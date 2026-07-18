@@ -1,56 +1,73 @@
-# MINOS Execution Plan
+# Plan de travail — MINOS
 
-Status: **Initial M0 plan**
+Statut : **Brouillon de cadrage**
 
-## Objective
+Ce plan organise le travail de MINOS en commençant par une phase de définition complète du besoin avant toute implémentation fonctionnelle importante.
 
-The first implementation phase must validate whether MINOS can build valuable, precise and compact Code Intelligence by orchestrating existing open-source semantic indexing and code-fact infrastructure rather than rebuilding language parsers and graph engines.
+La source de vérité fonctionnelle est le [`CAHIER_DES_CHARGES.md`](CAHIER_DES_CHARGES.md).
 
-The primary hypothesis is:
+## Principe de travail
 
-> SCIP-based semantic indexers plus Glean can provide the low-level code facts, while MINOS adds normalization, orchestration, explainability, derived analysis and agent-oriented query contracts.
+> **Documenter d'abord, décider ensuite, implémenter en dernier.**
 
-## M0 — Architecture & Feasibility
+Les expérimentations techniques ne doivent être lancées qu'une fois leur objectif, leurs critères de réussite et les décisions qu'elles doivent éclairer clairement définis.
 
-### Workstream 1 — Repository and project bootstrap
+---
 
-Deliverables:
+## C0 — Cadrage fonctionnel et architectural
 
-- project identity and README;
-- Maven bootstrap;
-- architecture overview;
-- ADR process;
-- roadmap;
-- MVP definition;
-- initial validation fixtures.
+### Objectif
 
-Exit condition:
+Définir précisément ce que MINOS doit être, ce qu'il ne doit pas être, sa valeur propre, son périmètre initial et ses contraintes.
 
-- architectural direction is documented before significant implementation.
+### Axe 1 — Vision et positionnement
 
-### Workstream 2 — External technology spikes
+À valider :
 
-Evaluate:
+- définition de MINOS ;
+- problème résolu ;
+- utilisateurs et consommateurs ;
+- frontière MINOS / NEXUS ;
+- rôle dans l'écosystème JARVIS / Alfred / Brainiac ;
+- valeur spécifique par rapport aux solutions existantes.
 
-- SCIP protocol and available indexers;
-- `scip-java` on a representative Maven repository;
-- at least one non-JVM SCIP indexer;
-- SCIP-to-Glean ingestion;
-- Glean local storage and query workflow;
-- Glean operational footprint;
-- failure modes when builds or dependencies are incomplete.
+### Axe 2 — Cas d'usage
 
-The spike must use real repositories in addition to synthetic fixtures.
+Définir et prioriser :
 
-Suggested first Java target:
+- recherche de symboles ;
+- recherche d'usages ;
+- implémentations ;
+- appelants / appelés ;
+- dépendances / dépendants ;
+- tests associés ;
+- architecture ;
+- analyse d'impact ;
+- contexte compact pour agents IA.
 
-```text
-ariane-chatbot
-```
+Pour chaque cas d'usage :
 
-### Workstream 3 — Normalized MINOS model
+- entrée ;
+- sortie attendue ;
+- niveau de précision ;
+- preuves requises ;
+- gestion de l'incertitude ;
+- priorité MVP ou future.
 
-Design the minimum domain model:
+### Axe 3 — Périmètre MVP
+
+Définir précisément :
+
+- les fonctionnalités obligatoires ;
+- les fonctionnalités différées ;
+- les langages de validation ;
+- les types de projets de validation ;
+- les critères mesurables de réussite ;
+- les critères d'arrêt ou de révision.
+
+### Axe 4 — Modèle de domaine
+
+Concevoir sans implémenter prématurément :
 
 ```text
 Project
@@ -64,186 +81,212 @@ Evidence
 IndexSnapshot
 ```
 
-The model must support:
+Points à trancher :
 
-- stable symbol identity;
-- overloaded methods;
-- cross-file relationships;
-- source/test distinction;
-- external symbol references;
-- unresolved references;
-- provider provenance.
+- identité stable des symboles ;
+- méthodes surchargées ;
+- symboles externes ;
+- références non résolues ;
+- provenance ;
+- confiance ;
+- relations factuelles et dérivées.
 
-### Workstream 4 — Provider capability model
+### Axe 5 — Stratégie d'indexation
 
-Define contracts for:
+Étudier :
+
+- SCIP ;
+- indexeurs SCIP disponibles ;
+- indexeurs Glean natifs ;
+- LSIF ;
+- LSP ;
+- AST / compilateurs ;
+- CPG / Joern et moteurs spécialisés.
+
+Objectif : définir un modèle `IndexerProvider` fondé sur les capacités.
+
+### Axe 6 — Stratégie Glean
+
+Décider si Glean doit être :
+
+- le backend par défaut ;
+- un backend de référence ;
+- un backend réservé à certains projets ;
+- remplacé par une autre solution.
+
+À étudier :
+
+- intégration locale ;
+- Windows / Linux / macOS ;
+- communication avec Java ;
+- complexité opérationnelle ;
+- performances ;
+- stockage ;
+- maintenance ;
+- reconstruction ;
+- licences.
+
+### Axe 7 — Abstraction de stockage
+
+Définir conceptuellement :
 
 ```text
+CodeKnowledgeStore
+```
+
+Le contrat doit être dérivé des cas d'usage MINOS et non de l'API Glean.
+
+### Axe 8 — Sécurité et local-first
+
+Définir :
+
+- comportement par défaut ;
+- données autorisées à sortir du poste ;
+- exclusions ;
+- `.minosignore` ;
+- gestion des dépôts privés ;
+- secrets ;
+- fonctionnement hors ligne.
+
+### Axe 9 — Critères de validation
+
+Définir avant les spikes :
+
+- précision des symboles ;
+- précision des références ;
+- qualité des relations ;
+- temps d'indexation ;
+- latence des requêtes ;
+- taille des index ;
+- empreinte mémoire ;
+- comportement en cas de dépendances manquantes ;
+- critères d'acceptation de Glean ;
+- critères d'acceptation des indexeurs SCIP.
+
+### Livrables C0
+
+- cahier des charges validé ;
+- modèle de domaine proposé ;
+- périmètre MVP validé ;
+- architecture cible validée à haut niveau ;
+- ADR structurantes acceptées ;
+- matrice d'évaluation SCIP / Glean ;
+- plan des expérimentations ;
+- roadmap mise à jour.
+
+### Condition de sortie C0
+
+> Aucun développement fonctionnel significatif ne commence tant que les principaux éléments de cadrage ne sont pas validés.
+
+---
+
+## M0 — Faisabilité technique
+
+M0 commence uniquement après validation de C0.
+
+### Objectif
+
+Vérifier par des expérimentations mesurables que les choix retenus pendant C0 sont techniquement viables.
+
+### Expérimentations envisagées
+
+#### SCIP sur un projet Java réel
+
+Vérifier :
+
+- classes ;
+- interfaces ;
+- méthodes ;
+- surcharges ;
+- définitions ;
+- références ;
+- implémentations ;
+- multi-module Maven ;
+- comportement sur Quarkus/CDI si pertinent.
+
+#### SCIP sur un second écosystème
+
+Objectif : prouver que le pipeline MINOS n'est pas Java-centric.
+
+Le second langage sera choisi pendant C0 selon la qualité des indexeurs disponibles.
+
+#### Glean
+
+Vérifier :
+
+- installation locale ;
+- ingestion SCIP ;
+- définition de symbole ;
+- références ;
+- implémentations ;
+- relations disponibles ;
+- coût de démarrage ;
+- consommation disque ;
+- complexité d'intégration avec Java.
+
+#### Abstraction MINOS
+
+Valider :
+
+```text
+CodeKnowledgeStore
 IndexerProvider
 IndexerRegistry
 IndexerCapabilities
-IndexingRequest
-IndexingResult
 ```
 
-Providers must advertise capabilities.
+Aucun type Glean ou SCIP ne doit traverser les frontières publiques du domaine MINOS.
 
-Example:
+### Premier vertical slice envisagé
 
 ```text
-DEFINITIONS
-REFERENCES
-IMPLEMENTATIONS
-CALL_RELATIONSHIPS
-TYPE_RELATIONSHIPS
-CROSS_MODULE
-DATA_FLOW
+Dépôt réel
+    │
+    ▼
+Indexeur sémantique
+    │
+    ▼
+SCIP ou autre format fournisseur
+    │
+    ▼
+Ingestion
+    │
+    ▼
+Backend de connaissance
+    │
+    ▼
+Contrats MINOS
+    │
+    ├── find_symbol
+    └── find_usages
 ```
 
-M0 does not require dynamic plugin loading. Static registration is acceptable for the first spike if the public architecture remains extensible.
+### Décision de sortie M0
 
-### Workstream 5 — CodeKnowledgeStore boundary
-
-Define a MINOS-owned storage/query port from use cases.
-
-Initial contract candidates:
+À l'issue des expérimentations :
 
 ```text
-upsertProjectIndex
-storeSymbols
-storeRelationships
-findSymbols
-findSymbolByQualifiedName
-findUsages
-findImplementations
-findIncomingRelationships
-findOutgoingRelationships
+ADOPTER
+ADOPTER_AVEC_CONTRAINTES
+REVOIR
+REMPLACER
 ```
 
-Two implementations are expected during validation:
+La décision doit être documentée par des mesures et une ADR.
 
-1. `InMemoryCodeKnowledgeStore` for tests;
-2. `GleanCodeKnowledgeStore` for the real spike.
+---
 
-The goal is not feature parity across multiple production stores.
+## Travaux explicitement différés
 
-### Workstream 6 — First vertical slice
+Pendant C0 et M0, ne pas dériver vers :
 
-Build the smallest end-to-end path:
-
-```text
-Java repository
-      │
-      ▼
-  scip-java
-      │
-      ▼
-   index.scip
-      │
-      ▼
- SCIP ingestion
-      │
-      ▼
-    Glean
-      │
-      ▼
-CodeKnowledgeStore
-      │
-      ▼
- find_symbol
- find_usages
-```
-
-The first slice is successful only if MINOS returns its own normalized result types.
-
-### Workstream 7 — Precision and evidence
-
-Every result must distinguish:
-
-```text
-RESOLVED
-PARTIALLY_RESOLVED
-UNRESOLVED
-HEURISTIC
-```
-
-Derived results must include:
-
-```text
-origin
-confidence
-evidence
-```
-
-No heuristic result may be presented as a deterministic fact.
-
-### Workstream 8 — Compact output contract
-
-Define machine-friendly responses before MCP implementation.
-
-Example target:
-
-```json
-{
-  "symbol": "DocumentIngestionService",
-  "kind": "CLASS",
-  "qualifiedName": "fr.ariane.chatbot.document.DocumentIngestionService",
-  "location": {
-    "file": "src/main/java/.../DocumentIngestionService.java",
-    "startLine": 12,
-    "endLine": 120
-  },
-  "relationships": {
-    "dependencies": 3,
-    "dependents": 2,
-    "relatedTests": 1
-  }
-}
-```
-
-Full source content must not be returned unless explicitly requested.
-
-## M0 validation matrix
-
-| Area | Validation |
-|---|---|
-| Java indexing | Representative Maven mono- and multi-module repositories |
-| Non-JVM indexing | At least one additional language |
-| Symbol precision | Definitions and qualified identities |
-| Usage precision | Cross-file references |
-| Implementation resolution | Interfaces / inheritance where supported |
-| Glean ingestion | SCIP facts successfully available in Glean |
-| Abstraction | No Glean types in MINOS domain contracts |
-| Local-first | No mandatory external cloud service |
-| Performance | Index and query timings recorded |
-| Failure handling | Missing dependencies and partial repositories tested |
-
-## M0 deliverables
-
-- architecture documentation;
-- accepted/rejected ADRs;
-- technology spike report;
-- normalized model proposal;
-- provider capability contract;
-- `CodeKnowledgeStore` contract;
-- in-memory test implementation;
-- Glean proof-of-concept adapter;
-- SCIP Java vertical slice;
-- one non-Java indexing spike;
-- benchmark results;
-- recommendation to proceed, revise or replace the Glean strategy.
-
-## Explicitly deferred
-
-M0 must not expand into:
-
-- production REST API;
-- full MCP server;
-- NEXUS integration;
-- semantic embeddings;
-- vector database;
-- IDE plugins;
-- GitHub/GitLab remote ingestion;
-- perfect impact analysis;
-- dynamic runtime analysis;
-- support for every language at launch.
+- API REST de production ;
+- serveur MCP complet ;
+- intégration NEXUS ;
+- embeddings ;
+- base vectorielle ;
+- plugins IDE ;
+- ingestion GitHub/GitLab distante ;
+- analyse d'impact complète ;
+- analyse runtime complète ;
+- support exhaustif de tous les langages.
