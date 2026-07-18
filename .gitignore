@@ -1,0 +1,25 @@
+# Maven
+/target/
+**/target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MINOS local data
+.minos/
+*.scip
+
+# Glean local databases and generated data
+.glean/
+glean-db/
+
+# Logs
+*.log
