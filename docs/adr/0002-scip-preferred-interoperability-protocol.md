@@ -1,80 +1,94 @@
-# ADR-0002 — Use SCIP as the preferred semantic indexing interoperability protocol
+# ADR-0002 — Utiliser SCIP comme protocole d'interopérabilité sémantique privilégié
 
-- Status: **Accepted**
-- Date: 2026-07-19
+- Statut : **Proposée — à valider pendant C0**
+- Date : 19 juillet 2026
 
-## Context
+## Contexte
 
-MINOS needs precise symbol-level information such as definitions, references and implementations without reimplementing mature language frontends whenever suitable indexers already exist.
+MINOS a besoin d'informations précises au niveau des symboles : définitions, références, implémentations et autres relations sémantiques.
 
-SCIP provides a language-agnostic protocol for sharing semantic code intelligence and has an ecosystem of language-specific indexers.
+Réimplémenter pour chaque langage un frontend complet, un résolveur de symboles et toute la logique de navigation sémantique consommerait une part très importante du projet avant même de produire la valeur propre à MINOS.
 
-At the same time, some languages or analysis requirements may be better served by native Glean indexers, compiler APIs, LSIF, Language Servers, AST analyzers or future specialized engines.
+SCIP fournit un protocole agnostique du langage permettant d'échanger de la Code Intelligence sémantique produite par des indexeurs spécialisés.
 
-## Decision
+Cependant, certains langages ou certaines analyses peuvent être mieux couverts par :
 
-SCIP will be the **preferred semantic indexing interoperability protocol** when a suitable and sufficiently accurate indexer exists.
+- des indexeurs Glean natifs ;
+- des API de compilateur ;
+- LSIF ;
+- des serveurs de langage ;
+- des analyseurs AST ;
+- des moteurs spécialisés futurs.
 
-SCIP will not be mandatory.
+## Décision proposée
 
-The architecture will use a SCIP ingestion adapter:
+SCIP doit être le **protocole d'interopérabilité sémantique privilégié** lorsqu'un indexeur suffisamment fiable et maintenu existe.
+
+SCIP ne doit pas être obligatoire.
+
+Architecture candidate :
 
 ```text
-Language-specific SCIP indexer
+Indexeur SCIP spécifique au langage
           │
           ▼
-       SCIP index
+      Index SCIP
           │
           ▼
-MINOS SCIP ingestion adapter
+Adaptateur d'ingestion SCIP MINOS
           │
           ▼
-Normalized MINOS Code Model
+   Modèle normalisé MINOS
 ```
 
-MINOS core services will not expose SCIP protobuf types directly.
+Les services principaux de MINOS ne doivent pas exposer directement les types protobuf SCIP.
 
-The indexer registry must allow non-SCIP providers to participate through the same MINOS capability model.
+Le registre des indexeurs doit permettre à des fournisseurs non-SCIP d'offrir leurs capacités via le même modèle MINOS.
 
-## Why SCIP is preferred
+## Pourquoi SCIP est envisagé
 
-- avoids building a complete parser and semantic resolver for every supported language;
-- provides a common exchange format across multiple language ecosystems;
-- supports precise symbol identity and occurrence information;
-- can feed Glean through SCIP-to-Glean tooling;
-- preserves the option to change the downstream knowledge store;
-- aligns with MINOS's multi-language goals.
+- évite de reconstruire un parser et un résolveur sémantique complets pour chaque langage ;
+- fournit un format d'échange commun entre plusieurs écosystèmes ;
+- permet de représenter des identités de symboles et occurrences sémantiques ;
+- peut servir de pont vers Glean ;
+- conserve la possibilité de changer le backend en aval ;
+- correspond à l'objectif multi-langages de MINOS.
 
-## Consequences
+## Avantages
 
-### Positive
+- accélération du support multi-langages ;
+- réduction du code d'analyse spécifique à maintenir ;
+- adoption plus simple de nouveaux indexeurs ;
+- séparation claire entre indexation et intelligence spécifique à MINOS.
 
-- Faster path to multi-language semantic indexing.
-- Less duplicated language-analysis infrastructure.
-- Easier adoption of new language indexers.
-- Clear boundary between language indexing and MINOS-specific intelligence.
+## Inconvénients
 
-### Negative
+- qualité dépendante de chaque indexeur SCIP ;
+- couverture de capacités différente selon les langages ;
+- certaines relations devront être dérivées après ingestion ;
+- MINOS devra gérer l'installation, l'exécution et les erreurs des outils externes.
 
-- Quality depends on each SCIP indexer.
-- Capability coverage differs by language.
-- Some desired relationships may need to be derived after ingestion.
-- Toolchain installation and process management must be handled by MINOS.
+## Validation requise
 
-## Validation required during M0
+Avant acceptation définitive, il faudra mesurer sur des dépôts réels :
 
-The decision must be validated with real repositories, starting with Java and at least one non-JVM language.
+- taux de réussite de l'indexation ;
+- précision des symboles ;
+- précision des références ;
+- résolution des implémentations ;
+- comportement multi-module ;
+- taille des index ;
+- durée d'indexation ;
+- fonctionnement hors ligne ;
+- comportement lorsque les dépendances sont indisponibles.
 
-Measurements must include:
+Si un indexeur SCIP n'atteint pas la qualité attendue pour un langage, MINOS doit pouvoir sélectionner un autre fournisseur sans modifier son domaine.
 
-- indexing success rate;
-- symbol precision;
-- reference precision;
-- implementation resolution;
-- multi-module behavior;
-- index size;
-- indexing duration;
-- offline operation;
-- failure behavior when dependencies are unavailable.
+## Condition d'acceptation
 
-If a SCIP indexer does not meet the required accuracy for a language, MINOS may select another provider without changing the domain model.
+Cette ADR ne pourra passer au statut **Acceptée** qu'après :
+
+1. validation du rôle de SCIP dans le cahier des charges ;
+2. comparaison avec les alternatives pertinentes ;
+3. définition de critères de qualité des fournisseurs ;
+4. validation expérimentale pendant M0.
