@@ -1,117 +1,125 @@
-# SCIP + Glean Foundation Research
+# Étude de fondation — SCIP + Glean
 
-Status: **M0 working document**
+Statut : **Document de recherche C0 — hypothèses à valider**
 
-## Purpose
+## Objectif
 
-This document captures the initial technical rationale for using SCIP and Glean as major building blocks of MINOS while preserving MINOS-owned domain contracts.
+Ce document rassemble les premières hypothèses techniques concernant l'utilisation de SCIP et Glean comme briques structurantes potentielles de MINOS.
 
-It is not a substitute for hands-on benchmarks. Every assumption listed here must be validated during M0.
+Il ne remplace ni le cahier des charges ni les expérimentations. Chaque hypothèse devra être validée avant de devenir une décision d'architecture acceptée.
 
-## 1. Why not build every language analyzer ourselves?
+---
 
-Accurate semantic code intelligence requires more than parsing syntax.
+## 1. Pourquoi ne pas développer tous les analyseurs de langages nous-mêmes ?
 
-A production-quality analyzer may need to understand:
+Une Code Intelligence précise nécessite plus qu'un simple parsing syntaxique.
 
-- symbol identity;
-- scopes;
-- imports;
-- overload resolution;
-- inheritance;
-- implementations;
-- type information;
-- build configuration;
-- dependency classpaths;
-- generated sources;
-- cross-file references.
+Un analyseur de qualité doit potentiellement comprendre :
 
-Reimplementing this separately for Java, TypeScript, Python, Go, Rust, C/C++, .NET and future languages would consume most of the project effort before MINOS delivers its differentiating value.
+- l'identité des symboles ;
+- les portées ;
+- les imports ;
+- les surcharges ;
+- l'héritage ;
+- les implémentations ;
+- les types ;
+- le système de build ;
+- les dépendances ;
+- les sources générées ;
+- les références entre fichiers.
 
-MINOS should therefore reuse mature language-specific semantic indexers whenever possible.
+Réimplémenter ces mécanismes pour chaque langage retarderait fortement la valeur propre de MINOS.
 
-## 2. SCIP role
+Hypothèse actuelle :
 
-SCIP is treated as an interoperability layer between language-specific indexers and downstream code-intelligence systems.
+> MINOS doit réutiliser des indexeurs sémantiques matures lorsqu'ils existent et sont suffisamment fiables.
 
-MINOS should use SCIP for capabilities it represents well, especially semantic symbol occurrences and relationships supplied by the corresponding indexer.
+---
 
-Conceptual flow:
+## 2. Rôle envisagé de SCIP
+
+SCIP est envisagé comme une couche d'interopérabilité entre les indexeurs spécifiques aux langages et MINOS.
 
 ```text
-Repository
-    │
-    ▼
-Language-specific semantic indexer
-    │
-    ▼
+Dépôt
+  │
+  ▼
+Indexeur sémantique spécifique au langage
+  │
+  ▼
 SCIP
-    │
-    ├── symbols
-    ├── occurrences
-    ├── definitions
-    ├── references
-    └── relationships available from indexer
-    │
-    ▼
-MINOS ingestion / Glean ingestion
+  │
+  ├── symboles
+  ├── occurrences
+  ├── définitions
+  ├── références
+  └── relations disponibles
+  │
+  ▼
+Ingestion MINOS / Glean
 ```
 
-### Benefits
+### Avantages potentiels
 
-- common interchange format;
-- avoids a MINOS-specific parser implementation per language;
-- allows different indexers to feed a common pipeline;
-- separates indexing from querying;
-- useful bridge toward Glean.
+- format d'échange commun ;
+- réduction du besoin de parsers spécifiques à MINOS ;
+- séparation entre indexation et interrogation ;
+- support possible de plusieurs écosystèmes ;
+- pont potentiel vers Glean.
 
-### Limits
+### Limites
 
-SCIP does not automatically guarantee identical semantic depth across every language.
+SCIP ne garantit pas une profondeur sémantique identique pour chaque langage.
 
-MINOS must track provider capabilities and quality independently.
+MINOS devra suivre les capacités de chaque fournisseur indépendamment.
 
-Example:
+Exemple :
 
 ```text
-Provider A
-- definitions: yes
-- references: yes
-- implementations: yes
-- call graph: partial
-- data flow: no
+Fournisseur A
+- définitions : oui
+- références : oui
+- implémentations : oui
+- graphe d'appels : partiel
+- flux de données : non
 
-Provider B
-- definitions: yes
-- references: yes
-- call graph: yes
-- data flow: yes
+Fournisseur B
+- définitions : oui
+- références : oui
+- graphe d'appels : oui
+- flux de données : oui
 ```
 
-MINOS must not infer capability solely from the presence of a SCIP file.
+La présence d'un index SCIP ne doit donc jamais suffire à conclure que toutes les capacités sont disponibles.
 
-## 3. Glean role
+---
 
-Glean is a specialized open-source system for storing, deriving and querying typed facts about source code.
+## 3. Rôle envisagé de Glean
 
-Its architecture is attractive to MINOS because it provides:
+Glean est un système open source spécialisé dans le stockage, la dérivation et l'interrogation de faits typés sur le code.
 
-- code-oriented fact storage;
-- typed schemas;
-- fact de-duplication;
-- declarative Angle queries;
-- relationship-oriented querying;
-- support for adding custom facts;
-- existing indexing integrations;
-- SCIP-based ingestion paths.
+Caractéristiques intéressantes pour MINOS :
 
-Glean can therefore potentially provide much of the low-level knowledge infrastructure beneath MINOS.
+- stockage orienté faits de code ;
+- schémas typés ;
+- déduplication ;
+- requêtes déclaratives ;
+- interrogation des relations ;
+- ajout de faits personnalisés ;
+- intégrations d'indexation existantes ;
+- possibilités d'ingestion SCIP.
 
-## 4. Why Glean is not the MINOS domain
+Hypothèse : Glean pourrait fournir une part importante de l'infrastructure de connaissance sous MINOS.
 
-MINOS requires concepts that must remain stable even if its infrastructure changes.
+Cette hypothèse doit être validée techniquement et opérationnellement.
 
-Examples:
+---
+
+## 4. Pourquoi Glean ne doit pas devenir le domaine MINOS
+
+MINOS a besoin de concepts stables indépendamment du backend.
+
+Exemples :
 
 ```text
 SymbolResult
@@ -123,162 +131,151 @@ Confidence
 IndexStatus
 ```
 
-If these concepts directly expose Glean fact IDs, Angle predicates or Thrift-generated types, changing the backend would break every consumer.
-
-The required boundary is therefore:
+Frontière candidate :
 
 ```text
-Consumer
-   │
-   ▼
-MINOS Query Service
-   │
-   ▼
+Consommateur
+    │
+    ▼
+Service de requêtes MINOS
+    │
+    ▼
 CodeKnowledgeStore
-   │
-   ▼
-Glean Adapter
-   │
-   ▼
+    │
+    ▼
+Adaptateur Glean
+    │
+    ▼
 Glean
 ```
 
-## 5. What MINOS should reuse from Glean
+Les identifiants Glean, prédicats Angle et types Thrift ne doivent pas fuiter vers les contrats publics MINOS.
 
-Candidate capabilities to reuse heavily:
+---
 
-- persistent code-fact storage;
-- indexing result ingestion;
-- typed fact schemas;
-- semantic relationship queries;
-- caller/reference/definition queries where supported;
-- transitive graph queries;
-- custom schemas for MINOS-derived facts;
-- efficient local querying.
+## 5. Ce que MINOS pourrait réutiliser de Glean
 
-## 6. What MINOS should own
+- stockage persistant des faits ;
+- ingestion des résultats d'indexation ;
+- schémas typés ;
+- requêtes sémantiques ;
+- recherches de définitions et références ;
+- parcours transitifs ;
+- schémas personnalisés pour les faits dérivés ;
+- requêtes locales performantes.
 
-MINOS should own:
+---
 
-- project/workspace registry;
-- language/build discovery;
-- indexer registry and capability selection;
-- indexer process orchestration;
-- normalized public/domain model;
-- provenance and confidence model;
-- derived dependency semantics;
-- related-test analysis;
-- impact-analysis semantics;
-- architecture overview semantics;
-- compact context generation;
-- CLI contracts;
-- MCP contracts;
-- API contracts;
-- NEXUS integration contracts.
+## 6. Ce que MINOS doit posséder
 
-## 7. Possible storage split
+- registre des projets et workspaces ;
+- découverte des langages et builds ;
+- registre des indexeurs ;
+- sélection selon les capacités ;
+- orchestration de l'indexation ;
+- modèle normalisé public et métier ;
+- provenance et confiance ;
+- dépendances dérivées ;
+- analyse des tests liés ;
+- analyse d'impact ;
+- vue d'architecture ;
+- contexte compact ;
+- contrats CLI ;
+- contrats MCP ;
+- contrats API ;
+- contrats d'intégration NEXUS.
 
-M0 should evaluate whether a split storage model is useful.
+---
 
-Conceptual option:
+## 7. Hypothèse de stockage séparé
+
+Une piste à évaluer :
 
 ```text
-MINOS metadata
-(project registry, configuration, snapshots)
-            │
-            ▼
-    Lightweight local store
+Métadonnées MINOS
+(registre, configuration, snapshots)
+        │
+        ▼
+Stockage local léger
 
-Code facts and graph queries
-            │
-            ▼
-          Glean
+Faits de code et requêtes graphe
+        │
+        ▼
+      Glean
 ```
 
-This could keep project-management data simple while using Glean only where its strengths matter.
+Aucune décision n'est prise à ce stade.
 
-No storage split is accepted yet; it is an M0 experiment.
+---
 
-## 8. Operational questions for Glean
+## 8. Questions opérationnelles concernant Glean
 
-The M0 spike must answer:
+Avant adoption, il faudra répondre notamment à :
 
-1. How easy is local installation on the target developer environments?
-2. Can MINOS package or orchestrate Glean without forcing users to understand its stack?
-3. What is the startup cost?
-4. What is the indexing cost on small, medium and large repositories?
-5. What is the on-disk database size?
-6. How are databases isolated per project/workspace?
-7. How are schema upgrades managed?
-8. How should MINOS communicate with Glean from Java?
-9. Is a sidecar process acceptable?
-10. Can a distribution be made practical on Windows, Linux and macOS?
-11. What happens when Glean is unavailable or its database is corrupted?
-12. Can MINOS rebuild all derived state from source/indexes?
+1. Quelle est la difficulté d'installation locale ?
+2. MINOS peut-il orchestrer Glean sans exposer sa complexité ?
+3. Quel est le coût de démarrage ?
+4. Quel est le coût d'indexation selon la taille du dépôt ?
+5. Quelle est la taille disque ?
+6. Comment isoler les bases par projet ou workspace ?
+7. Comment gérer les évolutions de schéma ?
+8. Comment communiquer avec Glean depuis Java ?
+9. Un processus sidecar est-il acceptable ?
+10. Une distribution pratique est-elle possible sous Windows, Linux et macOS ?
+11. Que se passe-t-il en cas de base corrompue ?
+12. MINOS peut-il reconstruire tout l'état dérivé ?
 
-## 9. Initial Glean integration options
+---
 
-### Option A — Sidecar process
+## 9. Options d'intégration Glean
+
+### Option A — Processus sidecar
 
 ```text
 MINOS JVM
    │
    │ RPC
    ▼
-Glean service/process
+Processus Glean
    │
    ▼
-Glean database
+Base Glean
 ```
 
-Advantages:
+Avantages : isolation de la stack non-Java et frontière claire.
 
-- isolates non-Java runtime concerns;
-- keeps MINOS domain clean;
-- follows service/client architecture.
+Inconvénients : gestion de processus, distribution, IPC ou ports locaux.
 
-Disadvantages:
-
-- process lifecycle management;
-- distribution complexity;
-- local ports or IPC concerns.
-
-### Option B — CLI orchestration for M0
+### Option B — Orchestration CLI pour M0
 
 ```text
-MINOS spike
+Spike MINOS
    │
    ▼
-Glean CLI
+CLI Glean
    │
    ▼
-Glean DB
+Base Glean
 ```
 
-Advantages:
+Avantages : chemin de validation rapide.
 
-- fastest validation path;
-- minimal integration code.
+Inconvénients : inadapté comme API long terme.
 
-Disadvantages:
+Usage envisagé : **M0 uniquement**.
 
-- unsuitable as the long-term application API;
-- output parsing may be brittle.
+### Option C — Client RPC généré
 
-Recommended use: **M0 spike only**.
+Évaluer si les clients Thrift/RPC permettent une intégration Java maintenable.
 
-### Option C — Direct generated RPC client
+---
 
-Evaluate whether generated Thrift/RPC clients provide a maintainable Java integration path.
+## 10. Expérimentations envisagées après C0
 
-This is a candidate for post-spike integration if supported cleanly.
-
-## 10. First experiments
-
-### Experiment A — Java semantic indexing
+### Expérience A — Indexation Java
 
 ```text
-Ariane repository
+Dépôt représentatif
     │
     ▼
 scip-java
@@ -287,19 +284,9 @@ scip-java
 index.scip
 ```
 
-Validate:
+À vérifier : symboles, surcharges, définitions, références, implémentations, multi-module et cas framework pertinents.
 
-- classes;
-- interfaces;
-- methods;
-- overloaded methods;
-- definitions;
-- references;
-- implementations;
-- Maven multi-module behavior;
-- Quarkus/CDI code patterns.
-
-### Experiment B — SCIP to Glean
+### Expérience B — SCIP vers Glean
 
 ```text
 index.scip
@@ -308,59 +295,58 @@ index.scip
 scip-to-glean
     │
     ▼
-Glean DB
+Base Glean
 ```
 
-Validate queries for:
+À vérifier : définition, références, implémentations et appelants lorsque disponibles.
 
-- symbol definition;
-- symbol references;
-- implementations;
-- callers when available.
+### Expérience C — Normalisation MINOS
 
-### Experiment C — MINOS normalization
-
-Implement only:
+Implémenter uniquement le strict minimum nécessaire à la validation :
 
 ```text
 find_symbol
 find_usages
 ```
 
-Both queries must return MINOS types, not Glean types.
+Les résultats doivent être des types MINOS.
 
-### Experiment D — Non-Java proof
+### Expérience D — Preuve non-Java
 
-Run the same conceptual pipeline on at least one non-JVM repository.
+Exécuter le même pipeline conceptuel sur un second écosystème.
 
-The objective is architectural validation, not broad language support.
+L'objectif est de valider l'architecture, pas de multiplier immédiatement les langages.
 
-## 11. Decision gate
+---
 
-At the end of M0, choose one of:
+## 11. Porte de décision
 
-### Proceed
+À la fin de M0 :
 
-SCIP + Glean provides sufficient precision, performance and local operability.
+### ADOPTER
 
-### Proceed with constraints
+SCIP + Glean offrent une précision, des performances et une opérabilité locale suffisantes.
 
-Glean remains useful for selected modes or repository sizes but MINOS needs an additional lightweight backend.
+### ADOPTER_AVEC_CONTRAINTES
 
-### Revise
+Glean reste utile, mais un backend plus léger est nécessaire dans certains contextes.
 
-SCIP remains useful but Glean operational complexity is too high; retain `CodeKnowledgeStore` and select another backend.
+### REVOIR
 
-### Replace
+SCIP reste utile mais Glean est trop complexe ; conserver `CodeKnowledgeStore` et changer de backend.
 
-Both assumptions fail; investigate alternative semantic index and graph architectures while preserving the MINOS domain boundaries.
+### REMPLACER
 
-## 12. Current recommendation
+Les hypothèses principales échouent ; réévaluer la fondation tout en préservant les frontières du domaine MINOS.
 
-The current architectural recommendation is:
+---
 
-> Reuse SCIP and Glean aggressively to avoid rebuilding mature code-intelligence infrastructure, while ensuring that MINOS owns its domain, orchestration, explainability and public query contracts.
+## 12. Recommandation de travail actuelle
 
-In short:
+La recommandation actuelle, encore non validée, est :
 
-> **SCIP/Glean provide facts. MINOS provides Code Intelligence. NEXUS provides Context Intelligence.**
+> Réutiliser fortement SCIP et Glean pour éviter de reconstruire une infrastructure mature, tout en laissant MINOS posséder son domaine, son orchestration, son explicabilité et ses contrats publics.
+
+En résumé :
+
+> **SCIP et Glean fournissent potentiellement les faits. MINOS fournit la Code Intelligence. NEXUS fournit la Context Intelligence.**
