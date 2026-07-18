@@ -1,61 +1,88 @@
-# MINOS MVP Definition
+# Définition du MVP — MINOS
 
-Status: **Draft**
+Statut : **Brouillon — à valider pendant C0**
 
-## 1. MVP statement
+Le MVP n'est pas encore engagé en développement. Ce document sert à définir ce que le premier produit utile devra démontrer.
 
-The MINOS MVP must prove that a local software repository can be semantically indexed, normalized and queried through MINOS without requiring an AI model to read the entire repository.
+---
 
-The MVP is successful when MINOS can answer reliable symbol- and relationship-level questions through its own stable contracts while reusing external indexing infrastructure underneath.
+## 1. Objectif du MVP
 
-## 2. Primary user story
+Le MVP de MINOS doit prouver qu'un dépôt logiciel local peut être indexé sémantiquement, normalisé et interrogé à travers des contrats MINOS stables, sans demander à un modèle IA de lire l'intégralité du dépôt.
 
-Given a local repository, a developer or agent can index it and ask:
+Le MVP est réussi lorsque MINOS peut répondre de manière fiable à des questions sur les symboles et leurs relations tout en réutilisant, lorsque pertinent, une infrastructure d'indexation existante.
+
+---
+
+## 2. Cas d'usage principal
+
+À partir d'un dépôt local, un développeur ou un agent doit pouvoir demander :
 
 ```text
-Where is this symbol?
-Who uses it?
-What does it depend on?
-What depends on it?
-What implements it?
-Who calls it?
+Où se trouve ce symbole ?
+Qui l'utilise ?
+Quelles sont ses implémentations ?
+De quoi dépend-il ?
+Qu'est-ce qui dépend de lui ?
+Qui l'appelle ?
 ```
 
-MINOS returns compact structured results containing locations, relationships and evidence without returning full files by default.
+MINOS retourne des résultats structurés et compacts contenant notamment :
 
-## 3. Initial validation languages
+- les emplacements ;
+- les relations ;
+- les preuves ;
+- le niveau de résolution ;
+- les plages de code pertinentes.
 
-The MVP architecture is language-agnostic.
+MINOS ne retourne pas les fichiers complets par défaut.
 
-Implementation validation will begin with:
+---
 
-1. Java as the first primary repository target;
-2. at least one non-JVM language to prove that the architecture is not accidentally Java-specific.
+## 3. Langages de validation
 
-Additional languages are added according to provider availability and quality, not by changing the MINOS domain.
+L'architecture du MVP doit être agnostique du langage.
 
-## 4. Included capabilities
+La validation devra utiliser :
 
-### Project registration
+1. un premier écosystème principal ;
+2. au moins un second écosystème suffisamment différent pour démontrer que le cœur n'est pas spécifique au premier.
 
-- register a local repository;
-- identify the project root;
-- record detected languages;
-- record detected build systems;
-- track index status and last successful index.
+Java est le candidat naturel pour le premier écosystème compte tenu des projets disponibles, mais ce choix reste à confirmer pendant C0.
 
-### Indexing
+Le second langage sera choisi selon la qualité des indexeurs et la pertinence du test.
 
-- select an indexer provider from a registry;
-- execute a semantic indexer;
-- prefer SCIP where an appropriate indexer exists;
-- ingest the resulting facts;
-- store/query through `CodeKnowledgeStore`;
-- use Glean as the preferred real backend.
+---
 
-### Symbol model
+## 4. Capacités incluses envisagées
 
-Minimum symbol kinds:
+### 4.1 Enregistrement d'un projet
+
+MINOS doit pouvoir :
+
+- enregistrer un dépôt local ;
+- identifier sa racine ;
+- détecter ses langages ;
+- détecter ses systèmes de build ;
+- suivre l'état de l'index ;
+- conserver la date de dernière indexation réussie.
+
+### 4.2 Indexation
+
+MINOS doit pouvoir :
+
+- sélectionner un fournisseur adapté ;
+- connaître les capacités de ce fournisseur ;
+- exécuter ou orchestrer l'indexation ;
+- privilégier SCIP lorsqu'un indexeur approprié existe ;
+- accepter d'autres fournisseurs ;
+- ingérer les faits produits ;
+- interroger ces connaissances via une abstraction MINOS ;
+- évaluer Glean comme backend réel privilégié.
+
+### 4.3 Modèle minimal de symboles
+
+Types envisagés :
 
 ```text
 CLASS
@@ -69,11 +96,11 @@ FIELD
 FUNCTION
 ```
 
-The model remains extensible for language-specific concepts.
+Le modèle doit rester extensible.
 
-### Relationships
+### 4.4 Relations initiales
 
-Initial normalized relationships:
+Relations factuelles envisagées :
 
 ```text
 DECLARES
@@ -84,17 +111,15 @@ IMPLEMENTS
 CALLS
 ```
 
-Derived relationships may include:
+Relation dérivée possible :
 
 ```text
 DEPENDS_ON
 ```
 
-Derived relationships must retain evidence.
+Toute relation dérivée doit conserver ses preuves.
 
-### Queries
-
-Required MVP queries:
+### 4.5 Requêtes obligatoires envisagées
 
 ```text
 find_symbol
@@ -104,105 +129,148 @@ find_dependencies
 find_dependents
 ```
 
-Target additional query if provider data is reliable:
+Requêtes complémentaires si les données des fournisseurs sont suffisamment fiables :
 
 ```text
 find_callers
 find_callees
 ```
 
-### Output
+---
 
-Every query must support a structured output suitable for machine consumption.
+## 5. Format de sortie
 
-Default results should favor:
+Chaque requête doit pouvoir retourner un résultat structuré adapté à une consommation machine.
+
+Les réponses doivent privilégier :
 
 ```text
 symbol
 signature
 kind
-qualified name
+qualifiedName
 location
 relationship
-relevant source range
+relevantSourceRange
 evidence
 ```
 
-over complete source-file content.
+plutôt que le contenu complet d'un fichier source.
 
-## 5. Explicitly excluded from MVP
+---
 
-- complete impact analysis;
-- semantic embeddings;
-- vector databases;
-- mandatory LLM analysis;
-- NEXUS integration;
-- production MCP server;
-- production REST API;
-- cloud service;
-- GitHub or GitLab remote ingestion;
-- IDE plugins;
-- perfect dynamic dispatch resolution;
-- complete runtime behavior analysis;
-- support for every programming language.
+## 6. Hors périmètre du MVP
 
-## 6. Technical validation criteria
+Le MVP ne doit pas inclure prématurément :
 
-### Symbol precision
+- analyse d'impact complète ;
+- embeddings sémantiques obligatoires ;
+- base vectorielle obligatoire ;
+- analyse LLM obligatoire ;
+- intégration NEXUS ;
+- serveur MCP de production ;
+- API REST de production ;
+- service cloud ;
+- ingestion distante GitHub/GitLab ;
+- plugins IDE ;
+- résolution parfaite du dispatch dynamique ;
+- analyse complète du comportement runtime ;
+- support exhaustif de tous les langages.
 
-On controlled fixtures:
+---
 
-- 100% of expected top-level symbols detected;
-- 100% of expected overloaded symbols uniquely identifiable;
-- no duplicate normalized symbols for the same declaration.
+## 7. Critères techniques de validation
 
-### Reference precision
+Les objectifs chiffrés devront être confirmés pendant C0 puis affinés après M0.
 
-On controlled fixtures:
+### 7.1 Précision des symboles
 
-- at least 99% of statically resolvable internal references correctly linked.
+Sur des fixtures contrôlées :
 
-### Query correctness
+- 100 % des symboles de premier niveau attendus détectés ;
+- 100 % des symboles surchargés attendus identifiables sans ambiguïté ;
+- aucun doublon normalisé pour une même déclaration.
 
-For fixture graphs, expected answers for `find_usages`, dependencies and dependents must be deterministic and asserted automatically.
+### 7.2 Précision des références
 
-### Backend isolation
+Objectif initial proposé :
 
-- no Glean-specific type in the MINOS domain contract;
-- no Angle query exposed to CLI/MCP/API consumers;
-- `InMemoryCodeKnowledgeStore` can satisfy core query-service tests.
+- au moins 99 % des références internes statiquement résolvables correctement reliées sur les fixtures contrôlées.
 
-### Local-first
+Cet objectif devra être challengé pendant C0.
 
-- indexing and querying require no mandatory cloud service;
-- repository source is not uploaded externally by default.
+### 7.3 Exactitude des requêtes
 
-### Query latency
+Sur des graphes de fixtures contrôlés :
 
-Initial targets on an already-built local index:
+- `find_usages` ;
+- `find_dependencies` ;
+- `find_dependents` ;
+
+doivent retourner des résultats déterministes et vérifiés automatiquement.
+
+### 7.4 Isolation du backend
+
+Exigences :
+
+- aucun type Glean dans le domaine public MINOS ;
+- aucune requête Angle exposée aux consommateurs CLI/MCP/API ;
+- possibilité de tester les services principaux avec une implémentation mémoire de `CodeKnowledgeStore`.
+
+### 7.5 Local-first
+
+Exigences :
+
+- aucune dépendance cloud obligatoire ;
+- aucune source envoyée vers un service externe par défaut.
+
+### 7.6 Latence
+
+Cibles initiales à confirmer :
 
 ```text
 find_symbol p95 < 100 ms
 find_usages p95 < 250 ms
-one-hop dependency query p95 < 250 ms
+requête de dépendance profondeur 1 p95 < 250 ms
 ```
 
-Targets may be revised after M0 benchmarks, but measurements are mandatory.
+Ces valeurs ne seront figées qu'après les premiers benchmarks.
 
-### Explainability
+### 7.7 Explicabilité
 
-100% of heuristic or derived relationships must expose their origin and evidence.
+100 % des relations heuristiques ou dérivées doivent pouvoir exposer :
 
-## 7. MVP exit gate
+- leur origine ;
+- leur niveau de confiance ;
+- leurs preuves.
 
-MINOS may be called an MVP only when all of the following are true:
+---
 
-1. a representative Java repository is indexed end-to-end;
-2. a repository in at least one additional language validates provider extensibility;
-3. `find_symbol` and `find_usages` run through MINOS-owned contracts;
-4. dependencies/dependents can be queried or derived with evidence;
-5. Glean is hidden behind `CodeKnowledgeStore`;
-6. the CLI can return compact structured JSON;
-7. automated fixture tests validate symbol and relationship correctness;
-8. benchmark results are documented;
-9. no mandatory LLM, cloud or NEXUS dependency exists.
+## 8. Critères de sortie du MVP
+
+MINOS pourra être considéré comme MVP uniquement si :
+
+1. un dépôt représentatif du premier écosystème est indexé de bout en bout ;
+2. un second écosystème valide l'extensibilité ;
+3. `find_symbol` et `find_usages` passent uniquement par des contrats MINOS ;
+4. les dépendances et dépendants peuvent être interrogés ou dérivés avec preuves ;
+5. Glean, s'il est retenu, reste derrière `CodeKnowledgeStore` ;
+6. une sortie structurée compacte est disponible ;
+7. des tests automatisés valident les symboles et relations ;
+8. les résultats de benchmarks sont documentés ;
+9. aucune dépendance obligatoire à un LLM, au cloud ou à NEXUS n'existe.
+
+---
+
+## 9. Condition préalable au développement du MVP
+
+Le MVP ne doit pas être lancé en développement tant que la phase **C0 — Cadrage fonctionnel et architectural** n'a pas validé :
+
+- le besoin ;
+- les cas d'usage prioritaires ;
+- les langages de validation ;
+- les critères de réussite ;
+- les ADR structurantes ;
+- le rôle de SCIP ;
+- le rôle de Glean ;
+- le modèle de domaine minimal.
