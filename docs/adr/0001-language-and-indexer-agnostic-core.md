@@ -1,28 +1,28 @@
-# ADR-0001 — Keep the MINOS core language- and indexer-agnostic
+# ADR-0001 — Conserver un cœur MINOS agnostique du langage et de l'indexeur
 
-- Status: **Accepted**
-- Date: 2026-07-19
+- Statut : **Proposée — à valider pendant C0**
+- Date : 19 juillet 2026
 
-## Context
+## Contexte
 
-MINOS is intended to become a Code Intelligence Engine capable of understanding repositories written in multiple languages and using different build systems.
+MINOS doit devenir un moteur de Code Intelligence capable de comprendre des dépôts utilisant plusieurs langages et différents systèmes de build.
 
-Initial examples focused on Java, TypeScript and Python, but these languages must not become architectural boundaries.
+Les premiers exemples ont souvent cité Java, TypeScript et Python, mais ces langages ne doivent jamais devenir des frontières architecturales.
 
-Likewise, no single parser, compiler API, SCIP implementation, Language Server or code-analysis engine can be assumed to cover every language and every required capability equally well.
+De la même manière, aucun parser, compilateur, indexeur SCIP, serveur de langage ou moteur d'analyse unique ne peut être supposé couvrir correctement tous les langages et toutes les capacités attendues.
 
-## Decision
+## Décision proposée
 
-The MINOS domain and query model will be both:
+Le domaine MINOS et son modèle de requêtes doivent être :
 
-- **language-agnostic**;
-- **indexer-agnostic**.
+- **agnostiques du langage** ;
+- **agnostiques de l'indexeur**.
 
-Language-specific indexing is provided through registered providers.
+L'indexation spécifique à un langage doit être fournie par des fournisseurs enregistrés.
 
-Providers advertise capabilities rather than being selected only by language name.
+Les fournisseurs doivent déclarer leurs capacités plutôt que d'être sélectionnés uniquement à partir du nom du langage.
 
-Conceptual capability examples:
+Exemples de capacités :
 
 ```text
 DEFINITIONS
@@ -37,45 +37,54 @@ CONTROL_FLOW
 DATA_FLOW
 ```
 
-The core must not contain hard-coded branching such as:
+Le cœur ne doit pas contenir de logique figée telle que :
 
 ```text
-if Java -> Java pipeline
-if Python -> Python pipeline
-if TypeScript -> TypeScript pipeline
+si Java -> pipeline Java
+si Python -> pipeline Python
+si TypeScript -> pipeline TypeScript
 ```
 
-Instead, an `IndexerRegistry` and capability negotiation mechanism will select suitable providers for a detected project or requested analysis.
+Un `IndexerRegistry` et un mécanisme de négociation des capacités doivent permettre de sélectionner les fournisseurs adaptés au projet détecté et à l'analyse demandée.
 
-Provider-specific models must be normalized before crossing into the MINOS domain.
+Les modèles propres aux fournisseurs doivent être normalisés avant d'entrer dans le domaine MINOS.
 
-## Consequences
+## Avantages
 
-### Positive
+- ajout de nouveaux langages sans réécriture des services principaux ;
+- combinaison possible de plusieurs moteurs pour un même langage ;
+- choix du meilleur fournisseur selon la capacité demandée ;
+- coexistence future d'indexeurs sémantiques, CPG, analyseurs de flux ou outils de sécurité ;
+- consommateurs MCP, API et NEXUS indépendants des technologies d'indexation.
 
-- New languages can be added without rewriting core query services.
-- MINOS can combine multiple engines for one language.
-- The best provider may be selected according to required capability.
-- Future CPG, data-flow or security analyzers can coexist with semantic indexers.
-- NEXUS and MCP consumers remain independent of underlying indexing technology.
+## Inconvénients
 
-### Negative
+- nécessité de concevoir soigneusement un modèle normalisé ;
+- complexité supplémentaire de négociation des capacités ;
+- risque de perdre certaines richesses propres à un fournisseur ;
+- besoin de tests d'intégration entre fournisseurs.
 
-- A normalized model must be designed carefully.
-- Capability negotiation introduces orchestration complexity.
-- Some provider-specific richness may not map directly to common concepts.
-- Integration testing must cover provider interoperability.
+## Alternatives étudiées
 
-## Rejected alternatives
+### Un framework de parsing unique pour tous les langages
 
-### One parser framework for all languages
+Non retenu comme direction principale, car la qualité du parsing, de la résolution sémantique et du support écosystème varie fortement selon les langages.
 
-Rejected because parser quality, semantic resolution and ecosystem support differ significantly between languages.
+### SCIP comme modèle de domaine interne obligatoire
 
-### SCIP as the mandatory internal domain model
+Non retenu comme principe, car SCIP est avant tout un format d'interopérabilité et ne représente pas nécessairement toutes les connaissances futures de MINOS.
 
-Rejected because SCIP is an interoperability format, not necessarily the optimal representation for every MINOS analysis and future data source.
+### Les schémas Glean comme modèle de domaine MINOS
 
-### Glean schemas as the MINOS domain model
+Non retenu comme principe, car cela couplerait directement le domaine et les contrats publics à un backend de stockage et de requêtes particulier.
 
-Rejected because this would couple the public and domain architecture directly to one storage/query backend.
+## Validation attendue pendant C0
+
+Cette ADR ne pourra passer au statut **Acceptée** qu'après validation :
+
+- du besoin multi-langages ;
+- du modèle de capacités ;
+- du rôle de SCIP ;
+- du rôle de Glean ;
+- du niveau de normalisation attendu ;
+- des compromis induits par cette abstraction.
