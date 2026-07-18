@@ -1,131 +1,145 @@
-# MINOS Architecture Overview
+# Vue d'ensemble de l'architecture — MINOS
 
-Status: **Draft / M0**
+Statut : **Proposition — à valider pendant C0**
 
-## 1. Purpose
+Ce document décrit une architecture candidate. Il ne constitue pas encore une décision définitive.
 
-MINOS is the Code Intelligence layer of the ecosystem. Its responsibility is to transform one or more software repositories into a structured, explainable and queryable representation of code.
+La source de vérité fonctionnelle reste le [`CAHIER_DES_CHARGES.md`](../CAHIER_DES_CHARGES.md).
 
-MINOS does not decide which information should be injected into an AI prompt. That responsibility belongs to NEXUS.
+---
+
+## 1. Finalité
+
+MINOS est la couche de **Code Intelligence** de l'écosystème.
+
+Sa responsabilité est de transformer un ou plusieurs dépôts logiciels en une représentation structurée, explicable et interrogeable du code.
+
+MINOS ne décide pas quelles informations doivent être injectées dans un prompt IA. Cette responsabilité appartient à NEXUS.
 
 ```text
 CODEBASE / WORKSPACE
         │
         ▼
       MINOS
-  Code Intelligence
+ Code Intelligence
         │
         ▼
       NEXUS
- Context Intelligence
+Context Intelligence
         │
         ▼
- Agent / LLM / IDE
+ AGENT / LLM / IDE
 ```
 
-## 2. Architectural goals
+---
 
-MINOS must be:
+## 2. Objectifs architecturaux
 
-- language-agnostic;
-- indexer-agnostic;
-- storage-backend-agnostic at the domain boundary;
-- local-first;
-- independent of any LLM or AI vendor;
-- capable of deterministic answers where the underlying evidence allows it;
-- explicit about uncertainty when relationships are derived or heuristic;
-- optimized for compact machine-consumable responses;
-- extensible toward multi-repository workspaces.
+MINOS doit être :
 
-## 3. High-level architecture
+- agnostique du langage ;
+- agnostique de l'indexeur ;
+- agnostique du backend de stockage à la frontière du domaine ;
+- local-first ;
+- indépendant de tout LLM ou fournisseur IA ;
+- capable de réponses déterministes lorsque les preuves le permettent ;
+- explicite sur l'incertitude ;
+- optimisé pour des réponses compactes consommables par machine ;
+- extensible vers les workspaces multi-dépôts.
+
+---
+
+## 3. Architecture générale candidate
 
 ```text
-Repositories / Workspaces
+Dépôts / Workspaces
           │
           ▼
-Project & Language Discovery
+Découverte du projet et des langages
           │
-          ├── repository structure
-          ├── languages
-          ├── build systems
-          └── source roots
-          │
-          ▼
-Indexer Orchestrator
+          ├── structure
+          ├── langages
+          ├── systèmes de build
+          └── racines de sources/tests
           │
           ▼
-Indexer Registry
+Orchestrateur d'indexation
+          │
+          ▼
+Registre des fournisseurs
           │
     ┌─────┼───────────────────────────────┐
     ▼     ▼                               ▼
-   SCIP  Native Glean Indexers       Other Providers
-    │     │                         AST / LSP / LSIF / CPG
-    └─────┼───────────────────────────────┘
-          ▼
-Code Intelligence Ingestion
-          │
-          ▼
-Normalized MINOS Code Model
-          │
-          ▼
-CodeKnowledgeStore
-          │
-    ┌─────┴────────────┐
-    ▼                  ▼
- Glean Adapter      Future Adapter
- preferred
-          │
-          ▼
-MINOS Intelligence Layer
-          │
- ┌────────┼───────────┐
- ▼        ▼           ▼
-Graph   Analysis    Search
- │        │           │
- └────────┼───────────┘
-          ▼
-MINOS Query Services
-          │
- ┌────────┼──────────────────────────────┐
- ▼        ▼                              ▼
-Symbols  Relationships             Context Views
-Usages   Dependencies              Compact ranges
-Calls    Tests                     Evidence
-Impact   Architecture              Confidence
-          │
-          ▼
-   Exposure Layer
-    ┌─────┼─────┐
-    ▼     ▼     ▼
-   CLI   MCP   API
-          │
-          ▼
-        NEXUS
+   SCIP  Indexeurs Glean natifs     Autres fournisseurs
+    │                              AST / LSP / LSIF / CPG
+    └─────────────────┬───────────────────┘
+                      ▼
+          Ingestion Code Intelligence
+                      │
+                      ▼
+           Modèle normalisé MINOS
+                      │
+                      ▼
+              CodeKnowledgeStore
+                      │
+           ┌──────────┴──────────┐
+           ▼                     ▼
+        Adaptateur            Adaptateur
+          Glean                 futur
+       privilégié
+                      │
+                      ▼
+        Couche d'intelligence MINOS
+                      │
+           ┌──────────┼──────────┐
+           ▼          ▼          ▼
+         Graphe     Analyse    Recherche
+                      │
+                      ▼
+          Services de requêtes MINOS
+                      │
+         ┌────────────┼────────────┐
+         ▼            ▼            ▼
+      Symboles     Relations   Vues compactes
+      Usages       Dépendances Contexte
+      Appels       Tests       Preuves
+      Impact       Architecture Confiance
+                      │
+                      ▼
+              Couche d'exposition
+              ┌───────┼───────┐
+              ▼       ▼       ▼
+             CLI     MCP     API
+                      │
+                      ▼
+                    NEXUS
 ```
 
-## 4. Core separation of responsibilities
+---
 
-### 4.1 Project Discovery
+## 4. Séparation des responsabilités
 
-Detects repository structure without performing semantic code analysis.
+### 4.1 Découverte du projet
 
-Responsibilities:
+Responsabilités :
 
-- project roots;
-- modules;
-- build systems;
-- languages;
-- source and test roots;
-- ignored paths;
-- candidate indexer providers.
+- racines de projet ;
+- modules ;
+- systèmes de build ;
+- langages ;
+- racines sources/tests ;
+- chemins ignorés ;
+- fournisseurs candidats.
 
-### 4.2 Indexer Registry
+Cette couche ne réalise pas l'analyse sémantique du code.
 
-Maintains a registry of available indexing providers.
+### 4.2 Registre des fournisseurs
 
-Providers advertise capabilities rather than being selected only by language.
+Le registre maintient les fournisseurs d'indexation disponibles.
 
-Example capabilities:
+La sélection doit être fondée sur les capacités réellement offertes.
+
+Exemples de capacités :
 
 ```text
 DEFINITIONS
@@ -140,28 +154,28 @@ CONTROL_FLOW
 DATA_FLOW
 ```
 
-A provider may support one language with many capabilities or several languages with a smaller capability set.
+Un fournisseur peut être excellent sur un langage et limité sur un autre. MINOS ne doit pas supposer une couverture uniforme.
 
-### 4.3 Code Intelligence Ingestion
+### 4.3 Ingestion Code Intelligence
 
-Converts provider-specific data into MINOS concepts.
+Cette couche transforme les données propres aux fournisseurs en concepts MINOS.
 
-Possible inputs include:
+Entrées possibles :
 
-- SCIP;
-- native Glean facts;
-- LSIF;
-- Language Server output;
-- compiler APIs;
-- AST analyzers;
-- Code Property Graphs;
-- future custom analyzers.
+- SCIP ;
+- faits natifs Glean ;
+- LSIF ;
+- sortie d'un serveur de langage ;
+- API de compilateur ;
+- AST ;
+- Code Property Graph ;
+- analyseur spécialisé futur.
 
-No external representation is allowed to leak directly into the MINOS domain model.
+Aucune représentation externe ne doit fuiter directement dans le domaine MINOS.
 
-### 4.4 Normalized MINOS Code Model
+### 4.4 Modèle normalisé MINOS
 
-The normalized model provides stable concepts such as:
+Concepts candidats :
 
 ```text
 Project
@@ -175,15 +189,15 @@ Evidence
 IndexSnapshot
 ```
 
-External identifiers such as SCIP symbol identifiers or Glean fact identifiers may be retained as metadata, but they are not the primary domain abstraction.
+Les identifiants externes SCIP ou Glean peuvent être conservés comme métadonnées, mais ne doivent pas constituer l'abstraction principale du domaine.
 
 ### 4.5 CodeKnowledgeStore
 
-`CodeKnowledgeStore` is a MINOS-owned port.
+`CodeKnowledgeStore` est une abstraction possédée par MINOS.
 
-It represents the capabilities MINOS needs from a code knowledge backend, not the API of a specific product.
+Elle représente les capacités dont MINOS a besoin pour stocker et interroger les connaissances du code, sans recopier l'API d'un produit particulier.
 
-Conceptual operations include:
+Opérations conceptuelles possibles :
 
 ```text
 storeSymbols
@@ -197,32 +211,40 @@ findCallees
 queryEvidence
 ```
 
-The initial preferred implementation is expected to be backed by Glean.
+L'implémentation privilégiée à évaluer est Glean.
 
-MINOS must not require consumers, domain services or MCP tools to understand Glean, Angle, RocksDB or Thrift.
+Les consommateurs MINOS ne doivent pas avoir à connaître :
 
-### 4.6 Intelligence Layer
+- Glean ;
+- Angle ;
+- RocksDB ;
+- Thrift.
 
-Adds MINOS-specific derived knowledge on top of indexed facts.
+### 4.6 Couche d'intelligence MINOS
 
-Examples:
+Cette couche ajoute les connaissances dérivées propres à MINOS.
+
+Exemples :
 
 ```text
 DEPENDS_ON
-TESTS
 RELATED_TEST
 IMPACT_PATH
 ARCHITECTURAL_ROLE
 CENTRALITY
 ```
 
-Derived information must carry provenance and confidence.
+Toute information dérivée doit conserver :
 
-### 4.7 Query Services
+- sa provenance ;
+- ses preuves ;
+- son niveau de confiance.
 
-The query layer exposes use-case-oriented operations independent of storage technology.
+### 4.7 Services de requêtes
 
-Initial target operations:
+Les services exposent des cas d'usage indépendants de la technologie de stockage.
+
+Premières opérations candidates :
 
 ```text
 findSymbol
@@ -235,7 +257,7 @@ findCallees
 getRelatedTests
 ```
 
-Later operations:
+Opérations futures :
 
 ```text
 analyzeImpact
@@ -244,9 +266,11 @@ getSymbolContext
 getModuleContext
 ```
 
-## 5. Evidence and confidence
+---
 
-Every relationship should be categorized as one of:
+## 5. Résolution, preuves et confiance
+
+Chaque relation doit permettre de distinguer au minimum :
 
 ```text
 RESOLVED
@@ -255,7 +279,9 @@ UNRESOLVED
 HEURISTIC
 ```
 
-Every derived or heuristic result should be able to expose:
+Les valeurs techniques pourront rester normalisées en anglais, mais leur documentation doit être en français.
+
+Chaque résultat dérivé ou heuristique doit pouvoir exposer :
 
 ```text
 origin
@@ -264,53 +290,63 @@ evidence
 path
 ```
 
-Example:
+Exemple :
 
 ```text
-Relationship: RELATED_TEST
-Source: DocumentIngestionServiceTest
-Target: DocumentIngestionService
-Resolution: HEURISTIC
-Confidence: 0.98
-Evidence:
-- imports target symbol
-- invokes ingest(Document)
-- same package hierarchy
+Relation : RELATED_TEST
+Source : DocumentIngestionServiceTest
+Cible : DocumentIngestionService
+Résolution : HEURISTIC
+Confiance : 0.98
+Preuves :
+- importe le symbole cible
+- appelle ingest(Document)
+- appartient à la même hiérarchie de package
 ```
 
-## 6. SCIP strategy
+---
 
-SCIP is treated as a preferred interoperability protocol where a suitable indexer exists.
+## 6. Stratégie SCIP candidate
 
-It is not part of the MINOS domain model and it is not mandatory for every language.
+SCIP est envisagé comme protocole d'interopérabilité privilégié lorsqu'un indexeur suffisamment fiable existe.
 
-The intended flow is:
+SCIP :
+
+- n'est pas le modèle de domaine MINOS ;
+- n'est pas obligatoire pour chaque langage ;
+- doit rester derrière un adaptateur d'ingestion.
+
+Flux candidat :
 
 ```text
-Language-specific tool
+Indexeur spécifique au langage
         │
         ▼
       SCIP
         │
         ▼
-SCIP ingestion adapter
+Adaptateur d'ingestion SCIP
         │
         ▼
-MINOS normalized model
+Modèle normalisé MINOS
 ```
 
-Alternative flows remain possible.
+D'autres flux doivent rester possibles.
 
-## 7. Glean strategy
+---
 
-Glean is the preferred M0/MVP candidate for storing and querying detailed code facts because it already provides a code-fact model, schemas and a declarative query engine.
+## 7. Stratégie Glean candidate
 
-However, Glean is an infrastructure choice, not a domain boundary.
+Glean est le candidat privilégié à évaluer pour le stockage et l'interrogation détaillée des faits de code.
 
-The architecture therefore requires:
+Cependant :
+
+> Glean est un choix d'infrastructure, pas une frontière du domaine.
+
+Architecture candidate :
 
 ```text
-MINOS Domain
+Domaine MINOS
      │
      ▼
 CodeKnowledgeStore
@@ -319,52 +355,60 @@ CodeKnowledgeStore
 GleanCodeKnowledgeStore
      │
      ▼
-Glean
+   Glean
 ```
 
-This allows MINOS to use Glean deeply while retaining the ability to:
+Ce découplage doit permettre à MINOS de :
 
-- replace it if operational constraints become unacceptable;
-- use a lighter local backend for small projects;
-- introduce a test in-memory backend;
-- combine multiple specialized engines in the future.
+- remplacer Glean si ses contraintes deviennent excessives ;
+- utiliser un backend plus léger pour certains cas ;
+- disposer d'un backend mémoire pour les tests ;
+- combiner plusieurs moteurs spécialisés à terme.
 
-## 8. Multi-language principle
+---
 
-MINOS must never encode a fixed language list in its core domain.
+## 8. Principe multi-langages
 
-Java, TypeScript and Python are useful first validation targets because mature semantic indexers exist, but future support may include any language for which a provider can supply sufficient code intelligence.
+Le cœur MINOS ne doit jamais contenir une liste fermée de langages.
 
-The core abstraction is therefore capability-based, not language-list-based.
+L'abstraction principale doit être fondée sur les **capacités**.
 
-## 9. Future specialized analysis engines
+Java, TypeScript ou Python peuvent servir de terrains de validation, mais ne constituent pas des frontières architecturales.
 
-MINOS may later orchestrate specialized engines such as Code Property Graph or data-flow analyzers.
+---
 
-Example:
+## 9. Moteurs spécialisés futurs
+
+MINOS pourra éventuellement orchestrer d'autres moteurs pour certaines analyses.
+
+Exemple conceptuel :
 
 ```text
-find_symbol       -> semantic index / SCIP-backed facts
-find_usages       -> semantic index / Glean
-find_callers      -> Glean / language-specific facts
-analyze_data_flow -> future CPG provider
-security_analysis -> future specialized provider
+find_symbol       -> index sémantique / faits SCIP
+find_usages       -> Glean / index sémantique
+find_callers      -> Glean / fournisseur spécifique
+analyze_data_flow -> futur fournisseur CPG
+security_analysis -> futur moteur spécialisé
 ```
 
-MINOS remains the facade that chooses and normalizes the result.
+MINOS reste la façade qui choisit, normalise et explique les résultats.
 
-## 10. Non-goals for M0
+---
 
-M0 will not attempt to implement:
+## 10. Non-objectifs pendant C0 et M0
 
-- a custom Java parser;
-- a complete multi-language parser framework;
-- perfect dynamic call resolution;
-- a production MCP server;
-- NEXUS integration;
-- embeddings;
-- vector search;
-- cloud indexing;
-- a public REST platform.
+Ne pas chercher à construire immédiatement :
 
-The purpose of M0 is to validate architecture and technology choices with measurable spikes.
+- un parser Java maison ;
+- un framework complet de parsers multi-langages ;
+- une résolution parfaite des appels dynamiques ;
+- un serveur MCP de production ;
+- l'intégration NEXUS ;
+- des embeddings ;
+- une recherche vectorielle ;
+- une indexation cloud ;
+- une plateforme REST publique.
+
+L'objectif de C0 est de cadrer.
+
+L'objectif de M0 sera de valider les choix techniques par des expérimentations mesurables.
