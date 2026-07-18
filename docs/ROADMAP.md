@@ -1,171 +1,255 @@
-# MINOS Roadmap
+# Feuille de route — MINOS
 
-Status: **Initial proposal**
+Statut : **Proposition initiale — à valider pendant C0**
 
-The roadmap is intentionally evidence-driven. A milestone may change when a spike disproves an architectural assumption.
+La feuille de route est volontairement guidée par les preuves. Un jalon peut être modifié si une expérimentation invalide une hypothèse d'architecture.
 
-## M0 — Architecture & Feasibility
+---
 
-Goal: validate the foundation before building product breadth.
+## C0 — Cadrage fonctionnel et architectural
 
-Deliverables:
+### Objectif
 
-- project bootstrap;
-- architecture overview;
-- ADRs;
-- SCIP evaluation;
-- Glean evaluation;
-- normalized MINOS model proposal;
-- indexer capability model;
-- `CodeKnowledgeStore` abstraction;
-- Java vertical spike;
-- one non-JVM vertical spike;
-- benchmark and precision report.
+Définir précisément ce que MINOS doit être avant de développer ses fonctionnalités.
 
-Decision gate:
+### Livrables
 
-> Is SCIP + Glean a viable default foundation for MINOS while keeping the MINOS domain decoupled?
+- cahier des charges ;
+- vision et positionnement ;
+- frontière MINOS / NEXUS ;
+- cas d'usage prioritaires ;
+- périmètre MVP ;
+- modèle de domaine proposé ;
+- modèle des symboles ;
+- modèle des relations ;
+- stratégie d'indexation ;
+- stratégie SCIP ;
+- stratégie Glean ;
+- stratégie `CodeKnowledgeStore` ;
+- critères de validation ;
+- ADR structurantes ;
+- plan des expérimentations M0.
 
-## M1 — Project Discovery & Indexer Orchestration
+### Porte de décision
 
-Goal: detect projects and select suitable indexers.
+> Savons-nous précisément ce que MINOS doit fournir, pourquoi, à qui, avec quelles limites et selon quels critères mesurables ?
 
-Scope:
+Aucune implémentation fonctionnelle significative ne doit commencer avant cette validation.
 
-- local repository registry;
-- workspace concept;
-- language detection;
-- build-system detection;
-- source/test roots;
-- `.gitignore` and `.minosignore` strategy;
-- `IndexerRegistry`;
-- provider capability negotiation;
-- index execution lifecycle;
-- index status reporting.
+---
 
-## M2 — Normalized Symbol Intelligence
+## M0 — Faisabilité technique
 
-Goal: expose reliable symbol lookup independently of provider/backend.
+### Objectif
 
-Scope:
+Valider les choix structurants avec des expérimentations réelles et mesurables.
 
-- normalized symbol model;
-- stable symbol identity;
-- files, modules and locations;
-- symbol kinds;
-- external and unresolved symbols;
-- `find_symbol`;
-- `get_file_symbols`;
-- lexical symbol search;
-- qualified-name search.
+### Périmètre
 
-M2 exit target:
+- évaluation SCIP ;
+- évaluation des indexeurs sélectionnés ;
+- évaluation Glean ;
+- test d'intégration locale ;
+- validation du découplage `CodeKnowledgeStore` ;
+- premier projet Java de référence ;
+- second écosystème de langage ;
+- mesures de précision ;
+- mesures de performance ;
+- rapport de décision.
+
+### Porte de décision
+
+> SCIP et Glean constituent-ils une fondation viable pour MINOS sans coupler irréversiblement son domaine à ces technologies ?
+
+Décisions possibles :
 
 ```text
-minos find-symbol <project> <symbol>
+ADOPTER
+ADOPTER_AVEC_CONTRAINTES
+REVOIR
+REMPLACER
 ```
 
-returns a normalized, compact result.
+---
 
-## M3 — Relationship Intelligence
+## M1 — Découverte des projets et orchestration des indexeurs
 
-Goal: expose incoming and outgoing code relationships.
+### Objectif
 
-Scope:
+Détecter un projet et sélectionner les fournisseurs d'indexation adaptés.
 
-- references;
-- implementations;
-- inheritance;
-- calls when supported;
-- dependency derivation;
-- relationship evidence and provenance;
-- `find_usages`;
-- `find_implementations`;
-- `find_callers`;
-- `find_callees`;
-- `dependencies`;
+### Périmètre
+
+- registre local des projets ;
+- concept de workspace ;
+- détection des langages ;
+- détection des systèmes de build ;
+- détection des racines de sources et de tests ;
+- stratégie `.gitignore` ;
+- stratégie `.minosignore` ;
+- `IndexerRegistry` ;
+- négociation des capacités ;
+- cycle de vie de l'indexation ;
+- état de l'index.
+
+---
+
+## M2 — Intelligence des symboles
+
+### Objectif
+
+Exposer une recherche fiable des symboles indépendamment du fournisseur et du backend.
+
+### Périmètre
+
+- modèle normalisé des symboles ;
+- identité stable ;
+- fichiers, modules et emplacements ;
+- types de symboles ;
+- symboles externes ;
+- symboles non résolus ;
+- `find_symbol` ;
+- `get_file_symbols` ;
+- recherche lexicale ;
+- recherche par nom qualifié.
+
+### Critère de sortie
+
+```text
+minos find-symbol <projet> <symbole>
+```
+
+retourne un résultat MINOS normalisé et compact.
+
+---
+
+## M3 — Intelligence des relations
+
+### Objectif
+
+Exposer les relations entrantes et sortantes entre éléments du code.
+
+### Périmètre
+
+- références ;
+- implémentations ;
+- héritage ;
+- appels lorsque disponibles ;
+- dépendances dérivées ;
+- provenance ;
+- preuves ;
+- niveau de confiance ;
+- `find_usages` ;
+- `find_implementations` ;
+- `find_callers` ;
+- `find_callees` ;
+- `dependencies` ;
 - `dependents`.
 
-## M4 — Search & Compact Context
+---
 
-Goal: make MINOS directly useful to tools and agents before MCP exists.
+## M4 — Recherche et contexte compact
 
-Scope:
+### Objectif
 
-- unified structured search;
-- compact JSON output;
-- result limits;
-- depth limits;
-- relevant source ranges;
-- explicit source retrieval;
-- token-efficient response policies;
-- query latency benchmarks.
+Rendre MINOS directement exploitable par des outils et agents avant même l'arrivée du MCP.
 
-This milestone defines the first **usable MINOS core**.
+### Périmètre
 
-## M5 — Related Tests & Explainable Derivations
+- recherche structurée unifiée ;
+- sortie JSON compacte ;
+- limites de résultats ;
+- limites de profondeur ;
+- plages de code pertinentes ;
+- récupération explicite du code source complet ;
+- politiques d'efficacité en tokens ;
+- benchmarks de latence.
 
-Goal: derive useful relationships that semantic indexers do not necessarily provide directly.
+Ce jalon définit le premier **cœur MINOS réellement utilisable**.
 
-Scope:
+---
 
-- related-test discovery;
-- test naming conventions;
-- direct symbol references;
-- method-call evidence;
-- package proximity;
-- confidence scoring;
-- explainable reasons.
+## M5 — Tests liés et dérivations explicables
 
-## M6 — Architecture Intelligence
+### Objectif
 
-Goal: provide a high-level topology of a repository.
+Déduire des relations utiles que les indexeurs ne fournissent pas forcément directement.
 
-Scope:
+### Périmètre
 
-- module topology;
-- package topology;
-- central components;
-- dependency concentration;
-- technology detection;
-- `get_architecture_overview`;
+- détection des tests liés ;
+- conventions de nommage ;
+- références directes ;
+- appels de méthodes ;
+- proximité de package ou namespace ;
+- score de confiance ;
+- explication des raisons.
+
+---
+
+## M6 — Intelligence d'architecture
+
+### Objectif
+
+Produire une vue de haut niveau de la topologie d'un projet.
+
+### Périmètre
+
+- topologie des modules ;
+- topologie des packages ou namespaces ;
+- composants centraux ;
+- concentration des dépendances ;
+- technologies détectées ;
+- `get_architecture_overview` ;
 - `get_module_context`.
 
-Architecture inference must remain evidence-based and distinguish detected facts from heuristics.
+Les faits détectés et les inférences doivent être distingués.
 
-## M7 — Incremental Indexing
+---
 
-Goal: avoid full repository reindexing when unnecessary.
+## M7 — Indexation incrémentale
 
-Scope:
+### Objectif
 
-- file fingerprints;
-- project/build fingerprints;
-- added/changed/deleted files;
-- index snapshots;
-- invalidation rules;
-- provider-specific incremental capabilities;
-- full-index fallback.
+Éviter les réindexations complètes lorsque cela n'est pas nécessaire.
 
-## M8 — Impact Analysis
+### Périmètre
 
-Goal: estimate change propagation using known graph relationships.
+- empreintes de fichiers ;
+- empreintes du projet et du build ;
+- fichiers ajoutés, modifiés et supprimés ;
+- snapshots d'index ;
+- règles d'invalidation ;
+- capacités incrémentales propres aux fournisseurs ;
+- repli vers une indexation complète.
 
-Scope:
+---
 
-- direct impact;
-- indirect impact;
-- path explanation;
-- confidence;
-- depth control;
-- related-test impact;
-- explicit limitations for dynamic behavior.
+## M8 — Analyse d'impact
 
-## M9 — Stable CLI
+### Objectif
 
-Goal: stabilize the developer-facing command line.
+Estimer la propagation potentielle d'une modification à partir des relations connues.
 
-Target commands:
+### Périmètre
+
+- impact direct ;
+- impact indirect ;
+- chemin explicatif ;
+- score de confiance ;
+- contrôle de profondeur ;
+- tests potentiellement impactés ;
+- limites explicites liées au comportement dynamique.
+
+---
+
+## M9 — CLI stabilisée
+
+### Objectif
+
+Stabiliser l'interface en ligne de commande destinée aux développeurs et aux automatisations.
+
+Commandes envisagées :
 
 ```text
 minos project add
@@ -185,11 +269,15 @@ minos impact
 minos inspect
 ```
 
-## M10 — MCP Server
+---
 
-Goal: expose compact specialized tools to AI agents.
+## M10 — Serveur MCP
 
-Candidate tools:
+### Objectif
+
+Exposer des outils spécialisés et compacts aux agents IA.
+
+Outils envisagés :
 
 ```text
 get_project_structure
@@ -210,56 +298,71 @@ analyze_impact
 get_index_status
 ```
 
-MCP remains an exposure layer. No core analysis logic belongs in MCP handlers.
+Le MCP reste une couche d'exposition. Aucune logique d'analyse métier ne doit résider dans les handlers MCP.
+
+---
 
 ## M11 — API
 
-Goal: support external systems without coupling them to Glean or internal adapters.
+### Objectif
 
-Scope:
+Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean ou des adaptateurs internes.
 
-- project/index operations;
-- symbol queries;
-- relationship queries;
-- architecture queries;
-- impact queries;
-- stable DTO contracts.
+### Périmètre
 
-Framework choice remains deferred until this milestone approaches.
+- opérations sur les projets et index ;
+- requêtes de symboles ;
+- requêtes de relations ;
+- architecture ;
+- impact ;
+- contrats DTO stables.
 
-## M12 — Multi-repository & Git Intelligence
+Le choix du framework serveur reste différé jusqu'à l'approche de ce jalon.
 
-Goal: expand from isolated local repositories to workspaces and history-aware intelligence.
+---
 
-Possible scope:
+## M12 — Multi-dépôts et intelligence Git
 
-- workspace-level symbol resolution;
-- cross-repository relationships;
-- Git change history;
-- symbol churn;
-- recent changes;
-- change hotspots.
+### Objectif
 
-## M13 — NEXUS Integration
+Étendre MINOS des dépôts isolés vers des workspaces et une compréhension de l'historique.
 
-Goal: allow NEXUS to consume MINOS Code Intelligence for task-specific context selection.
+Périmètre possible :
 
-Boundary:
+- résolution inter-dépôts ;
+- relations cross-repository ;
+- historique Git ;
+- fréquence de modification des symboles ;
+- changements récents ;
+- zones de forte activité.
 
-- MINOS provides facts, relationships, evidence and compact code views;
-- NEXUS ranks and selects what enters the AI context.
+---
 
-MINOS must remain fully usable without NEXUS.
+## M13 — Intégration NEXUS
 
-## Future exploration
+### Objectif
 
-Not committed to the main roadmap:
+Permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner un contexte adapté à une tâche.
 
-- CPG/data-flow engines;
-- security analysis;
-- semantic/vector search;
-- embeddings;
-- IDE plugins;
-- GitHub/GitLab remote indexing;
-- distributed indexing;
-- hosted service mode.
+### Frontière
+
+- MINOS fournit des faits, relations, preuves et vues compactes du code ;
+- NEXUS classe et sélectionne les informations à injecter dans le contexte IA.
+
+MINOS doit rester pleinement utilisable sans NEXUS.
+
+---
+
+## Explorations futures
+
+Non engagées dans la roadmap principale :
+
+- Code Property Graph ;
+- analyse de flux de données ;
+- analyse de sécurité ;
+- recherche sémantique ;
+- embeddings ;
+- plugins IDE ;
+- indexation distante GitHub/GitLab ;
+- indexation distribuée ;
+- mode service hébergé.
