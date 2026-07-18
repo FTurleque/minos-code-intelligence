@@ -18,6 +18,30 @@ Son rôle est de répondre à des questions comme :
 
 ## Position dans l'écosystème
 
+MINOS s'inscrit dans un écosystème plus large composé notamment de JARVIS, NEXUS, Alfred et Brainiac.
+
+Vue d'écosystème candidate :
+
+```text
+                       JARVIS
+                    Orchestration
+                         │
+            ┌────────────┴────────────┐
+            │                         │
+            ▼                         ▼
+          NEXUS                     MINOS
+   Context Intelligence       Code Intelligence
+            │                         │
+            └────────────┬────────────┘
+                         ▼
+                 ALFRED / BRAINIAC
+                  Agents / profils IA
+```
+
+Cette vue décrit les responsabilités fonctionnelles de l'écosystème. MINOS doit néanmoins rester autonome et ne dépendre fonctionnellement ni de JARVIS, ni de NEXUS, ni d'Alfred, ni de Brainiac.
+
+Le flux de connaissance peut également être représenté ainsi :
+
 ```text
 CODEBASE / WORKSPACE
         │
@@ -39,8 +63,12 @@ Les responsabilités sont volontairement séparées :
 
 - **MINOS** comprend et structure le code, les symboles, les relations, les dépendances et les preuves associées.
 - **NEXUS** sélectionne et classe les informations à injecter dans le contexte d'une IA pour une tâche donnée.
+- **JARVIS** est envisagé comme couche d'orchestration de l'écosystème.
+- **Alfred** et **Brainiac** représentent des agents ou profils spécialisés pouvant consommer les capacités disponibles.
 
-MINOS doit fonctionner indépendamment de NEXUS.
+MINOS doit fonctionner indépendamment de NEXUS et des autres consommateurs.
+
+Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée de cette répartition.
 
 ## Phase actuelle
 
@@ -62,6 +90,7 @@ La source de vérité du cadrage est :
 
 Documents complémentaires :
 
+- [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — place de MINOS dans l'écosystème JARVIS / NEXUS / Alfred / Brainiac ;
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture ;
 - [`docs/PLAN.md`](docs/PLAN.md) — plan de travail ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
@@ -77,19 +106,4 @@ L'orientation actuelle, encore à valider, est de :
 - privilégier SCIP comme protocole d'interopérabilité lorsque pertinent ;
 - évaluer Glean comme backend principal de faits et de requêtes sur le code ;
 - conserver un domaine MINOS indépendant de SCIP et de Glean ;
-- exposer à terme les capacités via CLI, MCP et API ;
-- optimiser les réponses pour les agents IA en retournant des informations compactes plutôt que des fichiers complets.
-
-## Principes directeurs
-
-1. **Agnostique du langage** — aucun langage ne doit être codé en dur dans le cœur.
-2. **Agnostique de l'indexeur** — SCIP est une option privilégiée, pas une obligation.
-3. **Glean fortement réutilisé, mais non imposé au domaine** — l'infrastructure doit rester remplaçable derrière une abstraction MINOS.
-4. **Fondé sur les preuves** — les heuristiques doivent exposer leur origine et leur niveau de confiance.
-5. **Local-first** — aucune donnée envoyée vers le cloud par défaut.
-6. **Efficace en tokens** — réponses compactes par défaut.
-7. **Extensible** — nouveaux langages, indexeurs et moteurs d'analyse ajoutables sans réécrire le cœur.
-
-## Licence
-
-Aucune licence publique n'est encore choisie. Le dépôt est actuellement privé. La stratégie open source et les licences des dépendances structurantes seront étudiées avant toute publication.
+- exposer à terme les capacités via CLI, MCP et API.
