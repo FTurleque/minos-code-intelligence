@@ -6,20 +6,20 @@
 .idea/
 *.iml
 
-# VS Code
+# Visual Studio Code
 .vscode/
 
-# OS
+# Systèmes d'exploitation
 .DS_Store
 Thumbs.db
 
-# MINOS local data
+# Données locales MINOS
 .minos/
 *.scip
 
-# Glean local databases and generated data
+# Bases locales Glean et données générées
 .glean/
 glean-db/
 
-# Logs
+# Journaux
 *.log
