@@ -4,23 +4,33 @@ Statut : **Brouillon de cadrage — à valider avant toute implémentation fonct
 
 Date : 19 juillet 2026
 
-Ce document constitue la **source de vérité fonctionnelle et technique de haut niveau** du projet MINOS pendant la phase de cadrage.
+Ce document constitue la **source de vérité fonctionnelle et technique de haut niveau** du projet MINOS pendant la phase C0.
 
-Aucune implémentation importante ne doit être considérée comme engagée tant que les objectifs, le périmètre, les responsabilités, les contraintes et les critères de validation décrits ici ne sont pas explicitement validés.
+Aucune implémentation importante ne doit être considérée comme engagée tant que les objectifs, le périmètre, les responsabilités, les contraintes, les principales décisions d'architecture et les critères de validation décrits ici ne sont pas explicitement validés.
+
+> **Règle de travail : documenter d'abord, décider ensuite, implémenter en dernier.**
 
 ---
 
-## 1. Présentation du projet
+# 1. Présentation du projet
 
-### 1.1 Nom
+## 1.1 Nom
 
 **MINOS**
 
-### 1.2 Nature du produit
+## 1.2 Nature du produit
 
 MINOS est un **moteur d'intelligence du code** (*Code Intelligence Engine*).
 
-Sa responsabilité est de construire, maintenir et exposer une représentation structurée, persistante, interrogeable et explicable d'un ou plusieurs projets logiciels.
+Sa responsabilité est de construire, maintenir et exposer une représentation :
+
+- structurée ;
+- persistante ;
+- interrogeable ;
+- explicable ;
+- exploitable par des machines ;
+
+d'un ou plusieurs projets logiciels.
 
 MINOS doit permettre à un humain, un IDE, un outil CLI, un serveur MCP, une API ou un agent IA d'obtenir rapidement des informations précises sur un codebase sans devoir relire ou charger systématiquement l'intégralité du dépôt.
 
@@ -31,10 +41,40 @@ MINOS n'est pas :
 - un agent IA ;
 - un moteur de génération de code ;
 - un simple moteur de recherche plein texte ;
-- un système de sélection de contexte pour LLM ;
+- un système de sélection du contexte pour LLM ;
 - un produit dépendant d'un fournisseur IA particulier.
 
-### 1.3 Positionnement conceptuel
+## 1.3 Formulation synthétique
+
+> **MINOS transforme un codebase en modèle de connaissance du code, puis permet de l'interroger.**
+
+---
+
+# 2. Positionnement dans l'écosystème IA
+
+Deux vues complémentaires doivent être distinguées.
+
+## 2.1 Vue d'orchestration
+
+```text
+                       JARVIS
+                    Orchestration
+                         │
+            ┌────────────┴────────────┐
+            │                         │
+            ▼                         ▼
+          NEXUS                     MINOS
+   Context Intelligence       Code Intelligence
+            │                         │
+            └────────────┬────────────┘
+                         ▼
+                 ALFRED / BRAINIAC
+                  Agents / profils IA
+```
+
+Cette vue exprime des responsabilités fonctionnelles et non des dépendances techniques obligatoires.
+
+## 2.2 Vue du flux de connaissance
 
 ```text
 CODEBASE / WORKSPACE
@@ -53,9 +93,11 @@ Context Intelligence
  AGENT / LLM / IDE
 ```
 
+## 2.3 Frontière MINOS / NEXUS
+
 MINOS répond à la question :
 
-> **Que contient le projet, où se trouvent ses éléments, et comment sont-ils reliés ?**
+> **Que contient le projet, où se trouvent ses éléments et comment sont-ils reliés ?**
 
 NEXUS répond à la question :
 
@@ -65,13 +107,35 @@ MINOS doit fonctionner sans NEXUS.
 
 NEXUS pourra consommer MINOS, mais MINOS ne devra jamais dépendre fonctionnellement de NEXUS.
 
+## 2.4 Frontière avec JARVIS
+
+JARVIS est envisagé comme couche d'orchestration.
+
+Il peut solliciter MINOS, NEXUS et d'autres agents ou capacités, mais ne doit pas absorber leurs domaines respectifs.
+
+MINOS doit fonctionner sans JARVIS.
+
+## 2.5 Alfred et Brainiac
+
+Alfred et Brainiac représentent des agents ou profils spécialisés pouvant consommer les capacités disponibles.
+
+Ils ne constituent pas des dépendances du cœur MINOS.
+
+## 2.6 CEREBRO
+
+Le nom CEREBRO a été évoqué pour un usage potentiel lié à des modèles ou capacités sémantiques.
+
+Son rôle n'est pas défini dans MINOS et reste hors périmètre du cadrage fonctionnel de MINOS.
+
+Voir également : [`ECOSYSTEME.md`](ECOSYSTEME.md).
+
 ---
 
-## 2. Vision
+# 3. Vision
 
 MINOS doit devenir la couche de **Code Intelligence** de l'écosystème IA.
 
-L'objectif à long terme est qu'un agent puisse interroger un codebase avec des questions telles que :
+À terme, un humain ou un agent doit pouvoir poser des questions telles que :
 
 ```text
 Où est défini DocumentIngestionService ?
@@ -110,14 +174,18 @@ Quel est le flux entre l'upload d'un document et son indexation ?
 ```
 
 ```text
-Quelle est la topologie générale de ce projet ?
+Dans quel module se trouve cette fonctionnalité ?
 ```
 
-MINOS doit privilégier :
+```text
+Quelles sont les classes centrales de cette partie de l'application ?
+```
+
+MINOS doit privilégier, dans cet ordre général :
 
 1. la précision des informations ;
 2. la qualité de la résolution des symboles ;
-3. l'explicabilité des résultats ;
+3. l'explicabilité ;
 4. la rapidité des requêtes ;
 5. l'efficacité pour les agents IA ;
 6. la réduction du contexte et des tokens ;
@@ -128,7 +196,7 @@ La quantité de fonctionnalités est secondaire par rapport à la fiabilité du 
 
 ---
 
-## 3. Problème à résoudre
+# 4. Problème à résoudre
 
 Lorsqu'un développeur ou un agent IA travaille sur un projet logiciel, il doit souvent parcourir de nombreux fichiers pour comprendre :
 
@@ -156,11 +224,11 @@ Cette exploration entraîne :
 - des modifications sans connaissance suffisante des impacts ;
 - une redécouverte permanente du même codebase.
 
-MINOS doit permettre de construire une représentation persistante et réutilisable du code afin de réduire cette redécouverte.
+MINOS doit construire une représentation persistante et réutilisable du code afin de réduire cette redécouverte.
 
 ---
 
-## 4. Utilisateurs et consommateurs visés
+# 5. Utilisateurs et consommateurs visés
 
 MINOS doit pouvoir être consommé à terme par :
 
@@ -180,40 +248,23 @@ MINOS doit pouvoir être consommé à terme par :
 - des pipelines CI/CD ;
 - des outils d'analyse automatisée.
 
-Ces consommateurs ne doivent pas connaître les détails internes de SCIP, Glean ou d'un moteur d'indexation spécifique.
+Ces consommateurs ne doivent pas connaître les détails internes de SCIP, Glean ou d'un indexeur particulier.
 
 ---
 
-## 5. Principes architecturaux fondamentaux
+# 6. Principes architecturaux fondamentaux
 
-### 5.1 Indépendance vis-à-vis des langages
+## 6.1 Agnosticisme du langage
 
 MINOS doit être **agnostique du langage**.
 
-Java, TypeScript et Python ne sont que des exemples de langages pouvant servir à la validation initiale.
+Java, TypeScript et Python ne sont que des exemples possibles de langages de validation.
 
 Le cœur de MINOS ne doit contenir aucune liste fermée de langages supportés.
 
-L'ajout futur de langages comme :
+Des langages comme Kotlin, Scala, JavaScript, Go, Rust, C, C++, C#, Visual Basic, Ruby, PHP, Dart, SQL ou d'autres doivent pouvoir être ajoutés par intégration d'un fournisseur adapté.
 
-- Kotlin ;
-- Scala ;
-- JavaScript ;
-- Go ;
-- Rust ;
-- C ;
-- C++ ;
-- C# ;
-- Visual Basic ;
-- Ruby ;
-- PHP ;
-- Dart ;
-- SQL ;
-- ou tout autre langage ;
-
-doit pouvoir être réalisé par l'ajout ou l'intégration d'un fournisseur adapté, sans réécriture du domaine MINOS.
-
-### 5.2 Indépendance vis-à-vis des indexeurs
+## 6.2 Agnosticisme de l'indexeur
 
 MINOS doit être **agnostique du moteur d'indexation**.
 
@@ -230,43 +281,22 @@ Un fournisseur pourra s'appuyer sur :
 - un outil spécialisé ;
 - une technologie future.
 
-MINOS doit sélectionner les fournisseurs selon leurs capacités et non uniquement selon le nom du langage.
+MINOS doit sélectionner les fournisseurs selon leurs capacités réelles, et non uniquement selon le nom du langage.
 
-### 5.3 Glean fortement réutilisé, mais non imposé au domaine
+## 6.3 Réutilisation avant réimplémentation
 
-Glean est actuellement le **backend privilégié à évaluer** pour le stockage et l'interrogation des faits de code.
+MINOS ne doit pas réinventer systématiquement des briques open source matures.
 
-La stratégie envisagée est :
+L'objectif est de réutiliser autant que possible :
 
-> **Glean-first, not Glean-locked.**
+- les indexeurs sémantiques ;
+- les protocoles d'interopérabilité ;
+- les moteurs de faits et de requêtes ;
+- les moteurs spécialisés ;
 
-Cette formulation reste à valider formellement pendant le cadrage et les expérimentations.
+tout en conservant les contrats métier et la valeur propre de MINOS.
 
-Le domaine MINOS ne doit pas exposer directement :
-
-- les types internes de Glean ;
-- Angle ;
-- Thrift ;
-- les identifiants de faits Glean ;
-- les détails de stockage Glean.
-
-Une abstraction MINOS, provisoirement nommée :
-
-```text
-CodeKnowledgeStore
-```
-
-doit isoler le domaine du backend.
-
-### 5.4 SCIP comme protocole privilégié, non obligatoire
-
-SCIP est envisagé comme **protocole d'interopérabilité sémantique privilégié** lorsqu'un indexeur de qualité existe pour le langage concerné.
-
-SCIP ne doit pas être obligatoire.
-
-MINOS doit pouvoir intégrer un fournisseur non-SCIP si celui-ci fournit une meilleure qualité ou des capacités absentes de SCIP.
-
-### 5.5 Fonctionnement local en priorité
+## 6.4 Local-first
 
 Par défaut :
 
@@ -274,22 +304,20 @@ Par défaut :
 - aucune analyse cloud ne doit être obligatoire ;
 - aucun LLM ne doit être nécessaire au fonctionnement de base ;
 - les dépôts privés doivent pouvoir être analysés localement ;
-- les intégrations externes doivent être explicitement activées.
+- les intégrations externes doivent être opt-in.
 
-### 5.6 Résultats fondés sur des preuves
+## 6.5 Résultats fondés sur les preuves
 
 MINOS doit distinguer les faits déterministes des résultats dérivés ou heuristiques.
 
-Statuts envisagés :
+Statuts conceptuels envisagés :
 
 ```text
-RESOLU
-PARTIELLEMENT_RESOLU
-NON_RESOLU
-HEURISTIQUE
+RESOLVED
+PARTIALLY_RESOLVED
+UNRESOLVED
+HEURISTIC
 ```
-
-Les valeurs techniques exposées par les API pourront rester normalisées en anglais si nécessaire, mais leur signification et leur documentation doivent être en français.
 
 Un résultat dérivé doit pouvoir fournir :
 
@@ -300,11 +328,19 @@ Un résultat dérivé doit pouvoir fournir :
 
 Aucune heuristique ne doit être présentée comme une certitude.
 
+## 6.6 Efficacité en tokens
+
+MINOS doit retourner par défaut des résultats ciblés et structurés plutôt que des fichiers complets.
+
+## 6.7 Extensibilité
+
+Un nouveau langage, un nouvel indexeur, un nouveau moteur spécialisé ou un nouveau backend doit pouvoir être ajouté sans réécriture du domaine principal.
+
 ---
 
-## 6. Architecture conceptuelle cible
+# 7. Architecture conceptuelle cible
 
-L'architecture suivante est une **hypothèse de travail à valider**, et non une architecture définitivement acceptée.
+L'architecture suivante est une hypothèse de travail à valider :
 
 ```text
 Dépôts / Workspaces
@@ -325,8 +361,8 @@ Registre des fournisseurs
         │
   ┌─────┼───────────────────────────────┐
   ▼     ▼                               ▼
- SCIP  Indexeurs Glean natifs     Autres fournisseurs
-  │                                  AST / LSP / LSIF / CPG
+ SCIP  Indexeurs Glean natifs      Autres fournisseurs
+  │                               AST / LSP / LSIF / CPG
   └──────────────────┬──────────────────┘
                      ▼
           Ingestion Code Intelligence
@@ -360,45 +396,11 @@ Registre des fournisseurs
                    NEXUS
 ```
 
----
-
-## 7. Responsabilités envisagées de MINOS
-
-MINOS doit posséder fonctionnellement :
-
-- le registre des projets et workspaces ;
-- la découverte de la structure d'un dépôt ;
-- la détection des langages ;
-- la détection des systèmes de build ;
-- le registre des fournisseurs d'indexation ;
-- le modèle de capacités des fournisseurs ;
-- l'orchestration des indexeurs ;
-- le modèle de domaine normalisé ;
-- le modèle de provenance ;
-- le modèle de confiance ;
-- les services de requêtes ;
-- les relations dérivées spécifiques à MINOS ;
-- l'analyse des tests liés ;
-- l'analyse d'impact ;
-- la vue d'architecture ;
-- la génération de réponses compactes ;
-- les contrats CLI ;
-- les contrats MCP ;
-- les contrats API ;
-- les contrats d'intégration avec NEXUS.
-
-MINOS ne doit pas obligatoirement posséder :
-
-- son propre parser pour chaque langage ;
-- son propre compilateur ;
-- son propre moteur de résolution sémantique complet ;
-- son propre moteur de stockage de graphe si une solution open source adaptée existe.
+MINOS doit rester la façade qui normalise et explique les résultats, indépendamment des moteurs utilisés en dessous.
 
 ---
 
-## 8. Capacités fonctionnelles cibles
-
-### 8.1 Gestion des projets
+# 8. Gestion des projets et workspaces
 
 MINOS doit pouvoir gérer plusieurs projets.
 
@@ -408,25 +410,29 @@ Informations minimales envisagées :
 id
 nom
 chemin local
-type de projet
+type
 langages détectés
 technologies détectées
 systèmes de build détectés
 date de dernière indexation
 état de l'index
-version du schéma
+version du schéma d'index
 ```
 
-Le premier périmètre doit viser les dépôts locaux.
+Le premier périmètre vise les dépôts locaux.
 
-Des extensions futures pourront supporter :
+Extensions futures :
 
 - GitHub ;
 - GitLab ;
 - archives ;
 - workspaces multi-dépôts.
 
-### 8.2 Découverte du dépôt
+Le modèle doit permettre de distinguer projet, module et workspace.
+
+---
+
+# 9. Découverte et scanner de dépôt
 
 MINOS doit identifier notamment :
 
@@ -444,13 +450,13 @@ MINOS doit respecter autant que possible :
 .gitignore
 ```
 
-et prévoir son propre mécanisme :
+et prévoir :
 
 ```text
 .minosignore
 ```
 
-Répertoires à exclure par défaut selon le contexte :
+Exclusions par défaut envisagées selon le contexte :
 
 ```text
 .git/
@@ -462,176 +468,137 @@ out/
 dist/
 ```
 
-### 8.3 Indexation sémantique
+Les fichiers binaires ne doivent pas être analysés inutilement.
 
-MINOS doit pouvoir exploiter un ou plusieurs fournisseurs capables d'extraire ou fournir :
-
-- définitions ;
-- références ;
-- implémentations ;
-- relations de type ;
-- relations d'appel ;
-- relations inter-fichiers ;
-- relations inter-modules ;
-- éventuellement relations inter-dépôts ;
-- éventuellement flux de contrôle ;
-- éventuellement flux de données.
-
-Toutes les capacités ne seront pas disponibles pour tous les langages.
-
-MINOS doit connaître les capacités réelles de chaque fournisseur.
-
-### 8.4 Recherche de symboles
-
-Capacité cible :
-
-```text
-find_symbol
-```
-
-Doit permettre de rechercher par :
-
-- nom simple ;
-- nom qualifié ;
-- type de symbole ;
-- éventuellement module ou projet.
-
-Résultat minimal :
-
-- nom ;
-- type ;
-- signature ;
-- emplacement ;
-- fichier ;
-- module ;
-- principales relations ;
-- provenance.
-
-### 8.5 Recherche d'usages
-
-Capacité cible :
-
-```text
-find_usages
-```
-
-Doit permettre d'identifier selon les informations disponibles :
-
-- références ;
-- imports ;
-- appels ;
-- héritages ;
-- implémentations ;
-- injections ;
-- autres usages pertinents.
-
-Chaque résultat doit exposer :
-
-- le fichier ;
-- le symbole source ;
-- la relation ;
-- l'emplacement ;
-- le niveau de résolution ;
-- la provenance.
-
-### 8.6 Dépendances et dépendants
-
-Capacités cibles :
-
-```text
-find_dependencies
-find_dependents
-```
-
-Définition :
-
-```text
-dependencies = ce dont le symbole dépend
-
-dependents = ce qui dépend du symbole
-```
-
-Une profondeur configurable devra être envisagée.
-
-### 8.7 Implémentations et appels
-
-Capacités cibles :
-
-```text
-find_implementations
-find_callers
-find_callees
-```
-
-Ces fonctionnalités devront être exposées uniquement lorsque les données du fournisseur sont suffisamment fiables.
-
-### 8.8 Tests liés
-
-Capacité cible :
-
-```text
-get_related_tests
-```
-
-Stratégies possibles :
-
-- références directes ;
-- imports ;
-- instanciations ;
-- appels de méthodes ;
-- conventions de nommage ;
-- proximité de package ou namespace.
-
-Chaque résultat heuristique doit fournir :
-
-- un niveau de confiance ;
-- les raisons ;
-- les preuves.
-
-### 8.9 Analyse d'impact
-
-Capacité cible future :
-
-```text
-analyze_impact
-```
-
-MINOS devra distinguer :
-
-- impact direct ;
-- impact indirect ;
-- profondeur ;
-- chemin de dépendance ;
-- niveau de confiance.
-
-L'analyse statique ne devra jamais être présentée comme une preuve complète du comportement runtime.
-
-### 8.10 Vue d'architecture
-
-Capacité cible :
-
-```text
-get_architecture_overview
-```
-
-Informations possibles :
-
-- modules ;
-- packages / namespaces ;
-- composants centraux ;
-- dépendances structurantes ;
-- technologies détectées ;
-- zones fortement couplées.
-
-Les inférences architecturales devront être distinguées des faits détectés directement.
+La découverte du dépôt ne doit pas être confondue avec l'analyse sémantique du code.
 
 ---
 
-## 9. Modèle de données minimal envisagé
+# 10. Modèle de fournisseurs d'indexation
 
-Le modèle reste à valider.
+Concepts candidats :
 
-Concepts envisagés :
+```text
+IndexerProvider
+IndexerRegistry
+IndexerCapabilities
+IndexingRequest
+IndexingResult
+```
+
+Les fournisseurs doivent déclarer leurs capacités.
+
+Exemples :
+
+```text
+DEFINITIONS
+REFERENCES
+IMPLEMENTATIONS
+TYPE_RELATIONSHIPS
+CALL_RELATIONSHIPS
+CROSS_FILE
+CROSS_MODULE
+CROSS_REPOSITORY
+CONTROL_FLOW
+DATA_FLOW
+```
+
+MINOS ne doit jamais supposer qu'un fournisseur fournit toutes les capacités simplement parce qu'il supporte un langage.
+
+La négociation des capacités doit permettre de sélectionner le meilleur fournisseur disponible pour un besoin donné.
+
+---
+
+# 11. Stratégie SCIP
+
+Hypothèse actuelle : SCIP peut réduire fortement la quantité de code spécifique à développer pour l'indexation sémantique multi-langages.
+
+SCIP est envisagé comme **protocole d'interopérabilité sémantique privilégié**, mais non obligatoire.
+
+MINOS doit évaluer :
+
+- la qualité des indexeurs ;
+- leur couverture ;
+- leur maintenance ;
+- leur licence ;
+- leur fonctionnement hors ligne ;
+- leur facilité d'installation ;
+- leur performance ;
+- leur comportement sur des projets réels.
+
+SCIP ne doit pas devenir le modèle de domaine MINOS.
+
+Les types protobuf SCIP ne doivent pas fuiter dans les contrats publics MINOS.
+
+Un fournisseur non-SCIP doit pouvoir être préféré s'il offre une meilleure précision ou des capacités absentes.
+
+---
+
+# 12. Stratégie Glean
+
+Hypothèse actuelle : Glean peut fournir une grande partie de l'infrastructure de :
+
+- stockage des faits de code ;
+- schémas typés ;
+- déduplication ;
+- interrogation ;
+- traversée de relations ;
+- dérivation de faits ;
+- persistance de connaissances spécifiques à MINOS.
+
+Stratégie candidate :
+
+> **Glean-first, not Glean-locked.**
+
+Cette stratégie n'est pas encore acceptée.
+
+Glean doit être placé derrière une abstraction appartenant à MINOS, provisoirement nommée :
+
+```text
+CodeKnowledgeStore
+```
+
+Le contrat doit être défini à partir des cas d'usage MINOS et non comme une copie de l'API Glean.
+
+Les éléments suivants ne doivent pas fuiter dans les contrats publics :
+
+- types Glean ;
+- Angle ;
+- Thrift ;
+- identifiants internes Glean ;
+- détails de stockage.
+
+Points à valider :
+
+- installation locale ;
+- Windows ;
+- Linux ;
+- macOS ;
+- coût de démarrage ;
+- consommation mémoire ;
+- taille disque ;
+- complexité opérationnelle ;
+- gestion des processus ;
+- intégration Java ;
+- communication RPC / Thrift / CLI ;
+- évolutions de schéma ;
+- reconstruction après corruption ;
+- petits et gros projets.
+
+Décisions possibles après M0 :
+
+```text
+ADOPTER
+ADOPTER_AVEC_CONTRAINTES
+REVOIR
+REMPLACER
+```
+
+---
+
+# 13. Modèle de données minimal
+
+Concepts candidats :
 
 ```text
 Project
@@ -645,9 +612,37 @@ Evidence
 IndexSnapshot
 ```
 
-### 9.1 Symbole
+Le modèle doit rester indépendant de SCIP et de Glean.
 
-Un symbole normalisé pourrait contenir :
+## 13.1 SourceFile
+
+Informations candidates :
+
+```text
+id
+projectId
+moduleId
+relativePath
+language
+sourceType
+contentHash
+size
+lastModified
+```
+
+`sourceType` pourra distinguer notamment :
+
+```text
+MAIN
+TEST
+RESOURCE
+CONFIGURATION
+DOCUMENTATION
+```
+
+## 13.2 Symbol
+
+Informations candidates :
 
 ```text
 id
@@ -684,32 +679,40 @@ FIELD
 FUNCTION
 ```
 
-Le modèle doit rester extensible.
+Le modèle doit rester extensible pour les concepts propres aux langages.
 
-### 9.2 Relation
+L'identité d'une méthode surchargée doit tenir compte de sa signature.
 
-Relations factuelles envisagées :
+## 13.3 Relationship
+
+Relations factuelles candidates :
 
 ```text
 DECLARES
 CONTAINS
+IMPORTS
 REFERENCES
 EXTENDS
 IMPLEMENTS
 CALLS
+RETURNS
+ACCEPTS
 ```
 
-Relations dérivées possibles :
+Relations dérivées ou sémantiques possibles :
 
 ```text
+USES
 DEPENDS_ON
+INJECTS
 RELATED_TEST
+TESTS
 IMPACT_PATH
 ARCHITECTURAL_ROLE
 CENTRALITY
 ```
 
-Une relation doit pouvoir conserver :
+Chaque relation doit pouvoir conserver :
 
 ```text
 sourceSymbolId
@@ -722,73 +725,213 @@ origin
 evidence
 ```
 
----
-
-## 10. Stratégie SCIP
-
-Hypothèse actuelle : SCIP peut réduire fortement la quantité de code spécifique à développer pour l'indexation sémantique multi-langages.
-
-MINOS doit évaluer :
-
-- la qualité des indexeurs disponibles ;
-- leur couverture fonctionnelle ;
-- leur maintenance ;
-- leur licence ;
-- leur fonctionnement hors ligne ;
-- leur facilité d'installation ;
-- leur performance ;
-- leur capacité à fonctionner sur des projets réels.
-
-SCIP ne doit pas devenir le modèle de domaine MINOS.
+Les relations factuelles doivent être distinguées des relations dérivées.
 
 ---
 
-## 11. Stratégie Glean
+# 14. Cas d'usage fonctionnels
 
-Hypothèse actuelle : Glean peut fournir une grande partie de l'infrastructure de :
+## 14.1 Recherche de symbole
 
-- stockage des faits de code ;
-- schémas typés ;
-- déduplication ;
-- interrogation ;
-- traversée de relations ;
-- dérivation de faits ;
-- persistance de connaissances spécifiques à MINOS.
-
-Les points à valider avant adoption sont notamment :
-
-- installation locale ;
-- Windows ;
-- Linux ;
-- macOS ;
-- coût de démarrage ;
-- consommation mémoire ;
-- taille disque ;
-- complexité opérationnelle ;
-- gestion des processus ;
-- intégration depuis Java ;
-- communication RPC / Thrift / CLI ;
-- mises à jour de schémas ;
-- reconstruction après corruption ;
-- fonctionnement sur petits projets ;
-- fonctionnement sur gros projets.
-
-La décision finale pourra être :
+Capacité cible :
 
 ```text
-ADOPTER
-ADOPTER_AVEC_CONTRAINTES
-REVOIR
-REMPLACER
+find_symbol
 ```
+
+Recherche par :
+
+- nom simple ;
+- nom qualifié ;
+- type de symbole ;
+- projet ;
+- module lorsque pertinent.
+
+Résultat minimal :
+
+- nom ;
+- type ;
+- signature ;
+- emplacement ;
+- fichier ;
+- module ;
+- principales relations ;
+- provenance.
+
+## 14.2 Recherche d'usages
+
+Capacité cible :
+
+```text
+find_usages
+```
+
+Peut identifier selon les capacités disponibles :
+
+- références ;
+- imports ;
+- appels ;
+- héritages ;
+- implémentations ;
+- injections ;
+- autres usages pertinents.
+
+Chaque résultat doit exposer :
+
+- fichier ;
+- symbole source ;
+- relation ;
+- emplacement ;
+- niveau de résolution ;
+- provenance.
+
+## 14.3 Implémentations
+
+```text
+find_implementations
+```
+
+Doit distinguer les implémentations résolues des résultats partiels ou heuristiques.
+
+## 14.4 Appelants et appelés
+
+```text
+find_callers
+find_callees
+```
+
+À exposer lorsque les données disponibles sont suffisamment fiables.
+
+## 14.5 Dépendances et dépendants
+
+```text
+find_dependencies
+find_dependents
+```
+
+Définition :
+
+```text
+dependencies = ce dont le symbole dépend
+
+dependents = ce qui dépend du symbole
+```
+
+Une profondeur configurable doit être prévue.
+
+## 14.6 Tests liés
+
+```text
+get_related_tests
+```
+
+Stratégies possibles :
+
+- références directes ;
+- imports ;
+- instanciations ;
+- appels de méthodes ;
+- conventions de nommage ;
+- proximité de package ou namespace.
+
+Chaque résultat heuristique doit fournir :
+
+- un niveau de confiance ;
+- les raisons ;
+- les preuves.
+
+## 14.7 Vue d'architecture
+
+```text
+get_architecture_overview
+```
+
+Informations possibles :
+
+- modules ;
+- packages ou namespaces ;
+- composants centraux ;
+- dépendances structurantes ;
+- technologies détectées ;
+- zones fortement couplées.
+
+Les faits détectés et les inférences architecturales doivent être distingués.
+
+## 14.8 Analyse d'impact
+
+```text
+analyze_impact
+```
+
+Doit distinguer :
+
+- impact direct ;
+- impact indirect ;
+- profondeur ;
+- chemin explicatif ;
+- niveau de confiance ;
+- tests potentiellement impactés.
+
+L'analyse statique ne doit jamais être présentée comme une preuve complète du comportement runtime.
+
+## 14.9 Recherche structurée générale
+
+Capacité cible :
+
+```text
+search_code
+```
+
+ou équivalent interne.
+
+La recherche doit pouvoir couvrir progressivement :
+
+- symboles ;
+- fichiers ;
+- packages ou namespaces ;
+- modules ;
+- relations.
+
+Le premier niveau doit proposer au minimum :
+
+- recherche lexicale ;
+- recherche par nom de symbole ;
+- recherche par nom qualifié.
+
+L'architecture doit permettre plus tard :
+
+- recherche sémantique ;
+- embeddings ;
+- recherche hybride.
+
+Aucun service d'embeddings externe ne doit être obligatoire.
+
+## 14.10 Contexte compact d'un symbole
+
+Capacité cible future :
+
+```text
+get_symbol_context
+```
+
+Doit pouvoir retourner :
+
+- symbole ;
+- signature ;
+- emplacement ;
+- relations pertinentes ;
+- plage de code utile ;
+- preuves ;
+
+sans charger le fichier complet par défaut.
 
 ---
 
-## 12. Efficacité pour les agents IA
+# 15. Efficacité pour les agents IA
 
-MINOS doit être conçu pour réduire la quantité de contexte envoyée aux modèles.
+MINOS doit réduire la quantité de contexte nécessaire à la compréhension d'un codebase.
 
-Par défaut, une requête doit privilégier :
+Par défaut, une réponse doit privilégier :
 
 ```text
 symbole
@@ -807,33 +950,31 @@ fichier source complet
 
 Le contenu complet d'un fichier ne doit être retourné que lorsqu'il est explicitement demandé.
 
-Exemple de résultat compact cible :
+Les réponses doivent prévoir :
 
-```json
-{
-  "symbol": "DocumentIngestionService",
-  "kind": "CLASS",
-  "qualifiedName": "fr.ariane.chatbot.document.DocumentIngestionService",
-  "location": {
-    "file": "src/main/java/.../DocumentIngestionService.java",
-    "startLine": 12,
-    "endLine": 120
-  },
-  "relationships": {
-    "dependencies": 3,
-    "dependents": 2,
-    "relatedTests": 1
-  }
-}
+- limites de résultats ;
+- limites de profondeur ;
+- pagination lorsque nécessaire ;
+- formats structurés ;
+- plages de code ciblées.
+
+Métriques futures spécifiques IA :
+
+```text
+Code Exploration Reduction
+Estimated Tokens Avoided
+Average Context Size
 ```
 
 ---
 
-## 13. Interfaces d'exposition envisagées
+# 16. Interfaces d'exposition
 
-### 13.1 CLI
+Les couches d'exposition ne doivent contenir aucune logique d'analyse métier principale.
 
-Commandes envisagées à terme :
+## 16.1 CLI
+
+Commandes candidates :
 
 ```text
 minos project add
@@ -853,13 +994,15 @@ minos impact
 minos inspect
 ```
 
-La CLI n'est pas prioritaire tant que le cœur des requêtes n'est pas validé.
+Les sorties machine doivent pouvoir être structurées, notamment en JSON.
 
-### 13.2 MCP
+## 16.2 MCP
 
-MINOS devra être conçu pour devenir un serveur MCP de qualité, mais MCP restera une couche d'exposition.
+MINOS doit être conçu pour devenir un serveur MCP de qualité.
 
-Outils envisagés :
+Le MCP reste une couche d'exposition.
+
+Outils candidats :
 
 ```text
 get_project_structure
@@ -880,23 +1023,150 @@ analyze_impact
 get_index_status
 ```
 
-Chaque outil devra :
+Chaque outil doit :
 
-- avoir une responsabilité précise ;
+- avoir une responsabilité claire ;
+- être spécialisé plutôt que trop générique ;
 - accepter des paramètres explicites ;
-- retourner une réponse structurée ;
-- proposer des limites de résultats ;
-- éviter les réponses excessivement volumineuses.
+- retourner une sortie structurée ;
+- proposer une limite configurable de résultats ;
+- éviter les réponses excessivement volumineuses ;
+- être déterministe lorsque les données le permettent.
 
-### 13.3 API
+Éviter les outils du type :
+
+```text
+query_everything
+```
+
+## 16.3 API
 
 Une API pourra être ajoutée lorsque les contrats métier seront stabilisés.
 
-Le framework serveur ne doit pas être choisi définitivement pendant la phase de cadrage.
+Exemples conceptuels :
+
+```text
+POST /api/projects
+POST /api/projects/{projectId}/index
+GET  /api/projects/{projectId}/symbols/search
+GET  /api/projects/{projectId}/symbols/{symbolId}
+GET  /api/projects/{projectId}/symbols/{symbolId}/usages
+GET  /api/projects/{projectId}/symbols/{symbolId}/dependencies
+GET  /api/projects/{projectId}/symbols/{symbolId}/tests
+```
+
+La logique métier ne doit pas être placée dans les contrôleurs REST.
+
+Le choix du framework serveur reste ouvert pendant C0.
 
 ---
 
-## 14. Sécurité et confidentialité
+# 17. Indexation complète et incrémentale
+
+MINOS ne doit pas réindexer systématiquement l'intégralité d'un dépôt lorsque cela peut être évité.
+
+La cible future doit distinguer :
+
+```text
+Full indexing
+Incremental indexing
+```
+
+MINOS doit pouvoir détecter progressivement :
+
+- fichier ajouté ;
+- fichier modifié ;
+- fichier supprimé.
+
+Puis mettre à jour uniquement les portions concernées de l'index et du graphe lorsque les fournisseurs le permettent.
+
+Le modèle doit prévoir :
+
+- empreinte de contenu ;
+- version du schéma ;
+- version de l'analyseur ou fournisseur ;
+- empreinte du build ;
+- snapshot d'index ;
+- règles d'invalidation ;
+- repli vers une indexation complète.
+
+L'indexation incrémentale n'est pas obligatoire dans le premier MVP.
+
+---
+
+# 18. Git Intelligence
+
+Extension future envisagée :
+
+```text
+get_symbol_history
+get_recent_changes
+get_file_churn
+get_recently_modified_symbols
+```
+
+Exemples d'informations :
+
+- nombre de modifications d'un symbole ;
+- date de dernière modification ;
+- fréquence de changement ;
+- zones de forte activité ;
+- relations entre historique Git et composants du code.
+
+Cette capacité n'est pas obligatoire pour le MVP.
+
+---
+
+# 19. Intégrations futures
+
+## 19.1 NEXUS
+
+MINOS expose des faits, relations, preuves et vues compactes.
+
+NEXUS sélectionne les informations pertinentes pour une tâche et construit le contexte.
+
+## 19.2 JARVIS
+
+JARVIS peut orchestrer MINOS sans devenir une dépendance du cœur.
+
+## 19.3 Alfred et Brainiac
+
+Ces agents ou profils peuvent consommer MINOS via des contrats d'exposition.
+
+## 19.4 AI Skills Registry
+
+MINOS ne gère pas directement les skills IA.
+
+Un skill pourra néanmoins utiliser les capacités de MINOS.
+
+Exemple :
+
+```text
+Skill : java-impact-analysis
+        │
+        ▼
+      MINOS
+        ├── find_usages
+        ├── find_dependencies
+        ├── get_related_tests
+        └── analyze_impact
+```
+
+## 19.5 IDE et outils externes
+
+Intégrations futures possibles :
+
+- IntelliJ IDEA ;
+- VS Code ;
+- GitHub Copilot ;
+- Claude ;
+- ChatGPT / OpenAI ;
+- agents personnalisés ;
+- pipelines CI/CD.
+
+---
+
+# 20. Sécurité et confidentialité
 
 MINOS doit pouvoir analyser des dépôts privés.
 
@@ -904,56 +1174,166 @@ Exigences :
 
 - aucune donnée envoyée vers un service externe par défaut ;
 - aucune analyse cloud automatique ;
-- intégrations externes explicitement activées ;
+- intégrations externes opt-in ;
 - possibilité d'exclure des fichiers ou chemins ;
 - respect de `.gitignore` autant que possible ;
-- support prévu de `.minosignore` ;
+- support de `.minosignore` ;
 - aucune dépendance obligatoire à un LLM ;
-- secrets et fichiers sensibles exclus lorsque cela est pertinent et configurable.
+- secrets et fichiers sensibles exclus lorsque pertinent et configurable.
+
+Le comportement par défaut doit être conservateur.
 
 ---
 
-## 15. Exigences non fonctionnelles
+# 21. Stratégie de tests
 
-### 15.1 Précision
+Les tests doivent être présents dès le début de l'implémentation technique.
+
+Types de tests à prévoir :
+
+- tests unitaires ;
+- tests d'intégration ;
+- tests de parsing/indexation lorsque MINOS contrôle cette couche ;
+- tests de normalisation ;
+- tests de détection de symboles ;
+- tests de relations ;
+- tests de recherche ;
+- tests de comportement des adaptateurs ;
+- tests d'indexation incrémentale lorsqu'elle sera développée.
+
+Des projets fixtures synthétiques doivent être créés.
+
+Exemple :
+
+```text
+UserResource
+    │
+    ▼
+UserService
+    │
+    ▼
+UserRepository
+```
+
+Tests attendus :
+
+```text
+find_usages UserService
+→ UserResource
+```
+
+```text
+find_dependencies UserService
+→ UserRepository
+```
+
+Les fixtures doivent inclure progressivement :
+
+- mono-module ;
+- multi-module ;
+- surcharges ;
+- héritage ;
+- implémentations ;
+- références cross-file ;
+- dépendances manquantes ;
+- symboles non résolus ;
+- au moins deux écosystèmes de langage.
+
+---
+
+# 22. Métriques
+
+MINOS doit pouvoir mesurer à terme :
+
+```text
+Indexing Time
+Incremental Indexing Time
+Symbol Detection Accuracy
+Relationship Detection Accuracy
+Search Precision
+Search Recall
+Query Latency
+Index Size
+Memory Footprint
+```
+
+Pour l'utilisation IA :
+
+```text
+Code Exploration Reduction
+Estimated Tokens Avoided
+Average Context Size
+```
+
+Les mesures doivent être faites sur des environnements de référence documentés.
+
+---
+
+# 23. Exigences non fonctionnelles
+
+## 23.1 Précision
 
 La précision prime sur la quantité de relations produites.
 
 Un résultat inconnu ou non résolu doit rester inconnu ou non résolu.
 
-### 15.2 Performance
+## 23.2 Performance
 
 Les requêtes sur un index existant doivent viser une latence faible.
 
-Les objectifs chiffrés seront fixés après les premiers benchmarks.
+Les objectifs chiffrés seront validés après les premiers benchmarks.
 
-### 15.3 Extensibilité
-
-L'ajout d'un langage, d'un indexeur ou d'un backend ne doit pas obliger à modifier les services métier existants.
-
-### 15.4 Maintenabilité
+## 23.3 Maintenabilité
 
 MINOS doit préférer des abstractions simples et testables.
 
-La modularisation Maven physique ne doit être introduite que lorsqu'elle apporte une vraie séparation utile.
+La modularisation physique ne doit être introduite que lorsqu'elle apporte une séparation réellement utile.
 
-### 15.5 Testabilité
+## 23.4 Testabilité
 
 Le cœur MINOS doit pouvoir être testé sans lancer Glean.
 
-Une implémentation mémoire ou un double de test de `CodeKnowledgeStore` doit être possible.
+Un backend mémoire ou double de test de `CodeKnowledgeStore` doit être possible.
 
-### 15.6 Open source
+## 23.5 Open source
 
 MINOS doit être conçu pour pouvoir devenir open source.
 
-Les licences de toutes les dépendances structurantes devront être vérifiées et documentées avant publication.
+Les licences des dépendances structurantes doivent être vérifiées et documentées avant publication.
+
+## 23.6 Multi-plateforme
+
+La cible locale doit prendre en compte au minimum :
+
+- Windows ;
+- Linux ;
+- macOS.
+
+Les choix d'infrastructure doivent être évalués en conséquence.
 
 ---
 
-## 16. Périmètre du premier MVP envisagé
+# 24. Stack technique — décision ouverte
 
-Le MVP devra démontrer que MINOS peut :
+Aucune stack complète n'est figée pendant C0.
+
+Orientations à étudier :
+
+- Java comme langage principal de MINOS ;
+- version LTS pertinente au moment de l'implémentation ;
+- Maven comme système de build possible ;
+- Quarkus ou framework Java léger pour une future API si nécessaire ;
+- fonctionnement du cœur sans framework serveur obligatoire.
+
+Ces choix doivent être comparés et documentés avant engagement.
+
+Le retrait du `pom.xml` pendant C0 est volontaire : la documentation du besoin précède le bootstrap technique définitif.
+
+---
+
+# 25. Périmètre du premier MVP envisagé
+
+Le MVP doit démontrer que MINOS peut :
 
 1. enregistrer un dépôt local ;
 2. détecter ses langages et son système de build ;
@@ -964,18 +1344,21 @@ Le MVP devra démontrer que MINOS peut :
 7. stocker ou interroger les connaissances via une abstraction MINOS ;
 8. exécuter `find_symbol` ;
 9. exécuter `find_usages` ;
-10. interroger les dépendances et dépendants ;
-11. retourner des résultats structurés et compacts ;
-12. fonctionner sans LLM, sans cloud et sans NEXUS ;
-13. démontrer son extensibilité avec au moins deux écosystèmes de langage distincts.
+10. exécuter `find_implementations` ;
+11. interroger dépendances et dépendants ;
+12. retourner des résultats structurés et compacts ;
+13. fonctionner sans LLM, sans cloud et sans NEXUS ;
+14. démontrer son extensibilité avec au moins deux écosystèmes de langage distincts.
 
-Le choix exact des deux langages de validation reste à confirmer.
+`find_callers` et `find_callees` peuvent être inclus si les fournisseurs sélectionnés offrent une précision suffisante.
 
-Java est un candidat naturel pour le premier test compte tenu de l'environnement existant, mais MINOS ne doit pas devenir Java-centric.
+Java est un candidat naturel pour le premier terrain de validation, mais ce choix doit être confirmé en C0.
+
+Le second écosystème doit être choisi pour réellement challenger l'agnosticisme du cœur.
 
 ---
 
-## 17. Hors périmètre du premier MVP
+# 26. Hors périmètre du premier MVP
 
 Ne pas implémenter prématurément :
 
@@ -992,24 +1375,87 @@ Ne pas implémenter prématurément :
 - les plugins IntelliJ ;
 - les extensions VS Code ;
 - GitHub ou GitLab comme source distante ;
-- l'analyse parfaite des appels dynamiques ;
-- une plateforme cloud hébergée.
+- une analyse parfaite des appels dynamiques ;
+- une plateforme cloud hébergée ;
+- une analyse d'impact complète ;
+- l'indexation incrémentale complète ;
+- Git Intelligence complète.
 
 ---
 
-## 18. Phase C0 — Cadrage avant implémentation
+# 27. Critères mesurables proposés pour le MVP
 
-Avant tout développement fonctionnel important, les éléments suivants doivent être validés :
+Les valeurs sont des propositions à challenger pendant C0 puis à affiner pendant M0.
 
-### 18.1 Besoin
+## 27.1 Symboles
+
+Sur les fixtures contrôlées :
+
+- 100 % des symboles de premier niveau attendus détectés ;
+- 100 % des surcharges attendues identifiables sans ambiguïté ;
+- aucun doublon normalisé pour une même déclaration.
+
+## 27.2 Références
+
+Objectif initial :
+
+- au moins 99 % des références internes statiquement résolvables correctement reliées sur les fixtures contrôlées.
+
+## 27.3 Requêtes
+
+Sur les graphes de fixtures :
+
+- `find_usages` ;
+- `find_dependencies` ;
+- `find_dependents` ;
+
+doivent retourner des résultats déterministes vérifiés automatiquement.
+
+## 27.4 Isolation du backend
+
+- aucun type Glean dans le domaine public MINOS ;
+- aucune requête Angle exposée aux consommateurs ;
+- possibilité de tester les services principaux avec un backend mémoire.
+
+## 27.5 Local-first
+
+- aucune dépendance cloud obligatoire ;
+- aucune source envoyée vers un service externe par défaut.
+
+## 27.6 Latence
+
+Cibles initiales à confirmer :
+
+```text
+find_symbol p95 < 100 ms
+find_usages p95 < 250 ms
+requête de dépendance profondeur 1 p95 < 250 ms
+```
+
+## 27.7 Explicabilité
+
+100 % des relations heuristiques ou dérivées doivent pouvoir exposer :
+
+- leur origine ;
+- leur niveau de confiance ;
+- leurs preuves.
+
+---
+
+# 28. Phase C0 — cadrage avant implémentation
+
+Avant tout développement fonctionnel important, valider :
+
+## 28.1 Besoin
 
 - vision ;
 - utilisateurs ;
 - cas d'usage ;
 - frontière MINOS / NEXUS ;
-- valeur propre de MINOS.
+- rôle dans l'écosystème ;
+- valeur propre de MINOS par rapport aux solutions existantes.
 
-### 18.2 Périmètre
+## 28.2 Périmètre
 
 - MVP ;
 - hors périmètre ;
@@ -1017,7 +1463,7 @@ Avant tout développement fonctionnel important, les éléments suivants doivent
 - langages de validation ;
 - types de projets ciblés.
 
-### 18.3 Architecture
+## 28.3 Architecture
 
 - modèle d'indexeurs ;
 - place de SCIP ;
@@ -1027,9 +1473,10 @@ Avant tout développement fonctionnel important, les éléments suivants doivent
 - modèle des symboles ;
 - modèle des relations ;
 - stratégie de stockage des métadonnées ;
-- stratégie d'exposition future.
+- stratégie d'exposition future ;
+- choix de stack technique.
 
-### 18.4 Contraintes
+## 28.4 Contraintes
 
 - local-first ;
 - multi-plateforme ;
@@ -1038,10 +1485,10 @@ Avant tout développement fonctionnel important, les éléments suivants doivent
 - performances ;
 - fonctionnement hors ligne.
 
-### 18.5 Validation
+## 28.5 Validation
 
-- critères mesurables du MVP ;
-- jeux de données de test ;
+- critères mesurables ;
+- fixtures ;
 - dépôts de référence ;
 - benchmarks ;
 - critères d'abandon ou de remplacement de SCIP/Glean.
@@ -1050,46 +1497,52 @@ Aucune ADR structurante ne doit passer au statut **Acceptée** avant cette valid
 
 ---
 
-## 19. Décisions ouvertes
+# 29. Décisions ouvertes
 
-Les points suivants restent à trancher :
-
-1. Glean doit-il être le backend par défaut du MVP ou seulement un backend de référence ?
+1. Glean doit-il être le backend par défaut du MVP ou un backend de référence ?
 2. Quel protocole de communication utiliser entre MINOS Java et Glean ?
 3. Les métadonnées de projets doivent-elles être stockées dans une base légère séparée ?
-4. Quels langages utiliser pour démontrer réellement l'agnosticisme du cœur ?
-5. Quel niveau minimal de support doit être exigé d'un fournisseur ?
+4. Quels langages utiliser pour démontrer l'agnosticisme du cœur ?
+5. Quel niveau minimal de support exiger d'un fournisseur ?
 6. Comment définir l'identité stable d'un symbole entre deux indexations ?
 7. Quel format normalisé exposer pour les relations inter-langages ?
 8. Comment représenter les symboles externes et non résolus ?
-9. Quelles capacités doivent appartenir au MVP et lesquelles doivent être repoussées ?
-10. Quels critères rendent Glean opérationnellement acceptable sur Windows ?
+9. Quelles capacités appartiennent au MVP ?
+10. Quels critères rendent Glean acceptable sur Windows ?
 11. Quelle granularité retenir pour l'indexation incrémentale future ?
-12. Quel framework, s'il en faut un, utiliser pour l'API future ?
+12. Quelle stratégie adopter pour les métadonnées MINOS ?
+13. Quelle version Java LTS retenir si Java est confirmé ?
+14. Maven doit-il être le build officiel de MINOS ?
+15. Quel framework, s'il en faut un, utiliser pour l'API future ?
+16. Quelle part de la recherche générique appartient au MVP ?
+17. Comment mesurer concrètement la réduction de contexte et de tokens ?
 
 ---
 
-## 20. Critères de validation du cahier des charges
+# 30. Critères de validation du cahier des charges
 
-Le cahier des charges pourra être considéré comme validé lorsque :
+Le cahier des charges peut être considéré comme validé lorsque :
 
 - la vision de MINOS est stable ;
 - la frontière avec NEXUS est sans ambiguïté ;
+- la place dans l'écosystème est comprise ;
 - le périmètre du MVP est validé ;
 - les fonctionnalités prioritaires sont classées ;
 - les principaux modèles métier sont définis ;
 - la stratégie SCIP est décidée ;
 - la stratégie Glean est décidée ;
 - les contraintes local-first et multi-langages sont validées ;
+- la stratégie de tests est validée ;
 - les critères mesurables du MVP sont définis ;
 - les principales ADR structurantes sont acceptées ;
-- la roadmap est alignée sur ces décisions.
+- la roadmap est alignée sur ces décisions ;
+- le plan d'expérimentations M0 est prêt.
 
 ---
 
-## 21. Règle de gouvernance du projet
+# 31. Gouvernance
 
-Pendant la phase de cadrage :
+Pendant la phase C0 :
 
 > **Documenter d'abord, décider ensuite, implémenter en dernier.**
 
