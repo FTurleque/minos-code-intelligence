@@ -78,6 +78,8 @@ Le projet est actuellement en phase :
 
 Aucune implémentation fonctionnelle importante ne doit commencer avant validation du besoin, du périmètre du MVP, des décisions d'architecture et des critères de validation.
 
+Aucun choix définitif de version Java, de système de build ou de framework serveur n'est engagé à ce stade.
+
 La règle actuelle est :
 
 > **Documenter d'abord, décider ensuite, implémenter en dernier.**
@@ -91,12 +93,13 @@ La source de vérité du cadrage est :
 Documents complémentaires :
 
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — place de MINOS dans l'écosystème JARVIS / NEXUS / Alfred / Brainiac ;
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture ;
+- [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture interne ;
+- [`docs/MVP.md`](docs/MVP.md) — définition proposée du MVP ;
 - [`docs/PLAN.md`](docs/PLAN.md) — plan de travail ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
-- [`docs/MVP.md`](docs/MVP.md) — définition du MVP ;
 - [`docs/adr/`](docs/adr/) — décisions d'architecture proposées ou validées ;
-- [`docs/research/`](docs/research/) — études techniques.
+- [`docs/research/`](docs/research/) — études techniques ;
+- [`docs/AUDIT_COHERENCE_C0.md`](docs/AUDIT_COHERENCE_C0.md) — audit d'alignement entre les échanges de cadrage et le dépôt.
 
 ## Orientation technique à étudier
 
@@ -107,3 +110,5 @@ L'orientation actuelle, encore à valider, est de :
 - évaluer Glean comme backend principal de faits et de requêtes sur le code ;
 - conserver un domaine MINOS indépendant de SCIP et de Glean ;
 - exposer à terme les capacités via CLI, MCP et API.
+
+Ces orientations sont des hypothèses de travail. Elles ne deviendront des décisions qu'après validation du cadrage C0 et, lorsque nécessaire, expérimentation pendant M0.
