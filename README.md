@@ -76,7 +76,7 @@ Le projet est actuellement en phase :
 
 > **C0 — Cadrage fonctionnel et architectural**
 
-Le **cahier des charges MINOS est validé**. C0 reste néanmoins ouvert jusqu'à validation des décisions d'architecture structurantes, du périmètre final du MVP, de la stack initiale, des critères mesurables et du plan d'expérimentations M0.
+Le **cahier des charges MINOS est validé**. C0 reste ouvert jusqu'à validation du périmètre final du MVP, de la stack initiale, des seuils mesurables et des derniers éléments de préparation de M0.
 
 Aucune implémentation fonctionnelle importante ne doit commencer avant la clôture de C0.
 
@@ -94,18 +94,27 @@ La règle actuelle est :
 - résultats compacts et explicables ;
 - cœur agnostique du langage ;
 - cœur agnostique de l'indexeur ;
-- ADR-0001 acceptée.
+- **ADR-0001** — cœur agnostique du langage et de l'indexeur ;
+- **ADR-0002** — SCIP comme protocole sémantique privilégié, mais non obligatoire ;
+- **ADR-0003** — `CodeKnowledgeStore` comme frontière MINOS ; Glean reste un backend avancé optionnel ;
+- chemin de fonctionnement MINOS sans Glean obligatoire pour M0.
 
 ### Décisions encore ouvertes
 
-- rôle définitif de SCIP ;
-- rôle définitif de Glean ;
-- forme exacte de `CodeKnowledgeStore` ;
-- modèle de domaine détaillé ;
+- forme finale du modèle de domaine minimal ;
+- backend léger de référence ;
+- niveau d'adoption de Glean après mesures M0 ;
 - périmètre final du MVP ;
-- langages et dépôts de validation ;
 - stack initiale ;
-- seuils de qualité et de performance.
+- seuils définitifs de qualité et de performance.
+
+### Écosystèmes M0 retenus
+
+- **Java** comme écosystème principal ;
+- **TypeScript** comme second écosystème de validation ;
+- **Python** comme repli si un blocage de l'indexeur TypeScript empêche une validation représentative.
+
+Le dépôt réel Java principal prévu pour M0 est `FTurleque/ariane-chatbot`.
 
 ## Documents de référence
 
@@ -119,22 +128,48 @@ Documents complémentaires :
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — place de MINOS dans l'écosystème JARVIS / NEXUS / Alfred / Brainiac ;
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture interne ;
 - [`docs/architecture/MODELE_DOMAINE.md`](docs/architecture/MODELE_DOMAINE.md) — proposition de modèle de domaine minimal ;
-- [`docs/architecture/INDEXEURS_CAPACITES.md`](docs/architecture/INDEXEURS_CAPACITES.md) — proposition de modèle de fournisseurs et de capacités ;
+- [`docs/architecture/INDEXEURS_CAPACITES.md`](docs/architecture/INDEXEURS_CAPACITES.md) — modèle de fournisseurs et de capacités ;
 - [`docs/MVP.md`](docs/MVP.md) — définition proposée du MVP ;
 - [`docs/PLAN.md`](docs/PLAN.md) — plan de travail ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
-- [`docs/adr/`](docs/adr/) — décisions d'architecture proposées ou validées ;
+- [`docs/M0_PLAN_EXPERIMENTATIONS.md`](docs/M0_PLAN_EXPERIMENTATIONS.md) — protocole détaillé des expérimentations M0 ;
+- [`docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md`](docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md) — comparaison SCIP, Glean, Kythe, Joern et baseline légère ;
+- [`docs/adr/`](docs/adr/) — décisions d'architecture ;
 - [`docs/research/`](docs/research/) — études techniques ;
 - [`docs/AUDIT_COHERENCE_C0.md`](docs/AUDIT_COHERENCE_C0.md) — audit d'alignement entre les échanges de cadrage et le dépôt.
 
-## Orientation technique à étudier
+## Fondation technique retenue pour M0
 
-L'orientation actuelle, encore à valider techniquement, est de :
+```text
+Repository
+    │
+    ▼
+IndexerRegistry
+    │
+    ├── SCIP Providers      ← chemin privilégié
+    ├── Native Providers
+    └── Specialized Providers
+    │
+    ▼
+MINOS Normalization
+    │
+    ▼
+CodeKnowledgeStore
+    │
+    ├── InMemory            ← tests
+    ├── Lightweight         ← baseline M0
+    └── Glean               ← backend avancé candidat
+    │
+    ▼
+MINOS Query Services
+    │
+    ├── CLI
+    ├── MCP
+    └── API
+```
 
-- réutiliser fortement les indexeurs sémantiques existants ;
-- privilégier SCIP comme protocole d'interopérabilité lorsque pertinent ;
-- évaluer Glean comme backend principal de faits et de requêtes sur le code ;
-- conserver un domaine MINOS indépendant de SCIP et de Glean ;
-- exposer à terme les capacités via CLI, MCP et API.
+Le principe est désormais :
 
-SCIP et Glean restent des hypothèses de fondation tant que les ADR correspondantes et les expérimentations M0 ne les ont pas validées.
+> **MINOS-first, Glean-optional.**
+
+SCIP est retenu comme protocole d'interopérabilité sémantique privilégié lorsqu'un fournisseur suffisamment fiable existe. Glean sera évalué pour ses capacités avancées, mais MINOS doit démontrer pendant M0 qu'il peut fonctionner sans lui.
