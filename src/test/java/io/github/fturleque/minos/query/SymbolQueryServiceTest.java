@@ -81,7 +81,8 @@ class SymbolQueryServiceTest {
                 ResolutionStatus.RESOLVED,
                 origin(),
                 false,
-                false
+                false,
+                Set.of()
         );
     }
 
@@ -98,7 +99,8 @@ class SymbolQueryServiceTest {
                         fileId, line, 0, line, 32, PositionEncoding.UTF16_CODE_UNITS),
                 roles,
                 ResolutionStatus.RESOLVED,
-                origin()
+                origin(),
+                Set.of()
         );
     }
 
