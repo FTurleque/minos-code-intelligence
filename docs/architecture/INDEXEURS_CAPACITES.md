@@ -1,19 +1,21 @@
 # Indexeurs et capacités — MINOS
 
-Statut : **Proposition C0 — à valider**
+- Statut : **Validé pour M0**
+- Date de validation : **22 juillet 2026**
 
-Ce document définit comment MINOS doit raisonner sur les fournisseurs d'indexation et d'analyse sans coder en dur une liste de langages ou de technologies.
+Ce document définit comment MINOS sélectionne et combine les fournisseurs d'indexation et d'analyse sans coder en dur une liste de langages ou de technologies.
 
 ---
 
 # 1. Objectif
 
-MINOS doit pouvoir répondre à deux questions distinctes :
+MINOS doit répondre à trois questions distinctes :
 
-1. **Quel fournisseur sait analyser ce projet ou ce langage ?**
-2. **Quelles capacités ce fournisseur peut-il réellement fournir avec un niveau de qualité acceptable ?**
+1. **Quel fournisseur est applicable à ce projet ?**
+2. **Quelles capacités fournit-il réellement ?**
+3. **Avec quelle qualité mesurée fournit-il ces capacités ?**
 
-La sélection d'un fournisseur ne doit jamais être réduite à :
+La sélection ne doit jamais se réduire à :
 
 ```text
 Java -> scip-java
@@ -21,17 +23,11 @@ Python -> fournisseur X
 TypeScript -> fournisseur Y
 ```
 
-Le choix doit être fondé sur les capacités, les contraintes du projet et la qualité mesurée.
-
 ---
 
-# 2. Concepts principaux
-
-## 2.1 `IndexerProvider`
+# 2. IndexerProvider
 
 Représente un fournisseur capable de produire ou exposer des faits de Code Intelligence.
-
-Contrat conceptuel :
 
 ```text
 IndexerProvider
@@ -44,12 +40,12 @@ IndexerProvider
 - capabilities
 - executionMode
 - localOnly
-- requiresBuild
-- requiresDependencies
-- priority?
+- prerequisites
+- declaredPriority?
+- metadata
 ```
 
-Le fournisseur peut être :
+Types initiaux :
 
 ```text
 SCIP_INDEXER
@@ -61,11 +57,11 @@ CPG_PROVIDER
 CUSTOM_PROVIDER
 ```
 
-## 2.2 `IndexerCapabilities`
+`GLEAN_NATIVE_INDEXER` désigne ici un **indexeur** produisant des faits Glean ; le backend de stockage Glean appartient à la frontière `CodeKnowledgeStore` et non au registre des indexeurs.
 
-Le fournisseur annonce explicitement ce qu'il sait fournir.
+---
 
-Capacités candidates :
+# 3. Capacités
 
 ```text
 PROJECT_STRUCTURE
@@ -90,30 +86,29 @@ EXTERNAL_SYMBOLS
 GENERATED_SYMBOLS
 CONTROL_FLOW
 DATA_FLOW
+TAINT_ANALYSIS
 INCREMENTAL_INDEXING
 ```
 
-Cette liste doit rester extensible.
+La liste reste extensible.
 
 ---
 
-# 3. Niveau de support d'une capacité
+# 4. CapabilitySupport
 
-Une simple valeur booléenne est insuffisante.
-
-Proposition :
+Une capacité n'est pas booléenne.
 
 ```text
 CapabilitySupport
 - capability
 - supportLevel
-- confidence
+- declaredConfidence?
 - limitations
 - measuredAt?
 - benchmarkReference?
 ```
 
-`supportLevel` :
+Niveaux :
 
 ```text
 FULL
@@ -131,51 +126,56 @@ supportLevel = PARTIAL
 limitations = "dispatch dynamique incomplet"
 ```
 
-MINOS ne doit pas présenter une capacité `PARTIAL` comme complète.
+MINOS ne présente jamais `PARTIAL` comme `FULL`.
 
 ---
 
-# 4. Qualité d'un fournisseur
+# 5. Capacité déclarée ≠ capacité validée
 
-Un fournisseur peut techniquement supporter une capacité tout en étant insuffisamment précis pour MINOS.
-
-MINOS doit donc distinguer :
-
-```text
-capacité déclarée
-≠
-capacité validée
-```
-
-Mesures possibles :
+Le fournisseur peut annoncer une capacité ; MINOS conserve séparément le résultat de sa qualification.
 
 ```text
 ProviderQualityProfile
+- providerId
+- providerVersion
+- ecosystem
+- buildSystem?
+- fixtureVersion
+- validatedAt
+- supportedEnvironment
+- capabilityResults
 - indexingSuccessRate
 - symbolPrecision
+- symbolRecall
 - referencePrecision
+- referenceRecall
 - implementationPrecision
-- callPrecision
+- implementationRecall
+- callPrecision?
+- callRecall?
 - unresolvedRate
 - indexingLatency
+- queryLatency
 - indexSize
 - memoryUsage
 - offlineSupport
 - operationalComplexity
+- knownLimitations
 ```
 
-Les profils de qualité devront être établis par écosystème et type de projet lorsque les résultats diffèrent fortement.
+Les métriques suivent `docs/METRIQUES_VALIDATION.md`.
+
+Un changement majeur du fournisseur ou de son frontend peut exiger une requalification.
 
 ---
 
-# 5. Détection d'applicabilité
+# 6. ProjectDescriptor
 
-Un fournisseur doit pouvoir indiquer s'il est applicable à un projet donné.
-
-Entrée conceptuelle :
+Entrée normalisée utilisée pour déterminer l'applicabilité :
 
 ```text
 ProjectDescriptor
+- projectId
 - languages
 - buildSystems
 - modules
@@ -183,19 +183,33 @@ ProjectDescriptor
 - testRoots
 - detectedTechnologies
 - platform
+- repositoryState
 ```
 
-Résultat :
+`repositoryState` peut notamment signaler :
+
+```text
+BUILDABLE
+PARTIALLY_BUILDABLE
+DEPENDENCIES_MISSING
+UNKNOWN
+```
+
+---
+
+# 7. ProviderApplicability
 
 ```text
 ProviderApplicability
+- providerId
 - applicable
 - reasons
 - prerequisites
 - missingPrerequisites
+- expectedDegradedMode?
 ```
 
-Exemples :
+Exemple :
 
 ```text
 applicable = true
@@ -211,114 +225,9 @@ reason = version du langage non supportée
 
 ---
 
-# 6. Sélection des fournisseurs
+# 8. Prérequis
 
-La sélection doit être une décision MINOS explicable.
-
-Entrées :
-
-- projet ;
-- capacité demandée ;
-- contraintes locales ;
-- fournisseurs disponibles ;
-- qualité mesurée ;
-- préférences utilisateur éventuelles.
-
-Sortie conceptuelle :
-
-```text
-ProviderSelection
-- selectedProvider
-- requestedCapability
-- alternatives
-- reasons
-- limitations
-```
-
-Exemple :
-
-```text
-Requête : find_callers
-
-Provider A
-- CALL_RELATIONSHIPS = PARTIAL
-- précision mesurée = 91 %
-
-Provider B
-- CALL_RELATIONSHIPS = FULL
-- précision mesurée = 98 %
-
-=> Provider B sélectionné
-```
-
----
-
-# 7. Plusieurs fournisseurs pour un même projet
-
-MINOS doit pouvoir combiner plusieurs fournisseurs.
-
-Exemple conceptuel :
-
-```text
-SCIP provider
-    ├── définitions
-    ├── références
-    └── implémentations
-
-CPG provider
-    ├── call graph avancé
-    └── data flow
-
-MINOS
-    └── normalise et expose les résultats
-```
-
-Le cœur doit donc éviter l'hypothèse :
-
-```text
-un projet = un indexeur
-```
-
-La réalité cible est plutôt :
-
-```text
-un projet = un ou plusieurs fournisseurs complémentaires
-```
-
----
-
-# 8. Priorité de SCIP
-
-Si l'ADR-0002 est acceptée, SCIP deviendra le protocole privilégié lorsque :
-
-- un indexeur existe ;
-- il est maintenu ;
-- sa licence est compatible ;
-- il fonctionne localement ;
-- ses capacités requises sont suffisantes ;
-- sa précision mesurée atteint les seuils MINOS.
-
-SCIP ne doit pas être choisi uniquement parce qu'un indexeur SCIP existe.
-
----
-
-# 9. Fournisseurs non-SCIP
-
-Un fournisseur non-SCIP doit pouvoir être préféré lorsqu'il :
-
-- fournit une capacité absente de l'indexeur SCIP ;
-- apporte une meilleure précision ;
-- supporte mieux un framework ou système de build ;
-- fonctionne dans un contexte où SCIP échoue ;
-- apporte des analyses spécialisées comme contrôle de flux ou flux de données.
-
-Tous les fournisseurs passent par une normalisation MINOS.
-
----
-
-# 10. Gestion des prérequis
-
-MINOS devra distinguer les dépendances nécessaires au fournisseur :
+Types initiaux :
 
 ```text
 NONE
@@ -328,23 +237,227 @@ LANGUAGE_RUNTIME
 DEPENDENCY_RESOLUTION
 EXTERNAL_BINARY
 SIDECAR_PROCESS
+OPERATING_SYSTEM
+CONTAINER_RUNTIME
 ```
 
-Un fournisseur doit pouvoir expliquer pourquoi il ne peut pas démarrer.
-
-Exemples :
-
-- Maven absent ;
-- dépendances non résolues ;
-- compilateur non installé ;
-- version du runtime incompatible ;
-- binaire d'indexeur absent.
+Un fournisseur doit expliquer les prérequis manquants.
 
 ---
 
-# 11. Mode dégradé
+# 9. ProviderSelection
 
-MINOS doit pouvoir fonctionner avec une qualité partielle plutôt que d'échouer systématiquement, à condition de rendre cette dégradation explicite.
+La sélection est explicable et fondée sur :
+
+- projet ;
+- capacité demandée ;
+- support déclaré ;
+- qualité mesurée ;
+- contraintes de plateforme ;
+- disponibilité locale ;
+- coût ;
+- préférence utilisateur éventuelle.
+
+```text
+ProviderSelection
+- selectedProvider
+- requestedCapability
+- alternatives
+- reasons
+- limitations
+- overrideApplied
+```
+
+Exemple :
+
+```text
+find_callers
+
+Provider A
+CALL_RELATIONSHIPS = PARTIAL
+precision = 91 %
+
+Provider B
+CALL_RELATIONSHIPS = FULL
+precision = 98 %
+
+=> Provider B
+```
+
+---
+
+# 10. Priorité de décision
+
+Ordre général :
+
+```text
+1. capacité disponible
+2. seuil de qualité atteint
+3. compatibilité environnement
+4. précision
+5. complétude
+6. coût d'indexation / requête
+7. préférence utilisateur
+```
+
+La précision prime sur le coût tant que le coût reste dans les limites opérationnelles acceptables.
+
+Un fournisseur plus rapide ne doit pas être choisi s'il produit des relations fausses dépassant les seuils MINOS.
+
+---
+
+# 11. SCIP comme chemin privilégié
+
+ADR-0002 étant acceptée, un fournisseur SCIP est privilégié lorsque :
+
+- un indexeur existe ;
+- il est maintenu ;
+- sa licence est compatible ;
+- il fonctionne localement ;
+- les capacités demandées sont disponibles ;
+- son profil mesuré atteint les seuils ;
+- aucune alternative ne fournit une qualité significativement meilleure pour la capacité demandée.
+
+L'existence d'un indexeur SCIP n'est jamais suffisante à elle seule.
+
+---
+
+# 12. Fournisseurs non-SCIP
+
+Un fournisseur non-SCIP peut être préféré lorsqu'il :
+
+- fournit une capacité absente ;
+- améliore la précision ;
+- supporte mieux un framework ou build ;
+- fonctionne lorsque l'indexeur SCIP échoue ;
+- apporte contrôle de flux, data-flow, taint ou sécurité ;
+- possède une meilleure intégration pour un écosystème particulier.
+
+Tous les résultats passent par la normalisation MINOS.
+
+---
+
+# 13. Plusieurs fournisseurs par projet
+
+La cible est :
+
+```text
+un projet = un plan d'analyse utilisant un ou plusieurs fournisseurs
+```
+
+Exemple :
+
+```text
+SCIP Provider
+    ├── DEFINITIONS
+    ├── REFERENCES
+    └── IMPLEMENTATIONS
+
+Joern / CPG Provider
+    ├── CONTROL_FLOW
+    ├── DATA_FLOW
+    └── TAINT_ANALYSIS
+
+MINOS
+    └── normalise et expose
+```
+
+---
+
+# 14. AnalysisPlan
+
+Pour éviter de sélectionner isolément un fournisseur à chaque appel, MINOS peut construire un plan d'analyse par projet.
+
+```text
+AnalysisPlan
+- projectId
+- providers
+- capabilityAssignments
+- prerequisites
+- fallbackAssignments
+- generatedAt
+- reasons
+```
+
+Exemple :
+
+```text
+DEFINITIONS      -> scip-java
+REFERENCES       -> scip-java
+IMPLEMENTATIONS  -> scip-java
+DATA_FLOW        -> joern
+```
+
+Le plan reste recalculable lorsque les fournisseurs ou leurs profils changent.
+
+---
+
+# 15. Conflits entre fournisseurs
+
+Deux fournisseurs peuvent produire des informations incompatibles.
+
+MINOS ne doit pas fusionner silencieusement des faits contradictoires.
+
+Règles initiales :
+
+1. conserver la provenance de chaque fait ;
+2. préférer un fait `FACTUAL` validé à une dérivation ;
+3. préférer une dérivation à une heuristique lorsque la sémantique est comparable ;
+4. utiliser le profil de qualité pour départager deux faits du même niveau ;
+5. exposer le conflit si aucune règle ne permet une décision fiable ;
+6. ne jamais transformer le conflit en certitude artificielle.
+
+Un résultat peut donc porter :
+
+```text
+CONFLICTING_EVIDENCE
+```
+
+comme diagnostic, sans nécessairement devenir un nouveau `ResolutionStatus` du domaine M0.
+
+---
+
+# 16. Override utilisateur
+
+Un utilisateur peut forcer un fournisseur par configuration pour :
+
+- diagnostic ;
+- comparaison ;
+- contraintes locales ;
+- reproductibilité.
+
+L'override doit être visible dans le résultat de sélection.
+
+MINOS doit refuser un override impossible à exécuter ou annoncer explicitement le mode dégradé.
+
+---
+
+# 17. Fournisseurs CLI
+
+Un fournisseur n'a pas besoin d'une bibliothèque embarquée.
+
+```text
+ProcessIndexerAdapter
+```
+
+peut encapsuler :
+
+- ligne de commande ;
+- environnement ;
+- répertoire de travail ;
+- stdout/stderr ;
+- timeout ;
+- code de retour ;
+- fichiers produits ;
+- nettoyage.
+
+Cette approche convient notamment aux indexeurs SCIP externes.
+
+Le domaine ne dépend pas du mécanisme d'exécution.
+
+---
+
+# 18. Mode dégradé
 
 Exemple :
 
@@ -355,36 +468,43 @@ Implementations    UNKNOWN
 Calls              UNSUPPORTED
 ```
 
-Les requêtes dépendantes d'une capacité absente doivent :
+Une requête dépendant d'une capacité absente doit :
 
-- retourner une information explicite ;
-- ne pas inventer de résultat ;
-- éventuellement proposer un autre fournisseur disponible.
-
----
-
-# 12. Observabilité
-
-Chaque exécution d'un fournisseur devra à terme permettre de mesurer :
-
-- version ;
-- durée ;
-- statut ;
-- nombre de fichiers analysés ;
-- nombre de symboles ;
-- nombre de relations ;
-- avertissements ;
-- erreurs ;
-- références non résolues ;
-- mémoire ;
-- taille produite ;
-- paramètres d'exécution.
-
-Ces données alimenteront les benchmarks et la décision de sélection.
+- signaler l'absence ;
+- ne rien inventer ;
+- proposer un fournisseur alternatif lorsque disponible ;
+- expliquer les limitations.
 
 ---
 
-# 13. Contrats conceptuels candidats
+# 19. Observabilité
+
+Chaque exécution doit pouvoir produire :
+
+```text
+providerId
+providerVersion
+startTime
+endTime
+duration
+status
+filesAnalyzed
+symbolsProduced
+occurrencesProduced
+relationshipsProduced
+warnings
+errors
+unresolvedCount
+peakMemory
+outputSize
+executionParameters
+```
+
+Ces informations alimentent `ProviderQualityProfile`.
+
+---
+
+# 20. Contrats conceptuels validés pour M0
 
 ```text
 IndexerProvider
@@ -397,49 +517,52 @@ IndexingRequest
 IndexingResult
 ProviderSelection
 ProviderQualityProfile
+AnalysisPlan
 ```
 
-Ces noms restent conceptuels pendant C0.
+Les noms pourront être ajustés pendant l'implémentation sans modifier leur responsabilité.
 
 ---
 
-# 14. Rôle de `IndexerRegistry`
+# 21. Rôle de IndexerRegistry
 
-Le registre doit :
+Le registre :
 
-- connaître les fournisseurs disponibles ;
-- exposer leurs versions ;
-- filtrer selon le projet ;
-- filtrer selon la capacité ;
-- prendre en compte leur qualité ;
-- fournir les candidats à l'orchestrateur ;
-- permettre plusieurs fournisseurs pour un même projet.
+- connaît les fournisseurs installés ;
+- expose leurs versions ;
+- filtre selon le projet ;
+- filtre selon les capacités ;
+- fournit les profils de qualité ;
+- prépare les candidats pour l'orchestrateur ;
+- permet plusieurs fournisseurs par projet.
 
-Le registre ne doit pas contenir de logique métier spécifique à Java, Python, TypeScript ou tout autre langage.
-
----
-
-# 15. Questions ouvertes
-
-1. Les profils de qualité doivent-ils être statiques, mesurés automatiquement ou les deux ?
-2. Comment arbitrer entre précision et coût d'indexation ?
-3. Un fournisseur doit-il pouvoir être forcé par configuration utilisateur ?
-4. Comment fusionner deux fournisseurs qui donnent des résultats contradictoires ?
-5. Comment représenter la priorité entre un fait direct et une dérivation MINOS ?
-6. Doit-on sélectionner un fournisseur par capacité ou constituer un plan d'analyse complet par projet ?
-7. Comment gérer les fournisseurs qui n'offrent qu'une CLI ?
-8. Comment versionner les capacités lorsque leur sémantique évolue ?
+Il ne contient aucune logique métier spécifique à Java, TypeScript, Python ou un autre langage.
 
 ---
 
-# 16. Critères de validation C0
+# 22. Décisions C0 prises
 
-Le modèle de capacités sera suffisamment défini pour M0 lorsque :
+1. Les profils combinent données déclarées et mesures ; **les mesures MINOS font foi** pour la qualification.
+2. La précision prime sur le coût dans les limites opérationnelles définies.
+3. Un utilisateur peut forcer un fournisseur avec override explicite.
+4. Les conflits ne sont jamais fusionnés silencieusement.
+5. Les faits directs priment sur dérivations et heuristiques lorsque leur sémantique est comparable.
+6. La sélection est réalisée par capacité puis agrégée en `AnalysisPlan`.
+7. Les fournisseurs CLI sont des fournisseurs de première classe derrière un adaptateur de processus.
+8. Les capacités et profils sont versionnés par la version du fournisseur et la version des fixtures.
 
-- un fournisseur SCIP et un fournisseur non-SCIP peuvent être représentés ;
-- un même projet peut utiliser plusieurs fournisseurs ;
-- les capacités partielles sont représentables ;
-- les prérequis et modes dégradés sont représentables ;
-- le choix d'un fournisseur peut être expliqué ;
-- aucun langage n'est codé en dur dans le modèle ;
-- les benchmarks M0 peuvent produire un `ProviderQualityProfile` exploitable.
+---
+
+# 23. Validation M0
+
+Le modèle est considéré prêt si M0 démontre :
+
+- représentation de `scip-java` ;
+- représentation de `scip-typescript` ;
+- représentation d'un fournisseur spécialisé non-SCIP conceptuel ;
+- capacités partielles ;
+- prérequis ;
+- mode dégradé ;
+- production d'un `ProviderQualityProfile` ;
+- sélection explicable ;
+- même domaine quel que soit le fournisseur.
