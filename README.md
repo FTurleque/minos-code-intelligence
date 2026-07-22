@@ -75,18 +75,21 @@ C0 a validé :
 - **ADR-0001** — cœur agnostique du langage et de l'indexeur ;
 - **ADR-0002** — SCIP comme protocole sémantique privilégié, non obligatoire ;
 - **ADR-0003** — `CodeKnowledgeStore` comme frontière MINOS et principe **MINOS-first, Glean-optional** ;
-- **ADR-0004** — **Java 25 LTS + Maven 3.9.x + Maven Wrapper + cœur sans framework serveur**.
+- **ADR-0004** — Maven 3.9.x + Maven Wrapper + cœur sans framework serveur ;
+- **ADR-0005** — **alignement de MINOS sur Java 24**, version déjà utilisée dans l'environnement de développement principal.
 
 M0 doit maintenant **tester les hypothèses par des expérimentations mesurables**, sans construire prématurément le produit complet.
 
 ## Stack M0
 
 ```text
-Langage        Java 25 LTS
+Langage        Java 24
 Build          Apache Maven 3.9.x
-Wrapper        Maven Wrapper
+Wrapper        Maven Wrapper 3.3.4 / Maven 3.9.16
 Framework      Aucun framework serveur dans le cœur
 ```
+
+La version Java suit la toolchain de référence des projets de l'environnement de développement. Une montée de version devra être coordonnée plutôt qu'imposée uniquement à MINOS.
 
 Le choix d'un framework pour une future API ou couche MCP reste différé jusqu'au besoin réel.
 
