@@ -80,7 +80,10 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
         return occurrencesByScopedId.values().stream()
                 .filter(occurrence -> projectId.equals(occurrence.projectId()))
-                .filter(occurrence -> symbolId.equals(occurrence.symbolId()))
+                .filter(SymbolOccurrence::isResolved)
+                .filter(occurrence -> occurrence.resolvedSymbolId()
+                        .map(symbolId::equals)
+                        .orElse(false))
                 .filter(occurrence -> !occurrence.isDefinitionOccurrence())
                 .sorted(Comparator
                         .comparing((SymbolOccurrence occurrence) -> occurrence.location().fileId())
