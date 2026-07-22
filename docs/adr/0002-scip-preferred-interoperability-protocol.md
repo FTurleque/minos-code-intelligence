@@ -142,12 +142,34 @@ Selon les langages ou analyses :
 - Code Property Graph / Joern ;
 - analyseur spécialisé futur.
 
+## Versions techniques vérifiées pour M0
+
+Au **22 juillet 2026**, les versions ne doivent pas être confondues :
+
+```text
+SCIP CLI                         v0.7.1
+Bindings Java du protocole       0.9.0
+scip-java                        v0.13.1
+```
+
+- la CLI SCIP `v0.7.1` est la release publiée de l'outil `scip` ;
+- le protocole fournit des bindings Java publiés sous `org.scip-code:scip-java-bindings:0.9.0` ;
+- `scip-java v0.13.1` est la release du fournisseur JVM utilisée comme référence de qualification M0.
+
+MINOS doit versionner séparément :
+
+1. le protocole / ses bindings ;
+2. la CLI d'inspection ;
+3. chaque indexeur producteur.
+
+Cette séparation évite de déduire à tort la compatibilité d'un indexeur à partir du numéro de version de la CLI SCIP.
+
 ## Sources techniques vérifiées
 
 Sources consultées le 22 juillet 2026 :
 
 - SCIP : https://github.com/scip-code/scip
 - CLI SCIP : https://github.com/scip-code/scip/blob/main/docs/CLI.md
-- scip-java : https://github.com/sourcegraph/scip-java
-
-La version publiée la plus récente observée lors de la décision est SCIP **v0.7.1**, publiée le **14 avril 2026**. La version publiée la plus récente de `scip-java` observée est **v0.12.3**, publiée le **2 avril 2026**.
+- bindings Java SCIP : https://github.com/scip-code/scip/tree/main/bindings/java
+- scip-java : https://github.com/scip-code/scip-java
+- release scip-java v0.13.1 : https://github.com/scip-code/scip-java/releases/tag/v0.13.1
