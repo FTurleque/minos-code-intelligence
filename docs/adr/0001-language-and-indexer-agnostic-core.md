@@ -1,7 +1,7 @@
 # ADR-0001 — Conserver un cœur MINOS agnostique du langage et de l'indexeur
 
 - Statut : **Acceptée**
-- Date de décision : **19 juillet 2026**
+- Date de décision : **22 juillet 2026**
 
 ## Contexte
 
