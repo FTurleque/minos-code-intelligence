@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   verify:
-    name: Java 25 / Maven verify
+    name: Java 25 / Maven Wrapper verify
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +32,12 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Préparer Maven Wrapper
+        id: wrapper
+        continue-on-error: true
+        shell: bash
+        run: chmod +x mvnw
+
       - name: Afficher la toolchain
         id: toolchain
         continue-on-error: true
@@ -42,8 +48,8 @@ jobs:
             echo "=== java -version ==="
             java -version
             echo
-            echo "=== mvn -version ==="
-            mvn -version
+            echo "=== ./mvnw -version ==="
+            ./mvnw -version
           } 2>&1 | tee target/m0-toolchain.log
 
       - name: Vérifier le projet
@@ -53,7 +59,7 @@ jobs:
         run: |
           mkdir -p target
           set +e
-          mvn --batch-mode --no-transfer-progress verify 2>&1 | tee target/m0-ci.log
+          ./mvnw --batch-mode --no-transfer-progress verify 2>&1 | tee target/m0-ci.log
           status=${PIPESTATUS[0]}
           echo "$status" > target/m0-ci.exit
           exit "$status"
@@ -66,6 +72,7 @@ jobs:
           {
             echo "checkout=${{ steps.checkout.outcome }}"
             echo "java=${{ steps.java.outcome }}"
+            echo "wrapper=${{ steps.wrapper.outcome }}"
             echo "toolchain=${{ steps.toolchain.outcome }}"
             echo "maven=${{ steps.maven.outcome }}"
           } | tee target/m0-step-outcomes.txt
@@ -86,7 +93,7 @@ jobs:
             target/surefire-reports/
 
       - name: Préparer le diagnostic de l'issue M0
-        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
+        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.wrapper.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
         shell: bash
         run: |
           {
@@ -116,7 +123,7 @@ jobs:
           } > target/m0-issue-diagnostic.md
 
       - name: Commenter l'issue M0 en cas d'échec
-        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
+        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.wrapper.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -128,6 +135,7 @@ jobs:
         run: |
           if [ "${{ steps.checkout.outcome }}" != "success" ] \
              || [ "${{ steps.java.outcome }}" != "success" ] \
+             || [ "${{ steps.wrapper.outcome }}" != "success" ] \
              || [ "${{ steps.toolchain.outcome }}" != "success" ] \
              || [ "${{ steps.maven.outcome }}" != "success" ]; then
             echo "La vérification M0 a échoué. Le diagnostic a été publié dans l'issue #3."
