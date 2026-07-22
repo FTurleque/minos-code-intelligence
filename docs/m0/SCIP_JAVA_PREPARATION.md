@@ -2,7 +2,7 @@
 
 Date : **22 juillet 2026**
 
-Statut : **Préparation de l'Expérience A**
+Statut : **A1 et A2 exécutées — résultats dans `RAPPORT_SCIP_JAVA_A1_A2.md`**
 
 ## Versions vérifiées
 
@@ -15,6 +15,12 @@ scip-java                        0.13.1
 ```
 
 Cette distinction est importante : la version de la CLI SCIP n'est pas la version du protocole/bindings ni celle de l'indexeur JVM.
+
+Résultat confirmé le 22 juillet 2026 : `scip-java 0.13.1` produit des index
+réels pour `java-simple` et pour `java-24-smoke` compilé en `release 24` avec
+le JDK 24.0.1. Sur Windows, cette exécution nécessite toutefois des adaptations
+locales parce que la release 0.13.1 a retiré son launcher Windows et utilise un
+attribut POSIX dans son agrégateur.
 
 ## Commande d'indexation de référence
 
@@ -64,8 +70,19 @@ org.scip-code:scip-java:0.13.1
 Commande conceptuelle :
 
 ```text
-coursier launch org.scip-code:scip-java:0.13.1 -- index
+coursier launch org.scip-code:scip-java:0.13.1 \
+  --jvm system \
+  --main org.scip_code.scip_java.ScipJava \
+  -- index
 ```
+
+La classe principale est fournie explicitement : le POM Maven publié pour
+`scip-java` 0.13.1 ne permet pas au launcher Coursier Windows courant de la
+déduire, alors que la documentation officielle identifie bien
+`org.scip_code.scip_java.ScipJava` comme point d'entrée.
+
+`--jvm system` impose le JDK déjà actif sur le poste ; l'expérience ne doit pas
+être exécutée silencieusement sur un JDK géré ou mis en cache par Coursier.
 
 Le mode fat jar reste une alternative intéressante après téléchargement initial.
 
@@ -113,6 +130,12 @@ scip snapshot --from index.scip --to scip-snapshot
 ```
 
 `scip test` sera utilisé lorsque des fichiers de test SCIP annotés seront disponibles.
+
+La mesure réelle a révélé une incompatibilité entre SCIP CLI 0.7.1 et les
+plages typées émises par scip-java 0.13.1 : `stats` réussit, mais `lint` et
+`snapshot` paniquent en tentant de lire l'ancien tableau `range`, vide dans ces
+index. Les logs et codes de sortie sont conservés ; cette limite ne doit pas
+être attribuée au code Java indexé.
 
 ## JDK de référence MINOS
 
@@ -252,11 +275,16 @@ ProviderQualityProfile
 rapport d'erreurs / limitations
 ```
 
+Les sorties A1/A2 réelles sont conservées dans le dossier `.minos-m0` de chaque
+fixture. Le dossier `snapshot/` est vide avec la combinaison actuelle ; le panic
+complet est conservé dans `snapshot.txt`.
+
 ## Sources officielles
 
 - https://github.com/scip-code/scip-java
 - https://github.com/scip-code/scip-java/releases/tag/v0.13.1
-- https://github.com/scip-code/scip-java/blob/main/docs/getting-started.md
+- https://github.com/scip-code/scip-java/blob/v0.13.1/docs/getting-started.md
 - https://github.com/scip-code/scip
-- https://github.com/scip-code/scip/blob/main/docs/CLI.md
+- https://github.com/scip-code/scip/releases/tag/v0.7.1
+- https://github.com/scip-code/scip/blob/v0.7.1/docs/CLI.md
 - https://github.com/scip-code/scip/tree/main/bindings/java

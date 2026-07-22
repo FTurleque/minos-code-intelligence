@@ -476,6 +476,32 @@ fixtureVersion
 
 Un changement majeur de version d'indexeur doit pouvoir déclencher une requalification.
 
+## 20.1 Première mesure scip-java M0
+
+La campagne A1/A2 du 22 juillet 2026 fournit la première baseline réelle :
+
+| Mesure | `java-simple` | `java-24-smoke` |
+|---|---:|---:|
+| Documents | 6 | 2 |
+| Lignes | 59 | 16 |
+| Faits de symboles catalogue | 32 | 10 |
+| Occurrences | 128 | 22 |
+| Occurrences résolues MINOS | 64 | 18 |
+| Occurrences non résolues MINOS | 64 | 4 |
+| Taux de non-résolution | 50 % | 18,18 % |
+| Doublons de catalogue | 0 | 0 |
+
+Pour `java-simple`, les 13 symboles obligatoires sont présents, mais le record
+`User` est publié avec un kind non spécifié. Les cinq cibles d'usage attendues
+sont retrouvées. L'implémentation d'interface est explicite ; les trois appels
+attendus existent comme occurrences cibles mais pas comme relations `CALLS`.
+
+Les taux bruts de non-résolution incluent les symboles JDK/JUnit et segments de
+package que l'index ne catalogue pas. Ils ne constituent donc pas directement
+une mesure de rappel sur les seules références workspace statiquement
+résolvables. Le détail et les contraintes Windows/SCIP CLI sont consignés dans
+`docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md`.
+
 ---
 
 # 21. Niveaux de verdict M0

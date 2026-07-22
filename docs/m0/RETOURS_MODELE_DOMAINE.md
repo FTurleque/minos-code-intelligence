@@ -203,7 +203,33 @@ La décision sur un port Java dépendra de l'observation des index réels :
 - si `qualifiedName` canonique est indispensable pour les portes M0, le parseur sera porté et testé contre les fixtures SCIP ;
 - sinon la baseline structurelle restera suffisante pour mesurer l'ingestion, puis le port pourra être planifié séparément.
 
-## 9. Effet sur les principes C0
+## 9. Les identifiants SCIP locaux sont portés par le document
+
+L'index réel `java-simple` réutilise les identifiants bruts :
+
+```text
+local 0
+local 1
+```
+
+dans plusieurs documents. Ils ne désignent pas le même symbole et ne sont pas
+des doublons fournisseur : la portée d'un symbole SCIP local est le document.
+
+La première version du catalogue, indexée uniquement par `rawSymbol`, réduisait
+32 faits à 24 entrées et pouvait relier une occurrence locale au symbole du
+mauvais fichier. La mesure réelle a conduit à corriger la clé interne :
+
+```text
+symbole global : rawSymbol
+symbole local  : document.relativePath + rawSymbol
+```
+
+Cette clé reste strictement interne à l'adaptateur. Elle ne devient ni
+`Symbol.id`, ni `Symbol.symbolKey`, et ne fait pas fuiter la grammaire SCIP dans
+le domaine. Après correction, A1 conserve 32 faits distincts et ne produit
+aucun doublon de catalogue.
+
+## 10. Effet sur les principes C0
 
 Aucun principe structurant n'est invalidé.
 
