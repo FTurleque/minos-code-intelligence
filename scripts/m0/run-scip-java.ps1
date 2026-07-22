@@ -36,7 +36,7 @@ function Resolve-ToolCommand {
         if ($ResolvedExplicit) {
             return $ResolvedExplicit.Source
         }
-        throw "$DisplayName introuvable : $ExplicitCommand"
+        throw "$DisplayName not found: $ExplicitCommand"
     }
 
     if (Test-Path -LiteralPath $LocalPath -PathType Leaf) {
@@ -48,7 +48,7 @@ function Resolve-ToolCommand {
         return $GlobalCommand.Source
     }
 
-    throw "$DisplayName introuvable. Exécuter d'abord .\scripts\m0\install-scip-tools.ps1"
+    throw "$DisplayName not found. Run .\scripts\m0\install-scip-tools.ps1 first."
 }
 
 function Invoke-Checked {
@@ -61,12 +61,12 @@ function Invoke-Checked {
     Write-Host "==> $Description"
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "$Description a échoué avec le code $LASTEXITCODE"
+        throw "$Description failed with exit code $LASTEXITCODE"
     }
 }
 
 if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
-    throw "Commande Java introuvable. Vérifier la configuration Java du poste."
+    throw "Java command not found. Check the workstation Java configuration."
 }
 
 $ResolvedCoursierCommand = Resolve-ToolCommand `
@@ -96,8 +96,8 @@ $LintFile = Join-Path $ResolvedOutputDirectory "lint.txt"
 $StatsFile = Join-Path $ResolvedOutputDirectory "stats.txt"
 $SnapshotDirectory = Join-Path $ResolvedOutputDirectory "snapshot"
 
-Write-Host "Projet       : $ResolvedProjectPath"
-Write-Host "Sorties      : $ResolvedOutputDirectory"
+Write-Host "Project      : $ResolvedProjectPath"
+Write-Host "Output       : $ResolvedOutputDirectory"
 Write-Host "scip-java    : $ScipJavaVersion"
 Write-Host "Coursier     : $ResolvedCoursierCommand"
 Write-Host "SCIP CLI     : $ResolvedScipCommand"
@@ -117,8 +117,7 @@ try {
     (& java -version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
 
     "=== coursier --help ===" | Add-Content -Encoding UTF8 $MetadataFile
-    (& $ResolvedCoursierCommand --help 2>&1 | Select-Object -First 20 | Out-String) |
-        Add-Content -Encoding UTF8 $MetadataFile
+    (& $ResolvedCoursierCommand --help 2>&1 | Select-Object -First 20 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
 
     "=== scip --version ===" | Add-Content -Encoding UTF8 $MetadataFile
     (& $ResolvedScipCommand --version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
@@ -130,25 +129,25 @@ try {
         $Coordinate,
         "--",
         "index"
-    ) -Description "Génération de index.scip avec scip-java"
+    ) -Description "Generate index.scip with scip-java"
 
     $GeneratedIndex = Join-Path $ResolvedProjectPath "index.scip"
     if (-not (Test-Path -LiteralPath $GeneratedIndex -PathType Leaf)) {
-        throw "scip-java n'a pas produit index.scip dans $ResolvedProjectPath"
+        throw "scip-java did not produce index.scip in $ResolvedProjectPath"
     }
 
     Copy-Item -LiteralPath $GeneratedIndex -Destination $IndexDestination -Force
 
-    Write-Host "==> Validation scip lint"
+    Write-Host "==> Run scip lint"
     & $ResolvedScipCommand lint $IndexDestination 2>&1 | Tee-Object -FilePath $LintFile
     if ($LASTEXITCODE -ne 0) {
-        throw "scip lint a échoué avec le code $LASTEXITCODE"
+        throw "scip lint failed with exit code $LASTEXITCODE"
     }
 
-    Write-Host "==> Statistiques scip stats"
+    Write-Host "==> Run scip stats"
     & $ResolvedScipCommand stats --from $IndexDestination 2>&1 | Tee-Object -FilePath $StatsFile
     if ($LASTEXITCODE -ne 0) {
-        throw "scip stats a échoué avec le code $LASTEXITCODE"
+        throw "scip stats failed with exit code $LASTEXITCODE"
     }
 
     if (Test-Path -LiteralPath $SnapshotDirectory) {
@@ -161,15 +160,15 @@ try {
         $IndexDestination,
         "--to",
         $SnapshotDirectory
-    ) -Description "Génération du snapshot SCIP"
+    ) -Description "Generate SCIP snapshot"
 
     Write-Host
-    Write-Host "Expérience scip-java terminée."
+    Write-Host "scip-java experiment completed." -ForegroundColor Green
     Write-Host "Index     : $IndexDestination"
     Write-Host "Lint      : $LintFile"
     Write-Host "Stats     : $StatsFile"
     Write-Host "Snapshot  : $SnapshotDirectory"
-    Write-Host "Contexte  : $MetadataFile"
+    Write-Host "Context   : $MetadataFile"
 }
 finally {
     Pop-Location
