@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProviderBoundaryTest {
 
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "minos");
-    private static final List<String> CORE_PACKAGES = List.of("domain", "store", "query");
+    private static final List<String> CORE_PACKAGES = List.of("domain", "store", "query", "discovery", "orchestration");
     private static final List<String> FORBIDDEN_REFERENCES = List.of(
             "org.scip_code.scip",
             "com.google.protobuf",
