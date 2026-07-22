@@ -268,6 +268,7 @@ public final class LocalProjectRegistry {
             try (Writer writer = Files.newBufferedWriter(
                     temporary,
                     StandardCharsets.UTF_8,
+                    StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING
             )) {
                 properties.store(writer, "MINOS local registry");
