@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   verify:
-    name: Java 25 / Maven Wrapper verify
+    name: Java 24 / Maven Wrapper verify
     runs-on: ubuntu-latest
 
     steps:
@@ -23,13 +23,13 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@v7
 
-      - name: Installer Java 25
+      - name: Installer Java 24
         id: java
         continue-on-error: true
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '24'
           cache: maven
 
       - name: Préparer Maven Wrapper
