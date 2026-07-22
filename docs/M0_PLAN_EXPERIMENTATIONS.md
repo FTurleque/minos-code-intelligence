@@ -406,6 +406,46 @@ complet fonctionne avec un repli de métadonnées limité à l'adaptateur ; les
 kinds, le lint strict, l'encodage de position et les relations `CALLS` restent
 des limitations qualifiées dans `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
 
+### D2 — qualification ciblée avant comparaison des backends
+
+Statut au 22 juillet 2026 : **D2 exécutée**. Les trois vérités terrain ont été
+écrites avant l'indexation :
+
+```text
+typescript-modules      références de projets, cross-module, surcharges, tests
+typescript-inheritance héritage, implémentations et overrides
+typescript-unresolved  module absent et cibles non résolues
+```
+
+Le cas multi-projet utilise les références TypeScript `tsconfig`. La release
+officielle `scip-typescript 0.4.0` les parcourt récursivement ; elle expose des
+options dédiées à Yarn et pnpm workspaces, mais pas à npm workspaces. npm reste
+utilisé uniquement pour installer TypeScript et exécuter les builds de vérité
+terrain.
+
+Mesures supplémentaires D2 :
+
+```text
+overloadDeclarationsExpected
+overloadProviderSymbols
+providerMultiValuedRoleOccurrences
+inheritanceRelationships
+implementationRelationships
+workspaceCrossProjectUsages
+expectedUnresolvedTargets
+observedUnresolvedTargets
+```
+
+Un échec de compilation attendu dans `typescript-unresolved` est une donnée de
+qualification. Il ne doit être ni corrigé artificiellement, ni présenté comme
+un build réussi.
+
+Résultat : les références de projets et les relations d'héritage sont
+exploitables avec des limitations de lint. Les surcharges partagent un même
+identifiant fournisseur, aucun rôle multi-valué n'est émis et l'appel d'un
+membre sur le type absent n'est pas indexé. Le détail mesuré se trouve dans
+`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
+
 Reproduire le chemin conceptuel :
 
 ```text

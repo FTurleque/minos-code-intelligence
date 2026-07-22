@@ -542,6 +542,42 @@ et le nom par un repli borné dans l'adaptateur ; il conserve le kind `OTHER` et
 l'encodage `UNKNOWN`. Le détail est dans
 `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
 
+## 20.3 Qualification avancée scip-typescript D2
+
+D2 du 22 juillet 2026 mesure trois fixtures ciblées avec
+`scip-typescript 0.4.0` :
+
+| Mesure | `typescript-modules` | `typescript-inheritance` | `typescript-unresolved` |
+|---|---:|---:|---:|
+| Documents | 4 | 6 | 1 |
+| Lignes | 38 | 40 | 13 |
+| Faits de symboles fournisseur | 29 | 25 | 10 |
+| Occurrences | 67 | 57 | 18 |
+| Symboles normalisés MINOS | 19 | 18 | 9 |
+| Occurrences résolues MINOS | 44 | 39 | 14 |
+| Occurrences non résolues MINOS | 23 | 18 | 4 |
+| Taux de non-résolution | 34,33 % | 31,58 % | 22,22 % |
+| Relations fournisseur | 4 | 11 | 2 |
+| Doublons de catalogue | 2 | 0 | 0 |
+| Symboles obligatoires présents | 11 / 11 | 12 / 12 | 6 / 6 |
+| Kinds exacts | 0 / 11 | 0 / 12 | 0 / 6 |
+
+Les références cross-project attendues sont toutes observables. Les deux
+surcharges déclarées de `GreetingService.greet` et leur implémentation sont
+toutefois fusionnées sous un seul identifiant SCIP : trois définitions, deux
+répétitions de catalogue et aucune identité de surcharge distincte. La porte
+« symboles surchargés distingués » n'est donc pas satisfaite.
+
+Les onze relations d'héritage et d'override émises ont une cible cataloguée,
+mais `Named extends Identified` n'est pas une relation explicite et le bit SCIP
+ne distingue pas `extends` de `implements`. Les quatre appels attendus sur les
+fixtures saines restent des références résolues sans relation `CALLS`.
+
+Sur 142 occurrences, aucune n'a un rôle multi-valué : seuls `DEFINITION` et
+`REFERENCE` sont observés. Pour le module absent, trois occurrences opaques
+`local 0` sont conservées comme non résolues ; l'appel `transform` n'est pas
+émis. Le détail est dans `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
+
 ---
 
 # 21. Niveaux de verdict M0

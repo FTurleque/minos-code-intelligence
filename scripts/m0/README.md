@@ -404,3 +404,59 @@ Baseline MINOS sur le même index :
 
 Les résultats mesurés et les limitations sont consignés dans
 `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
+
+## Expérience D2 — TypeScript multi-projet, héritage et non-résolution
+
+Les trois fixtures D2 conservent chacune leur vérité terrain dans
+`expected.json`. Installer leurs dépendances et vérifier les builds :
+
+```powershell
+Push-Location .\fixtures\typescript\typescript-modules
+npm ci --no-audit --no-fund
+npm test
+Pop-Location
+
+Push-Location .\fixtures\typescript\typescript-inheritance
+npm ci --no-audit --no-fund
+npm test
+Pop-Location
+
+Push-Location .\fixtures\typescript\typescript-unresolved
+npm ci --no-audit --no-fund
+npm run build # échec TS2307 attendu
+Pop-Location
+```
+
+Indexer chaque fixture :
+
+```powershell
+.\scripts\m0\run-scip-typescript.ps1 `
+  -ProjectPath .\fixtures\typescript\typescript-modules
+
+.\scripts\m0\run-scip-typescript.ps1 `
+  -ProjectPath .\fixtures\typescript\typescript-inheritance
+
+.\scripts\m0\run-scip-typescript.ps1 `
+  -ProjectPath .\fixtures\typescript\typescript-unresolved
+```
+
+Les trois runners retournent actuellement un échec global après avoir conservé
+l'index et tous les diagnostics : `scip lint` et le snapshot strict échouent,
+alors que l'indexation, les statistiques et le snapshot non strict réussissent.
+
+Exécuter ensuite la baseline MINOS, par exemple :
+
+```powershell
+.\scripts\m0\run-minos-scip-baseline.ps1 `
+  -IndexPath .\fixtures\typescript\typescript-modules\.minos-m0\scip-typescript\index.scip `
+  -ProjectId fixture-typescript-modules `
+  -ProviderId scip-typescript `
+  -ProviderVersion 0.4.0 `
+  -IndexRunId m0-typescript-d2-modules `
+  -Queries GreetingPort,GreetingBase,normalize,DefaultGreetingPort,GreetingService,greet,verifiesCrossProjectOverloads
+```
+
+Le harness expose aussi les combinaisons de rôles, les identifiants ayant
+plusieurs définitions, les relations dont la cible est cataloguée et les
+identifiants occurrence-only. Les résultats et leurs limites sont dans
+`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.

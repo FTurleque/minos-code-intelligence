@@ -293,6 +293,54 @@ de métadonnées : les 32 kinds et les 6 encodages sont non spécifiés. Le mod�
 commun doit préserver `OTHER` et `UNKNOWN` plutôt que d'inférer une précision
 depuis la syntaxe source.
 
+## 13. D2 : ne pas inventer la précision absente du fournisseur
+
+D2 TypeScript ajoute trois cas qui restent représentables par le modèle actuel
+sans type SCIP dans le domaine.
+
+### Surcharges
+
+`scip-typescript 0.4.0` publie les deux déclarations de surcharge et
+l'implémentation de `GreetingService.greet` sous le même identifiant, avec trois
+occurrences de définition. Le texte des signatures apparaît dans la
+documentation fournisseur, mais aucune identité distincte ne relie une
+signature à ses usages.
+
+Décision M0 provisoire :
+
+```text
+identité de surcharge absente du fournisseur
+  -> capacité UNSUPPORTED dans le profil
+  -> aucune identité MINOS inventée
+```
+
+Un enrichissement ultérieur devra prouver une réconciliation déterministe avec
+les occurrences avant de produire des symboles distincts. Ce cas ne justifie
+pas à lui seul un parseur complet de la grammaire SCIP.
+
+### Rôles
+
+Les 142 occurrences D2 portent exclusivement `DEFINITION` ou `REFERENCE`.
+Les imports ne portent pas `IMPORT` et les définitions de test ne portent pas
+`TEST`. `OccurrenceRole` reste multi-valué pour accepter les fournisseurs qui
+émettent ces bits, mais MINOS ne doit pas compléter silencieusement les rôles
+depuis le chemin du fichier ou la syntaxe source.
+
+### Références non résolues
+
+Une dépendance TypeScript absente produit trois occurrences `local 0` sans
+`SymbolInformation`. MINOS les conserve comme `UnresolvedSymbolReference` avec
+leur référence fournisseur opaque. Il n'invente pas le nom `MissingClient`.
+Le membre `transform` n'est pas émis du tout ; ce manque doit rester une limite
+du profil fournisseur, pas devenir une fausse référence résolue.
+
+### Relations
+
+Les relations d'héritage et d'override ont des cibles cataloguées, mais
+`isImplementation` ne distingue pas `extends` de `implements` et l'extension
+d'interface `Named -> Identified` n'est pas émise comme relation. La sémantique
+exacte d'une relation ne doit pas être renforcée au-delà des faits disponibles.
+
 ## Consolidation
 
 Les éléments confirmés par les index réels Java et TypeScript sont intégrés à
