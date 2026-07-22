@@ -196,12 +196,18 @@ avec :
 
 ```text
 index.scip
+index.txt
+shards/
 lint.txt
 stats.txt
 environment.txt
 snapshot/
 snapshot.txt
 ```
+
+`index.scip`, `lint.txt`, `stats.txt` et `snapshot*` sont absents lorsqu'une
+erreur de build empêche l'agrégation. `index.txt`, `environment.txt` et les
+shards éventuellement produits restent conservés.
 
 Le dossier `.minos-m0/` est ignoré par Git dans le dépôt MINOS.
 
@@ -210,6 +216,17 @@ Le dossier `.minos-m0/` est ignoré par Git dans le dépôt MINOS.
 ### `index.scip`
 
 Entrée binaire utilisée par la baseline `ScipIndexReader` / `ScipIngestionAdapter`.
+
+### `index.txt`
+
+Sortie complète de `scip-java index`, y compris les erreurs Maven. Le fichier
+est produit transactionnellement via `index.partial.txt`.
+
+### `shards/`
+
+Copie transactionnelle des shards bruts laissés dans
+`target/scip-targetroot/META-INF/scip`. Ils servent au diagnostic d'un échec et
+ne sont pas présentés comme un index final.
 
 ### `lint.txt`
 
@@ -238,6 +255,10 @@ Conserve au minimum :
 - version Java ;
 - commande Coursier utilisée ;
 - version SCIP CLI.
+
+Le fichier enregistre aussi `indexExitCode`, `indexProduced`, la durée et la
+taille de l'index, le nombre/volume des shards et les codes des
+post-traitements. Une phase non atteinte vaut explicitement `not-run`.
 
 ## Ordre d'exécution de l'Expérience A
 
@@ -275,6 +296,16 @@ Résultat confirmé : 160 sources principales et 60 sources de test compilées e
 `release 17`, 220 shards agrégés et ingérés par MINOS. Le détail se trouve dans
 `docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
 
+### A4 — `java-multi-module`
+
+Objectif : qualifier un reactor Maven avec définitions, implémentations, appels
+et tests traversant deux modules.
+
+### A5 — `java-partial-compile`
+
+Objectif : mesurer sans le masquer l'échec d'un module qui référence une
+dépendance absente après compilation d'un premier module sain.
+
 ## Règle d'analyse
 
 Un run réussi techniquement ne suffit pas à qualifier le fournisseur.
@@ -293,11 +324,12 @@ généré à la racine du projet. Si un index existait avant l'expérience, il e
 déplacé transactionnellement puis restauré, afin de ne pas laisser le dépôt
 analysé modifié.
 
-Les résultats mesurés de A1, A2 et A3 sont documentés dans :
+Les résultats mesurés de A1 à A5 sont documentés dans :
 
 ```text
 docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
 docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
+docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md
 ```
 
 ## Baseline SCIP → MINOS

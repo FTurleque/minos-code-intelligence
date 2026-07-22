@@ -223,6 +223,6 @@ artefacts de petites fixtures :
 - absence de relations `CALLS` ;
 - incompatibilité `lint`/`snapshot` de SCIP CLI 0.7.1.
 
-La prochaine expérience Java recommandée est une fixture Maven multi-module,
-suivie d'un projet partiellement compilable. Ces deux cas doivent être mesurés
-avant de considérer le profil Maven suffisamment qualifié.
+Les expériences suivantes, fixture Maven multi-module puis projet partiellement
+compilable, ont depuis été exécutées. Leurs résultats se trouvent dans
+`docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md`.

@@ -2,7 +2,7 @@
 
 Date : **22 juillet 2026**
 
-Statut : **A1, A2 et A3 exécutées — résultats dans les rapports `RAPPORT_SCIP_JAVA_*`**
+Statut : **A1 à A5 exécutées — résultats dans les rapports `RAPPORT_SCIP_JAVA_*`**
 
 ## Versions vérifiées
 
@@ -22,6 +22,10 @@ le dépôt Maven/Quarkus réel `ariane-chatbot` compilé en `release 17`, avec l
 JDK 24.0.1. Sur Windows, cette exécution nécessite toutefois des adaptations
 locales parce que la release 0.13.1 a retiré son launcher Windows et utilise un
 attribut POSIX dans son agrégateur.
+
+A4 confirme le support d'un reactor Maven multi-module. A5 montre qu'un échec
+de compilation dans un module ultérieur laisse des shards intermédiaires mais
+ne produit aucun `index.scip` final.
 
 ## Commande d'indexation de référence
 
@@ -239,6 +243,17 @@ fixtures/java/java-24-smoke
 
 But : qualifier explicitement `scip-java` dans l'environnement Java 24 réellement utilisé par MINOS.
 
+### Fixtures Maven complémentaires
+
+```text
+fixtures/java/java-multi-module
+fixtures/java/java-partial-compile
+```
+
+La première vérifie les références entre modules. La seconde contient un
+module sain et un module dépendant volontairement de `MissingClient`, absent,
+afin de qualifier le comportement sur compilation partielle.
+
 ## Première stratégie d'ingestion MINOS
 
 ```text
@@ -276,9 +291,15 @@ ProviderQualityProfile
 rapport d'erreurs / limitations
 ```
 
-Les sorties A1/A2 réelles sont conservées dans le dossier `.minos-m0` de chaque
-fixture. Le dossier `snapshot/` est vide avec la combinaison actuelle ; le panic
-complet est conservé dans `snapshot.txt`.
+`index.scip`, `lint`, `stats` et `snapshot` ne peuvent exister que si
+l'indexation atteint la phase correspondante. Le runner conserve toujours le
+journal `index.txt`, les codes dans `environment.txt` et les shards bruts
+éventuellement produits.
+
+Les sorties A1/A2/A4/A5 réelles sont conservées dans le dossier `.minos-m0` de
+chaque fixture. Le dossier `snapshot/` est vide avec la combinaison actuelle
+lorsqu'un index final existe ; le panic complet est conservé dans
+`snapshot.txt`. A5 s'arrête avant ces post-traitements.
 
 ## Sources officielles
 

@@ -302,6 +302,8 @@ snapshot humain avec la combinaison de versions actuelle.
 
 A3 a ensuite été exécutée sur le dépôt réel `FTurleque/ariane-chatbot`. Ses
 résultats sont consignés dans `docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
+A4/A5 qualifient ensuite Maven multi-module et l'échec de compilation contrôlé
+dans `docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md`.
 
 L'évaluation d'une CLI SCIP compatible avec les plages typées reste séparée.
 Les versions CLI, bindings et indexeur doivent continuer à être suivies

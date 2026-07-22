@@ -242,7 +242,27 @@ aucun doublon de catalogue. A3 confirme la règle avec 2 295 réutilisations
 d'identifiants locaux entre 220 documents, 4 587 faits conservés et toujours
 aucun doublon de catalogue.
 
-## 10. Effet sur les principes C0
+## 10. Un shard intermédiaire n'est pas un index validé
+
+A5 montre que `scip-java` peut produire un shard par source, y compris pour une
+source contenant des erreurs, puis refuser l'agrégation finale lorsque Maven
+échoue. Ces shards sont lisibles comme messages SCIP mais leurs identifiants ne
+sont pas encore réécrits dans la forme finale `scip-java maven ...` et les
+références cross-shard restent non réconciliées.
+
+Décision M0 provisoire :
+
+```text
+index fournisseur final  -> admissible pour ingestion standard
+shards intermédiaires    -> diagnostic uniquement
+```
+
+Le domaine ne doit pas inventer un `IndexSnapshot` sain à partir d'une phase
+fournisseur échouée. Un éventuel mode best-effort devra porter explicitement
+son état incomplet, son origine et ses limitations. Aucun nouveau type métier
+n'est introduit avant cette décision.
+
+## 11. Effet sur les principes C0
 
 Aucun principe structurant n'est invalidé.
 

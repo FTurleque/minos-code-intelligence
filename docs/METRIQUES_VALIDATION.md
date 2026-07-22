@@ -478,18 +478,18 @@ Un changement majeur de version d'indexeur doit pouvoir déclencher une requalif
 
 ## 20.1 Premières mesures scip-java M0
 
-La campagne A1/A2/A3 du 22 juillet 2026 fournit la première baseline réelle :
+La campagne A1 à A5 du 22 juillet 2026 fournit la première baseline réelle :
 
-| Mesure | `java-simple` | `java-24-smoke` | `ariane-chatbot` |
-|---|---:|---:|---:|
-| Documents | 6 | 2 | 220 |
-| Lignes | 59 | 16 | 12 070 |
-| Faits de symboles catalogue | 32 | 10 | 4 587 |
-| Occurrences | 128 | 22 | 25 956 |
-| Occurrences résolues MINOS | 64 | 18 | 14 000 |
-| Occurrences non résolues MINOS | 64 | 4 | 11 956 |
-| Taux de non-résolution | 50 % | 18,18 % | 46,06 % |
-| Doublons de catalogue | 0 | 0 | 0 |
+| Mesure | `java-simple` | `java-24-smoke` | `ariane-chatbot` | `java-multi-module` |
+|---|---:|---:|---:|---:|
+| Documents | 6 | 2 | 220 | 5 |
+| Lignes | 59 | 16 | 12 070 | 39 |
+| Faits de symboles catalogue | 32 | 10 | 4 587 | 21 |
+| Occurrences | 128 | 22 | 25 956 | 94 |
+| Occurrences résolues MINOS | 64 | 18 | 14 000 | 42 |
+| Occurrences non résolues MINOS | 64 | 4 | 11 956 | 52 |
+| Taux de non-résolution | 50 % | 18,18 % | 46,06 % | 55,32 % |
+| Doublons de catalogue | 0 | 0 | 0 | 0 |
 
 Pour `java-simple`, les 13 symboles obligatoires sont présents, mais le record
 `User` est publié avec un kind non spécifié. Les cinq cibles d'usage attendues
@@ -502,6 +502,16 @@ une mesure de rappel sur les seules références workspace statiquement
 résolvables. Le détail et les contraintes Windows/SCIP CLI sont consignés dans
 `docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md` et
 `docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
+
+A4 confirme 10/10 symboles obligatoires, l'implémentation cross-module et les
+deux cibles d'appels attendues. Son index de 10 987 octets est byte-identique
+sur deux runs ; la durée mesurée d'un run est 9 723 ms.
+
+A5 échoue comme prévu sur `MissingClient` après compilation du module sain :
+durée 7 811 ms, code 1, aucun index final et deux shards intermédiaires pour
+4 195 octets. Ces shards sont diagnostiquables mais ne satisfont pas la porte
+de résilience comme index sain. Le détail A4/A5 est dans
+`docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md`.
 
 ---
 
