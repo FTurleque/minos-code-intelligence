@@ -150,4 +150,4 @@ Sources consultées le 22 juillet 2026 :
 - CLI SCIP : https://github.com/scip-code/scip/blob/main/docs/CLI.md
 - scip-java : https://github.com/sourcegraph/scip-java
 
-La version publiée la plus récente observée lors de la décision est SCIP **v0.9.0**, publiée le 29 juin 2026.
+La version publiée la plus récente observée lors de la décision est SCIP **v0.7.1**, publiée le **14 avril 2026**. La version publiée la plus récente de `scip-java` observée est **v0.12.3**, publiée le **2 avril 2026**.
