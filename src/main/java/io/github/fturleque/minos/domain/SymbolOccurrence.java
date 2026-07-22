@@ -18,7 +18,8 @@ public record SymbolOccurrence(
         SymbolLocation location,
         Set<OccurrenceRole> roles,
         ResolutionStatus resolutionStatus,
-        Origin origin) {
+        Origin origin,
+        Set<ProviderReference> providerReferences) {
 
     public SymbolOccurrence {
         requireText(id, "id");
@@ -32,6 +33,7 @@ public record SymbolOccurrence(
         roles = roles.isEmpty()
                 ? Set.of(OccurrenceRole.OTHER)
                 : Set.copyOf(EnumSet.copyOf(roles));
+        providerReferences = providerReferences == null ? Set.of() : Set.copyOf(providerReferences);
     }
 
     public boolean hasRole(OccurrenceRole role) {
