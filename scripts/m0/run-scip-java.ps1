@@ -397,6 +397,17 @@ $LintFile = Join-Path $ResolvedOutputDirectory "lint.txt"
 $StatsFile = Join-Path $ResolvedOutputDirectory "stats.txt"
 $SnapshotDirectory = Join-Path $ResolvedOutputDirectory "snapshot"
 $SnapshotLogFile = Join-Path $ResolvedOutputDirectory "snapshot.txt"
+$GeneratedIndex = Join-Path $ResolvedProjectPath "index.scip"
+$PreexistingIndexBackup = Join-Path $ResolvedOutputDirectory "preexisting-project-index.scip.partial"
+$RestorePreexistingIndex = Test-Path -LiteralPath $GeneratedIndex -PathType Leaf
+$CopiedGeneratedIndex = $false
+
+if ($RestorePreexistingIndex) {
+    if (Test-Path -LiteralPath $PreexistingIndexBackup) {
+        throw "Refusing to overwrite an existing index backup: $PreexistingIndexBackup"
+    }
+    Move-Item -LiteralPath $GeneratedIndex -Destination $PreexistingIndexBackup
+}
 
 Write-Host "Project      : $ResolvedProjectPath"
 Write-Host "Output       : $ResolvedOutputDirectory"
@@ -451,12 +462,16 @@ try {
         "index"
     ) -Description "Generate index.scip with scip-java"
 
-    $GeneratedIndex = Join-Path $ResolvedProjectPath "index.scip"
     if (-not (Test-Path -LiteralPath $GeneratedIndex -PathType Leaf)) {
         throw "scip-java did not produce index.scip in $ResolvedProjectPath"
     }
 
     Copy-Item -LiteralPath $GeneratedIndex -Destination $IndexDestination -Force
+    $CopiedGeneratedIndex = $true
+    if ([System.IO.Path]::GetFullPath($GeneratedIndex) -ne
+            [System.IO.Path]::GetFullPath($IndexDestination)) {
+        Remove-Item -LiteralPath $GeneratedIndex -Force
+    }
 
     Write-Host "==> Run scip lint"
     & $ResolvedScipCommand lint $IndexDestination 2>&1 | Tee-Object -FilePath $LintFile
@@ -509,6 +524,16 @@ try {
 }
 finally {
     Pop-Location
+    if ($RestorePreexistingIndex -and (Test-Path -LiteralPath $PreexistingIndexBackup -PathType Leaf)) {
+        Remove-Item -LiteralPath $GeneratedIndex -Force -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $PreexistingIndexBackup -Destination $GeneratedIndex -Force
+    }
+    elseif ($CopiedGeneratedIndex -and
+            (Test-Path -LiteralPath $GeneratedIndex -PathType Leaf) -and
+            [System.IO.Path]::GetFullPath($GeneratedIndex) -ne
+                [System.IO.Path]::GetFullPath($IndexDestination)) {
+        Remove-Item -LiteralPath $GeneratedIndex -Force
+    }
     $env:PATH = $PreviousPath
     if ($null -eq $PreviousMavenCommand) {
         Remove-Item -LiteralPath "Env:\MINOS_M0_MAVEN_CMD" -ErrorAction SilentlyContinue
