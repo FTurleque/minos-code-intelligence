@@ -271,6 +271,10 @@ Objectif : tester un dépôt Maven Java réel avec :
 - dépendances externes ;
 - code applicatif réel.
 
+Résultat confirmé : 160 sources principales et 60 sources de test compilées en
+`release 17`, 220 shards agrégés et ingérés par MINOS. Le détail se trouve dans
+`docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
+
 ## Règle d'analyse
 
 Un run réussi techniquement ne suffit pas à qualifier le fournisseur.
@@ -284,10 +288,16 @@ Les résultats doivent être confrontés à :
 
 Le résultat final doit alimenter un `ProviderQualityProfile` et non une simple conclusion « fonctionne / ne fonctionne pas ».
 
-Les résultats mesurés de A1 et A2 sont documentés dans :
+Après copie dans le dossier d'artefacts, le runner retire l'`index.scip`
+généré à la racine du projet. Si un index existait avant l'expérience, il est
+déplacé transactionnellement puis restauré, afin de ne pas laisser le dépôt
+analysé modifié.
+
+Les résultats mesurés de A1, A2 et A3 sont documentés dans :
 
 ```text
 docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
+docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
 ```
 
 ## Baseline SCIP → MINOS
@@ -298,6 +308,7 @@ un index réel sans créer de CLI produit :
 ```powershell
 .\scripts\m0\run-minos-scip-baseline.ps1 `
   -IndexPath .\fixtures\java\java-simple\.minos-m0\scip-java\index.scip `
+  -ProjectId fixture-java-simple `
   -Queries User,UserRepository,findById,UserService,findUser
 ```
 

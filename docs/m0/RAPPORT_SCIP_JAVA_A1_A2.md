@@ -294,13 +294,15 @@ Verdict A2 :
 
 Ce résultat ne justifie aucun changement de JDK pour MINOS.
 
-## 6. Conclusion M0 de l'étape
+## 6. Conclusion A1/A2
 
 A1 et A2 suffisent pour poursuivre les expériences locales sans attendre la CI
 GitHub Actions. Elles ne valident ni la CI, ni `scip lint`, ni la production du
 snapshot humain avec la combinaison de versions actuelle.
 
-Prochaine décision expérimentale recommandée : qualifier A3 sur le dépôt réel
-`FTurleque/ariane-chatbot`, tout en ouvrant séparément l'évaluation d'une CLI
-SCIP compatible avec les plages typées. Les versions CLI, bindings et indexeur
-doivent continuer à être suivies indépendamment.
+A3 a ensuite été exécutée sur le dépôt réel `FTurleque/ariane-chatbot`. Ses
+résultats sont consignés dans `docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md`.
+
+L'évaluation d'une CLI SCIP compatible avec les plages typées reste séparée.
+Les versions CLI, bindings et indexeur doivent continuer à être suivies
+indépendamment.

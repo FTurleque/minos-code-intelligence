@@ -62,6 +62,11 @@ SymbolLocation
 
 Les lignes MINOS sont normalisées en base 1 ; les colonnes restent des offsets base 0 dans l'unité déclarée.
 
+L'index réel Ariane confirme qu'un fournisseur peut laisser cet encodage non
+spécifié : les 220 documents scip-java portent
+`UnspecifiedPositionEncoding`. MINOS doit alors conserver `UNKNOWN` et ne pas
+inférer silencieusement UTF-16.
+
 ## 3. Les identités fournisseur doivent être conservées séparément
 
 L'identifiant SCIP brut ne doit devenir ni :
@@ -154,6 +159,12 @@ unresolvedOccurrenceRate
 
 sans fausser les résultats.
 
+A3 confirme cette nécessité à l'échelle réelle : sur 25 956 occurrences,
+11 956 visent un identifiant absent du catalogue fournisseur. Parmi elles, 935
+concernent des membres workspace synthétiques, principalement des accessors de
+records, et 10 269 des symboles JDK ou de dépendances. Les transformer en
+symboles résolus aurait produit des faits non justifiés.
+
 ## 6. Les relations doivent pouvoir viser un workspace
 
 Le document de domaine C0 autorisait conceptuellement :
@@ -227,6 +238,8 @@ symbole local  : document.relativePath + rawSymbol
 Cette clé reste strictement interne à l'adaptateur. Elle ne devient ni
 `Symbol.id`, ni `Symbol.symbolKey`, et ne fait pas fuiter la grammaire SCIP dans
 le domaine. Après correction, A1 conserve 32 faits distincts et ne produit
+aucun doublon de catalogue. A3 confirme la règle avec 2 295 réutilisations
+d'identifiants locaux entre 220 documents, 4 587 faits conservés et toujours
 aucun doublon de catalogue.
 
 ## 10. Effet sur les principes C0

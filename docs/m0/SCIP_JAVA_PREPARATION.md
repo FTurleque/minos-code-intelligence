@@ -2,7 +2,7 @@
 
 Date : **22 juillet 2026**
 
-Statut : **A1 et A2 exécutées — résultats dans `RAPPORT_SCIP_JAVA_A1_A2.md`**
+Statut : **A1, A2 et A3 exécutées — résultats dans les rapports `RAPPORT_SCIP_JAVA_*`**
 
 ## Versions vérifiées
 
@@ -17,8 +17,9 @@ scip-java                        0.13.1
 Cette distinction est importante : la version de la CLI SCIP n'est pas la version du protocole/bindings ni celle de l'indexeur JVM.
 
 Résultat confirmé le 22 juillet 2026 : `scip-java 0.13.1` produit des index
-réels pour `java-simple` et pour `java-24-smoke` compilé en `release 24` avec
-le JDK 24.0.1. Sur Windows, cette exécution nécessite toutefois des adaptations
+réels pour `java-simple`, pour `java-24-smoke` compilé en `release 24` et pour
+le dépôt Maven/Quarkus réel `ariane-chatbot` compilé en `release 17`, avec le
+JDK 24.0.1. Sur Windows, cette exécution nécessite toutefois des adaptations
 locales parce que la release 0.13.1 a retiré son launcher Windows et utilise un
 attribut POSIX dans son agrégateur.
 
