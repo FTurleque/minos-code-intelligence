@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
  */
 public final class ScipRealIndexExperiment {
 
-    private static final String PROJECT_ID = "fixture-java-simple";
+    private static final String PROJECT_ID_PROPERTY = "minos.m0.projectId";
+    private static final String DEFAULT_PROJECT_ID = "m0-real-index";
 
     private ScipRealIndexExperiment() {
     }
@@ -38,6 +39,7 @@ public final class ScipRealIndexExperiment {
         }
 
         Index index = new ScipIndexReader().read(Path.of(arguments[0]));
+        String projectId = System.getProperty(PROJECT_ID_PROPERTY, DEFAULT_PROJECT_ID);
         emitProviderMetrics(index);
 
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
@@ -51,7 +53,7 @@ public final class ScipRealIndexExperiment {
         ScipIngestionReport report = new ScipIngestionAdapter().ingest(
                 index,
                 new ScipIngestionRequest(
-                        PROJECT_ID,
+                        projectId,
                         "main",
                         "scip-java",
                         "0.13.1",
@@ -71,7 +73,7 @@ public final class ScipRealIndexExperiment {
         metric("unresolvedOccurrenceRate", report.unresolvedOccurrenceRate());
 
         SymbolQueryService queries = new SymbolQueryService(store);
-        Arrays.stream(arguments).skip(1).forEach(query -> emitQuery(queries, query));
+        Arrays.stream(arguments).skip(1).forEach(query -> emitQuery(queries, projectId, query));
     }
 
     @SuppressWarnings("deprecation")
@@ -79,14 +81,24 @@ public final class ScipRealIndexExperiment {
         Set<String> uniqueRawSymbolIds = new HashSet<>();
         Set<String> catalogKeys = new HashSet<>();
         Map<String, Integer> occurrenceOnlySymbols = new TreeMap<>();
+        Map<String, Integer> positionEncodings = new TreeMap<>();
         int symbolEntries = 0;
         int occurrences = 0;
         int definitions = 0;
         int typedRanges = 0;
         int legacyRanges = 0;
         int relationships = 0;
+        int mainDocuments = 0;
+        int testDocuments = 0;
 
         for (Document document : index.getDocumentsList()) {
+            positionEncodings.merge(document.getPositionEncoding().name(), 1, Integer::sum);
+            if (document.getRelativePath().startsWith("src/main/")) {
+                mainDocuments++;
+            }
+            if (document.getRelativePath().startsWith("src/test/")) {
+                testDocuments++;
+            }
             for (SymbolInformation symbol : document.getSymbolsList()) {
                 symbolEntries++;
                 uniqueRawSymbolIds.add(symbol.getSymbol());
@@ -121,6 +133,28 @@ public final class ScipRealIndexExperiment {
             catalogKeys.add(ScipSymbolCatalog.key("", symbol.getSymbol()));
         }
 
+        int implementationRelationships = 0;
+        int referenceRelationships = 0;
+        int cataloguedRelationshipTargets = 0;
+        for (Document document : index.getDocumentsList()) {
+            for (SymbolInformation symbol : document.getSymbolsList()) {
+                for (Relationship relationship : symbol.getRelationshipsList()) {
+                    if (relationship.getIsImplementation()) {
+                        implementationRelationships++;
+                    }
+                    if (relationship.getIsReference()) {
+                        referenceRelationships++;
+                    }
+                    if (catalogKeys.contains(ScipSymbolCatalog.key(
+                            document.getRelativePath(),
+                            relationship.getSymbol()
+                    ))) {
+                        cataloguedRelationshipTargets++;
+                    }
+                }
+            }
+        }
+
         // Recompute after all documents and external symbols have been catalogued.
         occurrenceOnlySymbols.clear();
         for (Document document : index.getDocumentsList()) {
@@ -136,6 +170,8 @@ public final class ScipRealIndexExperiment {
         }
 
         metric("documents", index.getDocumentsCount());
+        metric("providerMainDocuments", mainDocuments);
+        metric("providerTestDocuments", testDocuments);
         metric("providerSymbolEntries", symbolEntries);
         metric("providerExternalSymbolEntries", index.getExternalSymbolsCount());
         metric("providerUniqueRawSymbolIds", uniqueRawSymbolIds.size());
@@ -149,6 +185,12 @@ public final class ScipRealIndexExperiment {
         metric("providerTypedRanges", typedRanges);
         metric("providerLegacyRanges", legacyRanges);
         metric("providerRelationships", relationships);
+        metric("providerImplementationRelationships", implementationRelationships);
+        metric("providerReferenceRelationships", referenceRelationships);
+        metric("providerCataloguedRelationshipTargets", cataloguedRelationshipTargets);
+        metric("providerUncataloguedRelationshipTargets", relationships - cataloguedRelationshipTargets);
+        positionEncodings.forEach((encoding, count) ->
+                metric("providerPositionEncoding." + encoding, count));
         metric("providerOccurrenceOnlySymbolIds", occurrenceOnlySymbols.size());
         metric("providerOccurrenceOnlyOccurrences", occurrenceOnlySymbols.values().stream()
                 .mapToInt(Integer::intValue)
@@ -157,8 +199,8 @@ public final class ScipRealIndexExperiment {
                 line("OCCURRENCE_ONLY_SYMBOL", symbol, Integer.toString(count)));
     }
 
-    private static void emitQuery(SymbolQueryService queries, String query) {
-        var symbols = queries.findSymbol(PROJECT_ID, query, 100);
+    private static void emitQuery(SymbolQueryService queries, String projectId, String query) {
+        var symbols = queries.findSymbol(projectId, query, 100);
         line("QUERY", query, Integer.toString(symbols.size()));
         for (Symbol symbol : symbols) {
             String providerIds = symbol.providerReferences().stream()
@@ -166,7 +208,7 @@ public final class ScipRealIndexExperiment {
                     .sorted()
                     .reduce((left, right) -> left + "," + right)
                     .orElse("");
-            var usages = queries.findUsages(PROJECT_ID, symbol.id(), 1000);
+            var usages = queries.findUsages(projectId, symbol.id(), 1000);
             line("QUERY_RESULT", query, symbol.name(), symbol.kind().name(),
                     symbol.identityQuality().name(), Integer.toString(usages.size()), providerIds);
             usages.forEach(usage -> line(

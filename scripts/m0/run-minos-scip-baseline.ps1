@@ -5,6 +5,8 @@ param(
 
     [string] $OutputFile,
 
+    [string] $ProjectId = "m0-real-index",
+
     [string[]] $Queries = @()
 )
 
@@ -39,6 +41,7 @@ try {
         (Get-Content -Raw -LiteralPath $ClasspathFile)
 
     $Arguments = @(
+        "-Dminos.m0.projectId=$ProjectId",
         "-classpath",
         $ExperimentClasspath,
         "io.github.fturleque.minos.adapter.scip.ScipRealIndexExperiment",
