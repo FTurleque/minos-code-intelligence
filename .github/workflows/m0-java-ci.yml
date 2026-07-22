@@ -33,4 +33,24 @@ jobs:
           mvn -version
 
       - name: Vérifier le projet
-        run: mvn --batch-mode --no-transfer-progress verify
+        id: maven-verify
+        shell: bash
+        run: |
+          mkdir -p target
+          set +e
+          mvn --batch-mode --no-transfer-progress verify 2>&1 | tee target/m0-ci.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > target/m0-ci.exit
+          exit "$status"
+
+      - name: Publier les diagnostics Maven
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: m0-java-ci-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            target/m0-ci.log
+            target/m0-ci.exit
+            target/surefire-reports/
