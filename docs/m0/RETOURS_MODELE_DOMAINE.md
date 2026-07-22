@@ -341,6 +341,26 @@ Les relations d'héritage et d'override ont des cibles cataloguées, mais
 d'interface `Named -> Identified` n'est pas émise comme relation. La sémantique
 exacte d'une relation ne doit pas être renforcée au-delà des faits disponibles.
 
+## 14. Glean C1 confirme la frontière, pas un nouveau modèle
+
+C1 a ingéré `java-simple` dans Glean 0.2.0.1 après une conversion technique des
+plages SCIP typées vers les champs historiques. Cette conversion reste dans un
+harness de test et ne change aucun concept `domain`, `store` ou `query`.
+
+Les résultats Glean renforcent trois décisions existantes :
+
+- les kinds fournisseur doivent rester qualifiés : Glean expose le record et
+  l'interface comme classes, et les constructeurs comme méthodes ;
+- une référence Glean n'est pas automatiquement une relation `CALLS` et ne doit
+  pas être présentée ainsi sans preuve d'appelant ;
+- l'absence de statut de non-résolution dans les prédicats C1 ne permet pas de
+  remplacer `ResolvedSymbolReference` / `UnresolvedSymbolReference`.
+
+`CodeKnowledgeStore` reste donc la frontière. Aucun prédicat Angle, identifiant
+de fait Glean, type Thrift ou détail RocksDB n'est introduit dans le domaine.
+Le choix E2 d'un chemin MINOS léger par défaut ne préjuge pas encore du stockage
+persistant final.
+
 ## Consolidation
 
 Les éléments confirmés par les index réels Java et TypeScript sont intégrés à

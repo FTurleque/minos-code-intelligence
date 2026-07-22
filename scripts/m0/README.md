@@ -1,6 +1,44 @@
-# Scripts M0 — Expériences SCIP Java et TypeScript
+# Scripts M0 — Expériences SCIP Java, TypeScript et Glean
 
 Ces scripts exécutent la chaîne de qualification `scip-java` sur un projet Maven Java puis conservent les artefacts nécessaires aux mesures M0.
+
+## Glean C1 sous WSL2
+
+L'expérience Glean utilise Ubuntu WSL2, car le build officiel reste testé
+uniquement sous Linux et l'image Docker officielle est encore signalée comme
+non fonctionnelle. Elle n'ajoute aucun composant Glean au cœur MINOS.
+
+Installation reproductible de Glean 0.2.0.1 et de ses dépendances Linux :
+
+```powershell
+.\scripts\m0\install-glean-wsl.ps1 -InstallSystemDependencies
+```
+
+Les dépendances de compilation sont limitées à la distribution WSL. Glean et
+les caches Cabal restent sous `~/.minos-m0/glean/` dans le compte Linux ; aucun
+`PATH` Windows ou utilisateur persistant n'est modifié. Le script est
+idempotent. `-Force` republie et revérifie le binaire depuis le store Cabal
+versionné sans installation globale.
+
+L'indexeur SCIP intégré à Glean 0.2.0.1 ne sait pas lire les plages typées
+émises par `scip-java 0.13.1`. La copie de compatibilité expérimentale se crée
+sans modifier l'index source :
+
+```powershell
+.\scripts\m0\export-glean-compatible-scip.ps1 `
+  -IndexPath .\fixtures\java\java-simple\.minos-m0\scip-java\index.scip `
+  -OutputPath .\.minos-m0\experiments\glean-c1\java-simple\index-legacy-ranges.scip
+```
+
+Le harness est volontairement placé dans les sources de test. Il convertit
+uniquement les plages `single_line_range` / `multi_line_range` et leurs plages
+englobantes vers les champs SCIP historiques attendus par Glean. Ce coût de
+compatibilité compte contre Glean ; il ne devient ni un modèle MINOS ni une
+réécriture de l'identité fournisseur.
+
+Le protocole et les résultats réels C1 sont suivis dans
+`docs/m0/RAPPORT_GLEAN_C1.md`. La comparaison décisionnelle avec le backend
+mémoire est dans `docs/m0/COMPARATIF_BACKENDS.md`.
 
 ## Versions de référence
 

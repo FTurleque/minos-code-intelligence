@@ -1,6 +1,6 @@
 # M0 — Plan détaillé des expérimentations
 
-- Statut : **Prêt pour validation de sortie C0**
+- Statut : **En cours — A, B, C1, D, E1 et E2 exécutées ; clôture M0 active**
 - Date : **22 juillet 2026**
 - Objectif : **valider la faisabilité technique sans construire prématurément le produit**
 
@@ -329,23 +329,30 @@ find_usages
 
 Mesurer la valeur réelle de Glean par rapport à la baseline.
 
+Statut au 22 juillet 2026 : **C1 exécutée avec limitations ; C2 et C3
+différées**. Glean 0.2.0.1 ingère la fixture contrôlée uniquement après
+conversion des plages SCIP typées vers le format historique. Les requêtes,
+coûts, échecs et limites sont consignés dans
+`docs/m0/RAPPORT_GLEAN_C1.md`.
+
 ## Pipeline
 
 ```text
-index.scip
+index.scip scip-java 0.13.1
     │
     ▼
-scip-to-glean
+copie de plages historiques requise par Glean 0.2.0.1
     │
     ▼
-Glean DB
+indexeur SCIP intégré à Glean
     │
     ▼
-GleanCodeKnowledgeStore
-    │
-    ▼
-MINOS Query Services
+Glean DB -> Angle CLI
 ```
+
+Le pipeline C1 mesure Glean sans implémenter prématurément un
+`GleanCodeKnowledgeStore`. Le convertisseur Rust officiel courant utilise lui
+aussi les anciennes plages et n'apporte pas de repli utile à cette version.
 
 ## Requêtes à mesurer
 
@@ -371,6 +378,9 @@ Objectif : validation fonctionnelle rapide.
 
 ### C2 — Thrift
 
+Statut : **différée**. C1 ne démontre pas une valeur MVP justifiant la
+génération et la maintenance d'un client.
+
 Évaluer :
 
 - génération cliente ;
@@ -381,7 +391,9 @@ Objectif : validation fonctionnelle rapide.
 
 ### C3 — Sidecar
 
-Évaluer un processus Glean isolé derrière un adaptateur MINOS.
+Statut : **différée**. Évaluer un processus Glean isolé derrière un adaptateur
+MINOS uniquement lorsqu'un cas d'usage non satisfait par le backend léger est
+mesurable.
 
 ## Mesures
 
@@ -496,6 +508,19 @@ Même dataset, mêmes requêtes, mêmes résultats attendus.
 | complexité code MINOS | mesurer | mesurer |
 
 Le résultat fonctionnel doit être comparé en utilisant des DTO MINOS identiques.
+
+## E2 — Décision comparative
+
+Statut au 22 juillet 2026 : **exécutée au niveau nécessaire pour choisir le
+chemin par défaut**. Glean C1 a été confronté à la même fixture et à la baseline
+E1. C1 n'étant pas branché derrière les DTO MINOS, ses latences ne sont pas
+présentées comme un benchmark micro strictement équivalent. Les capacités, les
+résultats de vérité terrain et le coût utilisateur des deux chemins sont en
+revanche comparables.
+
+Décision : backend MINOS léger par défaut, Glean optionnel et C2/C3 différées.
+Le stockage persistant final n'est pas choisi par E2. Rapport :
+`docs/m0/COMPARATIF_BACKENDS.md`.
 
 ## E1 — Baseline reproductible du backend mémoire
 

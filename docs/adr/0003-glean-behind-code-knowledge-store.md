@@ -1,6 +1,6 @@
 # ADR-0003 — Isoler le backend de connaissance et traiter Glean comme backend avancé optionnel
 
-- Statut : **Acceptée avec révision de l'orientation initiale**
+- Statut : **Acceptée — orientation confirmée par M0 C1/E2**
 - Date de décision : **22 juillet 2026**
 - Validation de Glean : **M0**
 
@@ -184,6 +184,37 @@ MINOS conserve `CodeKnowledgeStore` mais choisit un autre backend principal.
 ### REMPLACER
 
 Glean est retiré de la trajectoire principale ; le domaine MINOS reste inchangé.
+
+## Validation M0 du 22 juillet 2026
+
+C1 a construit et exécuté Glean 0.2.0.1 sous Ubuntu WSL2. L'ingestion directe
+de l'index produit par `scip-java 0.13.1` échoue : l'indexeur Glean intégré lit
+les anciens tableaux de positions et ignore les plages SCIP typées modernes.
+Une copie de compatibilité a permis d'ingérer et d'interroger `java-simple`.
+
+Les résultats sont fonctionnels mais ne justifient pas Glean comme backend par
+défaut :
+
+- 13/13 symboles présents, contre 9/13 kinds exacts ;
+- 5/5 cibles d'usage et l'implémentation attendue présentes ;
+- aucune relation `CALLS` explicite et aucune sémantique de non-résolution
+  équivalente au domaine MINOS démontrée ;
+- environ 4,52 GB de store Cabal local après construction ;
+- 155 376 KiB de pic RSS sur une requête instrumentée ;
+- environ 0,8 s au p95 pour une invocation CLI complète sous WSL2 ;
+- conversion préalable requise pour les 128 occurrences de la fixture.
+
+E2 retient donc le scénario **ADOPTER_AVEC_CONTRAINTES** au sens suivant :
+
+- adopter et préserver la frontière `CodeKnowledgeStore` ;
+- retenir un backend MINOS léger pour le chemin par défaut du MVP ;
+- conserver Glean comme backend avancé optionnel possible ;
+- différer C2 Thrift et C3 sidecar jusqu'à un besoin mesuré que le chemin léger
+  ne satisfait pas.
+
+Cette décision ne choisit pas encore le stockage persistant MINOS. Elle exclut
+seulement Glean du chemin par défaut actuel. Les mesures complètes sont dans
+`docs/m0/RAPPORT_GLEAN_C1.md` et `docs/m0/COMPARATIF_BACKENDS.md`.
 
 ## Alternatives surveillées
 

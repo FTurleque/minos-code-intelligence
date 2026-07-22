@@ -603,6 +603,41 @@ mesure RSS. Ariane ne contient que 25 956 occurrences ; ces chiffres ne fixent
 donc pas encore un seuil de scalabilité. Le détail méthodologique et les deux
 runs sont consignés dans `docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.
 
+## 20.5 Qualification Glean C1 et comparaison E2
+
+Glean 0.2.0.1 a été construit et exécuté sous Ubuntu 24.04 WSL2 sur le même
+`index.scip` `java-simple`. L'ingestion native échoue parce que son indexeur
+intégré ne décode que les anciennes plages SCIP. Une copie expérimentale a
+converti 128 plages et 27 plages englobantes sans modifier l'index source.
+
+| Mesure | Résultat Glean |
+|---|---:|
+| Ingestion de la copie compatible | 2 095 ms |
+| Reconstruction indépendante | 2,01 s |
+| Pic RSS ingestion | 204 340 KiB |
+| Taille de la base | 436 312 octets |
+| Symboles obligatoires présents | 13 / 13 |
+| Kinds exacts | 9 / 13 |
+| Cibles d'usage présentes | 5 / 5 |
+| Implémentations attendues | 1 / 1 |
+| Relations `CALLS` explicites | 0 / 3 |
+| Latence `SymbolDisplayName` p50 / p95 | 62,409 / 69,364 ms |
+| Latence `Reference` p50 / p95 | 60,284 / 72,890 ms |
+| Durée processus CLI p95 | 807 / 802 ms |
+| Pic RSS requête instrumentée | 155 376 KiB |
+| Store Cabal local | 4 516 378 499 octets |
+
+Les temps d'exécution Angle internes respectent les objectifs initiaux, mais
+ne constituent pas encore des latences du service MINOS complet. La durée
+processus inclut WSL et l'ouverture de base. Un seul processus Glean de cinq
+threads a été observé par invocation.
+
+Glean ne démontre sur ce dataset aucune capacité MVP obligatoire qui compense
+sa toolchain Linux, l'adaptateur de compatibilité, sa mémoire et son démarrage.
+E2 retient donc le chemin MINOS léger par défaut et diffère Thrift/sidecar. Les
+détails sont dans `docs/m0/RAPPORT_GLEAN_C1.md` et
+`docs/m0/COMPARATIF_BACKENDS.md`.
+
 ---
 
 # 21. Niveaux de verdict M0
