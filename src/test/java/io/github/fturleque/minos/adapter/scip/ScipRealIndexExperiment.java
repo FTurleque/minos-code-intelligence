@@ -1,5 +1,6 @@
 package io.github.fturleque.minos.adapter.scip;
 
+import io.github.fturleque.minos.domain.OccurrenceRole;
 import io.github.fturleque.minos.domain.ProviderReference;
 import io.github.fturleque.minos.domain.Symbol;
 import io.github.fturleque.minos.query.SymbolQueryService;
@@ -91,9 +92,15 @@ public final class ScipRealIndexExperiment {
         Set<String> catalogKeys = new HashSet<>();
         Map<String, Integer> occurrenceOnlySymbols = new TreeMap<>();
         Map<String, Integer> positionEncodings = new TreeMap<>();
+        Map<String, Integer> roleCombinations = new TreeMap<>();
+        Map<String, Integer> definitionsByCatalogKey = new TreeMap<>();
+        Map<String, String> rawSymbolsByCatalogKey = new TreeMap<>();
+        ScipOccurrenceRoleMapper roleMapper = new ScipOccurrenceRoleMapper();
         int symbolEntries = 0;
         int occurrences = 0;
         int definitions = 0;
+        int blankSymbolOccurrences = 0;
+        int multiValuedRoleOccurrences = 0;
         int typedRanges = 0;
         int legacyRanges = 0;
         int relationships = 0;
@@ -124,8 +131,26 @@ public final class ScipRealIndexExperiment {
 
             for (Occurrence occurrence : document.getOccurrencesList()) {
                 occurrences++;
+                if (occurrence.getSymbol().isBlank()) {
+                    blankSymbolOccurrences++;
+                }
+                Set<OccurrenceRole> mappedRoles = roleMapper.map(occurrence);
+                String roleCombination = mappedRoles.stream()
+                        .map(Enum::name)
+                        .sorted()
+                        .collect(Collectors.joining("+"));
+                roleCombinations.merge(roleCombination, 1, Integer::sum);
+                if (mappedRoles.size() > 1) {
+                    multiValuedRoleOccurrences++;
+                }
                 if ((occurrence.getSymbolRoles() & 1) != 0) {
                     definitions++;
+                    String catalogKey = ScipSymbolCatalog.key(
+                            document.getRelativePath(),
+                            occurrence.getSymbol()
+                    );
+                    definitionsByCatalogKey.merge(catalogKey, 1, Integer::sum);
+                    rawSymbolsByCatalogKey.putIfAbsent(catalogKey, occurrence.getSymbol());
                 }
                 if (occurrence.getTypedRangeCase() != Occurrence.TypedRangeCase.TYPEDRANGE_NOT_SET) {
                     typedRanges++;
@@ -191,6 +216,26 @@ public final class ScipRealIndexExperiment {
                 + index.getExternalSymbolsCount() - catalogKeys.size());
         metric("providerOccurrences", occurrences);
         metric("providerDefinitions", definitions);
+        metric("providerBlankSymbolOccurrences", blankSymbolOccurrences);
+        metric("providerMultiValuedRoleOccurrences", multiValuedRoleOccurrences);
+        roleCombinations.forEach((roles, count) ->
+                line("ROLE_COMBINATION", roles, Integer.toString(count)));
+        long multiDefinitionSymbols = definitionsByCatalogKey.values().stream()
+                .filter(count -> count > 1)
+                .count();
+        int maxDefinitionsPerSymbol = definitionsByCatalogKey.values().stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(0);
+        metric("providerMultiDefinitionSymbolIds", multiDefinitionSymbols);
+        metric("providerMaxDefinitionsPerSymbol", maxDefinitionsPerSymbol);
+        definitionsByCatalogKey.entrySet().stream()
+                .filter(entry -> entry.getValue() > 1)
+                .forEach(entry -> line(
+                        "MULTI_DEFINITION_SYMBOL",
+                        rawSymbolsByCatalogKey.get(entry.getKey()),
+                        Integer.toString(entry.getValue())
+                ));
         metric("providerTypedRanges", typedRanges);
         metric("providerLegacyRanges", legacyRanges);
         metric("providerRelationships", relationships);
@@ -244,7 +289,9 @@ public final class ScipRealIndexExperiment {
     }
 
     private static boolean isMainSource(String relativePath) {
-        return isSourceSet(relativePath, "main") || relativePath.startsWith("src/");
+        return isSourceSet(relativePath, "main")
+                || relativePath.startsWith("src/")
+                || relativePath.contains("/src/");
     }
 
     private static void metric(String name, Object value) {
