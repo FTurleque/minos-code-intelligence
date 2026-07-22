@@ -93,10 +93,11 @@ public final class ScipRealIndexExperiment {
 
         for (Document document : index.getDocumentsList()) {
             positionEncodings.merge(document.getPositionEncoding().name(), 1, Integer::sum);
-            if (document.getRelativePath().startsWith("src/main/")) {
+            String relativePath = document.getRelativePath().replace('\\', '/');
+            if (isSourceSet(relativePath, "main")) {
                 mainDocuments++;
             }
-            if (document.getRelativePath().startsWith("src/test/")) {
+            if (isSourceSet(relativePath, "test")) {
                 testDocuments++;
             }
             for (SymbolInformation symbol : document.getSymbolsList()) {
@@ -221,6 +222,11 @@ public final class ScipRealIndexExperiment {
                     usage.roles().stream().map(Enum::name).sorted().collect(Collectors.joining(","))
             ));
         }
+    }
+
+    private static boolean isSourceSet(String relativePath, String sourceSet) {
+        String segment = "src/" + sourceSet + "/";
+        return relativePath.startsWith(segment) || relativePath.contains("/" + segment);
     }
 
     private static void metric(String name, Object value) {

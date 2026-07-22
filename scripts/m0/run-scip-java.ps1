@@ -51,20 +51,6 @@ function Resolve-ToolCommand {
     throw "$DisplayName not found. Run .\scripts\m0\install-scip-tools.ps1 first."
 }
 
-function Invoke-Checked {
-    param(
-        [Parameter(Mandatory = $true)][string] $Command,
-        [Parameter(Mandatory = $true)][string[]] $Arguments,
-        [Parameter(Mandatory = $true)][string] $Description
-    )
-
-    Write-Host "==> $Description"
-    & $Command @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Description failed with exit code $LASTEXITCODE"
-    }
-}
-
 function Resolve-MavenBinForScipJava {
     $WrapperPropertiesPath = Join-Path $RepoRoot ".mvn\wrapper\maven-wrapper.properties"
     if (-not (Test-Path -LiteralPath $WrapperPropertiesPath -PathType Leaf)) {
@@ -393,14 +379,30 @@ New-Item -ItemType Directory -Force -Path $ResolvedOutputDirectory | Out-Null
 
 $MetadataFile = Join-Path $ResolvedOutputDirectory "environment.txt"
 $IndexDestination = Join-Path $ResolvedOutputDirectory "index.scip"
+$IndexLogFile = Join-Path $ResolvedOutputDirectory "index.txt"
+$IndexLogPartial = Join-Path $ResolvedOutputDirectory "index.partial.txt"
+$IndexDestinationPartial = Join-Path $ResolvedOutputDirectory "index.partial.scip"
 $LintFile = Join-Path $ResolvedOutputDirectory "lint.txt"
 $StatsFile = Join-Path $ResolvedOutputDirectory "stats.txt"
 $SnapshotDirectory = Join-Path $ResolvedOutputDirectory "snapshot"
 $SnapshotLogFile = Join-Path $ResolvedOutputDirectory "snapshot.txt"
+$ShardSourceDirectory = Join-Path $ResolvedProjectPath "target\scip-targetroot\META-INF\scip"
+$ShardDestination = Join-Path $ResolvedOutputDirectory "shards"
+$ShardDestinationPartial = Join-Path $ResolvedOutputDirectory "shards.partial"
 $GeneratedIndex = Join-Path $ResolvedProjectPath "index.scip"
 $PreexistingIndexBackup = Join-Path $ResolvedOutputDirectory "preexisting-project-index.scip.partial"
 $RestorePreexistingIndex = Test-Path -LiteralPath $GeneratedIndex -PathType Leaf
 $CopiedGeneratedIndex = $false
+
+if ([System.IO.Path]::GetFullPath($GeneratedIndex) -eq
+        [System.IO.Path]::GetFullPath($IndexDestination)) {
+    throw "OutputDirectory must not be the analyzed project root because index.scip is a transactional project artifact."
+}
+
+Remove-Item -LiteralPath $IndexDestination -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $IndexDestinationPartial -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $IndexLogPartial -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $ShardDestinationPartial -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($RestorePreexistingIndex) {
     if (Test-Path -LiteralPath $PreexistingIndexBackup) {
@@ -455,55 +457,108 @@ try {
     "=== scip --version ===" | Add-Content -Encoding UTF8 $MetadataFile
     (& $ResolvedScipCommand --version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
 
-    Invoke-Checked -Command "java" -Arguments @(
+    Write-Host "==> Generate index.scip with scip-java"
+    $IndexArguments = @(
         "-classpath",
         "$ScipJavaWindowsPatch;$ScipJavaClasspath",
         $ScipJavaMainClass,
         "index"
-    ) -Description "Generate index.scip with scip-java"
-
-    if (-not (Test-Path -LiteralPath $GeneratedIndex -PathType Leaf)) {
-        throw "scip-java did not produce index.scip in $ResolvedProjectPath"
-    }
-
-    Copy-Item -LiteralPath $GeneratedIndex -Destination $IndexDestination -Force
-    $CopiedGeneratedIndex = $true
-    if ([System.IO.Path]::GetFullPath($GeneratedIndex) -ne
-            [System.IO.Path]::GetFullPath($IndexDestination)) {
-        Remove-Item -LiteralPath $GeneratedIndex -Force
-    }
-
-    Write-Host "==> Run scip lint"
-    & $ResolvedScipCommand lint $IndexDestination 2>&1 | Tee-Object -FilePath $LintFile
-    $LintExitCode = $LASTEXITCODE
-
-    Write-Host "==> Run scip stats"
-    & $ResolvedScipCommand stats --from $IndexDestination --project-root $ResolvedProjectPath 2>&1 |
-        Tee-Object -FilePath $StatsFile
-    $StatsExitCode = $LASTEXITCODE
-
-    if (Test-Path -LiteralPath $SnapshotDirectory) {
-        Remove-Item -LiteralPath $SnapshotDirectory -Recurse -Force
-    }
-    New-Item -ItemType Directory -Force -Path $SnapshotDirectory | Out-Null
-
-    Write-Host "==> Generate SCIP snapshot"
-    $SnapshotArguments = @(
-        "snapshot",
-        "--from",
-        $IndexDestination,
-        "--to",
-        $SnapshotDirectory,
-        "--project-root",
-        $ResolvedProjectPath
     )
-    & $ResolvedScipCommand @SnapshotArguments 2>&1 | Tee-Object -FilePath $SnapshotLogFile
-    $SnapshotExitCode = $LASTEXITCODE
-    if (-not (Test-Path -LiteralPath $SnapshotDirectory -PathType Container)) {
+    $IndexStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    & java @IndexArguments 2>&1 | Tee-Object -FilePath $IndexLogPartial
+    $IndexExitCode = $LASTEXITCODE
+    $IndexStopwatch.Stop()
+    $IndexDurationMs = $IndexStopwatch.ElapsedMilliseconds
+    if (Test-Path -LiteralPath $IndexLogPartial -PathType Leaf) {
+        Move-Item -LiteralPath $IndexLogPartial -Destination $IndexLogFile -Force
+    }
+    else {
+        New-Item -ItemType File -Force -Path $IndexLogFile | Out-Null
+    }
+
+    $IndexProduced = Test-Path -LiteralPath $GeneratedIndex -PathType Leaf
+    $IndexBytes = if ($IndexProduced) {
+        (Get-Item -LiteralPath $GeneratedIndex).Length
+    }
+    else {
+        0
+    }
+    $ShardCount = 0
+    $ShardBytes = 0
+    Remove-Item -LiteralPath $ShardDestination -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $ShardSourceDirectory -PathType Container) {
+        Copy-Item -LiteralPath $ShardSourceDirectory -Destination $ShardDestinationPartial -Recurse
+        Move-Item -LiteralPath $ShardDestinationPartial -Destination $ShardDestination
+        $ShardFiles = @(
+            Get-ChildItem -LiteralPath $ShardDestination -Recurse -File -Filter "*.scip"
+        )
+        $ShardCount = $ShardFiles.Count
+        $MeasuredShardBytes = $ShardFiles |
+            Measure-Object -Property Length -Sum |
+            Select-Object -ExpandProperty Sum
+        if ($null -ne $MeasuredShardBytes) {
+            $ShardBytes = $MeasuredShardBytes
+        }
+    }
+    $LintExitCode = "not-run"
+    $StatsExitCode = "not-run"
+    $SnapshotExitCode = "not-run"
+
+    if ($IndexProduced) {
+        Copy-Item -LiteralPath $GeneratedIndex -Destination $IndexDestinationPartial -Force
+        Move-Item -LiteralPath $IndexDestinationPartial -Destination $IndexDestination -Force
+        $CopiedGeneratedIndex = $true
+        if ([System.IO.Path]::GetFullPath($GeneratedIndex) -ne
+                [System.IO.Path]::GetFullPath($IndexDestination)) {
+            Remove-Item -LiteralPath $GeneratedIndex -Force
+        }
+    }
+
+    if ($IndexProduced) {
+        Write-Host "==> Run scip lint"
+        & $ResolvedScipCommand lint $IndexDestination 2>&1 | Tee-Object -FilePath $LintFile
+        $LintExitCode = $LASTEXITCODE
+
+        Write-Host "==> Run scip stats"
+        & $ResolvedScipCommand stats --from $IndexDestination --project-root $ResolvedProjectPath 2>&1 |
+            Tee-Object -FilePath $StatsFile
+        $StatsExitCode = $LASTEXITCODE
+
+        if (Test-Path -LiteralPath $SnapshotDirectory) {
+            Remove-Item -LiteralPath $SnapshotDirectory -Recurse -Force
+        }
         New-Item -ItemType Directory -Force -Path $SnapshotDirectory | Out-Null
+
+        Write-Host "==> Generate SCIP snapshot"
+        $SnapshotArguments = @(
+            "snapshot",
+            "--from",
+            $IndexDestination,
+            "--to",
+            $SnapshotDirectory,
+            "--project-root",
+            $ResolvedProjectPath
+        )
+        & $ResolvedScipCommand @SnapshotArguments 2>&1 | Tee-Object -FilePath $SnapshotLogFile
+        $SnapshotExitCode = $LASTEXITCODE
+        if (-not (Test-Path -LiteralPath $SnapshotDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Force -Path $SnapshotDirectory | Out-Null
+        }
+    }
+    else {
+        Remove-Item -LiteralPath $LintFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $StatsFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $SnapshotLogFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $SnapshotDirectory -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     @(
+        "indexExitCode=$IndexExitCode",
+        "indexProduced=$IndexProduced",
+        "indexDurationMs=$IndexDurationMs",
+        "indexBytes=$IndexBytes",
+        "shardCount=$ShardCount",
+        "shardBytes=$ShardBytes",
         "lintExitCode=$LintExitCode",
         "statsExitCode=$StatsExitCode",
         "snapshotExitCode=$SnapshotExitCode"
@@ -511,15 +566,18 @@ try {
 
     Write-Host
     Write-Host "scip-java experiment artifacts preserved." -ForegroundColor Green
-    Write-Host "Index     : $IndexDestination"
+    Write-Host "Index     : $IndexDestination (produced=$IndexProduced)"
+    Write-Host "Index log : $IndexLogFile"
+    Write-Host "Shards    : $ShardDestination ($ShardCount preserved)"
     Write-Host "Lint      : $LintFile"
     Write-Host "Stats     : $StatsFile"
     Write-Host "Snapshot  : $SnapshotDirectory"
     Write-Host "Snapshot log: $SnapshotLogFile"
     Write-Host "Context   : $MetadataFile"
 
-    if ($LintExitCode -ne 0 -or $StatsExitCode -ne 0 -or $SnapshotExitCode -ne 0) {
-        throw "SCIP post-processing completed with failures: lint=$LintExitCode, stats=$StatsExitCode, snapshot=$SnapshotExitCode"
+    if ($IndexExitCode -ne 0 -or -not $IndexProduced -or
+            $LintExitCode -ne 0 -or $StatsExitCode -ne 0 -or $SnapshotExitCode -ne 0) {
+        throw "SCIP experiment completed with failures: index=$IndexExitCode, indexProduced=$IndexProduced, lint=$LintExitCode, stats=$StatsExitCode, snapshot=$SnapshotExitCode"
     }
 }
 finally {
