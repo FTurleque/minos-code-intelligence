@@ -156,7 +156,7 @@ try {
             "-Dminos.m0.measurementIterations=$($Configuration.measurementIterations)",
             "-classpath",
             $ExperimentClasspath,
-            "io.github.fturleque.minos.adapter.scip.InMemoryBackendBenchmark",
+            "com.minos.adapter.scip.InMemoryBackendBenchmark",
             $ResolvedIndexPath
         ) + @($Dataset.queries)
 

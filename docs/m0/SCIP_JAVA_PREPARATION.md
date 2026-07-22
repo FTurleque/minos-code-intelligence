@@ -110,7 +110,7 @@ org.scip_code.scip
 M0 utilise ces bindings uniquement dans :
 
 ```text
-io.github.fturleque.minos.adapter.scip
+com.minos.adapter.scip
 ```
 
 Ils ne doivent jamais apparaître dans :

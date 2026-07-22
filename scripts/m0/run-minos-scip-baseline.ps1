@@ -53,7 +53,7 @@ try {
         "-Dminos.m0.indexRunId=$IndexRunId",
         "-classpath",
         $ExperimentClasspath,
-        "io.github.fturleque.minos.adapter.scip.ScipRealIndexExperiment",
+        "com.minos.adapter.scip.ScipRealIndexExperiment",
         $ResolvedIndexPath
     ) + $Queries
 
