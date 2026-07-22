@@ -1,7 +1,10 @@
 # ADR-0004 — Implémenter le cœur MINOS en Java 25 avec Maven, sans framework serveur
 
-- Statut : **Acceptée**
+- Statut : **Partiellement remplacée par ADR-0005**
 - Date de décision : **22 juillet 2026**
+- Remplacement : **la cible Java 25 est remplacée par Java 24 via ADR-0005**
+
+> Cette ADR conserve la trace de la décision C0 initiale. La version Java courante de MINOS est désormais définie par **ADR-0005**. Les décisions Maven 3.9.x, Maven Wrapper et cœur sans framework serveur restent valides.
 
 ## Contexte
 
@@ -24,37 +27,40 @@ Les contraintes principales sont :
 - tests et packaging reproductibles ;
 - éviter un framework serveur avant qu'une API réseau soit réellement nécessaire.
 
-## État de l'écosystème au 22 juillet 2026
+## Décision initiale C0
 
-- Java 25 est une version LTS publiée en septembre 2025 ;
-- Java 26 est une version non-LTS ;
-- Maven 3.9.16 est la branche stable recommandée actuellement ;
-- Maven 4 n'est pas encore GA et reste une version de prévisualisation / release candidate.
-
-## Décision
-
-### Langage principal
+C0 avait retenu :
 
 ```text
 Java 25 LTS
+Apache Maven 3.9.x
+Maven Wrapper
+aucun framework serveur dans le cœur
 ```
 
-### Build
+La partie **Java 25** de cette décision est remplacée pendant M0 par **ADR-0005 — Aligner MINOS sur Java 24 avec l'environnement de développement**.
+
+La décision courante est donc :
 
 ```text
-Apache Maven 3.9.x
+Java 24                       ← ADR-0005
+Apache Maven 3.9.x            ← conservé
+Maven Wrapper                 ← conservé
+aucun framework serveur       ← conservé
 ```
 
-La version de référence au bootstrap M0 est `3.9.16` et doit être épinglée par Maven Wrapper.
+## Build
 
-### Framework
+La version Maven de référence au bootstrap M0 reste `3.9.16` et doit être épinglée par Maven Wrapper.
+
+## Framework
 
 Le cœur M0/MVP ne dépend d'aucun framework serveur.
 
-Architecture :
+Architecture actuelle après ADR-0005 :
 
 ```text
-Java 25
+Java 24
   │
   ├── domaine MINOS
   ├── services de requêtes
@@ -67,31 +73,6 @@ Framework serveur
 ```
 
 Un framework comme Quarkus pourra être évalué ultérieurement pour une couche d'exposition réseau, sans pénétrer le domaine.
-
-## Raisons du choix Java 25
-
-- LTS actuelle adaptée à un nouveau projet ;
-- très bonne portabilité desktop / serveur ;
-- Protobuf mature ;
-- clients Thrift possibles ;
-- bon support du parallélisme et des charges locales ;
-- écosystème de tests et de profiling mature ;
-- cohérence avec plusieurs projets existants servant de terrains de validation ;
-- facilite le développement et la maintenance dans l'environnement principal du projet.
-
-## Pourquoi Java 25 et non Java 26
-
-Java 26 est une version non-LTS.
-
-MINOS étant un projet d'infrastructure destiné à évoluer sur plusieurs années, une LTS est préférable pour éviter une migration de runtime semestrielle sans bénéfice nécessaire.
-
-## Pourquoi Maven 3.9.x
-
-- stable et recommandé actuellement par Apache Maven ;
-- Maven 4 n'est pas encore GA ;
-- très bon support des projets Java et de la CI ;
-- simplicité pour un projet dont l'auteur maîtrise déjà fortement Maven ;
-- possibilité de migrer vers Maven 4 ultérieurement lorsque celui-ci sera GA et suffisamment stabilisé.
 
 ## Pourquoi pas de framework serveur dans le cœur
 
@@ -121,39 +102,22 @@ API
 
 doivent rester des adaptateurs périphériques.
 
-## Alternatives étudiées
+## Pourquoi Maven 3.9.x
 
-### Java 21
+- stable et éprouvé ;
+- très bon support des projets Java et de la CI ;
+- simplicité pour un projet dont l'auteur maîtrise déjà fortement Maven ;
+- possibilité de migrer vers Maven 4 ultérieurement lorsque cette migration apportera un bénéfice réel.
 
-Valide et LTS, mais moins pertinent pour un projet neuf lancé après la disponibilité de Java 25 LTS, sauf contrainte de compatibilité externe découverte ultérieurement.
+## Alternatives étudiées lors de C0
 
-### Java 26
+La sélection initiale avait comparé Java 21, Java 25, Java 26, Kotlin, Go et Rust.
 
-Non retenu comme cible principale car non-LTS.
+Cette comparaison reste un historique de C0, mais **la cohérence avec la toolchain Java 24 déjà utilisée sur le poste de développement et les autres projets devient la contrainte opérationnelle prioritaire via ADR-0005**.
 
-### Kotlin
+## Règles courantes après ADR-0005
 
-Intéressant sur la JVM, mais ajouterait un langage d'implémentation supplémentaire sans avantage décisif pour le cœur initial.
-
-### Go
-
-Très intéressant pour les binaires et les outils locaux, et proche de certains outils SCIP. Non retenu comme choix principal compte tenu de l'écosystème existant et de la préférence pour un domaine riche fortement typé en Java.
-
-### Rust
-
-Excellent pour performance et distribution native, mais coût de développement et d'intégration plus élevé pour le contexte du projet. Peut rester pertinent pour des composants spécialisés futurs.
-
-### Maven 4
-
-Non retenu au lancement tant qu'il n'est pas GA.
-
-### Gradle
-
-Techniquement viable, mais aucun bénéfice suffisant n'est identifié pour justifier de remplacer Maven dans le contexte du projet.
-
-## Règles résultantes
-
-1. `maven.compiler.release = 25` au bootstrap.
+1. `maven.compiler.release = 24` au bootstrap.
 2. Maven Wrapper épingle Maven `3.9.16` au lancement de M0.
 3. Pas de Spring / Quarkus / Micronaut dans le domaine ou les services M0.
 4. Une couche API future peut choisir son framework indépendamment.
@@ -163,15 +127,8 @@ Techniquement viable, mais aucun bénéfice suffisant n'est identifié pour just
 
 ## Validation
 
-Cette ADR est acceptée à la suite de la validation explicite de la stack proposée pour MINOS.
+Cette ADR reste l'historique de la décision de stack prise à la clôture de C0.
 
-Elle clôt le dernier verrou architectural de C0. Toute remise en cause future de Java 25, Maven 3.9.x ou de l'absence de framework serveur dans le cœur devra être documentée par une nouvelle ADR qui remplace ou amende celle-ci.
+Pendant M0, la décision explicite d'aligner MINOS sur le JDK déjà utilisé dans l'environnement de développement a conduit à **ADR-0005**, qui remplace uniquement la cible Java 25 par **Java 24**.
 
-## Sources officielles
-
-Consultées le 22 juillet 2026 :
-
-- OpenJDK 25 : https://openjdk.org/projects/jdk/25/
-- Oracle Java SE Support Roadmap : https://www.oracle.com/java/technologies/java-se-support-roadmap.html
-- Apache Maven — installation : https://maven.apache.org/install.html
-- Apache Maven — historique des versions : https://maven.apache.org/docs/history.html
+La stack courante doit être lue conjointement avec ADR-0005.
