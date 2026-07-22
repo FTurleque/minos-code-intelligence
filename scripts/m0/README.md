@@ -5,6 +5,7 @@ Ces scripts exécutent la chaîne de qualification `scip-java` sur un projet Mav
 ## Versions de référence
 
 ```text
+Coursier                  2.1.25-M26
 scip-java                 0.13.1
 SCIP CLI                  0.7.1
 ```
@@ -17,39 +18,53 @@ org.scip-code:scip-java-bindings:0.9.0
 
 ## Prérequis
 
-Les scripts n'installent volontairement aucun outil de manière implicite.
-
-Ils exigent :
-
-- le **JDK 24 de référence du poste de développement** ;
-- Coursier, accessible par la commande `cs` ;
-- SCIP CLI, accessible par la commande `scip`.
+Le poste utilise le **JDK 24 de référence déjà installé**.
 
 MINOS ne demande pas l'installation d'un JDK supplémentaire uniquement pour l'expérience SCIP.
 
-Les noms de commandes sont configurables par paramètres PowerShell ou variables d'environnement Bash.
+Sous Windows, Coursier et SCIP CLI peuvent être installés **localement pour MINOS** avec :
+
+```powershell
+.\scripts\m0\install-scip-tools.ps1
+```
+
+Le script télécharge uniquement :
+
+```text
+Coursier 2.1.25-M26
+SCIP CLI 0.7.1
+```
+
+vers :
+
+```text
+.minos-m0\tools\bin\cs.exe
+.minos-m0\tools\bin\scip.exe
+```
+
+Il ne lance pas `cs setup`, n'installe pas Scala/sbt, ne modifie pas le `PATH` utilisateur et ne modifie pas le JDK.
+
+Le runner PowerShell utilise ces outils locaux automatiquement. Il peut aussi utiliser des commandes explicitement fournies ou, en dernier recours, des commandes présentes dans le `PATH`.
 
 ## Windows / PowerShell
 
 Depuis la racine de MINOS :
 
 ```powershell
-.\scripts\m0\run-scip-java.ps1 `
-    -ProjectPath .\fixtures\java\java-simple
+.\scripts\m0\install-scip-tools.ps1
+.\scripts\m0\run-scip-java.ps1 -ProjectPath .\fixtures\java\java-simple
 ```
 
 Fixture Java 24 :
 
 ```powershell
-.\scripts\m0\run-scip-java.ps1 `
-    -ProjectPath .\fixtures\java\java-24-smoke
+.\scripts\m0\run-scip-java.ps1 -ProjectPath .\fixtures\java\java-24-smoke
 ```
 
 Dépôt réel Ariane, exemple si les dépôts sont voisins :
 
 ```powershell
-.\scripts\m0\run-scip-java.ps1 `
-    -ProjectPath ..\ariane-chatbot
+.\scripts\m0\run-scip-java.ps1 -ProjectPath ..\ariane-chatbot
 ```
 
 Paramètres facultatifs :
@@ -57,11 +72,19 @@ Paramètres facultatifs :
 ```powershell
 -OutputDirectory <chemin>
 -ScipJavaVersion 0.13.1
--CoursierCommand cs
--ScipCommand scip
+-CoursierCommand <commande-ou-chemin>
+-ScipCommand <commande-ou-chemin>
+```
+
+Réinstallation forcée des outils locaux :
+
+```powershell
+.\scripts\m0\install-scip-tools.ps1 -Force
 ```
 
 ## Bash / Git Bash / Linux / macOS
+
+Le runner Bash attend actuellement `cs` et `scip` dans le `PATH` ou via les variables d'environnement indiquées ci-dessous.
 
 Le fichier peut être lancé explicitement avec Bash même si le bit exécutable n'est pas préservé par une copie Git :
 
@@ -164,6 +187,7 @@ Conserve au minimum :
 - chemin du projet ;
 - version `scip-java` ;
 - version Java ;
+- commande Coursier utilisée ;
 - version SCIP CLI.
 
 ## Ordre d'exécution de l'Expérience A
