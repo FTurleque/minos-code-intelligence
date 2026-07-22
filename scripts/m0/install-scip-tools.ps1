@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $ScipVersion = "0.7.1",
+    [string] $GoVersion = "1.25.0",
     [switch] $Force
 )
 
@@ -20,13 +21,22 @@ $ScipExe = Join-Path $ToolsBin "scip.exe"
 
 $CoursierArchive = Join-Path $TempRoot "cs-x86_64-pc-win32.zip"
 $CoursierExtract = Join-Path $TempRoot "coursier"
-$ScipArchive = Join-Path $TempRoot "scip-windows-amd64.tar.gz"
-$ScipExtract = Join-Path $TempRoot "scip"
+$ScipSourceArchive = Join-Path $TempRoot "scip-v$ScipVersion.zip"
+$ScipSourceExtract = Join-Path $TempRoot "scip-source"
+$GoArchive = Join-Path $TempRoot "go$GoVersion.windows-amd64.zip"
+$GoExtract = Join-Path $TempRoot "go-sdk"
+$ScipBuild = Join-Path $TempRoot "scip.exe"
+$ScipInstallPartial = "$ScipExe.partial"
 
 # Official Coursier Windows command-line installation launcher.
 # Coursier is only a bootstrap tool for M0, so MINOS does not pin its launcher version.
 $CoursierUrl = "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip"
-$ScipUrl = "https://github.com/scip-code/scip/releases/download/v$ScipVersion/scip-windows-amd64.tar.gz"
+
+# SCIP v0.7.1 only publishes Linux and macOS binaries. On Windows, build the
+# official tagged sources with the same flags as the upstream release workflow.
+# The portable Go SDK remains local to the transactional temporary directory.
+$ScipSourceUrl = "https://github.com/scip-code/scip/archive/refs/tags/v$ScipVersion.zip"
+$GoUrl = "https://go.dev/dl/go$GoVersion.windows-amd64.zip"
 
 function Download-File {
     param(
@@ -141,29 +151,89 @@ try {
     }
 
     if ($Force -or -not (Test-Path -LiteralPath $ScipExe -PathType Leaf)) {
-        if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) {
-            throw "tar.exe is required to extract the SCIP binary on Windows."
-        }
+        Remove-Item -LiteralPath $ScipSourceArchive -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $ScipSourceExtract -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $GoArchive -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $GoExtract -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $ScipBuild -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $ScipInstallPartial -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $ScipSourceExtract | Out-Null
+        New-Item -ItemType Directory -Force -Path $GoExtract | Out-Null
 
-        Remove-Item -LiteralPath $ScipExtract -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $ScipArchive -Force -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Force -Path $ScipExtract | Out-Null
+        Download-File -Uri $ScipSourceUrl -Destination $ScipSourceArchive
+        Download-File -Uri $GoUrl -Destination $GoArchive
+        Expand-Archive -LiteralPath $ScipSourceArchive -DestinationPath $ScipSourceExtract -Force
+        Expand-Archive -LiteralPath $GoArchive -DestinationPath $GoExtract -Force
 
-        Download-File -Uri $ScipUrl -Destination $ScipArchive
-        & tar.exe -xzf $ScipArchive -C $ScipExtract
-        if ($LASTEXITCODE -ne 0) {
-            throw "SCIP extraction failed with exit code $LASTEXITCODE"
-        }
-
-        $DownloadedScip = Get-ChildItem -LiteralPath $ScipExtract -Recurse -File |
-            Where-Object { $_.Name -eq "scip.exe" -or $_.Name -eq "scip" } |
+        $ScipSourceRoot = Get-ChildItem -LiteralPath $ScipSourceExtract -Directory |
+            Where-Object {
+                (Test-Path -LiteralPath (Join-Path $_.FullName "go.mod") -PathType Leaf) -and
+                (Test-Path -LiteralPath (Join-Path $_.FullName "cmd\scip") -PathType Container)
+            } |
             Select-Object -First 1
-
-        if (-not $DownloadedScip) {
-            throw "SCIP binary not found in downloaded archive."
+        if (-not $ScipSourceRoot) {
+            throw "SCIP v$ScipVersion sources not found in downloaded archive."
         }
 
-        Copy-Item -LiteralPath $DownloadedScip.FullName -Destination $ScipExe -Force
+        $GoExe = Join-Path $GoExtract "go\bin\go.exe"
+        if (-not (Test-Path -LiteralPath $GoExe -PathType Leaf)) {
+            throw "Portable Go $GoVersion executable not found in downloaded archive."
+        }
+
+        $PreviousGoEnvironment = @{}
+        foreach ($VariableName in @("CGO_ENABLED", "GOOS", "GOARCH", "GOWORK", "GOTOOLCHAIN", "GOCACHE", "GOPATH")) {
+            $PreviousGoEnvironment[$VariableName] = [Environment]::GetEnvironmentVariable($VariableName, "Process")
+        }
+
+        try {
+            $env:CGO_ENABLED = "0"
+            $env:GOOS = "windows"
+            $env:GOARCH = "amd64"
+            $env:GOWORK = "off"
+            $env:GOTOOLCHAIN = "local"
+            $env:GOCACHE = Join-Path $TempRoot "go-build-cache"
+            $env:GOPATH = Join-Path $TempRoot "go-path"
+
+            Write-Host "==> Build SCIP CLI v$ScipVersion for Windows amd64"
+            & $GoExe version
+            if ($LASTEXITCODE -ne 0) {
+                throw "Portable Go returned exit code $LASTEXITCODE"
+            }
+
+            Push-Location $ScipSourceRoot.FullName
+            try {
+                & $GoExe @(
+                    "build",
+                    "-ldflags", "-X main.Reproducible=true",
+                    "-o", $ScipBuild,
+                    "./cmd/scip"
+                )
+                if ($LASTEXITCODE -ne 0) {
+                    throw "SCIP build failed with exit code $LASTEXITCODE"
+                }
+            }
+            finally {
+                Pop-Location
+            }
+        }
+        finally {
+            foreach ($VariableName in $PreviousGoEnvironment.Keys) {
+                $PreviousValue = $PreviousGoEnvironment[$VariableName]
+                if ($null -eq $PreviousValue) {
+                    Remove-Item -LiteralPath "Env:\$VariableName" -ErrorAction SilentlyContinue
+                }
+                else {
+                    Set-Item -LiteralPath "Env:\$VariableName" -Value $PreviousValue
+                }
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $ScipBuild -PathType Leaf)) {
+            throw "SCIP binary not found after source build."
+        }
+
+        Copy-Item -LiteralPath $ScipBuild -Destination $ScipInstallPartial -Force
+        Move-Item -LiteralPath $ScipInstallPartial -Destination $ScipExe -Force
     }
 
     Write-Host
@@ -179,5 +249,6 @@ try {
     Write-Host "No user PATH or JDK configuration was modified."
 }
 finally {
+    Remove-Item -LiteralPath $ScipInstallPartial -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

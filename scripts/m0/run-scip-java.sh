@@ -63,9 +63,10 @@ pushd "$PROJECT_PATH" >/dev/null
 trap 'popd >/dev/null 2>&1 || true' EXIT
 
 COORDINATE="org.scip-code:scip-java:$SCIP_JAVA_VERSION"
+SCIP_JAVA_MAIN_CLASS="org.scip_code.scip_java.ScipJava"
 
 echo "==> Génération de index.scip avec scip-java"
-"$COURSIER_COMMAND" launch "$COORDINATE" -- index
+"$COURSIER_COMMAND" launch "$COORDINATE" --jvm system --main "$SCIP_JAVA_MAIN_CLASS" -- index
 
 if [[ ! -f index.scip ]]; then
   echo "scip-java n'a pas produit index.scip dans $PROJECT_PATH" >&2
