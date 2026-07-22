@@ -66,6 +66,7 @@ public final class InMemoryBackendBenchmark {
         long readStarted = System.nanoTime();
         Index index = new ScipIndexReader().read(indexPath);
         long indexReadNanos = System.nanoTime() - readStarted;
+        int documentCount = index.getDocumentsCount();
 
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
         Map<String, String> explicitFileIds = index.getDocumentsList().stream()
@@ -91,6 +92,8 @@ public final class InMemoryBackendBenchmark {
         long ingestionNanos = System.nanoTime() - ingestionStarted;
         long peakHeapIndexingBytes = peakHeapUsageBytes();
 
+        index = null;
+        explicitFileIds = null;
         forceGarbageCollection();
         long retainedHeapAfterIngestionBytes = usedHeapBytes();
 
@@ -136,7 +139,7 @@ public final class InMemoryBackendBenchmark {
 
         line("BENCHMARK", dataset, "InMemoryCodeKnowledgeStore");
         metric("indexBytes", Files.size(indexPath));
-        metric("documents", index.getDocumentsCount());
+        metric("documents", documentCount);
         metric("catalogSymbols", report.catalogSymbolCount());
         metric("normalizedSymbols", report.normalizedSymbolCount());
         metric("occurrences", report.occurrenceCount());
