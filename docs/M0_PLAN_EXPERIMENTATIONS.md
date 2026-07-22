@@ -561,6 +561,13 @@ E1 ne modifie ni `CodeKnowledgeStore`, ni les DTO, ni les services de requêtes.
 Le harness reste expérimental dans les sources de test et ne devient pas une
 CLI produit.
 
+Statut au 22 juillet 2026 : **E1 exécutée sur les huit index**. Deux campagnes
+depuis le même commit confirment 48/48 digests inter-processus identiques. Le
+pire p95 individuel est de 1,443 ms pour `find_symbol` et 10,249 ms pour
+`find_usages`. Le backend mémoire atteint les deux objectifs de latence C0 ;
+son absence de persistance et de requêtes de graphe reste explicite. Résultats :
+`docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.
+
 ---
 
 # 10. Fixtures et vérité terrain

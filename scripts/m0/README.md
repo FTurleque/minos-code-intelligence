@@ -460,3 +460,45 @@ Le harness expose aussi les combinaisons de rôles, les identifiants ayant
 plusieurs définitions, les relations dont la cible est cataloguée et les
 identifiants occurrence-only. Les résultats et leurs limites sont dans
 `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
+
+## Expérience E1 — benchmark du backend mémoire
+
+Le manifeste versionné contient les huit index et les trois requêtes de chaque
+dataset :
+
+```text
+benchmarks/m0/e1-in-memory.json
+```
+
+Exécution :
+
+```powershell
+.\scripts\m0\run-in-memory-backend-benchmark.ps1
+```
+
+Le runner compile le harness une fois, puis lance un JVM neuf par dataset. Les
+résultats sont promus transactionnellement depuis des fichiers `.partial` dans :
+
+```text
+.minos-m0/benchmarks/e1-in-memory/
+  environment.txt
+  summary.tsv
+  <dataset>/result.tsv
+  <dataset>/stderr.txt
+```
+
+Un second run indépendant peut être conservé sans écraser le premier :
+
+```powershell
+.\scripts\m0\run-in-memory-backend-benchmark.ps1 `
+  -OutputDirectory .minos-m0\benchmarks\e1-in-memory-repeat
+```
+
+`result.tsv` contient les durées de lecture et d'ingestion, les mesures heap,
+les p50/p95/max par requête, les digests déterministes et le temps processus
+mesuré par PowerShell. La sérialisation canonique est incluse dans la latence ;
+le calcul SHA-256 est effectué après la fenêtre mesurée.
+
+Le benchmark ne mesure pas encore le RSS complet et ne doit pas être confondu
+avec une CLI produit. Le rapport E1 est dans
+`docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.

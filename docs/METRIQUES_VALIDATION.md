@@ -578,6 +578,31 @@ Sur 142 occurrences, aucune n'a un rôle multi-valué : seuls `DEFINITION` et
 `local 0` sont conservées comme non résolues ; l'appel `transform` n'est pas
 émis. Le détail est dans `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
 
+## 20.4 Baseline du backend mémoire E1
+
+E1 du 22 juillet 2026 mesure `InMemoryCodeKnowledgeStore` sur les huit index
+réels Java et TypeScript. Deux campagnes indépendantes utilisent chacune 100
+itérations d'échauffement puis 500 mesures pour trois requêtes par dataset.
+
+| Mesure | Fixtures hors Ariane | Ariane |
+|---|---:|---:|
+| backend prêt | 134,954–182,820 ms | 431,731 / 444,206 ms |
+| `find_symbol` pire p95 individuel | 0,030 ms | 1,443 ms |
+| `find_usages` pire p95 individuel | 0,056 ms | 10,249 ms |
+| heap retenue après ingestion | 2,21–2,29 MiB | 21,30 MiB |
+| pic heap requêtes | 10,67–10,76 MiB | 53,75 MiB |
+| disque propre au store | 0 | 0 |
+
+Les objectifs initiaux de 100 ms pour `find_symbol` et 250 ms pour
+`find_usages` sont atteints sur ce corpus. Les 48 couples
+dataset/opération/requête conservent le même compteur et le même digest entre
+les deux JVM.
+
+La heap requête inclut les allocations du harness et ne constitue pas une
+mesure RSS. Ariane ne contient que 25 956 occurrences ; ces chiffres ne fixent
+donc pas encore un seuil de scalabilité. Le détail méthodologique et les deux
+runs sont consignés dans `docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.
+
 ---
 
 # 21. Niveaux de verdict M0
