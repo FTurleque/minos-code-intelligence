@@ -1,6 +1,5 @@
 package io.github.fturleque.minos.store;
 
-import io.github.fturleque.minos.domain.OccurrenceRole;
 import io.github.fturleque.minos.domain.Relationship;
 import io.github.fturleque.minos.domain.Symbol;
 import io.github.fturleque.minos.domain.SymbolOccurrence;
@@ -20,7 +19,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     private final Map<String, Symbol> symbolsByScopedId = new ConcurrentHashMap<>();
     private final Map<String, SymbolOccurrence> occurrencesByScopedId = new ConcurrentHashMap<>();
-    private final Map<String, Relationship> relationshipsByScopedId = new ConcurrentHashMap<>();
+    private final Map<String, Relationship> relationshipsById = new ConcurrentHashMap<>();
 
     @Override
     public void putSymbols(Collection<Symbol> symbols) {
@@ -44,8 +43,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         if (relationships == null) {
             return;
         }
-        relationships.forEach(relationship ->
-                relationshipsByScopedId.put(relationship.id(), relationship));
+        relationships.forEach(relationship -> relationshipsById.put(relationship.id(), relationship));
     }
 
     @Override
@@ -83,7 +81,7 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         return occurrencesByScopedId.values().stream()
                 .filter(occurrence -> projectId.equals(occurrence.projectId()))
                 .filter(occurrence -> symbolId.equals(occurrence.symbolId()))
-                .filter(occurrence -> occurrence.role() != OccurrenceRole.DEFINITION)
+                .filter(occurrence -> !occurrence.isDefinitionOccurrence())
                 .sorted(Comparator
                         .comparing((SymbolOccurrence occurrence) -> occurrence.location().fileId())
                         .thenComparingInt(occurrence -> occurrence.location().startLine())
