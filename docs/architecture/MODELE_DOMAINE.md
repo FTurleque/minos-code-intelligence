@@ -1,27 +1,32 @@
 # Modèle de domaine minimal — MINOS
 
-Statut : **Proposition C0 — à valider**
+- Statut : **Validé pour M0**
+- Date de validation : **22 juillet 2026**
 
-Ce document formalise le modèle de domaine minimal de MINOS avant toute implémentation. Il doit rester indépendant de SCIP, Glean, LSIF, LSP, d'un parser particulier ou d'un langage de programmation précis.
+Ce document définit le modèle de domaine minimal à utiliser pour les expérimentations M0. Il reste indépendant de SCIP, Glean, LSIF, LSP, d'un parser particulier et des langages analysés.
+
+Il pourra évoluer après M0, mais toute évolution incompatible devra être motivée par une limite observée sur les fixtures ou dépôts réels.
 
 ---
 
 # 1. Objectifs
 
-Le modèle doit permettre de représenter de manière stable et explicable :
+Le modèle doit représenter de manière structurée et explicable :
 
-- les projets et workspaces ;
-- les modules ;
-- les fichiers ;
-- les symboles ;
-- leurs emplacements ;
-- leurs relations ;
-- la provenance des faits ;
-- le niveau de résolution ;
-- les preuves ;
-- les snapshots d'indexation.
+- workspaces et projets ;
+- modules ;
+- fichiers ;
+- symboles ;
+- occurrences de symboles ;
+- emplacements ;
+- relations entre entités ;
+- cibles externes ou non résolues ;
+- provenance ;
+- niveau de résolution ;
+- preuves ;
+- snapshots d'indexation.
 
-Le modèle ne doit pas tenter de représenter toutes les particularités de tous les langages. Les concepts spécifiques à un fournisseur ou à un langage doivent rester extensibles via des métadonnées ou des extensions dédiées.
+Le modèle ne doit pas tenter d'imiter toutes les particularités de tous les langages.
 
 ---
 
@@ -31,9 +36,7 @@ Le modèle ne doit pas tenter de représenter toutes les particularités de tous
 
 Aucun type SCIP, Glean, Angle, Thrift, LSP, AST ou CPG ne doit apparaître dans le domaine public MINOS.
 
-## 2.2 Distinction fait / dérivation
-
-Une information peut être :
+## 2.2 Distinction entre fait, dérivation et heuristique
 
 ```text
 FACTUAL
@@ -41,11 +44,9 @@ DERIVED
 HEURISTIC
 ```
 
-Une information dérivée ou heuristique doit conserver sa provenance et ses preuves.
+Une information dérivée ou heuristique conserve sa provenance et ses preuves.
 
 ## 2.3 Résolution explicite
-
-Statuts conceptuels :
 
 ```text
 RESOLVED
@@ -54,41 +55,80 @@ UNRESOLVED
 HEURISTIC
 ```
 
-L'absence de résolution n'est pas une erreur à masquer.
+L'absence de résolution est une information valide et ne doit jamais être masquée.
 
-## 2.4 Identité et continuité
+## 2.4 Distinction symbole / occurrence
 
-MINOS doit distinguer :
+Un **symbole** représente une entité sémantique.
 
-- l'identité d'un objet dans un snapshot d'index ;
-- sa clé logique déterministe ;
-- sa continuité éventuelle entre plusieurs snapshots.
+Une **occurrence** représente l'apparition localisée d'un symbole dans un fichier.
 
-La continuité à travers un renommage ou un déplacement ne peut pas toujours être déterminée de manière certaine et ne doit pas être simulée artificiellement.
+Exemple :
+
+```text
+Symbol
+UserService.save(User)
+
+Occurrences
+- déclaration dans UserService.java
+- appel dans UserResource.java
+- appel dans UserServiceTest.java
+```
+
+Cette séparation est fondamentale pour `find_usages`.
+
+## 2.5 Identité et continuité
+
+MINOS distingue :
+
+- identité technique dans un snapshot ;
+- clé logique déterministe ;
+- continuité historique éventuelle entre snapshots.
+
+Un renommage ou déplacement ne doit pas être déclaré identique sans preuve suffisante.
 
 ---
 
-# 3. Entités principales
+# 3. Hiérarchie structurelle
 
-## 3.1 Workspace
+```text
+Workspace
+   │
+   └── Project
+         │
+         ├── Module
+         │    └── SourceFile
+         │          ├── Symbol
+         │          └── SymbolOccurrence
+         │
+         └── IndexSnapshot
+```
 
-Regroupe un ou plusieurs projets pouvant être analysés ensemble.
+---
 
-Attributs candidats :
+# 4. Workspace
+
+Regroupe un ou plusieurs projets analysables ensemble.
 
 ```text
 Workspace
 - id
 - name
-- rootPath
+- rootPath?
 - projectIds
 - createdAt
 - metadata
 ```
 
-Le workspace devient particulièrement utile pour les relations inter-dépôts futures.
+Le workspace prépare notamment :
 
-## 3.2 Project
+- multi-dépôts ;
+- relations inter-projets ;
+- résolution cross-repository future.
+
+---
+
+# 5. Project
 
 Représente un dépôt ou projet analysable par MINOS.
 
@@ -108,11 +148,13 @@ Project
 - metadata
 ```
 
-Le chemin local ne doit pas être utilisé comme seule identité métier du projet.
+Le chemin local ne constitue pas à lui seul l'identité du projet.
 
-## 3.3 Module
+---
 
-Représente une unité structurelle ou de build d'un projet.
+# 6. Module
+
+Représente une unité structurelle ou de build.
 
 ```text
 Module
@@ -127,11 +169,11 @@ Module
 - metadata
 ```
 
-Un projet peut être mono-module.
+Un projet mono-module possède simplement un module racine logique ou implicite.
 
-## 3.4 SourceFile
+---
 
-Représente un fichier connu du projet.
+# 7. SourceFile
 
 ```text
 SourceFile
@@ -144,10 +186,11 @@ SourceFile
 - contentHash
 - size
 - lastModifiedAt?
+- generated
 - metadata
 ```
 
-`fileKind` doit pouvoir distinguer au minimum :
+`fileKind` :
 
 ```text
 SOURCE
@@ -160,19 +203,15 @@ GENERATED
 OTHER
 ```
 
-`contentHash` est requis afin de préparer l'indexation incrémentale.
+`contentHash` est obligatoire pour préparer les snapshots et l'indexation incrémentale.
 
 ---
 
-# 4. Symbole
+# 8. Symbol
 
-## 4.1 Définition
+## 8.1 Définition
 
-Un symbole est une déclaration adressable ou référencée dans le code.
-
-Exemples : classe, interface, fonction, méthode, constructeur, champ, propriété, enum, annotation.
-
-## 4.2 Modèle candidat
+Un symbole est une entité sémantique adressable ou référencée.
 
 ```text
 Symbol
@@ -180,14 +219,14 @@ Symbol
 - symbolKey
 - projectId
 - moduleId?
-- fileId?
+- declarationFileId?
 - parentSymbolId?
 - kind
 - name
 - qualifiedName?
 - signature?
 - language
-- location?
+- declarationLocation?
 - visibility?
 - modifiers
 - resolutionStatus
@@ -195,10 +234,10 @@ Symbol
 - external
 - generated
 - providerReferences
-- metadata
+- extensions
 ```
 
-## 4.3 Types de symboles communs
+## 8.2 Types communs
 
 ```text
 CLASS
@@ -220,99 +259,191 @@ PACKAGE
 OTHER
 ```
 
-Le modèle doit permettre des types spécifiques sans forcer toutes les langues dans une taxonomie trop pauvre.
+Pour M0, `PACKAGE` et `NAMESPACE` sont représentés comme des symboles lorsque le fournisseur permet de les adresser sémantiquement.
 
-## 4.4 `id` et `symbolKey`
+Cette décision évite d'introduire prématurément une hiérarchie de conteneurs spécifique à chaque langage.
 
-Deux concepts sont séparés.
+## 8.3 `id`
 
-### `id`
-
-Identifiant technique interne MINOS d'un symbole connu dans un index.
+Identifiant technique interne MINOS dans un snapshot ou store.
 
 Il peut être opaque.
 
-### `symbolKey`
+## 8.4 `symbolKey`
 
-Clé logique déterministe utilisée pour retrouver une déclaration équivalente lorsque les informations structurelles n'ont pas changé.
-
-Composition candidate :
+Clé logique déterministe candidate :
 
 ```text
 project + language + kind + qualifiedName + signature
 ```
 
-Cette clé :
+Elle doit :
 
-- distingue les méthodes surchargées ;
-- ne dépend pas d'un ID Glean ou SCIP ;
-- peut être recalculée ;
-- ne garantit pas la continuité après renommage ou déplacement.
+- distinguer les surcharges ;
+- être indépendante des IDs SCIP/Glean ;
+- être recalculable ;
+- rester déterministe à données identiques.
 
-La continuité historique avancée pourra être ajoutée plus tard avec Git Intelligence.
+Elle ne garantit pas la continuité après renommage ou déplacement.
 
-## 4.5 Symboles externes
+Cette continuité relève de la future Git Intelligence.
 
-MINOS doit pouvoir représenter un symbole référencé mais non déclaré dans le dépôt local.
+---
+
+# 9. SymbolOccurrence
+
+Une occurrence décrit une apparition localisée d'un symbole.
+
+```text
+SymbolOccurrence
+- id
+- projectId
+- moduleId?
+- fileId
+- symbolRef
+- roles
+- location
+- resolutionStatus
+- origin
+- providerReferences
+- extensions
+```
+
+Rôles communs :
+
+```text
+DECLARATION
+DEFINITION
+REFERENCE
+IMPORT
+TYPE_USAGE
+CALL
+READ
+WRITE
+INSTANTIATION
+```
+
+Une occurrence peut avoir plusieurs rôles lorsque cela est pertinent.
+
+Cette entité permet de préserver plusieurs usages identiques d'un même symbole à des emplacements différents sans dupliquer le symbole lui-même.
+
+---
+
+# 10. Référence à un symbole
+
+MINOS distingue trois situations.
+
+## 10.1 Symbole local résolu
+
+```text
+ResolvedSymbolRef
+- symbolId
+```
+
+## 10.2 Symbole externe résolu
+
+Un symbole externe connu peut être représenté par un `Symbol` :
 
 ```text
 external = true
 ```
 
-Un symbole externe peut disposer d'un nom qualifié ou d'une identité fournisseur même si son fichier source n'est pas connu.
+avec, lorsque disponible :
 
-## 4.6 Symboles non résolus
+- nom qualifié ;
+- package/module externe ;
+- identité fournisseur ;
+- version de dépendance.
 
-Une référence non résolue ne doit pas provoquer la création d'un faux symbole résolu.
+## 10.3 Cible non résolue
 
-Elle peut être représentée par :
+Une référence non résolue ne doit pas créer un faux `Symbol` résolu.
 
-- une cible absente ;
-- une `UnresolvedTarget` ;
-- ou un symbole marqué `UNRESOLVED`.
-
-Le choix précis sera arrêté lors de la validation du modèle.
+```text
+UnresolvedSymbolRef
+- displayName?
+- qualifiedNameCandidate?
+- language?
+- rawProviderIdentifier?
+- reason?
+```
 
 ---
 
-# 5. Emplacement
+# 11. SymbolLocation
 
 ```text
 SymbolLocation
 - fileId
 - startLine
-- startColumn
+- startColumn?
 - endLine
-- endColumn
+- endColumn?
 ```
 
-Les colonnes peuvent être absentes lorsqu'un fournisseur ne les fournit pas.
+Les lignes sont obligatoires lorsque le fournisseur les fournit de façon fiable.
 
-MINOS doit conserver autant que possible l'emplacement de la déclaration et l'emplacement d'une relation ou occurrence.
+Les colonnes peuvent être absentes.
 
 ---
 
-# 6. Relation
+# 12. Références génériques entre entités
 
-## 6.1 Modèle candidat
+Toutes les relations de Code Intelligence ne relient pas nécessairement deux symboles.
+
+Exemples :
+
+```text
+SourceFile IMPORTS SourceFile
+Module DEPENDS_ON Module
+Project DEPENDS_ON Project
+Symbol CALLS Symbol
+```
+
+MINOS utilise donc conceptuellement :
+
+```text
+CodeEntityRef
+- entityType
+- entityId
+```
+
+`entityType` :
+
+```text
+WORKSPACE
+PROJECT
+MODULE
+SOURCE_FILE
+SYMBOL
+```
+
+Une cible non résolue peut remplacer `CodeEntityRef` lorsque nécessaire.
+
+---
+
+# 13. Relationship
 
 ```text
 Relationship
 - id
-- sourceSymbolId
-- targetSymbolId?
+- source
+- target?
 - unresolvedTarget?
 - kind
+- informationType
 - location?
 - resolutionStatus
 - origin
 - confidence?
 - evidence
 - providerReferences
-- metadata
+- extensions
 ```
 
-## 6.2 Relations factuelles primitives
+`source` et `target` utilisent `CodeEntityRef`.
+
+## 13.1 Relations factuelles primitives
 
 ```text
 DECLARES
@@ -329,9 +460,9 @@ WRITES
 INSTANTIATES
 ```
 
-Une relation primitive doit correspondre à une information suffisamment précise et observable.
+Une relation primitive correspond à une information observable ou fournie directement avec un niveau de résolution explicite.
 
-## 6.3 Relations dérivées ou sémantiques
+## 13.2 Relations dérivées
 
 ```text
 DEPENDS_ON
@@ -342,19 +473,27 @@ ARCHITECTURAL_ROLE
 CENTRALITY
 ```
 
-Ces relations doivent conserver leurs preuves.
+Une relation dérivée doit conserver ses preuves.
 
-## 6.4 `USES`
+## 13.3 `USES`
 
-`USES` ne doit pas devenir une relation primitive générique lorsque MINOS peut représenter la relation réelle : `CALLS`, `REFERENCES`, `IMPORTS`, `INSTANTIATES`, etc.
+`USES` n'est pas une relation primitive lorsque la relation précise est connue.
 
-`USES` pourra éventuellement être une vue agrégée de plusieurs relations.
+Elle peut devenir une vue agrégée de :
+
+```text
+REFERENCES
+CALLS
+IMPORTS
+INSTANTIATES
+READS
+WRITES
+...
+```
 
 ---
 
-# 7. Provenance
-
-Chaque fait important doit pouvoir indiquer son origine.
+# 14. Origin
 
 ```text
 Origin
@@ -365,7 +504,7 @@ Origin
 - sourceType
 ```
 
-Exemples de `sourceType` :
+`sourceType` :
 
 ```text
 SCIP
@@ -378,25 +517,30 @@ DERIVED_BY_MINOS
 HEURISTIC_BY_MINOS
 ```
 
-La provenance doit permettre d'expliquer d'où vient une information et de diagnostiquer les divergences entre fournisseurs.
+La provenance permet :
+
+- audit ;
+- comparaison de fournisseurs ;
+- explicabilité ;
+- reproduction des résultats.
 
 ---
 
-# 8. Preuve
+# 15. Evidence
 
 ```text
 Evidence
 - type
-- description
-- sourceSymbolId?
-- targetSymbolId?
+- description?
+- source?
+- target?
 - location?
 - providerReference?
 - weight?
 - metadata
 ```
 
-Exemples :
+Types initiaux :
 
 ```text
 DIRECT_REFERENCE
@@ -409,11 +553,11 @@ TEST_LOCATION
 DERIVATION_PATH
 ```
 
-Les preuves ne doivent pas être limitées à des chaînes de texte non structurées.
+Les preuves restent structurées ; une simple chaîne de texte n'est pas suffisante comme unique modèle.
 
 ---
 
-# 9. Snapshot d'indexation
+# 16. IndexSnapshot
 
 ```text
 IndexSnapshot
@@ -428,22 +572,60 @@ IndexSnapshot
 - providerConfigurations
 - sourceFileCount
 - symbolCount
+- occurrenceCount
 - relationshipCount
 - metadata
 ```
 
 Le snapshot sert à :
 
-- savoir avec quelles données une réponse a été produite ;
-- préparer l'indexation incrémentale ;
-- diagnostiquer les différences entre indexations ;
-- assurer la reproductibilité des mesures.
+- identifier les données ayant produit une réponse ;
+- préparer l'incrémental ;
+- diagnostiquer les différences ;
+- assurer la reproductibilité ;
+- empêcher qu'un index partiel remplace silencieusement un index sain.
 
 ---
 
-# 10. Résultats de requêtes
+# 17. Extensions spécifiques
 
-Les résultats publics ne doivent pas exposer directement les entités de persistence.
+Le champ conceptuel `extensions` peut contenir des données spécifiques à un langage ou fournisseur.
+
+Règles :
+
+1. les clés doivent être namespacées ;
+2. aucune extension n'est requise pour comprendre les cas d'usage de base ;
+3. un consommateur générique doit pouvoir ignorer une extension inconnue ;
+4. une donnée qui devient transversale à plusieurs langages peut être promue dans le modèle commun via ADR.
+
+Exemple conceptuel :
+
+```text
+extensions["java.annotationRetention"]
+extensions["typescript.exportKind"]
+```
+
+---
+
+# 18. Version du modèle
+
+Le modèle possède une `schemaVersion` indépendante de la version des fournisseurs.
+
+Les évolutions doivent suivre trois catégories :
+
+```text
+compatible
+migration_required
+breaking
+```
+
+Les snapshots conservent la version de schéma utilisée.
+
+---
+
+# 19. Résultats de requêtes
+
+Les interfaces publiques ne doivent pas exposer directement les entités de persistance.
 
 DTO conceptuels :
 
@@ -457,40 +639,48 @@ ImpactResult
 ArchitectureOverview
 ```
 
-Ils doivent pouvoir inclure :
+Ils peuvent inclure :
 
 - symbole ;
+- occurrences pertinentes ;
 - emplacement ;
-- relation ;
+- relations ;
 - provenance ;
 - statut de résolution ;
-- niveau de confiance ;
+- confiance ;
 - preuves ;
 - plage de code pertinente.
 
 ---
 
-# 11. Questions encore ouvertes
+# 20. Décisions C0 prises
 
-1. `PACKAGE` et `NAMESPACE` doivent-ils être des `Symbol` ou des conteneurs distincts ?
-2. Comment représenter précisément les symboles externes non présents dans l'index local ?
-3. Quelle forme exacte doit prendre `symbolKey` ?
-4. Faut-il distinguer `Declaration`, `Symbol` et `Occurrence` dans le domaine public ?
-5. Une relation doit-elle toujours cibler un symbole, ou peut-elle cibler un module/fichier/package ?
-6. Comment représenter les relations inter-dépôts ?
-7. Quelles métadonnées spécifiques à un langage peuvent être normalisées sans surcharger le cœur ?
-8. Comment versionner le modèle sans casser les consommateurs ?
+Les questions principales sont tranchées pour M0 :
+
+1. `PACKAGE` et `NAMESPACE` sont des `Symbol` adressables lorsque pertinent.
+2. Les symboles externes résolus sont des `Symbol external=true`.
+3. Les cibles réellement non résolues utilisent `UnresolvedSymbolRef`.
+4. `Symbol` et `SymbolOccurrence` sont distincts.
+5. Une `Relationship` relie des `CodeEntityRef`, pas uniquement des symboles.
+6. Les relations inter-dépôts utiliseront les mêmes références avec `Project` / `Workspace`.
+7. Les données spécifiques utilisent des extensions namespacées.
+8. Le modèle est versionné via `schemaVersion`.
+9. `symbolKey` est déterministe mais ne promet pas la continuité historique après rename/move.
+10. La continuité historique est différée à Git Intelligence.
 
 ---
 
-# 12. Critères de validation C0
+# 21. Validation M0
 
-Le modèle sera considéré suffisamment défini pour M0 lorsque :
+Le modèle est considéré suffisamment défini pour commencer M0 si les fixtures démontrent que :
 
-- il permet de représenter les fixtures prévues ;
-- les méthodes surchargées sont distinguables ;
-- les symboles externes et non résolus sont représentables ;
-- aucune dépendance SCIP/Glean n'apparaît dans les contrats ;
-- la provenance et les preuves sont représentables ;
-- les relations factuelles et dérivées sont séparées ;
-- un second langage peut être représenté sans modification structurelle du cœur.
+- les surcharges sont distinguables ;
+- plusieurs occurrences d'un même symbole sont conservées ;
+- les relations fichier/module/symbole sont représentables ;
+- les symboles externes sont représentables ;
+- les cibles non résolues sont représentables ;
+- aucun type SCIP/Glean ne traverse le domaine ;
+- la provenance et les preuves sont conservées ;
+- les résultats Java et TypeScript utilisent le même modèle commun.
+
+Si une fixture M0 invalide une hypothèse, le modèle doit être corrigé avant M1 et la décision documentée.
