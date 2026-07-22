@@ -1,0 +1,50 @@
+{
+  "fixture": "java-multi-module",
+  "language": "java",
+  "buildSystem": "maven",
+  "release": 17,
+  "modules": ["api", "app"],
+  "requiredSymbols": [
+    {"kind": "RECORD", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.api.UserProfile"},
+    {"kind": "INTERFACE", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort"},
+    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort.greet"},
+    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.DefaultGreetingPort"},
+    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.DefaultGreetingPort.greet"},
+    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.GreetingService"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.GreetingService.<init>"},
+    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.GreetingService.greet"},
+    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.GreetingServiceTest"},
+    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.multimodule.app.GreetingServiceTest.greetsAcrossModules"}
+  ],
+  "providerOptionalSymbols": [
+    "constructeurs implicites",
+    "accessor synthétique du record UserProfile",
+    "méthodes Object synthétiques ou héritées"
+  ],
+  "requiredRelationships": [
+    {
+      "kind": "IMPLEMENTS",
+      "source": "io.github.fturleque.minos.fixture.multimodule.app.DefaultGreetingPort",
+      "target": "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort"
+    },
+    {
+      "kind": "CALLS",
+      "source": "io.github.fturleque.minos.fixture.multimodule.app.GreetingService.greet",
+      "target": "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort.greet"
+    },
+    {
+      "kind": "CALLS",
+      "source": "io.github.fturleque.minos.fixture.multimodule.app.GreetingServiceTest.greetsAcrossModules",
+      "target": "io.github.fturleque.minos.fixture.multimodule.app.GreetingService.greet"
+    }
+  ],
+  "requiredUsageTargets": [
+    "io.github.fturleque.minos.fixture.multimodule.api.UserProfile",
+    "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort",
+    "io.github.fturleque.minos.fixture.multimodule.api.GreetingPort.greet",
+    "io.github.fturleque.minos.fixture.multimodule.app.DefaultGreetingPort",
+    "io.github.fturleque.minos.fixture.multimodule.app.GreetingService",
+    "io.github.fturleque.minos.fixture.multimodule.app.GreetingService.greet"
+  ],
+  "expectedUnresolved": []
+}

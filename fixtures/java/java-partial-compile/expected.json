@@ -1,0 +1,18 @@
+{
+  "fixture": "java-partial-compile",
+  "language": "java",
+  "buildSystem": "maven",
+  "release": 17,
+  "modules": ["stable", "broken"],
+  "expectedBuildOutcome": "FAILURE",
+  "expectedFailureEvidence": [
+    "package third.party.missing does not exist",
+    "cannot find symbol",
+    "MissingClient"
+  ],
+  "symbolsCompilableBeforeFailure": [
+    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.partial.stable.StableGreeting"},
+    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.partial.stable.StableGreeting.greet"}
+  ],
+  "providerQuestion": "scip-java preserves an ingestible partial index when a later Maven module fails to compile"
+}
