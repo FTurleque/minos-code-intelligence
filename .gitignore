@@ -2,6 +2,10 @@
 /target/
 **/target/
 
+# Node.js / TypeScript fixtures
+**/node_modules/
+fixtures/typescript/**/dist/
+
 # IntelliJ IDEA
 .idea/
 *.iml

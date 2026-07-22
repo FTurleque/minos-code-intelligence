@@ -1,6 +1,7 @@
 package io.github.fturleque.minos.adapter.scip;
 
 import io.github.fturleque.minos.domain.SymbolIdentityQuality;
+import io.github.fturleque.minos.domain.SymbolKind;
 import io.github.fturleque.minos.query.SymbolQueryService;
 import io.github.fturleque.minos.store.InMemoryCodeKnowledgeStore;
 import org.junit.jupiter.api.Test;
@@ -122,6 +123,41 @@ class ScipIngestionAdapterTest {
                 .getFirst().location().fileId());
         assertEquals("file-second", queries.findUsages("project-local-scope", second.id(), 10)
                 .getFirst().location().fileId());
+    }
+
+    @Test
+    void derivesMinimalMetadataWhenTypeScriptOmitsDisplayNameAndLanguage() {
+        String rawSymbol =
+                "scip-typescript npm fixture 1.0.0 src/`user-service.ts`/UserService#findUser().";
+        Document document = Document.newBuilder()
+                .setRelativePath("src/user-service.ts")
+                .addSymbols(SymbolInformation.newBuilder().setSymbol(rawSymbol))
+                .addOccurrences(occurrence(rawSymbol, 4, 2, 10, SymbolRole.Definition_VALUE))
+                .build();
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+
+        ScipIngestionReport report = new ScipIngestionAdapter().ingest(
+                Index.newBuilder().addDocuments(document).build(),
+                new ScipIngestionRequest(
+                        "project-typescript",
+                        "module-main",
+                        "scip-typescript",
+                        "0.4.0",
+                        "run-typescript",
+                        Map.of("src/user-service.ts", "file-user-service")
+                ),
+                store
+        );
+
+        assertEquals(1, report.normalizedSymbolCount());
+        var symbol = new SymbolQueryService(store)
+                .findSymbol("project-typescript", "findUser", 10)
+                .getFirst();
+        assertEquals("findUser", symbol.name());
+        assertEquals("typescript", symbol.language());
+        assertEquals(SymbolKind.OTHER, symbol.kind());
+        assertTrue(symbol.providerReferences().stream()
+                .anyMatch(reference -> reference.externalId().equals(rawSymbol)));
     }
 
     private static Document localSymbolDocument(String relativePath, String displayName) {

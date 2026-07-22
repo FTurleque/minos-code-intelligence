@@ -6,6 +6,7 @@ import org.scip_code.scip.SymbolInformation;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -80,10 +81,17 @@ final class ScipSymbolCatalog {
                 ? information.getSignatureDocumentation().getLanguage()
                 : "";
         String language = !documentLanguage.isBlank() ? documentLanguage : signatureLanguage;
+        if (language.isBlank()) {
+            language = inferLanguage(relativePath);
+        }
+        String displayName = information.getDisplayName();
+        if (displayName.isBlank()) {
+            displayName = ScipDescriptorNameExtractor.extract(information.getSymbol()).orElse("");
+        }
 
         return new ScipSymbolFact(
                 information.getSymbol(),
-                information.getDisplayName(),
+                displayName,
                 information.getKind(),
                 signature,
                 information.getEnclosingSymbol(),
@@ -91,5 +99,21 @@ final class ScipSymbolCatalog {
                 language,
                 external
         );
+    }
+
+    private static String inferLanguage(String relativePath) {
+        String normalized = relativePath == null ? "" : relativePath.toLowerCase(Locale.ROOT);
+        if (normalized.endsWith(".ts") || normalized.endsWith(".tsx")
+                || normalized.endsWith(".mts") || normalized.endsWith(".cts")) {
+            return "typescript";
+        }
+        if (normalized.endsWith(".js") || normalized.endsWith(".jsx")
+                || normalized.endsWith(".mjs") || normalized.endsWith(".cjs")) {
+            return "javascript";
+        }
+        if (normalized.endsWith(".java")) {
+            return "java";
+        }
+        return "";
     }
 }

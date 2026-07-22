@@ -28,7 +28,13 @@ import java.util.stream.Collectors;
 public final class ScipRealIndexExperiment {
 
     private static final String PROJECT_ID_PROPERTY = "minos.m0.projectId";
+    private static final String PROVIDER_ID_PROPERTY = "minos.m0.providerId";
+    private static final String PROVIDER_VERSION_PROPERTY = "minos.m0.providerVersion";
+    private static final String INDEX_RUN_ID_PROPERTY = "minos.m0.indexRunId";
     private static final String DEFAULT_PROJECT_ID = "m0-real-index";
+    private static final String DEFAULT_PROVIDER_ID = "scip-java";
+    private static final String DEFAULT_PROVIDER_VERSION = "0.13.1";
+    private static final String DEFAULT_INDEX_RUN_ID = "m0-real-index";
 
     private ScipRealIndexExperiment() {
     }
@@ -40,6 +46,9 @@ public final class ScipRealIndexExperiment {
 
         Index index = new ScipIndexReader().read(Path.of(arguments[0]));
         String projectId = System.getProperty(PROJECT_ID_PROPERTY, DEFAULT_PROJECT_ID);
+        String providerId = System.getProperty(PROVIDER_ID_PROPERTY, DEFAULT_PROVIDER_ID);
+        String providerVersion = System.getProperty(PROVIDER_VERSION_PROPERTY, DEFAULT_PROVIDER_VERSION);
+        String indexRunId = System.getProperty(INDEX_RUN_ID_PROPERTY, DEFAULT_INDEX_RUN_ID);
         emitProviderMetrics(index);
 
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
@@ -55,9 +64,9 @@ public final class ScipRealIndexExperiment {
                 new ScipIngestionRequest(
                         projectId,
                         "main",
-                        "scip-java",
-                        "0.13.1",
-                        "m0-a1",
+                        providerId,
+                        providerVersion,
+                        indexRunId,
                         explicitFileIds
                 ),
                 store
@@ -94,11 +103,10 @@ public final class ScipRealIndexExperiment {
         for (Document document : index.getDocumentsList()) {
             positionEncodings.merge(document.getPositionEncoding().name(), 1, Integer::sum);
             String relativePath = document.getRelativePath().replace('\\', '/');
-            if (isSourceSet(relativePath, "main")) {
-                mainDocuments++;
-            }
-            if (isSourceSet(relativePath, "test")) {
+            if (isTestSource(relativePath)) {
                 testDocuments++;
+            } else if (isMainSource(relativePath)) {
+                mainDocuments++;
             }
             for (SymbolInformation symbol : document.getSymbolsList()) {
                 symbolEntries++;
@@ -227,6 +235,16 @@ public final class ScipRealIndexExperiment {
     private static boolean isSourceSet(String relativePath, String sourceSet) {
         String segment = "src/" + sourceSet + "/";
         return relativePath.startsWith(segment) || relativePath.contains("/" + segment);
+    }
+
+    private static boolean isTestSource(String relativePath) {
+        return isSourceSet(relativePath, "test")
+                || relativePath.startsWith("test/")
+                || relativePath.contains("/test/");
+    }
+
+    private static boolean isMainSource(String relativePath) {
+        return isSourceSet(relativePath, "main") || relativePath.startsWith("src/");
     }
 
     private static void metric(String name, Object value) {

@@ -7,6 +7,12 @@ param(
 
     [string] $ProjectId = "m0-real-index",
 
+    [string] $ProviderId = "scip-java",
+
+    [string] $ProviderVersion = "0.13.1",
+
+    [string] $IndexRunId = "m0-real-index",
+
     [string[]] $Queries = @()
 )
 
@@ -42,6 +48,9 @@ try {
 
     $Arguments = @(
         "-Dminos.m0.projectId=$ProjectId",
+        "-Dminos.m0.providerId=$ProviderId",
+        "-Dminos.m0.providerVersion=$ProviderVersion",
+        "-Dminos.m0.indexRunId=$IndexRunId",
         "-classpath",
         $ExperimentClasspath,
         "io.github.fturleque.minos.adapter.scip.ScipRealIndexExperiment",
