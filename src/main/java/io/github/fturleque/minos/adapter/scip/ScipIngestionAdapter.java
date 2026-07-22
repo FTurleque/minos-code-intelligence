@@ -56,14 +56,16 @@ final class ScipIngestionAdapter {
 
         collectDefinitionMetadata(index, request, definitionLocations, generatedSymbols);
 
-        Map<String, Symbol> normalizedByRawSymbol = new LinkedHashMap<>();
+        Map<String, Symbol> normalizedByCatalogKey = new LinkedHashMap<>();
         int skippedSymbols = 0;
 
-        for (ScipSymbolFact fact : catalog.asMap().values()) {
+        for (Map.Entry<String, ScipSymbolFact> entry : catalog.asMap().entrySet()) {
+            String catalogKey = entry.getKey();
+            ScipSymbolFact fact = entry.getValue();
             String fileId = fact.relativePath().isBlank()
                     ? null
                     : fileIdFor(request, fact.relativePath());
-            SymbolLocation declarationLocation = definitionLocations.get(fact.rawSymbol());
+            SymbolLocation declarationLocation = definitionLocations.get(catalogKey);
 
             Optional<Symbol> normalized = symbolNormalizer.normalize(
                     fact,
@@ -74,17 +76,17 @@ final class ScipIngestionAdapter {
                     request.providerId(),
                     request.providerVersion(),
                     request.indexRunId(),
-                    generatedSymbols.contains(fact.rawSymbol())
+                    generatedSymbols.contains(catalogKey)
             );
 
             if (normalized.isPresent()) {
-                normalizedByRawSymbol.put(fact.rawSymbol(), normalized.orElseThrow());
+                normalizedByCatalogKey.put(catalogKey, normalized.orElseThrow());
             } else {
                 skippedSymbols++;
             }
         }
 
-        store.putSymbols(normalizedByRawSymbol.values());
+        store.putSymbols(normalizedByCatalogKey.values());
 
         List<SymbolOccurrence> normalizedOccurrences = new ArrayList<>();
         int resolvedOccurrences = 0;
@@ -111,7 +113,11 @@ final class ScipIngestionAdapter {
                 }
 
                 Set<OccurrenceRole> roles = roleMapper.map(occurrence);
-                Symbol resolved = normalizedByRawSymbol.get(occurrence.getSymbol());
+                String catalogKey = ScipSymbolCatalog.key(
+                        document.getRelativePath(),
+                        occurrence.getSymbol()
+                );
+                Symbol resolved = normalizedByCatalogKey.get(catalogKey);
                 SymbolReference symbolReference;
                 ResolutionStatus status;
 
@@ -120,7 +126,10 @@ final class ScipIngestionAdapter {
                     status = ResolutionStatus.RESOLVED;
                     resolvedOccurrences++;
                 } else {
-                    ScipSymbolFact knownFact = catalog.find(occurrence.getSymbol()).orElse(null);
+                    ScipSymbolFact knownFact = catalog.find(
+                            document.getRelativePath(),
+                            occurrence.getSymbol()
+                    ).orElse(null);
                     symbolReference = new UnresolvedSymbolReference(
                             knownFact == null ? null : blankToNull(knownFact.displayName()),
                             null,
@@ -150,7 +159,7 @@ final class ScipIngestionAdapter {
 
         return new ScipIngestionReport(
                 catalog.size(),
-                normalizedByRawSymbol.size(),
+                normalizedByCatalogKey.size(),
                 skippedSymbols,
                 normalizedOccurrences.size(),
                 resolvedOccurrences,
@@ -172,8 +181,12 @@ final class ScipIngestionAdapter {
                 }
 
                 Set<OccurrenceRole> roles = roleMapper.map(occurrence);
+                String catalogKey = ScipSymbolCatalog.key(
+                        document.getRelativePath(),
+                        occurrence.getSymbol()
+                );
                 if (roles.contains(OccurrenceRole.GENERATED)) {
-                    generatedSymbols.add(occurrence.getSymbol());
+                    generatedSymbols.add(catalogKey);
                 }
                 if (!roles.contains(OccurrenceRole.DEFINITION)
                         && !roles.contains(OccurrenceRole.FORWARD_DEFINITION)) {
@@ -182,7 +195,7 @@ final class ScipIngestionAdapter {
 
                 rangeMapper.map(fileId, occurrence, document.getPositionEncoding())
                         .ifPresent(location -> definitionLocations.putIfAbsent(
-                                occurrence.getSymbol(),
+                                catalogKey,
                                 location
                         ));
             }

@@ -14,10 +14,12 @@ import java.util.Optional;
  */
 final class ScipSymbolCatalog {
 
-    private final Map<String, ScipSymbolFact> factsByRawSymbol;
+    private static final String LOCAL_SYMBOL_PREFIX = "local ";
 
-    private ScipSymbolCatalog(Map<String, ScipSymbolFact> factsByRawSymbol) {
-        this.factsByRawSymbol = Collections.unmodifiableMap(new LinkedHashMap<>(factsByRawSymbol));
+    private final Map<String, ScipSymbolFact> factsByCatalogKey;
+
+    private ScipSymbolCatalog(Map<String, ScipSymbolFact> factsByCatalogKey) {
+        this.factsByCatalogKey = Collections.unmodifiableMap(new LinkedHashMap<>(factsByCatalogKey));
     }
 
     static ScipSymbolCatalog from(Index index) {
@@ -31,28 +33,39 @@ final class ScipSymbolCatalog {
                         document.getLanguage(),
                         false
                 );
-                facts.put(fact.rawSymbol(), fact);
+                facts.put(key(document.getRelativePath(), fact.rawSymbol()), fact);
             }
         }
 
         for (SymbolInformation information : index.getExternalSymbolsList()) {
             ScipSymbolFact fact = toFact(information, "", "", true);
-            facts.putIfAbsent(fact.rawSymbol(), fact);
+            facts.putIfAbsent(key("", fact.rawSymbol()), fact);
         }
 
         return new ScipSymbolCatalog(facts);
     }
 
-    Optional<ScipSymbolFact> find(String rawSymbol) {
-        return Optional.ofNullable(factsByRawSymbol.get(rawSymbol));
+    Optional<ScipSymbolFact> find(String relativePath, String rawSymbol) {
+        return Optional.ofNullable(factsByCatalogKey.get(key(relativePath, rawSymbol)));
     }
 
     int size() {
-        return factsByRawSymbol.size();
+        return factsByCatalogKey.size();
     }
 
     Map<String, ScipSymbolFact> asMap() {
-        return factsByRawSymbol;
+        return factsByCatalogKey;
+    }
+
+    /**
+     * SCIP local symbols are scoped to one document and their identifiers may be
+     * reused in every document. Global symbols remain keyed by their provider id.
+     */
+    static String key(String relativePath, String rawSymbol) {
+        if (rawSymbol != null && rawSymbol.startsWith(LOCAL_SYMBOL_PREFIX)) {
+            return (relativePath == null ? "" : relativePath) + "\u001F" + rawSymbol;
+        }
+        return rawSymbol;
     }
 
     private static ScipSymbolFact toFact(

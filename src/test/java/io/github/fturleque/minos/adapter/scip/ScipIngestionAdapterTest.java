@@ -87,6 +87,59 @@ class ScipIngestionAdapterTest {
         assertTrue(usages.getFirst().isResolved());
     }
 
+    @Test
+    void resolvesReusedLocalSymbolIdsWithinTheirOwnDocument() {
+        Document firstDocument = localSymbolDocument("First.java", "first");
+        Document secondDocument = localSymbolDocument("Second.java", "second");
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+
+        ScipIngestionReport report = new ScipIngestionAdapter().ingest(
+                Index.newBuilder()
+                        .addDocuments(firstDocument)
+                        .addDocuments(secondDocument)
+                        .build(),
+                new ScipIngestionRequest(
+                        "project-local-scope",
+                        "module-main",
+                        "scip-java",
+                        "0.13.1",
+                        "run-local-scope",
+                        Map.of("First.java", "file-first", "Second.java", "file-second")
+                ),
+                store
+        );
+
+        assertEquals(2, report.catalogSymbolCount());
+        assertEquals(2, report.normalizedSymbolCount());
+        assertEquals(4, report.resolvedOccurrenceCount());
+        assertEquals(0, report.unresolvedOccurrenceCount());
+
+        SymbolQueryService queries = new SymbolQueryService(store);
+        var first = queries.findSymbol("project-local-scope", "first", 10).getFirst();
+        var second = queries.findSymbol("project-local-scope", "second", 10).getFirst();
+
+        assertEquals("file-first", queries.findUsages("project-local-scope", first.id(), 10)
+                .getFirst().location().fileId());
+        assertEquals("file-second", queries.findUsages("project-local-scope", second.id(), 10)
+                .getFirst().location().fileId());
+    }
+
+    private static Document localSymbolDocument(String relativePath, String displayName) {
+        SymbolInformation local = SymbolInformation.newBuilder()
+                .setSymbol("local 0")
+                .setDisplayName(displayName)
+                .setKind(SymbolInformation.Kind.Variable)
+                .build();
+        return Document.newBuilder()
+                .setLanguage("java")
+                .setRelativePath(relativePath)
+                .setPositionEncoding(org.scip_code.scip.PositionEncoding.UTF16CodeUnitOffsetFromLineStart)
+                .addSymbols(local)
+                .addOccurrences(occurrence("local 0", 0, 0, displayName.length(), SymbolRole.Definition_VALUE))
+                .addOccurrences(occurrence("local 0", 1, 0, displayName.length(), SymbolRole.ReadAccess_VALUE))
+                .build();
+    }
+
     private static Occurrence occurrence(
             String rawSymbol,
             int zeroBasedLine,
