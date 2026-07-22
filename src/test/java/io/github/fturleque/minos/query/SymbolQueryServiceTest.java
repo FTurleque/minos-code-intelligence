@@ -22,6 +22,8 @@ class SymbolQueryServiceTest {
 
     private static final String PROJECT_ID = "project-1";
     private static final String SYMBOL_ID = "symbol-document-ingestion-service";
+    private static final String QUALIFIED_NAME =
+            "io.github.fturleque.minos.fixture.DocumentIngestionService";
 
     @Test
     void findSymbolUsesOnlyMinosContracts() {
@@ -34,7 +36,7 @@ class SymbolQueryServiceTest {
 
         assertEquals(1, result.size());
         assertEquals(SYMBOL_ID, result.getFirst().id());
-        assertEquals("fr.ariane.document.DocumentIngestionService", result.getFirst().qualifiedName());
+        assertEquals(QUALIFIED_NAME, result.getFirst().qualifiedName());
     }
 
     @Test
@@ -64,14 +66,14 @@ class SymbolQueryServiceTest {
     private static Symbol documentIngestionService() {
         return new Symbol(
                 SYMBOL_ID,
-                "project-1|java|CLASS|fr.ariane.document.DocumentIngestionService",
+                "project-1|java|CLASS|" + QUALIFIED_NAME,
                 PROJECT_ID,
                 "module-main",
                 "file-service",
                 null,
                 SymbolKind.CLASS,
                 "DocumentIngestionService",
-                "fr.ariane.document.DocumentIngestionService",
+                QUALIFIED_NAME,
                 null,
                 "java",
                 new SymbolLocation(
