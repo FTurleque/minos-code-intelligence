@@ -18,9 +18,12 @@ jobs:
 
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@v6
 
       - name: Installer Java 25
+        id: java
+        continue-on-error: true
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,12 +31,22 @@ jobs:
           cache: maven
 
       - name: Afficher la toolchain
+        id: toolchain
+        continue-on-error: true
+        shell: bash
         run: |
-          java -version
-          mvn -version
+          mkdir -p target
+          {
+            echo "=== java -version ==="
+            java -version
+            echo
+            echo "=== mvn -version ==="
+            mvn -version
+          } 2>&1 | tee target/m0-toolchain.log
 
       - name: Vérifier le projet
-        id: maven-verify
+        id: maven
+        continue-on-error: true
         shell: bash
         run: |
           mkdir -p target
@@ -43,6 +56,18 @@ jobs:
           echo "$status" > target/m0-ci.exit
           exit "$status"
 
+      - name: Enregistrer les résultats des étapes
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p target
+          {
+            echo "checkout=${{ steps.checkout.outcome }}"
+            echo "java=${{ steps.java.outcome }}"
+            echo "toolchain=${{ steps.toolchain.outcome }}"
+            echo "maven=${{ steps.maven.outcome }}"
+          } | tee target/m0-step-outcomes.txt
+
       - name: Publier les diagnostics Maven
         if: always()
         uses: actions/upload-artifact@v6
@@ -51,6 +76,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
           path: |
+            target/m0-step-outcomes.txt
+            target/m0-toolchain.log
             target/m0-ci.log
             target/m0-ci.exit
             target/surefire-reports/
+
+      - name: Faire échouer le job si nécessaire
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.java.outcome }}" != "success" ] \
+             || [ "${{ steps.toolchain.outcome }}" != "success" ] \
+             || [ "${{ steps.maven.outcome }}" != "success" ]; then
+            echo "La vérification M0 a échoué. Consulter l'artefact m0-java-ci-diagnostics."
+            exit 1
+          fi
