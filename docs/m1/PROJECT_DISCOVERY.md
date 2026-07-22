@@ -31,17 +31,19 @@ Il ne fournit volontairement **aucun identifiant métier de projet**. Le modèle
 
 Langages :
 
-- Java via les racines Maven conventionnelles `src/main/java` et `src/test/java` ;
-- TypeScript via la présence réelle de fichiers `.ts` / `.tsx` sous `src`, `test` ou `tests`.
+- Java uniquement lorsqu'un fichier `.java` est réellement présent sous `src/main/java` ou `src/test/java` ;
+- TypeScript uniquement lorsqu'un fichier `.ts` / `.tsx` est réellement présent sous `src`, `test` ou `tests`.
 
 Systèmes de build :
 
 - Maven via `pom.xml` ;
-- npm via `package.json`.
+- npm via `package-lock.json`.
+
+`package.json` reste un marqueur de module Node, mais ne suffit pas à déclarer npm : un projet peut utiliser yarn, pnpm ou un autre gestionnaire. Cette distinction évite de sur-déclarer une capacité non observée.
 
 Modules :
 
-- toute racine contenant un marqueur de build reconnu est conservée ;
+- toute racine contenant `pom.xml` ou `package.json` est conservée comme module observable ;
 - un projet sans marqueur obtient un module racine implicite ;
 - les chemins de module et de source sont toujours relatifs à la racine du projet ;
 - les résultats sont triés afin de rester déterministes entre exécutions.
