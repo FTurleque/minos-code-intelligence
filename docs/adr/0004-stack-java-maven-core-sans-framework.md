@@ -1,7 +1,7 @@
 # ADR-0004 — Implémenter le cœur MINOS en Java 25 avec Maven, sans framework serveur
 
-- Statut : **Proposée — à valider pendant C0**
-- Date de proposition : **22 juillet 2026**
+- Statut : **Acceptée**
+- Date de décision : **22 juillet 2026**
 
 ## Contexte
 
@@ -31,7 +31,7 @@ Les contraintes principales sont :
 - Maven 3.9.16 est la branche stable recommandée actuellement ;
 - Maven 4 n'est pas encore GA et reste une version de prévisualisation / release candidate.
 
-## Décision proposée
+## Décision
 
 ### Langage principal
 
@@ -45,11 +45,11 @@ Java 25 LTS
 Apache Maven 3.9.x
 ```
 
-La version exacte utilisée par la CI et le wrapper devra être épinglée au bootstrap ; au moment de cette ADR, la version stable observée est `3.9.16`.
+La version de référence au bootstrap M0 est `3.9.16` et doit être épinglée par Maven Wrapper.
 
 ### Framework
 
-Le cœur M0/MVP ne doit dépendre d'aucun framework serveur.
+Le cœur M0/MVP ne dépend d'aucun framework serveur.
 
 Architecture :
 
@@ -151,24 +151,21 @@ Non retenu au lancement tant qu'il n'est pas GA.
 
 Techniquement viable, mais aucun bénéfice suffisant n'est identifié pour justifier de remplacer Maven dans le contexte du projet.
 
-## Règles résultantes proposées
+## Règles résultantes
 
 1. `maven.compiler.release = 25` au bootstrap.
-2. Maven Wrapper afin d'épingler la version de build.
+2. Maven Wrapper épingle Maven `3.9.16` au lancement de M0.
 3. Pas de Spring / Quarkus / Micronaut dans le domaine ou les services M0.
 4. Une couche API future peut choisir son framework indépendamment.
 5. Les DTO/domain objects ne dépendent pas du framework d'exposition.
 6. Les adaptateurs d'indexeurs externes sont isolés du domaine.
 7. Les outils externes restent exécutables comme processus séparés lorsque nécessaire.
 
-## Validation attendue
+## Validation
 
-Avant acceptation de cette ADR, confirmer :
+Cette ADR est acceptée à la suite de la validation explicite de la stack proposée pour MINOS.
 
-- Java 25 comme runtime de référence ;
-- Maven comme build principal ;
-- absence de besoin immédiat d'un framework serveur ;
-- compatibilité suffisante des bibliothèques requises par le spike SCIP.
+Elle clôt le dernier verrou architectural de C0. Toute remise en cause future de Java 25, Maven 3.9.x ou de l'absence de framework serveur dans le cœur devra être documentée par une nouvelle ADR qui remplace ou amende celle-ci.
 
 ## Sources officielles
 
