@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [string] $CoursierVersion = "2.1.25-M26",
     [string] $ScipVersion = "0.7.1",
     [switch] $Force
 )
@@ -18,12 +19,10 @@ New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
 $CoursierExe = Join-Path $ToolsBin "cs.exe"
 $ScipExe = Join-Path $ToolsBin "scip.exe"
 
-$CoursierZip = Join-Path $TempRoot "cs-x86_64-pc-win32.zip"
-$CoursierExtract = Join-Path $TempRoot "coursier"
 $ScipArchive = Join-Path $TempRoot "scip-windows-amd64.tar.gz"
 $ScipExtract = Join-Path $TempRoot "scip"
 
-$CoursierUrl = "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip"
+$CoursierUrl = "https://github.com/coursier/coursier/releases/download/v$CoursierVersion/cs-x86_64-pc-win32.exe"
 $ScipUrl = "https://github.com/scip-code/scip/releases/download/v$ScipVersion/scip-windows-amd64.tar.gz"
 
 function Download-File {
@@ -56,21 +55,7 @@ function Test-Executable {
 
 try {
     if ($Force -or -not (Test-Path -LiteralPath $CoursierExe -PathType Leaf)) {
-        Remove-Item -LiteralPath $CoursierExtract -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $CoursierZip -Force -ErrorAction SilentlyContinue
-
-        Download-File -Uri $CoursierUrl -Destination $CoursierZip
-        Expand-Archive -LiteralPath $CoursierZip -DestinationPath $CoursierExtract -Force
-
-        $DownloadedCoursier = Get-ChildItem -LiteralPath $CoursierExtract -Recurse -File |
-            Where-Object { $_.Name -eq "cs-x86_64-pc-win32.exe" -or $_.Name -eq "cs.exe" } |
-            Select-Object -First 1
-
-        if (-not $DownloadedCoursier) {
-            throw "Launcher Coursier introuvable dans l'archive téléchargée."
-        }
-
-        Copy-Item -LiteralPath $DownloadedCoursier.FullName -Destination $CoursierExe -Force
+        Download-File -Uri $CoursierUrl -Destination $CoursierExe
     }
 
     if ($Force -or -not (Test-Path -LiteralPath $ScipExe -PathType Leaf)) {
@@ -101,8 +86,9 @@ try {
 
     Write-Host
     Write-Host "=== OUTILS MINOS M0 ===" -ForegroundColor Cyan
-    Test-Executable -Path $CoursierExe -Arguments @("version") -Name "Coursier"
-    Test-Executable -Path $ScipExe -Arguments @("--version") -Name "SCIP CLI"
+    Write-Host "Coursier attendu : $CoursierVersion"
+    Test-Executable -Path $CoursierExe -Arguments @("--help") -Name "Coursier"
+    Test-Executable -Path $ScipExe -Arguments @("--version") -Name "SCIP CLI $ScipVersion"
 
     Write-Host
     Write-Host "Installation locale terminée." -ForegroundColor Green
