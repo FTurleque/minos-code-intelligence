@@ -21,9 +21,11 @@ Les scripts n'installent volontairement aucun outil de manière implicite.
 
 Ils exigent :
 
-- un JDK adapté au projet analysé ;
+- le **JDK 24 de référence du poste de développement** ;
 - Coursier, accessible par la commande `cs` ;
 - SCIP CLI, accessible par la commande `scip`.
+
+MINOS ne demande pas l'installation d'un JDK supplémentaire uniquement pour l'expérience SCIP.
 
 Les noms de commandes sont configurables par paramètres PowerShell ou variables d'environnement Bash.
 
@@ -36,11 +38,11 @@ Depuis la racine de MINOS :
     -ProjectPath .\fixtures\java\java-simple
 ```
 
-Fixture Java 25 :
+Fixture Java 24 :
 
 ```powershell
 .\scripts\m0\run-scip-java.ps1 `
-    -ProjectPath .\fixtures\java\java-25-smoke
+    -ProjectPath .\fixtures\java\java-24-smoke
 ```
 
 Dépôt réel Ariane, exemple si les dépôts sont voisins :
@@ -67,10 +69,10 @@ Le fichier peut être lancé explicitement avec Bash même si le bit exécutable
 bash scripts/m0/run-scip-java.sh fixtures/java/java-simple
 ```
 
-Fixture Java 25 :
+Fixture Java 24 :
 
 ```bash
-bash scripts/m0/run-scip-java.sh fixtures/java/java-25-smoke
+bash scripts/m0/run-scip-java.sh fixtures/java/java-24-smoke
 ```
 
 Dépôt réel Ariane :
@@ -174,13 +176,17 @@ Objectif : comparer précisément le résultat à la vérité terrain contrôlé
 fixtures/java/java-simple/expected.json
 ```
 
-### A2 — `java-25-smoke`
+### A2 — `java-24-smoke`
 
-Objectif : confirmer que notre mode d'exécution fonctionne réellement sur un projet Maven `release=25`.
+Objectif : vérifier explicitement que `scip-java` sait indexer correctement un projet Maven `release=24` **avec le même JDK 24 que celui utilisé par MINOS**.
 
 ```text
-fixtures/java/java-25-smoke/expected.json
+fixtures/java/java-24-smoke/expected.json
 ```
+
+La documentation officielle de `scip-java` indique que son lanceur accepte un **JDK 17 ou supérieur**, mais sa matrice de versions Java explicitement ciblées liste actuellement Java 17, 21 et 25. Java 24 doit donc être qualifié par mesure réelle.
+
+Un échec de cette étape qualifiera une limitation de `scip-java` ; il ne déclenchera pas automatiquement un changement de JDK pour MINOS.
 
 ### A3 — `FTurleque/ariane-chatbot`
 
