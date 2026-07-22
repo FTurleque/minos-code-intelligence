@@ -53,9 +53,9 @@ Le principe retenu est :
 
 Glean reste un backend avancé candidat qui doit démontrer sa valeur pendant M0.
 
-### ADR-0004
+### ADR-0004 — décision initiale C0
 
-Stack initiale :
+C0 avait clôturé avec :
 
 ```text
 Java 25 LTS
@@ -63,6 +63,23 @@ Apache Maven 3.9.x
 Maven Wrapper
 cœur sans framework serveur
 ```
+
+### ADR-0005 — amendement M0
+
+Dès le bootstrap local de M0, la version Java a été réalignée sur la toolchain réellement utilisée par l'environnement de développement principal :
+
+```text
+Java 24
+Apache Maven 3.9.x
+Maven Wrapper
+cœur sans framework serveur
+```
+
+ADR-0005 remplace **uniquement la cible Java 25** de l'ADR-0004.
+
+La règle opérationnelle devient :
+
+> **MINOS utilise le même JDK de référence que les autres projets de l'environnement de développement ; il ne doit pas imposer à lui seul l'installation d'un JDK supplémentaire.**
 
 ## MVP strict validé
 
