@@ -11,6 +11,32 @@ SCIP CLI                  0.7.1
 
 Coursier n'est pas une composante fonctionnelle qualifiée par M0 : il sert uniquement de **bootstrapper** pour lancer `scip-java`. Sous Windows, l'installateur MINOS utilise le launcher officiel publié dans `coursier/launchers` plutôt que de figer un asset de release Coursier.
 
+Le runner fournit explicitement la classe principale officielle
+`org.scip_code.scip_java.ScipJava` à Coursier. Le POM Maven 0.13.1 ne permet
+pas au launcher Windows courant de la déduire automatiquement.
+
+Sous Windows, il exécute directement le classpath avec la commande `java` du
+poste, soit l'équivalent vérifié de Coursier `--jvm system`, et rend la
+distribution Maven 3.9.16 déjà installée par le Wrapper visible via un petit shim `mvn.exe`
+strictement local. Ce shim est nécessaire car `scip-java` invoque `mvn` avec
+`ProcessBuilder`, qui ne résout pas directement `mvn.cmd` sous Windows. Le
+`PATH` du processus est restauré après le run ; le `PATH` utilisateur et
+`JAVA_HOME` restent inchangés.
+
+`scip-java` 0.13.1 génère également son launcher temporaire `javac` sous
+forme de script Bash, car son support de launcher Windows a été retiré. Le
+runner PowerShell conserve le script fournisseur inchangé et l'exécute via
+Git Bash derrière un second shim local `javac.exe`. Cette compatibilité est
+une contrainte fournisseur de l'expérience, pas un support Windows natif à
+attribuer à `scip-java`.
+
+Enfin, l'agrégateur 0.13.1 crée son fichier temporaire avec un attribut de
+permissions POSIX que le provider Windows refuse. Le runner compile donc une
+substitution locale de la seule classe `ScipWriter`, identique à l'amont sauf
+que cet attribut initial est omis. Coursier résout toujours les artefacts
+officiels 0.13.1 ; le patch est placé en premier dans le classpath du JDK
+système. Aucune réécriture de symbole ni logique d'agrégation n'est réimplémentée.
+
 Les bindings Java SCIP utilisés par MINOS sont versionnés séparément dans le build principal :
 
 ```text
@@ -33,7 +59,8 @@ Le script télécharge uniquement :
 
 ```text
 Coursier launcher Windows officiel
-SCIP CLI 0.7.1
+sources officielles taguées SCIP CLI 0.7.1
+SDK Go 1.25.0 portable requis par ce tag
 ```
 
 vers :
@@ -48,6 +75,13 @@ Le launcher Coursier Windows provient de l'URL officielle :
 ```text
 https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip
 ```
+
+La release officielle SCIP `v0.7.1` ne publie aucun asset Windows : elle ne
+contient que les archives binaires Linux et macOS. L'installateur télécharge
+donc le tag source officiel et le compile pour `windows/amd64` avec le SDK Go
+portable, en reprenant les options du workflow de release amont. Go et ses
+caches de build restent dans `.minos-m0/tools/tmp` puis sont supprimés ; aucune
+installation système n'est créée.
 
 L'installateur utilise `curl.exe` en priorité avec plusieurs tentatives, puis un repli Windows PowerShell TLS 1.2. Les téléchargements sont écrits dans un fichier temporaire avant installation afin d'éviter de conserver un exécutable partiel.
 
@@ -166,6 +200,7 @@ lint.txt
 stats.txt
 environment.txt
 snapshot/
+snapshot.txt
 ```
 
 Le dossier `.minos-m0/` est ignoré par Git dans le dépôt MINOS.
@@ -187,6 +222,11 @@ Statistiques de l'index utilisées pour qualifier le fournisseur et comparer les
 ### `snapshot/`
 
 Vue humaine des occurrences et symboles destinée à la vérification contre `expected.json`.
+
+Avec SCIP CLI 0.7.1 et les plages typées de scip-java 0.13.1, `snapshot`
+termine actuellement par un panic amont. Le runner préserve un dossier vide et
+le diagnostic complet dans `snapshot.txt`, puis retourne un échec après avoir
+tenté tous les post-traitements.
 
 ### `environment.txt`
 
@@ -243,3 +283,24 @@ Les résultats doivent être confrontés à :
 - les limitations observées.
 
 Le résultat final doit alimenter un `ProviderQualityProfile` et non une simple conclusion « fonctionne / ne fonctionne pas ».
+
+Les résultats mesurés de A1 et A2 sont documentés dans :
+
+```text
+docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
+```
+
+## Baseline SCIP → MINOS
+
+Le harness expérimental reste dans les sources de test. Il peut être rejoué sur
+un index réel sans créer de CLI produit :
+
+```powershell
+.\scripts\m0\run-minos-scip-baseline.ps1 `
+  -IndexPath .\fixtures\java\java-simple\.minos-m0\scip-java\index.scip `
+  -Queries User,UserRepository,findById,UserService,findUser
+```
+
+La sortie TSV `minos-baseline.txt` contient les faits fournisseur, les
+relations, les métriques d'ingestion et les résultats `find_symbol` /
+`find_usages` avec leurs positions source.
