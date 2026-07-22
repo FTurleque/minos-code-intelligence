@@ -1,0 +1,28 @@
+{
+  "fixture": "typescript-unresolved",
+  "experiment": "D2-unresolved",
+  "language": "typescript",
+  "buildSystem": "npm",
+  "typescriptVersion": "5.6.3",
+  "expectedBuildOutcome": "FAILURE",
+  "expectedBuildDiagnostics": [
+    "TS2307",
+    "Cannot find module '@missing/client'"
+  ],
+  "requiredSymbols": [
+    {"kind": "INTERFACE", "qualifiedName": "Adapter"},
+    {"kind": "METHOD", "qualifiedName": "Adapter.execute"},
+    {"kind": "CLASS", "qualifiedName": "BrokenAdapter"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "BrokenAdapter.constructor"},
+    {"kind": "METHOD", "qualifiedName": "BrokenAdapter.execute"},
+    {"kind": "FUNCTION", "qualifiedName": "createBrokenAdapter"}
+  ],
+  "requiredRelationships": [
+    {"kind": "IMPLEMENTS", "source": "BrokenAdapter", "target": "Adapter"}
+  ],
+  "expectedUnresolved": [
+    {"qualifiedNameCandidate": "MissingClient", "context": "constructor type"},
+    {"qualifiedNameCandidate": "MissingClient", "context": "instantiation"},
+    {"qualifiedNameCandidate": "MissingClient.transform", "context": "method call"}
+  ]
+}

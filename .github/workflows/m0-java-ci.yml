@@ -1,0 +1,140 @@
+name: M0 Java CI
+
+on:
+  # Politique du dépôt : aucun déclenchement automatique. Ce workflow reste
+  # disponible uniquement lorsqu'une exécution GitHub Actions est demandée.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    name: Java 24 / Maven Wrapper verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        id: checkout
+        continue-on-error: true
+        uses: actions/checkout@v7
+
+      - name: Installer Java 24
+        id: java
+        continue-on-error: true
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Préparer Maven Wrapper
+        id: wrapper
+        continue-on-error: true
+        shell: bash
+        run: chmod +x mvnw
+
+      - name: Afficher la toolchain
+        id: toolchain
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p target
+          {
+            echo "=== java -version ==="
+            java -version
+            echo
+            echo "=== ./mvnw -version ==="
+            ./mvnw -version
+          } 2>&1 | tee target/m0-toolchain.log
+
+      - name: Vérifier le projet
+        id: maven
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p target
+          set +e
+          ./mvnw --batch-mode --no-transfer-progress verify 2>&1 | tee target/m0-ci.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > target/m0-ci.exit
+          exit "$status"
+
+      - name: Enregistrer les résultats des étapes
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p target
+          {
+            echo "checkout=${{ steps.checkout.outcome }}"
+            echo "java=${{ steps.java.outcome }}"
+            echo "wrapper=${{ steps.wrapper.outcome }}"
+            echo "toolchain=${{ steps.toolchain.outcome }}"
+            echo "maven=${{ steps.maven.outcome }}"
+          } | tee target/m0-step-outcomes.txt
+
+      - name: Publier les diagnostics Maven
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: m0-java-ci-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            target/m0-step-outcomes.txt
+            target/m0-toolchain.log
+            target/m0-ci.log
+            target/m0-ci.exit
+            target/surefire-reports/
+
+      - name: Préparer le diagnostic de l'issue M0
+        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.wrapper.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
+        shell: bash
+        run: |
+          {
+            echo "### Diagnostic CI M0 — run #${GITHUB_RUN_NUMBER}"
+            echo
+            echo "Commit : \`${GITHUB_SHA}\`"
+            echo
+            echo '```text'
+            cat target/m0-step-outcomes.txt 2>/dev/null || true
+            echo '```'
+            echo
+            if [ -f target/m0-ci.log ]; then
+              echo "Dernières lignes de Maven :"
+              echo
+              echo '```text'
+              tail -n 80 target/m0-ci.log
+              echo '```'
+            elif [ -f target/m0-toolchain.log ]; then
+              echo "Diagnostic toolchain :"
+              echo
+              echo '```text'
+              tail -n 80 target/m0-toolchain.log
+              echo '```'
+            else
+              echo "Aucun log Maven/toolchain n'a été produit ; l'échec est probablement antérieur à ces étapes."
+            fi
+          } > target/m0-issue-diagnostic.md
+
+      - name: Commenter l'issue M0 en cas d'échec
+        if: always() && (steps.checkout.outcome != 'success' || steps.java.outcome != 'success' || steps.wrapper.outcome != 'success' || steps.toolchain.outcome != 'success' || steps.maven.outcome != 'success')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 3 --repo "$GITHUB_REPOSITORY" --body-file target/m0-issue-diagnostic.md
+
+      - name: Faire échouer le job si nécessaire
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.checkout.outcome }}" != "success" ] \
+             || [ "${{ steps.java.outcome }}" != "success" ] \
+             || [ "${{ steps.wrapper.outcome }}" != "success" ] \
+             || [ "${{ steps.toolchain.outcome }}" != "success" ] \
+             || [ "${{ steps.maven.outcome }}" != "success" ]; then
+            echo "La vérification M0 a échoué. Le diagnostic a été publié dans l'issue #3."
+            exit 1
+          fi

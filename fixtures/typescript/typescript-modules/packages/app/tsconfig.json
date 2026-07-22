@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@minos/greeting-api": ["../api/src/greeting-contract"]
+    },
+    "tsBuildInfoFile": "dist/app.tsbuildinfo"
+  },
+  "references": [
+    {"path": "../api"}
+  ],
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

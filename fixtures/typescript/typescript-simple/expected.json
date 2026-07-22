@@ -1,0 +1,54 @@
+{
+  "fixture": "typescript-simple",
+  "language": "typescript",
+  "buildSystem": "npm",
+  "typescriptVersion": "5.6.3",
+  "requiredSymbols": [
+    {"kind": "TYPE_ALIAS", "qualifiedName": "UserId"},
+    {"kind": "ENUM", "qualifiedName": "UserStatus"},
+    {"kind": "INTERFACE", "qualifiedName": "User"},
+    {"kind": "INTERFACE", "qualifiedName": "UserRepository"},
+    {"kind": "METHOD", "qualifiedName": "UserRepository.findById"},
+    {"kind": "CLASS", "qualifiedName": "InMemoryUserRepository"},
+    {"kind": "METHOD", "qualifiedName": "InMemoryUserRepository.findById"},
+    {"kind": "CLASS", "qualifiedName": "UserService"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "UserService.constructor"},
+    {"kind": "METHOD", "qualifiedName": "UserService.findUser"},
+    {"kind": "FUNCTION", "qualifiedName": "getUserName"},
+    {"kind": "FUNCTION", "qualifiedName": "findsExistingUser"}
+  ],
+  "requiredRelationships": [
+    {
+      "kind": "IMPLEMENTS",
+      "source": "InMemoryUserRepository",
+      "target": "UserRepository"
+    },
+    {
+      "kind": "CALLS",
+      "source": "UserService.findUser",
+      "target": "UserRepository.findById"
+    },
+    {
+      "kind": "CALLS",
+      "source": "getUserName",
+      "target": "UserService.findUser"
+    },
+    {
+      "kind": "CALLS",
+      "source": "findsExistingUser",
+      "target": "getUserName"
+    }
+  ],
+  "requiredUsageTargets": [
+    "UserId",
+    "UserStatus",
+    "User",
+    "UserRepository",
+    "UserRepository.findById",
+    "InMemoryUserRepository",
+    "UserService",
+    "UserService.findUser",
+    "getUserName"
+  ],
+  "expectedUnresolved": []
+}

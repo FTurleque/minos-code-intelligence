@@ -1,0 +1,7 @@
+{
+  "name": "@minos/greeting-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/greeting-contract.js",
+  "types": "dist/greeting-contract.d.ts"
+}

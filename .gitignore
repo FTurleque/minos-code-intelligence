@@ -2,6 +2,10 @@
 /target/
 **/target/
 
+# Node.js / TypeScript fixtures
+**/node_modules/
+fixtures/typescript/**/dist/
+
 # IntelliJ IDEA
 .idea/
 *.iml
@@ -15,6 +19,8 @@ Thumbs.db
 
 # Données locales MINOS
 .minos/
+.minos-m0/
+**/.minos-m0/
 *.scip
 
 # Bases locales Glean et données générées

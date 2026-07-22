@@ -1,12 +1,18 @@
 # Feuille de route — MINOS
 
-Statut : **Proposition initiale — à valider pendant C0**
+Statut : **C0 et M0 technique clôturés — validation locale manuelle avant livraison**
+
+L'état opérationnel, la porte active et le reste à faire sont maintenus dans
+[`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
+portes de décision.
 
 La feuille de route est volontairement guidée par les preuves. Un jalon peut être modifié si une expérimentation invalide une hypothèse d'architecture.
 
 ---
 
 ## C0 — Cadrage fonctionnel et architectural
+
+État : **TERMINÉ**
 
 ### Objectif
 
@@ -39,6 +45,18 @@ Aucune implémentation fonctionnelle significative ne doit commencer avant cette
 ---
 
 ## M0 — Faisabilité technique
+
+État : **TERMINÉ TECHNIQUEMENT — verdict ADOPTER_AVEC_CONTRAINTES**
+
+Acquis : qualification Java et TypeScript, baseline SCIP vers MINOS sur huit
+index réels, benchmark reproductible du backend mémoire, Glean C1 et comparaison
+E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
+La décision est consolidée dans `m0/DECISION_M0.md`.
+
+La PR #4 demeure Draft. La validation est locale et manuelle ; GitHub Actions
+est en pause et ne se déclenche plus automatiquement. L'anomalie historique
+reste suivie dans #5 sans bloquer les validations locales. La revue et la
+fusion exigent une demande explicite.
 
 ### Objectif
 
@@ -73,6 +91,8 @@ REMPLACER
 ---
 
 ## M1 — Découverte des projets et orchestration des indexeurs
+
+État : **NON DÉMARRÉ — autorisé après intégration de la PR #4**
 
 ### Objectif
 

@@ -1,0 +1,46 @@
+{
+  "fixture": "typescript-modules",
+  "experiment": "D2-modules",
+  "language": "typescript",
+  "buildSystem": "npm + TypeScript project references",
+  "typescriptVersion": "5.6.3",
+  "expectedBuildOutcome": "SUCCESS",
+  "requiredSymbols": [
+    {"kind": "INTERFACE", "qualifiedName": "GreetingPort"},
+    {"kind": "METHOD", "qualifiedName": "GreetingPort.greet"},
+    {"kind": "CLASS", "qualifiedName": "GreetingBase"},
+    {"kind": "METHOD", "qualifiedName": "GreetingBase.greet"},
+    {"kind": "METHOD", "qualifiedName": "GreetingBase.normalize"},
+    {"kind": "CLASS", "qualifiedName": "DefaultGreetingPort"},
+    {"kind": "METHOD", "qualifiedName": "DefaultGreetingPort.greet"},
+    {"kind": "CLASS", "qualifiedName": "GreetingService"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "GreetingService.constructor"},
+    {"kind": "METHOD", "qualifiedName": "GreetingService.greet"},
+    {"kind": "FUNCTION", "qualifiedName": "verifiesCrossProjectOverloads"}
+  ],
+  "requiredOverloads": [
+    {"qualifiedName": "GreetingService.greet", "signature": "(name: string): string"},
+    {"qualifiedName": "GreetingService.greet", "signature": "(names: readonly string[]): string[]"}
+  ],
+  "requiredRelationships": [
+    {"kind": "EXTENDS", "source": "DefaultGreetingPort", "target": "GreetingBase"},
+    {"kind": "IMPLEMENTS", "source": "DefaultGreetingPort", "target": "GreetingPort"},
+    {"kind": "CALLS", "source": "DefaultGreetingPort.greet", "target": "GreetingBase.normalize"},
+    {"kind": "CALLS", "source": "GreetingService.greet", "target": "GreetingPort.greet"},
+    {"kind": "CALLS", "source": "verifiesCrossProjectOverloads", "target": "GreetingService.greet"}
+  ],
+  "requiredUsageTargets": [
+    "GreetingPort",
+    "GreetingPort.greet",
+    "GreetingBase",
+    "GreetingBase.normalize",
+    "DefaultGreetingPort",
+    "GreetingService",
+    "GreetingService.greet"
+  ],
+  "requiredRoleSets": [
+    {"context": "import", "contains": ["IMPORT", "REFERENCE"]},
+    {"context": "test-definition", "contains": ["DEFINITION", "TEST"]}
+  ],
+  "expectedUnresolved": []
+}

@@ -59,9 +59,12 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Le projet est désormais en phase :
+Le projet a terminé la faisabilité technique :
 
-> **M0 — Faisabilité technique**
+> **M0 — ADOPTER_AVEC_CONTRAINTES ; validation locale manuelle avant livraison**
+
+Le tableau de bord [`docs/STATUS.md`](docs/STATUS.md) indique ce qui est
+terminé, la porte active et ce qui reste avant le passage à M1.
 
 La phase **C0 — Cadrage fonctionnel et architectural est clôturée**.
 
@@ -151,6 +154,7 @@ Les mêmes contrats MINOS et les mêmes jeux de données doivent être utilisés
 
 ## Documents de référence
 
+- [`docs/STATUS.md`](docs/STATUS.md) — état opérationnel et prochaines portes ;
 - [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — cahier des charges validé ;
 - [`docs/MVP.md`](docs/MVP.md) — MVP strict validé ;
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — positionnement dans l'écosystème ;

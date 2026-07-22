@@ -1,6 +1,6 @@
 # M0 — Plan détaillé des expérimentations
 
-- Statut : **Prêt pour validation de sortie C0**
+- Statut : **Terminé techniquement — verdict ADOPTER_AVEC_CONTRAINTES ; validation locale manuelle**
 - Date : **22 juillet 2026**
 - Objectif : **valider la faisabilité technique sans construire prématurément le produit**
 
@@ -329,23 +329,30 @@ find_usages
 
 Mesurer la valeur réelle de Glean par rapport à la baseline.
 
+Statut au 22 juillet 2026 : **C1 exécutée avec limitations ; C2 et C3
+différées**. Glean 0.2.0.1 ingère la fixture contrôlée uniquement après
+conversion des plages SCIP typées vers le format historique. Les requêtes,
+coûts, échecs et limites sont consignés dans
+`docs/m0/RAPPORT_GLEAN_C1.md`.
+
 ## Pipeline
 
 ```text
-index.scip
+index.scip scip-java 0.13.1
     │
     ▼
-scip-to-glean
+copie de plages historiques requise par Glean 0.2.0.1
     │
     ▼
-Glean DB
+indexeur SCIP intégré à Glean
     │
     ▼
-GleanCodeKnowledgeStore
-    │
-    ▼
-MINOS Query Services
+Glean DB -> Angle CLI
 ```
+
+Le pipeline C1 mesure Glean sans implémenter prématurément un
+`GleanCodeKnowledgeStore`. Le convertisseur Rust officiel courant utilise lui
+aussi les anciennes plages et n'apporte pas de repli utile à cette version.
 
 ## Requêtes à mesurer
 
@@ -371,6 +378,9 @@ Objectif : validation fonctionnelle rapide.
 
 ### C2 — Thrift
 
+Statut : **différée**. C1 ne démontre pas une valeur MVP justifiant la
+génération et la maintenance d'un client.
+
 Évaluer :
 
 - génération cliente ;
@@ -381,7 +391,9 @@ Objectif : validation fonctionnelle rapide.
 
 ### C3 — Sidecar
 
-Évaluer un processus Glean isolé derrière un adaptateur MINOS.
+Statut : **différée**. Évaluer un processus Glean isolé derrière un adaptateur
+MINOS uniquement lorsqu'un cas d'usage non satisfait par le backend léger est
+mesurable.
 
 ## Mesures
 
@@ -400,6 +412,51 @@ rebuild_time
 ---
 
 # 8. Expérience D — TypeScript
+
+Statut au 22 juillet 2026 : **D1 `typescript-simple` exécutée**. Le pipeline
+complet fonctionne avec un repli de métadonnées limité à l'adaptateur ; les
+kinds, le lint strict, l'encodage de position et les relations `CALLS` restent
+des limitations qualifiées dans `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
+
+### D2 — qualification ciblée avant comparaison des backends
+
+Statut au 22 juillet 2026 : **D2 exécutée**. Les trois vérités terrain ont été
+écrites avant l'indexation :
+
+```text
+typescript-modules      références de projets, cross-module, surcharges, tests
+typescript-inheritance héritage, implémentations et overrides
+typescript-unresolved  module absent et cibles non résolues
+```
+
+Le cas multi-projet utilise les références TypeScript `tsconfig`. La release
+officielle `scip-typescript 0.4.0` les parcourt récursivement ; elle expose des
+options dédiées à Yarn et pnpm workspaces, mais pas à npm workspaces. npm reste
+utilisé uniquement pour installer TypeScript et exécuter les builds de vérité
+terrain.
+
+Mesures supplémentaires D2 :
+
+```text
+overloadDeclarationsExpected
+overloadProviderSymbols
+providerMultiValuedRoleOccurrences
+inheritanceRelationships
+implementationRelationships
+workspaceCrossProjectUsages
+expectedUnresolvedTargets
+observedUnresolvedTargets
+```
+
+Un échec de compilation attendu dans `typescript-unresolved` est une donnée de
+qualification. Il ne doit être ni corrigé artificiellement, ni présenté comme
+un build réussi.
+
+Résultat : les références de projets et les relations d'héritage sont
+exploitables avec des limitations de lint. Les surcharges partagent un même
+identifiant fournisseur, aucun rôle multi-valué n'est émis et l'appel d'un
+membre sur le type absent n'est pas indexé. Le détail mesuré se trouve dans
+`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md`.
 
 Reproduire le chemin conceptuel :
 
@@ -451,6 +508,90 @@ Même dataset, mêmes requêtes, mêmes résultats attendus.
 | complexité code MINOS | mesurer | mesurer |
 
 Le résultat fonctionnel doit être comparé en utilisant des DTO MINOS identiques.
+
+## E2 — Décision comparative
+
+Statut au 22 juillet 2026 : **exécutée au niveau nécessaire pour choisir le
+chemin par défaut**. Glean C1 a été confronté à la même fixture et à la baseline
+E1. C1 n'étant pas branché derrière les DTO MINOS, ses latences ne sont pas
+présentées comme un benchmark micro strictement équivalent. Les capacités, les
+résultats de vérité terrain et le coût utilisateur des deux chemins sont en
+revanche comparables.
+
+Décision : backend MINOS léger par défaut, Glean optionnel et C2/C3 différées.
+Le stockage persistant final n'est pas choisi par E2. Rapport :
+`docs/m0/COMPARATIF_BACKENDS.md`.
+
+## E1 — Baseline reproductible du backend mémoire
+
+E1 mesure d'abord `InMemoryCodeKnowledgeStore` sans Glean. Cette étape fixe la
+référence légère à laquelle tout backend candidat devra être comparé.
+
+Corpus réel :
+
+```text
+java-simple
+java-24-smoke
+ariane-chatbot
+java-multi-module
+typescript-simple
+typescript-modules
+typescript-inheritance
+typescript-unresolved
+```
+
+Le corpus et les requêtes sont figés dans
+`benchmarks/m0/e1-in-memory.json`. Chaque dataset est exécuté dans un JVM neuf
+afin d'isoler la lecture, l'ingestion et le store. Pour chaque requête :
+
+```text
+warmupIterations       100
+measurementIterations  500
+operations             find_symbol, find_usages
+serialization          représentation canonique incluse dans la mesure
+```
+
+Mesures E1 :
+
+```text
+indexReadDuration
+ingestionDuration
+backendReadyDuration
+processWallClockDuration
+find_symbol p50 / p95 / max
+find_usages p50 / p95 / max
+peakHeapIndexing
+retainedHeapAfterIngestion
+peakHeapQuery
+indexDiskSize
+workingStoreDiskSize
+resultDigestStable
+```
+
+La latence de requête est mesurée après échauffement du JVM, sur index déjà
+ingéré. Le temps `backendReadyDuration` représente la reconstruction complète
+du backend mémoire (`indexReadDuration + ingestionDuration`) mais exclut le
+démarrage du processus Java. Le temps processus est mesuré séparément par le
+runner PowerShell.
+
+La mémoire E1 est la heap Java observée dans le processus. Elle ne constitue
+pas encore une mesure RSS complète du système ; cette limite doit être
+conservée dans le rapport et appliquée symétriquement aux futurs backends.
+
+Le store mémoire n'écrit aucun fichier de travail : son coût disque propre est
+donc `0`, distinct de la taille de l'`index.scip` source et des résultats du
+benchmark.
+
+E1 ne modifie ni `CodeKnowledgeStore`, ni les DTO, ni les services de requêtes.
+Le harness reste expérimental dans les sources de test et ne devient pas une
+CLI produit.
+
+Statut au 22 juillet 2026 : **E1 exécutée sur les huit index**. Deux campagnes
+depuis le même commit confirment 48/48 digests inter-processus identiques. Le
+pire p95 individuel est de 1,443 ms pour `find_symbol` et 10,249 ms pour
+`find_usages`. Le backend mémoire atteint les deux objectifs de latence C0 ;
+son absence de persistance et de requêtes de graphe reste explicite. Résultats :
+`docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md`.
 
 ---
 
@@ -518,12 +659,16 @@ Sans bénéfice mesurable, Glean reste hors du chemin par défaut.
 # 13. Livrables M0
 
 ```text
-docs/m0/RESULTATS_SCIP_JAVA.md
-docs/m0/RESULTATS_SCIP_TYPESCRIPT.md
-docs/m0/RESULTATS_BASELINE.md
-docs/m0/RESULTATS_GLEAN.md
+docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
+docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
+docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md
+docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md
+docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md
+docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md
+docs/m0/RAPPORT_GLEAN_C1.md
 docs/m0/COMPARATIF_BACKENDS.md
 docs/m0/DECISION_M0.md
+docs/m0/STRATEGIE_VALIDATION_CI_M0.md
 ```
 
 Ainsi que :
@@ -554,11 +699,18 @@ M0 est terminé lorsque :
 Décision finale :
 
 ```text
-ADOPTER
 ADOPTER_AVEC_CONTRAINTES
-REVOIR
-REMPLACER
 ```
+
+Les dix conditions sont satisfaites au niveau de réduction de risque attendu
+pour M0. Les limites de précision exhaustive, d'identité canonique et de
+scalabilité deviennent des portes des jalons produit concernés. Le rapport de
+décision est `docs/m0/DECISION_M0.md`.
+
+GitHub Actions n'est pas une condition de faisabilité et reste en pause. La
+porte de livraison courante est le runner local manuel documenté dans
+`docs/m0/STRATEGIE_VALIDATION_CI_M0.md`. L'issue #5 conserve le diagnostic
+historique sans autoriser de relance automatique.
 
 ---
 

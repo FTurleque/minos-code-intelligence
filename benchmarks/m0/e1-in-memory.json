@@ -1,0 +1,72 @@
+{
+  "benchmark": "E1-in-memory",
+  "backend": "InMemoryCodeKnowledgeStore",
+  "warmupIterations": 100,
+  "measurementIterations": 500,
+  "datasets": [
+    {
+      "id": "java-simple",
+      "indexPath": "fixtures/java/java-simple/.minos-m0/scip-java/index.scip",
+      "projectId": "benchmark-java-simple",
+      "providerId": "scip-java",
+      "providerVersion": "0.13.1",
+      "queries": ["UserRepository", "UserService", "findUser"]
+    },
+    {
+      "id": "java-24-smoke",
+      "indexPath": "fixtures/java/java-24-smoke/.minos-m0/scip-java/index.scip",
+      "projectId": "benchmark-java-24-smoke",
+      "providerId": "scip-java",
+      "providerVersion": "0.13.1",
+      "queries": ["GreetingService", "GreetingApp", "greet"]
+    },
+    {
+      "id": "ariane-chatbot",
+      "indexPath": ".minos-m0/experiments/ariane-chatbot/scip-java/index.scip",
+      "projectId": "benchmark-ariane-chatbot",
+      "providerId": "scip-java",
+      "providerVersion": "0.13.1",
+      "queries": ["ChatService", "AuthService", "KRetriever"]
+    },
+    {
+      "id": "java-multi-module",
+      "indexPath": "fixtures/java/java-multi-module/.minos-m0/scip-java/index.scip",
+      "projectId": "benchmark-java-multi-module",
+      "providerId": "scip-java",
+      "providerVersion": "0.13.1",
+      "queries": ["GreetingPort", "GreetingService", "greetsAcrossModules"]
+    },
+    {
+      "id": "typescript-simple",
+      "indexPath": "fixtures/typescript/typescript-simple/.minos-m0/scip-typescript/index.scip",
+      "projectId": "benchmark-typescript-simple",
+      "providerId": "scip-typescript",
+      "providerVersion": "0.4.0",
+      "queries": ["UserRepository", "UserService", "getUserName"]
+    },
+    {
+      "id": "typescript-modules",
+      "indexPath": "fixtures/typescript/typescript-modules/.minos-m0/scip-typescript/index.scip",
+      "projectId": "benchmark-typescript-modules",
+      "providerId": "scip-typescript",
+      "providerVersion": "0.4.0",
+      "queries": ["GreetingPort", "GreetingService", "verifiesCrossProjectOverloads"]
+    },
+    {
+      "id": "typescript-inheritance",
+      "indexPath": "fixtures/typescript/typescript-inheritance/.minos-m0/scip-typescript/index.scip",
+      "projectId": "benchmark-typescript-inheritance",
+      "providerId": "scip-typescript",
+      "providerVersion": "0.4.0",
+      "queries": ["EntityBase", "AdminEntity", "describeEntity"]
+    },
+    {
+      "id": "typescript-unresolved",
+      "indexPath": "fixtures/typescript/typescript-unresolved/.minos-m0/scip-typescript/index.scip",
+      "projectId": "benchmark-typescript-unresolved",
+      "providerId": "scip-typescript",
+      "providerVersion": "0.4.0",
+      "queries": ["Adapter", "BrokenAdapter", "createBrokenAdapter"]
+    }
+  ]
+}

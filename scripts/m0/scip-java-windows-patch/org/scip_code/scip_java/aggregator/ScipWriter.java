@@ -1,0 +1,51 @@
+package org.scip_code.scip_java.aggregator;
+
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import org.scip_code.scip.Index;
+
+/**
+ * Windows compatibility patch for the upstream scip-java 0.13.1 ScipWriter.
+ *
+ * <p>The upstream implementation passes a POSIX permissions attribute to
+ * {@link Files#createTempFile(String, String, java.nio.file.attribute.FileAttribute[])},
+ * which the Windows file-system provider rejects. All aggregation behavior is
+ * unchanged; only that unsupported initial attribute is omitted.</p>
+ */
+public class ScipWriter implements AutoCloseable {
+
+    private final Path tmp;
+    private final ScipOutputStream output;
+    private final ScipAggregatorOptions options;
+
+    public ScipWriter(ScipAggregatorOptions options) throws IOException {
+        this.tmp = Files.createTempFile("scip-aggregator", "index.scip");
+        this.output = new ScipOutputStream(new BufferedOutputStream(Files.newOutputStream(tmp)));
+        this.options = options;
+    }
+
+    public void emitTyped(Index index) {
+        this.output.write(index.toByteArray());
+    }
+
+    public void build() throws IOException {
+        close();
+        Files.move(tmp, options.output(), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    @Override
+    public void close() throws IOException {
+        output.flush();
+    }
+
+    public void flush() {
+        try {
+            output.flush();
+        } catch (IOException exception) {
+            options.reporter().error(exception);
+        }
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@minos/greeting-app",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@minos/greeting-api": "1.0.0"
+  }
+}

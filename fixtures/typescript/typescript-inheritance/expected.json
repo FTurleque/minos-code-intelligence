@@ -1,0 +1,39 @@
+{
+  "fixture": "typescript-inheritance",
+  "experiment": "D2-inheritance",
+  "language": "typescript",
+  "buildSystem": "npm",
+  "typescriptVersion": "5.6.3",
+  "expectedBuildOutcome": "SUCCESS",
+  "requiredSymbols": [
+    {"kind": "INTERFACE", "qualifiedName": "Identified"},
+    {"kind": "INTERFACE", "qualifiedName": "Named"},
+    {"kind": "CLASS", "qualifiedName": "EntityBase"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "EntityBase.constructor"},
+    {"kind": "METHOD", "qualifiedName": "EntityBase.describe"},
+    {"kind": "CLASS", "qualifiedName": "UserEntity"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "UserEntity.constructor"},
+    {"kind": "METHOD", "qualifiedName": "UserEntity.describe"},
+    {"kind": "CLASS", "qualifiedName": "AdminEntity"},
+    {"kind": "METHOD", "qualifiedName": "AdminEntity.describe"},
+    {"kind": "FUNCTION", "qualifiedName": "describeEntity"},
+    {"kind": "FUNCTION", "qualifiedName": "verifiesInheritance"}
+  ],
+  "requiredRelationships": [
+    {"kind": "EXTENDS", "source": "Named", "target": "Identified"},
+    {"kind": "IMPLEMENTS", "source": "EntityBase", "target": "Identified"},
+    {"kind": "EXTENDS", "source": "UserEntity", "target": "EntityBase"},
+    {"kind": "IMPLEMENTS", "source": "UserEntity", "target": "Named"},
+    {"kind": "EXTENDS", "source": "AdminEntity", "target": "UserEntity"},
+    {"kind": "CALLS", "source": "describeEntity", "target": "EntityBase.describe"}
+  ],
+  "requiredUsageTargets": [
+    "Identified",
+    "Named",
+    "EntityBase",
+    "EntityBase.describe",
+    "UserEntity",
+    "AdminEntity"
+  ],
+  "expectedUnresolved": []
+}
