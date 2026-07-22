@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [string] $CoursierVersion = "2.1.25-M26",
     [string] $ScipVersion = "0.7.1",
     [switch] $Force
 )
@@ -19,11 +18,14 @@ New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
 $CoursierExe = Join-Path $ToolsBin "cs.exe"
 $ScipExe = Join-Path $ToolsBin "scip.exe"
 
-$CoursierDownload = Join-Path $TempRoot "cs-x86_64-pc-win32.exe.download"
+$CoursierArchive = Join-Path $TempRoot "cs-x86_64-pc-win32.zip"
+$CoursierExtract = Join-Path $TempRoot "coursier"
 $ScipArchive = Join-Path $TempRoot "scip-windows-amd64.tar.gz"
 $ScipExtract = Join-Path $TempRoot "scip"
 
-$CoursierUrl = "https://github.com/coursier/coursier/releases/download/v$CoursierVersion/cs-x86_64-pc-win32.exe"
+# Official Coursier Windows command-line installation launcher.
+# Coursier is only a bootstrap tool for M0, so MINOS does not pin its launcher version.
+$CoursierUrl = "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip"
 $ScipUrl = "https://github.com/scip-code/scip/releases/download/v$ScipVersion/scip-windows-amd64.tar.gz"
 
 function Download-File {
@@ -41,7 +43,7 @@ function Download-File {
     if ($Curl) {
         for ($Attempt = 1; $Attempt -le 4; $Attempt++) {
             Write-Host "  curl attempt $Attempt/4"
-            & $Curl.Source --fail --location --connect-timeout 30 --output $Partial $Uri
+            & $Curl.Source --fail --location --connect-timeout 30 --user-agent "MINOS-M0" --output $Partial $Uri
             if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $Partial -PathType Leaf)) {
                 break
             }
@@ -120,9 +122,22 @@ function Test-Executable {
 
 try {
     if ($Force -or -not (Test-Path -LiteralPath $CoursierExe -PathType Leaf)) {
-        Remove-Item -LiteralPath $CoursierDownload -Force -ErrorAction SilentlyContinue
-        Download-File -Uri $CoursierUrl -Destination $CoursierDownload
-        Move-Item -LiteralPath $CoursierDownload -Destination $CoursierExe -Force
+        Remove-Item -LiteralPath $CoursierArchive -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $CoursierExtract -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $CoursierExtract | Out-Null
+
+        Download-File -Uri $CoursierUrl -Destination $CoursierArchive
+        Expand-Archive -LiteralPath $CoursierArchive -DestinationPath $CoursierExtract -Force
+
+        $DownloadedCoursier = Get-ChildItem -LiteralPath $CoursierExtract -Recurse -File |
+            Where-Object { $_.Name -eq "cs-x86_64-pc-win32.exe" -or $_.Name -eq "cs.exe" } |
+            Select-Object -First 1
+
+        if (-not $DownloadedCoursier) {
+            throw "Coursier launcher not found in downloaded archive."
+        }
+
+        Copy-Item -LiteralPath $DownloadedCoursier.FullName -Destination $CoursierExe -Force
     }
 
     if ($Force -or -not (Test-Path -LiteralPath $ScipExe -PathType Leaf)) {
@@ -153,8 +168,7 @@ try {
 
     Write-Host
     Write-Host "=== MINOS M0 TOOLS ===" -ForegroundColor Cyan
-    Write-Host "Expected Coursier: $CoursierVersion"
-    Test-Executable -Path $CoursierExe -Arguments @("--help") -Name "Coursier"
+    Test-Executable -Path $CoursierExe -Arguments @("--help") -Name "Coursier launcher"
     Test-Executable -Path $ScipExe -Arguments @("--version") -Name "SCIP CLI $ScipVersion"
 
     Write-Host
