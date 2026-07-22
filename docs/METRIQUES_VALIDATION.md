@@ -658,3 +658,16 @@ Toute décision M0 doit citer :
 - écarts aux seuils ;
 - limites connues ;
 - impact sur la roadmap.
+
+## 21.1 Verdict obtenu
+
+Le verdict du 22 juillet 2026 est :
+
+```text
+ADOPTER_AVEC_CONTRAINTES
+```
+
+Les contraintes structurantes sont : capacités explicites par fournisseur,
+identités de repli tant que le canonique n'est pas prouvé, backend MINOS léger
+par défaut, Glean optionnel, et promotion atomique des index. Le détail et la
+transition vers M1 sont dans `docs/m0/DECISION_M0.md`.

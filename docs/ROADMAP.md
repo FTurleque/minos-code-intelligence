@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 clôturé — M0 en cours**
+Statut : **C0 et M0 technique clôturés — livraison M0 bloquée par la CI**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -46,12 +46,17 @@ Aucune implémentation fonctionnelle significative ne doit commencer avant cette
 
 ## M0 — Faisabilité technique
 
-État : **EN COURS — clôture et stratégie CI**
+État : **TERMINÉ TECHNIQUEMENT — verdict ADOPTER_AVEC_CONTRAINTES**
 
 Acquis : qualification Java et TypeScript, baseline SCIP vers MINOS sur huit
 index réels, benchmark reproductible du backend mémoire, Glean C1 et comparaison
 E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
-Restent le verdict consolidé, la stratégie CI et la décision de passage à M1.
+La décision est consolidée dans `m0/DECISION_M0.md`.
+
+La livraison reste bloquée : la PR #4 demeure Draft car GitHub Actions échoue
+avant tout step. Cette anomalie d'infrastructure, suivie dans #5, ne réouvre pas
+la faisabilité technique mais interdit la fusion sans stratégie satisfaite ou
+dérogation explicite.
 
 ### Objectif
 
@@ -87,7 +92,7 @@ REMPLACER
 
 ## M1 — Découverte des projets et orchestration des indexeurs
 
-État : **NON DÉMARRÉ — conditionné par la décision de sortie M0**
+État : **NON DÉMARRÉ — autorisé après intégration de la PR #4**
 
 ### Objectif
 

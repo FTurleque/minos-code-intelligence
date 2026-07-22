@@ -59,9 +59,9 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Le projet est désormais en phase :
+Le projet a terminé la faisabilité technique :
 
-> **M0 — Faisabilité technique**
+> **M0 — ADOPTER_AVEC_CONTRAINTES ; livraison de la PR #4 bloquée par la CI**
 
 Le tableau de bord [`docs/STATUS.md`](docs/STATUS.md) indique ce qui est
 terminé, la porte active et ce qui reste avant le passage à M1.

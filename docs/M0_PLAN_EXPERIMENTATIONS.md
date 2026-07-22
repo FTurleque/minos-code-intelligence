@@ -1,6 +1,6 @@
 # M0 — Plan détaillé des expérimentations
 
-- Statut : **En cours — A, B, C1, D, E1 et E2 exécutées ; clôture M0 active**
+- Statut : **Terminé techniquement — verdict ADOPTER_AVEC_CONTRAINTES ; PR #4 bloquée par la CI**
 - Date : **22 juillet 2026**
 - Objectif : **valider la faisabilité technique sans construire prématurément le produit**
 
@@ -659,12 +659,16 @@ Sans bénéfice mesurable, Glean reste hors du chemin par défaut.
 # 13. Livrables M0
 
 ```text
-docs/m0/RESULTATS_SCIP_JAVA.md
-docs/m0/RESULTATS_SCIP_TYPESCRIPT.md
-docs/m0/RESULTATS_BASELINE.md
-docs/m0/RESULTATS_GLEAN.md
+docs/m0/RAPPORT_SCIP_JAVA_A1_A2.md
+docs/m0/RAPPORT_SCIP_JAVA_A3_ARIANE.md
+docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md
+docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md
+docs/m0/RAPPORT_SCIP_TYPESCRIPT_D2.md
+docs/m0/RAPPORT_BACKEND_MEMOIRE_E1.md
+docs/m0/RAPPORT_GLEAN_C1.md
 docs/m0/COMPARATIF_BACKENDS.md
 docs/m0/DECISION_M0.md
+docs/m0/STRATEGIE_VALIDATION_CI_M0.md
 ```
 
 Ainsi que :
@@ -695,11 +699,17 @@ M0 est terminé lorsque :
 Décision finale :
 
 ```text
-ADOPTER
 ADOPTER_AVEC_CONTRAINTES
-REVOIR
-REMPLACER
 ```
+
+Les dix conditions sont satisfaites au niveau de réduction de risque attendu
+pour M0. Les limites de précision exhaustive, d'identité canonique et de
+scalabilité deviennent des portes des jalons produit concernés. Le rapport de
+décision est `docs/m0/DECISION_M0.md`.
+
+La CI GitHub Actions n'est pas une condition de faisabilité listée ci-dessus,
+mais reste une porte de livraison absolue pour la PR #4. Voir
+`docs/m0/STRATEGIE_VALIDATION_CI_M0.md` et l'issue #5.
 
 ---
 
