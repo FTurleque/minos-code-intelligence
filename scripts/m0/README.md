@@ -5,10 +5,11 @@ Ces scripts exécutent la chaîne de qualification `scip-java` sur un projet Mav
 ## Versions de référence
 
 ```text
-Coursier                  2.1.25-M26
 scip-java                 0.13.1
 SCIP CLI                  0.7.1
 ```
+
+Coursier n'est pas une composante fonctionnelle qualifiée par M0 : il sert uniquement de **bootstrapper** pour lancer `scip-java`. Sous Windows, l'installateur MINOS utilise le launcher officiel publié dans `coursier/launchers` plutôt que de figer un asset de release Coursier.
 
 Les bindings Java SCIP utilisés par MINOS sont versionnés séparément dans le build principal :
 
@@ -31,7 +32,7 @@ Sous Windows, Coursier et SCIP CLI peuvent être installés **localement pour MI
 Le script télécharge uniquement :
 
 ```text
-Coursier 2.1.25-M26
+Coursier launcher Windows officiel
 SCIP CLI 0.7.1
 ```
 
@@ -41,6 +42,14 @@ vers :
 .minos-m0\tools\bin\cs.exe
 .minos-m0\tools\bin\scip.exe
 ```
+
+Le launcher Coursier Windows provient de l'URL officielle :
+
+```text
+https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip
+```
+
+L'installateur utilise `curl.exe` en priorité avec plusieurs tentatives, puis un repli Windows PowerShell TLS 1.2. Les téléchargements sont écrits dans un fichier temporaire avant installation afin d'éviter de conserver un exécutable partiel.
 
 Il ne lance pas `cs setup`, n'installe pas Scala/sbt, ne modifie pas le `PATH` utilisateur et ne modifie pas le JDK.
 
