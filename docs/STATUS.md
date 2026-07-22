@@ -61,11 +61,12 @@ Premier incrément en cours : **baseline de découverte factuelle**.
 
 - contrat immuable `ProjectDiscovery` ;
 - absence volontaire d'identifiant métier dérivé du seul chemin local ;
-- détection Java via les racines Maven conventionnelles ;
-- détection TypeScript via la présence réelle de fichiers `.ts` / `.tsx` ;
+- détection Java uniquement lorsque des fichiers `.java` sont réellement observés ;
+- détection TypeScript uniquement lorsque des fichiers `.ts` / `.tsx` sont réellement observés ;
 - détection Maven via `pom.xml` ;
-- détection npm via `package.json` ;
-- découverte des modules par marqueurs de build ;
+- détection npm via `package-lock.json` ;
+- `package.json` utilisé comme marqueur de module Node sans présumer du gestionnaire de paquets ;
+- découverte des modules par marqueurs de build/projet ;
 - racines source/test relatives au projet ;
 - tri déterministe des résultats ;
 - exclusion technique initiale de `.git`, `.idea`, `.minos-m0`, `node_modules`,
