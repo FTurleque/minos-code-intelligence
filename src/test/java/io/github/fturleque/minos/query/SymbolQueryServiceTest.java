@@ -5,11 +5,13 @@ import io.github.fturleque.minos.domain.Origin;
 import io.github.fturleque.minos.domain.OriginType;
 import io.github.fturleque.minos.domain.PositionEncoding;
 import io.github.fturleque.minos.domain.ResolutionStatus;
+import io.github.fturleque.minos.domain.ResolvedSymbolReference;
 import io.github.fturleque.minos.domain.Symbol;
 import io.github.fturleque.minos.domain.SymbolIdentityQuality;
 import io.github.fturleque.minos.domain.SymbolKind;
 import io.github.fturleque.minos.domain.SymbolLocation;
 import io.github.fturleque.minos.domain.SymbolOccurrence;
+import io.github.fturleque.minos.domain.UnresolvedSymbolReference;
 import io.github.fturleque.minos.store.InMemoryCodeKnowledgeStore;
 import org.junit.jupiter.api.Test;
 
@@ -42,16 +44,17 @@ class SymbolQueryServiceTest {
     }
 
     @Test
-    void findUsagesExcludesDefinitionsAndReturnsDeterministicOrder() {
+    void findUsagesExcludesDefinitionsAndUnresolvedOccurrences() {
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
         store.putSymbols(List.of(documentIngestionService()));
         store.putOccurrences(List.of(
-                occurrence("occ-definition", "file-service", 12,
+                resolvedOccurrence("occ-definition", "file-service", 12,
                         Set.of(OccurrenceRole.DEFINITION, OccurrenceRole.TEST)),
-                occurrence("occ-use-b", "file-resource", 42,
+                resolvedOccurrence("occ-use-b", "file-resource", 42,
                         Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.READ)),
-                occurrence("occ-use-a", "file-resource", 18,
-                        Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.CALL))
+                resolvedOccurrence("occ-use-a", "file-resource", 18,
+                        Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.CALL)),
+                unresolvedOccurrence("occ-unresolved", "file-resource", 55)
         ));
 
         SymbolQueryService service = new SymbolQueryService(store);
@@ -89,7 +92,7 @@ class SymbolQueryServiceTest {
         );
     }
 
-    private static SymbolOccurrence occurrence(
+    private static SymbolOccurrence resolvedOccurrence(
             String id,
             String fileId,
             int line,
@@ -97,11 +100,31 @@ class SymbolQueryServiceTest {
         return new SymbolOccurrence(
                 id,
                 PROJECT_ID,
-                SYMBOL_ID,
+                new ResolvedSymbolReference(SYMBOL_ID),
                 new SymbolLocation(
                         fileId, line, 0, line, 32, PositionEncoding.UTF16_CODE_UNITS),
                 roles,
                 ResolutionStatus.RESOLVED,
+                origin(),
+                Set.of()
+        );
+    }
+
+    private static SymbolOccurrence unresolvedOccurrence(String id, String fileId, int line) {
+        return new SymbolOccurrence(
+                id,
+                PROJECT_ID,
+                new UnresolvedSymbolReference(
+                        "UnknownType",
+                        null,
+                        "java",
+                        "fixture unresolved reference",
+                        Set.of()
+                ),
+                new SymbolLocation(
+                        fileId, line, 0, line, 11, PositionEncoding.UTF16_CODE_UNITS),
+                Set.of(OccurrenceRole.REFERENCE),
+                ResolutionStatus.UNRESOLVED,
                 origin(),
                 Set.of()
         );
