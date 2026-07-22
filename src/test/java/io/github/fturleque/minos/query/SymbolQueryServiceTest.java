@@ -3,6 +3,7 @@ package io.github.fturleque.minos.query;
 import io.github.fturleque.minos.domain.OccurrenceRole;
 import io.github.fturleque.minos.domain.Origin;
 import io.github.fturleque.minos.domain.OriginType;
+import io.github.fturleque.minos.domain.PositionEncoding;
 import io.github.fturleque.minos.domain.ResolutionStatus;
 import io.github.fturleque.minos.domain.Symbol;
 import io.github.fturleque.minos.domain.SymbolKind;
@@ -73,7 +74,8 @@ class SymbolQueryServiceTest {
                 "fr.ariane.document.DocumentIngestionService",
                 null,
                 "java",
-                new SymbolLocation("file-service", 12, 0, 120, 1),
+                new SymbolLocation(
+                        "file-service", 12, 0, 120, 1, PositionEncoding.UTF16_CODE_UNITS),
                 ResolutionStatus.RESOLVED,
                 origin(),
                 false,
@@ -90,7 +92,8 @@ class SymbolQueryServiceTest {
                 id,
                 PROJECT_ID,
                 SYMBOL_ID,
-                new SymbolLocation(fileId, line, 0, line, 32),
+                new SymbolLocation(
+                        fileId, line, 0, line, 32, PositionEncoding.UTF16_CODE_UNITS),
                 roles,
                 ResolutionStatus.RESOLVED,
                 origin()
