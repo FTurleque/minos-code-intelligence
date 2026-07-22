@@ -15,7 +15,7 @@ La PR #4 reste Draft et ne doit pas être fusionnée tant que la stratégie
 primaire ci-dessous n'est pas satisfaite ou qu'une dérogation explicite n'est
 pas décidée par le propriétaire du dépôt.
 
-## Dernière observation
+## Observation de référence
 
 Head : `55df7f14b3a1936f539bdefe4ca3ebb43b29afc8`
 
@@ -74,7 +74,7 @@ documente également des quotas de minutes pour les dépôts privés.
 
 ## Vérification manuelle minimale
 
-### 1. Ouvrir le run exact
+### 1. Ouvrir le run de référence ou le dernier run équivalent
 
 ```text
 https://github.com/FTurleque/minos-code-intelligence/actions/runs/29954498349

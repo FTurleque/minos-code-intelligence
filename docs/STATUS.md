@@ -67,7 +67,7 @@ valeur MVP supplémentaire  non démontrée
 décision backend            MINOS léger par défaut, Glean optionnel
 ```
 
-Le run #212 du head `55df7f1` confirme un échec avant tout step :
+Les runs #212 et suivants confirment un échec avant tout step :
 
 ```text
 steps        null / endpoint direct vide
@@ -81,7 +81,7 @@ requises sont dans `docs/m0/STRATEGIE_VALIDATION_CI_M0.md`.
 
 ## Reste à faire avant la fusion et M1
 
-1. relever dans l'interface GitHub le message du run #212 ;
+1. relever dans l'interface GitHub le message d'un run récent concerné ;
 2. vérifier permissions Actions, politique de pinning et usage/facturation ;
 3. obtenir un run avec steps/logs et `verify` vert, ou décider explicitement
    une dérogation documentée ;
