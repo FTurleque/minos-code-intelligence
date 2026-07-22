@@ -19,6 +19,7 @@ New-Item -ItemType Directory -Force -Path $TempRoot | Out-Null
 $CoursierExe = Join-Path $ToolsBin "cs.exe"
 $ScipExe = Join-Path $ToolsBin "scip.exe"
 
+$CoursierDownload = Join-Path $TempRoot "cs-x86_64-pc-win32.exe.download"
 $ScipArchive = Join-Path $TempRoot "scip-windows-amd64.tar.gz"
 $ScipExtract = Join-Path $TempRoot "scip"
 
@@ -31,8 +32,72 @@ function Download-File {
         [Parameter(Mandatory = $true)][string] $Destination
     )
 
-    Write-Host "Téléchargement : $Uri"
-    Invoke-WebRequest -Uri $Uri -OutFile $Destination -UseBasicParsing
+    $Partial = "$Destination.partial"
+    Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+
+    Write-Host "Download: $Uri"
+
+    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($Curl) {
+        for ($Attempt = 1; $Attempt -le 4; $Attempt++) {
+            Write-Host "  curl attempt $Attempt/4"
+            & $Curl.Source --fail --location --connect-timeout 30 --output $Partial $Uri
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $Partial -PathType Leaf)) {
+                break
+            }
+
+            Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+            if ($Attempt -lt 4) {
+                Start-Sleep -Seconds (2 * $Attempt)
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $Partial -PathType Leaf)) {
+            throw "Download failed with curl.exe after 4 attempts: $Uri"
+        }
+    }
+    else {
+        $PreviousProtocol = [Net.ServicePointManager]::SecurityProtocol
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+            $Downloaded = $false
+            for ($Attempt = 1; $Attempt -le 4; $Attempt++) {
+                Write-Host "  PowerShell attempt $Attempt/4 (TLS 1.2)"
+                try {
+                    Invoke-WebRequest `
+                        -Uri $Uri `
+                        -OutFile $Partial `
+                        -UseBasicParsing `
+                        -Headers @{ "User-Agent" = "MINOS-M0" }
+                    $Downloaded = $true
+                    break
+                }
+                catch {
+                    Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+                    if ($Attempt -eq 4) {
+                        throw
+                    }
+                    Start-Sleep -Seconds (2 * $Attempt)
+                }
+            }
+
+            if (-not $Downloaded) {
+                throw "Download failed with Windows PowerShell: $Uri"
+            }
+        }
+        finally {
+            [Net.ServicePointManager]::SecurityProtocol = $PreviousProtocol
+        }
+    }
+
+    $DownloadedFile = Get-Item -LiteralPath $Partial -ErrorAction Stop
+    if ($DownloadedFile.Length -le 0) {
+        Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+        throw "Downloaded file is empty: $Uri"
+    }
+
+    Move-Item -LiteralPath $Partial -Destination $Destination -Force
 }
 
 function Test-Executable {
@@ -43,24 +108,26 @@ function Test-Executable {
     )
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "$Name introuvable après installation : $Path"
+        throw "$Name not found after installation: $Path"
     }
 
     Write-Host "==> $Name"
     & $Path @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "$Name a retourné le code $LASTEXITCODE"
+        throw "$Name returned exit code $LASTEXITCODE"
     }
 }
 
 try {
     if ($Force -or -not (Test-Path -LiteralPath $CoursierExe -PathType Leaf)) {
-        Download-File -Uri $CoursierUrl -Destination $CoursierExe
+        Remove-Item -LiteralPath $CoursierDownload -Force -ErrorAction SilentlyContinue
+        Download-File -Uri $CoursierUrl -Destination $CoursierDownload
+        Move-Item -LiteralPath $CoursierDownload -Destination $CoursierExe -Force
     }
 
     if ($Force -or -not (Test-Path -LiteralPath $ScipExe -PathType Leaf)) {
         if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) {
-            throw "tar.exe est requis pour extraire le binaire SCIP sous Windows."
+            throw "tar.exe is required to extract the SCIP binary on Windows."
         }
 
         Remove-Item -LiteralPath $ScipExtract -Recurse -Force -ErrorAction SilentlyContinue
@@ -70,7 +137,7 @@ try {
         Download-File -Uri $ScipUrl -Destination $ScipArchive
         & tar.exe -xzf $ScipArchive -C $ScipExtract
         if ($LASTEXITCODE -ne 0) {
-            throw "Extraction de SCIP échouée avec le code $LASTEXITCODE"
+            throw "SCIP extraction failed with exit code $LASTEXITCODE"
         }
 
         $DownloadedScip = Get-ChildItem -LiteralPath $ScipExtract -Recurse -File |
@@ -78,24 +145,24 @@ try {
             Select-Object -First 1
 
         if (-not $DownloadedScip) {
-            throw "Binaire SCIP introuvable dans l'archive téléchargée."
+            throw "SCIP binary not found in downloaded archive."
         }
 
         Copy-Item -LiteralPath $DownloadedScip.FullName -Destination $ScipExe -Force
     }
 
     Write-Host
-    Write-Host "=== OUTILS MINOS M0 ===" -ForegroundColor Cyan
-    Write-Host "Coursier attendu : $CoursierVersion"
+    Write-Host "=== MINOS M0 TOOLS ===" -ForegroundColor Cyan
+    Write-Host "Expected Coursier: $CoursierVersion"
     Test-Executable -Path $CoursierExe -Arguments @("--help") -Name "Coursier"
     Test-Executable -Path $ScipExe -Arguments @("--version") -Name "SCIP CLI $ScipVersion"
 
     Write-Host
-    Write-Host "Installation locale terminée." -ForegroundColor Green
+    Write-Host "Local installation completed." -ForegroundColor Green
     Write-Host "Coursier : $CoursierExe"
     Write-Host "SCIP     : $ScipExe"
     Write-Host
-    Write-Host "Aucune modification du PATH utilisateur ni du JDK n'a été effectuée."
+    Write-Host "No user PATH or JDK configuration was modified."
 }
 finally {
     Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
