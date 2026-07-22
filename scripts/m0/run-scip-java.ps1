@@ -116,8 +116,9 @@ try {
     "=== java -version ===" | Add-Content -Encoding UTF8 $MetadataFile
     (& java -version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
 
-    "=== coursier version ===" | Add-Content -Encoding UTF8 $MetadataFile
-    (& $ResolvedCoursierCommand version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
+    "=== coursier --help ===" | Add-Content -Encoding UTF8 $MetadataFile
+    (& $ResolvedCoursierCommand --help 2>&1 | Select-Object -First 20 | Out-String) |
+        Add-Content -Encoding UTF8 $MetadataFile
 
     "=== scip --version ===" | Add-Content -Encoding UTF8 $MetadataFile
     (& $ResolvedScipCommand --version 2>&1 | Out-String) | Add-Content -Encoding UTF8 $MetadataFile
