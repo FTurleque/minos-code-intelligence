@@ -27,12 +27,12 @@ public record ProjectDiscovery(
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }
-        languages = immutableEnumSet(languages, Language.class);
-        buildSystems = immutableEnumSet(buildSystems, BuildSystem.class);
+        languages = immutableEnumSet(languages);
+        buildSystems = immutableEnumSet(buildSystems);
         modules = List.copyOf(Objects.requireNonNull(modules, "modules"));
     }
 
-    private static <E extends Enum<E>> Set<E> immutableEnumSet(Set<E> values, Class<E> enumType) {
+    private static <E extends Enum<E>> Set<E> immutableEnumSet(Set<E> values) {
         Objects.requireNonNull(values, "values");
         if (values.isEmpty()) {
             return Set.of();
@@ -75,7 +75,7 @@ public record ProjectDiscovery(
             if (name == null || name.isBlank()) {
                 throw new IllegalArgumentException("name must not be blank");
             }
-            buildSystems = immutableEnumSet(buildSystems, BuildSystem.class);
+            buildSystems = immutableEnumSet(buildSystems);
             sourceRoots = List.copyOf(Objects.requireNonNull(sourceRoots, "sourceRoots"));
         }
     }
