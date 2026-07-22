@@ -76,7 +76,9 @@ Le projet est actuellement en phase :
 
 > **C0 — Cadrage fonctionnel et architectural**
 
-Aucune implémentation fonctionnelle importante ne doit commencer avant validation du besoin, du périmètre du MVP, des décisions d'architecture et des critères de validation.
+Le **cahier des charges MINOS est validé**. C0 reste néanmoins ouvert jusqu'à validation des décisions d'architecture structurantes, du périmètre final du MVP, de la stack initiale, des critères mesurables et du plan d'expérimentations M0.
+
+Aucune implémentation fonctionnelle importante ne doit commencer avant la clôture de C0.
 
 Aucun choix définitif de version Java, de système de build ou de framework serveur n'est engagé à ce stade.
 
@@ -86,9 +88,9 @@ La règle actuelle est :
 
 ## Documents de référence
 
-La source de vérité du cadrage est :
+La source de vérité fonctionnelle est :
 
-- [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md)
+- [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — **validé** ;
 
 Documents complémentaires :
 
