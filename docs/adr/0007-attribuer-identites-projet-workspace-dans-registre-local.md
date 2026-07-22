@@ -1,14 +1,15 @@
 # ADR-0007 — Attribuer les identités projet/workspace dans un registre local
 
-- Statut : **Proposé**
+- Statut : **Accepté**
 - Date : **22 juillet 2026**
+- Validation : **M1.2 fusionné le 22 juillet 2026**
 - Jalon : M1
 
 ## Contexte
 
 Le modèle MINOS validé en M0 impose qu'un chemin local ne constitue pas à lui seul l'identité métier d'un projet. M1 doit pourtant retrouver un projet entre deux exécutions, regrouper plusieurs projets dans un workspace et rester local-first sans introduire prématurément une base de données ou un service.
 
-## Décision proposée
+## Décision
 
 1. le registre attribue des UUID aux projets et workspaces lors de leur première création ;
 2. ces UUID sont persistés et relus, ils ne sont jamais dérivés du chemin, du nom ou du fournisseur d'indexation ;
@@ -26,11 +27,13 @@ Le modèle MINOS validé en M0 impose qu'un chemin local ne constitue pas à lui
 - aucune base SQL/embedded n'est nécessaire pour M1 ;
 - les opérations concurrentes multi-processus ne sont pas encore garanties, le registre M1 synchronise uniquement les opérations dans une instance JVM.
 
-## Validation attendue
+## Validation obtenue
 
-L'ADR pourra passer à **Accepté** lorsque les tests M1.2 auront confirmé :
+M1.2 a confirmé par tests puis build local vert :
 
 - stabilité de l'UUID après recréation du registre ;
 - idempotence de l'enregistrement d'une même racine ;
 - persistance de l'affectation workspace ;
 - absence de fuite de types fournisseur dans le package `registry`.
+
+La PR M1.2 a été fusionnée dans `main` au commit `b12c4bdc5a6061c6d6b0e4f7ef0ad86db42d9b31`.
