@@ -1,0 +1,36 @@
+name: M0 Java CI
+
+on:
+  push:
+    branches:
+      - m0/bootstrap-scip-baseline
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Java 25 / Maven verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Installer Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Afficher la toolchain
+        run: |
+          java -version
+          mvn -version
+
+      - name: Vérifier le projet
+        run: mvn --batch-mode --no-transfer-progress verify
