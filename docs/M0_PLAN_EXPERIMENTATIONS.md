@@ -497,6 +497,70 @@ Même dataset, mêmes requêtes, mêmes résultats attendus.
 
 Le résultat fonctionnel doit être comparé en utilisant des DTO MINOS identiques.
 
+## E1 — Baseline reproductible du backend mémoire
+
+E1 mesure d'abord `InMemoryCodeKnowledgeStore` sans Glean. Cette étape fixe la
+référence légère à laquelle tout backend candidat devra être comparé.
+
+Corpus réel :
+
+```text
+java-simple
+java-24-smoke
+ariane-chatbot
+java-multi-module
+typescript-simple
+typescript-modules
+typescript-inheritance
+typescript-unresolved
+```
+
+Le corpus et les requêtes sont figés dans
+`benchmarks/m0/e1-in-memory.json`. Chaque dataset est exécuté dans un JVM neuf
+afin d'isoler la lecture, l'ingestion et le store. Pour chaque requête :
+
+```text
+warmupIterations       100
+measurementIterations  500
+operations             find_symbol, find_usages
+serialization          représentation canonique incluse dans la mesure
+```
+
+Mesures E1 :
+
+```text
+indexReadDuration
+ingestionDuration
+backendReadyDuration
+processWallClockDuration
+find_symbol p50 / p95 / max
+find_usages p50 / p95 / max
+peakHeapIndexing
+retainedHeapAfterIngestion
+peakHeapQuery
+indexDiskSize
+workingStoreDiskSize
+resultDigestStable
+```
+
+La latence de requête est mesurée après échauffement du JVM, sur index déjà
+ingéré. Le temps `backendReadyDuration` représente la reconstruction complète
+du backend mémoire (`indexReadDuration + ingestionDuration`) mais exclut le
+démarrage du processus Java. Le temps processus est mesuré séparément par le
+runner PowerShell.
+
+La mémoire E1 est la heap Java observée dans le processus. Elle ne constitue
+pas encore une mesure RSS complète du système ; cette limite doit être
+conservée dans le rapport et appliquée symétriquement aux futurs backends.
+
+Le store mémoire n'écrit aucun fichier de travail : son coût disque propre est
+donc `0`, distinct de la taille de l'`index.scip` source et des résultats du
+benchmark.
+
+E1 ne modifie ni `CodeKnowledgeStore`, ni les DTO, ni les services de requêtes.
+Le harness reste expérimental dans les sources de test et ne devient pas une
+CLI produit.
+
 ---
 
 # 10. Fixtures et vérité terrain
