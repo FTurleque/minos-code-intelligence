@@ -6,6 +6,7 @@ import io.github.fturleque.minos.domain.OriginType;
 import io.github.fturleque.minos.domain.PositionEncoding;
 import io.github.fturleque.minos.domain.ResolutionStatus;
 import io.github.fturleque.minos.domain.Symbol;
+import io.github.fturleque.minos.domain.SymbolIdentityQuality;
 import io.github.fturleque.minos.domain.SymbolKind;
 import io.github.fturleque.minos.domain.SymbolLocation;
 import io.github.fturleque.minos.domain.SymbolOccurrence;
@@ -37,6 +38,7 @@ class SymbolQueryServiceTest {
         assertEquals(1, result.size());
         assertEquals(SYMBOL_ID, result.getFirst().id());
         assertEquals(QUALIFIED_NAME, result.getFirst().qualifiedName());
+        assertEquals(SymbolIdentityQuality.CANONICAL, result.getFirst().identityQuality());
     }
 
     @Test
@@ -67,6 +69,7 @@ class SymbolQueryServiceTest {
         return new Symbol(
                 SYMBOL_ID,
                 "project-1|java|CLASS|" + QUALIFIED_NAME,
+                SymbolIdentityQuality.CANONICAL,
                 PROJECT_ID,
                 "module-main",
                 "file-service",
