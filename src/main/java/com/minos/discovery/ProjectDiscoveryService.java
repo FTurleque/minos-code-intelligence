@@ -26,23 +26,14 @@ import java.util.Set;
  */
 public final class ProjectDiscoveryService {
 
-    private static final Set<String> IGNORED_DIRECTORY_NAMES = Set.of(
-            ".git",
-            ".idea",
-            ".minos-m0",
-            "node_modules",
-            "target",
-            "dist",
-            "out"
-    );
-
     public ProjectDiscovery discover(Path projectRoot) throws IOException {
         Path root = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
         }
 
-        Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root);
+        ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
+        Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy);
         if (moduleRoots.isEmpty()) {
             moduleRoots.put(root, EnumSet.noneOf(BuildSystem.class));
         }
@@ -54,7 +45,7 @@ public final class ProjectDiscoveryService {
         for (Map.Entry<Path, EnumSet<BuildSystem>> entry : moduleRoots.entrySet()) {
             Path moduleRoot = entry.getKey();
             EnumSet<BuildSystem> buildSystems = entry.getValue();
-            List<SourceRoot> sourceRoots = discoverSourceRoots(root, moduleRoot);
+            List<SourceRoot> sourceRoots = discoverSourceRoots(root, moduleRoot, ignorePolicy);
 
             sourceRoots.forEach(sourceRoot -> projectLanguages.add(sourceRoot.language()));
             projectBuildSystems.addAll(buildSystems);
@@ -78,18 +69,23 @@ public final class ProjectDiscoveryService {
         );
     }
 
-    private static Map<Path, EnumSet<BuildSystem>> discoverModuleRoots(Path root) throws IOException {
+    private static Map<Path, EnumSet<BuildSystem>> discoverModuleRoots(
+            Path root,
+            ProjectIgnorePolicy ignorePolicy
+    ) throws IOException {
         Map<Path, EnumSet<BuildSystem>> modules = new LinkedHashMap<>();
 
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                if (!directory.equals(root) && isIgnoredDirectory(directory)) {
+                Path relative = root.relativize(directory);
+                if (!directory.equals(root) && ignorePolicy.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
 
-                if (hasModuleMarker(directory)) {
-                    modules.put(directory, detectBuildSystems(directory));
+                if (!ignorePolicy.isIgnored(relative, true)
+                        && hasModuleMarker(root, directory, ignorePolicy)) {
+                    modules.put(directory, detectBuildSystems(root, directory, ignorePolicy));
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -98,23 +94,44 @@ public final class ProjectDiscoveryService {
         return modules;
     }
 
-    private static boolean hasModuleMarker(Path directory) {
-        return Files.isRegularFile(directory.resolve("pom.xml"))
-                || Files.isRegularFile(directory.resolve("package.json"));
+    private static boolean hasModuleMarker(
+            Path projectRoot,
+            Path directory,
+            ProjectIgnorePolicy ignorePolicy
+    ) {
+        return isVisibleFile(projectRoot, directory.resolve("pom.xml"), ignorePolicy)
+                || isVisibleFile(projectRoot, directory.resolve("package.json"), ignorePolicy);
     }
 
-    private static EnumSet<BuildSystem> detectBuildSystems(Path directory) {
+    private static EnumSet<BuildSystem> detectBuildSystems(
+            Path projectRoot,
+            Path directory,
+            ProjectIgnorePolicy ignorePolicy
+    ) {
         EnumSet<BuildSystem> systems = EnumSet.noneOf(BuildSystem.class);
-        if (Files.isRegularFile(directory.resolve("pom.xml"))) {
+        if (isVisibleFile(projectRoot, directory.resolve("pom.xml"), ignorePolicy)) {
             systems.add(BuildSystem.MAVEN);
         }
-        if (Files.isRegularFile(directory.resolve("package-lock.json"))) {
+        if (isVisibleFile(projectRoot, directory.resolve("package-lock.json"), ignorePolicy)) {
             systems.add(BuildSystem.NPM);
         }
         return systems;
     }
 
-    private static List<SourceRoot> discoverSourceRoots(Path projectRoot, Path moduleRoot) throws IOException {
+    private static boolean isVisibleFile(
+            Path projectRoot,
+            Path file,
+            ProjectIgnorePolicy ignorePolicy
+    ) {
+        return Files.isRegularFile(file)
+                && !ignorePolicy.isIgnored(projectRoot.relativize(file), false);
+    }
+
+    private static List<SourceRoot> discoverSourceRoots(
+            Path projectRoot,
+            Path moduleRoot,
+            ProjectIgnorePolicy ignorePolicy
+    ) throws IOException {
         List<SourceRoot> roots = new ArrayList<>();
 
         addLanguageRootIfPresent(
@@ -123,7 +140,8 @@ public final class ProjectDiscoveryService {
                 moduleRoot.resolve("src/main/java"),
                 SourceRootKind.SOURCE,
                 Language.JAVA,
-                Set.of(".java")
+                Set.of(".java"),
+                ignorePolicy
         );
         addLanguageRootIfPresent(
                 roots,
@@ -131,7 +149,8 @@ public final class ProjectDiscoveryService {
                 moduleRoot.resolve("src/test/java"),
                 SourceRootKind.TEST,
                 Language.JAVA,
-                Set.of(".java")
+                Set.of(".java"),
+                ignorePolicy
         );
         addLanguageRootIfPresent(
                 roots,
@@ -139,7 +158,8 @@ public final class ProjectDiscoveryService {
                 moduleRoot.resolve("src"),
                 SourceRootKind.SOURCE,
                 Language.TYPESCRIPT,
-                Set.of(".ts", ".tsx")
+                Set.of(".ts", ".tsx"),
+                ignorePolicy
         );
         addLanguageRootIfPresent(
                 roots,
@@ -147,7 +167,8 @@ public final class ProjectDiscoveryService {
                 moduleRoot.resolve("test"),
                 SourceRootKind.TEST,
                 Language.TYPESCRIPT,
-                Set.of(".ts", ".tsx")
+                Set.of(".ts", ".tsx"),
+                ignorePolicy
         );
         addLanguageRootIfPresent(
                 roots,
@@ -155,7 +176,8 @@ public final class ProjectDiscoveryService {
                 moduleRoot.resolve("tests"),
                 SourceRootKind.TEST,
                 Language.TYPESCRIPT,
-                Set.of(".ts", ".tsx")
+                Set.of(".ts", ".tsx"),
+                ignorePolicy
         );
 
         roots.sort(Comparator
@@ -171,36 +193,48 @@ public final class ProjectDiscoveryService {
             Path candidate,
             SourceRootKind kind,
             Language language,
-            Set<String> extensions
+            Set<String> extensions,
+            ProjectIgnorePolicy ignorePolicy
     ) throws IOException {
-        if (Files.isDirectory(candidate) && containsFileWithExtension(candidate, extensions)) {
-            roots.add(new SourceRoot(projectRoot.relativize(candidate), kind, language));
+        Path relativeCandidate = projectRoot.relativize(candidate);
+        if (Files.isDirectory(candidate)
+                && !ignorePolicy.isIgnored(relativeCandidate, true)
+                && containsVisibleFileWithExtension(projectRoot, candidate, extensions, ignorePolicy)) {
+            roots.add(new SourceRoot(relativeCandidate, kind, language));
         }
     }
 
-    private static boolean containsFileWithExtension(Path root, Set<String> extensions) throws IOException {
-        try (var paths = Files.walk(root)) {
-            return paths
-                    .filter(Files::isRegularFile)
-                    .filter(path -> !hasIgnoredSegment(root, path))
-                    .map(path -> path.getFileName().toString().toLowerCase(Locale.ROOT))
-                    .anyMatch(name -> extensions.stream().anyMatch(name::endsWith));
-        }
-    }
-
-    private static boolean hasIgnoredSegment(Path root, Path path) {
-        Path relative = root.relativize(path);
-        for (Path segment : relative) {
-            if (IGNORED_DIRECTORY_NAMES.contains(segment.toString())) {
-                return true;
+    private static boolean containsVisibleFileWithExtension(
+            Path projectRoot,
+            Path root,
+            Set<String> extensions,
+            ProjectIgnorePolicy ignorePolicy
+    ) throws IOException {
+        boolean[] found = {false};
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                if (!directory.equals(root)
+                        && ignorePolicy.isHardIgnored(projectRoot.relativize(directory))) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
             }
-        }
-        return false;
-    }
 
-    private static boolean isIgnoredDirectory(Path directory) {
-        Path name = directory.getFileName();
-        return name != null && IGNORED_DIRECTORY_NAMES.contains(name.toString());
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                Path relative = projectRoot.relativize(file);
+                if (!ignorePolicy.isIgnored(relative, false)) {
+                    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+                    if (extensions.stream().anyMatch(name::endsWith)) {
+                        found[0] = true;
+                        return FileVisitResult.TERMINATE;
+                    }
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return found[0];
     }
 
     private static String projectName(Path root) {
