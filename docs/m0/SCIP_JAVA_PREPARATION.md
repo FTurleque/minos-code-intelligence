@@ -73,7 +73,7 @@ Le mode fat jar reste une alternative intéressante après téléchargement init
 
 MINOS ne doit pas dépendre des anciens bindings propres à une implémentation d'indexeur.
 
-Le protocole SCIP publie désormais des bindings Java officiels :
+Le protocole SCIP publie des bindings Java officiels :
 
 ```text
 org.scip-code:scip-java-bindings:0.9.0
@@ -85,7 +85,7 @@ Ils sont générés à partir du schéma SCIP et utilisent le package Java :
 org.scip_code.scip
 ```
 
-M0 utilisera ces bindings uniquement dans :
+M0 utilise ces bindings uniquement dans :
 
 ```text
 io.github.fturleque.minos.adapter.scip
@@ -100,7 +100,7 @@ query
 CLI/MCP/API publiques
 ```
 
-Cette frontière sera vérifiée par test d'architecture ou test de dépendances avant fusion de la baseline.
+Cette frontière est vérifiée par test d'architecture.
 
 ## Validation de l'index SCIP
 
@@ -114,9 +114,22 @@ scip snapshot --from index.scip --to scip-snapshot
 
 `scip test` sera utilisé lorsque des fichiers de test SCIP annotés seront disponibles.
 
-## Versions Java supportées
+## JDK de référence MINOS
 
-La documentation courante de `scip-java` annonce :
+ADR-0005 aligne MINOS sur :
+
+```text
+Java 24
+```
+
+La règle M0 est explicite :
+
+> **MINOS n'installe pas un JDK supplémentaire uniquement pour satisfaire un fournisseur d'indexation.**
+
+La documentation actuelle de `scip-java` indique deux informations distinctes :
+
+1. son lanceur Java fonctionne avec un **JDK 17 ou supérieur** ;
+2. sa matrice de versions Java explicitement ciblées liste actuellement :
 
 ```text
 Java 17  ✅
@@ -124,20 +137,25 @@ Java 21  ✅
 Java 25  ✅
 ```
 
-Java 17, 21 et 25 nécessitent des `--add-exports` sur des APIs internes `javac`, gérés par l'intégration de l'indexeur.
+Java 24 n'est donc pas explicitement ciblé dans cette matrice, même si le lanceur accepte un JDK 17+.
 
-La fixture :
+Cette absence doit être **mesurée**, pas contournée.
+
+La fixture de compatibilité devient :
 
 ```text
-fixtures/java/java-25-smoke
+fixtures/java/java-24-smoke
 ```
 
-reste utile, mais son objectif n'est plus de tester une version non documentée. Elle doit vérifier en pratique que :
+Elle doit vérifier en pratique que :
 
-- notre mode d'installation/lancement de `scip-java` fonctionne avec JDK 25 ;
-- un projet Maven `release=25` produit effectivement `index.scip` ;
+- `scip-java` se lance avec le JDK 24 du poste de développement ;
+- un projet Maven `release=24` produit effectivement `index.scip` ;
 - les définitions et références minimales sont correctes ;
-- aucune régression liée aux exports internes `javac` n'apparaît dans notre environnement M0.
+- aucune incompatibilité avec les APIs internes `javac` n'apparaît ;
+- le résultat peut être ingéré par la baseline MINOS.
+
+Si cette expérience échoue, le verdict portera sur **la compatibilité de `scip-java` avec Java 24**, pas sur la version Java de MINOS.
 
 ## Support Maven à qualifier
 
@@ -189,13 +207,13 @@ Caractéristiques observées :
 - dépendances externes ;
 - tests Quarkus.
 
-### Fixture de compatibilité Java 25
+### Fixture de compatibilité Java 24
 
 ```text
-fixtures/java/java-25-smoke
+fixtures/java/java-24-smoke
 ```
 
-But : prouver la compatibilité effective dans l'environnement M0 malgré le support officiellement annoncé.
+But : qualifier explicitement `scip-java` dans l'environnement Java 24 réellement utilisé par MINOS.
 
 ## Première stratégie d'ingestion MINOS
 
