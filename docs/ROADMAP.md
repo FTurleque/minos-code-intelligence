@@ -1,12 +1,18 @@
 # Feuille de route — MINOS
 
-Statut : **Proposition initiale — à valider pendant C0**
+Statut : **C0 clôturé — M0 en cours**
+
+L'état opérationnel, la porte active et le reste à faire sont maintenus dans
+[`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
+portes de décision.
 
 La feuille de route est volontairement guidée par les preuves. Un jalon peut être modifié si une expérimentation invalide une hypothèse d'architecture.
 
 ---
 
 ## C0 — Cadrage fonctionnel et architectural
+
+État : **TERMINÉ**
 
 ### Objectif
 
@@ -39,6 +45,13 @@ Aucune implémentation fonctionnelle significative ne doit commencer avant cette
 ---
 
 ## M0 — Faisabilité technique
+
+État : **EN COURS — clôture et stratégie CI**
+
+Acquis : qualification Java et TypeScript, baseline SCIP vers MINOS sur huit
+index réels, benchmark reproductible du backend mémoire, Glean C1 et comparaison
+E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
+Restent le verdict consolidé, la stratégie CI et la décision de passage à M1.
 
 ### Objectif
 
@@ -73,6 +86,8 @@ REMPLACER
 ---
 
 ## M1 — Découverte des projets et orchestration des indexeurs
+
+État : **NON DÉMARRÉ — conditionné par la décision de sortie M0**
 
 ### Objectif
 
