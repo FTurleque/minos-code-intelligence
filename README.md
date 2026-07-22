@@ -6,7 +6,7 @@ MINOS est pensé pour fonctionner **localement**, être **agnostique du langage*
 
 MINOS n'est ni un chatbot, ni un LLM, ni un simple moteur de recherche textuelle.
 
-Son rôle est de répondre à des questions comme :
+Son rôle est notamment de répondre à des questions comme :
 
 - Où est défini ce symbole ?
 - Qui l'utilise, l'appelle, l'étend ou l'implémente ?
@@ -17,10 +17,6 @@ Son rôle est de répondre à des questions comme :
 - Quelle est la topologie générale du projet ?
 
 ## Position dans l'écosystème
-
-MINOS s'inscrit dans un écosystème plus large composé notamment de JARVIS, NEXUS, Alfred et Brainiac.
-
-Vue d'écosystème candidate :
 
 ```text
                        JARVIS
@@ -38,7 +34,7 @@ Vue d'écosystème candidate :
                   Agents / profils IA
 ```
 
-Cette vue décrit les responsabilités fonctionnelles de l'écosystème. MINOS doit néanmoins rester autonome et ne dépendre fonctionnellement ni de JARVIS, ni de NEXUS, ni d'Alfred, ni de Brainiac.
+Cette vue décrit les responsabilités fonctionnelles de l'écosystème. MINOS reste autonome et ne dépend fonctionnellement ni de JARVIS, ni de NEXUS, ni d'Alfred, ni de Brainiac.
 
 Le flux de connaissance peut également être représenté ainsi :
 
@@ -59,86 +55,42 @@ Context Intelligence
  AGENT / LLM / IDE
 ```
 
-Les responsabilités sont volontairement séparées :
-
-- **MINOS** comprend et structure le code, les symboles, les relations, les dépendances et les preuves associées.
-- **NEXUS** sélectionne et classe les informations à injecter dans le contexte d'une IA pour une tâche donnée.
-- **JARVIS** est envisagé comme couche d'orchestration de l'écosystème.
-- **Alfred** et **Brainiac** représentent des agents ou profils spécialisés pouvant consommer les capacités disponibles.
-
-MINOS doit fonctionner indépendamment de NEXUS et des autres consommateurs.
-
-Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée de cette répartition.
+Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Le projet est actuellement en phase :
+Le projet est désormais en phase :
 
-> **C0 — Cadrage fonctionnel et architectural**
+> **M0 — Faisabilité technique**
 
-Le **cahier des charges MINOS est validé**. C0 reste ouvert jusqu'à validation du périmètre final du MVP, de la stack initiale, des seuils mesurables et des derniers éléments de préparation de M0.
+La phase **C0 — Cadrage fonctionnel et architectural est clôturée**.
 
-Aucune implémentation fonctionnelle importante ne doit commencer avant la clôture de C0.
+C0 a validé :
 
-Aucun choix définitif de version Java, de système de build ou de framework serveur n'est engagé à ce stade.
-
-La règle actuelle est :
-
-> **Documenter d'abord, décider ensuite, implémenter en dernier.**
-
-### Décisions déjà validées
-
-- cahier des charges fonctionnel ;
-- séparation MINOS / NEXUS / JARVIS / agents ;
-- local-first ;
-- résultats compacts et explicables ;
-- cœur agnostique du langage ;
-- cœur agnostique de l'indexeur ;
+- le cahier des charges ;
+- le MVP strict ;
+- le modèle de domaine minimal pour M0 ;
+- le modèle des fournisseurs et capacités ;
+- la stratégie de tests et de métriques ;
 - **ADR-0001** — cœur agnostique du langage et de l'indexeur ;
-- **ADR-0002** — SCIP comme protocole sémantique privilégié, mais non obligatoire ;
-- **ADR-0003** — `CodeKnowledgeStore` comme frontière MINOS ; Glean reste un backend avancé optionnel ;
-- chemin de fonctionnement MINOS sans Glean obligatoire pour M0.
+- **ADR-0002** — SCIP comme protocole sémantique privilégié, non obligatoire ;
+- **ADR-0003** — `CodeKnowledgeStore` comme frontière MINOS et principe **MINOS-first, Glean-optional** ;
+- **ADR-0004** — **Java 25 LTS + Maven 3.9.x + Maven Wrapper + cœur sans framework serveur**.
 
-### Décisions encore ouvertes
+M0 doit maintenant **tester les hypothèses par des expérimentations mesurables**, sans construire prématurément le produit complet.
 
-- forme finale du modèle de domaine minimal ;
-- backend léger de référence ;
-- niveau d'adoption de Glean après mesures M0 ;
-- périmètre final du MVP ;
-- stack initiale ;
-- seuils définitifs de qualité et de performance.
+## Stack M0
 
-### Écosystèmes M0 retenus
+```text
+Langage        Java 25 LTS
+Build          Apache Maven 3.9.x
+Wrapper        Maven Wrapper
+Framework      Aucun framework serveur dans le cœur
+```
 
-- **Java** comme écosystème principal ;
-- **TypeScript** comme second écosystème de validation ;
-- **Python** comme repli si un blocage de l'indexeur TypeScript empêche une validation représentative.
+Le choix d'un framework pour une future API ou couche MCP reste différé jusqu'au besoin réel.
 
-Le dépôt réel Java principal prévu pour M0 est `FTurleque/ariane-chatbot`.
-
-## Documents de référence
-
-La source de vérité fonctionnelle est :
-
-- [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — **validé** ;
-- [`docs/VALIDATION_CAHIER_DES_CHARGES.md`](docs/VALIDATION_CAHIER_DES_CHARGES.md) — trace de validation.
-
-Documents complémentaires :
-
-- [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — place de MINOS dans l'écosystème JARVIS / NEXUS / Alfred / Brainiac ;
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture interne ;
-- [`docs/architecture/MODELE_DOMAINE.md`](docs/architecture/MODELE_DOMAINE.md) — proposition de modèle de domaine minimal ;
-- [`docs/architecture/INDEXEURS_CAPACITES.md`](docs/architecture/INDEXEURS_CAPACITES.md) — modèle de fournisseurs et de capacités ;
-- [`docs/MVP.md`](docs/MVP.md) — définition proposée du MVP ;
-- [`docs/PLAN.md`](docs/PLAN.md) — plan de travail ;
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
-- [`docs/M0_PLAN_EXPERIMENTATIONS.md`](docs/M0_PLAN_EXPERIMENTATIONS.md) — protocole détaillé des expérimentations M0 ;
-- [`docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md`](docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md) — comparaison SCIP, Glean, Kythe, Joern et baseline légère ;
-- [`docs/adr/`](docs/adr/) — décisions d'architecture ;
-- [`docs/research/`](docs/research/) — études techniques ;
-- [`docs/AUDIT_COHERENCE_C0.md`](docs/AUDIT_COHERENCE_C0.md) — audit d'alignement entre les échanges de cadrage et le dépôt.
-
-## Fondation technique retenue pour M0
+## Fondation technique M0
 
 ```text
 Repository
@@ -162,14 +114,54 @@ CodeKnowledgeStore
     │
     ▼
 MINOS Query Services
-    │
-    ├── CLI
-    ├── MCP
-    └── API
 ```
 
-Le principe est désormais :
+Principe :
 
 > **MINOS-first, Glean-optional.**
 
-SCIP est retenu comme protocole d'interopérabilité sémantique privilégié lorsqu'un fournisseur suffisamment fiable existe. Glean sera évalué pour ses capacités avancées, mais MINOS doit démontrer pendant M0 qu'il peut fonctionner sans lui.
+SCIP est privilégié lorsqu'un fournisseur suffisamment fiable existe. Glean doit démontrer pendant M0 une valeur suffisante pour justifier son coût opérationnel ; MINOS doit pouvoir fonctionner sans lui.
+
+## Écosystèmes de validation M0
+
+- **Java** — premier écosystème ;
+- **TypeScript** — second écosystème ;
+- **Python** — repli expérimental si nécessaire.
+
+Dépôt Java réel principal :
+
+```text
+FTurleque/ariane-chatbot
+```
+
+## Expérimentations M0
+
+```text
+A — Qualifier scip-java
+B — Baseline SCIP → MINOS sans Glean
+C — SCIP → Glean → MINOS
+D — Reproduire le pipeline avec TypeScript
+E — Comparer backend léger et Glean
+```
+
+Les mêmes contrats MINOS et les mêmes jeux de données doivent être utilisés pour comparer les chemins techniques.
+
+## Documents de référence
+
+- [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — cahier des charges validé ;
+- [`docs/MVP.md`](docs/MVP.md) — MVP strict validé ;
+- [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — positionnement dans l'écosystème ;
+- [`docs/architecture/overview.md`](docs/architecture/overview.md) — architecture générale ;
+- [`docs/architecture/MODELE_DOMAINE.md`](docs/architecture/MODELE_DOMAINE.md) — modèle de domaine validé pour M0 ;
+- [`docs/architecture/INDEXEURS_CAPACITES.md`](docs/architecture/INDEXEURS_CAPACITES.md) — fournisseurs et capacités validés pour M0 ;
+- [`docs/METRIQUES_VALIDATION.md`](docs/METRIQUES_VALIDATION.md) — métriques et seuils ;
+- [`docs/M0_PLAN_EXPERIMENTATIONS.md`](docs/M0_PLAN_EXPERIMENTATIONS.md) — protocole M0 ;
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
+- [`docs/adr/`](docs/adr/) — décisions d'architecture ;
+- [`docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md`](docs/research/COMPARATIF_FONDATIONS_CODE_INTELLIGENCE.md) — comparatif des fondations.
+
+## Règle de développement M0
+
+> **Mesurer avant d'industrialiser.**
+
+M0 doit produire des preuves techniques, des profils de qualité et des décisions documentées. Toute infrastructure non nécessaire à une expérimentation doit être différée.
