@@ -20,8 +20,9 @@ import java.util.regex.Pattern;
  *
  * <p>Le sous-ensemble volontairement supporté couvre les besoins usuels de M1 :
  * commentaires, négation {@code !}, ancrage racine {@code /}, répertoires
- * {@code pattern/}, {@code *}, {@code **}, {@code ?} et classes de caractères
- * simples. Les fichiers d'ignore imbriqués restent hors périmètre de M1.2.</p>
+ * {@code pattern/}, {@code *}, {@code **}, {@code ?}, classes de caractères
+ * simples et échappement d'un caractère par antislash. Les fichiers d'ignore
+ * imbriqués restent hors périmètre de M1.2.</p>
  */
 public final class ProjectIgnorePolicy {
 
@@ -115,7 +116,7 @@ public final class ProjectIgnorePolicy {
         }
 
         boolean negated = false;
-        if (line.startsWith("!")) {
+        if (!escapedLeadingMarker && line.startsWith("!")) {
             negated = true;
             line = line.substring(1);
         }
@@ -136,9 +137,8 @@ public final class ProjectIgnorePolicy {
             return null;
         }
 
-        String normalizedPattern = line.replace('\\', '/');
-        boolean containsSlash = normalizedPattern.indexOf('/') >= 0;
-        String regex = globToRegex(normalizedPattern);
+        boolean containsSlash = line.indexOf('/') >= 0;
+        String regex = globToRegex(line);
 
         StringBuilder baseExpression = new StringBuilder("^");
         if (!anchored && !containsSlash) {
@@ -159,6 +159,11 @@ public final class ProjectIgnorePolicy {
         int index = 0;
         while (index < glob.length()) {
             char current = glob.charAt(index);
+            if (current == '\\' && index + 1 < glob.length()) {
+                appendRegexLiteral(regex, glob.charAt(index + 1));
+                index += 2;
+                continue;
+            }
             if (current == '*') {
                 if (index + 1 < glob.length() && glob.charAt(index + 1) == '*') {
                     index += 2;
@@ -198,13 +203,17 @@ public final class ProjectIgnorePolicy {
                 }
             }
 
-            if (".(){}+$^|\\".indexOf(current) >= 0) {
-                regex.append('\\');
-            }
-            regex.append(current);
+            appendRegexLiteral(regex, current);
             index++;
         }
         return regex.toString();
+    }
+
+    private static void appendRegexLiteral(StringBuilder regex, char value) {
+        if (".[](){}*+?$^|\\".indexOf(value) >= 0) {
+            regex.append('\\');
+        }
+        regex.append(value);
     }
 
     private static Path normalizeRelative(Path path) {
