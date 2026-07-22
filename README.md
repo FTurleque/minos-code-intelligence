@@ -86,16 +86,40 @@ La règle actuelle est :
 
 > **Documenter d'abord, décider ensuite, implémenter en dernier.**
 
+### Décisions déjà validées
+
+- cahier des charges fonctionnel ;
+- séparation MINOS / NEXUS / JARVIS / agents ;
+- local-first ;
+- résultats compacts et explicables ;
+- cœur agnostique du langage ;
+- cœur agnostique de l'indexeur ;
+- ADR-0001 acceptée.
+
+### Décisions encore ouvertes
+
+- rôle définitif de SCIP ;
+- rôle définitif de Glean ;
+- forme exacte de `CodeKnowledgeStore` ;
+- modèle de domaine détaillé ;
+- périmètre final du MVP ;
+- langages et dépôts de validation ;
+- stack initiale ;
+- seuils de qualité et de performance.
+
 ## Documents de référence
 
 La source de vérité fonctionnelle est :
 
 - [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — **validé** ;
+- [`docs/VALIDATION_CAHIER_DES_CHARGES.md`](docs/VALIDATION_CAHIER_DES_CHARGES.md) — trace de validation.
 
 Documents complémentaires :
 
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — place de MINOS dans l'écosystème JARVIS / NEXUS / Alfred / Brainiac ;
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — proposition d'architecture interne ;
+- [`docs/architecture/MODELE_DOMAINE.md`](docs/architecture/MODELE_DOMAINE.md) — proposition de modèle de domaine minimal ;
+- [`docs/architecture/INDEXEURS_CAPACITES.md`](docs/architecture/INDEXEURS_CAPACITES.md) — proposition de modèle de fournisseurs et de capacités ;
 - [`docs/MVP.md`](docs/MVP.md) — définition proposée du MVP ;
 - [`docs/PLAN.md`](docs/PLAN.md) — plan de travail ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — feuille de route ;
@@ -105,7 +129,7 @@ Documents complémentaires :
 
 ## Orientation technique à étudier
 
-L'orientation actuelle, encore à valider, est de :
+L'orientation actuelle, encore à valider techniquement, est de :
 
 - réutiliser fortement les indexeurs sémantiques existants ;
 - privilégier SCIP comme protocole d'interopérabilité lorsque pertinent ;
@@ -113,4 +137,4 @@ L'orientation actuelle, encore à valider, est de :
 - conserver un domaine MINOS indépendant de SCIP et de Glean ;
 - exposer à terme les capacités via CLI, MCP et API.
 
-Ces orientations sont des hypothèses de travail. Elles ne deviendront des décisions qu'après validation du cadrage C0 et, lorsque nécessaire, expérimentation pendant M0.
+SCIP et Glean restent des hypothèses de fondation tant que les ADR correspondantes et les expérimentations M0 ne les ont pas validées.
