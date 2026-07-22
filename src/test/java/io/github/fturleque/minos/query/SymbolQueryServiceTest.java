@@ -12,6 +12,7 @@ import io.github.fturleque.minos.store.InMemoryCodeKnowledgeStore;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,13 +37,16 @@ class SymbolQueryServiceTest {
     }
 
     @Test
-    void findUsagesExcludesDefinitionAndReturnsDeterministicOrder() {
+    void findUsagesExcludesDefinitionsAndReturnsDeterministicOrder() {
         InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
         store.putSymbols(List.of(documentIngestionService()));
         store.putOccurrences(List.of(
-                occurrence("occ-definition", "file-service", 12, OccurrenceRole.DEFINITION),
-                occurrence("occ-use-b", "file-resource", 42, OccurrenceRole.REFERENCE),
-                occurrence("occ-use-a", "file-resource", 18, OccurrenceRole.CALL)
+                occurrence("occ-definition", "file-service", 12,
+                        Set.of(OccurrenceRole.DEFINITION, OccurrenceRole.TEST)),
+                occurrence("occ-use-b", "file-resource", 42,
+                        Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.READ)),
+                occurrence("occ-use-a", "file-resource", 18,
+                        Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.CALL))
         ));
 
         SymbolQueryService service = new SymbolQueryService(store);
@@ -52,7 +56,8 @@ class SymbolQueryServiceTest {
         assertEquals(2, usages.size());
         assertEquals("occ-use-a", usages.get(0).id());
         assertEquals("occ-use-b", usages.get(1).id());
-        assertTrue(usages.stream().noneMatch(usage -> usage.role() == OccurrenceRole.DEFINITION));
+        assertTrue(usages.stream().noneMatch(SymbolOccurrence::isDefinitionOccurrence));
+        assertTrue(usages.get(1).roles().containsAll(Set.of(OccurrenceRole.REFERENCE, OccurrenceRole.READ)));
     }
 
     private static Symbol documentIngestionService() {
@@ -80,13 +85,13 @@ class SymbolQueryServiceTest {
             String id,
             String fileId,
             int line,
-            OccurrenceRole role) {
+            Set<OccurrenceRole> roles) {
         return new SymbolOccurrence(
                 id,
                 PROJECT_ID,
                 SYMBOL_ID,
                 new SymbolLocation(fileId, line, 0, line, 32),
-                role,
+                roles,
                 ResolutionStatus.RESOLVED,
                 origin()
         );
