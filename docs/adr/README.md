@@ -19,6 +19,7 @@ MINOS uses Architecture Decision Records (ADRs) to document consequential techni
 | [0004](0004-stack-java-maven-core-sans-framework.md) | Implement the MINOS core with Maven and no server framework | Partially superseded by ADR-0005 |
 | [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 from the development environment | Accepted |
 | [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promote provider indexes atomically | Accepted |
+| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans un registre local | Proposed |
 
 Future ADR candidates:
 

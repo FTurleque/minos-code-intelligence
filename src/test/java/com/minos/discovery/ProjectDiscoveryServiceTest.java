@@ -78,6 +78,41 @@ class ProjectDiscoveryServiceTest {
                 .anyMatch(sourceRoot -> portable(sourceRoot.relativePath()).contains("node_modules")));
     }
 
+    @Test
+    void appliesGitignoreAndMinosignoreToModulesAndSourceRoots(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("pom.xml"), "<project/>");
+        Path mainJava = root.resolve("src/main/java/example");
+        Path testJava = root.resolve("src/test/java/example");
+        Files.createDirectories(mainJava);
+        Files.createDirectories(testJava);
+        Files.writeString(mainJava.resolve("App.java"), "package example; class App {}");
+        Files.writeString(testJava.resolve("AppTest.java"), "package example; class AppTest {}");
+
+        Path ignoredModule = root.resolve("ignored-module");
+        Files.createDirectories(ignoredModule.resolve("src/main/java/example"));
+        Files.writeString(ignoredModule.resolve("pom.xml"), "<project/>");
+        Files.writeString(
+                ignoredModule.resolve("src/main/java/example/Ignored.java"),
+                "package example; class Ignored {}"
+        );
+
+        Files.writeString(root.resolve(".gitignore"), "ignored-module/\n");
+        Files.writeString(root.resolve(".minosignore"), "src/test/java/\n");
+
+        ProjectDiscovery discovery = service.discover(root);
+
+        assertEquals(Set.of(Language.JAVA), discovery.languages());
+        assertEquals(Set.of(BuildSystem.MAVEN), discovery.buildSystems());
+        assertEquals(List.of(""), modulePaths(discovery));
+
+        ProjectDiscovery.DiscoveredModule rootModule = module(discovery, "");
+        assertTrue(rootModule.sourceRoots().stream().anyMatch(sourceRoot ->
+                portable(sourceRoot.relativePath()).equals("src/main/java")
+                        && sourceRoot.kind() == SourceRootKind.SOURCE));
+        assertFalse(rootModule.sourceRoots().stream().anyMatch(sourceRoot ->
+                portable(sourceRoot.relativePath()).equals("src/test/java")));
+    }
+
     private static List<String> modulePaths(ProjectDiscovery discovery) {
         return discovery.modules().stream()
                 .map(module -> portable(module.relativePath()))

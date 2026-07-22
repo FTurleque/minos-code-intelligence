@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 et M0 technique clôturés — validation locale manuelle avant livraison**
+Statut : **C0 et M0 livrés — M1 en cours**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -46,17 +46,16 @@ Aucune implémentation fonctionnelle significative ne doit commencer avant cette
 
 ## M0 — Faisabilité technique
 
-État : **TERMINÉ TECHNIQUEMENT — verdict ADOPTER_AVEC_CONTRAINTES**
+État : **TERMINÉ ET LIVRÉ — verdict ADOPTER_AVEC_CONTRAINTES**
 
 Acquis : qualification Java et TypeScript, baseline SCIP vers MINOS sur huit
 index réels, benchmark reproductible du backend mémoire, Glean C1 et comparaison
 E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
 La décision est consolidée dans `m0/DECISION_M0.md`.
 
-La PR #4 demeure Draft. La validation est locale et manuelle ; GitHub Actions
-est en pause et ne se déclenche plus automatiquement. L'anomalie historique
-reste suivie dans #5 sans bloquer les validations locales. La revue et la
-fusion exigent une demande explicite.
+La PR #4 a été validée localement puis fusionnée dans `main` au commit
+`6d8376bcfc16dd5ba1c6b691535aa3d8e57cc49a`. GitHub Actions reste en pause ;
+l'anomalie historique est suivie dans #5 sans bloquer la validation locale.
 
 ### Objectif
 
@@ -92,7 +91,7 @@ REMPLACER
 
 ## M1 — Découverte des projets et orchestration des indexeurs
 
-État : **NON DÉMARRÉ — autorisé après intégration de la PR #4**
+État : **EN COURS — M1.1 fusionné, M1.2 en validation**
 
 ### Objectif
 
@@ -111,6 +110,15 @@ Détecter un projet et sélectionner les fournisseurs d'indexation adaptés.
 - négociation des capacités ;
 - cycle de vie de l'indexation ;
 - état de l'index.
+
+Progression :
+
+```text
+M1.1 découverte locale factuelle              FUSIONNÉ
+M1.2 ignore policy + registre local            EN VALIDATION
+M1.3 IndexerRegistry + négociation             À FAIRE
+M1.4 cycle de vie + état d'index              À FAIRE
+```
 
 ---
 
