@@ -140,17 +140,18 @@ public final class ProjectIgnorePolicy {
         boolean containsSlash = normalizedPattern.indexOf('/') >= 0;
         String regex = globToRegex(normalizedPattern);
 
-        StringBuilder expression = new StringBuilder("^");
+        StringBuilder baseExpression = new StringBuilder("^");
         if (!anchored && !containsSlash) {
-            expression.append("(?:.*/)?");
+            baseExpression.append("(?:.*/)?");
         }
-        expression.append(regex);
-        if (directoryOnly) {
-            expression.append("(?:/.*)?");
-        }
-        expression.append('$');
+        baseExpression.append(regex);
 
-        return new IgnoreRule(Pattern.compile(expression.toString()), negated, directoryOnly);
+        Pattern directPattern = Pattern.compile(baseExpression + "$");
+        Pattern effectivePattern = directoryOnly
+                ? Pattern.compile(baseExpression + "(?:/.*)?$")
+                : directPattern;
+
+        return new IgnoreRule(effectivePattern, directPattern, negated, directoryOnly);
     }
 
     private static String globToRegex(String glob) {
@@ -222,12 +223,17 @@ public final class ProjectIgnorePolicy {
         return path.toString().replace('\\', '/');
     }
 
-    private record IgnoreRule(Pattern pattern, boolean negated, boolean directoryOnly) {
+    private record IgnoreRule(
+            Pattern effectivePattern,
+            Pattern directPattern,
+            boolean negated,
+            boolean directoryOnly
+    ) {
         private boolean matches(String portablePath, boolean directory) {
-            if (directoryOnly && portablePath.isEmpty()) {
+            if (directoryOnly && !directory && directPattern.matcher(portablePath).matches()) {
                 return false;
             }
-            return pattern.matcher(portablePath).matches();
+            return effectivePattern.matcher(portablePath).matches();
         }
     }
 }
