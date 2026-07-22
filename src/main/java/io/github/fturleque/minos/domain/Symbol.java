@@ -9,6 +9,7 @@ import java.util.Set;
 public record Symbol(
         String id,
         String symbolKey,
+        SymbolIdentityQuality identityQuality,
         String projectId,
         String moduleId,
         String fileId,
@@ -31,6 +32,7 @@ public record Symbol(
         requireText(projectId, "projectId");
         requireText(name, "name");
         requireText(language, "language");
+        Objects.requireNonNull(identityQuality, "identityQuality");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(resolutionStatus, "resolutionStatus");
         Objects.requireNonNull(origin, "origin");
