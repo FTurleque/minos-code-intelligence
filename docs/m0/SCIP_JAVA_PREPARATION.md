@@ -6,8 +6,15 @@ Statut : **Préparation de l'Expérience A**
 
 ## Versions vérifiées
 
-- `scip-java` : **0.12.3** ;
-- SCIP CLI : **0.7.1**.
+Les composants sont versionnés indépendamment :
+
+```text
+SCIP CLI                         0.7.1
+Bindings Java SCIP               0.9.0
+scip-java                        0.13.1
+```
+
+Cette distinction est importante : la version de la CLI SCIP n'est pas la version du protocole/bindings ni celle de l'indexeur JVM.
 
 ## Commande d'indexation de référence
 
@@ -23,7 +30,7 @@ Le résultat attendu est :
 index.scip
 ```
 
-Pour Maven, `scip-java` utilise par défaut un build conceptuellement équivalent à :
+Pour Maven, `scip-java` utilise par défaut :
 
 ```text
 --batch-mode clean verify -DskipTests
@@ -39,28 +46,61 @@ scip-java index -- --batch-mode -DskipTests package
 
 ## Installation privilégiée pour M0
 
-La documentation propose plusieurs modes :
+La documentation officielle propose notamment :
 
-- Docker ;
+- image Docker `ghcr.io/scip-code/scip-java` ;
 - lancement Java via Coursier ;
 - fat jar ;
-- dépendance Java directe.
+- utilisation comme bibliothèque Java.
 
-Pour MINOS M0, le **lancement Java / Coursier** est le candidat principal pour Windows et pour les tests reproductibles, car il évite de coupler l'expérience à Docker.
+Pour MINOS M0, le **lancement Java / Coursier** est le candidat principal pour Windows et les tests reproductibles, car il évite de rendre Docker obligatoire.
 
-Coordonnée publiée :
+Coordonnée actuelle :
 
 ```text
-com.sourcegraph:scip-java_2.13:0.12.3
+org.scip-code:scip-java:0.13.1
 ```
 
 Commande conceptuelle :
 
 ```text
-coursier launch com.sourcegraph:scip-java_2.13:0.12.3 -- index
+coursier launch org.scip-code:scip-java:0.13.1 -- index
 ```
 
-Le mode fat jar reste une alternative intéressante pour un fonctionnement local après téléchargement initial.
+Le mode fat jar reste une alternative intéressante après téléchargement initial.
+
+## Bindings Java du protocole SCIP
+
+MINOS ne doit pas dépendre des anciens bindings propres à une implémentation d'indexeur.
+
+Le protocole SCIP publie désormais des bindings Java officiels :
+
+```text
+org.scip-code:scip-java-bindings:0.9.0
+```
+
+Ils sont générés à partir du schéma SCIP et utilisent le package Java :
+
+```text
+org.scip_code.scip
+```
+
+M0 utilisera ces bindings uniquement dans :
+
+```text
+io.github.fturleque.minos.adapter.scip
+```
+
+Ils ne doivent jamais apparaître dans :
+
+```text
+domain
+store
+query
+CLI/MCP/API publiques
+```
+
+Cette frontière sera vérifiée par test d'architecture ou test de dépendances avant fusion de la baseline.
 
 ## Validation de l'index SCIP
 
@@ -74,44 +114,44 @@ scip snapshot --from index.scip --to scip-snapshot
 
 `scip test` sera utilisé lorsque des fichiers de test SCIP annotés seront disponibles.
 
-## Point de vigilance — versions Java
+## Versions Java supportées
 
-La documentation `scip-java 0.12.3` liste explicitement comme supportées :
+La documentation courante de `scip-java` annonce :
 
 ```text
-Java 11
-Java 17
-Java 21
+Java 17  ✅
+Java 21  ✅
+Java 25  ✅
 ```
 
-Java 25 n'est pas listé dans la matrice publiée.
+Java 17, 21 et 25 nécessitent des `--add-exports` sur des APIs internes `javac`, gérés par l'intégration de l'indexeur.
 
-Pour Java 17 et versions plus récentes documentées, `scip-java` nécessite des exports internes du compilateur `javac`.
+La fixture :
 
-Conséquence M0 :
+```text
+fixtures/java/java-25-smoke
+```
 
-> **le support de projets compilés en Java 25 doit être testé explicitement et ne doit pas être supposé.**
+reste utile, mais son objectif n'est plus de tester une version non documentée. Elle doit vérifier en pratique que :
 
-Le premier dépôt réel `FTurleque/ariane-chatbot` utilise Java 17 et constitue donc un cas supporté documenté.
-
-Une fixture séparée `java-25-smoke` doit vérifier :
-
-- lancement de `scip-java` sous l'environnement retenu ;
-- build Maven `release=25` ;
-- génération effective de `index.scip` ;
-- absence d'erreur liée aux APIs internes `javac` ;
-- définitions et références minimales.
-
-Un échec sur Java 25 ne remet pas en cause le langage d'implémentation de MINOS : les indexeurs sont des fournisseurs externes et peuvent utiliser leur propre toolchain. Il qualifierait cependant `scip-java` avec une limitation de version Java.
+- notre mode d'installation/lancement de `scip-java` fonctionne avec JDK 25 ;
+- un projet Maven `release=25` produit effectivement `index.scip` ;
+- les définitions et références minimales sont correctes ;
+- aucune régression liée aux exports internes `javac` n'apparaît dans notre environnement M0.
 
 ## Support Maven à qualifier
 
-La documentation annonce l'auto-configuration Maven pour Java.
+La documentation annonce l'auto-configuration suivante :
 
-Elle n'annonce pas d'auto-configuration Maven équivalente pour Scala ou Kotlin. Cette distinction confirme que MINOS doit qualifier un fournisseur par :
+| Langage | Maven |
+|---|---|
+| Java | supporté |
+| Kotlin | non supporté automatiquement |
+
+Elle confirme que MINOS doit qualifier un fournisseur par :
 
 ```text
-langage + build + version + capacités
+langage + système de build + version + capacités
 ```
 
 et non uniquement par nom de langage.
@@ -149,13 +189,37 @@ Caractéristiques observées :
 - dépendances externes ;
 - tests Quarkus.
 
-### Fixture de compatibilité
+### Fixture de compatibilité Java 25
 
 ```text
 fixtures/java/java-25-smoke
 ```
 
-But : qualifier explicitement la compatibilité `scip-java` avec un projet Java 25.
+But : prouver la compatibilité effective dans l'environnement M0 malgré le support officiellement annoncé.
+
+## Première stratégie d'ingestion MINOS
+
+```text
+index.scip
+    │
+    ▼
+org.scip-code:scip-java-bindings:0.9.0
+    │
+    ▼
+ScipIndexReader
+    │
+    ▼
+ScipIngestionAdapter
+    │
+    ├── Symbol
+    ├── SymbolOccurrence
+    └── Relationship
+         │
+         ▼
+CodeKnowledgeStore
+```
+
+Les ranges SCIP typés (`SingleLineRange`, `MultiLineRange`) doivent être privilégiés. L'ancien tableau `range` ne sert que de repli de compatibilité.
 
 ## Sorties attendues
 
@@ -172,7 +236,9 @@ rapport d'erreurs / limitations
 
 ## Sources officielles
 
-- https://github.com/sourcegraph/scip-java
-- https://sourcegraph.github.io/scip-java/docs/getting-started.html
+- https://github.com/scip-code/scip-java
+- https://github.com/scip-code/scip-java/releases/tag/v0.13.1
+- https://github.com/scip-code/scip-java/blob/main/docs/getting-started.md
 - https://github.com/scip-code/scip
 - https://github.com/scip-code/scip/blob/main/docs/CLI.md
+- https://github.com/scip-code/scip/tree/main/bindings/java
