@@ -1,6 +1,7 @@
 package io.github.fturleque.minos.domain;
 
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Déclaration adressable dans le modèle de connaissance MINOS.
@@ -21,7 +22,8 @@ public record Symbol(
         ResolutionStatus resolutionStatus,
         Origin origin,
         boolean external,
-        boolean generated) {
+        boolean generated,
+        Set<ProviderReference> providerReferences) {
 
     public Symbol {
         requireText(id, "id");
@@ -32,6 +34,7 @@ public record Symbol(
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(resolutionStatus, "resolutionStatus");
         Objects.requireNonNull(origin, "origin");
+        providerReferences = providerReferences == null ? Set.of() : Set.copyOf(providerReferences);
     }
 
     private static void requireText(String value, String fieldName) {
