@@ -58,11 +58,15 @@ final class ScipSymbolCatalog {
     private static ScipSymbolFact toFact(
             SymbolInformation information,
             String relativePath,
-            String language,
+            String documentLanguage,
             boolean external) {
         String signature = information.hasSignatureDocumentation()
                 ? information.getSignatureDocumentation().getText()
                 : "";
+        String signatureLanguage = information.hasSignatureDocumentation()
+                ? information.getSignatureDocumentation().getLanguage()
+                : "";
+        String language = !documentLanguage.isBlank() ? documentLanguage : signatureLanguage;
 
         return new ScipSymbolFact(
                 information.getSymbol(),
