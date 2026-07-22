@@ -214,6 +214,13 @@ La décision sur un port Java dépendra de l'observation des index réels :
 - si `qualifiedName` canonique est indispensable pour les portes M0, le parseur sera porté et testé contre les fixtures SCIP ;
 - sinon la baseline structurelle restera suffisante pour mesurer l'ingestion, puis le port pourra être planifié séparément.
 
+D1 apporte le cas concret attendu : `scip-typescript 0.4.0` ne remplit pas
+`display_name` pour ses 32 faits. Un extracteur limité au dernier descripteur
+global est donc justifié dans l'adaptateur pour récupérer un nom interrogeable.
+Il refuse les identifiants `local N` et les symboles de module sans descripteur,
+ne produit pas de nom qualifié et ne transforme jamais l'identifiant SCIP brut
+en identité métier. Le port de la grammaire complète reste hors de M0.
+
 ## 9. Les identifiants SCIP locaux sont portés par le document
 
 L'index réel `java-simple` réutilise les identifiants bruts :
@@ -275,6 +282,20 @@ Au contraire, ces corrections renforcent :
 - le support multi-langages ;
 - la reproductibilité des positions source.
 
-## Condition de consolidation
+## 12. Confirmation par le second écosystème
 
-Avant la sortie de M0, `docs/architecture/MODELE_DOMAINE.md` devra intégrer définitivement les éléments de ce document qui auront été confirmés par les index réels Java et TypeScript.
+D1 TypeScript utilise les mêmes `Symbol`, `SymbolOccurrence`,
+`SymbolReference`, `ProviderReference`, `SymbolLocation`, store et services de
+requêtes que Java. Aucun branchement TypeScript n'est ajouté au domaine.
+
+L'expérience confirme aussi qu'un second fournisseur peut omettre davantage
+de métadonnées : les 32 kinds et les 6 encodages sont non spécifiés. Le modèle
+commun doit préserver `OTHER` et `UNKNOWN` plutôt que d'inférer une précision
+depuis la syntaxe source.
+
+## Consolidation
+
+Les éléments confirmés par les index réels Java et TypeScript sont intégrés à
+`docs/architecture/MODELE_DOMAINE.md` le 22 juillet 2026. Les choix qui restent
+ouverts — identité canonique, parser SCIP complet et backend persistant —
+conservent leur statut expérimental ou futur.

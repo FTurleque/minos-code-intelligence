@@ -401,6 +401,11 @@ rebuild_time
 
 # 8. Expérience D — TypeScript
 
+Statut au 22 juillet 2026 : **D1 `typescript-simple` exécutée**. Le pipeline
+complet fonctionne avec un repli de métadonnées limité à l'adaptateur ; les
+kinds, le lint strict, l'encodage de position et les relations `CALLS` restent
+des limitations qualifiées dans `docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
+
 Reproduire le chemin conceptuel :
 
 ```text

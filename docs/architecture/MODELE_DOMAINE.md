@@ -217,6 +217,7 @@ Un symbole est une entité sémantique adressable ou référencée.
 Symbol
 - id
 - symbolKey
+- identityQuality
 - projectId
 - moduleId?
 - declarationFileId?
@@ -287,6 +288,22 @@ Elle doit :
 Elle ne garantit pas la continuité après renommage ou déplacement.
 
 Cette continuité relève de la future Git Intelligence.
+
+## 8.5 `identityQuality`
+
+La force de l'identité logique est explicite :
+
+```text
+CANONICAL
+STRUCTURAL_FALLBACK
+PROVIDER_SCOPED_FALLBACK
+```
+
+Une identité structurelle peut utiliser le projet, le langage, le kind, le
+chemin, le nom, la signature et la déclaration. Une identité scoped au
+fournisseur reste exploitable pour la traçabilité, mais ne permet jamais de
+réconcilier automatiquement deux fournisseurs. L'identifiant fournisseur brut
+n'est ni `symbolKey`, ni `qualifiedName`.
 
 ---
 
@@ -364,8 +381,8 @@ UnresolvedSymbolRef
 - displayName?
 - qualifiedNameCandidate?
 - language?
-- rawProviderIdentifier?
 - reason?
+- providerReferences
 ```
 
 ---
@@ -379,11 +396,24 @@ SymbolLocation
 - startColumn?
 - endLine
 - endColumn?
+- positionEncoding
 ```
 
 Les lignes sont obligatoires lorsque le fournisseur les fournit de façon fiable.
 
 Les colonnes peuvent être absentes.
+
+Lorsqu'elles sont présentes, leur unité est explicite :
+
+```text
+UTF8_CODE_UNITS
+UTF16_CODE_UNITS
+UTF32_CODE_UNITS
+UNKNOWN
+```
+
+Les lignes MINOS sont en base 1 ; les colonnes restent des offsets base 0 dans
+l'unité déclarée. `UNKNOWN` est conservé si le fournisseur ne précise rien.
 
 ---
 
@@ -524,6 +554,18 @@ La provenance permet :
 - explicabilité ;
 - reproduction des résultats.
 
+## 14.1 ProviderReference
+
+```text
+ProviderReference
+- providerId
+- externalId
+```
+
+Cette référence opaque conserve l'identité publiée par un fournisseur sans la
+faire fuiter dans les identités ou contrats métier. Un symbole, une occurrence,
+une cible non résolue ou une preuve peut en porter plusieurs.
+
 ---
 
 # 15. Evidence
@@ -584,6 +626,12 @@ Le snapshot sert à :
 - diagnostiquer les différences ;
 - assurer la reproductibilité ;
 - empêcher qu'un index partiel remplace silencieusement un index sain.
+
+Sa promotion est atomique : un run fournisseur réussi, un artefact final
+lisible et une ingestion MINOS réussie sont tous nécessaires. Sinon le
+snapshot actif précédent est conservé. Les shards et journaux d'un run échoué
+restent des diagnostics et ne deviennent pas des faits résolus du snapshot
+actif. ADR-0006 fixe cet invariant indépendamment du fournisseur et du backend.
 
 ---
 
@@ -667,6 +715,9 @@ Les questions principales sont tranchées pour M0 :
 8. Le modèle est versionné via `schemaVersion`.
 9. `symbolKey` est déterministe mais ne promet pas la continuité historique après rename/move.
 10. La continuité historique est différée à Git Intelligence.
+11. La qualité de l'identité et l'encodage des positions sont explicites.
+12. Les identifiants fournisseur restent dans `ProviderReference`.
+13. La promotion d'un snapshot fournisseur est atomique.
 
 ---
 

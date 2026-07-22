@@ -513,6 +513,35 @@ durée 7 811 ms, code 1, aucun index final et deux shards intermédiaires pour
 de résilience comme index sain. Le détail A4/A5 est dans
 `docs/m0/RAPPORT_SCIP_JAVA_A4_A5.md`.
 
+## 20.2 Première mesure scip-typescript M0
+
+D1 du 22 juillet 2026 qualifie `scip-typescript 0.4.0` sur la fixture
+`typescript-simple` :
+
+| Mesure | Résultat |
+|---|---:|
+| Documents | 6 |
+| Lignes | 49 |
+| Faits de symboles catalogue | 32 |
+| Occurrences | 100 |
+| Symboles normalisés MINOS | 24 |
+| Occurrences résolues MINOS | 70 |
+| Occurrences non résolues MINOS | 30 |
+| Taux de non-résolution | 30 % |
+| Doublons de catalogue | 0 |
+| Symboles obligatoires présents | 12 / 12 |
+| Kinds exacts | 0 / 12 |
+| Cibles d'usage présentes | 9 / 9 |
+| Implémentations attendues | 1 / 1 |
+| Cibles d'appels observables | 3 / 3 |
+| Relations `CALLS` explicites | 0 / 3 |
+
+Le fournisseur omet le langage, le nom d'affichage, le kind et l'encodage de
+position dans les structures concernées. MINOS récupère uniquement le langage
+et le nom par un repli borné dans l'adaptateur ; il conserve le kind `OTHER` et
+l'encodage `UNKNOWN`. Le détail est dans
+`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
+
 ---
 
 # 21. Niveaux de verdict M0

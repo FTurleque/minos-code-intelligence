@@ -1,4 +1,4 @@
-# Scripts M0 — Expérience A / `scip-java`
+# Scripts M0 — Expériences SCIP Java et TypeScript
 
 Ces scripts exécutent la chaîne de qualification `scip-java` sur un projet Maven Java puis conservent les artefacts nécessaires aux mesures M0.
 
@@ -347,3 +347,60 @@ un index réel sans créer de CLI produit :
 La sortie TSV `minos-baseline.txt` contient les faits fournisseur, les
 relations, les métriques d'ingestion et les résultats `find_symbol` /
 `find_usages` avec leurs positions source.
+
+## Expérience D1 — `scip-typescript`
+
+Installation locale et idempotente de la version qualifiée :
+
+```powershell
+.\scripts\m0\install-scip-typescript.ps1
+```
+
+Le package est installé sous :
+
+```text
+.minos-m0/tools/scip-typescript/
+```
+
+Il n'est ni global, ni ajouté au `PATH`. `-Force` reconstruit l'installation
+via un dossier `.partial`, valide la version, puis la promeut.
+
+Exécution sur la fixture :
+
+```powershell
+.\scripts\m0\run-scip-typescript.ps1 `
+  -ProjectPath .\fixtures\typescript\typescript-simple
+```
+
+Le runner produit dans `.minos-m0/scip-typescript` :
+
+```text
+index.scip
+index.txt
+lint.txt
+stats.txt
+snapshot/
+snapshot.txt
+snapshot-nonstrict/
+snapshot-nonstrict.txt
+environment.txt
+```
+
+Le snapshot non strict est tenté uniquement après l'échec du snapshot strict.
+Son succès ne masque pas l'échec strict : le runner termine en erreur si le
+lint ou le snapshot strict échoue, tout en conservant tous les diagnostics.
+
+Baseline MINOS sur le même index :
+
+```powershell
+.\scripts\m0\run-minos-scip-baseline.ps1 `
+  -IndexPath .\fixtures\typescript\typescript-simple\.minos-m0\scip-typescript\index.scip `
+  -ProjectId fixture-typescript-simple `
+  -ProviderId scip-typescript `
+  -ProviderVersion 0.4.0 `
+  -IndexRunId m0-typescript-d1 `
+  -Queries UserId,UserStatus,UserRepository,findById,UserService,findUser,getUserName
+```
+
+Les résultats mesurés et les limitations sont consignés dans
+`docs/m0/RAPPORT_SCIP_TYPESCRIPT_D1.md`.
