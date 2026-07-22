@@ -61,9 +61,21 @@ function Invoke-LoggedCommand {
     $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     Write-Host "==> $Label" -ForegroundColor Cyan
 
-    & $Command 2>&1 | Tee-Object -FilePath $PartialLogPath | Out-Host
-    $ExitCode = $LASTEXITCODE
-    $Stopwatch.Stop()
+    # Windows PowerShell 5.1 surfaces native stderr as non-terminating
+    # NativeCommandError records. With the script-wide Stop preference, harmless
+    # JVM/Maven warnings would otherwise abort validation before LASTEXITCODE can
+    # be inspected. Keep native stderr in the captured log and use the process
+    # exit code as the authoritative success/failure signal for this command.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $Command 2>&1 | Tee-Object -FilePath $PartialLogPath | Out-Host
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+        $Stopwatch.Stop()
+    }
 
     Move-Item -LiteralPath $PartialLogPath -Destination $LogPath -Force
     return [pscustomobject]@{
