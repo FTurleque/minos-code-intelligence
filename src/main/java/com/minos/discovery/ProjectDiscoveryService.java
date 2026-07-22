@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -87,9 +88,8 @@ public final class ProjectDiscoveryService {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
 
-                EnumSet<BuildSystem> systems = detectBuildSystems(directory);
-                if (!systems.isEmpty()) {
-                    modules.put(directory, systems);
+                if (hasModuleMarker(directory)) {
+                    modules.put(directory, detectBuildSystems(directory));
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -98,12 +98,17 @@ public final class ProjectDiscoveryService {
         return modules;
     }
 
+    private static boolean hasModuleMarker(Path directory) {
+        return Files.isRegularFile(directory.resolve("pom.xml"))
+                || Files.isRegularFile(directory.resolve("package.json"));
+    }
+
     private static EnumSet<BuildSystem> detectBuildSystems(Path directory) {
         EnumSet<BuildSystem> systems = EnumSet.noneOf(BuildSystem.class);
         if (Files.isRegularFile(directory.resolve("pom.xml"))) {
             systems.add(BuildSystem.MAVEN);
         }
-        if (Files.isRegularFile(directory.resolve("package.json"))) {
+        if (Files.isRegularFile(directory.resolve("package-lock.json"))) {
             systems.add(BuildSystem.NPM);
         }
         return systems;
@@ -112,12 +117,46 @@ public final class ProjectDiscoveryService {
     private static List<SourceRoot> discoverSourceRoots(Path projectRoot, Path moduleRoot) throws IOException {
         List<SourceRoot> roots = new ArrayList<>();
 
-        addIfDirectory(roots, projectRoot, moduleRoot.resolve("src/main/java"), SourceRootKind.SOURCE, Language.JAVA);
-        addIfDirectory(roots, projectRoot, moduleRoot.resolve("src/test/java"), SourceRootKind.TEST, Language.JAVA);
-
-        addTypeScriptRootIfPresent(roots, projectRoot, moduleRoot.resolve("src"), SourceRootKind.SOURCE);
-        addTypeScriptRootIfPresent(roots, projectRoot, moduleRoot.resolve("test"), SourceRootKind.TEST);
-        addTypeScriptRootIfPresent(roots, projectRoot, moduleRoot.resolve("tests"), SourceRootKind.TEST);
+        addLanguageRootIfPresent(
+                roots,
+                projectRoot,
+                moduleRoot.resolve("src/main/java"),
+                SourceRootKind.SOURCE,
+                Language.JAVA,
+                Set.of(".java")
+        );
+        addLanguageRootIfPresent(
+                roots,
+                projectRoot,
+                moduleRoot.resolve("src/test/java"),
+                SourceRootKind.TEST,
+                Language.JAVA,
+                Set.of(".java")
+        );
+        addLanguageRootIfPresent(
+                roots,
+                projectRoot,
+                moduleRoot.resolve("src"),
+                SourceRootKind.SOURCE,
+                Language.TYPESCRIPT,
+                Set.of(".ts", ".tsx")
+        );
+        addLanguageRootIfPresent(
+                roots,
+                projectRoot,
+                moduleRoot.resolve("test"),
+                SourceRootKind.TEST,
+                Language.TYPESCRIPT,
+                Set.of(".ts", ".tsx")
+        );
+        addLanguageRootIfPresent(
+                roots,
+                projectRoot,
+                moduleRoot.resolve("tests"),
+                SourceRootKind.TEST,
+                Language.TYPESCRIPT,
+                Set.of(".ts", ".tsx")
+        );
 
         roots.sort(Comparator
                 .comparing((SourceRoot root) -> portable(root.relativePath()))
@@ -126,36 +165,26 @@ public final class ProjectDiscoveryService {
         return roots;
     }
 
-    private static void addIfDirectory(
+    private static void addLanguageRootIfPresent(
             List<SourceRoot> roots,
             Path projectRoot,
             Path candidate,
             SourceRootKind kind,
-            Language language
-    ) {
-        if (Files.isDirectory(candidate)) {
+            Language language,
+            Set<String> extensions
+    ) throws IOException {
+        if (Files.isDirectory(candidate) && containsFileWithExtension(candidate, extensions)) {
             roots.add(new SourceRoot(projectRoot.relativize(candidate), kind, language));
         }
     }
 
-    private static void addTypeScriptRootIfPresent(
-            List<SourceRoot> roots,
-            Path projectRoot,
-            Path candidate,
-            SourceRootKind kind
-    ) throws IOException {
-        if (Files.isDirectory(candidate) && containsTypeScript(candidate)) {
-            roots.add(new SourceRoot(projectRoot.relativize(candidate), kind, Language.TYPESCRIPT));
-        }
-    }
-
-    private static boolean containsTypeScript(Path root) throws IOException {
+    private static boolean containsFileWithExtension(Path root, Set<String> extensions) throws IOException {
         try (var paths = Files.walk(root)) {
             return paths
                     .filter(Files::isRegularFile)
                     .filter(path -> !hasIgnoredSegment(root, path))
-                    .map(path -> path.getFileName().toString().toLowerCase())
-                    .anyMatch(name -> name.endsWith(".ts") || name.endsWith(".tsx"));
+                    .map(path -> path.getFileName().toString().toLowerCase(Locale.ROOT))
+                    .anyMatch(name -> extensions.stream().anyMatch(name::endsWith));
         }
     }
 
