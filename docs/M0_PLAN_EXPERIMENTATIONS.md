@@ -1,6 +1,6 @@
 # M0 — Plan détaillé des expérimentations
 
-- Statut : **Terminé techniquement — verdict ADOPTER_AVEC_CONTRAINTES ; PR #4 bloquée par la CI**
+- Statut : **Terminé techniquement — verdict ADOPTER_AVEC_CONTRAINTES ; validation locale manuelle**
 - Date : **22 juillet 2026**
 - Objectif : **valider la faisabilité technique sans construire prématurément le produit**
 
@@ -707,9 +707,10 @@ pour M0. Les limites de précision exhaustive, d'identité canonique et de
 scalabilité deviennent des portes des jalons produit concernés. Le rapport de
 décision est `docs/m0/DECISION_M0.md`.
 
-La CI GitHub Actions n'est pas une condition de faisabilité listée ci-dessus,
-mais reste une porte de livraison absolue pour la PR #4. Voir
-`docs/m0/STRATEGIE_VALIDATION_CI_M0.md` et l'issue #5.
+GitHub Actions n'est pas une condition de faisabilité et reste en pause. La
+porte de livraison courante est le runner local manuel documenté dans
+`docs/m0/STRATEGIE_VALIDATION_CI_M0.md`. L'issue #5 conserve le diagnostic
+historique sans autoriser de relance automatique.
 
 ---
 

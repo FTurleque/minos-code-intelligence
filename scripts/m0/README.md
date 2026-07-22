@@ -2,6 +2,22 @@
 
 Ces scripts exécutent la chaîne de qualification `scip-java` sur un projet Maven Java puis conservent les artefacts nécessaires aux mesures M0.
 
+## Validation locale manuelle
+
+GitHub Actions est en pause et ne se déclenche pas automatiquement. La porte de
+validation courante s'exécute uniquement sur demande, depuis un worktree
+propre :
+
+```powershell
+.\scripts\m0\validate-local-ci.ps1
+```
+
+Le runner impose Java 24 et Maven Wrapper/Maven 3.9.16, puis exécute le
+`clean verify` de MINOS et celui de `java-24-smoke`. Les logs, durées, codes de
+sortie, versions et commit sont conservés transactionnellement sous
+`.minos-m0\validation\manual-ci\`. L'option `-AllowDirty` est réservée aux
+diagnostics non livrables.
+
 ## Glean C1 sous WSL2
 
 L'expérience Glean utilise Ubuntu WSL2, car le build officiel reste testé

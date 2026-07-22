@@ -4,7 +4,7 @@ Date : 22 juillet 2026
 
 Verdict : **ADOPTER_AVEC_CONTRAINTES**
 
-État : **M0 TECHNIQUE TERMINÉ — livraison de la PR #4 bloquée par la CI**
+État : **M0 TECHNIQUE TERMINÉ — validation locale manuelle avant livraison**
 
 ## Décision exécutive
 
@@ -27,8 +27,9 @@ Glean n'est pas le backend par défaut. Il reste une option avancée future,
 réouvrable uniquement lorsqu'une traversée, un volume ou une dérivation
 mesurable dépasse les capacités du chemin léger.
 
-Cette décision clôt la question technique M0. Elle ne valide pas GitHub
-Actions, ne rend pas la PR #4 fusionnable et ne démarre pas M1.
+Cette décision clôt la question technique M0. GitHub Actions reste non validé
+et en pause. La validation courante est locale et manuelle ; elle ne rend pas
+la PR #4 fusionnable sans demande explicite et ne démarre pas M1.
 
 ## Réponse aux hypothèses M0
 
@@ -142,15 +143,16 @@ M0 ouvert.
 
 ```text
 M0 technique    TERMINÉ
-PR #4           DRAFT, non fusionnable actuellement
-GitHub Actions  NON VALIDÉ, issue #5 ouverte
+PR #4           DRAFT, en attente d'une demande explicite de revue
+CI locale       MANUELLE, porte de livraison courante
+GitHub Actions  EN PAUSE, déclenchement automatique désactivé, issue #5 ouverte
 M1              AUTORISÉ ARCHITECTURALEMENT, NON DÉMARRÉ
 ```
 
 Le passage opérationnel à M1 demande encore :
 
-1. une stratégie CI satisfaite ou une dérogation explicite du propriétaire ;
-2. la fusion de la PR #4 sans contourner #5 ;
+1. un run vert de `scripts/m0/validate-local-ci.ps1` sur le commit final propre ;
+2. une demande explicite de revue et de fusion de la PR #4 ;
 3. la création d'une branche M1 seulement après cette intégration.
 
 ## Première tranche recommandée pour M1

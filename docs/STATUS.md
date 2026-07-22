@@ -11,7 +11,7 @@ rapports `docs/m0/` portent les preuves expérimentales.
 ```text
 C0 — Cadrage                         TERMINÉ
 M0 — Faisabilité technique          TERMINÉE TECHNIQUEMENT
-PR #4 — Livraison M0                BLOQUÉE PAR LA CI
+PR #4 — Livraison M0                EN ATTENTE DE VALIDATION MANUELLE / REVUE
 M1 — Découverte et orchestration     NON DÉMARRÉ
 M2 à M13 — Jalons produit           NON DÉMARRÉS
 ```
@@ -21,9 +21,10 @@ multi-langages et mémoire, la mesure Glean C1 et la comparaison E2 sont
 obtenues. Le chemin du MVP reste MINOS léger ; Glean est différé comme backend
 avancé optionnel.
 
-La faisabilité technique est clôturée. La porte active est la livraison : la
-PR #4 reste Draft tant que la stratégie GitHub Actions suivie dans #5 n'est pas
-satisfaite ou remplacée par une dérogation explicite du propriétaire.
+La faisabilité technique est clôturée. La validation courante est locale et
+manuelle. GitHub Actions est en pause et ne se déclenche plus sur les pushes ou
+les pull requests. La PR #4 reste Draft jusqu'à une demande explicite de revue
+et de fusion.
 
 Les implémentations expérimentales de `find_symbol` et `find_usages` valident
 M0 ; elles ne signifient pas que les jalons produit M2 et M3 sont commencés.
@@ -54,9 +55,12 @@ M0 ; elles ne signifient pas que les jalons produit M2 et M3 sont commencés.
 - Glean 0.2.0.1 installé sous WSL2 et C1 exécutée sur `java-simple` ;
 - comparaison E2 conclue en faveur du chemin MINOS léger par défaut ;
 - décision consolidée dans `docs/m0/DECISION_M0.md` ;
-- PR #4 maintenue en Draft ; la CI GitHub Actions n'est pas déclarée validée.
+- PR #4 maintenue en Draft ; la CI GitHub Actions n'est pas déclarée validée ;
+- workflow GitHub Actions limité à `workflow_dispatch`, sans déclenchement
+  automatique ;
+- porte locale reproductible fournie par `scripts/m0/validate-local-ci.ps1`.
 
-## Porte active — livraison M0 et CI
+## Porte active — validation locale et livraison M0
 
 Glean C1 a fourni le résultat décisionnel attendu :
 
@@ -67,7 +71,7 @@ valeur MVP supplémentaire  non démontrée
 décision backend            MINOS léger par défaut, Glean optionnel
 ```
 
-Les runs #212 et suivants confirment un échec avant tout step :
+Les runs #212 et suivants ont confirmé un échec avant tout step :
 
 ```text
 steps        null / endpoint direct vide
@@ -76,23 +80,30 @@ job logs     404 BlobNotFound
 artifacts    aucun
 ```
 
-Le build Java n'est pas atteint. La stratégie et les vérifications manuelles
-requises sont dans `docs/m0/STRATEGIE_VALIDATION_CI_M0.md`.
+Ce diagnostic reste suivi dans #5, mais sa résolution est en pause. Le workflow
+ne se déclenche plus automatiquement. La porte active est désormais un run
+local manuel sur un commit propre :
+
+```powershell
+.\scripts\m0\validate-local-ci.ps1
+```
+
+La stratégie et les preuves attendues sont dans
+`docs/m0/STRATEGIE_VALIDATION_CI_M0.md`.
 
 ## Reste à faire avant la fusion et M1
 
-1. relever dans l'interface GitHub le message d'un run récent concerné ;
-2. vérifier permissions Actions, politique de pinning et usage/facturation ;
-3. obtenir un run avec steps/logs et `verify` vert, ou décider explicitement
-   une dérogation documentée ;
-4. revoir puis fusionner la PR #4 ;
+1. exécuter la validation locale manuelle sur le commit final propre ;
+2. conserver le commit, les deux logs Maven et le verdict local ;
+3. revoir la PR #4 sur demande explicite ;
+4. fusionner uniquement sur demande explicite ;
 5. créer la branche M1 seulement après intégration.
 
 ## Blocages et décisions
 
 | Sujet | Effet |
 |---|---|
-| GitHub Actions sans steps ni logs | Bloque la fusion de la PR #4, pas les expériences locales |
+| GitHub Actions sans steps ni logs | Issue #5 ouverte mais investigation en pause ; aucun déclenchement automatique |
 | `scip lint` / `snapshot` sur plages typées | Limitation SCIP CLI 0.7.1 documentée, pas un échec du code MINOS |
 | Kinds et appels incomplets selon les fournisseurs | Doivent rester des capacités explicites, pas être sur-déclarés |
 | `qualifiedName` non canonique dans tous les cas | Accepté pour M0/M1 ; requalification ciblée en M2 |
@@ -102,7 +113,7 @@ requises sont dans `docs/m0/STRATEGIE_VALIDATION_CI_M0.md`.
 ```text
 M0 technique terminé — ADOPTER_AVEC_CONTRAINTES
         ↓
-Stratégie CI satisfaite + PR #4 fusionnée
+Validation locale manuelle verte + revue/fusion explicites de la PR #4
         ↓
 Début de M1 : découverte et orchestration
 ```

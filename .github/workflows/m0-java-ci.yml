@@ -1,12 +1,9 @@
 name: M0 Java CI
 
 on:
-  push:
-    branches:
-      - m0/bootstrap-scip-baseline
-  pull_request:
-    branches:
-      - main
+  # Politique du dépôt : aucun déclenchement automatique. Ce workflow reste
+  # disponible uniquement lorsqu'une exécution GitHub Actions est demandée.
+  workflow_dispatch:
 
 permissions:
   contents: read

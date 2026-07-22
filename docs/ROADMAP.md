@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 et M0 technique clôturés — livraison M0 bloquée par la CI**
+Statut : **C0 et M0 technique clôturés — validation locale manuelle avant livraison**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -53,10 +53,10 @@ index réels, benchmark reproductible du backend mémoire, Glean C1 et comparais
 E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
 La décision est consolidée dans `m0/DECISION_M0.md`.
 
-La livraison reste bloquée : la PR #4 demeure Draft car GitHub Actions échoue
-avant tout step. Cette anomalie d'infrastructure, suivie dans #5, ne réouvre pas
-la faisabilité technique mais interdit la fusion sans stratégie satisfaite ou
-dérogation explicite.
+La PR #4 demeure Draft. La validation est locale et manuelle ; GitHub Actions
+est en pause et ne se déclenche plus automatiquement. L'anomalie historique
+reste suivie dans #5 sans bloquer les validations locales. La revue et la
+fusion exigent une demande explicite.
 
 ### Objectif
 

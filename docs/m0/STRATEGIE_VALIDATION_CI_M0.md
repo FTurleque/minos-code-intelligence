@@ -2,22 +2,61 @@
 
 Date : 22 juillet 2026
 
-Statut : **BLOQUÉE AVANT EXÉCUTION DU PREMIER STEP**
+Statut : **CI LOCALE MANUELLE — GITHUB ACTIONS EN PAUSE**
 
-Suivi : issue GitHub #5
+Suivi de l'anomalie historique : issue GitHub #5
 
-## Objectif
+## Décision
 
-Obtenir une preuve CI exploitable sans attribuer au code Java un échec qui se
-produit avant le démarrage du job.
+La validation de MINOS est locale et déclenchée manuellement jusqu'à nouvelle
+décision explicite du propriétaire du dépôt.
 
-La PR #4 reste Draft et ne doit pas être fusionnée tant que la stratégie
-primaire ci-dessous n'est pas satisfaite ou qu'une dérogation explicite n'est
-pas décidée par le propriétaire du dépôt.
+Le workflow `.github/workflows/m0-java-ci.yml` n'écoute plus les événements
+`push` ou `pull_request`. Il conserve uniquement `workflow_dispatch` afin de ne
+jamais consommer GitHub Actions ni créer un run à la suite d'un push. Sa
+présence ne constitue pas une preuve CI et il ne doit pas être lancé sans
+demande explicite.
 
-## Observation de référence
+La PR #4 reste Draft. La politique de validation manuelle ne donne aucune
+autorisation implicite de la fusionner ou de démarrer M1.
 
-Head : `55df7f14b3a1936f539bdefe4ca3ebb43b29afc8`
+## Porte locale normative
+
+Depuis un commit propre de la branche à valider :
+
+```powershell
+.\scripts\m0\validate-local-ci.ps1
+```
+
+Le runner vérifie et conserve :
+
+```text
+worktree Git propre
+branche et commit exacts
+Java 24
+Maven Wrapper / Maven 3.9.16
+mvnw.cmd clean verify
+mvnw.cmd -f fixtures/java/java-24-smoke/pom.xml clean verify
+codes de sortie, durées et logs
+```
+
+Les preuves sont créées transactionnellement sous :
+
+```text
+.minos-m0/validation/manual-ci/<date>-<commit>/
+  environment.txt
+  minos-clean-verify.txt
+  java-24-smoke-clean-verify.txt
+  result.txt
+```
+
+`latest.txt` pointe vers le dernier run. Ces fichiers restent locaux et sont
+ignorés par Git. `-AllowDirty` existe uniquement pour un diagnostic de travail :
+un tel run ne vaut pas validation d'un commit livrable.
+
+## Observation GitHub Actions conservée
+
+Head de référence : `55df7f14b3a1936f539bdefe4ca3ebb43b29afc8`
 
 ```text
 workflow     M0 Java CI
@@ -33,91 +72,29 @@ job logs     404 BlobNotFound
 artifacts    []
 ```
 
-Le workflow est suffisamment valide pour créer le run et le job portant le nom
-déclaré. En revanche, même le step implicite `Set up job` n'apparaît pas. Le
-runner n'a donc exécuté ni `actions/checkout`, ni `actions/setup-java`, ni
-Maven.
+Le workflow était suffisamment valide pour créer le run et le job portant le
+nom déclaré. Même le step implicite `Set up job` n'apparaissait pas. Le runner
+n'avait donc exécuté ni `actions/checkout`, ni `actions/setup-java`, ni Maven.
 
-Le 22 juillet 2026, la page officielle GitHub Status indique Actions
-opérationnel et aucun incident du jour. Les incidents de démarrage des 9, 13 et
-20 juillet sont résolus et ne suffisent pas à expliquer les échecs répétés du
-dépôt.
+Ces preuves excluent un échec de compilation MINOS, des tests JUnit, de Java 24
+ou de Maven pendant le job. Le problème reste une anomalie d'infrastructure
+distincte, suivie dans #5 et mise en pause.
 
-## Ce que les preuves excluent actuellement
+## Réactivation éventuelle de GitHub Actions
 
-- un échec de compilation MINOS ;
-- un échec des 27 tests JUnit ;
-- une incompatibilité Java 24 ou Maven 3.9.16 pendant le job ;
-- une erreur produite par `actions/checkout`, `setup-java` ou
-  `upload-artifact`, puisque leurs steps n'ont pas démarré ;
-- un diagnostic par ajout de steps supplémentaires : aucun step existant n'est
-  atteint.
+La réactivation n'est pas une tâche active. Elle exige une demande explicite.
+À ce moment-là seulement :
 
-Modifier le code Java, ajouter du logging au YAML ou changer de JDK serait donc
-une correction sans preuve.
+1. relever le bandeau exact du dernier run dans l'interface GitHub ;
+2. vérifier `Settings > Actions > General`, les politiques d'actions et de
+   pinning par SHA ;
+3. vérifier les minutes, budgets et alertes de facturation du compte ;
+4. contacter GitHub Support si Actions reste désactivé indépendamment des
+   réglages du dépôt ;
+5. déclencher manuellement `workflow_dispatch`, jamais un déclenchement
+   automatique.
 
-## Causes à vérifier dans l'interface GitHub
-
-Le connecteur et l'API ne remontent pas le bandeau de diagnostic de l'interface
-du run. Les causes ci-dessous restent des hypothèses à vérifier, pas des causes
-déclarées :
-
-1. Actions désactivé ou restreint au niveau du dépôt ou du compte ;
-2. politique interdisant les actions GitHub ou exigeant des SHA complets ;
-3. quota de minutes, budget, moyen de paiement ou verrouillage du compte ;
-4. restriction GitHub interne nécessitant le support.
-
-GitHub documente que les permissions sont configurées dans
-`Settings > Actions > General`. Une politique limitée peut bloquer les actions
-`actions/*`, et une politique de pinning peut exiger des SHA complets. GitHub
-documente également des quotas de minutes pour les dépôts privés.
-
-## Vérification manuelle minimale
-
-### 1. Ouvrir le run de référence ou le dernier run équivalent
-
-```text
-https://github.com/FTurleque/minos-code-intelligence/actions/runs/29954498349
-```
-
-Relever textuellement le bandeau ou l'annotation affiché au niveau du run ou du
-job. Ne pas relancer avant d'avoir conservé ce message dans #5.
-
-### 2. Vérifier la politique Actions
-
-Dans le dépôt :
-
-```text
-Settings > Actions > General > Actions permissions
-```
-
-Vérifier :
-
-- GitHub Actions activé ;
-- actions créées par GitHub autorisées ;
-- éventuelle exigence de pinning par SHA complet.
-
-Si le pinning est exigé, la correction sera de remplacer les tags
-`actions/checkout@v7`, `actions/setup-java@v5` et `actions/upload-artifact@v6`
-par leurs SHA officiels vérifiés. Cette modification ne doit être faite qu'après
-confirmation de la politique.
-
-### 3. Vérifier usage et facturation
-
-Dans les paramètres du compte propriétaire, vérifier l'usage GitHub Actions,
-le budget, les minutes incluses et l'absence d'alerte de paiement. Les minutes
-des dépôts privés sont imputées au propriétaire du dépôt.
-
-### 4. Vérifier un éventuel verrouillage
-
-Si GitHub affiche qu'Actions est désactivé pour le compte indépendamment des
-réglages du dépôt, la documentation officielle demande de contacter GitHub
-Support.
-
-## Stratégie primaire de validation
-
-La porte CI M0 est satisfaite seulement lorsqu'un run du head courant ou d'un
-descendant strict remplit :
+Un futur run GitHub exploitable devra fournir :
 
 ```text
 job.steps non vide
@@ -126,20 +103,15 @@ checkout success
 setup Java 24 success
 Maven Wrapper verify success
 27 tests ou total ultérieur success
-artefact de diagnostic publié ou absence justifiée car tout est vert
 ```
 
-Après obtention de cette preuve :
+Après obtention de cette preuve, mettre #5 à jour et réévaluer séparément son
+statut. La revue, la sortie de Draft et la fusion de la PR #4 restent des
+actions distinctes qui exigent une demande explicite.
 
-1. mettre #5 à jour avec run, job, commit et résultats ;
-2. fermer #5 uniquement si le comportement est compris ou durablement corrigé ;
-3. réévaluer le statut Draft de la PR #4 ;
-4. ne fusionner qu'après revue explicite.
+## Preuve locale déjà acquise
 
-## Stratégie de repli
-
-Le build local reproductible reste une preuve technique, pas une validation
-GitHub Actions :
+Avant la formalisation du runner manuel, la validation locale avait fourni :
 
 ```text
 Windows 10
@@ -151,11 +123,11 @@ Maven 3.9.16
 27 tests réussis
 ```
 
-Une fusion fondée uniquement sur cette preuve constituerait une dérogation.
-Elle exige une décision explicite du propriétaire dans #5 et dans la PR #4 ;
-elle ne doit jamais être appliquée automatiquement par le runner ou par MINOS.
+Cette preuve ne doit jamais être présentée comme une validation GitHub
+Actions. Le runner manuel la rend désormais reproductible et rattachable à un
+commit propre.
 
-## Sources officielles
+## Sources officielles conservées pour une reprise
 
 - paramètres Actions :
   <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository> ;
