@@ -77,10 +77,12 @@ try {
 
     $Coordinate = "org.scip-code:scip-java:$ScipJavaVersion"
 
-    Invoke-Checked \
-        -Command $CoursierCommand \
-        -Arguments @("launch", $Coordinate, "--", "index") \
-        -Description "Génération de index.scip avec scip-java"
+    Invoke-Checked -Command $CoursierCommand -Arguments @(
+        "launch",
+        $Coordinate,
+        "--",
+        "index"
+    ) -Description "Génération de index.scip avec scip-java"
 
     $GeneratedIndex = Join-Path $ResolvedProjectPath "index.scip"
     if (-not (Test-Path -LiteralPath $GeneratedIndex -PathType Leaf)) {
@@ -105,10 +107,13 @@ try {
         Remove-Item -LiteralPath $SnapshotDirectory -Recurse -Force
     }
 
-    Invoke-Checked \
-        -Command $ScipCommand \
-        -Arguments @("snapshot", "--from", $IndexDestination, "--to", $SnapshotDirectory) \
-        -Description "Génération du snapshot SCIP"
+    Invoke-Checked -Command $ScipCommand -Arguments @(
+        "snapshot",
+        "--from",
+        $IndexDestination,
+        "--to",
+        $SnapshotDirectory
+    ) -Description "Génération du snapshot SCIP"
 
     Write-Host
     Write-Host "Expérience scip-java terminée."
