@@ -1,34 +1,38 @@
-# ADR-0003 — Réutiliser fortement Glean derrière une abstraction MINOS
+# ADR-0003 — Isoler le backend de connaissance et traiter Glean comme backend avancé optionnel
 
-- Statut : **Proposée — à valider pendant C0**
-- Date : 19 juillet 2026
+- Statut : **Acceptée avec révision de l'orientation initiale**
+- Date de décision : **22 juillet 2026**
+- Validation de Glean : **M0**
 
 ## Contexte
 
-Glean fournit déjà un système spécialisé pour collecter, stocker, dériver et interroger des faits typés sur le code source.
+Glean fournit un système spécialisé pour collecter, stocker, dériver et interroger des faits typés sur le code source. Il possède un moteur de stockage fondé sur RocksDB, des schémas typés, le langage de requête Angle, des prédicats dérivés et des mécanismes permettant d'ajouter des faits spécifiques.
 
-Reconstruire immédiatement une plateforme équivalente dans MINOS dupliquerait une quantité importante de travail existant.
+Ces capacités sont très proches de plusieurs besoins futurs de MINOS et justifient une expérimentation sérieuse.
 
-Cependant, coupler directement le domaine MINOS aux API Glean, aux requêtes Angle, aux détails de stockage ou à la topologie de déploiement rendrait Glean difficilement remplaçable.
+Cependant, l'étude C0 met en évidence des contraintes opérationnelles importantes pour MINOS :
 
-MINOS doit pouvoir :
+- la documentation officielle indique que le build Glean est actuellement testé uniquement sous Linux ;
+- l'image Docker documentée est actuellement signalée comme non fonctionnelle ;
+- cette image de démonstration est de l'ordre de plusieurs gigaoctets ;
+- l'API cliente officiellement documentée est actuellement Haskell ;
+- les autres intégrations passent par l'API Thrift ou par la CLI ;
+- l'intégration Java nécessiterait donc une couche d'adaptation spécifique ;
+- la documentation Java de Glean présente encore un chemin LSIF, tandis que d'autres parties de la documentation mettent en avant SCIP, ce qui devra être clarifié expérimentalement.
 
-- évoluer indépendamment ;
-- utiliser un backend mémoire pour les tests ;
-- supporter éventuellement un backend plus léger ;
-- intégrer plus tard d'autres moteurs spécialisés.
+MINOS étant local-first et devant prendre en compte Windows, Linux et macOS, Glean ne peut pas être déclaré backend obligatoire du MVP sans validation opérationnelle.
 
-## Décision proposée
+## Décision
 
-MINOS doit **réutiliser fortement Glean** comme backend privilégié à évaluer pour les faits et requêtes de Code Intelligence.
+### 1. `CodeKnowledgeStore` devient une frontière architecturale MINOS
 
-Glean doit être placé derrière une abstraction possédée par MINOS, provisoirement nommée :
+MINOS possède une abstraction de stockage et d'interrogation de la connaissance du code, nommée conceptuellement :
 
 ```text
 CodeKnowledgeStore
 ```
 
-Sens de dépendance :
+Cette abstraction est définie à partir des cas d'usage MINOS et non à partir d'une API particulière.
 
 ```text
 Domaine / Services MINOS
@@ -36,112 +40,167 @@ Domaine / Services MINOS
           ▼
   CodeKnowledgeStore
           │
-          ▼
-GleanCodeKnowledgeStore
-          │
-          ▼
-        Glean
+     ┌────┼───────────────┐
+     ▼    ▼               ▼
+  Léger  Glean        Backend futur
 ```
 
-Le contrat `CodeKnowledgeStore` doit être défini à partir des cas d'usage MINOS et non comme une copie de l'API Glean.
+Aucun type Glean, prédicat Angle, identifiant de fait ou type Thrift ne doit traverser cette frontière.
 
-L'adaptateur Glean peut utiliser en interne :
+### 2. Glean n'est pas obligatoire pour le MVP
 
-- Angle ;
-- Thrift ;
-- les schémas Glean ;
-- d'autres détails spécifiques.
+L'orientation initiale :
 
-Ces éléments ne doivent pas fuiter vers :
+> Glean-first, not Glean-locked
 
-- le domaine MINOS ;
-- la CLI ;
-- les outils MCP ;
-- l'API ;
-- les contrats d'intégration NEXUS.
+est **révisée**.
 
-## Responsabilités candidates de l'adaptateur Glean
+La nouvelle formulation est :
 
-- ingérer ou exposer les faits indexés ;
-- résoudre les symboles et emplacements ;
-- interroger les références et implémentations ;
-- interroger les relations d'appel et de type lorsque disponibles ;
-- exécuter des requêtes orientées graphe ;
-- persister éventuellement des faits dérivés MINOS ;
-- retourner des résultats normalisés MINOS.
+> **MINOS-first, Glean-optional.**
 
-## Faits spécifiques à MINOS
+Glean devient un **backend avancé candidat** à évaluer pendant M0, et non le backend obligatoire ou le backend par défaut du MVP.
 
-MINOS pourra définir des connaissances supplémentaires comme :
+### 3. M0 doit comparer deux chemins réels
+
+#### Chemin A — Baseline MINOS légère
 
 ```text
-RELATED_TEST
-DEPENDS_ON
-IMPACT_PATH
-ARCHITECTURAL_ROLE
-CENTRALITY
-CONFIDENCE
-EVIDENCE
+Repository
+    │
+    ▼
+SCIP / fournisseur
+    │
+    ▼
+Adaptateur MINOS
+    │
+    ▼
+Modèle normalisé
+    │
+    ▼
+Backend léger MINOS
 ```
 
-Ces concepts appartiennent au modèle d'intelligence MINOS même s'ils sont physiquement stockés dans Glean.
+Ce chemin doit démontrer que MINOS peut fournir au minimum `find_symbol` et `find_usages` sans Glean.
 
-## Avantages
+Le backend léger peut être en mémoire pour les tests et utiliser un stockage embarqué minimal pour le spike si nécessaire. Son objectif M0 n'est pas de remplacer toutes les capacités de Glean.
 
-- réutilisation d'une base spécialisée dans les faits de code ;
-- évite de reconstruire prématurément une plateforme de graphe et de requêtes ;
-- possibilité de réutiliser les chemins d'ingestion SCIP ;
-- potentiel de requêtes avancées rapidement ;
-- contrats publics MINOS indépendants de Glean ;
-- possibilité d'un backend mémoire pour les tests.
+#### Chemin B — Glean
 
-## Inconvénients
+```text
+Repository
+    │
+    ▼
+SCIP / indexeur
+    │
+    ▼
+Glean
+    │
+    ▼
+GleanCodeKnowledgeStore
+    │
+    ▼
+Services MINOS
+```
 
-- complexité opérationnelle supérieure à une base Java embarquée ;
-- technologies hors de la stack Java principale ;
-- nécessité d'un mapping précis entre faits Glean et concepts MINOS ;
-- besoin potentiel de schémas ou dérivations spécifiques ;
-- coût initial de conception d'une frontière remplaçable.
+Ce chemin mesure la valeur ajoutée réelle de Glean et son coût opérationnel.
 
-## Alternatives étudiées
+## Pourquoi conserver Glean dans l'évaluation
 
-### Reconstruire immédiatement un fact store complet dans SQLite
+Glean reste particulièrement intéressant pour :
 
-Non retenu comme direction par défaut à ce stade, car cela pourrait dupliquer des capacités déjà disponibles dans Glean.
+- stockage de faits typés ;
+- déduplication ;
+- requêtes relationnelles complexes ;
+- prédicats dérivés ;
+- requêtes de graphe et parcours transitifs ;
+- schémas personnalisés MINOS ;
+- code navigation à grande échelle ;
+- futurs besoins de multi-dépôts ou monorepos massifs.
 
-SQLite peut néanmoins rester pertinent pour :
+Il peut donc devenir plus tard :
 
-- le registre des projets ;
-- les métadonnées locales ;
-- les fixtures ;
-- un backend léger futur.
+- backend avancé optionnel ;
+- backend pour gros dépôts ;
+- backend de serveur Linux ;
+- moteur de requêtes spécialisé derrière `CodeKnowledgeStore`.
 
-### Exposer directement Glean aux consommateurs
+## Pourquoi ne pas l'imposer maintenant
 
-Non retenu, car CLI, MCP, API et NEXUS deviendraient couplés aux concepts et au langage de requêtes de Glean.
+L'imposer dès le MVP introduirait prématurément :
 
-### Maintenir plusieurs backends de production avec parité dès le départ
+- une forte dépendance opérationnelle à Linux ;
+- Haskell et l'écosystème de build Glean ;
+- RocksDB ;
+- Thrift ou orchestration CLI ;
+- gestion d'un processus externe ;
+- packaging et mises à jour supplémentaires ;
+- une difficulté de distribution Windows non encore résolue.
 
-Non retenu pour le premier périmètre, car cela créerait une complexité excessive avant stabilisation du domaine.
+Ces coûts doivent être justifiés par des mesures, pas supposés acceptables.
 
-## Formulation de la stratégie candidate
+## Backend léger de contrôle
 
-> **Glean-first, not Glean-locked.**
+MINOS doit disposer au minimum :
 
-Cette formulation est une hypothèse d'architecture, pas encore une décision définitive.
+- d'un `InMemoryCodeKnowledgeStore` pour les tests ;
+- d'un chemin expérimental léger permettant de comparer Glean pendant M0.
 
-## Validation requise
+Le choix du stockage embarqué éventuel n'est pas encore figé.
 
-Avant acceptation définitive, il faudra démontrer que :
+SQLite reste un candidat naturel pour un spike ou les métadonnées, mais cette ADR ne décide pas qu'il sera le backend de production.
 
-1. un dépôt représentatif peut être indexé et interrogé via Glean ;
-2. des faits SCIP peuvent être ingérés et exploités ;
-3. MINOS peut exposer ses propres contrats sans type Glean ;
-4. une implémentation mémoire de `CodeKnowledgeStore` est possible ;
-5. la complexité opérationnelle reste acceptable pour un outil local-first ;
-6. la distribution est réaliste sur les environnements cibles, notamment Windows ;
-7. le coût en mémoire, disque et démarrage est acceptable.
+Le convertisseur SQLite expérimental du CLI SCIP peut être utilisé pour inspection ou comparaison, mais son statut expérimental interdit d'en faire une dépendance de production sans étude supplémentaire.
 
-## Condition d'acceptation
+## Critères d'adoption de Glean après M0
 
-Cette ADR ne pourra passer au statut **Acceptée** qu'après validation du cahier des charges et des expérimentations prévues en M0.
+Glean ne pourra devenir backend recommandé que si l'expérience démontre :
+
+1. une valeur fonctionnelle mesurable supérieure au chemin léger ;
+2. une installation et une mise à jour automatisables ;
+3. un mode d'exécution acceptable sur l'environnement développeur cible ;
+4. une solution crédible pour Windows, directement ou via une abstraction transparente ;
+5. une communication MINOS ↔ Glean maintenable ;
+6. des temps de démarrage et d'indexation acceptables ;
+7. une empreinte mémoire et disque acceptable ;
+8. une reconstruction fiable des bases ;
+9. des bénéfices réels pour les requêtes complexes ;
+10. aucune fuite des concepts Glean dans le domaine MINOS.
+
+## Scénarios de décision après M0
+
+### ADOPTER
+
+Glean apporte une valeur significative et son exploitation est suffisamment transparente.
+
+### ADOPTER_AVEC_CONTRAINTES
+
+Glean devient un backend avancé réservé à certains environnements, tailles de projets ou modes serveur.
+
+### REVOIR
+
+MINOS conserve `CodeKnowledgeStore` mais choisit un autre backend principal.
+
+### REMPLACER
+
+Glean est retiré de la trajectoire principale ; le domaine MINOS reste inchangé.
+
+## Alternatives surveillées
+
+- backend léger MINOS sur stockage embarqué ;
+- Kythe pour certains besoins de graphes et cross-références ;
+- Joern comme moteur spécialisé CPG / data-flow, sans en faire le backend général ;
+- moteur spécialisé futur derrière un adaptateur ;
+- combinaison de plusieurs moteurs selon les capacités.
+
+## Sources techniques vérifiées
+
+Sources consultées le 22 juillet 2026 :
+
+- Introduction Glean : https://glean.software/docs/introduction/
+- Construction de Glean : https://glean.software/docs/building/
+- Docker Glean : https://glean.software/docs/docker/
+- Requêtes et API : https://glean.software/docs/query/intro/
+- CLI Glean : https://glean.software/docs/cli/
+- Indexation Python/SCIP : https://glean.software/docs/indexer/scip-python/
+- Indexation Java : https://glean.software/docs/indexer/lsif-java/
