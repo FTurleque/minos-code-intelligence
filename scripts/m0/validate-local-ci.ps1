@@ -21,6 +21,20 @@ function Resolve-FromRepoRoot {
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Path))
 }
 
+function Resolve-OsArchitecture {
+    $Architecture = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")
+    if ([string]::IsNullOrWhiteSpace($Architecture)) {
+        $Architecture = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Architecture)) {
+        return $Architecture
+    }
+    if ([System.Environment]::Is64BitOperatingSystem) {
+        return "64-bit"
+    }
+    return "32-bit"
+}
+
 function Write-TransactionalText {
     param(
         [Parameter(Mandatory = $true)][string] $Path,
@@ -107,6 +121,7 @@ try {
     $RunId = "$([DateTimeOffset]::Now.ToString('yyyyMMdd-HHmmss'))-$($GitCommit.Substring(0, 8))"
     $RunDirectory = Join-Path $ResolvedOutputDirectory $RunId
     New-Item -ItemType Directory -Force -Path $RunDirectory | Out-Null
+    $OsArchitecture = Resolve-OsArchitecture
 
     $EnvironmentLines = @(
         "startedAt=$([DateTimeOffset]::Now.ToString('o'))",
@@ -117,7 +132,7 @@ try {
         "gitDirty=$($IsDirty.ToString().ToLowerInvariant())",
         "allowDirty=$($AllowDirty.IsPresent.ToString().ToLowerInvariant())",
         "os=$([System.Environment]::OSVersion.VersionString)",
-        "architecture=$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)",
+        "architecture=$OsArchitecture",
         "javaCommand=$JavaCommand",
         "=== java --version ===",
         $JavaVersion,
