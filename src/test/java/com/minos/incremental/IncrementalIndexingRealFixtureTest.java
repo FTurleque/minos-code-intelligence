@@ -55,7 +55,7 @@ class IncrementalIndexingRealFixtureTest {
         IncrementalIndexingResult first = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
         IncrementalIndexingResult unchanged = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
 
-        Path changedSource = project.resolve("packages/app/src/service.ts");
+        Path changedSource = project.resolve("packages/app/src/greeting-service.ts");
         Files.writeString(changedSource, Files.readString(changedSource) + System.lineSeparator() + "// M7.4 change");
         IncrementalIndexingResult sourceChanged = coordinator.refresh(
                 projectId,
