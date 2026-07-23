@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M1 livrés — M2 autorisé**
+Statut : **C0 à M5 terminés et validés localement — M6 prochain jalon**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -137,7 +137,7 @@ M1.4 cycle de vie + état d'index              FUSIONNÉ
 
 ## M2 — Intelligence des symboles
 
-État : **AUTORISÉ — prochain jalon**
+État : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
 ### Objectif
 
@@ -164,9 +164,14 @@ minos find-symbol <projet> <symbole>
 
 retourne un résultat MINOS normalisé et compact.
 
+Porte acquise avec un registre et un snapshot persistant rechargés dans un
+nouveau processus. Décision : `m2/DECISION_M2.md`.
+
 ---
 
 ## M3 — Intelligence des relations
+
+État : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
 ### Objectif
 
@@ -189,9 +194,26 @@ Exposer les relations entrantes et sortantes entre éléments du code.
 - `dependencies` ;
 - `dependents`.
 
+Premier incrément acquis : contrat de relation isolé par projet, recherche
+entrante/sortante/indifférente, filtres de kind/résolution/nature, ordre
+déterministe, résultat compact avec provenance et preuves, et
+`findImplementations`.
+
+Deuxième incrément acquis : mapping factuel des quatre drapeaux SCIP,
+résolution par le catalogue MINOS, cibles non résolues explicites,
+déduplication et métriques de perte.
+
+Porte finale acquise : snapshot v2 rétrocompatible persistant symboles,
+occurrences, relations et preuves ; dérivation directe `DEPENDS_ON` ; commandes
+`find-usages`, `find-implementations`, `find-callers`, `find-callees`,
+`dependencies` et `dependents` ; relecture depuis une nouvelle JVM et replay
+des quatre index TypeScript réels. Décision : `m3/DECISION_M3.md`.
+
 ---
 
 ## M4 — Recherche et contexte compact
+
+État : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
 ### Objectif
 
@@ -210,9 +232,18 @@ Rendre MINOS directement exploitable par des outils et agents avant même l'arri
 
 Ce jalon définit le premier **cœur MINOS réellement utilisable**.
 
+Porte acquise : `minos search` compose symboles, relations, preuves, usages et
+plages source sous des limites explicites de résultats, profondeur et tokens ;
+`minos get-source` récupère le fichier complet uniquement sur demande ; les
+chemins restent confinés à la racine réelle du projet. Le snapshot TypeScript
+réel a été relu dans de nouveaux processus et 200 recherches ont mesuré un p95
+de 5,421 ms. Décision : `m4/DECISION_M4.md`.
+
 ---
 
 ## M5 — Tests liés et dérivations explicables
+
+État : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
 ### Objectif
 
@@ -227,6 +258,14 @@ Déduire des relations utiles que les indexeurs ne fournissent pas forcément di
 - proximité de package ou namespace ;
 - score de confiance ;
 - explication des raisons.
+
+Porte acquise : relation orientée test vers production, classification
+dérivée/heuristique, agrégation déterministe des signaux, preuves structurées,
+persistance snapshot v2, métrique dédiée, cas d'usage `findRelatedTests` et
+commande `related-tests`. La validation finale compile `93` sources main et `49`
+sources test et exécute `140/140` tests avec `BUILD SUCCESS`. Le replay des
+quatre index TypeScript versionnés et la chaîne snapshot → réouverture → CLI JSON
+font partie de cette porte verte. Décision : `m5/DECISION_M5.md`.
 
 ---
 

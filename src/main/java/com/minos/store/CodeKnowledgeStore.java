@@ -1,8 +1,10 @@
 package com.minos.store;
 
 import com.minos.domain.Relationship;
+import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
+import com.minos.domain.SymbolSearchCriteria;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,7 +26,15 @@ public interface CodeKnowledgeStore {
 
     Optional<Symbol> findSymbolById(String projectId, String symbolId);
 
-    List<Symbol> findSymbols(String projectId, String query, int limit);
+    List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria);
+
+    default List<Symbol> findSymbols(String projectId, String query, int limit) {
+        return findSymbols(projectId, SymbolSearchCriteria.lexical(query, limit));
+    }
+
+    List<Symbol> findFileSymbols(String projectId, String fileId, int limit);
 
     List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit);
+
+    List<Relationship> findRelationships(String projectId, RelationshipSearchCriteria criteria);
 }

@@ -4,6 +4,7 @@ import com.minos.domain.OccurrenceRole;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
 import com.minos.domain.ProviderReference;
+import com.minos.domain.Relationship;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.ResolvedSymbolReference;
 import com.minos.domain.Symbol;
@@ -11,10 +12,13 @@ import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolReference;
 import com.minos.domain.UnresolvedSymbolReference;
+import com.minos.query.DependencyDerivationService;
+import com.minos.query.RelatedTestDerivationService;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Document;
 import org.scip_code.scip.Index;
 import org.scip_code.scip.Occurrence;
+import org.scip_code.scip.SymbolInformation;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -41,6 +45,11 @@ final class ScipIngestionAdapter {
     private final ScipRangeMapper rangeMapper = new ScipRangeMapper();
     private final ScipOccurrenceRoleMapper roleMapper = new ScipOccurrenceRoleMapper();
     private final ScipSymbolNormalizer symbolNormalizer = new ScipSymbolNormalizer();
+    private final ScipRelationshipNormalizer relationshipNormalizer = new ScipRelationshipNormalizer();
+    private final DependencyDerivationService dependencyDerivationService =
+            new DependencyDerivationService();
+    private final RelatedTestDerivationService relatedTestDerivationService =
+            new RelatedTestDerivationService();
 
     ScipIngestionReport ingest(
             Index index,
@@ -157,6 +166,24 @@ final class ScipIngestionAdapter {
 
         store.putOccurrences(normalizedOccurrences);
 
+        RelationshipAccumulator relationships = collectRelationships(
+                index,
+                catalog,
+                normalizedByCatalogKey
+        );
+        List<Relationship> derivedDependencies = dependencyDerivationService.derive(
+                relationships.values()
+        );
+        List<Relationship> relatedTests = relatedTestDerivationService.derive(
+                normalizedByCatalogKey.values(),
+                normalizedOccurrences,
+                relationships.values()
+        );
+        List<Relationship> allRelationships = new ArrayList<>(relationships.values());
+        allRelationships.addAll(derivedDependencies);
+        allRelationships.addAll(relatedTests);
+        store.putRelationships(allRelationships);
+
         return new ScipIngestionReport(
                 catalog.size(),
                 normalizedByCatalogKey.size(),
@@ -164,8 +191,113 @@ final class ScipIngestionAdapter {
                 normalizedOccurrences.size(),
                 resolvedOccurrences,
                 unresolvedOccurrences,
-                skippedOccurrences
+                skippedOccurrences,
+                relationships.providerRelationshipCount,
+                relationships.providerRelationshipFactCount,
+                relationships.size(),
+                derivedDependencies.size() + relatedTests.size(),
+                relatedTests.size(),
+                relationships.resolvedCount(),
+                relationships.unresolvedCount(),
+                relationships.skippedRelationshipFactCount,
+                relationships.duplicateRelationshipCount
         );
+    }
+
+    private RelationshipAccumulator collectRelationships(
+            Index index,
+            ScipSymbolCatalog catalog,
+            Map<String, Symbol> normalizedByCatalogKey
+    ) {
+        RelationshipAccumulator accumulator = new RelationshipAccumulator();
+        for (Document document : index.getDocumentsList()) {
+            collectRelationships(
+                    document.getSymbolsList(),
+                    document.getRelativePath(),
+                    catalog,
+                    normalizedByCatalogKey,
+                    accumulator
+            );
+        }
+        collectRelationships(
+                index.getExternalSymbolsList(),
+                "",
+                catalog,
+                normalizedByCatalogKey,
+                accumulator
+        );
+        return accumulator;
+    }
+
+    private void collectRelationships(
+            List<SymbolInformation> providerSymbols,
+            String relativePath,
+            ScipSymbolCatalog catalog,
+            Map<String, Symbol> normalizedByCatalogKey,
+            RelationshipAccumulator accumulator
+    ) {
+        for (SymbolInformation providerSource : providerSymbols) {
+            String sourceKey = ScipSymbolCatalog.key(relativePath, providerSource.getSymbol());
+            Symbol source = normalizedByCatalogKey.get(sourceKey);
+            ScipSymbolFact sourceFact = catalog.find(relativePath, providerSource.getSymbol())
+                    .orElse(null);
+
+            for (org.scip_code.scip.Relationship providerRelationship
+                    : providerSource.getRelationshipsList()) {
+                accumulator.providerRelationshipCount++;
+                int providerFacts = relationshipNormalizer.factCount(providerRelationship);
+                accumulator.providerRelationshipFactCount += providerFacts;
+                if (providerFacts == 0) {
+                    continue;
+                }
+                if (source == null) {
+                    accumulator.skippedRelationshipFactCount += providerFacts;
+                    continue;
+                }
+
+                String targetKey = ScipSymbolCatalog.key(
+                        relativePath,
+                        providerRelationship.getSymbol()
+                );
+                Symbol target = normalizedByCatalogKey.get(targetKey);
+                String unresolvedTarget = target == null
+                        ? unresolvedRelationshipTarget(
+                                providerRelationship.getSymbol(),
+                                relativePath,
+                                sourceFact,
+                                catalog
+                        )
+                        : null;
+                List<Relationship> normalized = relationshipNormalizer.normalize(
+                        providerRelationship,
+                        source,
+                        target,
+                        unresolvedTarget
+                );
+                accumulator.skippedRelationshipFactCount += providerFacts - normalized.size();
+                normalized.forEach(accumulator::add);
+            }
+        }
+    }
+
+    private String unresolvedRelationshipTarget(
+            String rawTarget,
+            String relativePath,
+            ScipSymbolFact sourceFact,
+            ScipSymbolCatalog catalog
+    ) {
+        ScipSymbolFact targetFact = catalog.find(relativePath, rawTarget).orElse(null);
+        String language = targetFact != null && !targetFact.language().isBlank()
+                ? targetFact.language()
+                : sourceFact == null ? "" : sourceFact.language();
+        Optional<String> qualifiedName = ScipQualifiedNameExtractor.extract(rawTarget, language);
+        if (qualifiedName.isPresent()) {
+            return qualifiedName.orElseThrow();
+        }
+        if (targetFact != null && !targetFact.displayName().isBlank()) {
+            return targetFact.displayName();
+        }
+        return ScipDescriptorNameExtractor.extract(rawTarget).orElse(null);
     }
 
     private void collectDefinitionMetadata(
@@ -247,6 +379,41 @@ final class ScipIngestionAdapter {
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private static final class RelationshipAccumulator {
+
+        private final Map<String, Relationship> relationshipsById = new LinkedHashMap<>();
+        private int providerRelationshipCount;
+        private int providerRelationshipFactCount;
+        private int skippedRelationshipFactCount;
+        private int duplicateRelationshipCount;
+
+        private void add(Relationship relationship) {
+            if (relationshipsById.putIfAbsent(relationship.id(), relationship) != null) {
+                duplicateRelationshipCount++;
+            }
+        }
+
+        private List<Relationship> values() {
+            return List.copyOf(relationshipsById.values());
+        }
+
+        private int size() {
+            return relationshipsById.size();
+        }
+
+        private int resolvedCount() {
+            return (int) relationshipsById.values().stream()
+                    .filter(relationship -> relationship.resolutionStatus() == ResolutionStatus.RESOLVED)
+                    .count();
+        }
+
+        private int unresolvedCount() {
+            return (int) relationshipsById.values().stream()
+                    .filter(relationship -> relationship.resolutionStatus() == ResolutionStatus.UNRESOLVED)
+                    .count();
         }
     }
 }

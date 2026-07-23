@@ -1,8 +1,11 @@
 package com.minos.store;
 
 import com.minos.domain.Relationship;
+import com.minos.domain.RelationshipDirection;
+import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
+import com.minos.domain.SymbolSearchCriteria;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -13,13 +16,13 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Implémentation mémoire déterministe destinée aux tests et à la baseline M0.
+ * Implémentation mémoire déterministe des contrats de stockage MINOS.
  */
 public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
 
     private final Map<String, Symbol> symbolsByScopedId = new ConcurrentHashMap<>();
     private final Map<String, SymbolOccurrence> occurrencesByScopedId = new ConcurrentHashMap<>();
-    private final Map<String, Relationship> relationshipsById = new ConcurrentHashMap<>();
+    private final Map<String, Relationship> relationshipsByScopedId = new ConcurrentHashMap<>();
 
     @Override
     public void putSymbols(Collection<Symbol> symbols) {
@@ -43,7 +46,10 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
         if (relationships == null) {
             return;
         }
-        relationships.forEach(relationship -> relationshipsById.put(relationship.id(), relationship));
+        relationships.forEach(relationship -> relationshipsByScopedId.put(
+                scopedKey(relationship.projectId(), relationship.id()),
+                relationship
+        ));
     }
 
     @Override
@@ -54,18 +60,46 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
     }
 
     @Override
-    public List<Symbol> findSymbols(String projectId, String query, int limit) {
+    public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) {
         validateText(projectId, "projectId");
-        validateText(query, "query");
-        validateLimit(limit);
+        if (criteria == null) {
+            throw new IllegalArgumentException("criteria must not be null");
+        }
 
-        String normalizedQuery = query.toLowerCase(Locale.ROOT);
+        String normalizedQuery = normalize(criteria.text());
 
         return symbolsByScopedId.values().stream()
                 .filter(symbol -> projectId.equals(symbol.projectId()))
-                .filter(symbol -> matches(symbol, normalizedQuery))
+                .filter(symbol -> criteria.kind() == null || criteria.kind() == symbol.kind())
+                .filter(symbol -> criteria.moduleId() == null || criteria.moduleId().equals(symbol.moduleId()))
+                .filter(symbol -> criteria.qualifiedName() == null
+                        || criteria.qualifiedName().equals(symbol.qualifiedName()))
+                .filter(symbol -> normalizedQuery == null || matchRank(symbol, normalizedQuery) < Integer.MAX_VALUE)
                 .sorted(Comparator
-                        .comparing(Symbol::qualifiedName, Comparator.nullsLast(String::compareTo))
+                        .comparingInt((Symbol symbol) -> matchRank(symbol, normalizedQuery))
+                        .thenComparing(Symbol::external)
+                        .thenComparing(Symbol::generated)
+                        .thenComparing(Symbol::qualifiedName, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(Symbol::name)
+                        .thenComparing(Symbol::signature, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(Symbol::id))
+                .limit(criteria.limit())
+                .toList();
+    }
+
+    @Override
+    public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) {
+        validateText(projectId, "projectId");
+        validateText(fileId, "fileId");
+        validateLimit(limit);
+
+        return symbolsByScopedId.values().stream()
+                .filter(symbol -> projectId.equals(symbol.projectId()))
+                .filter(symbol -> declaredInFile(symbol, fileId))
+                .sorted(Comparator
+                        .comparingInt(InMemoryCodeKnowledgeStore::startLine)
+                        .thenComparingInt(InMemoryCodeKnowledgeStore::startColumn)
+                        .thenComparing(Symbol::qualifiedName, Comparator.nullsLast(String::compareTo))
                         .thenComparing(Symbol::name)
                         .thenComparing(Symbol::id))
                 .limit(limit)
@@ -94,10 +128,149 @@ public final class InMemoryCodeKnowledgeStore implements CodeKnowledgeStore {
                 .toList();
     }
 
-    private static boolean matches(Symbol symbol, String normalizedQuery) {
-        return containsIgnoreCase(symbol.name(), normalizedQuery)
-                || containsIgnoreCase(symbol.qualifiedName(), normalizedQuery)
-                || containsIgnoreCase(symbol.symbolKey(), normalizedQuery);
+    @Override
+    public List<Relationship> findRelationships(
+            String projectId,
+            RelationshipSearchCriteria criteria
+    ) {
+        validateText(projectId, "projectId");
+        if (criteria == null) {
+            throw new IllegalArgumentException("criteria must not be null");
+        }
+
+        return relationshipsByScopedId.values().stream()
+                .filter(relationship -> projectId.equals(relationship.projectId()))
+                .filter(relationship -> matchesDirection(relationship, criteria))
+                .filter(relationship -> criteria.kinds().isEmpty()
+                        || criteria.kinds().contains(relationship.kind()))
+                .filter(relationship -> criteria.resolutionStatus() == null
+                        || criteria.resolutionStatus() == relationship.resolutionStatus())
+                .filter(relationship -> criteria.nature() == null
+                        || criteria.nature() == relationship.nature())
+                .sorted(Comparator
+                        .comparingInt((Relationship relationship) -> directionRank(
+                                relationship,
+                                criteria
+                        ))
+                        .thenComparing(Relationship::kind)
+                        .thenComparing(relationship -> relationship.target() == null)
+                        .thenComparing(relationship -> relationship.source().type())
+                        .thenComparing(relationship -> relationship.source().id())
+                        .thenComparing(
+                                relationship -> relationship.target() == null
+                                        ? null
+                                        : relationship.target().type(),
+                                Comparator.nullsLast(Comparator.naturalOrder())
+                        )
+                        .thenComparing(
+                                relationship -> relationship.target() == null
+                                        ? null
+                                        : relationship.target().id(),
+                                Comparator.nullsLast(String::compareTo)
+                        )
+                        .thenComparing(
+                                Relationship::unresolvedTarget,
+                                Comparator.nullsLast(String::compareTo)
+                        )
+                        .thenComparing(
+                                relationship -> relationship.location() == null
+                                        ? null
+                                        : relationship.location().fileId(),
+                                Comparator.nullsLast(String::compareTo)
+                        )
+                        .thenComparingInt(InMemoryCodeKnowledgeStore::relationshipStartLine)
+                        .thenComparingInt(InMemoryCodeKnowledgeStore::relationshipStartColumn)
+                        .thenComparing(Relationship::id))
+                .limit(criteria.limit())
+                .toList();
+    }
+
+    private static int matchRank(Symbol symbol, String normalizedQuery) {
+        if (normalizedQuery == null) {
+            return 0;
+        }
+        if (equalsIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
+            return 0;
+        }
+        if (equalsIgnoreCase(symbol.name(), normalizedQuery)) {
+            return 1;
+        }
+        if (startsWithIgnoreCase(symbol.name(), normalizedQuery)) {
+            return 2;
+        }
+        if (startsWithIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
+            return 3;
+        }
+        if (containsIgnoreCase(symbol.name(), normalizedQuery)) {
+            return 4;
+        }
+        if (containsIgnoreCase(symbol.qualifiedName(), normalizedQuery)) {
+            return 5;
+        }
+        if (containsIgnoreCase(symbol.symbolKey(), normalizedQuery)) {
+            return 6;
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    private static boolean declaredInFile(Symbol symbol, String fileId) {
+        return fileId.equals(symbol.fileId())
+                || symbol.location() != null && fileId.equals(symbol.location().fileId());
+    }
+
+    private static int startLine(Symbol symbol) {
+        return symbol.location() == null ? Integer.MAX_VALUE : symbol.location().startLine();
+    }
+
+    private static int startColumn(Symbol symbol) {
+        return symbol.location() == null ? Integer.MAX_VALUE : symbol.location().startColumn();
+    }
+
+    private static boolean matchesDirection(
+            Relationship relationship,
+            RelationshipSearchCriteria criteria
+    ) {
+        boolean outgoing = relationship.source().equals(criteria.anchor());
+        boolean incoming = criteria.anchor().equals(relationship.target());
+        return switch (criteria.direction()) {
+            case OUTGOING -> outgoing;
+            case INCOMING -> incoming;
+            case ANY -> outgoing || incoming;
+        };
+    }
+
+    private static int directionRank(
+            Relationship relationship,
+            RelationshipSearchCriteria criteria
+    ) {
+        if (criteria.direction() != RelationshipDirection.ANY) {
+            return 0;
+        }
+        return relationship.source().equals(criteria.anchor()) ? 0 : 1;
+    }
+
+    private static int relationshipStartLine(Relationship relationship) {
+        return relationship.location() == null
+                ? Integer.MAX_VALUE
+                : relationship.location().startLine();
+    }
+
+    private static int relationshipStartColumn(Relationship relationship) {
+        return relationship.location() == null
+                ? Integer.MAX_VALUE
+                : relationship.location().startColumn();
+    }
+
+    private static String normalize(String value) {
+        return value == null ? null : value.toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean equalsIgnoreCase(String value, String normalizedQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).equals(normalizedQuery);
+    }
+
+    private static boolean startsWithIgnoreCase(String value, String normalizedQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).startsWith(normalizedQuery);
     }
 
     private static boolean containsIgnoreCase(String value, String normalizedQuery) {

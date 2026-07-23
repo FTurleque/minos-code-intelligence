@@ -477,6 +477,8 @@ Relationship
 
 ```text
 DECLARES
+DEFINITION
+TYPE_DEFINITION
 CONTAINS
 IMPORTS
 REFERENCES
@@ -491,6 +493,11 @@ INSTANTIATES
 ```
 
 Une relation primitive correspond à une information observable ou fournie directement avec un niveau de résolution explicite.
+
+`DEFINITION` relie un symbole à une définition fournie par le moteur de Code
+Intelligence. `TYPE_DEFINITION` relie une occurrence symbolique à la définition
+de son type. Ces relations ne doivent pas être confondues avec `DECLARES`, qui
+porte une relation structurelle de contenance/déclaration.
 
 ## 13.2 Relations dérivées
 
@@ -698,6 +705,12 @@ Ils peuvent inclure :
 - confiance ;
 - preuves ;
 - plage de code pertinente.
+
+M4 matérialise cette vue avec `CodeSearchResponse`, `CodeContextResult`,
+`ContextRelationshipResult` et `SourceExcerpt`. Ces DTO restent indépendants
+du fournisseur et distinguent la plage pertinente du fichier complet
+explicitement demandé. Ils portent également le budget, l'estimation de tokens,
+les tokens source évités et le signal de troncature.
 
 ---
 
