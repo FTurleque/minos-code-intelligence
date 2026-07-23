@@ -2,7 +2,7 @@
 
 **MINOS** est un moteur d’intelligence du code (*Code Intelligence Engine*) conçu pour construire une compréhension structurée, persistante, interrogeable et explicable de projets logiciels.
 
-MINOS est pensé pour fonctionner **localement**, être **agnostique du langage**, indépendant des fournisseurs d’IA et découplé des moteurs d’indexation ou de stockage utilisés en interne.
+MINOS fonctionne **localement**, reste **agnostique du langage**, indépendant des fournisseurs d’IA et découplé des moteurs d’indexation ou de stockage utilisés en interne.
 
 MINOS n’est ni un chatbot, ni un LLM, ni un simple moteur de recherche textuelle.
 
@@ -37,64 +37,78 @@ Il vise notamment à répondre à des questions comme :
                   Agents / profils IA
 ```
 
-Cette vue décrit les responsabilités fonctionnelles de l’écosystème. MINOS reste autonome et ne dépend fonctionnellement ni de JARVIS, ni de NEXUS, ni d’Alfred, ni de Brainiac.
-
-```text
-CODEBASE / WORKSPACE
-        │
-        ▼
-      MINOS
- Code Intelligence
-« Je comprends le code »
-        │
-        ▼
-      NEXUS
-Context Intelligence
-« Je sélectionne le bon contexte »
-        │
-        ▼
- AGENT / LLM / IDE
-```
+MINOS reste autonome et ne dépend fonctionnellement ni de JARVIS, ni de NEXUS, ni d’Alfred, ni de Brainiac.
 
 Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md).
 
 ## Phase actuelle
 
-Les jalons **C0 à M7 sont terminés, validés et livrés**.
+Les jalons **C0 à M8 sont terminés, validés et livrés**.
 
-M7 — Indexation incrémentale — a été clôturé via PR #26 au commit :
+M8 — Analyse d’impact — a été fusionné via PR #28 au commit :
 
 ```text
-c66382705880158b9ccac63b5662b81bf2d8d255
+8147db5c246c7bad92c9b6ab21be81084dc64f59
 ```
 
-Porte finale M7 :
+Porte finale M8 :
 
 ```text
-134 sources main
-69 sources test
-196 / 196 tests PASS
+143 sources main
+72 sources test
+203 / 203 tests PASS
 BUILD SUCCESS
 ```
 
-**M8 — Analyse d’impact est maintenant implémenté** sur une branche dédiée et attend sa porte locale finale.
+**M9 — CLI stabilisée est maintenant intégralement implémenté** sur `m9/stable-cli` et attend sa porte locale finale.
 
-M8 fournit :
+La surface M9 comprend :
 
-- impacts directs et indirects ;
-- traversée inverse des relations de dépendance observées ;
-- chemins explicatifs complets ;
-- profondeur et résultats bornés ;
-- gestion déterministe des cycles et chemins concurrents ;
-- confiance conservatrice par minimum des confiances du chemin ;
-- tests potentiellement impactés via `RELATED_TEST` M5 ;
-- chemin de preuve test conservé séparément du meilleur chemin général ;
-- limites explicites pour dispatch dynamique, réflexion, configuration runtime, relations non résolues et entités externes ;
-- `ProjectImpactQuery` / `LocalProjectImpactQuery`.
+```text
+minos project add
+minos project list
+minos project inspect
+minos inspect
+minos index
+minos index-status
+minos search
+minos find-symbol
+minos get-source
+minos find-usages
+minos find-implementations
+minos find-callers
+minos find-callees
+minos dependencies
+minos dependents
+minos related-tests
+minos architecture
+minos impact
+```
 
-La décision M8 est préparée dans [`docs/m8/DECISION_M8.md`](docs/m8/DECISION_M8.md).
+Toutes les vues stabilisées sont scriptables en `text` ou `json`, avec codes de sortie documentés et erreurs sur `stderr`.
 
-Le tableau de bord [`docs/STATUS.md`](docs/STATUS.md) indique la porte active et la [`roadmap`](docs/ROADMAP.md) décrit M9 à M13.
+### Frontière de `minos index`
+
+MINOS possède les contrats de lifecycle/indexeurs, mais le dépôt ne contient pas encore de runner de production lançant automatiquement `scip-java` ou `scip-typescript`.
+
+M9 expose donc le chemin réellement qualifié :
+
+```text
+artefact SCIP existant
+        │
+        ▼
+ScipSymbolSnapshotImporter
+        │
+        ▼
+normalisation MINOS
+        │
+        ▼
+FileSymbolSnapshotStore
+```
+
+La CLI ne transforme pas une absence d’infrastructure en capacité fictive.
+
+Voir [`docs/m9/CLI.md`](docs/m9/CLI.md) et [`docs/m9/DECISION_M9.md`](docs/m9/DECISION_M9.md).
 
 ## Stack technique
 
@@ -105,57 +119,49 @@ Wrapper        Maven Wrapper 3.3.4 / Maven 3.9.16
 Framework      Aucun framework serveur dans le cœur
 ```
 
-La version Java suit la toolchain de référence de l’environnement de développement. Une montée de version doit être coordonnée plutôt qu’imposée uniquement à MINOS.
-
-Le choix d’un framework pour une future API ou couche MCP reste différé jusqu’au besoin réel.
-
 ## Fondation technique
 
 ```text
-Repository
-    │
-    ▼
+Repository / Workspace
+        │
+        ▼
 Project Discovery / Registry
-    │
-    ▼
+        │
+        ▼
 Fingerprint / Invalidation
-    │
-    ▼
-IndexerRegistry
-    │
-    ├── SCIP Providers      ← chemin privilégié
-    ├── Native Providers
-    └── Specialized Providers
-    │
-    ▼
+        │
+        ▼
+Indexer Registry / Negotiation
+        │
+        ▼
 Incremental Planner
-    │
-    ├── NONE
-    ├── FULL
-    └── INCREMENTAL         ← seulement si capacité prouvée
-    │
-    ▼
+  NONE / FULL / INCREMENTAL
+        │
+        ▼
 Indexing Lifecycle / Atomic Promotion
-    │
-    ▼
+        │
+        ▼
 MINOS Normalization
-    │
-    ▼
+        │
+        ▼
 CodeKnowledgeStore
-    │
-    ├── InMemory            ← tests
-    ├── Lightweight         ← chemin par défaut
-    └── Glean               ← option avancée
-    │
-    ▼
+        │
+        ├── InMemory
+        ├── Lightweight local
+        └── Glean optionnel
+        │
+        ▼
 MINOS Query Services
-    │
-    ├── Symbol Intelligence
-    ├── Relationship Intelligence
-    ├── Compact Context
-    ├── Related Tests
-    ├── Architecture Intelligence
-    └── Impact Analysis
+        │
+        ├── Symbol Intelligence
+        ├── Relationship Intelligence
+        ├── Compact Context
+        ├── Related Tests
+        ├── Architecture Intelligence
+        └── Impact Analysis
+        │
+        ▼
+Stable CLI
 ```
 
 Principe structurant :
@@ -173,13 +179,13 @@ SCIP est privilégié lorsqu’un fournisseur suffisamment fiable existe. Les co
 - les limitations d’un fournisseur ne sont jamais transformées en garanties ;
 - une portée incrémentale n’est jamais exécutée sans capacité fournisseur qualifiée ;
 - un doute d’invalidation provoque un fallback complet ;
-- une analyse d’impact décrit des **impacts potentiels observables**, jamais une certitude runtime ;
+- une analyse d’impact décrit des impacts **potentiels observables**, jamais une certitude runtime ;
 - l’absence de chemin observé ne prouve pas l’absence d’impact ;
-- les rôles architecturaux ne sont pas inventés à partir de conventions seules.
+- la CLI reste une couche d’exposition et ne réimplémente pas l’intelligence métier.
 
-## Prochain jalon — M9 après clôture M8
+## Prochain jalon — M10 après clôture M9
 
-M9 vise la **stabilisation de la CLI**, notamment l’exposition cohérente des capacités déjà construites : indexation, recherche, symboles, relations, tests liés, architecture et impact.
+M10 vise un **serveur MCP** exposant aux agents IA des outils spécialisés et compacts. La logique métier doit rester dans les services MINOS, pas dans les handlers MCP.
 
 ## Documents de référence
 
@@ -188,11 +194,11 @@ M9 vise la **stabilisation de la CLI**, notamment l’exposition cohérente des 
 - [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — cahier des charges ;
 - [`docs/MVP.md`](docs/MVP.md) — MVP ;
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — positionnement ;
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — architecture générale ;
-- [`docs/m6/DECISION_M6.md`](docs/m6/DECISION_M6.md) — décision M6 ;
 - [`docs/m7/DECISION_M7.md`](docs/m7/DECISION_M7.md) — décision M7 ;
 - [`docs/m8/IMPACT_ANALYSIS.md`](docs/m8/IMPACT_ANALYSIS.md) — conception M8 ;
 - [`docs/m8/DECISION_M8.md`](docs/m8/DECISION_M8.md) — décision M8 ;
+- [`docs/m9/CLI.md`](docs/m9/CLI.md) — contrat CLI M9 ;
+- [`docs/m9/DECISION_M9.md`](docs/m9/DECISION_M9.md) — décision M9 ;
 - [`docs/adr/`](docs/adr/) — décisions d’architecture.
 
 ## Règle de développement
