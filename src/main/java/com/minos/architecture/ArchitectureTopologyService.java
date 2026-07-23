@@ -14,11 +14,11 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -50,7 +50,10 @@ public final class ArchitectureTopologyService {
         int externalSymbolCount = 0;
         int unassignedLocalSymbolCount = 0;
 
-        for (Symbol symbol : snapshot.symbols()) {
+        List<Symbol> orderedSymbols = snapshot.symbols().stream()
+                .sorted(Comparator.comparing(Symbol::id))
+                .toList();
+        for (Symbol symbol : orderedSymbols) {
             if (symbol.external()) {
                 externalSymbolCount++;
                 continue;
@@ -195,7 +198,7 @@ public final class ArchitectureTopologyService {
 
         private void accept(Symbol symbol, Path filePath) {
             symbolCount++;
-            languages.add(symbol.language().toUpperCase());
+            languages.add(symbol.language().toUpperCase(Locale.ROOT));
 
             SourceRoot sourceRoot = bestSourceRoot(filePath);
             Path relativeFile;
@@ -294,7 +297,7 @@ public final class ArchitectureTopologyService {
 
         private void accept(String language) {
             symbolCount++;
-            languages.add(language.toUpperCase());
+            languages.add(language.toUpperCase(Locale.ROOT));
         }
 
         private ArchitectureNamespace toResult(String moduleId) {
