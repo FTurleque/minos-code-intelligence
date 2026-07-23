@@ -26,7 +26,7 @@ class SymbolQueryServiceTest {
     private static final String PROJECT_ID = "project-1";
     private static final String SYMBOL_ID = "symbol-document-ingestion-service";
     private static final String QUALIFIED_NAME =
-            "io.github.fturleque.minos.fixture.DocumentIngestionService";
+            "com.minos.fixture.DocumentIngestionService";
 
     @Test
     void findSymbolUsesOnlyMinosContracts() {

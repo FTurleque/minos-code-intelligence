@@ -4,17 +4,17 @@
   "release": 24,
   "purpose": "Qualifier la compatibilité de scip-java avec un projet compilé en Java 24.",
   "requiredSymbols": [
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture24.GreetingService"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture24.GreetingService.greet"},
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture24.GreetingApp"},
-    {"kind": "CONSTRUCTOR", "qualifiedName": "io.github.fturleque.minos.fixture24.GreetingApp.<init>"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture24.GreetingApp.run"}
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture24.GreetingService"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture24.GreetingService.greet"},
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture24.GreetingApp"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "com.minos.fixture24.GreetingApp.<init>"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture24.GreetingApp.run"}
   ],
   "requiredRelationships": [
     {
       "kind": "CALLS",
-      "source": "io.github.fturleque.minos.fixture24.GreetingApp.run",
-      "target": "io.github.fturleque.minos.fixture24.GreetingService.greet"
+      "source": "com.minos.fixture24.GreetingApp.run",
+      "target": "com.minos.fixture24.GreetingService.greet"
     }
   ],
   "expectedUnresolved": []

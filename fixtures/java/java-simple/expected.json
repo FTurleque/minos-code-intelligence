@@ -3,19 +3,19 @@
   "language": "java",
   "buildSystem": "maven",
   "requiredSymbols": [
-    {"kind": "RECORD", "qualifiedName": "io.github.fturleque.minos.fixture.User"},
-    {"kind": "INTERFACE", "qualifiedName": "io.github.fturleque.minos.fixture.UserRepository"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.UserRepository.findById"},
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.InMemoryUserRepository"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.InMemoryUserRepository.findById"},
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.UserService"},
-    {"kind": "CONSTRUCTOR", "qualifiedName": "io.github.fturleque.minos.fixture.UserService.<init>"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.UserService.findUser"},
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.UserResource"},
-    {"kind": "CONSTRUCTOR", "qualifiedName": "io.github.fturleque.minos.fixture.UserResource.<init>"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.UserResource.getUserName"},
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.UserServiceTest"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.UserServiceTest.findsExistingUser"}
+    {"kind": "RECORD", "qualifiedName": "com.minos.fixture.User"},
+    {"kind": "INTERFACE", "qualifiedName": "com.minos.fixture.UserRepository"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.UserRepository.findById"},
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture.InMemoryUserRepository"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.InMemoryUserRepository.findById"},
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture.UserService"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "com.minos.fixture.UserService.<init>"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.UserService.findUser"},
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture.UserResource"},
+    {"kind": "CONSTRUCTOR", "qualifiedName": "com.minos.fixture.UserResource.<init>"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.UserResource.getUserName"},
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture.UserServiceTest"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.UserServiceTest.findsExistingUser"}
   ],
   "providerOptionalSymbols": [
     "constructeurs implicites",
@@ -25,31 +25,31 @@
   "requiredRelationships": [
     {
       "kind": "IMPLEMENTS",
-      "source": "io.github.fturleque.minos.fixture.InMemoryUserRepository",
-      "target": "io.github.fturleque.minos.fixture.UserRepository"
+      "source": "com.minos.fixture.InMemoryUserRepository",
+      "target": "com.minos.fixture.UserRepository"
     },
     {
       "kind": "CALLS",
-      "source": "io.github.fturleque.minos.fixture.UserService.findUser",
-      "target": "io.github.fturleque.minos.fixture.UserRepository.findById"
+      "source": "com.minos.fixture.UserService.findUser",
+      "target": "com.minos.fixture.UserRepository.findById"
     },
     {
       "kind": "CALLS",
-      "source": "io.github.fturleque.minos.fixture.UserResource.getUserName",
-      "target": "io.github.fturleque.minos.fixture.UserService.findUser"
+      "source": "com.minos.fixture.UserResource.getUserName",
+      "target": "com.minos.fixture.UserService.findUser"
     },
     {
       "kind": "CALLS",
-      "source": "io.github.fturleque.minos.fixture.UserServiceTest.findsExistingUser",
-      "target": "io.github.fturleque.minos.fixture.UserService.findUser"
+      "source": "com.minos.fixture.UserServiceTest.findsExistingUser",
+      "target": "com.minos.fixture.UserService.findUser"
     }
   ],
   "requiredUsageTargets": [
-    "io.github.fturleque.minos.fixture.User",
-    "io.github.fturleque.minos.fixture.UserRepository",
-    "io.github.fturleque.minos.fixture.UserRepository.findById",
-    "io.github.fturleque.minos.fixture.UserService",
-    "io.github.fturleque.minos.fixture.UserService.findUser"
+    "com.minos.fixture.User",
+    "com.minos.fixture.UserRepository",
+    "com.minos.fixture.UserRepository.findById",
+    "com.minos.fixture.UserService",
+    "com.minos.fixture.UserService.findUser"
   ],
   "expectedUnresolved": []
 }

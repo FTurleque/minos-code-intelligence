@@ -11,8 +11,8 @@
     "MissingClient"
   ],
   "symbolsCompilableBeforeFailure": [
-    {"kind": "CLASS", "qualifiedName": "io.github.fturleque.minos.fixture.partial.stable.StableGreeting"},
-    {"kind": "METHOD", "qualifiedName": "io.github.fturleque.minos.fixture.partial.stable.StableGreeting.greet"}
+    {"kind": "CLASS", "qualifiedName": "com.minos.fixture.partial.stable.StableGreeting"},
+    {"kind": "METHOD", "qualifiedName": "com.minos.fixture.partial.stable.StableGreeting.greet"}
   ],
   "providerQuestion": "scip-java preserves an ingestible partial index when a later Maven module fails to compile"
 }
