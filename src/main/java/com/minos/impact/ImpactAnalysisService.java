@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,8 +77,8 @@ public final class ImpactAnalysisService {
         queue.add(rootCandidate);
 
         Map<String, Candidate> selected = new HashMap<>();
+        Map<String, Candidate> testCandidates = new HashMap<>();
         selected.put(root.id(), rootCandidate);
-        List<ImpactedSymbol> impacts = new ArrayList<>();
         EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, symbolsById);
 
         while (!queue.isEmpty()) {
@@ -126,6 +127,13 @@ public final class ImpactAnalysisService {
                         pathSignature(path)
                 );
 
+                if (relationship.kind() == RelationshipKind.RELATED_TEST) {
+                    Candidate previousTest = testCandidates.get(impactedId);
+                    if (previousTest == null || compareCandidate(candidate, previousTest) < 0) {
+                        testCandidates.put(impactedId, candidate);
+                    }
+                }
+
                 Candidate previous = selected.get(impactedId);
                 if (previous == null || compareCandidate(candidate, previous) < 0) {
                     selected.put(impactedId, candidate);
@@ -143,22 +151,23 @@ public final class ImpactAnalysisService {
             ordered = ordered.subList(0, request.maxResults());
         }
 
+        Set<String> includedIds = new HashSet<>();
+        List<ImpactedSymbol> impacts = new ArrayList<>();
         for (Candidate candidate : ordered) {
-            Symbol symbol = symbolsById.get(candidate.symbolId());
-            boolean testImpact = candidate.path().getLast().relationshipKind() == RelationshipKind.RELATED_TEST;
-            impacts.add(new ImpactedSymbol(
-                    symbol,
-                    candidate.depth() == 1 ? ImpactLevel.DIRECT : ImpactLevel.INDIRECT,
-                    candidate.depth(),
-                    candidate.confidence(),
-                    candidate.path(),
-                    testImpact
+            includedIds.add(candidate.symbolId());
+            impacts.add(toImpactedSymbol(
+                    symbolsById.get(candidate.symbolId()),
+                    candidate,
+                    testCandidates.containsKey(candidate.symbolId())
             ));
         }
 
-        List<ImpactedSymbol> impactedTests = impacts.stream()
-                .filter(ImpactedSymbol::testImpact)
+        List<ImpactedSymbol> impactedTests = testCandidates.values().stream()
+                .filter(candidate -> includedIds.contains(candidate.symbolId()))
+                .sorted(CANDIDATE_ORDER)
+                .map(candidate -> toImpactedSymbol(symbolsById.get(candidate.symbolId()), candidate, true))
                 .toList();
+
         return new ImpactAnalysisReport(
                 snapshot.projectId(),
                 snapshot.snapshotId(),
@@ -167,6 +176,17 @@ public final class ImpactAnalysisService {
                 impacts,
                 impactedTests,
                 List.copyOf(limitations)
+        );
+    }
+
+    private static ImpactedSymbol toImpactedSymbol(Symbol symbol, Candidate candidate, boolean testImpact) {
+        return new ImpactedSymbol(
+                symbol,
+                candidate.depth() == 1 ? ImpactLevel.DIRECT : ImpactLevel.INDIRECT,
+                candidate.depth(),
+                candidate.confidence(),
+                candidate.path(),
+                testImpact
         );
     }
 
