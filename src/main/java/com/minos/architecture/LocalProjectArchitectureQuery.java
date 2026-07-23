@@ -25,6 +25,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     private final ArchitectureConcentrationService concentrationService;
     private final ArchitectureCentralityService centralityService;
     private final ArchitectureTechnologyService technologyService;
+    private final ArchitectureIntelligenceService intelligenceService = new ArchitectureIntelligenceService();
 
     public LocalProjectArchitectureQuery(
             LocalProjectRegistry projectRegistry,
@@ -169,6 +170,29 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
         ProjectContext context = loadContext(projectIdentifier);
         ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
         return technologyService.detect(context.discovery(), overview);
+    }
+
+    @Override
+    public ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier) throws IOException {
+        return intelligence(loadContext(projectIdentifier));
+    }
+
+    @Override
+    public ArchitectureModuleContext getModuleContext(
+            String projectIdentifier,
+            String moduleIdentifier
+    ) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        return intelligenceService.moduleContext(intelligence(context), moduleIdentifier);
+    }
+
+    private ArchitectureIntelligenceView intelligence(ProjectContext context) {
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        ArchitectureDependencyGraph dependencies = dependencyService.build(context.discovery(), context.snapshot());
+        ArchitectureConcentrationReport concentration = concentrationService.analyze(overview, dependencies);
+        ArchitectureCentralityReport centrality = centralityService.rank(concentration);
+        ArchitectureTechnologyReport technologies = technologyService.detect(context.discovery(), overview);
+        return intelligenceService.compose(overview, dependencies, concentration, centrality, technologies);
     }
 
     private ArchitectureConcentrationReport concentration(ProjectContext context) {
