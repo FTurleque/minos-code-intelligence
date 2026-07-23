@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,6 +49,7 @@ class ArchitectureRealFixtureMeasurementTest {
         ArchitectureConcentrationReport concentration = new ArchitectureConcentrationService()
                 .analyze(overview, graph);
         ArchitectureCentralityReport centrality = new ArchitectureCentralityService().rank(concentration);
+        ArchitectureTechnologyReport technologies = new ArchitectureTechnologyService().detect(discovery, overview);
 
         ArchitectureModule rootModule = module(overview, "");
         ArchitectureModule api = module(overview, "packages/api");
@@ -74,6 +76,12 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(0, centrality(centrality, rootModule.id()).incomingRank());
         assertEquals(0, centrality(centrality, rootModule.id()).outgoingRank());
 
+        assertEquals(List.of("TYPESCRIPT", "NPM"), technologies.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+        assertEquals(Set.of(api.id(), app.id()), Set.copyOf(technology(technologies, "TYPESCRIPT").moduleIds()));
+        assertEquals(List.of(rootModule.id()), technology(technologies, "NPM").moduleIds());
+
         System.out.printf(
                 "M6.3 typescript-modules: modules=%d, dependsOn=%d, inter=%d, intra=%d, unassigned=%d, "
                         + "edges=%d, HHI-in=%.6f, HHI-out=%.6f, max-in=%.6f, max-out=%.6f%n",
@@ -95,6 +103,12 @@ class ArchitectureRealFixtureMeasurementTest {
                 centrality(centrality, rootModule.id()).incomingRank(),
                 centrality(centrality, rootModule.id()).outgoingRank()
         );
+        System.out.printf(
+                "M6.6 typescript-modules technologies: names=%s, typescript-modules=%s, npm-modules=%s%n",
+                technologies.technologies().stream().map(ArchitectureTechnology::name).toList(),
+                technology(technologies, "TYPESCRIPT").moduleIds(),
+                technology(technologies, "NPM").moduleIds()
+        );
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
@@ -110,6 +124,13 @@ class ArchitectureRealFixtureMeasurementTest {
     ) {
         return report.modules().stream()
                 .filter(module -> moduleId.equals(module.moduleId()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static ArchitectureTechnology technology(ArchitectureTechnologyReport report, String name) {
+        return report.technologies().stream()
+                .filter(technology -> name.equals(technology.name()))
                 .findFirst()
                 .orElseThrow();
     }
