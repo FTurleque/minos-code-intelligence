@@ -16,8 +16,9 @@ M3 — Intelligence des relations     TERMINÉ ET LIVRÉ
 M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
 M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
 M6 — Intelligence d’architecture    TERMINÉ, VALIDÉ ET LIVRÉ
-M7 — Indexation incrémentale        EN COURS — M7.1/M7.2 LIVRÉS, M7.3 EN VALIDATION
-M8 à M13                            NON DÉMARRÉS
+M7 — Indexation incrémentale        FONCTIONNELLEMENT COMPLET — PORTE FINALE EN ATTENTE
+M8 — Analyse d’impact               PROCHAIN APRÈS CLÔTURE M7
+M9 à M13                            NON DÉMARRÉS
 ```
 
 GitHub Actions reste volontairement hors de la porte locale courante ; l’anomalie
@@ -25,71 +26,22 @@ historique est suivie séparément dans #5.
 
 ## Portes acquises avant M7
 
-### M0
-
-Verdict : **ADOPTER_AVEC_CONTRAINTES**.
-
-- Java 24 + Maven Wrapper qualifiés ;
-- SCIP Java / TypeScript mesurés ;
-- backend MINOS léger retenu par défaut ;
-- Glean optionnel ;
-- frontière fournisseur préservée.
-
-Décision : `docs/m0/DECISION_M0.md`.
-
-### M1
-
-- découverte Java / TypeScript ;
-- Maven / npm factuels ;
-- modules et racines source/test ;
-- `.gitignore` / `.minosignore` ;
-- registre projets/workspaces ;
-- négociation des indexeurs ;
-- lifecycle et promotion atomique.
-
-Suivi clôturé : issue #6.
-
-### M2 à M5
-
 ```text
-M2  86 tests   BUILD SUCCESS
-M3 115 tests   BUILD SUCCESS
-M4 131 tests   BUILD SUCCESS
-M5 140 tests   BUILD SUCCESS
+M2   86 tests   BUILD SUCCESS
+M3  115 tests   BUILD SUCCESS
+M4  131 tests   BUILD SUCCESS
+M5  140 tests   BUILD SUCCESS
+M6  162 tests   BUILD SUCCESS
 ```
 
 Décisions :
 
+- `docs/m0/DECISION_M0.md` ;
 - `docs/m2/DECISION_M2.md` ;
 - `docs/m3/DECISION_M3.md` ;
 - `docs/m4/DECISION_M4.md` ;
-- `docs/m5/DECISION_M5.md`.
-
-### M6 — Intelligence d’architecture
-
-M6 a été livré en sept incréments, PR #14 à #20, puis consolidé par PR #21.
-
-Acquis :
-
-- modules et namespaces ;
-- dépendances inter-modules ;
-- concentration ;
-- centralité relative directionnelle ;
-- technologies factuelles ;
-- vue d’architecture composée ;
-- contexte compact de module ;
-- distinction faits / dérivations / preuves.
-
-Porte finale :
-
-```text
-116 sources main
-58 sources test
-162/162 tests PASS
-BUILD SUCCESS
-```
-
-Décision : `docs/m6/DECISION_M6.md`.
+- `docs/m5/DECISION_M5.md` ;
+- `docs/m6/DECISION_M6.md`.
 
 ## M7 — Indexation incrémentale
 
@@ -103,16 +55,6 @@ PR #23, merge :
 34b57dfadad962b98c2d5c028957595cee575400
 ```
 
-Acquis :
-
-- `FileFingerprint` ;
-- `ProjectFingerprint` ;
-- `ProjectChangeSet` ;
-- `ProjectFingerprintService` ;
-- empreintes indépendantes du chemin absolu et des timestamps ;
-- fichiers ajoutés/modifiés/supprimés/identiques ;
-- empreinte build séparée.
-
 Porte :
 
 ```text
@@ -122,7 +64,15 @@ Porte :
 BUILD SUCCESS
 ```
 
-Replay réel : `files=13` sur `typescript-modules`.
+Acquis :
+
+- `FileFingerprint` ;
+- `ProjectFingerprint` ;
+- `ProjectChangeSet` ;
+- `ProjectFingerprintService` ;
+- empreintes indépendantes du chemin absolu et des timestamps ;
+- classification ajouté/modifié/supprimé/identique ;
+- empreinte build séparée.
 
 Document : `docs/m7/FINGERPRINTS_AND_CHANGESET.md`.
 
@@ -134,15 +84,6 @@ PR #24, merge :
 379b5a28a92cb58b340dc8801d66fad1b853e4ce
 ```
 
-Acquis :
-
-- snapshot fingerprint associé à `projectId + indexSnapshotId` ;
-- historique immuable ;
-- publication séparée de la promotion ;
-- pointeur actif atomique ;
-- checksum et recalcul des agrégats ;
-- alignement explicite avec `ProjectIndexState.activeSnapshotId`.
-
 Porte :
 
 ```text
@@ -152,18 +93,39 @@ Porte :
 BUILD SUCCESS
 ```
 
+Acquis :
+
+- snapshot fingerprint associé à `projectId + indexSnapshotId` ;
+- historique immuable ;
+- publication séparée de la promotion ;
+- pointeur actif atomique ;
+- checksum et recalcul des agrégats ;
+- alignement avec `ProjectIndexState.activeSnapshotId`.
+
 Document : `docs/m7/FINGERPRINT_SNAPSHOTS.md`.
 
-### M7.3 — Invalidation conservatrice — EN VALIDATION
+### M7.3 — Invalidation conservatrice — LIVRÉ
 
-Branche : `m7/conservative-invalidation`.
+PR #25, merge :
 
-Contrats :
+```text
+8f87a8fbb3f62361f88e38c9a8f22c2da2050ca8
+```
 
-- `ProjectInvalidationScope` ;
-- `ProjectInvalidationReason` ;
-- `ProjectInvalidationAssessment` ;
-- `ProjectInvalidationService`.
+Head validé :
+
+```text
+e41abcf999ca94b0f3cf9accc0ae8b6a22e41ffd
+```
+
+Porte :
+
+```text
+128 sources main
+65 sources test
+184/184 tests PASS
+BUILD SUCCESS
+```
 
 Portées :
 
@@ -173,38 +135,70 @@ PARTIAL_CANDIDATE
 FULL_REQUIRED
 ```
 
-Règles principales :
-
-- pas d’index actif → `FULL_REQUIRED` ;
-- baseline absente ou désalignée → `FULL_REQUIRED` ;
-- build modifié → `FULL_REQUIRED` ;
-- `.gitignore` / `.minosignore` modifié → `FULL_REQUIRED` ;
-- changement non qualifiable → `FULL_REQUIRED` ;
-- uniquement sources/tests reconnus → `PARTIAL_CANDIDATE` ;
-- aucun changement → `NONE`.
-
-`PARTIAL_CANDIDATE` ne signifie pas encore qu’un fournisseur sait exécuter une
-indexation partielle.
-
 Document : `docs/m7/CONSERVATIVE_INVALIDATION.md`.
 
-## Porte active
+### M7.4 — Planification, fallback et lifecycle — IMPLÉMENTÉ
+
+Branche finale :
+
+```text
+m7/finalize-incremental-indexing
+```
+
+Acquis :
+
+- `IndexerCapability.INCREMENTAL_INDEXING` ;
+- `IncrementalIndexingPlan` et raisons structurées ;
+- `IncrementalIndexingPlanner` ;
+- `IndexingMode.NONE/FULL/INCREMENTAL` ;
+- `IndexingExecutionRequest.mode + changedFiles` ;
+- validation de sécurité dans `IndexingLifecycleService` ;
+- atomicité projet : toutes les sélections doivent être capables ;
+- fallback complet si une seule capacité manque ;
+- `IncrementalIndexingCoordinator` ;
+- nouvelle baseline fingerprint uniquement sur workspace stable ;
+- baseline illisible/désalignée traitée comme absence de preuve.
+
+Les versions épinglées actuelles :
+
+```text
+scip-java       0.13.1
+scip-typescript 0.4.0
+```
+
+ne sont **pas** déclarées `INCREMENTAL_INDEXING`, faute de qualification M0.
+Un changement source borné retombe donc actuellement en `FULL` avec ces fournisseurs.
+
+Cette absence de capacité n’est pas un échec M7 : elle démontre précisément le
+fallback demandé par la porte de décision, sans inventer de support fournisseur.
+
+Documents :
+
+- `docs/m7/INCREMENTAL_EXECUTION.md` ;
+- `docs/m7/DECISION_M7.md`.
+
+## Porte active — finale M7
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-La branche M7.3 doit rester en Draft jusqu’à validation locale de son SHA exact.
+La PR finale M7 doit rester Draft jusqu’à validation locale de son **head exact**.
 
-## Suite prévue
-
-M7.4 devra ajouter une capacité fournisseur explicite d’indexation incrémentale et
-combiner cette qualification avec l’évaluation M7.3 pour produire un plan sûr :
+Le replay attendu inclut notamment :
 
 ```text
-PARTIAL_CANDIDATE + capacité fournisseur prouvée -> incrémental possible
-sinon                                         -> indexation complète
+M7.1 typescript-modules fingerprints: ...
+M7.2 typescript-modules fingerprint-snapshot: ...
+M7.3 typescript-modules invalidation: source-scope=PARTIAL_CANDIDATE, ...
+M7.4 typescript-modules planning: initial=FULL, unchanged=NONE, source=FULL, missing-capability=[scip-typescript], baseline=snapshot-2
 ```
+
+Après porte verte et fusion :
+
+- issue #22 → `completed` ;
+- M7 → terminé, validé et livré ;
+- M8 — Analyse d’impact → jalon actif.
 
 ## Sources de vérité
 
@@ -214,6 +208,8 @@ sinon                                         -> indexation complète
 - M7.1 : `docs/m7/FINGERPRINTS_AND_CHANGESET.md` ;
 - M7.2 : `docs/m7/FINGERPRINT_SNAPSHOTS.md` ;
 - M7.3 : `docs/m7/CONSERVATIVE_INVALIDATION.md` ;
+- M7.4 : `docs/m7/INCREMENTAL_EXECUTION.md` ;
+- décision M7 : `docs/m7/DECISION_M7.md` ;
 - promotion atomique : ADR-0006 ;
 - identité registre : ADR-0007 ;
 - négociation indexeurs : ADR-0008.
