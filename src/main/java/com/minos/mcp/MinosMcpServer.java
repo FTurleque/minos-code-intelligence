@@ -8,6 +8,9 @@ import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema.ServerCapabilities;
 
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
 
 /**
  * Serveur MCP local MINOS en transport STDIO.
@@ -22,7 +25,7 @@ public final class MinosMcpServer {
 
     public static void main(String[] arguments) {
         try {
-            Path home = MinosLauncher.resolveHome(System.getenv(), System.getProperties())
+            Path home = resolveHome(System.getenv(), System.getProperties())
                     .toAbsolutePath()
                     .normalize();
             StdioServerTransportProvider transport =
@@ -47,5 +50,26 @@ public final class MinosMcpServer {
                     (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message));
             System.exit(1);
         }
+    }
+
+    static Path resolveHome(Map<String, String> environment, Properties properties) {
+        Objects.requireNonNull(environment, "environment");
+        Objects.requireNonNull(properties, "properties");
+
+        String property = properties.getProperty(MinosLauncher.HOME_SYSTEM_PROPERTY);
+        if (property != null && !property.isBlank()) {
+            return Path.of(property);
+        }
+        String environmentValue = environment.get(MinosLauncher.HOME_ENVIRONMENT_VARIABLE);
+        if (environmentValue != null && !environmentValue.isBlank()) {
+            return Path.of(environmentValue);
+        }
+        String userHome = properties.getProperty("user.home");
+        if (userHome == null || userHome.isBlank()) {
+            throw new IllegalStateException(
+                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory"
+            );
+        }
+        return Path.of(userHome).resolve(".minos");
     }
 }
