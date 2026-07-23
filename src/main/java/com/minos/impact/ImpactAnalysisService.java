@@ -67,8 +67,9 @@ public final class ImpactAnalysisService {
         if (root == null) {
             throw new IllegalArgumentException("unknown symbol in snapshot: " + request.symbolId());
         }
-        if (root.external()) {
-            throw new IllegalArgumentException("impact root must be a local symbol: " + request.symbolId());
+        if (root.external() || root.generated()) {
+            throw new IllegalArgumentException(
+                    "impact root must be a local non-generated symbol: " + request.symbolId());
         }
 
         Map<String, List<Relationship>> incoming = incomingRelationships(snapshot, symbolsById);
@@ -101,8 +102,12 @@ public final class ImpactAnalysisService {
                     continue;
                 }
                 Symbol impacted = symbolsById.get(impactedId);
-                if (impacted == null || impacted.external() || impacted.generated()) {
+                if (impacted == null || impacted.external()) {
                     limitations.add(ImpactLimitation.EXTERNAL_TARGETS_NOT_TRAVERSED);
+                    continue;
+                }
+                if (impacted.generated()) {
+                    limitations.add(ImpactLimitation.GENERATED_SYMBOLS_NOT_TRAVERSED);
                     continue;
                 }
 
