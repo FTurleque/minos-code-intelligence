@@ -59,16 +59,18 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Le projet a terminé C0, M0, M1, M2, M3 et M4. M5 est implémenté et sa porte
-de validation finale est en cours :
+Le projet a terminé C0, M0, M1, M2, M3, M4 et M5. Les jalons M2 à M5 sont
+validés localement dans la PR de livraison courante ; **M6 — Intelligence
+d'architecture** est le prochain jalon de la roadmap.
 
-> **M5 — Tests liés et dérivations explicables — validation finale en attente**
+> **M5 — Tests liés et dérivations explicables — TERMINÉ ET VALIDÉ LOCALEMENT**
 
-M5 dérive `RELATED_TEST` depuis les références, les appels disponibles, le
-nommage et la proximité de namespace, avec un score et des preuves structurées.
-Il ajoute `minos related-tests`. Les règles et l'état exact de la porte sont
-dans la [`dérivation M5`](docs/m5/RELATED_TEST_DERIVATION.md) et la
-[`décision M5`](docs/m5/DECISION_M5.md).
+La porte finale M5 a validé `93` sources principales, `49` sources de test et
+`140/140` tests, puis le launcher Windows avec `minos.cmd --help`. M5 dérive
+`RELATED_TEST` depuis les références, les appels disponibles, le nommage et la
+proximité de namespace, avec un score et des preuves structurées. Il ajoute
+`minos related-tests`. Voir la [`dérivation M5`](docs/m5/RELATED_TEST_DERIVATION.md)
+et la [`décision M5`](docs/m5/DECISION_M5.md).
 
 M4 ajoute `minos search`, qui compose symboles, relations, preuves, usages et
 plages source sous des limites de profondeur et de tokens, ainsi que
