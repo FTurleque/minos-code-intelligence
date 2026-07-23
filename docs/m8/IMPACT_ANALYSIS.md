@@ -207,22 +207,28 @@ Les résultats sont donc reproductibles pour un même snapshot et une même requ
 fixtures/typescript/typescript-modules/.minos-m0/scip-typescript/index.scip
 ```
 
+Le replay respecte la qualification M0 de `scip-typescript 0.4.0` : les cibles d’appels sont observables via les occurrences, mais les relations `CALLS` explicites ne sont pas publiées sur cette fixture. Il s’appuie donc sur une relation fournisseur réellement persistée et qualifiée :
+
+```text
+DefaultGreetingPort --IMPLEMENTS--> GreetingPort
+```
+
 Racine :
 
 ```text
-GreetingPort.greet
+GreetingPort
 ```
 
 Le replay vérifie notamment :
 
-- `GreetingService.greet` comme impact direct observé ;
+- `DefaultGreetingPort` comme impact direct observé via `IMPLEMENTS` ;
 - au moins un test potentiel issu des relations M5 ;
 - un chemin non vide pour chaque preuve de test.
 
 Sortie attendue :
 
 ```text
-M8 typescript-modules impact: root=GreetingPort.greet, impacts=..., tests=..., max-depth=..., limitations=[...]
+M8 typescript-modules impact: root=GreetingPort, impacts=..., tests=..., max-depth=..., limitations=[...]
 ```
 
 ## Hors périmètre
