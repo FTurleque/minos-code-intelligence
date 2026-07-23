@@ -95,7 +95,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                 throw new IOException("fingerprint snapshot already exists with different content for index snapshot: "
                         + indexSnapshotId);
             }
-            moveAtomically(temporary, target);
+            publishAtomically(temporary, target);
             return snapshot;
         } finally {
             Files.deleteIfExists(temporary);
@@ -107,8 +107,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         Objects.requireNonNull(projectId, "projectId");
         indexSnapshotId = requireText(indexSnapshotId, "indexSnapshotId");
         Path projectDirectory = projectDirectory(projectId);
-        String idHash = sha256(indexSnapshotId);
-        List<Path> matches = filesForIdHash(projectDirectory, idHash);
+        List<Path> matches = filesForIdHash(projectDirectory, sha256(indexSnapshotId));
         if (matches.isEmpty()) {
             throw new IOException("fingerprint snapshot is not published for index snapshot: " + indexSnapshotId);
         }
@@ -132,7 +131,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                     snapshot.fingerprint().buildSha256(),
                     snapshot.fingerprint().fileCount()
             ));
-            moveAtomically(temporaryPointer, projectDirectory.resolve(ACTIVE_FILE));
+            replaceAtomically(temporaryPointer, projectDirectory.resolve(ACTIVE_FILE));
         } finally {
             Files.deleteIfExists(temporaryPointer);
         }
@@ -337,14 +336,19 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static ActivePointer readPointer(Path file) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             requireHeader(input, POINTER_MAGIC, "fingerprint active pointer");
-            ActivePointer pointer = new ActivePointer(
-                    readString(input, "indexSnapshotId"),
-                    readString(input, "fileName"),
-                    readString(input, "sha256"),
-                    readString(input, "projectSha256"),
-                    readString(input, "buildSha256"),
-                    readCount(input, MAX_FILES, "fileCount")
-            );
+            ActivePointer pointer;
+            try {
+                pointer = new ActivePointer(
+                        readString(input, "indexSnapshotId"),
+                        readString(input, "fileName"),
+                        readString(input, "sha256"),
+                        readString(input, "projectSha256"),
+                        readString(input, "buildSha256"),
+                        readCount(input, MAX_FILES, "fileCount")
+                );
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("invalid fingerprint active pointer", exception);
+            }
             if (input.read() != -1) {
                 throw new IOException("unexpected trailing data in fingerprint active pointer");
             }
@@ -470,12 +474,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static String checksum(Path file) throws IOException {
         MessageDigest digest = sha256Digest();
-        byte[] buffer = new byte[8192];
-        try (InputStream raw = Files.newInputStream(file);
-             DigestInputStream input = new DigestInputStream(raw, digest)) {
-            while (input.read(buffer) >= 0) {
-                // DigestInputStream updates the digest.
-            }
+        try (InputStream input = new DigestInputStream(Files.newInputStream(file), digest)) {
+            input.transferTo(OutputStream.nullOutputStream());
         }
         return HEX.formatHex(digest.digest());
     }
@@ -505,11 +505,24 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return value;
     }
 
-    private static void moveAtomically(Path source, Path target) throws IOException {
+    private static void publishAtomically(Path source, Path target) throws IOException {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException exception) {
             Files.move(source, target);
+        }
+    }
+
+    private static void replaceAtomically(Path source, Path target) throws IOException {
+        try {
+            Files.move(
+                    source,
+                    target,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
