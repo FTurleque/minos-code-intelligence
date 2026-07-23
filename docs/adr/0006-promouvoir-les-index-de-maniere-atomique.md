@@ -50,6 +50,31 @@ du snapshot actif.
 5. Les types SCIP, shards ou statuts propres à un indexeur ne fuitent pas dans
    les contrats publics du domaine.
 
+## Clarification M1 — projet multi-langages / multi-indexeurs
+
+M1 étend explicitement l'invariant au **run projet complet**.
+
+Un projet peut sélectionner plusieurs indexeurs, par exemple un indexeur Java et
+un indexeur TypeScript. Le nouvel état actif ne peut pas être promu fournisseur
+par fournisseur : tous les artefacts requis par le plan négocié appartiennent au
+même run projet.
+
+```text
+sélections négociées complètes
+  -> exécuter tous les indexeurs sélectionnés
+  -> valider tous les artefacts finaux
+  -> ingérer/stager un snapshot projet commun
+  -> promouvoir ce snapshot une seule fois
+```
+
+Si un seul indexeur, le staging ou la promotion échoue, le snapshot actif
+précédent reste inchangé. MINOS ne publie donc jamais silencieusement un mélange
+« nouveau Java / ancien TypeScript » issu d'un même rafraîchissement.
+
+Pendant un rafraîchissement, l'ancien snapshot peut rester disponible aux
+requêtes. Après un échec de rafraîchissement, l'état projet peut être marqué
+`STALE` tout en conservant explicitement cet ancien snapshot actif.
+
 ## Mode best-effort
 
 MINOS n'implémente pas de récupération best-effort pendant cette baseline.
@@ -83,10 +108,11 @@ séparée et devrait exposer explicitement :
 - la future implémentation persistante devra distinguer staging et snapshot
   actif.
 
-## Portée M0
+## Portée M0 / M1
 
 M0 valide l'invariant, les artefacts transactionnels et le comportement du
-runner. La gestion persistante des snapshots, de leur promotion et de leur
-garbage collection sera implémentée lorsque le backend de stockage sera choisi.
+runner. M1 formalise le cycle de vie fournisseur-indépendant, l'état observable
+et l'atomicité d'un run projet pouvant comporter plusieurs indexeurs.
 
-Cette ADR ne choisit ni Glean ni un backend léger définitif.
+La gestion persistante des snapshots, leur garbage collection et un éventuel
+mode best-effort restent différés jusqu'au choix du backend de stockage.

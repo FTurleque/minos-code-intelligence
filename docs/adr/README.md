@@ -18,9 +18,9 @@ MINOS uses Architecture Decision Records (ADRs) to document consequential techni
 | [0003](0003-glean-behind-code-knowledge-store.md) | Keep Glean optional behind a MINOS-owned CodeKnowledgeStore port | Accepted; confirmed by M0 C1/E2 |
 | [0004](0004-stack-java-maven-core-sans-framework.md) | Implement the MINOS core with Maven and no server framework | Partially superseded by ADR-0005 |
 | [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 from the development environment | Accepted |
-| [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promote provider indexes atomically | Accepted |
+| [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promote provider indexes atomically | Accepted; clarified for multi-indexer project runs in M1.4 |
 | [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans un registre local | Accepted; confirmed by M1.2 |
-| [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Proposed |
+| [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted; confirmed by M1.3 |
 
 Future ADR candidates:
 
