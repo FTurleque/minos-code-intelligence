@@ -2,12 +2,28 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #13.
 
 Base : M6.4 a montré qu'un HHI global ne suffit pas à qualifier un composant
 central et que fan-in et fan-out doivent rester distincts.
+
+Livraison : PR #18 fusionnée dans `main` au commit
+`d6f280204cf283f3af3d98b30def358c0722acda` après validation locale du head
+`e14ec523412c95da5ce790c62eff5c7968589606`.
+
+Porte acquise :
+
+```text
+109 sources main compilées en release 24
+57 sources test compilées en release 24
+158 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
 
 ## Objectif
 
@@ -123,8 +139,8 @@ Aucun type SCIP, Glean ou fournisseur n'entre dans les contrats M6.5.
 - ordre de sortie déterministe par ID de module ;
 - cohérence des rapports de concentration utilisés comme entrée.
 
-`LocalProjectArchitectureQueryTest` couvre désormais la chaîne file-backed
-jusqu'au ranking sur une dépendance `app -> api` :
+`LocalProjectArchitectureQueryTest` couvre la chaîne file-backed jusqu'au ranking
+sur une dépendance `app -> api` :
 
 ```text
 api : incomingRank=1, outgoingRank=0
@@ -133,13 +149,13 @@ app : incomingRank=0, outgoingRank=1
 
 ## Replay réel TypeScript
 
-`ArchitectureRealFixtureMeasurementTest` continue de relire le vrai index :
+`ArchitectureRealFixtureMeasurementTest` relit le vrai index :
 
 ```text
 fixtures/typescript/typescript-modules/.minos-m0/scip-typescript/index.scip
 ```
 
-Après reconstruction M6.1 à M6.3, M6.5 exige :
+La validation a confirmé :
 
 ```text
 packages/api  -> top entrant, incomingRank=1, outgoingRank=0
@@ -147,10 +163,10 @@ packages/app  -> top sortant, incomingRank=0, outgoingRank=1
 module racine -> incomingRank=0, outgoingRank=0
 ```
 
-La sortie Maven ajoute :
+Sortie observée :
 
 ```text
-M6.5 typescript-modules centrality: top-in=..., top-out=..., root-in-rank=0, root-out-rank=0
+M6.5 typescript-modules centrality: top-in=[module:db2e7bf15b9e282b379863ebaf2dd7a255818a8a6d46242a18f8fb134891eb2f], top-out=[module:4d0be5518f3d599a858e4ff6611a1e98320c26c600bd4eb8d185c560b03b16dc], root-in-rank=0, root-out-rank=0
 ```
 
 ## Pourquoi aucun score composite
@@ -168,20 +184,6 @@ l'information que la calibration a montré comme significative.
 M6.5 qualifie donc les « composants centraux » comme des **leaders relatifs par
 direction**, pas comme une classe absolue.
 
-## Porte locale
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-La porte doit vérifier :
-
-- compilation Java 24 ;
-- suite complète verte ;
-- aucune régression M2 à M6.4 ;
-- tests M6.5 verts ;
-- replay réel TypeScript avec la ligne `M6.5 typescript-modules centrality:`.
-
 ## Hors périmètre
 
 - score composite unique ;
@@ -193,5 +195,5 @@ La porte doit vérifier :
 - `get_module_context` ;
 - MCP/API.
 
-La prochaine étape M6 pourra s'appuyer sur ce ranking pour enrichir la vue
-d'architecture, sans perdre la distinction entre fait, agrégat et interprétation.
+La suite M6 peut s'appuyer sur ce ranking pour enrichir la vue d'architecture,
+sans perdre la distinction entre fait, agrégat et interprétation.
