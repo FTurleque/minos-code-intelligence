@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.cli.MinosLauncher;
+import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
@@ -78,7 +79,9 @@ public final class MinosMcpTools {
             Function<Map<String, Object>, List<String>> commandFactory
     ) {
         return SyncToolSpecification.builder()
-                .tool(Tool.builder(name, schema).description(description).build())
+                .tool(Tool.builder(name, McpJsonDefaults.getMapper(), schema)
+                        .description(description)
+                        .build())
                 .callHandler((exchange, request) -> execute(commandFactory.apply(arguments(request.arguments()))))
                 .build();
     }
@@ -88,12 +91,12 @@ public final class MinosMcpTools {
         if (result.exitCode() == 0) {
             String text = result.stdout().stripTrailing();
             return CallToolResult.builder()
-                    .content(List.of(new TextContent(text.isEmpty() ? "{}" : text)))
+                    .content(List.of(TextContent.builder(text.isEmpty() ? "{}" : text).build()))
                     .build();
         }
         String message = result.stderr().isBlank() ? result.stdout() : result.stderr();
         return CallToolResult.builder()
-                .content(List.of(new TextContent(message.strip())))
+                .content(List.of(TextContent.builder(message.strip()).build()))
                 .isError(true)
                 .build();
     }
