@@ -77,13 +77,14 @@ class IncrementalIndexingCoordinatorTest {
 
         executor.projectRootToMutate.set(project);
         IncrementalIndexingResult unstable = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
-        IncrementalIndexingResult healing = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
 
         assertEquals(IndexingMode.FULL, unstable.plan().mode());
         assertFalse(unstable.workspaceStableDuringRun());
         assertFalse(unstable.fingerprintBaselineAdvanced());
         assertTrue(fingerprintStore.loadActive(projectId).isEmpty());
         assertTrue(unstable.diagnostic().orElseThrow().contains("workspace changed during indexing"));
+
+        IncrementalIndexingResult healing = coordinator.refresh(projectId, project, IndexingRequirements.baseline());
 
         assertEquals(IndexingMode.FULL, healing.plan().mode());
         assertEquals(
