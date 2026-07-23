@@ -1,7 +1,9 @@
 package com.minos.incremental;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Diff factuel entre deux snapshots d'empreintes projet.
@@ -30,6 +32,7 @@ public record ProjectChangeSet(
         modifiedFiles = immutablePaths(modifiedFiles, "modifiedFiles");
         deletedFiles = immutablePaths(deletedFiles, "deletedFiles");
         unchangedFiles = immutablePaths(unchangedFiles, "unchangedFiles");
+        requireDisjoint(addedFiles, modifiedFiles, deletedFiles, unchangedFiles);
 
         boolean hasFileChanges = !addedFiles.isEmpty() || !modifiedFiles.isEmpty() || !deletedFiles.isEmpty();
         if (projectChanged != hasFileChanges) {
@@ -61,5 +64,17 @@ public record ProjectChangeSet(
             previous = path;
         }
         return copy;
+    }
+
+    @SafeVarargs
+    private static void requireDisjoint(List<String>... groups) {
+        Set<String> paths = new HashSet<>();
+        for (List<String> group : groups) {
+            for (String path : group) {
+                if (!paths.add(path)) {
+                    throw new IllegalArgumentException("a file path cannot belong to multiple change categories: " + path);
+                }
+            }
+        }
     }
 }
