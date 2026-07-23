@@ -21,12 +21,19 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     private final FileSymbolSnapshotStore snapshotStore;
     private final ProjectDiscoveryService discoveryService;
     private final ArchitectureTopologyService topologyService;
+    private final ArchitectureDependencyService dependencyService;
 
     public LocalProjectArchitectureQuery(
             LocalProjectRegistry projectRegistry,
             FileSymbolSnapshotStore snapshotStore
     ) {
-        this(projectRegistry, snapshotStore, new ProjectDiscoveryService(), new ArchitectureTopologyService());
+        this(
+                projectRegistry,
+                snapshotStore,
+                new ProjectDiscoveryService(),
+                new ArchitectureTopologyService(),
+                new ArchitectureDependencyService()
+        );
     }
 
     LocalProjectArchitectureQuery(
@@ -35,21 +42,49 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ProjectDiscoveryService discoveryService,
             ArchitectureTopologyService topologyService
     ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                new ArchitectureDependencyService()
+        );
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService
+    ) {
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.topologyService = Objects.requireNonNull(topologyService, "topologyService");
+        this.dependencyService = Objects.requireNonNull(dependencyService, "dependencyService");
     }
 
     @Override
     public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        return topologyService.build(context.discovery(), context.snapshot());
+    }
+
+    @Override
+    public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        return dependencyService.build(context.discovery(), context.snapshot());
+    }
+
+    private ProjectContext loadContext(String projectIdentifier) throws IOException {
         RegisteredProject project = resolveProject(projectIdentifier);
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException(
                         "project has no active code knowledge snapshot: " + project.id()
                 ));
         ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
-        return topologyService.build(discovery, snapshot);
+        return new ProjectContext(discovery, snapshot);
     }
 
     private RegisteredProject resolveProject(String identifier) throws IOException {
@@ -84,6 +119,13 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             return UUID.fromString(value);
         } catch (IllegalArgumentException exception) {
             return null;
+        }
+    }
+
+    private record ProjectContext(ProjectDiscovery discovery, CodeKnowledgeSnapshot snapshot) {
+        private ProjectContext {
+            Objects.requireNonNull(discovery, "discovery");
+            Objects.requireNonNull(snapshot, "snapshot");
         }
     }
 }
