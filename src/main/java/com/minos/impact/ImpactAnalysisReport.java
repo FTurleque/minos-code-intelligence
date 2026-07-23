@@ -1,5 +1,6 @@
 package com.minos.impact;
 
+import com.minos.domain.InformationNature;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.Symbol;
 
@@ -49,5 +50,9 @@ public record ImpactAnalysisReport(
                         "potentially impacted tests require an included impact and a RELATED_TEST proof path");
             }
         }
+    }
+
+    public InformationNature nature() {
+        return InformationNature.DERIVED;
     }
 }
