@@ -2,9 +2,13 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
-Suivi : issue #13.
+Suivi : issue #13. Livraison : PR #14.
+
+Head validé : `2198b3c7ee35b20fc2a4872c2312502d7e33185b`.
+
+Merge `main` : `b509734738f9943f3eb57b3876ea1aad487adf44`.
 
 ## Objectif
 
@@ -66,9 +70,11 @@ silencieusement placés dans un module.
 
 ## Déterminisme
 
+- symboles triés par ID avant agrégation ;
 - modules triés par chemin relatif ;
 - namespaces triés par chemin relatif ;
 - langages et systèmes de build triés ;
+- normalisation des langages indépendante de la locale JVM ;
 - IDs de modules et namespaces dérivés par SHA-256 à partir du projet et de la
   topologie logique ;
 - aucune identité fournisseur n'est exposée.
@@ -83,7 +89,8 @@ silencieusement placés dans un module.
 - comptage séparé des symboles externes ;
 - symbole local sans fichier conservé comme non attribué ;
 - namespace par défaut ;
-- rejet d'un `fileId` sortant de la racine.
+- rejet d'un `fileId` sortant de la racine ;
+- égalité stricte de la vue lorsque l'ordre des symboles change.
 
 `LocalProjectArchitectureQueryTest` couvre :
 
@@ -98,6 +105,33 @@ registre local
 
 La frontière fournisseur est également étendue au package `architecture`.
 
+## Porte locale acquise
+
+Validation exécutée le 23 juillet 2026 sur le head exact M6.1 :
+
+```text
+.\mvnw.cmd clean verify
+99 sources main compilées
+51 sources test compilées
+144 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
+
+Tests M6 directement concernés :
+
+```text
+ArchitectureTopologyServiceTest      3/3 PASS
+LocalProjectArchitectureQueryTest    1/1 PASS
+NamespaceConventionTest              1/1 PASS
+ProviderBoundaryTest                 1/1 PASS
+```
+
+Le warning `sun.misc.Unsafe` de `protobuf-java 4.34.2` sous Java 24 reste
+non bloquant et identique aux validations précédentes.
+
 ## Hors périmètre M6.1
 
 - rôles `service`, `controller`, `repository`, `core`, etc. ;
@@ -109,13 +143,5 @@ La frontière fournisseur est également étendue au package `architecture`.
 - `get_module_context` ;
 - MCP.
 
-Ces points doivent être qualifiés après validation de la topologie de base.
-
-## Porte locale attendue
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-M6.1 ne sera pas déclaré validé avant un build vert sur le head exact de la
-branche `m6/architecture-intelligence`.
+Le graphe inter-modules constitue désormais M6.2. Voir
+[`MODULE_DEPENDENCIES.md`](MODULE_DEPENDENCIES.md).
