@@ -63,6 +63,42 @@ class ImpactAnalysisServiceTest {
         assertEquals(List.of("service-calls-repository", "test-related-service"),
                 report.potentiallyImpactedTests().getFirst().path().stream()
                         .map(ImpactPathStep::relationshipId).toList());
+        assertTrue(report.limitations().contains(ImpactLimitation.DYNAMIC_DISPATCH_NOT_PROVEN));
+        assertTrue(report.limitations().contains(ImpactLimitation.REFLECTION_NOT_PROVEN));
+        assertTrue(report.limitations().contains(ImpactLimitation.RUNTIME_CONFIGURATION_NOT_PROVEN));
+    }
+
+    @Test
+    void choosesShortestPathThenHighestConfidenceAtEqualDepth() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        Symbol intermediary = symbol("intermediary", "src/main/java/Intermediary.java");
+        Symbol shortPath = symbol("short-path", "src/main/java/ShortPath.java");
+        Symbol confidenceChoice = symbol("confidence-choice", "src/main/java/ConfidenceChoice.java");
+
+        CodeKnowledgeSnapshot snapshot = snapshot(
+                List.of(root, intermediary, shortPath, confidenceChoice),
+                List.of(
+                        factual("intermediary-root", intermediary, root, RelationshipKind.REFERENCES),
+                        factual("short-indirect", shortPath, intermediary, RelationshipKind.CALLS),
+                        derived("short-direct", shortPath, root, RelationshipKind.DEPENDS_ON, 0.50),
+                        derived("confidence-low", confidenceChoice, root, RelationshipKind.REFERENCES, 0.40),
+                        derived("confidence-high", confidenceChoice, root, RelationshipKind.REFERENCES, 0.90)
+                )
+        );
+
+        ImpactAnalysisReport report = new ImpactAnalysisService().analyze(
+                snapshot,
+                new ImpactAnalysisRequest(root.id(), 4, 20)
+        );
+
+        ImpactedSymbol shortest = impact(report, shortPath.id());
+        ImpactedSymbol strongest = impact(report, confidenceChoice.id());
+        assertEquals(1, shortest.depth());
+        assertEquals(0.50, shortest.confidence());
+        assertEquals("short-direct", shortest.path().getFirst().relationshipId());
+        assertEquals(1, strongest.depth());
+        assertEquals(0.90, strongest.confidence());
+        assertEquals("confidence-high", strongest.path().getFirst().relationshipId());
     }
 
     @Test
@@ -110,11 +146,59 @@ class ImpactAnalysisServiceTest {
         assertTrue(report.limitations().contains(ImpactLimitation.MAX_RESULTS_REACHED));
     }
 
+    @Test
+    void reportsUnresolvedAndGeneratedCoverageGapsWithoutTraversingThem() {
+        Symbol root = symbol("root", "src/main/java/Root.java");
+        Symbol generated = symbol("generated", "target/generated/Generated.java", true);
+        Symbol unresolvedSource = symbol("unresolved-source", "src/main/java/UnresolvedSource.java");
+        Relationship unresolved = new Relationship(
+                "unresolved",
+                PROJECT_ID.toString(),
+                ref(unresolvedSource),
+                null,
+                "missing.Target",
+                RelationshipKind.REFERENCES,
+                null,
+                ResolutionStatus.UNRESOLVED,
+                InformationNature.FACTUAL,
+                null,
+                FACTUAL_ORIGIN,
+                List.of()
+        );
+        CodeKnowledgeSnapshot snapshot = snapshot(
+                List.of(root, generated, unresolvedSource),
+                List.of(
+                        factual("generated-root", generated, root, RelationshipKind.REFERENCES),
+                        unresolved
+                )
+        );
+
+        ImpactAnalysisReport report = new ImpactAnalysisService().analyze(
+                snapshot,
+                new ImpactAnalysisRequest(root.id(), 2, 20)
+        );
+
+        assertTrue(report.impacts().isEmpty());
+        assertTrue(report.limitations().contains(ImpactLimitation.GENERATED_SYMBOLS_NOT_TRAVERSED));
+        assertTrue(report.limitations().contains(ImpactLimitation.UNRESOLVED_RELATIONSHIPS_IGNORED));
+    }
+
+    private static ImpactedSymbol impact(ImpactAnalysisReport report, String symbolId) {
+        return report.impacts().stream()
+                .filter(impact -> symbolId.equals(impact.symbol().id()))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private static CodeKnowledgeSnapshot snapshot(List<Symbol> symbols, List<Relationship> relationships) {
         return new CodeKnowledgeSnapshot(PROJECT_ID, "snapshot-m8", symbols, List.of(), relationships);
     }
 
     private static Symbol symbol(String id, String fileId) {
+        return symbol(id, fileId, false);
+    }
+
+    private static Symbol symbol(String id, String fileId, boolean generated) {
         return new Symbol(
                 id,
                 "key:" + id,
@@ -132,7 +216,7 @@ class ImpactAnalysisServiceTest {
                 ResolutionStatus.RESOLVED,
                 FACTUAL_ORIGIN,
                 false,
-                false,
+                generated,
                 Set.of()
         );
     }
