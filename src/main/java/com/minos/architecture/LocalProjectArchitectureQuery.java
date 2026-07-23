@@ -1,0 +1,89 @@
+package com.minos.architecture;
+
+import com.minos.discovery.ProjectDiscovery;
+import com.minos.discovery.ProjectDiscoveryService;
+import com.minos.registry.LocalProjectRegistry;
+import com.minos.registry.RegisteredProject;
+import com.minos.store.CodeKnowledgeSnapshot;
+import com.minos.store.FileSymbolSnapshotStore;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Bootstrap local M6 : registre projet + découverte factuelle + snapshot actif.
+ */
+public final class LocalProjectArchitectureQuery implements ProjectArchitectureQuery {
+
+    private final LocalProjectRegistry projectRegistry;
+    private final FileSymbolSnapshotStore snapshotStore;
+    private final ProjectDiscoveryService discoveryService;
+    private final ArchitectureTopologyService topologyService;
+
+    public LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore
+    ) {
+        this(projectRegistry, snapshotStore, new ProjectDiscoveryService(), new ArchitectureTopologyService());
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService
+    ) {
+        this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
+        this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
+        this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
+        this.topologyService = Objects.requireNonNull(topologyService, "topologyService");
+    }
+
+    @Override
+    public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
+        RegisteredProject project = resolveProject(projectIdentifier);
+        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
+                .orElseThrow(() -> new IllegalStateException(
+                        "project has no active code knowledge snapshot: " + project.id()
+                ));
+        ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
+        return topologyService.build(discovery, snapshot);
+    }
+
+    private RegisteredProject resolveProject(String identifier) throws IOException {
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("project identifier must not be blank");
+        }
+
+        UUID projectId = parseUuid(identifier);
+        if (projectId != null) {
+            return projectRegistry.findProject(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "unknown project: " + identifier
+                    ));
+        }
+
+        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
+                .filter(project -> identifier.equals(project.displayName()))
+                .toList();
+        if (matches.isEmpty()) {
+            throw new IllegalArgumentException("unknown project: " + identifier);
+        }
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException(
+                    "ambiguous project name, use its UUID: " + identifier
+            );
+        }
+        return matches.getFirst();
+    }
+
+    private static UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+}
