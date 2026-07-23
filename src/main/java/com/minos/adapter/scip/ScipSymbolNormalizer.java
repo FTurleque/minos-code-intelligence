@@ -17,11 +17,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Première passe de normalisation des symboles SCIP vers le domaine MINOS.
+ * Normalisation des symboles SCIP vers le domaine MINOS.
  *
- * <p>M0 utilise volontairement une identité structurelle de repli pour les symboles
- * locaux tant que la grammaire complète des identifiants SCIP n'est pas portée et
- * validée côté Java.</p>
+ * <p>M2 extrait les noms qualifiés depuis la grammaire standard des descripteurs.
+ * La qualité d'identité reste néanmoins un repli explicite tant que l'équivalence
+ * des signatures et symboles entre fournisseurs n'est pas mesurée.</p>
  */
 final class ScipSymbolNormalizer {
 
@@ -45,6 +45,8 @@ final class ScipSymbolNormalizer {
         }
 
         SymbolKind kind = kindMapper.map(fact.kind());
+        String qualifiedName = ScipQualifiedNameExtractor.extract(fact.rawSymbol(), fact.language())
+                .orElse(null);
         SymbolIdentityQuality identityQuality;
         String identityMaterial;
 
@@ -54,7 +56,8 @@ final class ScipSymbolNormalizer {
                     projectId,
                     fact,
                     kind,
-                    declarationLocation
+                    declarationLocation,
+                    qualifiedName
             );
         } else {
             identityQuality = SymbolIdentityQuality.PROVIDER_SCOPED_FALLBACK;
@@ -90,7 +93,7 @@ final class ScipSymbolNormalizer {
                 null,
                 kind,
                 fact.displayName(),
-                null,
+                qualifiedName,
                 blankToNull(fact.signature()),
                 fact.language(),
                 declarationLocation,
@@ -106,11 +109,23 @@ final class ScipSymbolNormalizer {
             String projectId,
             ScipSymbolFact fact,
             SymbolKind kind,
-            SymbolLocation location) {
+            SymbolLocation location,
+            String qualifiedName) {
         String locationPart = location == null
                 ? ""
                 : location.startLine() + ":" + location.startColumn()
                     + "-" + location.endLine() + ":" + location.endColumn();
+
+        if (qualifiedName != null) {
+            return String.join("\u001F",
+                    projectId,
+                    fact.language(),
+                    kind.name(),
+                    qualifiedName,
+                    fact.signature(),
+                    fact.signature().isBlank() ? locationPart : ""
+            );
+        }
 
         return String.join("\u001F",
                 projectId,

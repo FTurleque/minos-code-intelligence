@@ -145,6 +145,9 @@ public final class InMemoryBackendBenchmark {
         metric("occurrences", report.occurrenceCount());
         metric("resolvedOccurrences", report.resolvedOccurrenceCount());
         metric("unresolvedOccurrences", report.unresolvedOccurrenceCount());
+        metric("relationships", report.relationshipCount());
+        metric("resolvedRelationships", report.resolvedRelationshipCount());
+        metric("unresolvedRelationships", report.unresolvedRelationshipCount());
         durationMetric("indexReadMs", indexReadNanos);
         durationMetric("ingestionMs", ingestionNanos);
         durationMetric("backendReadyMs", indexReadNanos + ingestionNanos);

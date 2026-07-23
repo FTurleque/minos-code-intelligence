@@ -59,12 +59,49 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Le projet a terminé la faisabilité technique :
+Le projet a terminé C0, M0, M1, M2, M3 et M4. M5 est implémenté et sa porte
+de validation finale est en cours :
 
-> **M0 — ADOPTER_AVEC_CONTRAINTES ; validation locale manuelle avant livraison**
+> **M5 — Tests liés et dérivations explicables — validation finale en attente**
+
+M5 dérive `RELATED_TEST` depuis les références, les appels disponibles, le
+nommage et la proximité de namespace, avec un score et des preuves structurées.
+Il ajoute `minos related-tests`. Les règles et l'état exact de la porte sont
+dans la [`dérivation M5`](docs/m5/RELATED_TEST_DERIVATION.md) et la
+[`décision M5`](docs/m5/DECISION_M5.md).
+
+M4 ajoute `minos search`, qui compose symboles, relations, preuves, usages et
+plages source sous des limites de profondeur et de tokens, ainsi que
+`minos get-source` pour la récupération complète explicitement demandée. Le
+verdict, la politique de volume et le benchmark réel sont dans la
+[`décision M4`](docs/m4/DECISION_M4.md).
+
+M3 fournit des requêtes relationnelles normalisées et isolées par projet,
+normalise les quatre drapeaux SCIP sans inventer de sémantique, dérive des
+dépendances explicables, persiste symboles/occurrences/relations dans un
+snapshot v2 rétrocompatible et expose `find-usages`, implémentations, appels
+disponibles, dépendances et dépendants dans la CLI. Voir la
+[`décision M3`](docs/m3/DECISION_M3.md), le
+[`format v2`](docs/m3/CODE_KNOWLEDGE_SNAPSHOTS.md) et les
+[`commandes relationnelles`](docs/m3/CLI_RELATIONSHIPS.md).
 
 Le tableau de bord [`docs/STATUS.md`](docs/STATUS.md) indique ce qui est
-terminé, la porte active et ce qui reste avant le passage à M1.
+terminé et la porte active.
+
+Le premier incrément M2 structure la recherche par texte, nom qualifié, type et
+module, ajoute un classement déterministe et expose les symboles déclarés dans
+un fichier. Le second extrait les noms qualifiés Java et TypeScript depuis les
+descripteurs SCIP globaux sans sur-déclarer une identité canonique. Voir
+[`docs/m2/SYMBOL_SEARCH.md`](docs/m2/SYMBOL_SEARCH.md) et
+[`docs/m2/SCIP_QUALIFIED_NAMES.md`](docs/m2/SCIP_QUALIFIED_NAMES.md). Le
+troisième incrément ajoute le DTO compact
+[`SymbolResult`](docs/m2/SYMBOL_RESULTS.md). Le quatrième fournit ses rendus
+déterministes [`TEXT` et `JSON`](docs/m2/SYMBOL_OUTPUT.md), prêts à être branchés
+sur la CLI. Le cinquième ajoute le contrat et le dispatcher
+[`find-symbol`](docs/m2/FIND_SYMBOL_CLI.md), avec un port explicite pour le
+chargement du projet et de son snapshot actif. La clôture ajoute le
+[`snapshot persistant`](docs/m2/SYMBOL_SNAPSHOTS.md), le launcher exécutable et
+la [`décision M2`](docs/m2/DECISION_M2.md).
 
 La phase **C0 — Cadrage fonctionnel et architectural est clôturée**.
 

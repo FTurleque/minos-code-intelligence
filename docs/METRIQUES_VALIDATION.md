@@ -671,3 +671,237 @@ Les contraintes structurantes sont : capacités explicites par fournisseur,
 identités de repli tant que le canonique n'est pas prouvé, backend MINOS léger
 par défaut, Glean optionnel, et promotion atomique des index. Le détail et la
 transition vers M1 sont dans `docs/m0/DECISION_M0.md`.
+
+---
+
+# 22. Clôture M2 — Intelligence des symboles
+
+La validation finale locale du 23 juillet 2026 porte sur le modèle normalisé,
+les recherches, les sorties, le snapshot persistant et le launcher :
+
+| Mesure | Résultat |
+|---|---:|
+| Sources main compilées | 69 |
+| Sources test compilées | 29 |
+| Tests JUnit | 86 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| Wrapper Windows `--help` | exit 0 |
+| Relecture dans un nouveau processus | réussie |
+| Corruption checksum détectée | oui |
+| Snapshot déterministe | oui |
+
+Les quatre index TypeScript locaux ont été relus sur le code final :
+
+| Dataset | Symboles MINOS | Occurrences | Résolues | Non résolues |
+|---|---:|---:|---:|---:|
+| `typescript-simple` | 24 | 100 | 70 | 30 |
+| `typescript-inheritance` | 18 | 57 | 39 | 18 |
+| `typescript-modules` | 19 | 67 | 44 | 23 |
+| `typescript-unresolved` | 9 | 18 | 14 | 4 |
+
+Les résultats restent identiques aux mesures M0/D2. Les surcharges TypeScript
+fusionnées et le symbole absent `MissingClient` restent des limites fournisseur
+explicites. Le verdict détaillé et les critères de sortie sont dans
+`docs/m2/DECISION_M2.md`.
+
+---
+
+# 23. M3 — Première porte des requêtes relationnelles
+
+La validation locale du 23 juillet 2026 couvre le contrat normalisé, le store
+mémoire et le service de requête relationnel :
+
+| Mesure | Résultat |
+|---|---:|
+| Sources main compilées | 73 |
+| Sources test compilées | 31 |
+| Tests JUnit | 95 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| Isolation multi-projets avec ID identique | réussie |
+| Ordre relationnel déterministe | réussi |
+| Provenance, confiance et preuves conservées | oui |
+| Frontière fournisseur | respectée |
+
+Cette porte valide l'interrogation de relations déjà normalisées. Elle ne
+mesure pas encore la précision ou le rappel du mapping SCIP vers
+`Relationship`, ni la persistance des relations. Ces deux points constituent
+les prochaines preuves M3.
+
+---
+
+# 24. M3 — Normalisation des relations SCIP
+
+Le deuxième incrément M3 a été validé le 23 juillet 2026 sur des builders
+contrôlés puis sur les quatre index TypeScript locaux produits avec
+`scip-typescript 0.4.0`.
+
+| Dataset | Messages SCIP | Faits booléens | Relations MINOS | Résolues | Ignorées | Doublons |
+|---|---:|---:|---:|---:|---:|---:|
+| `typescript-simple` | 2 | 3 | 3 | 3 | 0 | 0 |
+| `typescript-inheritance` | 11 | 14 | 14 | 14 | 0 | 0 |
+| `typescript-modules` | 4 | 6 | 6 | 6 | 0 | 0 |
+| `typescript-unresolved` | 2 | 3 | 3 | 3 | 0 | 0 |
+| **Total** | **19** | **26** | **26** | **26** | **0** | **0** |
+
+Les 19 messages contiennent 19 drapeaux `is_implementation` et 7 drapeaux
+`is_reference`. Les quatre index n'émettent aucun `is_type_definition` ni
+`is_definition`. Un message portant plusieurs drapeaux produit plusieurs faits
+MINOS ; aucune information n'est écrasée.
+
+Validation complète :
+
+| Mesure | Résultat |
+|---|---:|
+| Sources main compilées | 74 |
+| Sources test compilées | 31 |
+| Tests JUnit | 98 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| Faits `CALLS` inventés | 0 |
+| Faits `EXTENDS` inventés | 0 |
+
+Cette validation couvre l'ingestion vers le store mémoire. La persistance dans
+le snapshot actif reste hors de cette porte et sera traitée par le format v2.
+
+---
+
+# 25. M3 — Clôture persistance, dépendances et CLI
+
+La porte finale M3 a été validée localement le 23 juillet 2026.
+
+## Build complet
+
+| Mesure | Résultat |
+|---|---:|
+| Sources main compilées | 80 |
+| Sources test compilées | 37 |
+| Tests JUnit | 115 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| Build du JAR exécutable | succès |
+| Relecture du snapshot dans une nouvelle JVM | succès |
+
+## Rejeu relationnel réel
+
+| Dataset | Faits SCIP | Dépendances dérivées | Ignorés | Doublons |
+|---|---:|---:|---:|---:|
+| `typescript-simple` | 3 | 2 | 0 | 0 |
+| `typescript-inheritance` | 14 | 11 | 0 | 0 |
+| `typescript-modules` | 6 | 4 | 0 | 0 |
+| `typescript-unresolved` | 3 | 2 | 0 | 0 |
+| **Total** | **26** | **19** | **0** | **0** |
+
+Les 26 faits sont tous résolus. Les 19 dépendances coalescent les faits portant
+la même paire source/cible et gardent chaque chemin sous forme de preuve.
+
+## Snapshot et probes CLI réels
+
+Le snapshot v2 produit depuis `typescript-simple` contient :
+
+| Mesure | Résultat |
+|---|---:|
+| Symboles | 24 |
+| Occurrences | 100 |
+| Relations factuelles | 3 |
+| Relations dérivées | 2 |
+| Relations persistées | 5 |
+
+Après fermeture de l'importeur, des processus exécutant le JAR produit ont
+retourné :
+
+| Commande | Résultats |
+|---|---:|
+| `find-usages UserRepository` | 4 |
+| `find-implementations UserRepository` | 1 |
+| `dependencies InMemoryUserRepository` | 1 |
+| `dependents UserRepository` | 1 |
+| `find-callers InMemoryUserRepository` | 0 |
+| `find-callees InMemoryUserRepository` | 0 |
+
+Les deux zéros sont des réponses réussies et attendues : ce fournisseur ne
+publie aucun fait `CALLS` dans cet artefact. Le verdict est documenté dans
+`docs/m3/DECISION_M3.md`.
+
+---
+
+# 26. M4 — Recherche et contexte compact
+
+La porte M4 a été validée localement le 23 juillet 2026.
+
+## Validation complète
+
+| Mesure | Résultat |
+|---|---:|
+| Sources main compilées | 92 |
+| Sources test compilées | 45 |
+| Tests JUnit | 131 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| JAR et launcher Windows | succès |
+| Recherche M4 dans une nouvelle JVM | succès |
+| JSON relu par `ConvertFrom-Json` | succès |
+
+## Efficacité de contexte réelle
+
+La recherche exacte de `InMemoryUserRepository.findById` sur
+`typescript-simple` a produit :
+
+| Mesure | Résultat |
+|---|---:|
+| Symboles racine | 1 |
+| Relations incluses | 3 |
+| Plage pertinente | 3 lignes |
+| Tokens plage / fichier | 19 / 101 |
+| Estimated Tokens Avoided | 82 |
+| Estimated Tokens réponse | 540 |
+| Troncature | non |
+
+`UserRepository` a par ailleurs retourné 4 usages et 2 relations. La commande
+explicite `get-source` a restitué le fichier complet, sans troncature.
+
+## Latence locale
+
+Après 20 warmups, le benchmark de 200 recherches lexicales `findById` avec
+profondeur 2 a mesuré :
+
+| Percentile | Durée |
+|---|---:|
+| p50 | 3,232 ms |
+| p95 | 5,421 ms |
+| p99 | 5,969 ms |
+
+La réponse moyenne de ce scénario contient 4 symboles racine, 1 417 tokens
+estimés et 180 tokens source évités, sans troncature. La cible p95 de 250 ms
+pour une recherche de faible profondeur est satisfaite sur cette fixture et
+cette machine. Le verdict détaillé est dans `docs/m4/DECISION_M4.md`.
+
+---
+
+# 27. M5 — Tests liés et dérivations explicables
+
+La porte M5 est implémentée mais reste ouverte au 23 juillet 2026.
+
+## Suite ciblée acquise
+
+| Mesure | Résultat |
+|---|---:|
+| Tests ciblés initiaux | 16 |
+| Échecs / erreurs / skipped | 0 / 0 / 0 |
+| Signaux couverts | 5 / 5 |
+| Dérivations/heuristiques sans preuve autorisées par le modèle | 0 |
+
+Les tests couvrent `TEST_LOCATION`, `PACKAGE_PROXIMITY`,
+`NAMING_CONVENTION`, `DIRECT_REFERENCE` et `DIRECT_CALL`, ainsi que le score,
+la nature, la résolution, l'origine et le déterminisme.
+
+## Portes codées restant à exécuter
+
+| Porte | Attendu |
+|---|---|
+| Replay `typescript-simple` | au moins un `RELATED_TEST` |
+| Replay `typescript-inheritance` | au moins un `RELATED_TEST` |
+| Replay `typescript-modules` | au moins un `RELATED_TEST` |
+| Replay `typescript-unresolved` | zéro, car aucune source de test |
+| Snapshot v2 → réouverture → CLI JSON | relation et preuves fidèles |
+| `clean verify` | zéro échec, erreur et skipped |
+
+L'exécution a été empêchée par le sandbox lors de la lecture du fichier de
+sécurité du JDK local. Aucun chiffre réel final n'est donc publié avant la
+réexécution de cette porte. Voir `docs/m5/DECISION_M5.md`.

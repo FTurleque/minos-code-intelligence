@@ -81,6 +81,15 @@ public final class ScipRealIndexExperiment {
         metric("unresolvedOccurrences", report.unresolvedOccurrenceCount());
         metric("skippedOccurrences", report.skippedOccurrenceCount());
         metric("unresolvedOccurrenceRate", report.unresolvedOccurrenceRate());
+        metric("providerRelationships", report.providerRelationshipCount());
+        metric("providerRelationshipFacts", report.providerRelationshipFactCount());
+        metric("normalizedRelationships", report.relationshipCount());
+        metric("derivedRelationships", report.derivedRelationshipCount());
+        metric("relatedTestRelationships", report.relatedTestRelationshipCount());
+        metric("resolvedRelationships", report.resolvedRelationshipCount());
+        metric("unresolvedRelationships", report.unresolvedRelationshipCount());
+        metric("skippedRelationshipFacts", report.skippedRelationshipFactCount());
+        metric("duplicateRelationships", report.duplicateRelationshipCount());
 
         SymbolQueryService queries = new SymbolQueryService(store);
         Arrays.stream(arguments).skip(1).forEach(query -> emitQuery(queries, projectId, query));
@@ -125,7 +134,9 @@ public final class ScipRealIndexExperiment {
                 for (Relationship relationship : symbol.getRelationshipsList()) {
                     line("RELATIONSHIP", symbol.getSymbol(), relationship.getSymbol(),
                             Boolean.toString(relationship.getIsImplementation()),
-                            Boolean.toString(relationship.getIsReference()));
+                            Boolean.toString(relationship.getIsReference()),
+                            Boolean.toString(relationship.getIsTypeDefinition()),
+                            Boolean.toString(relationship.getIsDefinition()));
                 }
             }
 
@@ -169,6 +180,8 @@ public final class ScipRealIndexExperiment {
 
         int implementationRelationships = 0;
         int referenceRelationships = 0;
+        int typeDefinitionRelationships = 0;
+        int definitionRelationships = 0;
         int cataloguedRelationshipTargets = 0;
         for (Document document : index.getDocumentsList()) {
             for (SymbolInformation symbol : document.getSymbolsList()) {
@@ -178,6 +191,12 @@ public final class ScipRealIndexExperiment {
                     }
                     if (relationship.getIsReference()) {
                         referenceRelationships++;
+                    }
+                    if (relationship.getIsTypeDefinition()) {
+                        typeDefinitionRelationships++;
+                    }
+                    if (relationship.getIsDefinition()) {
+                        definitionRelationships++;
                     }
                     if (catalogKeys.contains(ScipSymbolCatalog.key(
                             document.getRelativePath(),
@@ -241,6 +260,8 @@ public final class ScipRealIndexExperiment {
         metric("providerRelationships", relationships);
         metric("providerImplementationRelationships", implementationRelationships);
         metric("providerReferenceRelationships", referenceRelationships);
+        metric("providerTypeDefinitionRelationships", typeDefinitionRelationships);
+        metric("providerDefinitionRelationships", definitionRelationships);
         metric("providerCataloguedRelationshipTargets", cataloguedRelationshipTargets);
         metric("providerUncataloguedRelationshipTargets", relationships - cataloguedRelationshipTargets);
         positionEncodings.forEach((encoding, count) ->

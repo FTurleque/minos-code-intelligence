@@ -5,6 +5,8 @@ package com.minos.domain;
  */
 public enum RelationshipKind {
     DECLARES,
+    DEFINITION,
+    TYPE_DEFINITION,
     CONTAINS,
     IMPORTS,
     REFERENCES,

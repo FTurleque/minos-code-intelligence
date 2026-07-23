@@ -304,6 +304,12 @@ Preuves :
 - appartient à la même hiérarchie de package
 ```
 
+M5 concrétise ce contrat avec une relation orientée du test vers la production.
+Les références et appels factuels produisent une dérivation ; le nommage seul
+reste heuristique et la proximité de namespace ne suffit jamais seule. Le score
+et les poids sont définis dans
+[`../m5/RELATED_TEST_DERIVATION.md`](../m5/RELATED_TEST_DERIVATION.md).
+
 ---
 
 ## 6. Stratégie SCIP candidate

@@ -1,7 +1,7 @@
 package com.minos.adapter.scip;
 
 /**
- * Mesures minimales produites par une ingestion SCIP M0.
+ * Mesures produites par une ingestion SCIP normalisée.
  */
 record ScipIngestionReport(
         int catalogSymbolCount,
@@ -10,7 +10,16 @@ record ScipIngestionReport(
         int occurrenceCount,
         int resolvedOccurrenceCount,
         int unresolvedOccurrenceCount,
-        int skippedOccurrenceCount) {
+        int skippedOccurrenceCount,
+        int providerRelationshipCount,
+        int providerRelationshipFactCount,
+        int relationshipCount,
+        int derivedRelationshipCount,
+        int relatedTestRelationshipCount,
+        int resolvedRelationshipCount,
+        int unresolvedRelationshipCount,
+        int skippedRelationshipFactCount,
+        int duplicateRelationshipCount) {
 
     double unresolvedOccurrenceRate() {
         int considered = resolvedOccurrenceCount + unresolvedOccurrenceCount;
