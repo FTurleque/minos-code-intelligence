@@ -1,7 +1,14 @@
 package com.minos.architecture;
 
+import com.minos.domain.CodeEntityRef;
+import com.minos.domain.CodeEntityType;
+import com.minos.domain.Evidence;
+import com.minos.domain.EvidenceType;
+import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
 import com.minos.domain.OriginType;
+import com.minos.domain.Relationship;
+import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
@@ -38,7 +45,7 @@ class LocalProjectArchitectureQueryTest {
         snapshots.publish(
                 project.id(),
                 "snapshot-m6-local",
-                List.of(symbol(project, "src/main/java/com/acme/App.java")),
+                List.of(symbol(project, "app", "src/main/java/com/acme/App.java")),
                 List.of(),
                 List.of()
         );
@@ -56,18 +63,65 @@ class LocalProjectArchitectureQueryTest {
         assertEquals("com.acme", overview.modules().getFirst().namespaces().getFirst().name());
     }
 
-    private static Symbol symbol(RegisteredProject project, String fileId) {
+    @Test
+    void reloadsPersistedDependenciesAndAggregatesThemBetweenDiscoveredModules(@TempDir Path root)
+            throws Exception {
+        Path projectRoot = Files.createDirectories(root.resolve("multi-module"));
+        Files.writeString(projectRoot.resolve("pom.xml"), "<project/>");
+        Path apiRoot = Files.createDirectories(projectRoot.resolve("api/src/main/java/com/acme/api"));
+        Path appRoot = Files.createDirectories(projectRoot.resolve("app/src/main/java/com/acme/app"));
+        Files.writeString(projectRoot.resolve("api/pom.xml"), "<project/>");
+        Files.writeString(projectRoot.resolve("app/pom.xml"), "<project/>");
+        Files.writeString(apiRoot.resolve("Api.java"), "package com.acme.api; public class Api {}");
+        Files.writeString(appRoot.resolve("App.java"), "package com.acme.app; public class App {}");
+
+        LocalProjectRegistry registry = new LocalProjectRegistry(root.resolve("registry"));
+        RegisteredProject project = registry.registerProject(projectRoot, "dependency-fixture");
+        Symbol api = symbol(project, "api", "api/src/main/java/com/acme/api/Api.java");
+        Symbol app = symbol(project, "app", "app/src/main/java/com/acme/app/App.java");
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(root.resolve("snapshots"));
+        snapshots.publish(
+                project.id(),
+                "snapshot-m6-dependencies",
+                List.of(api, app),
+                List.of(),
+                List.of(dependency(project, app, api))
+        );
+
+        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+        ArchitectureOverview overview = query.getArchitectureOverview("dependency-fixture");
+        ArchitectureDependencyGraph graph = query.getModuleDependencies("dependency-fixture");
+
+        ArchitectureModule apiModule = module(overview, "api");
+        ArchitectureModule appModule = module(overview, "app");
+        assertEquals(1, graph.totalDependencyCount());
+        assertEquals(1, graph.interModuleDependencyCount());
+        assertEquals(0, graph.intraModuleDependencyCount());
+        assertEquals(0, graph.unassignedDependencyCount());
+        assertEquals(1, graph.moduleEdgeCount());
+        assertEquals(appModule.id(), graph.dependencies().getFirst().sourceModuleId());
+        assertEquals(apiModule.id(), graph.dependencies().getFirst().targetModuleId());
+    }
+
+    private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
+        return overview.modules().stream()
+                .filter(module -> relativePath.equals(module.relativePath()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Symbol symbol(RegisteredProject project, String id, String fileId) {
         return new Symbol(
-                "sym:app",
-                "key:app",
+                "sym:" + id,
+                "key:" + id,
                 SymbolIdentityQuality.STRUCTURAL_FALLBACK,
                 project.id().toString(),
                 "main",
                 fileId,
                 null,
                 SymbolKind.CLASS,
-                "App",
-                "com.acme.App",
+                id,
+                "com.acme." + id,
                 null,
                 "java",
                 null,
@@ -76,6 +130,32 @@ class LocalProjectArchitectureQueryTest {
                 false,
                 false,
                 Set.of()
+        );
+    }
+
+    private static Relationship dependency(RegisteredProject project, Symbol source, Symbol target) {
+        CodeEntityRef sourceRef = new CodeEntityRef(CodeEntityType.SYMBOL, source.id());
+        CodeEntityRef targetRef = new CodeEntityRef(CodeEntityType.SYMBOL, target.id());
+        return new Relationship(
+                "rel:dependency",
+                project.id().toString(),
+                sourceRef,
+                targetRef,
+                null,
+                RelationshipKind.DEPENDS_ON,
+                null,
+                ResolutionStatus.RESOLVED,
+                InformationNature.DERIVED,
+                1.0,
+                new Origin("minos", "RELATIONSHIP_DERIVATION", "M3", "run", OriginType.DERIVED_BY_MINOS),
+                List.of(new Evidence(
+                        EvidenceType.DERIVATION_PATH,
+                        "Direct persisted dependency",
+                        sourceRef,
+                        targetRef,
+                        null,
+                        1.0
+                ))
         );
     }
 }
