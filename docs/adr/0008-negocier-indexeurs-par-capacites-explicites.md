@@ -1,7 +1,8 @@
 # ADR-0008 — Négocier les indexeurs par capacités explicites
 
-- Statut : **Proposé**
+- Statut : **Accepté**
 - Date : **22 juillet 2026**
+- Validation : **23 juillet 2026**
 - Jalon : M1
 
 ## Contexte
@@ -10,7 +11,7 @@ M0 a montré que deux indexeurs SCIP peuvent partager un protocole commun tout e
 
 Choisir un fournisseur uniquement à partir du langage ou de son nom masquerait ces différences et conduirait MINOS à inventer des garanties que les mesures ne démontrent pas.
 
-## Décision proposée
+## Décision
 
 1. chaque indexeur est décrit par un `IndexerDescriptor` indépendant de son API native ;
 2. le descriptor expose version, langages, systèmes de build qualifiés, capacités positives, niveau de qualification, priorité et limitations ;
@@ -20,7 +21,7 @@ Choisir un fournisseur uniquement à partir du langage ou de son nom masquerait 
 6. les indexeurs expérimentaux sont exclus par défaut ;
 7. les rejets restent observables : build non qualifié, capacité absente, fournisseur expérimental ou priorité inférieure ;
 8. l'ordre de sélection est déterministe : priorité décroissante puis identifiant ;
-9. la négociation ne lance aucun processus fournisseur ; l'exécution et son cycle de vie restent M1.4 ;
+9. la négociation ne lance aucun processus fournisseur ; l'exécution et son cycle de vie relèvent de M1.4 ;
 10. les connaissances propres à SCIP restent dans `adapter.scip` et sont adaptées vers les contrats `orchestration`.
 
 ## Catalogue M1 issu des preuves M0
@@ -58,11 +59,11 @@ Le descriptor TypeScript n'impose pas npm : M0 a démontré que les références
 - un appelant peut demander une capacité forte et obtenir explicitement « non couvert » plutôt qu'un faux succès ;
 - un nouveau fournisseur peut être ajouté sans modifier le domaine de découverte ;
 - les limites fournisseurs deviennent des données de sélection et de diagnostic ;
-- M1.4 pourra exécuter uniquement un plan déjà négocié et observable.
+- M1.4 exécute uniquement un plan déjà négocié et observable.
 
-## Validation attendue
+## Validation M1.3
 
-L'ADR pourra passer à **Accepté** lorsque M1.3 aura confirmé :
+M1.3 a confirmé :
 
 - unicité des indexeurs enregistrés ;
 - sélection déterministe par priorité ;
@@ -71,3 +72,5 @@ L'ADR pourra passer à **Accepté** lorsque M1.3 aura confirmé :
 - sélection réelle `scip-typescript` sur les fixtures TypeScript ;
 - conservation de l'asymétrie d'index partiel Java/TypeScript ;
 - absence de types SCIP dans `orchestration`.
+
+La validation locale du head M1.3 a été confirmée par le développeur avant fusion de la PR #9 dans `main` au commit `0125802b364f481e2242c7d2bbb008beb4c2d8d7`.
