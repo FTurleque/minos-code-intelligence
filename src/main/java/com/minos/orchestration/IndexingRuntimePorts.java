@@ -37,13 +37,50 @@ public final class IndexingRuntimePorts {
             UUID runId,
             UUID projectId,
             Path projectRoot,
-            IndexerSelection selection
+            IndexerSelection selection,
+            IndexingMode mode,
+            List<String> changedFiles
     ) {
         public IndexingExecutionRequest {
             Objects.requireNonNull(runId, "runId");
             Objects.requireNonNull(projectId, "projectId");
             Objects.requireNonNull(projectRoot, "projectRoot");
             Objects.requireNonNull(selection, "selection");
+            Objects.requireNonNull(mode, "mode");
+            if (mode == IndexingMode.NONE) {
+                throw new IllegalArgumentException("NONE is not an executable indexing mode");
+            }
+            changedFiles = immutableSortedPaths(changedFiles);
+            if (mode == IndexingMode.FULL && !changedFiles.isEmpty()) {
+                throw new IllegalArgumentException("FULL execution must not expose a partial changed-file scope");
+            }
+            if (mode == IndexingMode.INCREMENTAL && changedFiles.isEmpty()) {
+                throw new IllegalArgumentException("INCREMENTAL execution requires changed files");
+            }
+        }
+
+        public IndexingExecutionRequest(
+                UUID runId,
+                UUID projectId,
+                Path projectRoot,
+                IndexerSelection selection
+        ) {
+            this(runId, projectId, projectRoot, selection, IndexingMode.FULL, List.of());
+        }
+
+        private static List<String> immutableSortedPaths(List<String> paths) {
+            List<String> copy = List.copyOf(Objects.requireNonNull(paths, "changedFiles"));
+            String previous = null;
+            for (String path : copy) {
+                if (path == null || path.isBlank() || path.startsWith("/") || path.contains("\\")) {
+                    throw new IllegalArgumentException("changedFiles must contain portable relative paths");
+                }
+                if (previous != null && previous.compareTo(path) >= 0) {
+                    throw new IllegalArgumentException("changedFiles must be strictly sorted and unique");
+                }
+                previous = path;
+            }
+            return copy;
         }
     }
 
