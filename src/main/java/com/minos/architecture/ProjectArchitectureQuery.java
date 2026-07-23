@@ -16,4 +16,8 @@ public interface ProjectArchitectureQuery {
     ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier) throws IOException;
 
     ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier) throws IOException;
+
+    ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier) throws IOException;
+
+    ArchitectureModuleContext getModuleContext(String projectIdentifier, String moduleIdentifier) throws IOException;
 }
