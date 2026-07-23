@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 et M0 livrés — M1 en cours**
+Statut : **C0 à M1 livrés — M2 autorisé**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -91,13 +91,17 @@ REMPLACER
 
 ## M1 — Découverte des projets et orchestration des indexeurs
 
-État : **EN COURS — M1.1 et M1.2 fusionnés, M1.3 en validation**
+État : **TERMINÉ ET LIVRÉ**
+
+La PR finale M1 (#10) a été validée localement sur le head
+`debf19bf4baecfda1e50c9981cbeed857b679a2f` avec 47 tests verts, puis fusionnée
+dans `main` au commit `cf59f43ca6d9927340a889d77c41b375c019f9ba`.
 
 ### Objectif
 
 Détecter un projet et sélectionner les fournisseurs d'indexation adaptés.
 
-### Périmètre
+### Périmètre livré
 
 - registre local des projets ;
 - concept de workspace ;
@@ -116,13 +120,24 @@ Progression :
 ```text
 M1.1 découverte locale factuelle              FUSIONNÉ
 M1.2 ignore policy + registre local            FUSIONNÉ
-M1.3 IndexerRegistry + négociation             EN VALIDATION
-M1.4 cycle de vie + état d'index              À FAIRE
+M1.3 IndexerRegistry + négociation             FUSIONNÉ
+M1.4 cycle de vie + état d'index              FUSIONNÉ
 ```
+
+### Porte de sortie acquise
+
+- découverte reproductible Java / TypeScript ;
+- identité projet/workspace persistante et indépendante du chemin ;
+- sélection fournisseur par capacités positives qualifiées ;
+- état d'index observable ;
+- promotion atomique au niveau du run projet complet ;
+- frontière fournisseur préservée dans le cœur MINOS.
 
 ---
 
 ## M2 — Intelligence des symboles
+
+État : **AUTORISÉ — prochain jalon**
 
 ### Objectif
 
