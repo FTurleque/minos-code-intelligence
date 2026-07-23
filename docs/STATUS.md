@@ -19,17 +19,16 @@ M1 — Découverte et orchestration     TERMINÉ ET FUSIONNÉ
 M2 — Intelligence des symboles       TERMINÉ ET VALIDÉ LOCALEMENT
 M3 — Intelligence des relations      TERMINÉ ET VALIDÉ LOCALEMENT
 M4 — Recherche et contexte compact   TERMINÉ ET VALIDÉ LOCALEMENT
-M5 — Tests liés et dérivations       IMPLÉMENTÉ, VALIDATION FINALE EN ATTENTE
+M5 — Tests liés et dérivations       TERMINÉ ET VALIDÉ LOCALEMENT
 M6 à M13 — Jalons produit            NON DÉMARRÉS
 ```
 
 M0 est livré avec le verdict **ADOPTER_AVEC_CONTRAINTES**. M1 est livré
-intégralement. M2, M3 et M4 sont terminés et validés localement sur le worktree
-courant ; ils ne sont pas encore présentés comme fusionnés. M5 est implémenté,
-mais reste ouvert tant que la validation complète et le replay réel ajoutés à
-sa porte n'ont pas été exécutés. GitHub Actions reste
-volontairement hors de la porte courante ; l'anomalie historique est suivie
-séparément dans #5.
+intégralement. M2, M3, M4 et M5 sont terminés et validés localement sur la
+branche de livraison courante ; ils ne sont pas encore présentés comme
+fusionnés. La prochaine porte produit est M6 — Intelligence d'architecture.
+GitHub Actions reste volontairement hors de la porte courante ; l'anomalie
+historique est suivie séparément dans #5.
 
 ## Résultats acquis de M0
 
@@ -261,9 +260,9 @@ M3 — Intelligence des relations — terminé
         ↓
 M4 — Recherche et contexte compact — terminé
         ↓
-M5 — Tests liés et dérivations — validation finale en attente
+M5 — Tests liés et dérivations — terminé
         ↓
-M6 — Intelligence d'architecture — prochain après clôture M5
+M6 — Intelligence d'architecture — prochain jalon
 ```
 
 M2 stabilise le modèle de symbole et sa recherche sans remettre en cause les
@@ -548,9 +547,9 @@ Verdict : **M4 TERMINÉ ET VALIDÉ LOCALEMENT**. Documentation :
 - `docs/m4/TOKEN_POLICY_AND_BENCHMARK.md` ;
 - `docs/m4/DECISION_M4.md`.
 
-## M5 — implémentation : tests liés explicables
+## M5 — clôture : tests liés explicables
 
-Le périmètre M5 est implémenté :
+Le périmètre M5 est implémenté et validé :
 
 - relation orientée `test --RELATED_TEST--> production` ;
 - détection des emplacements de test et ancrage prudent du symbole de test ;
@@ -562,12 +561,31 @@ Le périmètre M5 est implémenté :
 - requête `findRelatedTests` et commande `minos related-tests` ;
 - raisons complètes dans les rendus TEXT et JSON.
 
-La première suite ciblée a réussi 16 tests. Les tests de replay des quatre index
-TypeScript réels et de réouverture snapshot → CLI sont codés, mais leur
-exécution finale et `clean verify` sont en attente d'un environnement autorisant
-la lecture du JDK local. Le jalon reste donc ouvert.
+Preuve finale :
 
-Documentation :
+```text
+.\mvnw.cmd clean verify
+93 sources main compilées
+49 sources test compilées
+140 tests réussis
+0 échec
+0 erreur
+0 skipped
+BUILD SUCCESS
+
+.\minos.cmd --help
+exit 0
+```
+
+Le replay des quatre index TypeScript versionnés est inclus dans cette suite :
+`typescript-simple`, `typescript-inheritance` et `typescript-modules` doivent
+produire au moins une relation `RELATED_TEST`, tandis que
+`typescript-unresolved` doit en produire zéro faute de source de test. La porte
+snapshot importe ensuite une relation, republie le snapshot, recrée le registre
+et le store et valide la CLI JSON `related-tests` avec les preuves
+`DIRECT_REFERENCE`, `NAMING_CONVENTION` et une confiance persistée de `0.887`.
+
+Verdict : **M5 TERMINÉ ET VALIDÉ LOCALEMENT**. Documentation :
 
 - `docs/m5/RELATED_TEST_DERIVATION.md` ;
 - `docs/m5/CLI_RELATED_TESTS.md` ;
