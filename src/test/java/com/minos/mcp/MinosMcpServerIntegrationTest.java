@@ -82,6 +82,15 @@ class MinosMcpServerIntegrationTest {
             assertTrue(impactJson.contains("\"impactCount\":2"), impactJson);
             assertTrue(impactJson.contains("\"testCount\":1"), impactJson);
 
+            var invalidImpact = client.callTool(CallToolRequest.builder("minos_impact")
+                    .arguments(Map.of(
+                            "project", "m10-typescript",
+                            "symbolId", greetingPort.id(),
+                            "depth", 99
+                    ))
+                    .build());
+            assertTrue(Boolean.TRUE.equals(invalidImpact.isError()));
+
             System.out.printf(
                     "M10 MCP stdio: tools=%d, project=%s, snapshot=%s, architecture-modules=3, impact-root=GreetingPort%n",
                     listed.tools().size(), project.id(), snapshot.snapshotId());
