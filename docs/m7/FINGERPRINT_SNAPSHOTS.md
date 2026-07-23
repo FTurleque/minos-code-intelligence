@@ -2,20 +2,25 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #22.
 
-Base : M7.1 livré via PR #23 au commit
-`34b57dfadad962b98c2d5c028957595cee575400`.
+PR : **#24**.
+
+Head validé :
+`f1b3e619335ab7e0dc766ebae12df1ff88a7b47d`.
+
+Merge dans `main` :
+`379b5a28a92cb58b340dc8801d66fad1b853e4ce`.
 
 ## Objectif
 
 Conserver durablement les empreintes M7.1 et les associer explicitement au
-snapshot d’index MINOS auquel elles correspondent, sans encore décider si une
-réindexation partielle est sûre.
+snapshot d’index MINOS auquel elles correspondent, sans décider à ce stade si
+une réindexation partielle est sûre.
 
-## Contrats
+## Contrats livrés
 
 - `ProjectFingerprintSnapshot` ;
 - `ProjectFingerprintSnapshotStore` ;
@@ -32,17 +37,12 @@ indexSnapshotId
 ProjectFingerprint
 ```
 
-`indexSnapshotId` est une association fournie explicitement par l’orchestration.
-M7.2 ne capture pas automatiquement le workspace au moment d’une promotion
-d’index : cette intégration sera ajoutée lorsque le lifecycle incrémental sera
-conçu.
-
-Cette distinction évite de rattacher par erreur l’état courant du workspace à un
-ancien snapshot d’index encore actif.
+`indexSnapshotId` est fourni explicitement par l’orchestration. M7.2 ne rattache
+jamais implicitement l’état courant du workspace à un ancien index encore actif.
 
 ## Format fichier
 
-Le backend fichier utilise un format binaire versionné `v1` avec :
+Le backend utilise un format binaire versionné `v1` :
 
 ```text
 magic MNFP
@@ -55,19 +55,9 @@ fileCount
 [file path, size, sha256]...
 ```
 
-Les entrées restent dans l’ordre déterministe produit par M7.1.
+Les entrées gardent l’ordre déterministe produit par M7.1.
 
-## Publication immuable
-
-La publication écrit d’abord un fichier temporaire puis publie le snapshot dans
-le répertoire du projet.
-
-Le nom final contient :
-
-```text
-hash(indexSnapshotId)
-checksum du fichier snapshot
-```
+## Historique immuable
 
 Un même couple :
 
@@ -77,72 +67,54 @@ projectId + indexSnapshotId
 
 est immuable :
 
-- republication avec le même contenu → idempotente ;
-- republication avec un contenu différent → refusée.
+- republication identique → idempotente ;
+- republication avec contenu différent → refus explicite.
 
-Les anciens snapshots restent conservés et accessibles par leur
-`indexSnapshotId`.
+Les snapshots antérieurs restent chargeables par `indexSnapshotId`.
 
-## Pointeur actif
+## Publication et promotion
 
-La promotion est une opération séparée :
+Les opérations sont séparées :
 
 ```text
 publish(...)
 promote(projectId, indexSnapshotId)
 ```
 
-`publish` ne change jamais le snapshot actif.
+`publish` ne modifie jamais le pointeur actif.
 
-`promote` écrit un `active.pointer` temporaire puis remplace atomiquement le
-pointeur précédent. Le pointeur conserve :
+`promote` remplace atomiquement `active.pointer`. Le remplacement concerne
+uniquement ce pointeur ; les snapshots historiques ne sont jamais écrasés.
 
-```text
-indexSnapshotId
-fileName
-checksum
-projectSha256
-buildSha256
-fileCount
-```
+## Intégrité
 
-Le remplacement atomique ne s’applique qu’au pointeur. Les fichiers historiques
-ne sont jamais écrasés.
+Toute lecture vérifie notamment :
 
-## Vérification d’intégrité
-
-Toute lecture vérifie :
-
-- magic et version du format ;
+- magic et version ;
 - projet attendu ;
-- checksum complet du fichier via son nom ;
-- tailles et chemins des entrées ;
-- ordre et unicité des chemins via `ProjectFingerprint` ;
+- checksum complet du fichier ;
+- structure et nombre d’entrées ;
+- ordre et unicité des chemins ;
 - recalcul de `projectSha256` ;
 - recalcul de `buildSha256` ;
-- métadonnées du pointeur actif.
+- cohérence des métadonnées du pointeur actif.
 
-Une corruption du fichier historique ou du pointeur actif est donc refusée avant
-retour au consommateur.
+Une corruption est refusée avant retour au consommateur.
 
 ## Alignement avec le lifecycle M1
 
-`ProjectFingerprintSnapshotAlignmentService` compare le pointeur d’empreintes
-actif avec `ProjectIndexState.activeSnapshotId`.
+`ProjectFingerprintSnapshotAlignmentService` confronte le pointeur fingerprint
+actif à `ProjectIndexState.activeSnapshotId` :
 
-Comportements :
+- index actif sans baseline fingerprint → absence explicite ;
+- IDs identiques → baseline alignée ;
+- IDs différents → erreur ;
+- fingerprint actif sans index actif → erreur.
 
-- index actif sans baseline fingerprint → `Optional.empty()` ;
-- index actif + fingerprint portant le même ID → résultat aligné ;
-- IDs différents → erreur explicite ;
-- fingerprint actif alors que le lifecycle n’annonce aucun index actif → erreur.
+Ce service vérifie l’association persistée ; il ne compare pas encore le
+fingerprint au workspace courant.
 
-Le service ne compare pas encore le fingerprint à l’état courant du workspace.
-Il vérifie uniquement l’association persistée entre les deux snapshots.
-
-## Historique
-
-Le store permet :
+## API historique
 
 ```text
 load(projectId, indexSnapshotId)
@@ -152,75 +124,61 @@ listIndexSnapshotIds(projectId)
 
 La liste historique est triée et refuse les IDs dupliqués.
 
-## Tests de qualification
+## Tests qualifiés
 
-`FileProjectFingerprintSnapshotStoreTest` couvre notamment :
+La suite couvre :
 
 - publication sans promotion implicite ;
-- promotion du premier snapshot ;
-- publication et promotion d’un second snapshot ;
-- réouverture d’une nouvelle instance ;
-- conservation du premier snapshot ;
 - remplacement du pointeur actif ;
-- republication identique idempotente ;
+- historique et réouverture ;
+- republication idempotente ;
 - refus de réécriture historique ;
-- refus d’une promotion non publiée ;
-- détection de corruption ;
-- isolation par projet.
-
-`ProjectFingerprintSnapshotAlignmentServiceTest` couvre :
-
-- absence de baseline compatible avec un index actif ;
-- alignement exact ;
-- désalignement explicite ;
-- pointeur fingerprint interdit sans index actif.
+- promotion d’un snapshot absent ;
+- corruption ;
+- isolation projet ;
+- alignement et désalignement avec `ProjectIndexState` ;
+- replay file-backed de la fixture TypeScript réelle.
 
 ## Replay réel
 
-`ProjectFingerprintSnapshotRealFixtureTest` utilise :
+Fixture :
 
 ```text
 fixtures/typescript/typescript-modules
 ```
 
-Chaîne vérifiée :
+Résultat validé :
 
 ```text
-capture M7.1
- -> publish fingerprint snapshot
- -> promote fingerprint pointer
- -> nouvelle instance du store
- -> ProjectIndexState READY
- -> alignement
- -> relecture identique
+M7.2 typescript-modules fingerprint-snapshot: index=typescript-modules-index, files=13, history=1, project=9103c5ddd376bad13d2f59c4dc923dd58eda6b8e0d0b0a0a991d29af96cb58bd, build=5b5b6d352221ca53a8844f9df644b3dd60b048b93d81e0f1bbade0359b504fb6
 ```
 
-La sortie Maven doit contenir :
+## Porte locale acquise
 
 ```text
-M7.2 typescript-modules fingerprint-snapshot: index=..., files=13, history=1, project=..., build=...
+.\mvnw.cmd clean verify
+124 sources main compilées en release 24
+63 sources test compilées en release 24
+176 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
 ```
+
+Le warning `sun.misc.Unsafe` de `protobuf-java 4.34.2` reste non bloquant.
 
 ## Hors périmètre M7.2
 
 - décision d’invalidation ;
-- capacité fournisseur `INCREMENTAL_INDEXING` ;
-- choix `INCREMENTAL` vs `FULL` ;
-- calcul d’un périmètre partiel par indexeur ;
+- capacité fournisseur d’indexation incrémentale ;
+- choix final `INCREMENTAL` vs `FULL` ;
 - modification de `IndexingLifecycleService` ;
-- capture automatique au moment de la promotion d’index ;
+- capture automatique au moment de la promotion ;
 - watcher filesystem.
-
-## Porte locale
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-La PR reste Draft jusqu’à validation locale de son head exact.
 
 ## Suite
 
-M7.3 pourra établir les premières règles d’invalidation conservatrices à partir
-du `ProjectChangeSet`, de l’empreinte build et de l’alignement avec le snapshot
-d’index, avant d’introduire les capacités incrémentales propres aux fournisseurs.
+M7.3 introduit les règles d’invalidation conservatrices à partir du
+`ProjectChangeSet`, du changement de build et de l’alignement avec le snapshot
+d’index actif.

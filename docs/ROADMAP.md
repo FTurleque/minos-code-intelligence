@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M6 terminés — M7 prochain jalon**
+Statut : **C0 à M6 terminés — M7 en cours**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md).
 Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon
@@ -31,10 +31,6 @@ Définir précisément ce que MINOS doit être avant les implémentations produi
 - critères de validation ;
 - ADR structurantes ;
 - plan d’expérimentations M0.
-
-### Porte de décision
-
-> Savons-nous précisément ce que MINOS doit fournir, pourquoi, à qui, avec quelles limites et selon quels critères mesurables ?
 
 ---
 
@@ -99,17 +95,8 @@ Exposer une recherche fiable des symboles indépendamment du fournisseur et du b
 - symboles externes et non résolus ;
 - `find_symbol` ;
 - `get_file_symbols` ;
-- recherche lexicale ;
-- recherche par nom qualifié ;
+- recherche lexicale et par nom qualifié ;
 - snapshot persistant et résultats compacts.
-
-### Porte acquise
-
-```text
-minos find-symbol <projet> <symbole>
-```
-
-retourne un résultat MINOS normalisé et compact depuis un snapshot persistant.
 
 Décision : `m2/DECISION_M2.md`.
 
@@ -130,12 +117,7 @@ Exposer les relations entrantes et sortantes entre éléments du code.
 - héritage et appels lorsqu’ils sont disponibles ;
 - dépendances dérivées ;
 - provenance, preuves et confiance ;
-- `find_usages` ;
-- `find_implementations` ;
-- `find_callers` ;
-- `find_callees` ;
-- `dependencies` ;
-- `dependents` ;
+- requêtes usages/implémentations/appels/dépendances ;
 - snapshot de connaissance v2.
 
 Décision : `m3/DECISION_M3.md`.
@@ -197,12 +179,12 @@ Produire une vue de haut niveau de la topologie d’un projet.
 ### Périmètre livré
 
 - topologie des modules ;
-- topologie des packages ou namespaces ;
+- topologie des packages/namespaces ;
 - composants centraux sous forme de rangs relatifs directionnels ;
 - concentration des dépendances ;
 - technologies détectées factuellement ;
-- `get_architecture_overview` métier via `ProjectArchitectureQuery.getArchitectureOverview(...)` ;
-- `get_module_context` métier via `ProjectArchitectureQuery.getModuleContext(...)` ;
+- `get_architecture_overview` métier ;
+- `get_module_context` métier ;
 - vue composée `ArchitectureIntelligenceView` ;
 - distinction explicite entre faits, dérivations et preuves.
 
@@ -216,18 +198,8 @@ M6.4 calibration centralité                     PR #17
 M6.5 classement composants centraux             PR #18
 M6.6 technologies factuelles                    PR #19
 M6.7 vue composée + contexte de module          PR #20
+consolidation finale                            PR #21
 ```
-
-### Porte acquise
-
-La dernière porte fonctionnelle M6 compile `116` sources main, `58` sources test
-et exécute `162/162` tests avec `BUILD SUCCESS` sur le head M6.7
-`ba744f41b974432fe33eb617a866ef4c8dcb0ead`, ensuite fusionné dans `main` au
-commit `f10449681a9010079cc9fe0400aac867dea497d9`.
-
-Le replay réel `typescript-modules` confirme la topologie multi-module, la
-dépendance `packages/app -> packages/api`, les rangs directionnels et les
-technologies `TYPESCRIPT` / `NPM` sans propagation artificielle.
 
 Décision : `m6/DECISION_M6.md`.
 
@@ -235,23 +207,85 @@ Décision : `m6/DECISION_M6.md`.
 
 ## M7 — Indexation incrémentale
 
-État : **PROCHAIN JALON**
+État : **EN COURS — M7.1 ET M7.2 LIVRÉS, M7.3 EN VALIDATION**
+
+Suivi : issue #22.
 
 ### Objectif
 
-Éviter les réindexations complètes lorsque cela n’est pas nécessaire.
+Éviter les réindexations complètes lorsque cela n’est pas nécessaire, sans
+jamais promouvoir une exécution partielle qui n’est pas prouvée sûre.
 
 ### Périmètre
 
 - empreintes de fichiers ;
 - empreintes du projet et du build ;
 - fichiers ajoutés, modifiés et supprimés ;
-- snapshots d’index ;
+- snapshots d’empreintes associés aux snapshots d’index ;
 - règles d’invalidation ;
 - capacités incrémentales propres aux fournisseurs ;
-- repli vers une indexation complète.
+- décision sûre `INCREMENTAL` vs `FULL` ;
+- repli explicite vers une indexation complète.
 
-### Porte de décision
+### M7.1 — Empreintes reproductibles et ChangeSet — LIVRÉ
+
+PR #23, merge `34b57dfadad962b98c2d5c028957595cee575400`.
+
+Acquis :
+
+- `FileFingerprint` ;
+- `ProjectFingerprint` ;
+- `ProjectChangeSet` ;
+- `ProjectFingerprintService` ;
+- empreintes déterministes ;
+- distinction projet/build ;
+- classification added/modified/deleted/unchanged.
+
+### M7.2 — Snapshots persistants d’empreintes — LIVRÉ
+
+PR #24, merge `379b5a28a92cb58b340dc8801d66fad1b853e4ce`.
+
+Acquis :
+
+- association `projectId + indexSnapshotId` ;
+- historique immuable ;
+- publication et promotion séparées ;
+- pointeur actif atomique ;
+- contrôle d’intégrité ;
+- alignement explicite avec `ProjectIndexState.activeSnapshotId`.
+
+### M7.3 — Invalidation conservatrice — EN VALIDATION
+
+Objectif : déterminer la portée fournisseur-indépendante avant négociation avec
+un indexeur.
+
+Portées :
+
+```text
+NONE
+PARTIAL_CANDIDATE
+FULL_REQUIRED
+```
+
+Règles :
+
+- pas d’index actif → complet ;
+- baseline absente/désalignée → complet ;
+- définition de build modifiée → complet ;
+- politique d’ignore modifiée → complet ;
+- fichier changé non qualifiable → complet ;
+- uniquement sources/tests reconnus → candidat partiel ;
+- aucun changement → aucune réindexation.
+
+`PARTIAL_CANDIDATE` ne constitue pas une preuve de capacité fournisseur.
+
+### Suite prévue
+
+M7.4 devra introduire une capacité fournisseur explicite d’indexation
+incrémentale et combiner cette capacité avec M7.3 afin de produire un plan
+`INCREMENTAL` ou `FULL` avec fallback sûr.
+
+### Porte de décision M7
 
 > MINOS sait-il déterminer de manière sûre ce qui peut être réindexé partiellement, et revenir explicitement à une indexation complète lorsqu’il ne peut pas le prouver ?
 
@@ -330,7 +364,8 @@ analyze_impact
 get_index_status
 ```
 
-Le MCP reste une couche d’exposition. Aucune logique d’analyse métier ne doit résider dans les handlers MCP.
+Le MCP reste une couche d’exposition. Aucune logique d’analyse métier ne doit
+résider dans les handlers MCP.
 
 ---
 
@@ -338,7 +373,8 @@ Le MCP reste une couche d’exposition. Aucune logique d’analyse métier ne do
 
 ### Objectif
 
-Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean ou des adaptateurs internes.
+Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean ou
+des adaptateurs internes.
 
 ### Périmètre
 
@@ -348,8 +384,6 @@ Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean o
 - architecture ;
 - impact ;
 - contrats DTO stables.
-
-Le choix du framework serveur reste différé jusqu’à l’approche de ce jalon.
 
 ---
 
@@ -374,7 +408,8 @@ Périmètre possible :
 
 ### Objectif
 
-Permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner un contexte adapté à une tâche.
+Permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner
+un contexte adapté à une tâche.
 
 ### Frontière
 

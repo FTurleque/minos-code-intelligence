@@ -2,254 +2,218 @@
 
 Dernière mise à jour : **23 juillet 2026**
 
-Ce document est le tableau de bord opérationnel de MINOS. Les preuves détaillées
-restent dans les rapports de jalon, les documents de décision et les issues GitHub.
-La feuille de route conserve la séquence produit.
+Ce document est le tableau de bord opérationnel compact de MINOS. Les preuves
+détaillées restent dans les documents de jalon, les décisions et les issues GitHub.
 
 ## Synthèse
 
 ```text
 C0 — Cadrage                         TERMINÉ
-M0 — Faisabilité technique          TERMINÉ ET FUSIONNÉ
-M1 — Découverte et orchestration    TERMINÉ ET FUSIONNÉ
+M0 — Faisabilité technique          TERMINÉ ET LIVRÉ
+M1 — Découverte et orchestration    TERMINÉ ET LIVRÉ
 M2 — Intelligence des symboles      TERMINÉ ET LIVRÉ
 M3 — Intelligence des relations     TERMINÉ ET LIVRÉ
 M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
 M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
 M6 — Intelligence d’architecture    TERMINÉ, VALIDÉ ET LIVRÉ
-M7 — Indexation incrémentale        PROCHAIN JALON
+M7 — Indexation incrémentale        EN COURS — M7.1/M7.2 LIVRÉS, M7.3 EN VALIDATION
 M8 à M13                            NON DÉMARRÉS
 ```
 
 GitHub Actions reste volontairement hors de la porte locale courante ; l’anomalie
 historique est suivie séparément dans #5.
 
-## Portes acquises
+## Portes acquises avant M7
 
-### C0 — cadrage
-
-Le cahier des charges, le MVP, les frontières MINOS/NEXUS, le modèle de domaine,
-les stratégies SCIP/Glean/store et les ADR structurantes ont été validés.
-
-### M0 — faisabilité technique
+### M0
 
 Verdict : **ADOPTER_AVEC_CONTRAINTES**.
 
-Acquis principaux :
-
 - Java 24 + Maven Wrapper qualifiés ;
-- SCIP Java et TypeScript mesurés sur artefacts réels ;
+- SCIP Java / TypeScript mesurés ;
 - backend MINOS léger retenu par défaut ;
 - Glean optionnel ;
 - frontière fournisseur préservée.
 
 Décision : `docs/m0/DECISION_M0.md`.
 
-### M1 — découverte et orchestration
-
-Acquis :
+### M1
 
 - découverte Java / TypeScript ;
 - Maven / npm factuels ;
 - modules et racines source/test ;
 - `.gitignore` / `.minosignore` ;
 - registre projets/workspaces ;
-- `IndexerRegistry` et négociation de capacités ;
-- cycle de vie d’indexation et promotion atomique.
+- négociation des indexeurs ;
+- lifecycle et promotion atomique.
 
 Suivi clôturé : issue #6.
 
-### M2 — intelligence des symboles
-
-Acquis :
-
-- modèle de symbole normalisé ;
-- identité et qualité d’identité explicites ;
-- recherche lexicale et par nom qualifié ;
-- DTO compact et rendus TEXT/JSON ;
-- snapshot persistant ;
-- `find-symbol` et `getFileSymbols`.
-
-Porte finale : **86 tests, BUILD SUCCESS**.
-
-Décision : `docs/m2/DECISION_M2.md`.
-
-### M3 — intelligence des relations
-
-Acquis :
-
-- relations normalisées et isolées par projet ;
-- faits SCIP conservés sans surinterprétation ;
-- provenance, preuves, résolution et confiance ;
-- `DEPENDS_ON` dérivé explicitement ;
-- persistance snapshot v2 ;
-- requêtes usages/implémentations/appels/dépendances.
-
-Porte finale : **115 tests, BUILD SUCCESS**.
-
-Décision : `docs/m3/DECISION_M3.md`.
-
-### M4 — recherche et contexte compact
-
-Acquis :
-
-- recherche structurée unifiée ;
-- profondeur, résultats et tokens bornés ;
-- plages source compactes ;
-- récupération complète explicite avec `get-source` ;
-- benchmark réel de latence.
-
-Porte finale : **131 tests, BUILD SUCCESS**.
-
-Décision : `docs/m4/DECISION_M4.md`.
-
-### M5 — tests liés et dérivations explicables
-
-Acquis :
-
-- `RELATED_TEST` orienté test → production ;
-- signaux directs et heuristiques séparés ;
-- score déterministe et preuves structurées ;
-- persistance et requête `findRelatedTests` ;
-- CLI `related-tests`.
-
-Porte finale : **140 tests, BUILD SUCCESS**.
-
-Décision : `docs/m5/DECISION_M5.md`.
-
-## M6 — Intelligence d’architecture — clôture
-
-Suivi : issue #13.
-
-M6 est livré en sept incréments :
+### M2 à M5
 
 ```text
-M6.1 topologie modules / namespaces             PR #14
-M6.2 dépendances inter-modules explicables      PR #15
-M6.3 mesures de concentration                   PR #16
-M6.4 calibration des distributions              PR #17
-M6.5 classement directionnel des composants     PR #18
-M6.6 technologies factuelles                    PR #19
-M6.7 vue composée + contexte de module           PR #20
+M2  86 tests   BUILD SUCCESS
+M3 115 tests   BUILD SUCCESS
+M4 131 tests   BUILD SUCCESS
+M5 140 tests   BUILD SUCCESS
 ```
 
+Décisions :
+
+- `docs/m2/DECISION_M2.md` ;
+- `docs/m3/DECISION_M3.md` ;
+- `docs/m4/DECISION_M4.md` ;
+- `docs/m5/DECISION_M5.md`.
+
+### M6 — Intelligence d’architecture
+
+M6 a été livré en sept incréments, PR #14 à #20, puis consolidé par PR #21.
+
 Acquis :
 
-- `ArchitectureOverview` avec modules factuels et namespaces dérivés ;
-- `ArchitectureDependencyGraph` fondé uniquement sur les `DEPENDS_ON` persistés ;
-- concentration entrante/sortante avec HHI et parts maximales ;
-- calibration cycle / chaîne / fan-in / fan-out / pondérée ;
-- rangs de centralité relatifs et directionnels, sans seuil absolu ;
-- technologies factuelles actuellement qualifiées : `JAVA`, `TYPESCRIPT`, `MAVEN`, `NPM` ;
-- `ArchitectureIntelligenceView` cohérente sur un projet/snapshot unique ;
-- `ProjectArchitectureQuery.getArchitectureOverview(...)` ;
-- `ProjectArchitectureQuery.getModuleContext(...)` ;
-- distinction explicite entre `FACTUAL`, `DERIVED` et les preuves associées.
+- modules et namespaces ;
+- dépendances inter-modules ;
+- concentration ;
+- centralité relative directionnelle ;
+- technologies factuelles ;
+- vue d’architecture composée ;
+- contexte compact de module ;
+- distinction faits / dérivations / preuves.
 
-### Porte finale fonctionnelle M6
-
-Head validé M6.7 :
+Porte finale :
 
 ```text
-ba744f41b974432fe33eb617a866ef4c8dcb0ead
-```
-
-Validation :
-
-```text
-.\mvnw.cmd clean verify
-116 sources main compilées en release 24
-58 sources test compilées en release 24
-162 tests exécutés
-0 failure
-0 error
-0 skipped
+116 sources main
+58 sources test
+162/162 tests PASS
 BUILD SUCCESS
-```
-
-Fusion M6.7 :
-
-```text
-f10449681a9010079cc9fe0400aac867dea497d9
-```
-
-### Replay réel TypeScript M6
-
-La fixture `fixtures/typescript/typescript-modules` confirme :
-
-```text
-modules = 3
-DEPENDS_ON = 4
-inter = 4
-module edges = 1
-
-packages/api
-  incomingDependencyCount = 4
-  incomingRank = 1
-  technologies = [TYPESCRIPT]
-
-packages/app
-  outgoingDependencyCount = 4
-  outgoingRank = 1
-  technologies = [TYPESCRIPT]
-
-root
-  incomingRank = 0
-  outgoingRank = 0
-  technologies = [NPM]
 ```
 
 Décision : `docs/m6/DECISION_M6.md`.
 
-La branche `m6/finalize-milestone` ne modifie que la documentation de clôture et
-doit encore passer la porte locale sur son SHA exact avant fusion.
+## M7 — Indexation incrémentale
+
+Suivi : issue #22.
+
+### M7.1 — Empreintes et ChangeSet — LIVRÉ
+
+PR #23, merge :
+
+```text
+34b57dfadad962b98c2d5c028957595cee575400
+```
+
+Acquis :
+
+- `FileFingerprint` ;
+- `ProjectFingerprint` ;
+- `ProjectChangeSet` ;
+- `ProjectFingerprintService` ;
+- empreintes indépendantes du chemin absolu et des timestamps ;
+- fichiers ajoutés/modifiés/supprimés/identiques ;
+- empreinte build séparée.
+
+Porte :
+
+```text
+120 sources main
+60 sources test
+167/167 tests PASS
+BUILD SUCCESS
+```
+
+Replay réel : `files=13` sur `typescript-modules`.
+
+Document : `docs/m7/FINGERPRINTS_AND_CHANGESET.md`.
+
+### M7.2 — Snapshots persistants — LIVRÉ
+
+PR #24, merge :
+
+```text
+379b5a28a92cb58b340dc8801d66fad1b853e4ce
+```
+
+Acquis :
+
+- snapshot fingerprint associé à `projectId + indexSnapshotId` ;
+- historique immuable ;
+- publication séparée de la promotion ;
+- pointeur actif atomique ;
+- checksum et recalcul des agrégats ;
+- alignement explicite avec `ProjectIndexState.activeSnapshotId`.
+
+Porte :
+
+```text
+124 sources main
+63 sources test
+176/176 tests PASS
+BUILD SUCCESS
+```
+
+Document : `docs/m7/FINGERPRINT_SNAPSHOTS.md`.
+
+### M7.3 — Invalidation conservatrice — EN VALIDATION
+
+Branche : `m7/conservative-invalidation`.
+
+Contrats :
+
+- `ProjectInvalidationScope` ;
+- `ProjectInvalidationReason` ;
+- `ProjectInvalidationAssessment` ;
+- `ProjectInvalidationService`.
+
+Portées :
+
+```text
+NONE
+PARTIAL_CANDIDATE
+FULL_REQUIRED
+```
+
+Règles principales :
+
+- pas d’index actif → `FULL_REQUIRED` ;
+- baseline absente ou désalignée → `FULL_REQUIRED` ;
+- build modifié → `FULL_REQUIRED` ;
+- `.gitignore` / `.minosignore` modifié → `FULL_REQUIRED` ;
+- changement non qualifiable → `FULL_REQUIRED` ;
+- uniquement sources/tests reconnus → `PARTIAL_CANDIDATE` ;
+- aucun changement → `NONE`.
+
+`PARTIAL_CANDIDATE` ne signifie pas encore qu’un fournisseur sait exécuter une
+indexation partielle.
+
+Document : `docs/m7/CONSERVATIVE_INVALIDATION.md`.
 
 ## Porte active
-
-La porte active est la **consolidation documentaire finale M6** :
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-Après fusion de cette consolidation et clôture de l’issue #13, le jalon actif
-devient **M7 — Indexation incrémentale**.
+La branche M7.3 doit rester en Draft jusqu’à validation locale de son SHA exact.
 
-## Prochain jalon — M7
+## Suite prévue
 
-Objectif : éviter les réindexations complètes lorsqu’elles ne sont pas nécessaires.
+M7.4 devra ajouter une capacité fournisseur explicite d’indexation incrémentale et
+combiner cette qualification avec l’évaluation M7.3 pour produire un plan sûr :
 
-Périmètre roadmap :
-
-- empreintes de fichiers ;
-- empreintes projet/build ;
-- fichiers ajoutés, modifiés et supprimés ;
-- snapshots d’index ;
-- règles d’invalidation ;
-- capacités incrémentales propres aux fournisseurs ;
-- repli explicite vers une indexation complète.
+```text
+PARTIAL_CANDIDATE + capacité fournisseur prouvée -> incrémental possible
+sinon                                         -> indexation complète
+```
 
 ## Sources de vérité
 
 - roadmap : `docs/ROADMAP.md` ;
 - état opérationnel : `docs/STATUS.md` ;
-- décision M0 : `docs/m0/DECISION_M0.md` ;
-- décision M2 : `docs/m2/DECISION_M2.md` ;
-- décision M3 : `docs/m3/DECISION_M3.md` ;
-- décision M4 : `docs/m4/DECISION_M4.md` ;
-- décision M5 : `docs/m5/DECISION_M5.md` ;
-- décision M6 : `docs/m6/DECISION_M6.md` ;
-- topologie M6.1 : `docs/m6/ARCHITECTURE_TOPOLOGY.md` ;
-- dépendances M6.2 : `docs/m6/MODULE_DEPENDENCIES.md` ;
-- concentration M6.3 : `docs/m6/ARCHITECTURE_CONCENTRATION.md` ;
-- calibration M6.4 : `docs/m6/CENTRALITY_CALIBRATION.md` ;
-- centralité M6.5 : `docs/m6/CENTRAL_COMPONENT_RANKING.md` ;
-- technologies M6.6 : `docs/m6/TECHNOLOGY_DETECTION.md` ;
-- vue composée M6.7 : `docs/m6/ARCHITECTURE_VIEW_AND_MODULE_CONTEXT.md` ;
-- suivi M6 : issue #13 ;
+- suivi M7 : issue #22 ;
+- M7.1 : `docs/m7/FINGERPRINTS_AND_CHANGESET.md` ;
+- M7.2 : `docs/m7/FINGERPRINT_SNAPSHOTS.md` ;
+- M7.3 : `docs/m7/CONSERVATIVE_INVALIDATION.md` ;
 - promotion atomique : ADR-0006 ;
 - identité registre : ADR-0007 ;
 - négociation indexeurs : ADR-0008.
-
-Ce tableau de bord doit rester compact : les mesures détaillées appartiennent aux
-documents de jalon et aux décisions de porte.
