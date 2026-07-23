@@ -2,9 +2,13 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #13.
+
+Livraison : PR #15 fusionnée dans `main` au commit
+`db5c4ed8e8106c38b56289b3908767458dcf4056` après validation locale du head
+`634694242b6a4322594d687175f05c9956e74c0d`.
 
 ## Objectif
 
@@ -144,6 +148,35 @@ registre
 Le test vérifie que les IDs source/cible de l'arête correspondent exactement aux
 modules `app` et `api` de la topologie M6.1.
 
+## Validation locale acquise
+
+Validation exécutée le **23 juillet 2026** sur le head exact
+`634694242b6a4322594d687175f05c9956e74c0d` :
+
+```text
+.\mvnw.cmd clean verify
+103 sources main compilées en release 24
+52 sources test compilées en release 24
+148 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
+
+Tests M6 concernés :
+
+```text
+ArchitectureDependencyServiceTest    3/3 PASS
+LocalProjectArchitectureQueryTest    2/2 PASS
+ArchitectureTopologyServiceTest      3/3 PASS
+NamespaceConventionTest              1/1 PASS
+ProviderBoundaryTest                 1/1 PASS
+```
+
+Le warning `sun.misc.Unsafe` provenant de `protobuf-java 4.34.2` sous Java 24
+reste non bloquant et identique aux validations précédentes.
+
 ## Hors périmètre M6.2
 
 - score de centralité ;
@@ -155,13 +188,5 @@ modules `app` et `api` de la topologie M6.1.
 - `get_module_context` ;
 - MCP/API.
 
-Ces notions seront étudiées à partir des mesures du graphe qualifié, pas avant.
-
-## Porte locale attendue
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-M6.2 restera en attente tant que cette commande n'est pas verte sur le head exact
-de `m6/module-dependency-intelligence`.
+Ces notions sont étudiées à partir des mesures du graphe qualifié en M6.3, pas
+avant.
