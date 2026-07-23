@@ -74,19 +74,39 @@ class ArchitectureCentralityServiceTest {
     }
 
     private static ArchitectureConcentrationReport report(ArchitectureModuleConcentration... modules) {
+        int interModuleDependencies = List.of(modules).stream()
+                .mapToInt(ArchitectureModuleConcentration::incomingDependencyCount)
+                .sum();
+        int outgoingDependencies = List.of(modules).stream()
+                .mapToInt(ArchitectureModuleConcentration::outgoingDependencyCount)
+                .sum();
+        assertEquals(interModuleDependencies, outgoingDependencies);
+
         return new ArchitectureConcentrationReport(
                 "project-centrality",
                 "snapshot-centrality",
                 modules.length,
-                10,
-                0.0,
-                0.0,
+                interModuleDependencies,
+                herfindahlIncoming(modules),
+                herfindahlOutgoing(modules),
                 maxIncoming(modules),
                 maxOutgoing(modules),
                 List.of(modules),
                 InformationNature.DERIVED,
                 List.of(evidence("centrality source report"))
         );
+    }
+
+    private static double herfindahlIncoming(ArchitectureModuleConcentration[] modules) {
+        return List.of(modules).stream()
+                .mapToDouble(module -> module.incomingShare() * module.incomingShare())
+                .sum();
+    }
+
+    private static double herfindahlOutgoing(ArchitectureModuleConcentration[] modules) {
+        return List.of(modules).stream()
+                .mapToDouble(module -> module.outgoingShare() * module.outgoingShare())
+                .sum();
     }
 
     private static double maxIncoming(ArchitectureModuleConcentration[] modules) {
