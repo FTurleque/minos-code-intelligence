@@ -20,6 +20,7 @@ Il vise notamment à répondre à des questions comme :
 - Quelle est la topologie générale du projet ?
 - Quels modules sont structurellement centraux dans le graphe observé ?
 - Quelles technologies sont réellement détectées ?
+- Le projet doit-il être réindexé entièrement ou une portée incrémentale est-elle prouvable ?
 - Quels éléments peuvent être impactés par une modification ?
 
 ## Position dans l’écosystème
@@ -67,45 +68,40 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) pour la description détaillée.
 
 ## Phase actuelle
 
-Les jalons **C0 à M6 sont terminés**. M6 — Intelligence d’architecture — est
-validé localement et livré ; **M7 — Indexation incrémentale** est le prochain
-jalon de la roadmap.
+Les jalons **C0 à M6 sont terminés et livrés**.
 
-La dernière porte fonctionnelle M6 a validé :
+**M7 — Indexation incrémentale est fonctionnellement complet** et attend sa porte
+locale finale sur le head exact de la PR de clôture. Après cette porte et sa
+fusion, **M8 — Analyse d’impact** devient le prochain jalon.
 
-```text
-116 sources main
-58 sources test
-162 / 162 tests PASS
-BUILD SUCCESS
-```
+M7 fournit désormais :
 
-M6 fournit désormais :
+- empreintes déterministes fichiers/projet/build ;
+- `ProjectChangeSet` ajouté/modifié/supprimé/identique ;
+- snapshots d’empreintes persistants associés aux snapshots d’index ;
+- invalidation `NONE / PARTIAL_CANDIDATE / FULL_REQUIRED` ;
+- capacité fournisseur distincte `INCREMENTAL_INDEXING` ;
+- plan `NONE / FULL / INCREMENTAL` ;
+- fallback projet complet si une seule sélection ne prouve pas sa capacité ;
+- périmètre `changedFiles` uniquement pour une exécution incrémentale ;
+- baseline fingerprint avancée uniquement si le workspace reste stable pendant le run.
 
-- topologie modules / namespaces ;
-- graphe inter-modules explicable ;
-- concentration des dépendances ;
-- calibration des distributions ;
-- centralité relative séparée en entrant / sortant ;
-- technologies factuelles `JAVA`, `TYPESCRIPT`, `MAVEN`, `NPM` ;
-- vue composée `ArchitectureIntelligenceView` ;
-- `ProjectArchitectureQuery.getArchitectureOverview(...)` ;
-- `ProjectArchitectureQuery.getModuleContext(...)`.
-
-Le replay réel TypeScript multi-module valide notamment :
+Les versions actuellement épinglées :
 
 ```text
-packages/app -> packages/api
-api : incomingRank=1, technologies=[TYPESCRIPT]
-app : outgoingRank=1, technologies=[TYPESCRIPT]
-root: rank=0/0, technologies=[NPM]
+scip-java       0.13.1
+scip-typescript 0.4.0
 ```
 
-La décision de clôture est documentée dans
-[`docs/m6/DECISION_M6.md`](docs/m6/DECISION_M6.md).
+ne sont pas déclarées `INCREMENTAL_INDEXING`, car cette capacité n’a pas été
+qualifiée pendant M0. MINOS retombe donc volontairement en `FULL` avec ces
+fournisseurs au lieu d’inventer une garantie.
+
+La décision de clôture M7 est préparée dans
+[`docs/m7/DECISION_M7.md`](docs/m7/DECISION_M7.md).
 
 Le tableau de bord [`docs/STATUS.md`](docs/STATUS.md) indique la porte active et
-la [`roadmap`](docs/ROADMAP.md) décrit M7 à M13.
+la [`roadmap`](docs/ROADMAP.md) décrit M8 à M13.
 
 ## Stack technique
 
@@ -132,11 +128,24 @@ Repository
 Project Discovery / Registry
     │
     ▼
+Fingerprint / Invalidation
+    │
+    ▼
 IndexerRegistry
     │
     ├── SCIP Providers      ← chemin privilégié
     ├── Native Providers
     └── Specialized Providers
+    │
+    ▼
+Incremental Planner
+    │
+    ├── NONE
+    ├── FULL
+    └── INCREMENTAL         ← seulement si capacité prouvée
+    │
+    ▼
+Indexing Lifecycle / Atomic Promotion
     │
     ▼
 MINOS Normalization
@@ -173,23 +182,21 @@ backend particulier.
 - les résultats publics sont compacts et déterministes ;
 - le code source complet n’est retourné que sur demande explicite ;
 - les limitations d’un fournisseur ne sont jamais transformées en garanties ;
+- une portée incrémentale n’est jamais exécutée sans capacité fournisseur qualifiée ;
+- un doute d’invalidation provoque un fallback complet ;
 - les rôles architecturaux ne sont pas inventés à partir de conventions seules.
 
-## Prochain jalon — M7
+## Prochain jalon — M8
 
-M7 vise l’**indexation incrémentale** :
+Après clôture de M7, M8 vise l’**analyse d’impact** :
 
-- empreintes de fichiers ;
-- empreintes projet/build ;
-- détection ajout/modification/suppression ;
-- snapshots d’index ;
-- règles d’invalidation ;
-- capacités incrémentales des fournisseurs ;
-- fallback sûr vers une indexation complète.
-
-La porte M7 doit répondre à la question suivante :
-
-> MINOS sait-il prouver qu’une réindexation partielle est sûre et revenir à une indexation complète lorsqu’il ne peut pas le prouver ?
+- impact direct ;
+- impact indirect ;
+- chemins explicatifs ;
+- score de confiance ;
+- profondeur bornée ;
+- tests potentiellement impactés ;
+- limites explicites liées au comportement dynamique.
 
 ## Documents de référence
 
@@ -199,9 +206,12 @@ La porte M7 doit répondre à la question suivante :
 - [`docs/MVP.md`](docs/MVP.md) — MVP ;
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — positionnement ;
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — architecture générale ;
-- [`docs/m5/DECISION_M5.md`](docs/m5/DECISION_M5.md) — décision M5 ;
 - [`docs/m6/DECISION_M6.md`](docs/m6/DECISION_M6.md) — décision M6 ;
-- [`docs/m6/ARCHITECTURE_VIEW_AND_MODULE_CONTEXT.md`](docs/m6/ARCHITECTURE_VIEW_AND_MODULE_CONTEXT.md) — vue M6 composée ;
+- [`docs/m7/FINGERPRINTS_AND_CHANGESET.md`](docs/m7/FINGERPRINTS_AND_CHANGESET.md) — M7.1 ;
+- [`docs/m7/FINGERPRINT_SNAPSHOTS.md`](docs/m7/FINGERPRINT_SNAPSHOTS.md) — M7.2 ;
+- [`docs/m7/CONSERVATIVE_INVALIDATION.md`](docs/m7/CONSERVATIVE_INVALIDATION.md) — M7.3 ;
+- [`docs/m7/INCREMENTAL_EXECUTION.md`](docs/m7/INCREMENTAL_EXECUTION.md) — M7.4 ;
+- [`docs/m7/DECISION_M7.md`](docs/m7/DECISION_M7.md) — décision M7 ;
 - [`docs/adr/`](docs/adr/) — décisions d’architecture.
 
 ## Règle de développement
