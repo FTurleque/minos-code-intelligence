@@ -91,7 +91,7 @@ REMPLACER
 
 ## M1 — Découverte des projets et orchestration des indexeurs
 
-État : **EN COURS — M1.1 fusionné, M1.2 en validation**
+État : **EN COURS — M1.1 et M1.2 fusionnés, M1.3 en validation**
 
 ### Objectif
 
@@ -115,8 +115,8 @@ Progression :
 
 ```text
 M1.1 découverte locale factuelle              FUSIONNÉ
-M1.2 ignore policy + registre local            EN VALIDATION
-M1.3 IndexerRegistry + négociation             À FAIRE
+M1.2 ignore policy + registre local            FUSIONNÉ
+M1.3 IndexerRegistry + négociation             EN VALIDATION
 M1.4 cycle de vie + état d'index              À FAIRE
 ```
 
