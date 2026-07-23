@@ -2,9 +2,13 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #13.
+
+Validation : head `3053030ba827210e1894885ae246269037952fcc`, **161/161 tests**, `BUILD SUCCESS`.
+
+Livraison : PR #19 fusionnée dans `main` au commit `a991d4ef1b350310d23021a1f96104f9d88f7cff`.
 
 Base : M6.5 a livré le classement relatif directionnel des composants centraux.
 
@@ -96,7 +100,7 @@ puis BUILD_SYSTEM par nom
 
 Les IDs de modules sont également triés.
 
-## Replay réel TypeScript
+## Replay réel TypeScript validé
 
 La fixture versionnée :
 
@@ -107,7 +111,7 @@ fixtures/typescript/typescript-modules
 est redécouverte réellement pendant `ArchitectureRealFixtureMeasurementTest`, en
 plus du replay SCIP déjà utilisé par M6.3 et M6.5.
 
-La porte M6.6 exige :
+Mesure validée :
 
 ```text
 technologies = [TYPESCRIPT, NPM]
@@ -120,10 +124,10 @@ Le rattachement npm à la racine est important : les sous-modules disposent de
 `package.json`, mais le verrou npm qualifié par M1 est le `package-lock.json`
 racine. M6.6 ne propage donc pas artificiellement `NPM` aux workspaces enfants.
 
-La sortie Maven doit contenir :
+Sortie observée :
 
 ```text
-M6.6 typescript-modules technologies: ...
+M6.6 typescript-modules technologies: names=[TYPESCRIPT, NPM], ...
 ```
 
 ## Chaîne file-backed
@@ -156,23 +160,24 @@ M6.6 ne qualifie pas encore :
 Ces informations nécessiteraient une analyse explicite des manifestes,
 dépendances ou configurations et ne doivent pas être déduites par simple nommage.
 
-## Porte locale
+## Porte locale acquise
 
-```powershell
+```text
 .\mvnw.cmd clean verify
+113 sources main compilées en release 24
+58 sources test compilées en release 24
+161 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
 ```
 
-La porte doit confirmer :
-
-- compilation Java 24 ;
-- suite complète verte ;
-- tests unitaires de détection et déduplication ;
-- chaîne file-backed ;
-- replay réel TypeScript avec la ligne `M6.6 typescript-modules technologies` ;
-- aucune régression M2 à M6.5.
+Le warning `sun.misc.Unsafe` de `protobuf-java 4.34.2` sous Java 24 reste non
+bloquant et identique aux validations précédentes.
 
 ## Suite
 
-Après M6.6, M6 doit encore assembler une vue métier compacte réunissant topologie,
-dépendances, concentration, centralité et technologies, puis fournir
-`get_module_context` avant la validation finale du jalon.
+M6.7 assemble une vue métier cohérente réunissant topologie, dépendances,
+concentration, centralité et technologies, puis expose un contexte compact par
+module sans ajouter de nouvelle heuristique.
