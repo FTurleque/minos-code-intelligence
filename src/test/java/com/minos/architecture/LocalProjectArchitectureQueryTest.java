@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LocalProjectArchitectureQueryTest {
 
@@ -53,6 +54,8 @@ class LocalProjectArchitectureQueryTest {
         LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
         ArchitectureOverview overview = query.getArchitectureOverview("architecture-fixture");
         ArchitectureTechnologyReport technologies = query.getArchitectureTechnologies("architecture-fixture");
+        ArchitectureIntelligenceView intelligence = query.getArchitectureIntelligence("architecture-fixture");
+        ArchitectureModuleContext rootContext = query.getModuleContext("architecture-fixture", ".");
 
         assertEquals(project.id().toString(), overview.projectId());
         assertEquals("snapshot-m6-local", overview.snapshotId());
@@ -70,6 +73,23 @@ class LocalProjectArchitectureQueryTest {
                 .toList());
         assertEquals(List.of(overview.modules().getFirst().id()), technology(technologies, "JAVA").moduleIds());
         assertEquals(List.of(overview.modules().getFirst().id()), technology(technologies, "MAVEN").moduleIds());
+
+        assertEquals(project.id().toString(), intelligence.projectId());
+        assertEquals("snapshot-m6-local", intelligence.snapshotId());
+        assertEquals(1, intelligence.overview().moduleCount());
+        assertEquals(0, intelligence.dependencies().totalDependencyCount());
+        assertEquals(List.of("JAVA", "MAVEN"), intelligence.technologies().technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
+        assertEquals(overview.modules().getFirst().id(), rootContext.module().id());
+        assertEquals(0, rootContext.incomingModuleEdgeCount());
+        assertEquals(0, rootContext.outgoingModuleEdgeCount());
+        assertEquals(0, rootContext.centrality().incomingRank());
+        assertEquals(0, rootContext.centrality().outgoingRank());
+        assertEquals(List.of("JAVA", "MAVEN"), rootContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
     }
 
     @Test
@@ -103,9 +123,15 @@ class LocalProjectArchitectureQueryTest {
         ArchitectureConcentrationReport concentration = query.getArchitectureConcentration("dependency-fixture");
         ArchitectureCentralityReport centrality = query.getArchitectureCentrality("dependency-fixture");
         ArchitectureTechnologyReport technologies = query.getArchitectureTechnologies("dependency-fixture");
+        ArchitectureIntelligenceView intelligence = query.getArchitectureIntelligence("dependency-fixture");
 
         ArchitectureModule apiModule = module(overview, "api");
         ArchitectureModule appModule = module(overview, "app");
+        ArchitectureModule rootModule = module(overview, "");
+        ArchitectureModuleContext apiContext = query.getModuleContext("dependency-fixture", "api");
+        ArchitectureModuleContext appContext = query.getModuleContext("dependency-fixture", appModule.id());
+        ArchitectureModuleContext rootContext = query.getModuleContext("dependency-fixture", ".");
+
         assertEquals(1, graph.totalDependencyCount());
         assertEquals(1, graph.interModuleDependencyCount());
         assertEquals(0, graph.intraModuleDependencyCount());
@@ -138,6 +164,38 @@ class LocalProjectArchitectureQueryTest {
                 .toList());
         assertEquals(Set.of(apiModule.id(), appModule.id()), Set.copyOf(technology(technologies, "JAVA").moduleIds()));
         assertEquals(3, technology(technologies, "MAVEN").moduleIds().size());
+
+        assertEquals(project.id().toString(), intelligence.projectId());
+        assertEquals("snapshot-m6-dependencies", intelligence.snapshotId());
+        assertEquals(overview.moduleCount(), intelligence.overview().moduleCount());
+        assertEquals(graph.totalDependencyCount(), intelligence.dependencies().totalDependencyCount());
+        assertEquals(centrality.topIncomingModuleIds(), intelligence.centrality().topIncomingModuleIds());
+        assertEquals(technologies.technologies(), intelligence.technologies().technologies());
+
+        assertEquals(apiModule.id(), apiContext.module().id());
+        assertEquals(1, apiContext.incomingModuleEdgeCount());
+        assertEquals(0, apiContext.outgoingModuleEdgeCount());
+        assertEquals(1, apiContext.concentration().incomingDependencyCount());
+        assertEquals(1, apiContext.centrality().incomingRank());
+        assertEquals(List.of("JAVA", "MAVEN"), apiContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
+        assertEquals(appModule.id(), appContext.module().id());
+        assertEquals(0, appContext.incomingModuleEdgeCount());
+        assertEquals(1, appContext.outgoingModuleEdgeCount());
+        assertEquals(1, appContext.concentration().outgoingDependencyCount());
+        assertEquals(1, appContext.centrality().outgoingRank());
+
+        assertEquals(rootModule.id(), rootContext.module().id());
+        assertEquals(0, rootContext.incomingModuleEdgeCount());
+        assertEquals(0, rootContext.outgoingModuleEdgeCount());
+        assertEquals(List.of("MAVEN"), rootContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> query.getModuleContext("dependency-fixture", "missing-module"));
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
