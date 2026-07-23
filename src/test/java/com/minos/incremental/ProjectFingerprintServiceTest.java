@@ -27,10 +27,15 @@ class ProjectFingerprintServiceTest {
 
         ProjectFingerprint firstCapture = service.capture(first);
         ProjectFingerprint secondCapture = service.capture(second);
+        ProjectChangeSet noChanges = service.compare(firstCapture, secondCapture);
 
         assertEquals(firstCapture, service.capture(first));
         assertEquals(firstCapture.projectSha256(), secondCapture.projectSha256());
         assertEquals(firstCapture.buildSha256(), secondCapture.buildSha256());
+        assertFalse(noChanges.projectChanged());
+        assertFalse(noChanges.buildDefinitionChanged());
+        assertEquals(0, noChanges.changedFileCount());
+        assertEquals(5, noChanges.unchangedFiles().size());
         assertEquals(
                 List.of(".gitignore", ".minosignore", "package.json", "pom.xml", "src/main/java/App.java"),
                 firstCapture.files().stream().map(FileFingerprint::relativePath).toList()
