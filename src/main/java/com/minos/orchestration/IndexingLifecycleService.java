@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
 import com.minos.orchestration.IndexingRun.Phase;
 import com.minos.orchestration.IndexingRun.Status;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -74,14 +76,55 @@ public final class IndexingLifecycleService {
         this.executors = Map.copyOf(byId);
     }
 
+    /**
+     * Compatibilité M1 : un appel direct reste une indexation complète.
+     */
     public IndexingRun execute(
             UUID projectId,
             Path projectRoot,
             IndexerNegotiationResult negotiation
     ) {
+        return executeInternal(projectId, projectRoot, negotiation, IndexingMode.FULL, List.of());
+    }
+
+    /**
+     * Exécute un plan M7. Un plan NONE ne crée aucun run.
+     */
+    public Optional<IndexingRun> executePlanned(
+            UUID projectId,
+            Path projectRoot,
+            IndexerNegotiationResult negotiation,
+            IncrementalIndexingPlan plan
+    ) {
+        Objects.requireNonNull(plan, "plan");
+        if (!Objects.requireNonNull(projectId, "projectId").equals(plan.projectId())) {
+            throw new IllegalArgumentException("plan belongs to another project");
+        }
+        validatePlanAgainstNegotiation(plan, negotiation);
+        if (plan.mode() == IndexingMode.NONE) {
+            return Optional.empty();
+        }
+        List<String> changedFiles = plan.mode() == IndexingMode.INCREMENTAL
+                ? plan.changedFiles()
+                : List.of();
+        return Optional.of(executeInternal(projectId, projectRoot, negotiation, plan.mode(), changedFiles));
+    }
+
+    private IndexingRun executeInternal(
+            UUID projectId,
+            Path projectRoot,
+            IndexerNegotiationResult negotiation,
+            IndexingMode mode,
+            List<String> changedFiles
+    ) {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(negotiation, "negotiation");
+        Objects.requireNonNull(mode, "mode");
+        Objects.requireNonNull(changedFiles, "changedFiles");
+        if (mode == IndexingMode.NONE) {
+            throw new IllegalArgumentException("NONE must not start an indexing run");
+        }
         if (!negotiation.complete()) {
             throw new IllegalArgumentException("indexer negotiation must cover every detected language");
         }
@@ -116,7 +159,7 @@ public final class IndexingLifecycleService {
                     List.of(),
                     Optional.empty(),
                     previousState.activeSnapshotId(),
-                    Optional.of("provider execution started")
+                    Optional.of("provider execution started: mode=" + mode)
             );
             stateStore.saveRun(run);
             stateStore.saveProjectState(new ProjectIndexState(
@@ -127,7 +170,7 @@ public final class IndexingLifecycleService {
                     previousState.activeSnapshotId(),
                     Optional.of(runId),
                     createdAt,
-                    Optional.of("indexing run in progress")
+                    Optional.of("indexing run in progress: mode=" + mode)
             ));
         }
 
@@ -145,7 +188,14 @@ public final class IndexingLifecycleService {
                 }
 
                 IndexingArtifact artifact = Objects.requireNonNull(
-                        executor.execute(new IndexingExecutionRequest(runId, projectId, root, selection)),
+                        executor.execute(new IndexingExecutionRequest(
+                                runId,
+                                projectId,
+                                root,
+                                selection,
+                                mode,
+                                changedFiles
+                        )),
                         "indexer execution artifact"
                 );
                 Path artifactPath = validateArtifact(selection, artifact);
@@ -168,7 +218,7 @@ public final class IndexingLifecycleService {
                         executions,
                         stagedSnapshotId,
                         previousState.activeSnapshotId(),
-                        Optional.of("provider artifacts completed: " + executions.size())
+                        Optional.of("provider artifacts completed: " + executions.size() + ", mode=" + mode)
                 ));
             }
 
@@ -181,7 +231,7 @@ public final class IndexingLifecycleService {
                     executions,
                     stagedSnapshotId,
                     previousState.activeSnapshotId(),
-                    Optional.of("staging project snapshot")
+                    Optional.of("staging project snapshot: mode=" + mode)
             ));
 
             String stagedId = requireText(
@@ -199,7 +249,7 @@ public final class IndexingLifecycleService {
                     executions,
                     stagedSnapshotId,
                     previousState.activeSnapshotId(),
-                    Optional.of("promoting staged snapshot")
+                    Optional.of("promoting staged snapshot: mode=" + mode)
             ));
 
             promoter.promote(projectId, runId, stagedId);
@@ -216,7 +266,7 @@ public final class IndexingLifecycleService {
                     stagedSnapshotId,
                     previousState.activeSnapshotId(),
                     Optional.of(stagedId),
-                    Optional.of("indexing run completed and snapshot promoted")
+                    Optional.of("indexing run completed and snapshot promoted: mode=" + mode)
             );
 
             synchronized (projectLock) {
@@ -227,7 +277,7 @@ public final class IndexingLifecycleService {
                         Optional.of(stagedId),
                         Optional.of(runId),
                         completedAt,
-                        Optional.of("active snapshot is current")
+                        Optional.of("active snapshot is current: mode=" + mode)
                 ));
             }
             return succeeded;
@@ -277,6 +327,30 @@ public final class IndexingLifecycleService {
 
     public List<IndexingRun> listRuns(UUID projectId) {
         return stateStore.listRuns(Objects.requireNonNull(projectId, "projectId"));
+    }
+
+    private static void validatePlanAgainstNegotiation(
+            IncrementalIndexingPlan plan,
+            IndexerNegotiationResult negotiation
+    ) {
+        Objects.requireNonNull(negotiation, "negotiation");
+        TreeSet<String> negotiated = new TreeSet<>();
+        for (IndexerNegotiationResult.IndexerSelection selection : negotiation.selections()) {
+            negotiated.add(selection.indexer().id());
+        }
+        if (!List.copyOf(negotiated).equals(plan.selectedIndexerIds())) {
+            throw new IllegalArgumentException("plan selections do not match indexer negotiation");
+        }
+        if (plan.mode() == IndexingMode.INCREMENTAL) {
+            for (IndexerNegotiationResult.IndexerSelection selection : negotiation.selections()) {
+                if (!selection.indexer().capabilities().contains(IndexerCapability.INCREMENTAL_INDEXING)) {
+                    throw new IllegalArgumentException(
+                            "incremental plan contains an indexer without INCREMENTAL_INDEXING: "
+                                    + selection.indexer().id()
+                    );
+                }
+            }
+        }
     }
 
     private static Path validateArtifact(
