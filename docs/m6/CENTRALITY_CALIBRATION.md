@@ -2,7 +2,7 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **CORRIGÉ APRÈS PREMIÈRE PORTE — REVALIDATION LOCALE EN ATTENTE**
 
 Suivi : issue #13.
 
@@ -108,37 +108,65 @@ max-out = 0.8
 Ce profil vérifie que les compteurs pondérés ne sont pas réduits à un simple
 nombre d'arêtes.
 
-## Fixture Java réelle
+## Calibration Java sur fixture versionnée
 
-`ArchitectureJavaFixtureMeasurementTest` relit réellement :
+La première version M6.4 supposait à tort que cet artefact était versionné :
 
 ```text
 fixtures/java/java-simple/.minos-m0/scip-java/index.scip
 ```
 
-puis exécute la même chaîne que M6.3 :
+La première porte locale a correctement échoué avec :
 
 ```text
-SCIP versionné
- -> snapshot v2
- -> ProjectDiscovery
- -> ArchitectureOverview
- -> ArchitectureDependencyGraph
- -> ArchitectureConcentrationReport
+SCIP index does not exist or is not a regular file
 ```
 
-`java-simple` est un projet Maven mono-module. La porte M6.4 exige donc :
+Le test ne masque pas cette absence et ne génère pas artificiellement un faux
+artefact fournisseur.
+
+La correction utilise la fixture réellement versionnée :
 
 ```text
-moduleCount = 1
-interModuleDependencyCount = 0
-moduleEdgeCount = 0
-HHI-in = 0
-HHI-out = 0
+fixtures/java/java-multi-module
 ```
 
-Le nombre total de `DEPENDS_ON`, ainsi que leur répartition intra-module / non
-attribuable, restent mesurés et imprimés sans être figés a priori.
+Sa vérité terrain documente notamment :
+
+```text
+modules = [api, app]
+app.DefaultGreetingPort IMPLEMENTS api.GreetingPort
+app.GreetingService.greet CALLS api.GreetingPort.greet
+```
+
+Pour la calibration M6.4, `ArchitectureJavaFixtureMeasurementTest` :
+
+1. redécouvre réellement la structure Maven de `java-multi-module` ;
+2. utilise les chemins source réellement versionnés de `app` et `api` ;
+3. publie un snapshot MINOS contrôlé contenant une dépendance `app -> api`
+   représentative de la vérité terrain inter-module ;
+4. reconstruit `ArchitectureOverview` ;
+5. reconstruit `ArchitectureDependencyGraph` ;
+6. calcule `ArchitectureConcentrationReport`.
+
+La porte exige :
+
+```text
+moduleCount = 3             # racine Maven + api + app
+totalDependencyCount = 1
+interModuleDependencyCount = 1
+intraModuleDependencyCount = 0
+unassignedDependencyCount = 0
+moduleEdgeCount = 1
+edge = app -> api
+HHI-in = 1
+HHI-out = 1
+max-in = 1
+max-out = 1
+```
+
+Cette preuve est volontairement qualifiée de **calibration sur topologie réelle
+avec snapshot contrôlé**, et non de replay SCIP Java réel.
 
 ## Pourquoi cette calibration est nécessaire
 
@@ -149,7 +177,7 @@ HHI-in = 1
 HHI-out = 1
 ```
 
-mais ce résultat découle d'une seule arête module → module. Sans profils
+mais ce résultat découle d'une seule arête module -> module. Sans profils
 contrastés, transformer `HHI = 1` en règle de centralité confondrait concentration
 du graphe et centralité d'un composant.
 
@@ -159,7 +187,7 @@ Les profils M6.4 permettent de distinguer :
 - orientation fan-in / fan-out ;
 - distribution équilibrée ;
 - effet du poids des dépendances ;
-- absence structurelle de dépendances inter-modules.
+- comportement d'une topologie Maven multi-module réelle.
 
 ## Porte locale
 
@@ -175,7 +203,7 @@ M6.4 calibration directed-chain: ...
 M6.4 calibration fan-in: ...
 M6.4 calibration fan-out: ...
 M6.4 calibration weighted-fan-in: ...
-M6.4 java-simple: ...
+M6.4 java-multi-module: ...
 ```
 
 ## Décision attendue après validation
@@ -186,7 +214,6 @@ Après la porte M6.4, un éventuel indicateur de composant central devra :
 2. rester dérivé et explicable ;
 3. conserver les métriques source dans sa preuve ;
 4. éviter un seuil absolu choisi arbitrairement ;
-5. ne pas classifier un projet mono-module comme ayant un composant central sur
-   la seule base d'une absence de concurrence.
+5. ne pas confondre concentration globale du graphe et rôle architectural.
 
 Aucune formule finale n'est engagée avant validation de ces profils.
