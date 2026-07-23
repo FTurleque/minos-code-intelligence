@@ -16,8 +16,9 @@ M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
 M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
 M6 — Intelligence d’architecture    TERMINÉ, VALIDÉ ET LIVRÉ
 M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
-M8 — Analyse d’impact               IMPLÉMENTÉ — PORTE LOCALE FINALE EN ATTENTE
-M9 à M13                            NON DÉMARRÉS
+M8 — Analyse d’impact               TERMINÉ, VALIDÉ ET LIVRÉ
+M9 — CLI stabilisée                 FONCTIONNELLEMENT COMPLET — PORTE FINALE EN ATTENTE
+M10 à M13                           NON DÉMARRÉS
 ```
 
 GitHub Actions reste volontairement hors de la porte locale courante ; l’anomalie historique est suivie séparément dans #5.
@@ -31,137 +32,146 @@ M4  131 tests   BUILD SUCCESS
 M5  140 tests   BUILD SUCCESS
 M6  162 tests   BUILD SUCCESS
 M7  196 tests   BUILD SUCCESS
+M8  203 tests   BUILD SUCCESS
 ```
 
-Décisions :
+## M7 — Indexation incrémentale — LIVRÉ
 
-- `docs/m0/DECISION_M0.md` ;
-- `docs/m2/DECISION_M2.md` ;
-- `docs/m3/DECISION_M3.md` ;
-- `docs/m4/DECISION_M4.md` ;
-- `docs/m5/DECISION_M5.md` ;
-- `docs/m6/DECISION_M6.md` ;
-- `docs/m7/DECISION_M7.md`.
-
-## M7 — Indexation incrémentale — TERMINÉ
-
-Suivi clôturé : issue #22.
-
-Livraisons :
+Issue #22 clôturée. Merge final :
 
 ```text
-M7.1  PR #23  merge 34b57dfadad962b98c2d5c028957595cee575400  167/167 PASS
-M7.2  PR #24  merge 379b5a28a92cb58b340dc8801d66fad1b853e4ce  176/176 PASS
-M7.3  PR #25  merge 8f87a8fbb3f62361f88e38c9a8f22c2da2050ca8  184/184 PASS
-M7.4  PR #26  merge c66382705880158b9ccac63b5662b81bf2d8d255  196/196 PASS
+c66382705880158b9ccac63b5662b81bf2d8d255
 ```
 
-Head final validé avant fusion :
+Head validé : `ab9367dd532891ba5d5099a7bc9fa7d0ef5074f7`.
+
+Porte : **134 sources main / 69 test / 196 PASS**.
+
+Décision : `docs/m7/DECISION_M7.md`.
+
+## M8 — Analyse d’impact — LIVRÉ
+
+Issue #27 clôturée `completed`.
+
+PR finale : #28.
+
+Head exact validé :
 
 ```text
-ab9367dd532891ba5d5099a7bc9fa7d0ef5074f7
+08bbdeab18873a2209f02b58bc8d7e547443ea0f
+```
+
+Merge final :
+
+```text
+8147db5c246c7bad92c9b6ab21be81084dc64f59
 ```
 
 Porte finale :
 
 ```text
-134 sources main
-69 sources test
-196/196 tests PASS
+143 sources main
+72 sources test
+203/203 tests PASS
 BUILD SUCCESS
 ```
 
-Acquis principaux :
+Replay réel :
 
-- fingerprints déterministes fichiers/projet/build ;
-- `ProjectChangeSet` ;
-- snapshots d’empreintes persistants ;
-- invalidation `NONE / PARTIAL_CANDIDATE / FULL_REQUIRED` ;
-- capacité `INCREMENTAL_INDEXING` ;
-- planification `NONE / INCREMENTAL / FULL` ;
-- fallback complet projet ;
-- lifecycle avec `mode + changedFiles` ;
-- baseline fingerprint avancée uniquement sur workspace stable.
+```text
+M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
+```
 
-Les versions épinglées `scip-java 0.13.1` et `scip-typescript 0.4.0` ne revendiquent pas `INCREMENTAL_INDEXING` faute de preuve M0 ; elles retombent explicitement en `FULL`.
+Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, bornes, cycles, tests potentiellement impactés et limites runtime explicites.
 
-## M8 — Analyse d’impact — IMPLÉMENTÉ
+Décision : `docs/m8/DECISION_M8.md`.
 
-Suivi : issue #27.
+## M9 — CLI stabilisée — IMPLÉMENTÉ
+
+Suivi : issue #29.
 
 Branche :
 
 ```text
-m8/impact-analysis
+m9/stable-cli
 ```
 
-Acquis :
-
-- `ImpactAnalysisRequest` ;
-- `ImpactAnalysisReport` ;
-- `ImpactedSymbol` ;
-- `ImpactPathStep` ;
-- `ImpactAnalysisService` ;
-- `ProjectImpactQuery` / `LocalProjectImpactQuery` ;
-- impact direct et indirect ;
-- traversée inverse des relations de dépendance pertinentes ;
-- cycles neutralisés ;
-- profondeur bornée `1..32` ;
-- résultats bornés `1..10 000` ;
-- meilleur chemin déterministe ;
-- confiance conservatrice par minimum des arêtes ;
-- tests potentiellement impactés via `RELATED_TEST` M5 ;
-- chemin de preuve `RELATED_TEST` conservé séparément du meilleur chemin général ;
-- limites dynamiques explicites.
-
-Relations propagées :
+Surface stabilisée :
 
 ```text
-TYPE_DEFINITION IMPORTS REFERENCES EXTENDS IMPLEMENTS CALLS
-RETURNS ACCEPTS READS WRITES INSTANTIATES DEPENDS_ON INJECTS RELATED_TEST
+minos project add
+minos project list
+minos project inspect
+minos inspect
+minos index
+minos index-status
+minos search
+minos find-symbol
+minos get-source
+minos find-usages
+minos find-implementations
+minos find-callers
+minos find-callees
+minos dependencies
+minos dependents
+minos related-tests
+minos architecture
+minos impact
 ```
 
-Limites structurées :
+Acquis M9 :
+
+- formats `text` et `json` ;
+- codes de sortie `0 / 1 / 2` ;
+- erreurs sur stderr ;
+- aide globale et par commande, sans création du home ;
+- administration du registre projet ;
+- inspection factuelle découverte + snapshot actif ;
+- import explicite d’un artefact SCIP via `minos index` ;
+- `index-status` basé sur un snapshot réellement relisible ;
+- architecture M6 exposée en vue projet/module ;
+- impact M8 exposé avec chemins, confiance, tests et limitations ;
+- replay end-to-end sur `fixtures/typescript/typescript-modules` ;
+- encodeur JSON déterministe partagé.
+
+### Frontière d’indexation
+
+Le dépôt ne possède toujours pas de runner de production implémentant `IndexerExecutor` pour lancer automatiquement `scip-java` ou `scip-typescript`.
+
+M9 n’invente pas cette capacité :
 
 ```text
-UNRESOLVED_RELATIONSHIPS_IGNORED
-EXTERNAL_TARGETS_NOT_TRAVERSED
-GENERATED_SYMBOLS_NOT_TRAVERSED
-DYNAMIC_DISPATCH_NOT_PROVEN
-REFLECTION_NOT_PROVEN
-RUNTIME_CONFIGURATION_NOT_PROVEN
-MAX_DEPTH_REACHED
-MAX_RESULTS_REACHED
+artefact SCIP existant
+  -> ScipSymbolSnapshotImporter
+  -> normalisation MINOS
+  -> FileSymbolSnapshotStore
 ```
 
-Replay réel : `fixtures/typescript/typescript-modules` depuis `GreetingPort.greet`.
+Les métadonnées de dernier import ne sont retournées que lorsqu’elles sont réellement enregistrées et alignées sur le snapshot actif.
 
 Documents :
 
-- `docs/m8/IMPACT_ANALYSIS.md` ;
-- `docs/m8/DECISION_M8.md`.
+- `docs/m9/CLI.md` ;
+- `docs/m9/DECISION_M9.md`.
 
-## Porte active — finale M8
+## Porte active — finale M9
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-La PR M8 doit rester Draft jusqu’à validation locale de son **head exact**.
+La PR M9 doit rester Draft jusqu’à validation locale du **head exact**.
 
 Après porte verte et fusion :
 
-- issue #27 → `completed` ;
-- M8 → terminé, validé et livré ;
-- M9 — CLI stabilisée → prochain jalon.
+- issue #29 → `completed` ;
+- M9 → terminé, validé et livré ;
+- M10 — Serveur MCP → prochain jalon.
 
 ## Sources de vérité
 
 - roadmap : `docs/ROADMAP.md` ;
 - état opérationnel : `docs/STATUS.md` ;
-- suivi M8 : issue #27 ;
-- décision M7 : `docs/m7/DECISION_M7.md` ;
-- conception M8 : `docs/m8/IMPACT_ANALYSIS.md` ;
-- décision M8 : `docs/m8/DECISION_M8.md` ;
-- modèle de relations : M3 ;
-- tests liés : M5.
+- suivi M9 : issue #29 ;
+- M8 : `docs/m8/IMPACT_ANALYSIS.md`, `docs/m8/DECISION_M8.md` ;
+- M9 : `docs/m9/CLI.md`, `docs/m9/DECISION_M9.md`.
