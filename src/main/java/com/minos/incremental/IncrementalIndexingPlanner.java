@@ -4,8 +4,6 @@ import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerNegotiationResult;
 import com.minos.orchestration.IndexingMode;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
