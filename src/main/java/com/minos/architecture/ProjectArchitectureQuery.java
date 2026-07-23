@@ -12,4 +12,6 @@ public interface ProjectArchitectureQuery {
     ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException;
 
     ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier) throws IOException;
+
+    ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier) throws IOException;
 }
