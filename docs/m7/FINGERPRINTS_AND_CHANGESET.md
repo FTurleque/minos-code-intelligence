@@ -2,12 +2,17 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #22.
 
 Base : M6 clôturé et fusionné dans `main` au commit
 `5252e4498456feece21a5903548221e1ce1ba20f`.
+
+Validation : head `48715066ddb808a4ad4e821212d6eaa450738284`, **167/167 tests**, `BUILD SUCCESS`.
+
+Livraison : PR #23 fusionnée dans `main` au commit
+`34b57dfadad962b98c2d5c028957595cee575400`.
 
 ## Objectif
 
@@ -35,9 +40,8 @@ sha256
 ```
 
 Le chemin est relatif au projet, normalisé et portable avec `/`.
-
-Le hash est un SHA-256 du contenu brut du fichier. Les timestamps, propriétaires,
-permissions et le chemin absolu du checkout n’entrent pas dans l’identité.
+Le hash est un SHA-256 du contenu brut. Timestamps, propriétaires, permissions et
+chemin absolu du checkout n’entrent pas dans l’identité.
 
 ## Visibilité
 
@@ -46,39 +50,24 @@ La capture réutilise `ProjectIgnorePolicy` afin de rester cohérente avec M1 :
 - répertoires techniques hard-ignored (`.git`, `.idea`, `.minos-m0`,
   `node_modules`, `target`, `dist`, `out`) non parcourus ;
 - `.gitignore` et `.minosignore` racine appliqués ;
-- les répertoires soft-ignored ne sont pas coupés prématurément afin de conserver
-  les négations supportées par la politique M1 ;
-- les symlinks ne sont pas suivis par `walkFileTree` ;
+- répertoires soft-ignored non coupés prématurément afin de préserver les
+  négations supportées ;
+- symlinks non suivis ;
 - seuls les fichiers réguliers visibles sont fingerprintés.
 
-Les deux fichiers de contrôle racine :
+`.gitignore` et `.minosignore` racine restent eux-mêmes fingerprintés lorsqu’ils
+existent : une modification de politique d’exclusion doit rester observable.
+
+## Empreintes agrégées
+
+`ProjectFingerprint.projectSha256` agrège dans l’ordre lexical :
 
 ```text
-.gitignore
-.minosignore
+relativePath + taille + sha256 contenu
 ```
 
-sont toujours fingerprintés lorsqu’ils existent, même s’ils tentent de
-s’ignorer eux-mêmes. Une modification de politique d’exclusion doit rester
-observable.
-
-## Empreinte projet
-
-`ProjectFingerprint.projectSha256` agrège dans l’ordre lexical des chemins :
-
-```text
-relativePath
-sizeBytes
-sha256 du contenu
-```
-
-L’empreinte est donc reproductible pour deux checkouts identiques placés dans
-des répertoires absolus différents.
-
-## Empreinte build
-
-`ProjectFingerprint.buildSha256` agrège seulement les descripteurs actuellement
-qualifiés par le périmètre M1 :
+`ProjectFingerprint.buildSha256` utilise uniquement les descripteurs actuellement
+qualifiés :
 
 ```text
 pom.xml
@@ -86,15 +75,12 @@ package.json
 package-lock.json
 ```
 
-Ils peuvent se trouver à la racine ou dans des modules imbriqués.
-
-M7.1 n’invente pas encore de support Gradle, pnpm, Yarn ou d’autres systèmes non
-qualifiés dans `ProjectDiscovery`.
+M7.1 n’invente pas de support Gradle, pnpm ou Yarn.
 
 ## ChangeSet
 
 `ProjectFingerprintService.compare(previous, current)` produit quatre listes
-triées et uniques :
+triées, uniques et disjointes :
 
 ```text
 addedFiles
@@ -110,7 +96,7 @@ Règles :
 - même chemin mais contenu ou taille différents → `MODIFIED` ;
 - même chemin, même contenu et même taille → `UNCHANGED`.
 
-Le rapport expose également :
+Le rapport expose aussi :
 
 ```text
 projectChanged
@@ -118,41 +104,38 @@ buildDefinitionChanged
 changedFileCount
 ```
 
-`buildDefinitionChanged` signifie uniquement que l’empreinte des descripteurs de
-build a changé. Ce n’est pas encore une décision d’invalidation complète.
+`buildDefinitionChanged` est un fait de comparaison, pas encore une règle
+d’invalidation.
 
-## Propriétés de sûreté
+## Porte locale acquise
 
-M7.1 qualifie explicitement :
+```text
+.\mvnw.cmd clean verify
+120 sources main compilées en release 24
+60 sources test compilées en release 24
+167 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
 
-- stabilité de la capture répétée ;
-- indépendance du chemin absolu ;
-- indépendance des timestamps ;
-- exclusion des fichiers ignorés et générés ;
-- visibilité des changements de `.gitignore` / `.minosignore` ;
-- distinction source-only / définition de build ;
-- ajout, modification et suppression ;
-- ordre déterministe des résultats.
+Le warning `sun.misc.Unsafe` de `protobuf-java 4.34.2` sous Java 24 reste non
+bloquant.
 
 ## Replay réel
 
-`ProjectFingerprintRealFixtureTest` capture deux fois la fixture versionnée :
+Fixture :
 
 ```text
 fixtures/typescript/typescript-modules
 ```
 
-La porte exige une capture identique et la présence de fichiers TypeScript et du
-`package-lock.json` réel.
-
-La sortie Maven doit contenir :
+Résultat observé :
 
 ```text
-M7.1 typescript-modules fingerprints: files=..., project=..., build=...
+M7.1 typescript-modules fingerprints: files=13, project=9103c5ddd376bad13d2f59c4dc923dd58eda6b8e0d0b0a0a991d29af96cb58bd, build=5b5b6d352221ca53a8844f9df644b3dd60b048b93d81e0f1bbade0359b504fb6
 ```
-
-Les hashes exacts observés seront enregistrés après validation locale du head de
-PR.
 
 ## Hors périmètre M7.1
 
@@ -165,18 +148,5 @@ PR.
 - orchestration de l’exécution partielle ;
 - watcher filesystem temps réel.
 
-Ces sujets seront traités dans les incréments suivants de M7.
-
-## Porte locale
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-La PR reste Draft jusqu’à validation locale du head exact.
-
-## Suite
-
-Après M7.1, l’incrément suivant devra persister les snapshots d’empreintes et les
-lier explicitement au snapshot d’index actif avant de définir les règles
-d’invalidation.
+Ces sujets sont traités par les incréments suivants de M7, en commençant par
+M7.2 pour la persistance et l’association explicite aux snapshots d’index.
