@@ -80,6 +80,7 @@ class ArchitectureTopologyServiceTest {
         assertEquals(List.of("JAVA"), api.languages());
         assertEquals(List.of("MAVEN"), api.buildSystems());
         assertEquals(InformationNature.FACTUAL, api.nature());
+        assertEquals(InformationNature.DERIVED, api.aggregateNature());
         assertEquals("com.acme.api", api.namespaces().getFirst().name());
 
         ArchitectureModule app = module(overview, "app");
@@ -122,6 +123,32 @@ class ArchitectureTopologyServiceTest {
         assertEquals(1, root.symbolCount());
         assertEquals("<default>", root.namespaces().getFirst().name());
         assertEquals("", root.namespaces().getFirst().relativePath());
+    }
+
+    @Test
+    void producesTheSameTopologyRegardlessOfSnapshotSymbolOrder() {
+        UUID projectId = UUID.randomUUID();
+        ProjectDiscovery discovery = new ProjectDiscovery(
+                Path.of("."),
+                "deterministic",
+                Set.of(Language.TYPESCRIPT),
+                Set.of(BuildSystem.NPM),
+                List.of(module("", "deterministic", BuildSystem.NPM,
+                        root("src", SourceRootKind.SOURCE, Language.TYPESCRIPT)))
+        );
+        Symbol alpha = symbol(projectId, "alpha", "src/domain/Alpha.ts", "typescript", false);
+        Symbol zeta = symbol(projectId, "zeta", "src/domain/Zeta.ts", "typescript", false);
+
+        ArchitectureOverview first = service.build(
+                discovery,
+                new CodeKnowledgeSnapshot(
+                        projectId, "same-snapshot", List.of(zeta, alpha), List.of(), List.of()));
+        ArchitectureOverview second = service.build(
+                discovery,
+                new CodeKnowledgeSnapshot(
+                        projectId, "same-snapshot", List.of(alpha, zeta), List.of(), List.of()));
+
+        assertEquals(first, second);
     }
 
     private static DiscoveredModule module(
