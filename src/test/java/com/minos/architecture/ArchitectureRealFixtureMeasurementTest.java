@@ -50,10 +50,21 @@ class ArchitectureRealFixtureMeasurementTest {
                 .analyze(overview, graph);
         ArchitectureCentralityReport centrality = new ArchitectureCentralityService().rank(concentration);
         ArchitectureTechnologyReport technologies = new ArchitectureTechnologyService().detect(discovery, overview);
+        ArchitectureIntelligenceService intelligenceService = new ArchitectureIntelligenceService();
+        ArchitectureIntelligenceView intelligence = intelligenceService.compose(
+                overview,
+                graph,
+                concentration,
+                centrality,
+                technologies
+        );
 
         ArchitectureModule rootModule = module(overview, "");
         ArchitectureModule api = module(overview, "packages/api");
         ArchitectureModule app = module(overview, "packages/app");
+        ArchitectureModuleContext apiContext = intelligenceService.moduleContext(intelligence, "packages/api");
+        ArchitectureModuleContext appContext = intelligenceService.moduleContext(intelligence, app.id());
+        ArchitectureModuleContext rootContext = intelligenceService.moduleContext(intelligence, ".");
 
         assertEquals(3, overview.moduleCount());
         assertEquals(4, graph.totalDependencyCount());
@@ -82,6 +93,38 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(Set.of(api.id(), app.id()), Set.copyOf(technology(technologies, "TYPESCRIPT").moduleIds()));
         assertEquals(List.of(rootModule.id()), technology(technologies, "NPM").moduleIds());
 
+        assertEquals(projectId.toString(), intelligence.projectId());
+        assertEquals("snapshot-m6-real-typescript-modules", intelligence.snapshotId());
+        assertEquals(3, intelligence.overview().moduleCount());
+        assertEquals(4, intelligence.dependencies().totalDependencyCount());
+        assertEquals(List.of(api.id()), intelligence.centrality().topIncomingModuleIds());
+        assertEquals(List.of(app.id()), intelligence.centrality().topOutgoingModuleIds());
+
+        assertEquals(api.id(), apiContext.module().id());
+        assertEquals(1, apiContext.incomingModuleEdgeCount());
+        assertEquals(0, apiContext.outgoingModuleEdgeCount());
+        assertEquals(4, apiContext.concentration().incomingDependencyCount());
+        assertEquals(1, apiContext.centrality().incomingRank());
+        assertEquals(List.of("TYPESCRIPT"), apiContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
+        assertEquals(app.id(), appContext.module().id());
+        assertEquals(0, appContext.incomingModuleEdgeCount());
+        assertEquals(1, appContext.outgoingModuleEdgeCount());
+        assertEquals(4, appContext.concentration().outgoingDependencyCount());
+        assertEquals(1, appContext.centrality().outgoingRank());
+        assertEquals(List.of("TYPESCRIPT"), appContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
+        assertEquals(rootModule.id(), rootContext.module().id());
+        assertEquals(0, rootContext.incomingModuleEdgeCount());
+        assertEquals(0, rootContext.outgoingModuleEdgeCount());
+        assertEquals(List.of("NPM"), rootContext.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+
         System.out.printf(
                 "M6.3 typescript-modules: modules=%d, dependsOn=%d, inter=%d, intra=%d, unassigned=%d, "
                         + "edges=%d, HHI-in=%.6f, HHI-out=%.6f, max-in=%.6f, max-out=%.6f%n",
@@ -108,6 +151,16 @@ class ArchitectureRealFixtureMeasurementTest {
                 technologies.technologies().stream().map(ArchitectureTechnology::name).toList(),
                 technology(technologies, "TYPESCRIPT").moduleIds(),
                 technology(technologies, "NPM").moduleIds()
+        );
+        System.out.printf(
+                "M6.7 typescript-modules architecture: modules=%d, api-in-edges=%d, api-in-rank=%d, "
+                        + "app-out-edges=%d, app-out-rank=%d, root-technologies=%s%n",
+                intelligence.overview().moduleCount(),
+                apiContext.incomingModuleEdgeCount(),
+                apiContext.centrality().incomingRank(),
+                appContext.outgoingModuleEdgeCount(),
+                appContext.centrality().outgoingRank(),
+                rootContext.technologies().stream().map(ArchitectureTechnology::name).toList()
         );
     }
 
