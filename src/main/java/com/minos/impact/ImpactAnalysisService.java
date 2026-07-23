@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * Analyse d'impact potentiel par traversée inverse, bornée et explicable, du graphe MINOS.
@@ -72,11 +71,12 @@ public final class ImpactAnalysisService {
         }
 
         Map<String, List<Relationship>> incoming = incomingRelationships(snapshot, symbolsById);
+        Candidate rootCandidate = Candidate.root(root.id());
         PriorityQueue<Candidate> queue = new PriorityQueue<>(CANDIDATE_ORDER);
-        queue.add(Candidate.root(root.id()));
+        queue.add(rootCandidate);
 
         Map<String, Candidate> selected = new HashMap<>();
-        selected.put(root.id(), Candidate.root(root.id()));
+        selected.put(root.id(), rootCandidate);
         List<ImpactedSymbol> impacts = new ArrayList<>();
         EnumSet<ImpactLimitation> limitations = baselineLimitations(snapshot, symbolsById);
 
@@ -178,7 +178,7 @@ public final class ImpactAnalysisService {
         snapshot.relationships().stream()
                 .filter(Objects::nonNull)
                 .filter(relationship -> PROPAGATING_KINDS.contains(relationship.kind()))
-                .filter(relationship -> relationship.resolutionStatus() == ResolutionStatus.RESOLVED)
+                .filter(ImpactAnalysisService::isTraversableResolution)
                 .filter(relationship -> relationship.target() != null)
                 .filter(relationship -> relationship.source().type() == CodeEntityType.SYMBOL)
                 .filter(relationship -> relationship.target().type() == CodeEntityType.SYMBOL)
@@ -194,6 +194,12 @@ public final class ImpactAnalysisService {
         return incoming;
     }
 
+    private static boolean isTraversableResolution(Relationship relationship) {
+        return relationship.resolutionStatus() == ResolutionStatus.RESOLVED
+                || (relationship.kind() == RelationshipKind.RELATED_TEST
+                && relationship.resolutionStatus() == ResolutionStatus.HEURISTIC);
+    }
+
     private static EnumSet<ImpactLimitation> baselineLimitations(
             CodeKnowledgeSnapshot snapshot,
             Map<String, Symbol> symbolsById
@@ -205,7 +211,7 @@ public final class ImpactAnalysisService {
         );
         if (snapshot.relationships().stream().anyMatch(relationship ->
                 PROPAGATING_KINDS.contains(relationship.kind())
-                        && relationship.resolutionStatus() != ResolutionStatus.RESOLVED)) {
+                        && relationship.resolutionStatus() == ResolutionStatus.UNRESOLVED)) {
             limitations.add(ImpactLimitation.UNRESOLVED_RELATIONSHIPS_IGNORED);
         }
         if (snapshot.relationships().stream().anyMatch(relationship ->
