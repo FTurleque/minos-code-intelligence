@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **22 juillet 2026**
+Dernière mise à jour : **23 juillet 2026**
 
 Ce document est le tableau de bord opérationnel de MINOS. La feuille de route
 conserve la séquence des jalons, les issues GitHub portent les checklists de
@@ -14,7 +14,8 @@ M0 — Faisabilité technique          TERMINÉ ET FUSIONNÉ
 M1 — Découverte et orchestration     EN COURS
   M1.1 — découverte locale           VALIDÉ ET FUSIONNÉ
   M1.2 — ignore + registre           VALIDÉ ET FUSIONNÉ
-  M1.3 — registre indexeurs          EN COURS
+  M1.3 — registre indexeurs          VALIDÉ ET FUSIONNÉ
+  M1.4 — cycle de vie / état         EN VALIDATION
 M2 à M13 — Jalons produit           NON DÉMARRÉS
 ```
 
@@ -107,15 +108,15 @@ multi-processus.
 
 Documentation : `docs/m1/IGNORE_AND_REGISTRY.md`.
 
-## M1.3 — porte active : IndexerRegistry + négociation
+## M1.3 — IndexerRegistry et négociation
 
-Branche :
+La validation locale du head
+`3b642819ea2d1828ed831f9f53d47604c81233c3` a été confirmée entièrement verte
+par le développeur avant fusion.
 
-```text
-m1/indexer-registry-capability-negotiation
-```
+Fusion `main` : `0125802b364f481e2242c7d2bbb008beb4c2d8d7`.
 
-### Implémenté sur le head courant
+Acquis :
 
 - `IndexerCapability` ;
 - `IndexerQualification` ;
@@ -130,9 +131,9 @@ m1/indexer-registry-capability-negotiation
 - `scip-typescript 0.4.0` sans fausse dépendance à npm ;
 - asymétrie d'index partiel Java/TypeScript conservée ;
 - aucune promesse `CALLS` ajoutée ;
-- ADR-0008 proposé.
+- ADR-0008 **Accepté**.
 
-### Capacités M1 actuelles
+Capacités M1 actuelles :
 
 ```text
 SYMBOLS
@@ -147,27 +148,67 @@ PARTIAL_INDEX_ON_BUILD_FAILURE
 Une capacité exprime un support observé/qualifié et **pas** une garantie de
 complétude.
 
-### Validation requise
+Documentation : `docs/m1/INDEXER_NEGOTIATION.md`.
+
+## M1.4 — porte active : cycle de vie et état d'index
+
+Branche :
+
+```text
+m1/indexing-lifecycle-state
+```
+
+### Implémenté sur le head courant
+
+- `ProjectIndexState` ;
+- états `NEVER_INDEXED`, `INDEXING`, `REFRESHING`, `READY`, `STALE`, `FAILED` ;
+- `IndexingRun` avec statut, phase, artefacts exécutés et snapshots avant/après ;
+- phases `PROVIDER_EXECUTION`, `STAGING`, `PROMOTION`, `COMPLETED` ;
+- `IndexStateStore` ;
+- `InMemoryIndexStateStore` baseline ;
+- ports runtime fournisseur-indépendants `IndexerExecutor`, `SnapshotStager`, `SnapshotPromoter` ;
+- `IndexingLifecycleService` ;
+- refus d'une négociation incomplète avant démarrage ;
+- un seul run actif par projet dans une instance de service ;
+- exécution de toutes les sélections avant staging ;
+- staging d'un snapshot projet commun ;
+- promotion atomique unique ;
+- ancien snapshot conservé en cas d'échec de refresh ;
+- état `STALE` pour distinguer échec récent et snapshot précédent encore actif ;
+- ADR-0006 clarifié pour les projets multi-langages / multi-indexeurs.
+
+### Tests de porte ajoutés
+
+`IndexingLifecycleServiceTest` couvre :
+
+- succès Java + TypeScript avec un seul staging et une seule promotion ;
+- échec du second fournisseur bloquant toute promotion ;
+- échec de promotion conservant le snapshot précédent en `STALE` ;
+- négociation incomplète ne créant aucun run.
+
+### Limites explicites M1.4
+
+- aucune annulation forcée d'un processus externe ;
+- aucun timeout générique ;
+- aucune politique de retry ;
+- aucun verrouillage multi-processus ;
+- aucune persistance durable imposée pour `IndexStateStore` ;
+- aucun mode best-effort promu comme snapshot sain.
+
+Ces limites sont explicites afin de ne pas inventer des garanties runtime non
+qualifiées. Elles ne bloquent pas la porte M1.
+
+### Validation finale M1 requise
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-M1.3 doit rester en Draft tant que cette commande n'est pas verte sur le head
-courant.
+M1.4 doit rester en Draft tant que cette commande n'est pas verte sur son head
+exact. Après validation et fusion, l'issue #6 pourra être clôturée et M2 pourra
+démarrer depuis `main`.
 
-Documentation : `docs/m1/INDEXER_NEGOTIATION.md`.
-
-## Reste du périmètre M1
-
-```text
-M1.4 cycle de vie de l'indexation + état de l'index
-validation finale M1
-```
-
-M1.4 devra partir d'un plan déjà négocié et ajouter les états observables,
-l'exécution, l'échec, l'annulation/timeout si retenus et la promotion atomique,
-sans déplacer de logique fournisseur dans le cœur.
+Documentation : `docs/m1/INDEXING_LIFECYCLE.md`.
 
 ## Blocages et décisions
 
@@ -180,6 +221,7 @@ sans déplacer de logique fournisseur dans le cœur.
 | Identité projet | UUID persistant du registre ; chemin = localisation/rapprochement uniquement |
 | Ignore imbriqué | Limite M1.2 documentée |
 | Sélection indexeur | Par capacités qualifiées, build compatible, qualification et priorité déterministe |
+| Promotion | Atomique au niveau du run projet complet, y compris multi-indexeurs |
 
 ## Prochaines portes
 
@@ -190,9 +232,11 @@ M1.1 découverte locale — validée et fusionnée
         ↓
 M1.2 ignore + registre — validé et fusionné
         ↓
-M1.3 IndexerRegistry + négociation — validation locale
+M1.3 IndexerRegistry + négociation — validé et fusionné
         ↓
-M1.4 cycle de vie / état d'index + validation finale M1
+M1.4 cycle de vie / état d'index — validation finale M1
+        ↓
+M2 Intelligence des symboles
 ```
 
 ## Sources de vérité
@@ -205,6 +249,8 @@ M1.4 cycle de vie / état d'index + validation finale M1
 - découverte M1.1 : `docs/m1/PROJECT_DISCOVERY.md` ;
 - ignore et registre M1.2 : `docs/m1/IGNORE_AND_REGISTRY.md` ;
 - négociation M1.3 : `docs/m1/INDEXER_NEGOTIATION.md` ;
+- lifecycle M1.4 : `docs/m1/INDEXING_LIFECYCLE.md` ;
+- promotion atomique : ADR-0006 ;
 - identité registre : ADR-0007 ;
 - négociation indexeurs : ADR-0008.
 
