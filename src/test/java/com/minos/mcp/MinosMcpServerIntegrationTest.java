@@ -45,8 +45,12 @@ class MinosMcpServerIntegrationTest {
         String javaExecutable = Path.of(
                 System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java"
         ).toString();
+        String testClasspath = System.getProperty(
+                "surefire.test.class.path",
+                System.getProperty("java.class.path")
+        );
         ServerParameters parameters = ServerParameters.builder(javaExecutable)
-                .args("-cp", System.getProperty("java.class.path"), MinosMcpServer.class.getName())
+                .args("-cp", testClasspath, MinosMcpServer.class.getName())
                 .env(Map.of(MinosLauncher.HOME_ENVIRONMENT_VARIABLE, home.toString()))
                 .build();
         StdioClientTransport transport = new StdioClientTransport(parameters, McpJsonDefaults.getMapper());
