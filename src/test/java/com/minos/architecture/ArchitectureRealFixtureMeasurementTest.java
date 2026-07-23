@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,7 +35,7 @@ class ArchitectureRealFixtureMeasurementTest {
                         null,
                         "scip-typescript",
                         "0.4.0",
-                        "m6.3-real-fixture",
+                        "m6-real-fixture",
                         Map.of()
                 ),
                 snapshots
@@ -46,7 +47,9 @@ class ArchitectureRealFixtureMeasurementTest {
         ArchitectureDependencyGraph graph = new ArchitectureDependencyService().build(discovery, snapshot);
         ArchitectureConcentrationReport concentration = new ArchitectureConcentrationService()
                 .analyze(overview, graph);
+        ArchitectureCentralityReport centrality = new ArchitectureCentralityService().rank(concentration);
 
+        ArchitectureModule rootModule = module(overview, "");
         ArchitectureModule api = module(overview, "packages/api");
         ArchitectureModule app = module(overview, "packages/app");
 
@@ -62,6 +65,15 @@ class ArchitectureRealFixtureMeasurementTest {
         assertTrue(concentration.incomingHerfindahlIndex() > 0.0);
         assertTrue(concentration.outgoingHerfindahlIndex() > 0.0);
 
+        assertEquals(List.of(api.id()), centrality.topIncomingModuleIds());
+        assertEquals(List.of(app.id()), centrality.topOutgoingModuleIds());
+        assertEquals(1, centrality(centrality, api.id()).incomingRank());
+        assertEquals(0, centrality(centrality, api.id()).outgoingRank());
+        assertEquals(0, centrality(centrality, app.id()).incomingRank());
+        assertEquals(1, centrality(centrality, app.id()).outgoingRank());
+        assertEquals(0, centrality(centrality, rootModule.id()).incomingRank());
+        assertEquals(0, centrality(centrality, rootModule.id()).outgoingRank());
+
         System.out.printf(
                 "M6.3 typescript-modules: modules=%d, dependsOn=%d, inter=%d, intra=%d, unassigned=%d, "
                         + "edges=%d, HHI-in=%.6f, HHI-out=%.6f, max-in=%.6f, max-out=%.6f%n",
@@ -76,11 +88,28 @@ class ArchitectureRealFixtureMeasurementTest {
                 concentration.maxIncomingShare(),
                 concentration.maxOutgoingShare()
         );
+        System.out.printf(
+                "M6.5 typescript-modules centrality: top-in=%s, top-out=%s, root-in-rank=%d, root-out-rank=%d%n",
+                centrality.topIncomingModuleIds(),
+                centrality.topOutgoingModuleIds(),
+                centrality(centrality, rootModule.id()).incomingRank(),
+                centrality(centrality, rootModule.id()).outgoingRank()
+        );
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
         return overview.modules().stream()
                 .filter(module -> relativePath.equals(module.relativePath()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static ArchitectureModuleCentrality centrality(
+            ArchitectureCentralityReport report,
+            String moduleId
+    ) {
+        return report.modules().stream()
+                .filter(module -> moduleId.equals(module.moduleId()))
                 .findFirst()
                 .orElseThrow();
     }
