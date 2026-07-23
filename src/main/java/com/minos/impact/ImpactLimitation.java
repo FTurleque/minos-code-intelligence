@@ -1,0 +1,15 @@
+package com.minos.impact;
+
+/**
+ * Limites explicites de couverture de l'analyse d'impact.
+ */
+public enum ImpactLimitation {
+    UNRESOLVED_RELATIONSHIPS_IGNORED,
+    EXTERNAL_TARGETS_NOT_TRAVERSED,
+    GENERATED_SYMBOLS_NOT_TRAVERSED,
+    DYNAMIC_DISPATCH_NOT_PROVEN,
+    REFLECTION_NOT_PROVEN,
+    RUNTIME_CONFIGURATION_NOT_PROVEN,
+    MAX_DEPTH_REACHED,
+    MAX_RESULTS_REACHED
+}

@@ -1,13 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M6 terminés — M7 fonctionnellement complet, validation finale en attente**
+Statut : **C0 à M7 terminés — M8 implémenté, validation finale en attente**
 
-L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md).
-Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon
-et ses portes de décision.
+L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
 
-La roadmap reste guidée par les preuves : un jalon peut être ajusté si une
-expérimentation invalide une hypothèse d’architecture.
+La roadmap reste guidée par les preuves : un jalon peut être ajusté si une expérimentation invalide une hypothèse d’architecture.
 
 ---
 
@@ -15,40 +12,22 @@ expérimentation invalide une hypothèse d’architecture.
 
 État : **TERMINÉ**
 
-### Objectif
+Objectif : définir précisément MINOS avant les implémentations produit.
 
-Définir précisément ce que MINOS doit être avant les implémentations produit.
-
-### Livrables
-
-- cahier des charges ;
-- vision et positionnement ;
-- frontière MINOS / NEXUS ;
-- cas d’usage prioritaires ;
-- périmètre MVP ;
-- modèles de domaine, symboles et relations ;
-- stratégies d’indexation, SCIP, Glean et `CodeKnowledgeStore` ;
-- critères de validation ;
-- ADR structurantes ;
-- plan d’expérimentations M0.
+Livrables : cahier des charges, vision, frontière MINOS/NEXUS, cas d’usage, MVP, modèle de domaine, stratégie d’indexation, critères de validation et ADR structurantes.
 
 ---
 
 ## M0 — Faisabilité technique
 
-État : **TERMINÉ ET LIVRÉ — verdict ADOPTER_AVEC_CONTRAINTES**
+État : **TERMINÉ ET LIVRÉ — ADOPTER_AVEC_CONTRAINTES**
 
-### Objectif
-
-Valider les choix structurants avec des expérimentations réelles et mesurables.
-
-### Acquis
+Acquis :
 
 - qualification SCIP Java / TypeScript ;
 - baseline SCIP → MINOS sur artefacts réels ;
-- benchmark du backend mémoire ;
-- qualification de Glean sous contraintes ;
 - backend MINOS léger retenu par défaut ;
+- Glean optionnel ;
 - frontière fournisseur préservée.
 
 Décision : `m0/DECISION_M0.md`.
@@ -59,22 +38,7 @@ Décision : `m0/DECISION_M0.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-### Objectif
-
-Détecter un projet et sélectionner les fournisseurs d’indexation adaptés.
-
-### Périmètre livré
-
-- registre local projets/workspaces ;
-- détection des langages ;
-- détection des systèmes de build ;
-- racines de sources et de tests ;
-- `.gitignore` et `.minosignore` ;
-- `IndexerRegistry` ;
-- négociation des capacités ;
-- cycle de vie de l’indexation ;
-- état de l’index ;
-- promotion atomique du snapshot projet.
+Acquis : registre projets/workspaces, détection langages/builds/modules/racines, politiques d’ignore, `IndexerRegistry`, négociation des capacités, lifecycle et promotion atomique.
 
 ---
 
@@ -82,21 +46,7 @@ Détecter un projet et sélectionner les fournisseurs d’indexation adaptés.
 
 État : **TERMINÉ ET LIVRÉ**
 
-### Objectif
-
-Exposer une recherche fiable des symboles indépendamment du fournisseur et du backend.
-
-### Périmètre livré
-
-- modèle normalisé des symboles ;
-- identité stable et qualité d’identité ;
-- fichiers, modules et emplacements ;
-- types de symboles ;
-- symboles externes et non résolus ;
-- `find_symbol` ;
-- `get_file_symbols` ;
-- recherche lexicale et par nom qualifié ;
-- snapshot persistant et résultats compacts.
+Acquis : symboles normalisés, identités stables, emplacements, symboles externes/non résolus, recherche lexicale/qualifiée et snapshots persistants.
 
 Décision : `m2/DECISION_M2.md`.
 
@@ -106,19 +56,7 @@ Décision : `m2/DECISION_M2.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-### Objectif
-
-Exposer les relations entrantes et sortantes entre éléments du code.
-
-### Périmètre livré
-
-- références ;
-- implémentations ;
-- héritage et appels lorsqu’ils sont disponibles ;
-- dépendances dérivées ;
-- provenance, preuves et confiance ;
-- requêtes usages/implémentations/appels/dépendances ;
-- snapshot de connaissance v2.
+Acquis : références, implémentations, héritage, appels lorsque disponibles, dépendances dérivées, provenance, preuves, confiance et requêtes directionnelles.
 
 Décision : `m3/DECISION_M3.md`.
 
@@ -128,18 +66,7 @@ Décision : `m3/DECISION_M3.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-### Objectif
-
-Rendre MINOS directement exploitable par des outils et agents avant le MCP.
-
-### Périmètre livré
-
-- recherche structurée unifiée ;
-- sortie compacte ;
-- limites de résultats, profondeur et tokens ;
-- plages de code pertinentes ;
-- récupération explicite du code source complet ;
-- benchmark de latence.
+Acquis : recherche structurée unifiée, sorties compactes, limites de résultats/tokens/profondeur, plages pertinentes, source complète explicite et benchmark de latence.
 
 Décision : `m4/DECISION_M4.md`.
 
@@ -149,20 +76,7 @@ Décision : `m4/DECISION_M4.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-### Objectif
-
-Déduire des relations utiles que les indexeurs ne fournissent pas forcément directement.
-
-### Périmètre livré
-
-- détection des tests liés ;
-- conventions de nommage ;
-- références directes ;
-- appels lorsqu’ils sont disponibles ;
-- proximité package/namespace ;
-- score de confiance ;
-- raisons et preuves structurées ;
-- requête et CLI `related-tests`.
+Acquis : `RELATED_TEST`, conventions de nommage, références/appels directs, proximité de namespace, score, raisons et preuves structurées.
 
 Décision : `m5/DECISION_M5.md`.
 
@@ -170,36 +84,13 @@ Décision : `m5/DECISION_M5.md`.
 
 ## M6 — Intelligence d’architecture
 
-État : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-### Objectif
+Acquis : topologie modules/namespaces, dépendances inter-modules, concentration, centralité relative directionnelle, technologies factuelles, vue composée et contexte de module.
 
-Produire une vue de haut niveau de la topologie d’un projet.
+Incréments : PR #14 à #20, consolidation PR #21.
 
-### Périmètre livré
-
-- topologie des modules ;
-- topologie des packages/namespaces ;
-- composants centraux sous forme de rangs relatifs directionnels ;
-- concentration des dépendances ;
-- technologies détectées factuellement ;
-- `get_architecture_overview` métier ;
-- `get_module_context` métier ;
-- vue composée `ArchitectureIntelligenceView` ;
-- distinction explicite entre faits, dérivations et preuves.
-
-### Incréments
-
-```text
-M6.1 topologie modules / namespaces             PR #14
-M6.2 dépendances inter-modules                  PR #15
-M6.3 concentration                              PR #16
-M6.4 calibration centralité                     PR #17
-M6.5 classement composants centraux             PR #18
-M6.6 technologies factuelles                    PR #19
-M6.7 vue composée + contexte de module          PR #20
-consolidation finale                            PR #21
-```
+Porte finale : **162/162 tests PASS**.
 
 Décision : `m6/DECISION_M6.md`.
 
@@ -207,139 +98,145 @@ Décision : `m6/DECISION_M6.md`.
 
 ## M7 — Indexation incrémentale
 
-État : **FONCTIONNELLEMENT COMPLET — VALIDATION LOCALE FINALE EN ATTENTE**
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi : issue #22.
+Suivi clôturé : issue #22.
 
 ### Objectif
 
-Éviter les réindexations complètes lorsque cela n’est pas nécessaire, sans
-jamais exécuter une portée partielle qui n’est pas prouvée sûre.
+Éviter les réindexations complètes lorsque cela n’est pas nécessaire, sans jamais exécuter une portée partielle qui n’est pas prouvée sûre.
 
-### Périmètre couvert
-
-- empreintes de fichiers ;
-- empreintes du projet et du build ;
-- fichiers ajoutés, modifiés et supprimés ;
-- snapshots d’empreintes associés aux snapshots d’index ;
-- règles d’invalidation ;
-- capacité fournisseur `INCREMENTAL_INDEXING` ;
-- décision sûre `NONE` / `INCREMENTAL` / `FULL` ;
-- repli explicite vers une indexation complète ;
-- promotion de la baseline fingerprint uniquement sur workspace stable.
-
-### M7.1 — Empreintes reproductibles et ChangeSet — LIVRÉ
-
-PR #23, merge `34b57dfadad962b98c2d5c028957595cee575400`.
-
-Acquis :
-
-- `FileFingerprint` ;
-- `ProjectFingerprint` ;
-- `ProjectChangeSet` ;
-- `ProjectFingerprintService` ;
-- empreintes déterministes ;
-- distinction projet/build ;
-- classification added/modified/deleted/unchanged.
-
-### M7.2 — Snapshots persistants d’empreintes — LIVRÉ
-
-PR #24, merge `379b5a28a92cb58b340dc8801d66fad1b853e4ce`.
-
-Acquis :
-
-- association `projectId + indexSnapshotId` ;
-- historique immuable ;
-- publication et promotion séparées ;
-- pointeur actif atomique ;
-- contrôle d’intégrité ;
-- alignement explicite avec `ProjectIndexState.activeSnapshotId`.
-
-### M7.3 — Invalidation conservatrice — LIVRÉ
-
-PR #25, merge `8f87a8fbb3f62361f88e38c9a8f22c2da2050ca8`.
-
-Portées :
+### Livraisons
 
 ```text
-NONE
-PARTIAL_CANDIDATE
-FULL_REQUIRED
+M7.1 — empreintes et ChangeSet             PR #23
+M7.2 — snapshots persistants               PR #24
+M7.3 — invalidation conservatrice          PR #25
+M7.4 — planification/fallback/lifecycle    PR #26
 ```
 
-Règles principales :
+Merge final : `c66382705880158b9ccac63b5662b81bf2d8d255`.
 
-- pas d’index actif → complet ;
-- baseline absente/désalignée/illisible → complet ;
-- définition de build modifiée → complet ;
-- politique d’ignore modifiée → complet ;
-- fichier changé non qualifiable → complet ;
-- uniquement sources/tests reconnus → candidat partiel ;
-- aucun changement → aucune réindexation.
+Porte finale :
 
-### M7.4 — Planification et exécution sûres — IMPLÉMENTÉ
+```text
+134 sources main
+69 sources test
+196/196 tests PASS
+BUILD SUCCESS
+```
 
 Acquis :
 
+- fingerprints fichiers/projet/build ;
+- ajout/modification/suppression ;
+- snapshots d’empreintes liés aux snapshots d’index ;
+- `NONE / PARTIAL_CANDIDATE / FULL_REQUIRED` ;
 - `IndexerCapability.INCREMENTAL_INDEXING` ;
-- `IncrementalIndexingPlan` ;
-- `IncrementalIndexingPlanner` ;
-- `IncrementalIndexingCoordinator` ;
-- `IndexingMode.NONE/FULL/INCREMENTAL` ;
-- `IndexingExecutionRequest.mode + changedFiles` ;
-- défense en profondeur dans `IndexingLifecycleService` ;
-- atomicité projet : tous les indexeurs sélectionnés doivent être qualifiés ;
-- fallback `FULL` lorsqu’une capacité manque ;
-- baseline fingerprint avancée uniquement si le workspace reste identique pendant le run.
+- `NONE / INCREMENTAL / FULL` ;
+- fallback complet projet ;
+- avancement de baseline uniquement sur workspace stable.
 
-Les versions actuellement épinglées de `scip-java 0.13.1` et
-`scip-typescript 0.4.0` ne reçoivent pas artificiellement
-`INCREMENTAL_INDEXING`. Avec elles, un `PARTIAL_CANDIDATE` retombe donc en
-`FULL` jusqu’à requalification fournisseur.
-
-### Porte de décision M7
-
-> MINOS sait-il déterminer de manière sûre ce qui peut être réindexé partiellement, et revenir explicitement à une indexation complète lorsqu’il ne peut pas le prouver ?
-
-Verdict préparé : **OUI, sous preuve explicite de capacité fournisseur**.
+Porte M7 : **OUI, sous preuve explicite de capacité fournisseur.**
 
 Décision : `m7/DECISION_M7.md`.
-
-La porte finale reste :
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-sur le head exact de la PR finale M7.
 
 ---
 
 ## M8 — Analyse d’impact
 
-État : **PROCHAIN JALON APRÈS CLÔTURE M7**
+État : **IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
+
+Suivi : issue #27.
 
 ### Objectif
 
-Estimer la propagation potentielle d’une modification à partir des relations connues.
+Estimer la propagation potentielle d’une modification à partir des relations connues, avec chemins explicatifs et limites de couverture explicites.
 
-### Périmètre
+### Périmètre implémenté
 
-- impact direct ;
-- impact indirect ;
-- chemin explicatif ;
-- score de confiance ;
-- contrôle de profondeur ;
-- tests potentiellement impactés ;
-- limites liées au comportement dynamique.
+- [x] impact direct ;
+- [x] impact indirect ;
+- [x] chemin explicatif ;
+- [x] score de confiance ;
+- [x] contrôle de profondeur ;
+- [x] tests potentiellement impactés ;
+- [x] limites liées au comportement dynamique ;
+- [x] façade locale fournisseur-indépendante ;
+- [x] replay sur fixture TypeScript réelle ;
+- [ ] validation locale finale du head exact ;
+- [ ] fusion et clôture administrative.
+
+### Sémantique
+
+Une relation de dépendance observée :
+
+```text
+source -> target
+```
+
+est parcourue en sens inverse pour l’impact : une modification de `target` peut potentiellement impacter `source`.
+
+Relations propagées :
+
+```text
+TYPE_DEFINITION IMPORTS REFERENCES EXTENDS IMPLEMENTS CALLS
+RETURNS ACCEPTS READS WRITES INSTANTIATES DEPENDS_ON INJECTS RELATED_TEST
+```
+
+Le meilleur chemin est choisi par profondeur croissante, confiance décroissante puis ordre lexical stable.
+
+Confiance d’un chemin :
+
+```text
+minimum des confiances de ses relations
+```
+
+Un fait sans score explicite vaut `1.0` pour ce calcul.
+
+Les tests M5 sont retournés comme **potentiellement impactés** avec leur chemin `RELATED_TEST` spécifique, y compris lorsque la relation M5 est heuristique.
+
+### Limites explicites
+
+```text
+UNRESOLVED_RELATIONSHIPS_IGNORED
+EXTERNAL_TARGETS_NOT_TRAVERSED
+GENERATED_SYMBOLS_NOT_TRAVERSED
+DYNAMIC_DISPATCH_NOT_PROVEN
+REFLECTION_NOT_PROVEN
+RUNTIME_CONFIGURATION_NOT_PROVEN
+MAX_DEPTH_REACHED
+MAX_RESULTS_REACHED
+```
+
+L’absence de chemin observé n’est jamais interprétée comme une preuve d’absence d’impact runtime.
+
+### Porte de décision M8
+
+> MINOS sait-il produire une estimation déterministe, bornée et explicable des éléments et tests potentiellement impactés par une modification, tout en exposant les limites de couverture du graphe observé ?
+
+Verdict préparé :
+
+> **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
+
+Documents :
+
+- `m8/IMPACT_ANALYSIS.md` ;
+- `m8/DECISION_M8.md`.
+
+Porte finale :
+
+```powershell
+.\mvnw.cmd clean verify
+```
 
 ---
 
 ## M9 — CLI stabilisée
 
-### Objectif
+État : **PROCHAIN APRÈS CLÔTURE M8**
 
-Stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations.
+Objectif : stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations.
 
 Commandes envisagées :
 
@@ -365,81 +262,43 @@ minos inspect
 
 ## M10 — Serveur MCP
 
-### Objectif
+État : **NON DÉMARRÉ**
 
-Exposer des outils spécialisés et compacts aux agents IA.
+Objectif : exposer des outils spécialisés et compacts aux agents IA.
 
-Outils envisagés :
+Outils envisagés : structure projet, recherche code, symboles, usages, implémentations, callers/callees, dépendances, tests liés, contexte de symbole/module, architecture, analyse d’impact et statut d’index.
 
-```text
-get_project_structure
-search_code
-find_symbol
-find_usages
-find_implementations
-find_callers
-find_callees
-find_dependencies
-find_dependents
-get_related_tests
-get_symbol_context
-get_file_symbols
-get_module_context
-get_architecture_overview
-analyze_impact
-get_index_status
-```
-
-Le MCP reste une couche d’exposition. Aucune logique d’analyse métier ne doit
-résider dans les handlers MCP.
+Le MCP reste une couche d’exposition ; aucune logique métier d’analyse ne doit résider dans ses handlers.
 
 ---
 
 ## M11 — API
 
-### Objectif
+État : **NON DÉMARRÉ**
 
-Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean ou
-des adaptateurs internes.
+Objectif : permettre à des systèmes externes de consommer MINOS via des DTO stables sans dépendre de Glean ou des adaptateurs internes.
 
-### Périmètre
-
-- opérations sur les projets et index ;
-- requêtes de symboles ;
-- requêtes de relations ;
-- architecture ;
-- impact ;
-- contrats DTO stables.
+Périmètre : projets/index, symboles, relations, architecture, impact et contrats publics.
 
 ---
 
 ## M12 — Multi-dépôts et intelligence Git
 
-### Objectif
+État : **NON DÉMARRÉ**
 
-Étendre MINOS des dépôts isolés vers des workspaces et une compréhension de l’historique.
-
-Périmètre possible :
-
-- résolution inter-dépôts ;
-- relations cross-repository ;
-- historique Git ;
-- fréquence de modification des symboles ;
-- changements récents ;
-- zones de forte activité.
+Périmètre possible : résolution inter-dépôts, relations cross-repository, historique Git, fréquence de modification, changements récents et zones d’activité.
 
 ---
 
 ## M13 — Intégration NEXUS
 
-### Objectif
+État : **NON DÉMARRÉ**
 
-Permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner
-un contexte adapté à une tâche.
+Objectif : permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner un contexte adapté à une tâche.
 
-### Frontière
+Frontière :
 
-- MINOS fournit des faits, relations, preuves et vues compactes du code ;
+- MINOS fournit faits, relations, preuves et vues compactes du code ;
 - NEXUS classe et sélectionne les informations à injecter dans le contexte IA.
 
 MINOS doit rester pleinement utilisable sans NEXUS.
