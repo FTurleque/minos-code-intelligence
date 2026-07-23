@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M4 terminés — M5 implémenté, validation finale en attente**
+Statut : **C0 à M5 terminés et validés localement — M6 prochain jalon**
 
 L'état opérationnel, la porte active et le reste à faire sont maintenus dans
 [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
@@ -243,7 +243,7 @@ de 5,421 ms. Décision : `m4/DECISION_M4.md`.
 
 ## M5 — Tests liés et dérivations explicables
 
-État : **IMPLÉMENTÉ — VALIDATION FINALE EN ATTENTE**
+État : **TERMINÉ ET VALIDÉ LOCALEMENT**
 
 ### Objectif
 
@@ -259,12 +259,13 @@ Déduire des relations utiles que les indexeurs ne fournissent pas forcément di
 - score de confiance ;
 - explication des raisons.
 
-Implémentation acquise : relation orientée test vers production, classification
+Porte acquise : relation orientée test vers production, classification
 dérivée/heuristique, agrégation déterministe des signaux, preuves structurées,
 persistance snapshot v2, métrique dédiée, cas d'usage `findRelatedTests` et
-commande `related-tests`. La porte reste ouverte jusqu'au succès du build
-complet et du replay des quatre index TypeScript versionnés. Suivi :
-`m5/DECISION_M5.md`.
+commande `related-tests`. La validation finale compile `93` sources main et `49`
+sources test et exécute `140/140` tests avec `BUILD SUCCESS`. Le replay des
+quatre index TypeScript versionnés et la chaîne snapshot → réouverture → CLI JSON
+font partie de cette porte verte. Décision : `m5/DECISION_M5.md`.
 
 ---
 
