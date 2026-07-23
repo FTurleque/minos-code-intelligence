@@ -198,6 +198,38 @@ class LocalProjectArchitectureQueryTest {
                 () -> query.getModuleContext("dependency-fixture", "missing-module"));
     }
 
+    @Test
+    void requiresPathOrIdWhenModuleNameIsAmbiguous(@TempDir Path root) throws Exception {
+        Path projectRoot = Files.createDirectories(root.resolve("ambiguous-modules"));
+        Path leftRoot = Files.createDirectories(projectRoot.resolve("left/service/src/main/java/com/acme/left"));
+        Path rightRoot = Files.createDirectories(projectRoot.resolve("right/service/src/main/java/com/acme/right"));
+        Files.writeString(projectRoot.resolve("left/service/pom.xml"), "<project/>");
+        Files.writeString(projectRoot.resolve("right/service/pom.xml"), "<project/>");
+        Files.writeString(leftRoot.resolve("LeftService.java"), "package com.acme.left; public class LeftService {}");
+        Files.writeString(rightRoot.resolve("RightService.java"), "package com.acme.right; public class RightService {}");
+
+        LocalProjectRegistry registry = new LocalProjectRegistry(root.resolve("registry"));
+        RegisteredProject project = registry.registerProject(projectRoot, "ambiguous-fixture");
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(root.resolve("snapshots"));
+        snapshots.publish(
+                project.id(),
+                "snapshot-m6-ambiguous",
+                List.of(
+                        symbol(project, "left", "left/service/src/main/java/com/acme/left/LeftService.java"),
+                        symbol(project, "right", "right/service/src/main/java/com/acme/right/RightService.java")
+                ),
+                List.of(),
+                List.of()
+        );
+
+        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> query.getModuleContext("ambiguous-fixture", "service"));
+        assertEquals("left/service",
+                query.getModuleContext("ambiguous-fixture", "left/service").module().relativePath());
+    }
+
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
         return overview.modules().stream()
                 .filter(module -> relativePath.equals(module.relativePath()))
