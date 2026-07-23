@@ -1,10 +1,23 @@
 package com.minos.cli;
 
+import com.minos.architecture.ArchitectureCentralityReport;
+import com.minos.architecture.ArchitectureConcentrationReport;
+import com.minos.architecture.ArchitectureDependencyGraph;
+import com.minos.architecture.ArchitectureIntelligenceView;
+import com.minos.architecture.ArchitectureModuleContext;
+import com.minos.architecture.ArchitectureOverview;
+import com.minos.architecture.ArchitectureTechnologyReport;
+import com.minos.architecture.LocalProjectArchitectureQuery;
+import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.context.CodeSearchResponse;
 import com.minos.context.SourceExcerpt;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolSearchCriteria;
+import com.minos.impact.ImpactAnalysisReport;
+import com.minos.impact.ImpactAnalysisRequest;
+import com.minos.impact.LocalProjectImpactQuery;
+import com.minos.impact.ProjectImpactQuery;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
@@ -53,8 +66,12 @@ public final class MinosLauncher {
         Objects.requireNonNull(error, "error");
 
         Path normalizedHome = home.toAbsolutePath().normalize();
-        return new MinosCli(new LazyLocalProjectSymbolQuery(normalizedHome))
-                .run(arguments, output, error);
+        return new MinosCli(
+                new LazyLocalProjectSymbolQuery(normalizedHome),
+                new LazyProjectOperations(normalizedHome),
+                new LazyProjectArchitectureQuery(normalizedHome),
+                new LazyProjectImpactQuery(normalizedHome)
+        ).run(arguments, output, error);
     }
 
     static Path resolveHome(Map<String, String> environment, Properties properties) {
@@ -85,6 +102,14 @@ public final class MinosLauncher {
                 : message.replace('\r', ' ').replace('\n', ' ');
     }
 
+    private static LocalProjectRegistry registry(Path home) throws IOException {
+        return new LocalProjectRegistry(home.resolve("registry"));
+    }
+
+    private static FileSymbolSnapshotStore snapshots(Path home) throws IOException {
+        return new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
+    }
+
     private static final class LazyLocalProjectSymbolQuery implements ProjectSymbolQuery {
 
         private final Path home;
@@ -94,28 +119,17 @@ public final class MinosLauncher {
         }
 
         @Override
-        public List<SymbolResult> findSymbols(
-                String projectId,
-                SymbolSearchCriteria criteria
-        ) throws Exception {
+        public List<SymbolResult> findSymbols(String projectId, SymbolSearchCriteria criteria) throws Exception {
             return delegate().findSymbols(projectId, criteria);
         }
 
         @Override
-        public List<SymbolResult> getFileSymbols(
-                String projectId,
-                String fileId,
-                int limit
-        ) throws Exception {
+        public List<SymbolResult> getFileSymbols(String projectId, String fileId, int limit) throws Exception {
             return delegate().getFileSymbols(projectId, fileId, limit);
         }
 
         @Override
-        public List<UsageResult> findUsages(
-                String projectId,
-                String symbolId,
-                int limit
-        ) throws Exception {
+        public List<UsageResult> findUsages(String projectId, String symbolId, int limit) throws Exception {
             return delegate().findUsages(projectId, symbolId, limit);
         }
 
@@ -128,10 +142,7 @@ public final class MinosLauncher {
         }
 
         @Override
-        public CodeSearchResponse searchCode(
-                String projectId,
-                CodeSearchCriteria criteria
-        ) throws Exception {
+        public CodeSearchResponse searchCode(String projectId, CodeSearchCriteria criteria) throws Exception {
             return delegate().searchCode(projectId, criteria);
         }
 
@@ -141,10 +152,117 @@ public final class MinosLauncher {
         }
 
         private LocalProjectSymbolQuery delegate() throws IOException {
-            return new LocalProjectSymbolQuery(
-                    new LocalProjectRegistry(home.resolve("registry")),
-                    new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"))
-            );
+            return new LocalProjectSymbolQuery(registry(home), snapshots(home));
+        }
+    }
+
+    private static final class LazyProjectOperations implements ProjectOperations {
+
+        private final Path home;
+
+        private LazyProjectOperations(Path home) {
+            this.home = home;
+        }
+
+        @Override
+        public ProjectView addProject(Path rootPath, String displayName) throws Exception {
+            return delegate().addProject(rootPath, displayName);
+        }
+
+        @Override
+        public List<ProjectView> listProjects() throws Exception {
+            return delegate().listProjects();
+        }
+
+        @Override
+        public ProjectView inspectProject(String projectIdentifier) throws Exception {
+            return delegate().inspectProject(projectIdentifier);
+        }
+
+        @Override
+        public IndexImportResult importScip(
+                String projectIdentifier,
+                Path indexFile,
+                String providerId,
+                String providerVersion,
+                String moduleId,
+                String snapshotId
+        ) throws Exception {
+            return delegate().importScip(
+                    projectIdentifier, indexFile, providerId, providerVersion, moduleId, snapshotId);
+        }
+
+        private LocalProjectOperations delegate() throws IOException {
+            return new LocalProjectOperations(home);
+        }
+    }
+
+    private static final class LazyProjectArchitectureQuery implements ProjectArchitectureQuery {
+
+        private final Path home;
+
+        private LazyProjectArchitectureQuery(Path home) {
+            this.home = home;
+        }
+
+        @Override
+        public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
+            return delegate().getArchitectureOverview(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
+            return delegate().getModuleDependencies(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier)
+                throws IOException {
+            return delegate().getArchitectureConcentration(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier)
+                throws IOException {
+            return delegate().getArchitectureCentrality(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier)
+                throws IOException {
+            return delegate().getArchitectureTechnologies(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier)
+                throws IOException {
+            return delegate().getArchitectureIntelligence(projectIdentifier);
+        }
+
+        @Override
+        public ArchitectureModuleContext getModuleContext(String projectIdentifier, String moduleIdentifier)
+                throws IOException {
+            return delegate().getModuleContext(projectIdentifier, moduleIdentifier);
+        }
+
+        private LocalProjectArchitectureQuery delegate() throws IOException {
+            return new LocalProjectArchitectureQuery(registry(home), snapshots(home));
+        }
+    }
+
+    private static final class LazyProjectImpactQuery implements ProjectImpactQuery {
+
+        private final Path home;
+
+        private LazyProjectImpactQuery(Path home) {
+            this.home = home;
+        }
+
+        @Override
+        public ImpactAnalysisReport analyzeImpact(String projectIdentifier, ImpactAnalysisRequest request)
+                throws IOException {
+            return new LocalProjectImpactQuery(registry(home), snapshots(home))
+                    .analyzeImpact(projectIdentifier, request);
         }
     }
 }

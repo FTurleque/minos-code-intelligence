@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M7 terminés — M8 implémenté, validation finale en attente**
+Statut : **C0 à M8 terminés et livrés — M9 implémenté, validation finale en attente**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
 
@@ -14,21 +14,13 @@ La roadmap reste guidée par les preuves : un jalon peut être ajusté si une ex
 
 Objectif : définir précisément MINOS avant les implémentations produit.
 
-Livrables : cahier des charges, vision, frontière MINOS/NEXUS, cas d’usage, MVP, modèle de domaine, stratégie d’indexation, critères de validation et ADR structurantes.
-
 ---
 
 ## M0 — Faisabilité technique
 
 État : **TERMINÉ ET LIVRÉ — ADOPTER_AVEC_CONTRAINTES**
 
-Acquis :
-
-- qualification SCIP Java / TypeScript ;
-- baseline SCIP → MINOS sur artefacts réels ;
-- backend MINOS léger retenu par défaut ;
-- Glean optionnel ;
-- frontière fournisseur préservée.
+Acquis : qualification SCIP Java/TypeScript, baseline SCIP → MINOS, backend local léger, Glean optionnel et frontière fournisseur.
 
 Décision : `m0/DECISION_M0.md`.
 
@@ -38,7 +30,7 @@ Décision : `m0/DECISION_M0.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : registre projets/workspaces, détection langages/builds/modules/racines, politiques d’ignore, `IndexerRegistry`, négociation des capacités, lifecycle et promotion atomique.
+Acquis : registre projets/workspaces, découverte langages/builds/modules/racines, ignores, registre/négociation indexeurs, lifecycle et promotion atomique.
 
 ---
 
@@ -46,7 +38,7 @@ Acquis : registre projets/workspaces, détection langages/builds/modules/racines
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : symboles normalisés, identités stables, emplacements, symboles externes/non résolus, recherche lexicale/qualifiée et snapshots persistants.
+Acquis : symboles normalisés, identités stables, emplacements, externes/non résolus, recherche et snapshots persistants.
 
 Décision : `m2/DECISION_M2.md`.
 
@@ -66,7 +58,7 @@ Décision : `m3/DECISION_M3.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : recherche structurée unifiée, sorties compactes, limites de résultats/tokens/profondeur, plages pertinentes, source complète explicite et benchmark de latence.
+Acquis : recherche structurée, sorties compactes, limites résultats/tokens/profondeur, extraits pertinents, source explicite et benchmark de latence.
 
 Décision : `m4/DECISION_M4.md`.
 
@@ -76,7 +68,7 @@ Décision : `m4/DECISION_M4.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : `RELATED_TEST`, conventions de nommage, références/appels directs, proximité de namespace, score, raisons et preuves structurées.
+Acquis : `RELATED_TEST`, signaux de nommage/référence/appel/proximité, score, raisons et preuves structurées.
 
 Décision : `m5/DECISION_M5.md`.
 
@@ -87,8 +79,6 @@ Décision : `m5/DECISION_M5.md`.
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
 Acquis : topologie modules/namespaces, dépendances inter-modules, concentration, centralité relative directionnelle, technologies factuelles, vue composée et contexte de module.
-
-Incréments : PR #14 à #20, consolidation PR #21.
 
 Porte finale : **162/162 tests PASS**.
 
@@ -102,20 +92,11 @@ Décision : `m6/DECISION_M6.md`.
 
 Suivi clôturé : issue #22.
 
-### Objectif
-
-Éviter les réindexations complètes lorsque cela n’est pas nécessaire, sans jamais exécuter une portée partielle qui n’est pas prouvée sûre.
-
-### Livraisons
+Merge final :
 
 ```text
-M7.1 — empreintes et ChangeSet             PR #23
-M7.2 — snapshots persistants               PR #24
-M7.3 — invalidation conservatrice          PR #25
-M7.4 — planification/fallback/lifecycle    PR #26
+c66382705880158b9ccac63b5662b81bf2d8d255
 ```
-
-Merge final : `c66382705880158b9ccac63b5662b81bf2d8d255`.
 
 Porte finale :
 
@@ -126,16 +107,7 @@ Porte finale :
 BUILD SUCCESS
 ```
 
-Acquis :
-
-- fingerprints fichiers/projet/build ;
-- ajout/modification/suppression ;
-- snapshots d’empreintes liés aux snapshots d’index ;
-- `NONE / PARTIAL_CANDIDATE / FULL_REQUIRED` ;
-- `IndexerCapability.INCREMENTAL_INDEXING` ;
-- `NONE / INCREMENTAL / FULL` ;
-- fallback complet projet ;
-- avancement de baseline uniquement sur workspace stable.
+Acquis : fingerprints, ChangeSet, snapshots d’empreintes, invalidation conservatrice, capacité incrémentale explicite, plan `NONE/INCREMENTAL/FULL`, fallback complet et baseline conditionnée à la stabilité du workspace.
 
 Porte M7 : **OUI, sous preuve explicite de capacité fournisseur.**
 
@@ -145,107 +117,75 @@ Décision : `m7/DECISION_M7.md`.
 
 ## M8 — Analyse d’impact
 
-État : **IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi : issue #27.
+Suivi clôturé : issue #27.
 
-### Objectif
+PR finale : #28.
 
-Estimer la propagation potentielle d’une modification à partir des relations connues, avec chemins explicatifs et limites de couverture explicites.
-
-### Périmètre implémenté
-
-- [x] impact direct ;
-- [x] impact indirect ;
-- [x] chemin explicatif ;
-- [x] score de confiance ;
-- [x] contrôle de profondeur ;
-- [x] tests potentiellement impactés ;
-- [x] limites liées au comportement dynamique ;
-- [x] façade locale fournisseur-indépendante ;
-- [x] replay sur fixture TypeScript réelle ;
-- [ ] validation locale finale du head exact ;
-- [ ] fusion et clôture administrative.
-
-### Sémantique
-
-Une relation de dépendance observée :
+Head validé :
 
 ```text
-source -> target
+08bbdeab18873a2209f02b58bc8d7e547443ea0f
 ```
 
-est parcourue en sens inverse pour l’impact : une modification de `target` peut potentiellement impacter `source`.
-
-Relations propagées :
+Merge final :
 
 ```text
-TYPE_DEFINITION IMPORTS REFERENCES EXTENDS IMPLEMENTS CALLS
-RETURNS ACCEPTS READS WRITES INSTANTIATES DEPENDS_ON INJECTS RELATED_TEST
+8147db5c246c7bad92c9b6ab21be81084dc64f59
 ```
-
-Le meilleur chemin est choisi par profondeur croissante, confiance décroissante puis ordre lexical stable.
-
-Confiance d’un chemin :
-
-```text
-minimum des confiances de ses relations
-```
-
-Un fait sans score explicite vaut `1.0` pour ce calcul.
-
-Les tests M5 sont retournés comme **potentiellement impactés** avec leur chemin `RELATED_TEST` spécifique, y compris lorsque la relation M5 est heuristique.
-
-### Limites explicites
-
-```text
-UNRESOLVED_RELATIONSHIPS_IGNORED
-EXTERNAL_TARGETS_NOT_TRAVERSED
-GENERATED_SYMBOLS_NOT_TRAVERSED
-DYNAMIC_DISPATCH_NOT_PROVEN
-REFLECTION_NOT_PROVEN
-RUNTIME_CONFIGURATION_NOT_PROVEN
-MAX_DEPTH_REACHED
-MAX_RESULTS_REACHED
-```
-
-L’absence de chemin observé n’est jamais interprétée comme une preuve d’absence d’impact runtime.
-
-### Porte de décision M8
-
-> MINOS sait-il produire une estimation déterministe, bornée et explicable des éléments et tests potentiellement impactés par une modification, tout en exposant les limites de couverture du graphe observé ?
-
-Verdict préparé :
-
-> **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
-
-Documents :
-
-- `m8/IMPACT_ANALYSIS.md` ;
-- `m8/DECISION_M8.md`.
 
 Porte finale :
 
-```powershell
-.\mvnw.cmd clean verify
+```text
+143 sources main
+72 sources test
+203/203 tests PASS
+BUILD SUCCESS
 ```
+
+Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limites runtime explicites.
+
+Replay réel final :
+
+```text
+M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
+```
+
+Porte M8 : **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
+
+Décision : `m8/DECISION_M8.md`.
 
 ---
 
 ## M9 — CLI stabilisée
 
-État : **PROCHAIN APRÈS CLÔTURE M8**
+État : **FONCTIONNELLEMENT COMPLET — VALIDATION LOCALE FINALE EN ATTENTE**
 
-Objectif : stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations.
+Suivi : issue #29.
 
-Commandes envisagées :
+Branche :
+
+```text
+m9/stable-cli
+```
+
+### Objectif
+
+Stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations, sans dupliquer la logique métier M1 à M8.
+
+### Surface implémentée
 
 ```text
 minos project add
 minos project list
+minos project inspect
+minos inspect
 minos index
+minos index-status
 minos search
 minos find-symbol
+minos get-source
 minos find-usages
 minos find-implementations
 minos find-callers
@@ -255,14 +195,65 @@ minos dependents
 minos related-tests
 minos architecture
 minos impact
-minos inspect
+```
+
+### Contrat CLI
+
+- [x] formats `text` et `json` ;
+- [x] codes de sortie `0 / 1 / 2` ;
+- [x] erreurs sur stderr ;
+- [x] aide globale et par commande ;
+- [x] aide lazy sans création du home ;
+- [x] administration du registre projet ;
+- [x] inspection factuelle ;
+- [x] import d’un artefact SCIP existant ;
+- [x] statut de snapshot actif ;
+- [x] architecture projet/module ;
+- [x] analyse d’impact ;
+- [x] tests end-to-end sur fixture réelle ;
+- [x] documentation et décision ;
+- [ ] validation locale finale du head exact ;
+- [ ] fusion et clôture administrative.
+
+### Frontière d’indexation
+
+Aucun `IndexerExecutor` de production ne lance actuellement `scip-java` ou `scip-typescript` depuis le cœur. M9 ne simule pas ce support.
+
+`minos index` stabilise le chemin réellement disponible :
+
+```text
+artefact SCIP existant
+  -> ScipSymbolSnapshotImporter
+  -> normalisation MINOS
+  -> FileSymbolSnapshotStore
+```
+
+`index-status` n’invente ni date ni provider : les métadonnées de succès sont exposées uniquement lorsqu’un import CLI M9 aligné sur le snapshot actif les a réellement enregistrées.
+
+### Porte de décision M9
+
+> MINOS expose-t-il son cœur déjà validé via une CLI cohérente, scriptable, documentée et stable, avec les mêmes résultats métier que les services sous-jacents ?
+
+Verdict préparé :
+
+> **OUI, sous la frontière d’exécution réellement disponible : administration, requêtes M2–M8 et import SCIP explicite, sans revendiquer un runner automatique absent.**
+
+Documents :
+
+- `m9/CLI.md` ;
+- `m9/DECISION_M9.md`.
+
+Porte finale :
+
+```powershell
+.\mvnw.cmd clean verify
 ```
 
 ---
 
 ## M10 — Serveur MCP
 
-État : **NON DÉMARRÉ**
+État : **PROCHAIN APRÈS CLÔTURE M9**
 
 Objectif : exposer des outils spécialisés et compacts aux agents IA.
 
@@ -307,14 +298,4 @@ MINOS doit rester pleinement utilisable sans NEXUS.
 
 ## Explorations futures
 
-Non engagées dans la roadmap principale :
-
-- Code Property Graph ;
-- analyse de flux de données ;
-- analyse de sécurité ;
-- recherche sémantique ;
-- embeddings ;
-- plugins IDE ;
-- indexation distante GitHub/GitLab ;
-- indexation distribuée ;
-- mode service hébergé.
+Non engagées dans la roadmap principale : Code Property Graph, flux de données, sécurité, recherche sémantique, embeddings, plugins IDE, indexation distante GitHub/GitLab, indexation distribuée et mode service hébergé.
