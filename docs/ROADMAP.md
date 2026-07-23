@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M8 terminés et livrés — M9 implémenté, validation finale en attente**
+Statut : **C0 à M9 terminés et livrés — M10 implémenté, validation finale en attente**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
 
@@ -160,88 +160,155 @@ Décision : `m8/DECISION_M8.md`.
 
 ## M9 — CLI stabilisée
 
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
+
+Suivi clôturé : issue #29.
+
+PR finale : #30.
+
+Head exact validé :
+
+```text
+ae82f24897ea925f04f450f793541b39d13b6d47
+```
+
+Merge final :
+
+```text
+22afe31339dc3a75dc51c491a725330c6d433ecc
+```
+
+Porte finale :
+
+```text
+150 sources main
+75 sources test
+207/207 tests PASS
+BUILD SUCCESS
+```
+
+Replay réel :
+
+```text
+M9 stable CLI: project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, architecture-modules=3, impact-root=GreetingPort
+```
+
+Acquis : administration du registre, import SCIP explicite, statut d’index factuel, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json`, codes de sortie stables, aides et replay end-to-end réel.
+
+Frontière : aucun runner de production absent n’est simulé par `minos index`.
+
+Porte M9 :
+
+> **OUI, sous la frontière d’exécution réellement disponible : administration, requêtes M2–M8 et import SCIP explicite, sans revendiquer un runner automatique absent.**
+
+Décision : `m9/DECISION_M9.md`.
+
+---
+
+## M10 — Serveur MCP
+
 État : **FONCTIONNELLEMENT COMPLET — VALIDATION LOCALE FINALE EN ATTENTE**
 
-Suivi : issue #29.
+Suivi : issue #31.
 
 Branche :
 
 ```text
-m9/stable-cli
+m10/mcp-server
 ```
 
 ### Objectif
 
-Stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations, sans dupliquer la logique métier M1 à M8.
+Exposer aux agents IA les capacités MINOS M1–M9 via un serveur MCP local, borné et fournisseur-indépendant, sans déplacer la logique métier dans le protocole.
+
+### Choix techniques
+
+```text
+SDK MCP Java officiel   2.0.0
+Transport               STDIO
+API serveur             synchrone
+Framework web           aucun
+Tools                    15 read-only
+```
 
 ### Surface implémentée
 
 ```text
-minos project add
-minos project list
-minos project inspect
-minos inspect
-minos index
-minos index-status
-minos search
-minos find-symbol
-minos get-source
-minos find-usages
-minos find-implementations
-minos find-callers
-minos find-callees
-minos dependencies
-minos dependents
-minos related-tests
-minos architecture
-minos impact
+minos_project_structure
+minos_index_status
+minos_search_code
+minos_find_symbols
+minos_find_usages
+minos_find_implementations
+minos_find_callers
+minos_find_callees
+minos_dependencies
+minos_dependents
+minos_related_tests
+minos_symbol_context
+minos_module_context
+minos_architecture
+minos_impact
 ```
 
-### Contrat CLI
+### Frontière MCP
 
-- [x] formats `text` et `json` ;
-- [x] codes de sortie `0 / 1 / 2` ;
-- [x] erreurs sur stderr ;
-- [x] aide globale et par commande ;
-- [x] aide lazy sans création du home ;
-- [x] administration du registre projet ;
-- [x] inspection factuelle ;
-- [x] import d’un artefact SCIP existant ;
-- [x] statut de snapshot actif ;
-- [x] architecture projet/module ;
-- [x] analyse d’impact ;
-- [x] tests end-to-end sur fixture réelle ;
+Les handlers MCP traduisent les arguments validés vers la surface CLI JSON M9 puis délèguent à `MinosLauncher.run(...)`.
+
+Aucune analyse M1–M8 n’est réimplémentée dans `com.minos.mcp`.
+
+Le serveur M10 est read-only : aucune mutation de projet, aucune indexation et aucune écriture applicative ne sont exposées comme tool.
+
+### Contrat protocolaire
+
+- [x] serveur STDIO ;
+- [x] SDK officiel épinglé ;
+- [x] négociation et `tools/list` ;
+- [x] `tools/call` ;
+- [x] JSON Schemas bornés ;
+- [x] `additionalProperties=false` ;
+- [x] validation d’entrée SDK ;
+- [x] erreurs tool explicites ;
+- [x] aucune sortie applicative parasite sur stdout ;
+- [x] home `minos.home > MINOS_HOME > ~/.minos` ;
+- [x] test unitaire du catalogue ;
+- [x] test d’intégration protocolaire STDIO ;
+- [x] replay réel TypeScript ;
+- [x] distribution `-all.jar` ;
 - [x] documentation et décision ;
 - [ ] validation locale finale du head exact ;
 - [ ] fusion et clôture administrative.
 
-### Frontière d’indexation
+### Qualification attendue
 
-Aucun `IndexerExecutor` de production ne lance actuellement `scip-java` ou `scip-typescript` depuis le cœur. M9 ne simule pas ce support.
-
-`minos index` stabilise le chemin réellement disponible :
+Le test d’intégration démarre un vrai sous-processus MCP puis vérifie :
 
 ```text
-artefact SCIP existant
-  -> ScipSymbolSnapshotImporter
-  -> normalisation MINOS
-  -> FileSymbolSnapshotStore
+15 tools
+architecture modules = 3
+impact GreetingPort = 2
+related impacted tests = 1
+schema impact depth=99 rejeté
 ```
 
-`index-status` n’invente ni date ni provider : les métadonnées de succès sont exposées uniquement lorsqu’un import CLI M9 aligné sur le snapshot actif les a réellement enregistrées.
+Replay attendu :
 
-### Porte de décision M9
+```text
+M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modules=3, impact-root=GreetingPort
+```
 
-> MINOS expose-t-il son cœur déjà validé via une CLI cohérente, scriptable, documentée et stable, avec les mêmes résultats métier que les services sous-jacents ?
+### Porte de décision M10
+
+> Un client MCP standard peut-il découvrir et appeler les capacités MINOS M1–M9 via un serveur local fiable, borné et fournisseur-indépendant, sans divergence avec le cœur métier ?
 
 Verdict préparé :
 
-> **OUI, sous la frontière d’exécution réellement disponible : administration, requêtes M2–M8 et import SCIP explicite, sans revendiquer un runner automatique absent.**
+> **OUI, via un serveur MCP STDIO read-only qui délègue à la surface MINOS existante et conserve les mêmes bornes, preuves et limitations.**
 
 Documents :
 
-- `m9/CLI.md` ;
-- `m9/DECISION_M9.md`.
+- `m10/MCP_SERVER.md` ;
+- `m10/DECISION_M10.md`.
 
 Porte finale :
 
@@ -249,17 +316,13 @@ Porte finale :
 .\mvnw.cmd clean verify
 ```
 
----
+Volumes attendus si le head reste inchangé :
 
-## M10 — Serveur MCP
-
-État : **PROCHAIN APRÈS CLÔTURE M9**
-
-Objectif : exposer des outils spécialisés et compacts aux agents IA.
-
-Outils envisagés : structure projet, recherche code, symboles, usages, implémentations, callers/callees, dépendances, tests liés, contexte de symbole/module, architecture, analyse d’impact et statut d’index.
-
-Le MCP reste une couche d’exposition ; aucune logique métier d’analyse ne doit résider dans ses handlers.
+```text
+152 sources main
+77 sources test
+210 tests
+```
 
 ---
 
