@@ -2,7 +2,7 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE EN ATTENTE**
+Statut : **LIVRÉ — VALIDÉ LOCALEMENT ET FUSIONNÉ**
 
 Suivi : issue #13.
 
@@ -143,7 +143,7 @@ fixtures/typescript/typescript-modules
 
 continue d’utiliser son vrai index SCIP versionné.
 
-La porte M6.7 exige :
+La porte M6.7 confirme :
 
 ```text
 api:
@@ -164,10 +164,10 @@ root:
   technologies = [NPM]
 ```
 
-La sortie Maven doit contenir :
+Sortie observée :
 
 ```text
-M6.7 typescript-modules architecture: ...
+M6.7 typescript-modules architecture: modules=3, api-in-edges=1, api-in-rank=1, app-out-edges=1, app-out-rank=1, root-technologies=[NPM]
 ```
 
 ## Nature et preuves
@@ -182,6 +182,23 @@ Ils ne convertissent pas :
 - une dépendance dérivée en fait brut ;
 - un rang relatif en rôle architectural.
 
+## Validation locale acquise
+
+Head validé : `ba744f41b974432fe33eb617a866ef4c8dcb0ead`.
+
+```text
+.\mvnw.cmd clean verify
+116 sources main compilées en release 24
+58 sources test compilées en release 24
+162 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
+
+Fusion `main` : `f10449681a9010079cc9fe0400aac867dea497d9`.
+
 ## Hors périmètre
 
 - CLI `minos architecture` ;
@@ -192,21 +209,8 @@ Ils ne convertissent pas :
 - détection de frameworks/runtimes non qualifiés ;
 - analyse d’impact M8.
 
-## Porte locale
+## Suite
 
-```powershell
-.\mvnw.cmd clean verify
-```
-
-La porte doit confirmer :
-
-- compilation Java 24 ;
-- suite complète verte ;
-- chaîne file-backed ;
-- replay réel TypeScript ;
-- ligne `M6.7 typescript-modules architecture:` ;
-- aucune régression M2 à M6.6.
-
-Après validation et livraison de M6.7, il restera à faire la consolidation finale
-du jalon M6 : documentation opérationnelle, vérification de la porte globale et
-décision de clôture avant M7.
+M6.7 étant livré, la branche de consolidation finale aligne la roadmap, le
+statut opérationnel et la décision `docs/m6/DECISION_M6.md` avant le passage à
+**M7 — Indexation incrémentale**.
