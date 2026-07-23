@@ -64,7 +64,7 @@ class LocalProjectArchitectureQueryTest {
     }
 
     @Test
-    void reloadsPersistedDependenciesAndAggregatesThemBetweenDiscoveredModules(@TempDir Path root)
+    void reloadsPersistedDependenciesAndRanksDiscoveredModules(@TempDir Path root)
             throws Exception {
         Path projectRoot = Files.createDirectories(root.resolve("multi-module"));
         Files.writeString(projectRoot.resolve("pom.xml"), "<project/>");
@@ -92,6 +92,7 @@ class LocalProjectArchitectureQueryTest {
         ArchitectureOverview overview = query.getArchitectureOverview("dependency-fixture");
         ArchitectureDependencyGraph graph = query.getModuleDependencies("dependency-fixture");
         ArchitectureConcentrationReport concentration = query.getArchitectureConcentration("dependency-fixture");
+        ArchitectureCentralityReport centrality = query.getArchitectureCentrality("dependency-fixture");
 
         ArchitectureModule apiModule = module(overview, "api");
         ArchitectureModule appModule = module(overview, "app");
@@ -113,6 +114,14 @@ class LocalProjectArchitectureQueryTest {
         assertEquals(0, metric(concentration, apiModule.id()).outgoingDependencyCount());
         assertEquals(0, metric(concentration, appModule.id()).incomingDependencyCount());
         assertEquals(1, metric(concentration, appModule.id()).outgoingDependencyCount());
+
+        assertEquals(3, centrality.moduleCount());
+        assertEquals(List.of(apiModule.id()), centrality.topIncomingModuleIds());
+        assertEquals(List.of(appModule.id()), centrality.topOutgoingModuleIds());
+        assertEquals(1, centrality(centrality, apiModule.id()).incomingRank());
+        assertEquals(0, centrality(centrality, apiModule.id()).outgoingRank());
+        assertEquals(0, centrality(centrality, appModule.id()).incomingRank());
+        assertEquals(1, centrality(centrality, appModule.id()).outgoingRank());
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
@@ -128,6 +137,16 @@ class LocalProjectArchitectureQueryTest {
     ) {
         return report.modules().stream()
                 .filter(metric -> moduleId.equals(metric.moduleId()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static ArchitectureModuleCentrality centrality(
+            ArchitectureCentralityReport report,
+            String moduleId
+    ) {
+        return report.modules().stream()
+                .filter(module -> moduleId.equals(module.moduleId()))
                 .findFirst()
                 .orElseThrow();
     }

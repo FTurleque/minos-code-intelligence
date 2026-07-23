@@ -2,12 +2,13 @@
 
 Date : **23 juillet 2026**
 
-Statut : **CORRIGÉ APRÈS PREMIÈRE PORTE — REVALIDATION LOCALE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #13.
 
-Base : M6.3 a livré des mesures descriptives de concentration, mais la première
-fixture multi-module observée ne contenait qu'une seule arête inter-module.
+Livraison : PR #17 fusionnée dans `main` au commit
+`612e0907850219376cdc5bd6c6d5401831e96450` après validation locale du head
+`b7864aa9f739dbf652fca54be2580115c40f6cf7`.
 
 ## Objectif
 
@@ -15,23 +16,15 @@ fixture multi-module observée ne contenait qu'une seule arête inter-module.
 réagissent à des distributions structurellement différentes avant de définir un
 quelconque score ou seuil de « composant central ».
 
-M6.4 reste un lot de **calibration**. Il ne produit encore aucune classification
-métier ou architecturale.
+M6.4 est un lot de **calibration**. Il ne produit aucune classification métier ou
+architecturale.
 
-## Profils contrôlés
-
-`ArchitectureCentralityCalibrationTest` construit quatre modules et plusieurs
-graphes aux résultats mathématiques connus.
+## Profils contrôlés validés
 
 ### Cycle équilibré
 
 ```text
 A -> B -> C -> D -> A
-```
-
-Quatre contributions uniformes :
-
-```text
 HHI-in  = 0.25
 HHI-out = 0.25
 max-in  = 0.25
@@ -42,11 +35,6 @@ max-out = 0.25
 
 ```text
 A -> B -> C -> D
-```
-
-Trois contributions réparties sur trois sources et trois cibles :
-
-```text
 HHI-in  = 1/3
 HHI-out = 1/3
 max-in  = 1/3
@@ -59,11 +47,7 @@ max-out = 1/3
 A --\
 B ---> D
 C --/
-```
 
-Toute la part entrante converge vers `D` :
-
-```text
 HHI-in  = 1.0
 HHI-out = 1/3
 max-in  = 1.0
@@ -76,11 +60,7 @@ max-out = 1/3
     /-> A
 D ---> B
     \-> C
-```
 
-Toute la part sortante part de `D` :
-
-```text
 HHI-in  = 1/3
 HHI-out = 1.0
 max-in  = 1/3
@@ -93,20 +73,15 @@ max-out = 1.0
 A -(8)-> D
 B -(1)-> D
 C -(1)-> D
-```
 
-La cible reste totalement concentrée tandis que la distribution des sources est
-elle-même dominée par `A` :
-
-```text
 HHI-in  = 1.0
 HHI-out = 0.66
 max-in  = 1.0
 max-out = 0.8
 ```
 
-Ce profil vérifie que les compteurs pondérés ne sont pas réduits à un simple
-nombre d'arêtes.
+Ce dernier profil confirme que le poids des dépendances reste visible et que
+l'analyse ne se réduit pas au nombre d'arêtes.
 
 ## Calibration Java sur fixture versionnée
 
@@ -122,8 +97,7 @@ La première porte locale a correctement échoué avec :
 SCIP index does not exist or is not a regular file
 ```
 
-Le test ne masque pas cette absence et ne génère pas artificiellement un faux
-artefact fournisseur.
+Aucun faux artefact SCIP n'a été généré ou simulé.
 
 La correction utilise la fixture réellement versionnée :
 
@@ -131,89 +105,77 @@ La correction utilise la fixture réellement versionnée :
 fixtures/java/java-multi-module
 ```
 
-Sa vérité terrain documente notamment :
+Sa vérité terrain documente notamment les modules `api`, `app` et des relations
+inter-modules `app -> api`.
 
-```text
-modules = [api, app]
-app.DefaultGreetingPort IMPLEMENTS api.GreetingPort
-app.GreetingService.greet CALLS api.GreetingPort.greet
-```
-
-Pour la calibration M6.4, `ArchitectureJavaFixtureMeasurementTest` :
+`ArchitectureJavaFixtureMeasurementTest` :
 
 1. redécouvre réellement la structure Maven de `java-multi-module` ;
 2. utilise les chemins source réellement versionnés de `app` et `api` ;
-3. publie un snapshot MINOS contrôlé contenant une dépendance `app -> api`
-   représentative de la vérité terrain inter-module ;
+3. publie un snapshot MINOS contrôlé contenant une dépendance `app -> api` ;
 4. reconstruit `ArchitectureOverview` ;
 5. reconstruit `ArchitectureDependencyGraph` ;
 6. calcule `ArchitectureConcentrationReport`.
 
-La porte exige :
+Mesure validée :
 
 ```text
-moduleCount = 3             # racine Maven + api + app
-totalDependencyCount = 1
-interModuleDependencyCount = 1
-intraModuleDependencyCount = 0
-unassignedDependencyCount = 0
-moduleEdgeCount = 1
-edge = app -> api
-HHI-in = 1
-HHI-out = 1
-max-in = 1
-max-out = 1
+modules=3
+dependsOn=1
+inter=1
+intra=0
+unassigned=0
+edges=1
+HHI-in=1.000000
+HHI-out=1.000000
+max-in=1.000000
+max-out=1.000000
 ```
 
-Cette preuve est volontairement qualifiée de **calibration sur topologie réelle
-avec snapshot contrôlé**, et non de replay SCIP Java réel.
+Cette preuve est une **calibration sur topologie réelle avec snapshot contrôlé**,
+et non un replay SCIP Java réel.
 
-## Pourquoi cette calibration est nécessaire
+## Validation locale acquise
 
-La fixture TypeScript M6.3 donne :
+Validation exécutée le **23 juillet 2026** sur le head exact
+`b7864aa9f739dbf652fca54be2580115c40f6cf7` :
 
 ```text
-HHI-in = 1
-HHI-out = 1
-```
-
-mais ce résultat découle d'une seule arête module -> module. Sans profils
-contrastés, transformer `HHI = 1` en règle de centralité confondrait concentration
-du graphe et centralité d'un composant.
-
-Les profils M6.4 permettent de distinguer :
-
-- concentration globale du trafic ;
-- orientation fan-in / fan-out ;
-- distribution équilibrée ;
-- effet du poids des dépendances ;
-- comportement d'une topologie Maven multi-module réelle.
-
-## Porte locale
-
-```powershell
 .\mvnw.cmd clean verify
+106 sources main compilées en release 24
+56 sources test compilées en release 24
+155 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
 ```
 
-La sortie doit notamment contenir :
+Profils observés :
 
 ```text
-M6.4 calibration balanced-cycle: ...
-M6.4 calibration directed-chain: ...
-M6.4 calibration fan-in: ...
-M6.4 calibration fan-out: ...
-M6.4 calibration weighted-fan-in: ...
-M6.4 java-multi-module: ...
+balanced-cycle      deps=4   HHI-in=0.250000  HHI-out=0.250000  max-in=0.250000  max-out=0.250000
+directed-chain      deps=3   HHI-in=0.333333  HHI-out=0.333333  max-in=0.333333  max-out=0.333333
+fan-in              deps=3   HHI-in=1.000000  HHI-out=0.333333  max-in=1.000000  max-out=0.333333
+fan-out             deps=3   HHI-in=0.333333  HHI-out=1.000000  max-in=0.333333  max-out=1.000000
+weighted-fan-in     deps=10  HHI-in=1.000000  HHI-out=0.660000  max-in=1.000000  max-out=0.800000
 ```
 
-## Décision attendue après validation
+Le warning `sun.misc.Unsafe` provenant de `protobuf-java 4.34.2` sous Java 24
+reste non bloquant et identique aux validations précédentes.
 
-Après la porte M6.4, un éventuel indicateur de composant central devra :
+## Décision M6.4
 
-1. distinguer explicitement centralité entrante et sortante lorsqu'elles divergent ;
-2. rester dérivé et explicable ;
-3. conserver les métriques source dans sa preuve ;
-4. éviter un seuil absolu choisi arbitrairement ;
-5. ne pas confondre concentration globale du graphe et rôle architectural.
+La calibration établit qu'un HHI global ne suffit pas à qualifier un composant
+central. La direction est une information structurante : fan-in et fan-out
+peuvent diverger fortement.
 
-Aucune formule finale n'est engagée avant validation de ces profils.
+La suite doit donc :
+
+1. distinguer centralité entrante et sortante ;
+2. conserver les métriques source dans les preuves ;
+3. éviter tout seuil absolu arbitraire ;
+4. ne pas confondre concentration globale et rôle architectural ;
+5. privilégier un classement relatif explicable.
+
+Cette décision est mise en œuvre par M6.5.
