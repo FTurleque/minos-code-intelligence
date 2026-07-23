@@ -24,6 +24,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     private final ArchitectureDependencyService dependencyService;
     private final ArchitectureConcentrationService concentrationService;
     private final ArchitectureCentralityService centralityService;
+    private final ArchitectureTechnologyService technologyService;
 
     public LocalProjectArchitectureQuery(
             LocalProjectRegistry projectRegistry,
@@ -36,7 +37,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 new ArchitectureTopologyService(),
                 new ArchitectureDependencyService(),
                 new ArchitectureConcentrationService(),
-                new ArchitectureCentralityService()
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
         );
     }
 
@@ -53,7 +55,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 topologyService,
                 new ArchitectureDependencyService(),
                 new ArchitectureConcentrationService(),
-                new ArchitectureCentralityService()
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
         );
     }
 
@@ -71,7 +74,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 topologyService,
                 dependencyService,
                 new ArchitectureConcentrationService(),
-                new ArchitectureCentralityService()
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
         );
     }
 
@@ -90,7 +94,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 topologyService,
                 dependencyService,
                 concentrationService,
-                new ArchitectureCentralityService()
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
         );
     }
 
@@ -103,6 +108,28 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureConcentrationService concentrationService,
             ArchitectureCentralityService centralityService
     ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                dependencyService,
+                concentrationService,
+                centralityService,
+                new ArchitectureTechnologyService()
+        );
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService,
+            ArchitectureConcentrationService concentrationService,
+            ArchitectureCentralityService centralityService,
+            ArchitectureTechnologyService technologyService
+    ) {
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
@@ -110,6 +137,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
         this.dependencyService = Objects.requireNonNull(dependencyService, "dependencyService");
         this.concentrationService = Objects.requireNonNull(concentrationService, "concentrationService");
         this.centralityService = Objects.requireNonNull(centralityService, "centralityService");
+        this.technologyService = Objects.requireNonNull(technologyService, "technologyService");
     }
 
     @Override
@@ -134,6 +162,13 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     public ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier) throws IOException {
         ProjectContext context = loadContext(projectIdentifier);
         return centralityService.rank(concentration(context));
+    }
+
+    @Override
+    public ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        return technologyService.detect(context.discovery(), overview);
     }
 
     private ArchitectureConcentrationReport concentration(ProjectContext context) {
