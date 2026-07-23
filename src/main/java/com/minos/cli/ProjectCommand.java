@@ -18,6 +18,14 @@ import java.util.Set;
 public final class ProjectCommand {
 
     public static final String NAME = "project";
+    private static final String ADD_USAGE =
+            "Usage: minos project add <path> [--name <name>] [--format <text|json>]";
+    private static final String LIST_USAGE =
+            "Usage: minos project list [--format <text|json>]";
+    private static final String INSPECT_USAGE =
+            "Usage: minos inspect <project> [--format <text|json>]";
+    private static final String STATUS_USAGE =
+            "Usage: minos index-status <project> [--format <text|json>]";
     private static final String USAGE = """
             Usage:
               minos project add <path> [--name <name>] [--format <text|json>]
@@ -41,22 +49,26 @@ public final class ProjectCommand {
             return FindSymbolCommand.SUCCESS;
         }
         if (arguments.length == 0) {
-            return usageError("project subcommand is required", output, error);
+            return usageError("project subcommand is required", error);
         }
         return switch (arguments[0]) {
             case "add" -> runAdd(slice(arguments, 1), output, error);
             case "list" -> runList(slice(arguments, 1), output, error);
             case "inspect" -> runInspectAlias(slice(arguments, 1), output, error);
-            default -> usageError("unknown project subcommand: " + arguments[0], output, error);
+            default -> usageError("unknown project subcommand: " + arguments[0], error);
         };
     }
 
     public int runInspectAlias(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (arguments.length == 1 && isHelp(arguments[0])) {
+            output.append(INSPECT_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         Options options;
         try {
             options = Options.singleProject(arguments);
         } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, "Usage: minos inspect <project> [--format <text|json>]", error);
+            return commandUsageError(exception, INSPECT_USAGE, error);
         }
         try {
             ProjectOperations.ProjectView project = operations.inspectProject(options.project());
@@ -68,11 +80,15 @@ public final class ProjectCommand {
     }
 
     public int runIndexStatus(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (arguments.length == 1 && isHelp(arguments[0])) {
+            output.append(STATUS_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         Options options;
         try {
             options = Options.singleProject(arguments);
         } catch (IllegalArgumentException exception) {
-            return commandUsageError(exception, "Usage: minos index-status <project> [--format <text|json>]", error);
+            return commandUsageError(exception, STATUS_USAGE, error);
         }
         try {
             ProjectOperations.ProjectView project = operations.inspectProject(options.project());
@@ -88,15 +104,15 @@ public final class ProjectCommand {
     }
 
     private int runAdd(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (arguments.length == 1 && isHelp(arguments[0])) {
+            output.append(ADD_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         AddOptions options;
         try {
             options = AddOptions.parse(arguments);
         } catch (IllegalArgumentException exception) {
-            return commandUsageError(
-                    exception,
-                    "Usage: minos project add <path> [--name <name>] [--format <text|json>]",
-                    error
-            );
+            return commandUsageError(exception, ADD_USAGE, error);
         }
         try {
             ProjectOperations.ProjectView project = operations.addProject(options.path(), options.name());
@@ -108,15 +124,15 @@ public final class ProjectCommand {
     }
 
     private int runList(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (arguments.length == 1 && isHelp(arguments[0])) {
+            output.append(LIST_USAGE).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         SymbolOutputFormat format;
         try {
             format = parseFormatOnly(arguments);
         } catch (IllegalArgumentException exception) {
-            return commandUsageError(
-                    exception,
-                    "Usage: minos project list [--format <text|json>]",
-                    error
-            );
+            return commandUsageError(exception, LIST_USAGE, error);
         }
         try {
             List<ProjectOperations.ProjectView> projects = operations.listProjects();
@@ -208,25 +224,20 @@ public final class ProjectCommand {
         if (arguments.length == 0) {
             return SymbolOutputFormat.TEXT;
         }
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            throw new IllegalArgumentException("help");
-        }
         if (arguments.length != 2 || !"--format".equals(arguments[0])) {
             throw new IllegalArgumentException("only --format is supported");
         }
         return SymbolOutputFormat.parse(arguments[1]);
     }
 
-    private int usageError(String message, Appendable output, Appendable error) throws IOException {
+    private static int usageError(String message, Appendable error) throws IOException {
         error.append("error: ").append(message).append('\n').append(USAGE).append('\n');
         return FindSymbolCommand.USAGE_ERROR;
     }
 
     private static int commandUsageError(IllegalArgumentException exception, String usage, Appendable error)
             throws IOException {
-        if (!"help".equals(exception.getMessage())) {
-            error.append("error: ").append(exception.getMessage()).append('\n');
-        }
+        error.append("error: ").append(exception.getMessage()).append('\n');
         error.append(usage).append('\n');
         return FindSymbolCommand.USAGE_ERROR;
     }
@@ -262,9 +273,6 @@ public final class ProjectCommand {
 
     private record Options(String project, SymbolOutputFormat format) {
         private static Options singleProject(String[] arguments) {
-            if (arguments.length == 1 && isHelp(arguments[0])) {
-                throw new IllegalArgumentException("help");
-            }
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
@@ -282,9 +290,6 @@ public final class ProjectCommand {
 
     private record AddOptions(Path path, String name, SymbolOutputFormat format) {
         private static AddOptions parse(String[] arguments) {
-            if (arguments.length == 1 && isHelp(arguments[0])) {
-                throw new IllegalArgumentException("help");
-            }
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <path>");
             }
