@@ -22,6 +22,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -55,13 +56,11 @@ public final class LocalProjectOperations implements ProjectOperations {
 
     @Override
     public List<ProjectView> listProjects() throws IOException {
-        return registry.listProjects().stream().map(project -> {
-            try {
-                return view(project);
-            } catch (IOException exception) {
-                throw new ProjectViewReadException(exception);
-            }
-        }).toList();
+        List<ProjectView> projects = new ArrayList<>();
+        for (RegisteredProject project : registry.listProjects()) {
+            projects.add(view(project));
+        }
+        return List.copyOf(projects);
     }
 
     @Override
@@ -265,12 +264,6 @@ public final class LocalProjectOperations implements ProjectOperations {
             requireText(snapshotId, "snapshotId");
             requireText(providerId, "providerId");
             Objects.requireNonNull(completedAt, "completedAt");
-        }
-    }
-
-    private static final class ProjectViewReadException extends RuntimeException {
-        private ProjectViewReadException(IOException cause) {
-            super(cause);
         }
     }
 }
