@@ -50,8 +50,9 @@ class LocalProjectArchitectureQueryTest {
                 List.of()
         );
 
-        ArchitectureOverview overview = new LocalProjectArchitectureQuery(registry, snapshots)
-                .getArchitectureOverview("architecture-fixture");
+        LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
+        ArchitectureOverview overview = query.getArchitectureOverview("architecture-fixture");
+        ArchitectureTechnologyReport technologies = query.getArchitectureTechnologies("architecture-fixture");
 
         assertEquals(project.id().toString(), overview.projectId());
         assertEquals("snapshot-m6-local", overview.snapshotId());
@@ -61,6 +62,14 @@ class LocalProjectArchitectureQueryTest {
         assertEquals(0, overview.unassignedLocalSymbolCount());
         assertEquals(1, overview.moduleCount());
         assertEquals("com.acme", overview.modules().getFirst().namespaces().getFirst().name());
+
+        assertEquals(project.id().toString(), technologies.projectId());
+        assertEquals("snapshot-m6-local", technologies.snapshotId());
+        assertEquals(List.of("JAVA", "MAVEN"), technologies.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+        assertEquals(List.of(overview.modules().getFirst().id()), technology(technologies, "JAVA").moduleIds());
+        assertEquals(List.of(overview.modules().getFirst().id()), technology(technologies, "MAVEN").moduleIds());
     }
 
     @Test
@@ -93,6 +102,7 @@ class LocalProjectArchitectureQueryTest {
         ArchitectureDependencyGraph graph = query.getModuleDependencies("dependency-fixture");
         ArchitectureConcentrationReport concentration = query.getArchitectureConcentration("dependency-fixture");
         ArchitectureCentralityReport centrality = query.getArchitectureCentrality("dependency-fixture");
+        ArchitectureTechnologyReport technologies = query.getArchitectureTechnologies("dependency-fixture");
 
         ArchitectureModule apiModule = module(overview, "api");
         ArchitectureModule appModule = module(overview, "app");
@@ -122,6 +132,12 @@ class LocalProjectArchitectureQueryTest {
         assertEquals(0, centrality(centrality, apiModule.id()).outgoingRank());
         assertEquals(0, centrality(centrality, appModule.id()).incomingRank());
         assertEquals(1, centrality(centrality, appModule.id()).outgoingRank());
+
+        assertEquals(List.of("JAVA", "MAVEN"), technologies.technologies().stream()
+                .map(ArchitectureTechnology::name)
+                .toList());
+        assertEquals(Set.of(apiModule.id(), appModule.id()), Set.copyOf(technology(technologies, "JAVA").moduleIds()));
+        assertEquals(3, technology(technologies, "MAVEN").moduleIds().size());
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
@@ -147,6 +163,13 @@ class LocalProjectArchitectureQueryTest {
     ) {
         return report.modules().stream()
                 .filter(module -> moduleId.equals(module.moduleId()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static ArchitectureTechnology technology(ArchitectureTechnologyReport report, String name) {
+        return report.technologies().stream()
+                .filter(technology -> name.equals(technology.name()))
                 .findFirst()
                 .orElseThrow();
     }
