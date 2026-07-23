@@ -22,6 +22,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     private final ProjectDiscoveryService discoveryService;
     private final ArchitectureTopologyService topologyService;
     private final ArchitectureDependencyService dependencyService;
+    private final ArchitectureConcentrationService concentrationService;
 
     public LocalProjectArchitectureQuery(
             LocalProjectRegistry projectRegistry,
@@ -32,7 +33,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 snapshotStore,
                 new ProjectDiscoveryService(),
                 new ArchitectureTopologyService(),
-                new ArchitectureDependencyService()
+                new ArchitectureDependencyService(),
+                new ArchitectureConcentrationService()
         );
     }
 
@@ -47,7 +49,8 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
                 snapshotStore,
                 discoveryService,
                 topologyService,
-                new ArchitectureDependencyService()
+                new ArchitectureDependencyService(),
+                new ArchitectureConcentrationService()
         );
     }
 
@@ -58,11 +61,30 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureTopologyService topologyService,
             ArchitectureDependencyService dependencyService
     ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                dependencyService,
+                new ArchitectureConcentrationService()
+        );
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService,
+            ArchitectureConcentrationService concentrationService
+    ) {
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.topologyService = Objects.requireNonNull(topologyService, "topologyService");
         this.dependencyService = Objects.requireNonNull(dependencyService, "dependencyService");
+        this.concentrationService = Objects.requireNonNull(concentrationService, "concentrationService");
     }
 
     @Override
@@ -75,6 +97,14 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
         ProjectContext context = loadContext(projectIdentifier);
         return dependencyService.build(context.discovery(), context.snapshot());
+    }
+
+    @Override
+    public ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        ArchitectureDependencyGraph graph = dependencyService.build(context.discovery(), context.snapshot());
+        return concentrationService.analyze(overview, graph);
     }
 
     private ProjectContext loadContext(String projectIdentifier) throws IOException {

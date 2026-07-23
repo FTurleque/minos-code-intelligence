@@ -91,6 +91,7 @@ class LocalProjectArchitectureQueryTest {
         LocalProjectArchitectureQuery query = new LocalProjectArchitectureQuery(registry, snapshots);
         ArchitectureOverview overview = query.getArchitectureOverview("dependency-fixture");
         ArchitectureDependencyGraph graph = query.getModuleDependencies("dependency-fixture");
+        ArchitectureConcentrationReport concentration = query.getArchitectureConcentration("dependency-fixture");
 
         ArchitectureModule apiModule = module(overview, "api");
         ArchitectureModule appModule = module(overview, "app");
@@ -101,11 +102,32 @@ class LocalProjectArchitectureQueryTest {
         assertEquals(1, graph.moduleEdgeCount());
         assertEquals(appModule.id(), graph.dependencies().getFirst().sourceModuleId());
         assertEquals(apiModule.id(), graph.dependencies().getFirst().targetModuleId());
+
+        assertEquals(3, concentration.moduleCount());
+        assertEquals(1, concentration.interModuleDependencyCount());
+        assertEquals(1.0, concentration.incomingHerfindahlIndex(), 0.0);
+        assertEquals(1.0, concentration.outgoingHerfindahlIndex(), 0.0);
+        assertEquals(1.0, concentration.maxIncomingShare(), 0.0);
+        assertEquals(1.0, concentration.maxOutgoingShare(), 0.0);
+        assertEquals(1, metric(concentration, apiModule.id()).incomingDependencyCount());
+        assertEquals(0, metric(concentration, apiModule.id()).outgoingDependencyCount());
+        assertEquals(0, metric(concentration, appModule.id()).incomingDependencyCount());
+        assertEquals(1, metric(concentration, appModule.id()).outgoingDependencyCount());
     }
 
     private static ArchitectureModule module(ArchitectureOverview overview, String relativePath) {
         return overview.modules().stream()
                 .filter(module -> relativePath.equals(module.relativePath()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static ArchitectureModuleConcentration metric(
+            ArchitectureConcentrationReport report,
+            String moduleId
+    ) {
+        return report.modules().stream()
+                .filter(metric -> moduleId.equals(metric.moduleId()))
                 .findFirst()
                 .orElseThrow();
     }
