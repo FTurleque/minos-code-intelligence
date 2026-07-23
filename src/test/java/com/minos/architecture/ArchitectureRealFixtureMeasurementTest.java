@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArchitectureRealFixtureMeasurementTest {
@@ -63,6 +64,7 @@ class ArchitectureRealFixtureMeasurementTest {
         ArchitectureModule api = module(overview, "packages/api");
         ArchitectureModule app = module(overview, "packages/app");
         ArchitectureModuleContext apiContext = intelligenceService.moduleContext(intelligence, "packages/api");
+        ArchitectureModuleContext apiByNameContext = intelligenceService.moduleContext(intelligence, "api");
         ArchitectureModuleContext appContext = intelligenceService.moduleContext(intelligence, app.id());
         ArchitectureModuleContext rootContext = intelligenceService.moduleContext(intelligence, ".");
 
@@ -101,6 +103,7 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(List.of(app.id()), intelligence.centrality().topOutgoingModuleIds());
 
         assertEquals(api.id(), apiContext.module().id());
+        assertEquals(api.id(), apiByNameContext.module().id());
         assertEquals(1, apiContext.incomingModuleEdgeCount());
         assertEquals(0, apiContext.outgoingModuleEdgeCount());
         assertEquals(4, apiContext.concentration().incomingDependencyCount());
@@ -124,6 +127,22 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(List.of("NPM"), rootContext.technologies().stream()
                 .map(ArchitectureTechnology::name)
                 .toList());
+
+        ArchitectureTechnologyReport wrongSnapshotTechnologies = new ArchitectureTechnologyReport(
+                technologies.projectId(),
+                "other-snapshot",
+                technologies.technologyCount(),
+                technologies.technologies(),
+                technologies.nature(),
+                technologies.evidence()
+        );
+        assertThrows(IllegalArgumentException.class, () -> intelligenceService.compose(
+                overview,
+                graph,
+                concentration,
+                centrality,
+                wrongSnapshotTechnologies
+        ));
 
         System.out.printf(
                 "M6.3 typescript-modules: modules=%d, dependsOn=%d, inter=%d, intra=%d, unassigned=%d, "
