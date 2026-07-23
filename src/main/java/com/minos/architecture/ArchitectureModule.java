@@ -19,6 +19,7 @@ public record ArchitectureModule(
         int symbolCount,
         List<ArchitectureNamespace> namespaces,
         InformationNature nature,
+        InformationNature aggregateNature,
         List<Evidence> evidence
 ) {
 
@@ -36,7 +37,11 @@ public record ArchitectureModule(
         }
         namespaces = List.copyOf(Objects.requireNonNull(namespaces, "namespaces"));
         nature = Objects.requireNonNull(nature, "nature");
+        aggregateNature = Objects.requireNonNull(aggregateNature, "aggregateNature");
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
+        if (aggregateNature != InformationNature.FACTUAL && evidence.isEmpty()) {
+            throw new IllegalArgumentException("derived module aggregates require evidence");
+        }
     }
 
     public int namespaceCount() {
