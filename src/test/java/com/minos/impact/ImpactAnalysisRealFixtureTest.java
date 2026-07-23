@@ -39,18 +39,18 @@ class ImpactAnalysisRealFixtureTest {
         );
 
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(projectId).orElseThrow();
-        Symbol greetingPortMethod = snapshot.symbols().stream()
-                .filter(symbol -> "GreetingPort.greet".equals(symbol.qualifiedName()))
+        Symbol greetingPort = snapshot.symbols().stream()
+                .filter(symbol -> "GreetingPort".equals(symbol.qualifiedName()))
                 .findFirst()
                 .orElseThrow();
 
         ImpactAnalysisReport report = new ImpactAnalysisService().analyze(
                 snapshot,
-                new ImpactAnalysisRequest(greetingPortMethod.id(), 4, 200)
+                new ImpactAnalysisRequest(greetingPort.id(), 4, 200)
         );
 
         assertTrue(report.impacts().stream().anyMatch(impact ->
-                "GreetingService.greet".equals(impact.symbol().qualifiedName())
+                "DefaultGreetingPort".equals(impact.symbol().qualifiedName())
                         && impact.level() == ImpactLevel.DIRECT));
         assertFalse(report.potentiallyImpactedTests().isEmpty());
         assertTrue(report.potentiallyImpactedTests().stream().allMatch(impact ->
@@ -58,7 +58,7 @@ class ImpactAnalysisRealFixtureTest {
 
         System.out.printf(
                 "M8 typescript-modules impact: root=%s, impacts=%d, tests=%d, max-depth=%d, limitations=%s%n",
-                greetingPortMethod.qualifiedName(),
+                greetingPort.qualifiedName(),
                 report.impacts().size(),
                 report.potentiallyImpactedTests().size(),
                 report.impacts().stream().mapToInt(ImpactedSymbol::depth).max().orElse(0),
