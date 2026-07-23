@@ -14,4 +14,6 @@ public interface ProjectArchitectureQuery {
     ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier) throws IOException;
 
     ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier) throws IOException;
+
+    ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier) throws IOException;
 }
