@@ -13,6 +13,7 @@ class ProviderBoundaryTest {
 
     private static final Path MAIN_JAVA = Path.of("src", "main", "java", "com", "minos");
     private static final List<String> CORE_PACKAGES = List.of(
+            "architecture",
             "cli",
             "domain",
             "store",
