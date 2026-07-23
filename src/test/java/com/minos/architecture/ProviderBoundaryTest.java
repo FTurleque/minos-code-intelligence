@@ -21,7 +21,8 @@ class ProviderBoundaryTest {
             "output",
             "discovery",
             "registry",
-            "orchestration"
+            "orchestration",
+            "impact"
     );
     private static final List<String> FORBIDDEN_REFERENCES = List.of(
             "org.scip_code.scip",
