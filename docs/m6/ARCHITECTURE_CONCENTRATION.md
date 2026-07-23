@@ -2,9 +2,13 @@
 
 Date : **23 juillet 2026**
 
-Statut : **IMPLÉMENTÉ — VALIDATION LOCALE ET MESURE RÉELLE EN ATTENTE**
+Statut : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 Suivi : issue #13.
+
+Livraison : PR #16 fusionnée dans `main` au commit
+`398e2b9a97ba2434ad8e644c71292714461cb34f` après validation locale du head
+`0f8edf19fbf6234f8025cc8f36f1b8f738252914`.
 
 Base : M6.2 a livré le graphe module → module dérivé exclusivement des relations
 `DEPENDS_ON` déjà persistées par MINOS.
@@ -133,22 +137,44 @@ Le test :
 7. vérifie notamment qu'une arête `packages/app → packages/api` existe ;
 8. imprime les mesures observées dans la sortie Maven.
 
-La baseline M3 attend `4` relations `DEPENDS_ON` persistées pour cette fixture.
-Le nombre exact de dépendances inter-modules, les HHI et les parts maximales ne
-seront consignés qu'après exécution locale du head M6.3.
+Mesure acquise :
 
-## Porte locale
-
-```powershell
-.\mvnw.cmd clean verify
+```text
+modules=3
+dependsOn=4
+inter=4
+intra=0
+unassigned=0
+edges=1
+HHI-in=1.000000
+HHI-out=1.000000
+max-in=1.000000
+max-out=1.000000
 ```
 
-La porte doit fournir :
+Les quatre dépendances inter-modules convergent sur l'unique arête
+`packages/app → packages/api`. La concentration directionnelle de cette fixture
+est donc maximale, sans que ce seul échantillon permette de définir un seuil de
+centralité généralisable.
 
-- compilation Java 24 ;
-- suite complète verte ;
-- sortie de `ArchitectureRealFixtureMeasurementTest` ;
-- aucune régression M2 à M6.2.
+## Validation locale acquise
+
+Validation exécutée le **23 juillet 2026** sur le head exact
+`0f8edf19fbf6234f8025cc8f36f1b8f738252914` :
+
+```text
+.\mvnw.cmd clean verify
+106 sources main compilées en release 24
+54 sources test compilées en release 24
+152 tests exécutés
+0 failure
+0 error
+0 skipped
+BUILD SUCCESS
+```
+
+Le warning `sun.misc.Unsafe` provenant de `protobuf-java 4.34.2` sous Java 24
+reste non bloquant.
 
 ## Hors périmètre
 
@@ -161,5 +187,5 @@ La porte doit fournir :
 - `get_module_context` ;
 - MCP/API.
 
-La prochaine décision M6 devra se baser sur les chiffres réellement observés,
-pas sur un seuil choisi a priori.
+M6.4 élargit désormais l'échantillon de topologies avant toute qualification de
+composant central.
