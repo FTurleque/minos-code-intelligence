@@ -75,6 +75,16 @@ class ScipIndexerCatalogTest {
         assertEquals(java.util.Set.of(Language.TYPESCRIPT), result.uncoveredLanguages());
     }
 
+    @Test
+    void doesNotInventIncrementalIndexingForPinnedScipVersions() {
+        assertFalse(ScipIndexerCatalog.scipJava().capabilities().contains(IndexerCapability.INCREMENTAL_INDEXING));
+        assertFalse(ScipIndexerCatalog.scipTypeScript().capabilities().contains(IndexerCapability.INCREMENTAL_INDEXING));
+        assertTrue(ScipIndexerCatalog.scipJava().limitations().stream()
+                .anyMatch(value -> value.contains("incremental indexing has not been qualified")));
+        assertTrue(ScipIndexerCatalog.scipTypeScript().limitations().stream()
+                .anyMatch(value -> value.contains("incremental indexing has not been qualified")));
+    }
+
     private static IndexerRegistry qualifiedRegistry() {
         IndexerRegistry registry = new IndexerRegistry();
         ScipIndexerCatalog.registerQualifiedM1(registry);

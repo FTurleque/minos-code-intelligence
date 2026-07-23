@@ -48,6 +48,7 @@ public final class ScipIndexerCatalog {
                 List.of(
                         "qualified in M0 on Maven projects only",
                         "no final index is published when project compilation fails",
+                        "incremental indexing has not been qualified for scip-java 0.13.1",
                         "CALLS relations are not emitted explicitly",
                         "some symbol kinds remain unspecified"
                 )
@@ -72,6 +73,7 @@ public final class ScipIndexerCatalog {
                 IndexerQualification.QUALIFIED_WITH_CONSTRAINTS,
                 100,
                 List.of(
+                        "incremental indexing has not been qualified for scip-typescript 0.4.0",
                         "overloaded declarations can share one provider symbol identity",
                         "symbol kinds are frequently unspecified",
                         "structural relations are incomplete and do not distinguish extends from implements reliably",

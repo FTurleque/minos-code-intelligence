@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M6 terminés — M7 en cours**
+Statut : **C0 à M6 terminés — M7 fonctionnellement complet, validation finale en attente**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md).
 Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon
@@ -207,25 +207,26 @@ Décision : `m6/DECISION_M6.md`.
 
 ## M7 — Indexation incrémentale
 
-État : **EN COURS — M7.1 ET M7.2 LIVRÉS, M7.3 EN VALIDATION**
+État : **FONCTIONNELLEMENT COMPLET — VALIDATION LOCALE FINALE EN ATTENTE**
 
 Suivi : issue #22.
 
 ### Objectif
 
 Éviter les réindexations complètes lorsque cela n’est pas nécessaire, sans
-jamais promouvoir une exécution partielle qui n’est pas prouvée sûre.
+jamais exécuter une portée partielle qui n’est pas prouvée sûre.
 
-### Périmètre
+### Périmètre couvert
 
 - empreintes de fichiers ;
 - empreintes du projet et du build ;
 - fichiers ajoutés, modifiés et supprimés ;
 - snapshots d’empreintes associés aux snapshots d’index ;
 - règles d’invalidation ;
-- capacités incrémentales propres aux fournisseurs ;
-- décision sûre `INCREMENTAL` vs `FULL` ;
-- repli explicite vers une indexation complète.
+- capacité fournisseur `INCREMENTAL_INDEXING` ;
+- décision sûre `NONE` / `INCREMENTAL` / `FULL` ;
+- repli explicite vers une indexation complète ;
+- promotion de la baseline fingerprint uniquement sur workspace stable.
 
 ### M7.1 — Empreintes reproductibles et ChangeSet — LIVRÉ
 
@@ -254,10 +255,9 @@ Acquis :
 - contrôle d’intégrité ;
 - alignement explicite avec `ProjectIndexState.activeSnapshotId`.
 
-### M7.3 — Invalidation conservatrice — EN VALIDATION
+### M7.3 — Invalidation conservatrice — LIVRÉ
 
-Objectif : déterminer la portée fournisseur-indépendante avant négociation avec
-un indexeur.
+PR #25, merge `8f87a8fbb3f62361f88e38c9a8f22c2da2050ca8`.
 
 Portées :
 
@@ -267,31 +267,57 @@ PARTIAL_CANDIDATE
 FULL_REQUIRED
 ```
 
-Règles :
+Règles principales :
 
 - pas d’index actif → complet ;
-- baseline absente/désalignée → complet ;
+- baseline absente/désalignée/illisible → complet ;
 - définition de build modifiée → complet ;
 - politique d’ignore modifiée → complet ;
 - fichier changé non qualifiable → complet ;
 - uniquement sources/tests reconnus → candidat partiel ;
 - aucun changement → aucune réindexation.
 
-`PARTIAL_CANDIDATE` ne constitue pas une preuve de capacité fournisseur.
+### M7.4 — Planification et exécution sûres — IMPLÉMENTÉ
 
-### Suite prévue
+Acquis :
 
-M7.4 devra introduire une capacité fournisseur explicite d’indexation
-incrémentale et combiner cette capacité avec M7.3 afin de produire un plan
-`INCREMENTAL` ou `FULL` avec fallback sûr.
+- `IndexerCapability.INCREMENTAL_INDEXING` ;
+- `IncrementalIndexingPlan` ;
+- `IncrementalIndexingPlanner` ;
+- `IncrementalIndexingCoordinator` ;
+- `IndexingMode.NONE/FULL/INCREMENTAL` ;
+- `IndexingExecutionRequest.mode + changedFiles` ;
+- défense en profondeur dans `IndexingLifecycleService` ;
+- atomicité projet : tous les indexeurs sélectionnés doivent être qualifiés ;
+- fallback `FULL` lorsqu’une capacité manque ;
+- baseline fingerprint avancée uniquement si le workspace reste identique pendant le run.
+
+Les versions actuellement épinglées de `scip-java 0.13.1` et
+`scip-typescript 0.4.0` ne reçoivent pas artificiellement
+`INCREMENTAL_INDEXING`. Avec elles, un `PARTIAL_CANDIDATE` retombe donc en
+`FULL` jusqu’à requalification fournisseur.
 
 ### Porte de décision M7
 
 > MINOS sait-il déterminer de manière sûre ce qui peut être réindexé partiellement, et revenir explicitement à une indexation complète lorsqu’il ne peut pas le prouver ?
 
+Verdict préparé : **OUI, sous preuve explicite de capacité fournisseur**.
+
+Décision : `m7/DECISION_M7.md`.
+
+La porte finale reste :
+
+```powershell
+.\mvnw.cmd clean verify
+```
+
+sur le head exact de la PR finale M7.
+
 ---
 
 ## M8 — Analyse d’impact
+
+État : **PROCHAIN JALON APRÈS CLÔTURE M7**
 
 ### Objectif
 
