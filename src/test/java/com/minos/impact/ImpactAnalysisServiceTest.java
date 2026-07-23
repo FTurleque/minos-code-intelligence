@@ -51,6 +51,8 @@ class ImpactAnalysisServiceTest {
                 new ImpactAnalysisRequest(repository.id(), 4, 20)
         );
 
+        assertEquals(InformationNature.DERIVED, report.nature());
+        assertTrue(report.impacts().stream().allMatch(impact -> impact.nature() == InformationNature.DERIVED));
         assertEquals(List.of(service.id(), controller.id(), test.id()), report.impacts().stream()
                 .map(impact -> impact.symbol().id()).toList());
         assertEquals(ImpactLevel.DIRECT, report.impacts().getFirst().level());
