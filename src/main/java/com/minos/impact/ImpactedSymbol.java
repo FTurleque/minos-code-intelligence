@@ -1,5 +1,6 @@
 package com.minos.impact;
 
+import com.minos.domain.InformationNature;
 import com.minos.domain.Symbol;
 
 import java.util.List;
@@ -35,5 +36,9 @@ public record ImpactedSymbol(
         if (!path.getLast().impactedSymbolId().equals(symbol.id())) {
             throw new IllegalArgumentException("path must end at impacted symbol");
         }
+    }
+
+    public InformationNature nature() {
+        return InformationNature.DERIVED;
     }
 }
