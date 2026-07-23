@@ -1,12 +1,13 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M5 terminés et validés localement — M6 prochain jalon**
+Statut : **C0 à M6 terminés — M7 prochain jalon**
 
-L'état opérationnel, la porte active et le reste à faire sont maintenus dans
-[`STATUS.md`](STATUS.md). Cette feuille conserve la séquence des jalons et leurs
-portes de décision.
+L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md).
+Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon
+et ses portes de décision.
 
-La feuille de route est volontairement guidée par les preuves. Un jalon peut être modifié si une expérimentation invalide une hypothèse d'architecture.
+La roadmap reste guidée par les preuves : un jalon peut être ajusté si une
+expérimentation invalide une hypothèse d’architecture.
 
 ---
 
@@ -16,31 +17,24 @@ La feuille de route est volontairement guidée par les preuves. Un jalon peut ê
 
 ### Objectif
 
-Définir précisément ce que MINOS doit être avant de développer ses fonctionnalités.
+Définir précisément ce que MINOS doit être avant les implémentations produit.
 
 ### Livrables
 
 - cahier des charges ;
 - vision et positionnement ;
 - frontière MINOS / NEXUS ;
-- cas d'usage prioritaires ;
+- cas d’usage prioritaires ;
 - périmètre MVP ;
-- modèle de domaine proposé ;
-- modèle des symboles ;
-- modèle des relations ;
-- stratégie d'indexation ;
-- stratégie SCIP ;
-- stratégie Glean ;
-- stratégie `CodeKnowledgeStore` ;
+- modèles de domaine, symboles et relations ;
+- stratégies d’indexation, SCIP, Glean et `CodeKnowledgeStore` ;
 - critères de validation ;
 - ADR structurantes ;
-- plan des expérimentations M0.
+- plan d’expérimentations M0.
 
 ### Porte de décision
 
 > Savons-nous précisément ce que MINOS doit fournir, pourquoi, à qui, avec quelles limites et selon quels critères mesurables ?
-
-Aucune implémentation fonctionnelle significative ne doit commencer avant cette validation.
 
 ---
 
@@ -48,44 +42,20 @@ Aucune implémentation fonctionnelle significative ne doit commencer avant cette
 
 État : **TERMINÉ ET LIVRÉ — verdict ADOPTER_AVEC_CONTRAINTES**
 
-Acquis : qualification Java et TypeScript, baseline SCIP vers MINOS sur huit
-index réels, benchmark reproductible du backend mémoire, Glean C1 et comparaison
-E2. Le backend MINOS léger est retenu par défaut et Glean reste optionnel.
-La décision est consolidée dans `m0/DECISION_M0.md`.
-
-La PR #4 a été validée localement puis fusionnée dans `main` au commit
-`6d8376bcfc16dd5ba1c6b691535aa3d8e57cc49a`. GitHub Actions reste en pause ;
-l'anomalie historique est suivie dans #5 sans bloquer la validation locale.
-
 ### Objectif
 
 Valider les choix structurants avec des expérimentations réelles et mesurables.
 
-### Périmètre
+### Acquis
 
-- évaluation SCIP ;
-- évaluation des indexeurs sélectionnés ;
-- évaluation Glean ;
-- test d'intégration locale ;
-- validation du découplage `CodeKnowledgeStore` ;
-- premier projet Java de référence ;
-- second écosystème de langage ;
-- mesures de précision ;
-- mesures de performance ;
-- rapport de décision.
+- qualification SCIP Java / TypeScript ;
+- baseline SCIP → MINOS sur artefacts réels ;
+- benchmark du backend mémoire ;
+- qualification de Glean sous contraintes ;
+- backend MINOS léger retenu par défaut ;
+- frontière fournisseur préservée.
 
-### Porte de décision
-
-> SCIP et Glean constituent-ils une fondation viable pour MINOS sans coupler irréversiblement son domaine à ces technologies ?
-
-Décisions possibles :
-
-```text
-ADOPTER
-ADOPTER_AVEC_CONTRAINTES
-REVOIR
-REMPLACER
-```
+Décision : `m0/DECISION_M0.md`.
 
 ---
 
@@ -93,225 +63,205 @@ REMPLACER
 
 État : **TERMINÉ ET LIVRÉ**
 
-La PR finale M1 (#10) a été validée localement sur le head
-`debf19bf4baecfda1e50c9981cbeed857b679a2f` avec 47 tests verts, puis fusionnée
-dans `main` au commit `cf59f43ca6d9927340a889d77c41b375c019f9ba`.
-
 ### Objectif
 
-Détecter un projet et sélectionner les fournisseurs d'indexation adaptés.
+Détecter un projet et sélectionner les fournisseurs d’indexation adaptés.
 
 ### Périmètre livré
 
-- registre local des projets ;
-- concept de workspace ;
+- registre local projets/workspaces ;
 - détection des langages ;
 - détection des systèmes de build ;
-- détection des racines de sources et de tests ;
-- stratégie `.gitignore` ;
-- stratégie `.minosignore` ;
+- racines de sources et de tests ;
+- `.gitignore` et `.minosignore` ;
 - `IndexerRegistry` ;
 - négociation des capacités ;
-- cycle de vie de l'indexation ;
-- état de l'index.
-
-Progression :
-
-```text
-M1.1 découverte locale factuelle              FUSIONNÉ
-M1.2 ignore policy + registre local            FUSIONNÉ
-M1.3 IndexerRegistry + négociation             FUSIONNÉ
-M1.4 cycle de vie + état d'index              FUSIONNÉ
-```
-
-### Porte de sortie acquise
-
-- découverte reproductible Java / TypeScript ;
-- identité projet/workspace persistante et indépendante du chemin ;
-- sélection fournisseur par capacités positives qualifiées ;
-- état d'index observable ;
-- promotion atomique au niveau du run projet complet ;
-- frontière fournisseur préservée dans le cœur MINOS.
+- cycle de vie de l’indexation ;
+- état de l’index ;
+- promotion atomique du snapshot projet.
 
 ---
 
 ## M2 — Intelligence des symboles
 
-État : **TERMINÉ ET VALIDÉ LOCALEMENT**
+État : **TERMINÉ ET LIVRÉ**
 
 ### Objectif
 
 Exposer une recherche fiable des symboles indépendamment du fournisseur et du backend.
 
-### Périmètre
+### Périmètre livré
 
 - modèle normalisé des symboles ;
-- identité stable ;
+- identité stable et qualité d’identité ;
 - fichiers, modules et emplacements ;
 - types de symboles ;
-- symboles externes ;
-- symboles non résolus ;
+- symboles externes et non résolus ;
 - `find_symbol` ;
 - `get_file_symbols` ;
 - recherche lexicale ;
-- recherche par nom qualifié.
+- recherche par nom qualifié ;
+- snapshot persistant et résultats compacts.
 
-### Critère de sortie
+### Porte acquise
 
 ```text
 minos find-symbol <projet> <symbole>
 ```
 
-retourne un résultat MINOS normalisé et compact.
+retourne un résultat MINOS normalisé et compact depuis un snapshot persistant.
 
-Porte acquise avec un registre et un snapshot persistant rechargés dans un
-nouveau processus. Décision : `m2/DECISION_M2.md`.
+Décision : `m2/DECISION_M2.md`.
 
 ---
 
 ## M3 — Intelligence des relations
 
-État : **TERMINÉ ET VALIDÉ LOCALEMENT**
+État : **TERMINÉ ET LIVRÉ**
 
 ### Objectif
 
 Exposer les relations entrantes et sortantes entre éléments du code.
 
-### Périmètre
+### Périmètre livré
 
 - références ;
 - implémentations ;
-- héritage ;
-- appels lorsque disponibles ;
+- héritage et appels lorsqu’ils sont disponibles ;
 - dépendances dérivées ;
-- provenance ;
-- preuves ;
-- niveau de confiance ;
+- provenance, preuves et confiance ;
 - `find_usages` ;
 - `find_implementations` ;
 - `find_callers` ;
 - `find_callees` ;
 - `dependencies` ;
-- `dependents`.
+- `dependents` ;
+- snapshot de connaissance v2.
 
-Premier incrément acquis : contrat de relation isolé par projet, recherche
-entrante/sortante/indifférente, filtres de kind/résolution/nature, ordre
-déterministe, résultat compact avec provenance et preuves, et
-`findImplementations`.
-
-Deuxième incrément acquis : mapping factuel des quatre drapeaux SCIP,
-résolution par le catalogue MINOS, cibles non résolues explicites,
-déduplication et métriques de perte.
-
-Porte finale acquise : snapshot v2 rétrocompatible persistant symboles,
-occurrences, relations et preuves ; dérivation directe `DEPENDS_ON` ; commandes
-`find-usages`, `find-implementations`, `find-callers`, `find-callees`,
-`dependencies` et `dependents` ; relecture depuis une nouvelle JVM et replay
-des quatre index TypeScript réels. Décision : `m3/DECISION_M3.md`.
+Décision : `m3/DECISION_M3.md`.
 
 ---
 
 ## M4 — Recherche et contexte compact
 
-État : **TERMINÉ ET VALIDÉ LOCALEMENT**
+État : **TERMINÉ ET LIVRÉ**
 
 ### Objectif
 
-Rendre MINOS directement exploitable par des outils et agents avant même l'arrivée du MCP.
+Rendre MINOS directement exploitable par des outils et agents avant le MCP.
 
-### Périmètre
+### Périmètre livré
 
 - recherche structurée unifiée ;
-- sortie JSON compacte ;
-- limites de résultats ;
-- limites de profondeur ;
+- sortie compacte ;
+- limites de résultats, profondeur et tokens ;
 - plages de code pertinentes ;
 - récupération explicite du code source complet ;
-- politiques d'efficacité en tokens ;
-- benchmarks de latence.
+- benchmark de latence.
 
-Ce jalon définit le premier **cœur MINOS réellement utilisable**.
-
-Porte acquise : `minos search` compose symboles, relations, preuves, usages et
-plages source sous des limites explicites de résultats, profondeur et tokens ;
-`minos get-source` récupère le fichier complet uniquement sur demande ; les
-chemins restent confinés à la racine réelle du projet. Le snapshot TypeScript
-réel a été relu dans de nouveaux processus et 200 recherches ont mesuré un p95
-de 5,421 ms. Décision : `m4/DECISION_M4.md`.
+Décision : `m4/DECISION_M4.md`.
 
 ---
 
 ## M5 — Tests liés et dérivations explicables
 
-État : **TERMINÉ ET VALIDÉ LOCALEMENT**
+État : **TERMINÉ ET LIVRÉ**
 
 ### Objectif
 
 Déduire des relations utiles que les indexeurs ne fournissent pas forcément directement.
 
-### Périmètre
+### Périmètre livré
 
 - détection des tests liés ;
 - conventions de nommage ;
 - références directes ;
-- appels de méthodes ;
-- proximité de package ou namespace ;
+- appels lorsqu’ils sont disponibles ;
+- proximité package/namespace ;
 - score de confiance ;
-- explication des raisons.
+- raisons et preuves structurées ;
+- requête et CLI `related-tests`.
 
-Porte acquise : relation orientée test vers production, classification
-dérivée/heuristique, agrégation déterministe des signaux, preuves structurées,
-persistance snapshot v2, métrique dédiée, cas d'usage `findRelatedTests` et
-commande `related-tests`. La validation finale compile `93` sources main et `49`
-sources test et exécute `140/140` tests avec `BUILD SUCCESS`. Le replay des
-quatre index TypeScript versionnés et la chaîne snapshot → réouverture → CLI JSON
-font partie de cette porte verte. Décision : `m5/DECISION_M5.md`.
+Décision : `m5/DECISION_M5.md`.
 
 ---
 
-## M6 — Intelligence d'architecture
+## M6 — Intelligence d’architecture
+
+État : **TERMINÉ, VALIDÉ LOCALEMENT ET LIVRÉ**
 
 ### Objectif
 
-Produire une vue de haut niveau de la topologie d'un projet.
+Produire une vue de haut niveau de la topologie d’un projet.
 
-### Périmètre
+### Périmètre livré
 
 - topologie des modules ;
 - topologie des packages ou namespaces ;
-- composants centraux ;
+- composants centraux sous forme de rangs relatifs directionnels ;
 - concentration des dépendances ;
-- technologies détectées ;
-- `get_architecture_overview` ;
-- `get_module_context`.
+- technologies détectées factuellement ;
+- `get_architecture_overview` métier via `ProjectArchitectureQuery.getArchitectureOverview(...)` ;
+- `get_module_context` métier via `ProjectArchitectureQuery.getModuleContext(...)` ;
+- vue composée `ArchitectureIntelligenceView` ;
+- distinction explicite entre faits, dérivations et preuves.
 
-Les faits détectés et les inférences doivent être distingués.
+### Incréments
+
+```text
+M6.1 topologie modules / namespaces             PR #14
+M6.2 dépendances inter-modules                  PR #15
+M6.3 concentration                              PR #16
+M6.4 calibration centralité                     PR #17
+M6.5 classement composants centraux             PR #18
+M6.6 technologies factuelles                    PR #19
+M6.7 vue composée + contexte de module          PR #20
+```
+
+### Porte acquise
+
+La dernière porte fonctionnelle M6 compile `116` sources main, `58` sources test
+et exécute `162/162` tests avec `BUILD SUCCESS` sur le head M6.7
+`ba744f41b974432fe33eb617a866ef4c8dcb0ead`, ensuite fusionné dans `main` au
+commit `f10449681a9010079cc9fe0400aac867dea497d9`.
+
+Le replay réel `typescript-modules` confirme la topologie multi-module, la
+dépendance `packages/app -> packages/api`, les rangs directionnels et les
+technologies `TYPESCRIPT` / `NPM` sans propagation artificielle.
+
+Décision : `m6/DECISION_M6.md`.
 
 ---
 
 ## M7 — Indexation incrémentale
 
+État : **PROCHAIN JALON**
+
 ### Objectif
 
-Éviter les réindexations complètes lorsque cela n'est pas nécessaire.
+Éviter les réindexations complètes lorsque cela n’est pas nécessaire.
 
 ### Périmètre
 
 - empreintes de fichiers ;
 - empreintes du projet et du build ;
 - fichiers ajoutés, modifiés et supprimés ;
-- snapshots d'index ;
-- règles d'invalidation ;
+- snapshots d’index ;
+- règles d’invalidation ;
 - capacités incrémentales propres aux fournisseurs ;
 - repli vers une indexation complète.
 
+### Porte de décision
+
+> MINOS sait-il déterminer de manière sûre ce qui peut être réindexé partiellement, et revenir explicitement à une indexation complète lorsqu’il ne peut pas le prouver ?
+
 ---
 
-## M8 — Analyse d'impact
+## M8 — Analyse d’impact
 
 ### Objectif
 
-Estimer la propagation potentielle d'une modification à partir des relations connues.
+Estimer la propagation potentielle d’une modification à partir des relations connues.
 
 ### Périmètre
 
@@ -321,7 +271,7 @@ Estimer la propagation potentielle d'une modification à partir des relations co
 - score de confiance ;
 - contrôle de profondeur ;
 - tests potentiellement impactés ;
-- limites explicites liées au comportement dynamique.
+- limites liées au comportement dynamique.
 
 ---
 
@@ -329,7 +279,7 @@ Estimer la propagation potentielle d'une modification à partir des relations co
 
 ### Objectif
 
-Stabiliser l'interface en ligne de commande destinée aux développeurs et aux automatisations.
+Stabiliser l’interface en ligne de commande destinée aux développeurs et automatisations.
 
 Commandes envisagées :
 
@@ -380,7 +330,7 @@ analyze_impact
 get_index_status
 ```
 
-Le MCP reste une couche d'exposition. Aucune logique d'analyse métier ne doit résider dans les handlers MCP.
+Le MCP reste une couche d’exposition. Aucune logique d’analyse métier ne doit résider dans les handlers MCP.
 
 ---
 
@@ -399,7 +349,7 @@ Permettre à des systèmes externes de consommer MINOS sans dépendre de Glean o
 - impact ;
 - contrats DTO stables.
 
-Le choix du framework serveur reste différé jusqu'à l'approche de ce jalon.
+Le choix du framework serveur reste différé jusqu’à l’approche de ce jalon.
 
 ---
 
@@ -407,7 +357,7 @@ Le choix du framework serveur reste différé jusqu'à l'approche de ce jalon.
 
 ### Objectif
 
-Étendre MINOS des dépôts isolés vers des workspaces et une compréhension de l'historique.
+Étendre MINOS des dépôts isolés vers des workspaces et une compréhension de l’historique.
 
 Périmètre possible :
 
