@@ -44,6 +44,33 @@ public record ArchitectureModule(
         }
     }
 
+    public ArchitectureModule(
+            String id,
+            String name,
+            String relativePath,
+            List<String> buildSystems,
+            List<String> languages,
+            int sourceRootCount,
+            int symbolCount,
+            List<ArchitectureNamespace> namespaces,
+            InformationNature nature,
+            List<Evidence> evidence
+    ) {
+        this(
+                id,
+                name,
+                relativePath,
+                buildSystems,
+                languages,
+                sourceRootCount,
+                symbolCount,
+                namespaces,
+                nature,
+                InformationNature.DERIVED,
+                evidence
+        );
+    }
+
     public int namespaceCount() {
         return namespaces.size();
     }
