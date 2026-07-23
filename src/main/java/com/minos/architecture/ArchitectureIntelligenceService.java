@@ -95,7 +95,6 @@ public final class ArchitectureIntelligenceService {
                 .orElseThrow(() -> new IllegalStateException("missing centrality metric for module " + moduleId));
         List<ArchitectureTechnology> technologies = view.technologies().technologies().stream()
                 .filter(technology -> technology.moduleIds().contains(moduleId))
-                .sorted(Comparator.comparing(ArchitectureTechnology::id))
                 .toList();
 
         return new ArchitectureModuleContext(
