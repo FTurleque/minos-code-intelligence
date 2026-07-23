@@ -6,7 +6,6 @@ import com.minos.domain.Evidence;
 import com.minos.domain.EvidenceType;
 import com.minos.domain.InformationNature;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
