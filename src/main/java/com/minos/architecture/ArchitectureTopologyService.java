@@ -10,7 +10,6 @@ import com.minos.domain.Symbol;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -42,9 +41,15 @@ public final class ArchitectureTopologyService {
         Objects.requireNonNull(discovery, "discovery");
         Objects.requireNonNull(snapshot, "snapshot");
 
-        List<MutableModule> modules = discovery.modules().stream()
-                .map(MutableModule::new)
-                .toList();
+        String projectId = snapshot.projectId().toString();
+        ArchitectureModuleResolver resolver = new ArchitectureModuleResolver(projectId, discovery);
+        Map<String, MutableModule> modules = new LinkedHashMap<>();
+        discovery.modules().stream()
+                .sorted(Comparator.comparing(module -> ArchitectureModuleResolver.portable(module.relativePath())))
+                .forEach(module -> modules.put(
+                        ArchitectureModuleResolver.portable(module.relativePath()),
+                        new MutableModule(module)
+                ));
 
         int localSymbolCount = 0;
         int externalSymbolCount = 0;
@@ -60,23 +65,21 @@ public final class ArchitectureTopologyService {
             }
             localSymbolCount++;
 
-            Path filePath = safeRelativePath(symbol.fileId());
-            if (filePath == null) {
+            ArchitectureModuleResolver.Assignment assignment = resolver.resolve(symbol).orElse(null);
+            if (assignment == null) {
                 unassignedLocalSymbolCount++;
                 continue;
             }
-
-            MutableModule module = selectModule(filePath, modules);
+            MutableModule module = modules.get(
+                    ArchitectureModuleResolver.portable(assignment.module().relativePath()));
             if (module == null) {
                 unassignedLocalSymbolCount++;
                 continue;
             }
-            module.accept(symbol, filePath);
+            module.accept(symbol, assignment);
         }
 
-        String projectId = snapshot.projectId().toString();
-        List<ArchitectureModule> resultModules = modules.stream()
-                .sorted(Comparator.comparing(module -> portable(module.module.relativePath())))
+        List<ArchitectureModule> resultModules = modules.values().stream()
                 .map(module -> module.toResult(projectId))
                 .toList();
 
@@ -104,66 +107,6 @@ public final class ArchitectureTopologyService {
         );
     }
 
-    private static MutableModule selectModule(Path filePath, List<MutableModule> modules) {
-        MutableModule best = null;
-        int bestScore = -1;
-
-        for (MutableModule module : modules) {
-            int score = module.sourceRootSpecificity(filePath);
-            if (score > bestScore) {
-                best = module;
-                bestScore = score;
-            }
-        }
-        if (bestScore >= 0) {
-            return best;
-        }
-
-        best = null;
-        bestScore = -1;
-        for (MutableModule module : modules) {
-            Path modulePath = module.module.relativePath();
-            if (!startsWith(filePath, modulePath)) {
-                continue;
-            }
-            int score = portable(modulePath).length();
-            if (score > bestScore) {
-                best = module;
-                bestScore = score;
-            }
-        }
-        return best;
-    }
-
-    private static Path safeRelativePath(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String portable = value.replace('\\', '/');
-        if (portable.startsWith("/")
-                || portable.startsWith("file:")
-                || portable.matches("^[A-Za-z]:/.*")) {
-            return null;
-        }
-        try {
-            Path path = Path.of(portable).normalize();
-            if (path.isAbsolute() || path.startsWith("..")) {
-                return null;
-            }
-            return path;
-        } catch (InvalidPathException exception) {
-            return null;
-        }
-    }
-
-    private static boolean startsWith(Path path, Path prefix) {
-        return portable(prefix).isEmpty() || path.startsWith(prefix);
-    }
-
-    private static String portable(Path path) {
-        return path.toString().replace('\\', '/');
-    }
-
     private static String stableId(String prefix, String material) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -187,35 +130,26 @@ public final class ArchitectureTopologyService {
                     .forEach(languages::add);
         }
 
-        private int sourceRootSpecificity(Path filePath) {
-            return module.sourceRoots().stream()
-                    .map(SourceRoot::relativePath)
-                    .filter(root -> startsWith(filePath, root))
-                    .mapToInt(root -> portable(root).length())
-                    .max()
-                    .orElse(-1);
-        }
-
-        private void accept(Symbol symbol, Path filePath) {
+        private void accept(Symbol symbol, ArchitectureModuleResolver.Assignment assignment) {
             symbolCount++;
             languages.add(symbol.language().toUpperCase(Locale.ROOT));
 
-            SourceRoot sourceRoot = bestSourceRoot(filePath);
+            SourceRoot sourceRoot = assignment.sourceRoot();
             Path relativeFile;
             String evidenceRoot;
             if (sourceRoot != null) {
-                relativeFile = sourceRoot.relativePath().relativize(filePath);
-                evidenceRoot = portable(sourceRoot.relativePath());
+                relativeFile = sourceRoot.relativePath().relativize(assignment.filePath());
+                evidenceRoot = ArchitectureModuleResolver.portable(sourceRoot.relativePath());
             } else {
                 Path modulePath = module.relativePath();
-                relativeFile = portable(modulePath).isEmpty()
-                        ? filePath
-                        : modulePath.relativize(filePath);
-                evidenceRoot = portable(modulePath);
+                relativeFile = ArchitectureModuleResolver.portable(modulePath).isEmpty()
+                        ? assignment.filePath()
+                        : modulePath.relativize(assignment.filePath());
+                evidenceRoot = ArchitectureModuleResolver.portable(modulePath);
             }
 
             Path parent = relativeFile.getParent();
-            String namespacePath = parent == null ? "" : portable(parent);
+            String namespacePath = parent == null ? "" : ArchitectureModuleResolver.portable(parent);
             String namespaceName = namespacePath.isEmpty()
                     ? DEFAULT_NAMESPACE
                     : namespacePath.replace('/', '.');
@@ -226,22 +160,15 @@ public final class ArchitectureTopologyService {
                             namespaceName,
                             namespacePath,
                             evidenceRoot,
-                            portable(filePath)
+                            ArchitectureModuleResolver.portable(assignment.filePath())
                     )
             );
             namespace.accept(symbol.language());
         }
 
-        private SourceRoot bestSourceRoot(Path filePath) {
-            return module.sourceRoots().stream()
-                    .filter(root -> startsWith(filePath, root.relativePath()))
-                    .max(Comparator.comparingInt(root -> portable(root.relativePath()).length()))
-                    .orElse(null);
-        }
-
         private ArchitectureModule toResult(String projectId) {
-            String relativePath = portable(module.relativePath());
-            String moduleId = stableId("module", projectId + "\u001F" + relativePath);
+            String relativePath = ArchitectureModuleResolver.portable(module.relativePath());
+            String moduleId = ArchitectureModuleResolver.moduleId(projectId, module.relativePath());
             List<ArchitectureNamespace> namespaceResults = namespaces.values().stream()
                     .sorted(Comparator.comparing(namespace -> namespace.relativePath))
                     .map(namespace -> namespace.toResult(moduleId))
