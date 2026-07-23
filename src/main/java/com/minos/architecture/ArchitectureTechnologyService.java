@@ -1,7 +1,6 @@
 package com.minos.architecture;
 
 import com.minos.discovery.ProjectDiscovery;
-import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.DiscoveredModule;
 import com.minos.discovery.ProjectDiscovery.SourceRoot;
 import com.minos.domain.Evidence;
@@ -13,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -98,7 +98,7 @@ public final class ArchitectureTechnologyService {
                 ).observe(
                         moduleId,
                         "Language " + root.language().name()
-                                + " observed in " + root.kind().name().toLowerCase()
+                                + " observed in " + root.kind().name().toLowerCase(Locale.ROOT)
                                 + " root '" + displayPath(portable(root.relativePath())) + "'"
                 ));
 
@@ -126,9 +126,9 @@ public final class ArchitectureTechnologyService {
 
     private static String stableId(ArchitectureTechnologyCategory category, String name) {
         return "technology:"
-                + category.name().toLowerCase().replace('_', '-')
+                + category.name().toLowerCase(Locale.ROOT).replace('_', '-')
                 + ":"
-                + name.toLowerCase().replace('_', '-');
+                + name.toLowerCase(Locale.ROOT).replace('_', '-');
     }
 
     private static String portable(Path path) {
@@ -150,7 +150,7 @@ public final class ArchitectureTechnologyService {
 
         @Override
         public int compareTo(TechnologyKey other) {
-            int categoryOrder = category.name().compareTo(other.category.name());
+            int categoryOrder = Integer.compare(category.ordinal(), other.category.ordinal());
             return categoryOrder != 0 ? categoryOrder : name.compareTo(other.name);
         }
     }
