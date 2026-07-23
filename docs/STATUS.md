@@ -11,17 +11,18 @@ travail et les rapports de jalon conservent les preuves détaillées.
 ```text
 C0 — Cadrage                         TERMINÉ
 M0 — Faisabilité technique          TERMINÉ ET FUSIONNÉ
-M1 — Découverte et orchestration     EN COURS
+M1 — Découverte et orchestration     TERMINÉ ET FUSIONNÉ
   M1.1 — découverte locale           VALIDÉ ET FUSIONNÉ
   M1.2 — ignore + registre           VALIDÉ ET FUSIONNÉ
   M1.3 — registre indexeurs          VALIDÉ ET FUSIONNÉ
-  M1.4 — cycle de vie / état         EN VALIDATION
-M2 à M13 — Jalons produit           NON DÉMARRÉS
+  M1.4 — cycle de vie / état         VALIDÉ ET FUSIONNÉ
+M2 — Intelligence des symboles       AUTORISÉ
+M3 à M13 — Jalons produit           NON DÉMARRÉS
 ```
 
-M0 est livré avec le verdict **ADOPTER_AVEC_CONTRAINTES**. M1 est suivi dans
-l'issue #6. GitHub Actions reste volontairement hors de la porte courante ;
-l'anomalie historique est suivie séparément dans #5.
+M0 est livré avec le verdict **ADOPTER_AVEC_CONTRAINTES**. M1 est désormais
+livré intégralement. GitHub Actions reste volontairement hors de la porte
+courante ; l'anomalie historique est suivie séparément dans #5.
 
 ## Résultats acquis de M0
 
@@ -46,7 +47,11 @@ runner         Manual CI: SUCCESS
 merge main     6d8376bcfc16dd5ba1c6b691535aa3d8e57cc49a
 ```
 
-## M1.1 — découverte locale factuelle
+## M1 — clôture du jalon
+
+Suivi : issue #6.
+
+### M1.1 — découverte locale factuelle
 
 La PR #7 a été validée localement sur
 `be6ac6872cb289022db671f28094ecb996c8fe71` :
@@ -73,7 +78,7 @@ Acquis :
 
 Documentation : `docs/m1/PROJECT_DISCOVERY.md`.
 
-## M1.2 — ignore policy et registre local
+### M1.2 — ignore policy et registre local
 
 La PR #8 a été validée localement sur
 `a89ba9b1fc473606afd107b6e9e7f9ea463b6a7d` :
@@ -108,11 +113,11 @@ multi-processus.
 
 Documentation : `docs/m1/IGNORE_AND_REGISTRY.md`.
 
-## M1.3 — IndexerRegistry et négociation
+### M1.3 — IndexerRegistry et négociation
 
 La validation locale du head
 `3b642819ea2d1828ed831f9f53d47604c81233c3` a été confirmée entièrement verte
-par le développeur avant fusion.
+avant fusion.
 
 Fusion `main` : `0125802b364f481e2242c7d2bbb008beb4c2d8d7`.
 
@@ -133,7 +138,7 @@ Acquis :
 - aucune promesse `CALLS` ajoutée ;
 - ADR-0008 **Accepté**.
 
-Capacités M1 actuelles :
+Capacités qualifiées M1 :
 
 ```text
 SYMBOLS
@@ -150,43 +155,49 @@ complétude.
 
 Documentation : `docs/m1/INDEXER_NEGOTIATION.md`.
 
-## M1.4 — porte active : cycle de vie et état d'index
+### M1.4 — cycle de vie et état d'index
 
-Branche :
+La PR #10 a été validée localement sur le head final
+`debf19bf4baecfda1e50c9981cbeed857b679a2f` :
 
 ```text
-m1/indexing-lifecycle-state
+54 sources main
+20 sources test
+47 tests réussis
+0 échec
+0 erreur
+0 skipped
+BUILD SUCCESS
 ```
 
-### Implémenté sur le head courant
+Fusion `main` : `cf59f43ca6d9927340a889d77c41b375c019f9ba`.
+
+Acquis :
 
 - `ProjectIndexState` ;
 - états `NEVER_INDEXED`, `INDEXING`, `REFRESHING`, `READY`, `STALE`, `FAILED` ;
-- `IndexingRun` avec statut, phase, artefacts exécutés et snapshots avant/après ;
+- `IndexingRun` avec statut, phase, exécutions et snapshots avant/après ;
 - phases `PROVIDER_EXECUTION`, `STAGING`, `PROMOTION`, `COMPLETED` ;
-- `IndexStateStore` ;
-- `InMemoryIndexStateStore` baseline ;
+- `IndexStateStore` et baseline `InMemoryIndexStateStore` ;
 - ports runtime fournisseur-indépendants `IndexerExecutor`, `SnapshotStager`, `SnapshotPromoter` ;
 - `IndexingLifecycleService` ;
 - refus d'une négociation incomplète avant démarrage ;
 - un seul run actif par projet dans une instance de service ;
 - exécution de toutes les sélections avant staging ;
 - staging d'un snapshot projet commun ;
-- promotion atomique unique ;
+- promotion atomique unique au niveau du run projet complet ;
 - ancien snapshot conservé en cas d'échec de refresh ;
 - état `STALE` pour distinguer échec récent et snapshot précédent encore actif ;
 - ADR-0006 clarifié pour les projets multi-langages / multi-indexeurs.
 
-### Tests de porte ajoutés
-
-`IndexingLifecycleServiceTest` couvre :
+Tests de porte :
 
 - succès Java + TypeScript avec un seul staging et une seule promotion ;
 - échec du second fournisseur bloquant toute promotion ;
 - échec de promotion conservant le snapshot précédent en `STALE` ;
 - négociation incomplète ne créant aucun run.
 
-### Limites explicites M1.4
+Limites explicites conservées :
 
 - aucune annulation forcée d'un processus externe ;
 - aucun timeout générique ;
@@ -195,20 +206,27 @@ m1/indexing-lifecycle-state
 - aucune persistance durable imposée pour `IndexStateStore` ;
 - aucun mode best-effort promu comme snapshot sain.
 
-Ces limites sont explicites afin de ne pas inventer des garanties runtime non
-qualifiées. Elles ne bloquent pas la porte M1.
-
-### Validation finale M1 requise
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-M1.4 doit rester en Draft tant que cette commande n'est pas verte sur son head
-exact. Après validation et fusion, l'issue #6 pourra être clôturée et M2 pourra
-démarrer depuis `main`.
+Ces limites n'empêchent pas la clôture de M1 : elles ne sont pas des garanties
+qualifiées de ce jalon.
 
 Documentation : `docs/m1/INDEXING_LIFECYCLE.md`.
+
+## Verdict M1
+
+**TERMINÉ ET LIVRÉ.**
+
+Les critères de sortie de M1 sont satisfaits :
+
+- découverte reproductible sur fixtures Java et TypeScript ;
+- projets multi-modules et racines source/test représentés explicitement ;
+- politique d'ignore appliquée ;
+- identité projet/workspace persistante et indépendante du chemin ;
+- sélection d'indexeurs par capacités explicites ;
+- limites fournisseur conservées ;
+- cycle de vie et états d'index observables ;
+- promotion atomique au niveau projet ;
+- aucune fuite SCIP/Glean/Protobuf dans les contrats `discovery`, `registry` ou `orchestration` ;
+- validation locale finale verte sur le head fusionné.
 
 ## Blocages et décisions
 
@@ -216,36 +234,32 @@ Documentation : `docs/m1/INDEXING_LIFECYCLE.md`.
 |---|---|
 | GitHub Actions sans steps ni logs | Issue #5 en pause ; aucun blocage de la validation locale |
 | `scip lint` / `snapshot` sur plages typées | Limitation SCIP CLI 0.7.1 documentée |
-| Kinds et appels incomplets selon les fournisseurs | Capacités explicites, jamais inventées |
-| `qualifiedName` non canonique dans tous les cas | Accepté pour M1 ; requalification ciblée en M2 |
+| Kinds et appels incomplets selon les fournisseurs | Capacités explicites, jamais inventées ; travail ciblé en M2/M3 |
+| `qualifiedName` non canonique dans tous les cas | Requalification ciblée en M2 |
 | Identité projet | UUID persistant du registre ; chemin = localisation/rapprochement uniquement |
 | Ignore imbriqué | Limite M1.2 documentée |
 | Sélection indexeur | Par capacités qualifiées, build compatible, qualification et priorité déterministe |
 | Promotion | Atomique au niveau du run projet complet, y compris multi-indexeurs |
 
-## Prochaines portes
+## Prochaine porte
 
 ```text
-M0 fusionné — ADOPTER_AVEC_CONTRAINTES
+M0 — ADOPTER_AVEC_CONTRAINTES — livré
         ↓
-M1.1 découverte locale — validée et fusionnée
+M1 — découverte + orchestration — livré
         ↓
-M1.2 ignore + registre — validé et fusionné
-        ↓
-M1.3 IndexerRegistry + négociation — validé et fusionné
-        ↓
-M1.4 cycle de vie / état d'index — validation finale M1
-        ↓
-M2 Intelligence des symboles
+M2 — Intelligence des symboles — autorisé
 ```
+
+M2 doit stabiliser le modèle de symbole et sa recherche sans remettre en cause
+les frontières fournisseur établies par M0/M1.
 
 ## Sources de vérité
 
 - feuille de route : `docs/ROADMAP.md` ;
 - état opérationnel : `docs/STATUS.md` ;
 - décision M0 : `docs/m0/DECISION_M0.md` ;
-- preuves M0 : `docs/m0/` ;
-- suivi M1 : issue #6 ;
+- suivi M1 clôturé : issue #6 ;
 - découverte M1.1 : `docs/m1/PROJECT_DISCOVERY.md` ;
 - ignore et registre M1.2 : `docs/m1/IGNORE_AND_REGISTRY.md` ;
 - négociation M1.3 : `docs/m1/INDEXER_NEGOTIATION.md` ;
