@@ -1,6 +1,6 @@
 # Documentation MINOS
 
-Ce répertoire est le point d’entrée de la documentation **utilisateur** et **développeur** de MINOS Code Intelligence.
+Ce répertoire est le point d’entrée de la documentation **utilisateur**, **développeur**, **architecturale** et **historique** de MINOS Code Intelligence.
 
 MINOS est un moteur local de Code Intelligence : il enregistre des projets, importe des index structurés, normalise symboles et relations, produit des vues d’architecture et d’impact, expose ces capacités en CLI, API Java et MCP, et peut exporter sa connaissance vers NEXUS.
 
@@ -8,20 +8,14 @@ MINOS est un moteur local de Code Intelligence : il enregistre des projets, impo
 
 ```mermaid
 flowchart LR
-    A[Je veux utiliser MINOS] --> U[Guide utilisateur]
-    A --> D[Guide développeur]
-    U --> U1[Installation]
-    U --> U2[CLI]
-    U --> U3[API Java]
-    U --> U4[MCP]
-    U --> U5[NEXUS]
-    U --> U6[Dépannage]
-    D --> D1[Architecture]
-    D --> D2[Modèle de domaine]
-    D --> D3[Indexation et stockage]
-    D --> D4[Surfaces publiques]
-    D --> D5[Multi-dépôts et Git]
-    D --> D6[Tests et contribution]
+    A[Documentation MINOS] --> U[Utiliser]
+    A --> D[Développer]
+    A --> ADR[Comprendre les décisions]
+    A --> H[Consulter les preuves historiques]
+    U --> U1[user/]
+    D --> D1[developer/]
+    ADR --> A1[adr/]
+    H --> H1[history/milestones/]
 ```
 
 ## Documentation utilisateur
@@ -44,19 +38,27 @@ flowchart LR
 - [Multi-dépôts et intelligence Git](developer/multi-repo-git.md)
 - [Tests, validation et contribution](developer/testing.md)
 
-## Documents de conception et d’historique
+## Décisions architecturales
 
-Les guides ci-dessus décrivent **l’état utilisable du produit**. Les documents suivants conservent les décisions et preuves par jalon :
+Les choix techniques durables sont documentés sous forme d’[Architecture Decision Records](adr/README.md).
+
+Les ADR répondent à la question **« pourquoi MINOS est-il architecturé ainsi aujourd’hui ? »**. Ils ne servent pas de journal de validation de milestone.
+
+## Historique et preuves de jalon
+
+Les anciens dossiers `m0/` à `m13/` sont regroupés sous :
+
+- [Historique des jalons](history/milestones/README.md)
+
+Ces documents répondent à la question **« comment cette capacité a-t-elle été expérimentée, prouvée et livrée à ce moment-là ? »**. Ils conservent volontairement leurs SHA, nombres de tests, limitations fournisseur et états historiques.
+
+## Documents transverses
 
 - [État opérationnel](STATUS.md)
 - [Roadmap](ROADMAP.md)
 - [Cahier des charges](CAHIER_DES_CHARGES.md)
 - [MVP](MVP.md)
 - [Écosystème](ECOSYSTEME.md)
-- [ADR](adr/)
-- [M10 — MCP](m10/MCP_SERVER.md)
-- [M11 — API](m11/API.md)
-- [M12 — Multi-dépôts et Git](m12/MULTI_REPO_GIT.md)
-- [M13 — NEXUS](m13/NEXUS_INTEGRATION.md)
+- [ADR](adr/README.md)
 
-> Les documents de jalon peuvent contenir des chiffres de validation ou des états historiques propres à leur PR. Pour installer ou utiliser MINOS, privilégier les guides `user/`. Pour modifier le code, privilégier les guides `developer/`.
+> Pour installer ou utiliser MINOS, privilégier `user/`. Pour modifier le code, privilégier `developer/`. Pour comprendre une décision durable, privilégier `adr/`. Pour auditer une livraison historique, utiliser `history/milestones/`.
