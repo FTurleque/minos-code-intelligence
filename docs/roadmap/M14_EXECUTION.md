@@ -1,6 +1,6 @@
 # M14 — Exécution : indexation autonome et installation PROD
 
-Statut : **EN COURS — implémentation 7/7 ; qualification finale en attente**
+Statut : **EN COURS — implémentation 7/7 ; qualification finale en cours**
 
 Issue : **#42**  
 PR de travail : **#43**
@@ -34,21 +34,21 @@ project
 
 ## Lecture de l'avancement
 
-- ✅ = implémenté **et validé** sur le SHA courant ;
-- 🟡 = implémenté mais qualification locale/replay encore nécessaire ;
+- ✅ = implémenté **et validé sur le head final exact** ;
+- 🟡 = implémenté mais le head courant doit encore passer la qualification complète ;
 - ⬜ = non implémenté.
 
-| Étape | Fonction | Implémentation | Validation attendue |
+| Étape | Fonction | État du head courant | Gate final |
 |---|---|---:|---|
-| M14-S1 | Runtime providers + processus | 🟡 | tests + vrai processus enfant |
-| M14-S2 | scip-typescript autonome | 🟡 | installation + replay fixture TS |
-| M14-S3 | scip-java autonome | 🟡 | replay Maven Windows réel |
+| M14-S1 | Runtime providers + processus | 🟡 | `clean verify` + vrai processus enfant |
+| M14-S2 | scip-typescript autonome | 🟡 | installation + FULL → SUCCEEDED → NONE |
+| M14-S3 | scip-java autonome Windows | 🟡 | 0.13.1 + replay Maven + STALE/recovery |
 | M14-S4 | Staging multi-provider | 🟡 | collision/échec/promotion atomique |
-| M14-S5 | CLI autonome | 🟡 | `dry-run`, `NONE`, `FULL`, erreur provider |
-| M14-S6 | Installation native Windows | 🟡 | build `jpackage`, ZIP, install, `doctor` |
-| M14-S7 | Release + Docker + docs | 🟡 | même JAR release + Docker smoke |
+| M14-S5 | CLI autonome | 🟡 | `dry-run`, NONE, FULL, erreurs runtime |
+| M14-S6 | Installation native Windows | 🟡 | jpackage + ZIP + SHA-256 + install vierge |
+| M14-S7 | Release + Docker + docs | 🟡 | mêmes artefacts installés + Docker smoke |
 
-**Aucune étape n'est marquée ✅ avant validation exacte du head final.**
+**Une validation réussie sur un ancien SHA ne transforme pas le head courant en ✅.**
 
 ---
 
@@ -61,54 +61,81 @@ Implémenté :
 - timeout ;
 - capture stdout/stderr ;
 - destruction de l'arbre de processus ;
-- préservation d'un `index.scip` préexistant ;
-- artefact final copié sous `<MINOS_HOME>/runs/<runId>/<provider>/` ;
+- préservation d'un artefact préexistant ;
+- artefact final stable sous `<MINOS_HOME>/runs/<runId>/<provider>/` ;
 - masquage des arguments manifestement sensibles ;
-- `FileIndexStateStore` persistant pour les états projet/run.
-
-À valider : build/tests et cas timeout/process tree.
+- `FileIndexStateStore` persistant ;
+- bootstrap autonome lazy : les commandes `--help` restent sans effet de bord.
 
 ---
 
 ## M14-S2 — TypeScript
 
-Implémenté :
+Provider verrouillé :
 
 ```text
-MINOS_HOME/tools/scip-typescript/0.4.0/
+scip-typescript 0.4.0
 ```
+
+Installation gérée :
+
+```text
+<MINOS_HOME>/tools/scip-typescript/0.4.0/
+```
+
+Implémenté :
 
 - installation npm locale transactionnelle ;
 - aucun `npm -g` ;
-- `node` / `npm` diagnostiqués ;
-- `tsconfig.json` ou package compatible requis ;
+- diagnostic `node` / `npm` ;
 - aucune installation silencieuse des dépendances métier ;
-- `scip-typescript index` exécuté dans la racine projet ;
-- incrémental explicitement refusé tant qu'il n'est pas qualifié.
-
-À valider : replay TypeScript réel et second run `NONE`.
+- exécution `scip-typescript index` depuis la racine projet ;
+- incrémental non revendiqué tant qu'il n'est pas qualifié.
 
 ---
 
-## M14-S3 — Java
+## M14-S3 — Java Windows
 
-Implémenté :
+Provider verrouillé :
 
-- runtime `scip-java` verrouillé ;
-- résolution via Coursier géré/PATH ;
-- téléchargement Coursier Windows dans `MINOS_HOME/tools` ;
-- `JAVA_HOME` doit désigner un JDK avec `javac` ;
-- portée actuelle limitée aux projets Maven qualifiés ;
-- exécution dans la racine du projet ;
-- incrémental non revendiqué.
+```text
+scip-java 0.13.1
+org.scip-code:scip-java:0.13.1
+```
 
-À valider impérativement sous Windows : Maven réel, projet multi-module, échec de build et conservation du snapshot précédent.
+M14 réutilise explicitement la qualification Windows obtenue pendant M0 au lieu de lancer naïvement le provider.
+
+Runtime géré :
+
+```text
+<MINOS_HOME>/tools/
+├── coursier/windows-x64-official-launcher/cs.exe
+└── scip-java/0.13.1/runtime/
+    ├── scip-java-windows-runner.ps1
+    └── ScipWriter.java
+```
+
+Adaptations Windows qualifiées :
+
+1. shim local `mvn.exe` vers le Maven Wrapper du projet ou Maven disponible ;
+2. shim local `javac.exe` exécutant le launcher fournisseur via Git Bash ;
+3. patch `ScipWriter` identique à l'amont sauf suppression de l'attribut POSIX non supporté par Windows.
+
+Préconditions :
+
+```text
+JAVA_HOME -> JDK avec java/javac/jar
+pom.xml
+mvnw.cmd dans le projet ou un parent, sinon Maven dans PATH
+Git Bash
+csc.exe
+```
+
+Le runner est embarqué comme ressource du JAR et extrait par `minos tools install scip-java` : l'installation utilisateur ne dépend pas de `scripts/m0`.
 
 ---
 
 ## M14-S4 — Staging projet
-
-Le chemin actif devient :
 
 ```text
 provider artifact
@@ -117,7 +144,7 @@ temporary provider normalization
   ↓
 normalized provider snapshot
   ↓
-Project assembly
+project assembly
   ↓
 staged project snapshot
   ↓
@@ -126,11 +153,11 @@ atomic active publication
 
 Implémenté :
 
-- chaque provider normalisé dans un store temporaire ;
+- chaque provider est normalisé dans un store temporaire ;
 - aucun provider ne publie directement dans le store actif ;
 - assemblage projet ;
 - collision d'identifiant = échec explicite ;
-- promotion finale via `FileSymbolSnapshotStore`.
+- promotion finale unique via `FileSymbolSnapshotStore`.
 
 ---
 
@@ -148,11 +175,11 @@ minos doctor
 minos tools list
 minos tools install <provider>
 minos tools verify
+minos mcp
+minos --version
 ```
 
-Le mode historique `index --scip` reste temporairement accepté avec warning.
-
-### Planification
+`index` est le parcours autonome. `import-scip` porte le contrat d'import manuel explicite.
 
 Le service réutilise :
 
@@ -163,22 +190,22 @@ Le service réutilise :
 - `IncrementalIndexingPlanner` ;
 - `IndexingLifecycleService`.
 
-Donc M14 ne réimplémente pas M1/M7.
-
-### Politique actuelle
+Politique conservatrice actuelle :
 
 ```text
 aucun changement -> NONE
 changement       -> FULL
 ```
 
-car les versions providers gérées ne déclarent pas `INCREMENTAL_INDEXING`.
+car les providers gérés ne déclarent pas encore `INCREMENTAL_INDEXING`.
+
+`inspect` et `index-status` lisent les états M14 persistants (`READY`, `STALE`, `FAILED`, etc.).
 
 ---
 
 ## M14-S6 — Installation native Windows
 
-Implémenté :
+Build mainteneur :
 
 ```powershell
 .\scripts\release\build-windows-distribution.ps1 -Version 0.2.0
@@ -191,30 +218,32 @@ target/dist/minos-0.2.0-windows-x64.zip
 target/dist/minos-0.2.0-windows-x64.zip.sha256
 ```
 
-Le ZIP contient :
+Contenu attendu et contrôlé par l'installateur :
 
 ```text
-app/              app-image jpackage + runtime Java
-minos.cmd
-minos-mcp.cmd
-install.ps1
-VERSION
-README.txt
+minos-<version>-windows-x64/
+├── app/                                  # jpackage + runtime Java embarqué
+├── lib/
+│   └── minos.jar                         # shaded JAR exact de release
+├── docker/
+│   ├── Dockerfile.mcp.release
+│   ├── compose.mcp.prod.yaml
+│   └── scripts/prod-mcp-release.ps1
+├── minos.cmd
+├── minos-mcp.cmd
+├── install.ps1
+├── VERSION
+└── README.txt
 ```
 
-Installation par défaut sans élévation :
+Installation utilisateur par défaut :
 
 ```text
-%LOCALAPPDATA%\Programs\MINOS
+programme : %LOCALAPPDATA%\Programs\MINOS
+données   : %LOCALAPPDATA%\MINOS\data
 ```
 
-Données :
-
-```text
-%LOCALAPPDATA%\MINOS\data
-```
-
-Le launcher utilisateur n'exige pas de `JAVA_HOME` pour exécuter MINOS.
+Le runtime Java de MINOS est embarqué ; le JDK système reste uniquement une précondition éventuelle du projet indexé.
 
 ---
 
@@ -222,17 +251,14 @@ Le launcher utilisateur n'exige pas de `JAVA_HOME` pour exécuter MINOS.
 
 Implémenté :
 
-- version de développement portée à `0.2.0-SNAPSHOT` ;
-- version de release injectée dans un POM temporaire lors du packaging ;
+- version de développement `0.2.0-SNAPSHOT` ;
+- version de release injectée dans un POM temporaire ;
 - `Implementation-Version` dans le manifest ;
-- `minos --version` lit la version packagée ;
 - ZIP + SHA-256 ;
-- Dockerfile release consommant un `minos.jar` déjà construit ;
-- workflow Docker packagé séparé du build source ;
-- `docker-data` distinct du home natif ;
-- documentation PROD/native/Docker mise à jour.
-
-Le Docker garde :
+- Dockerfile release consommant `lib/minos.jar` ;
+- assets Docker inclus dans la distribution installable ;
+- `docker-data` séparé du home natif ;
+- Docker MCP toujours durci :
 
 ```text
 network_mode: none
@@ -242,29 +268,99 @@ cap_drop: ALL
 no-new-privileges
 ```
 
+Avec `-ValidateDocker`, le gate M14 utilise désormais **le JAR et les scripts de la distribution réellement installée**, pas les fichiers du checkout source.
+
+---
+
+# Historique de qualification Windows
+
+## Qualification #1 — `d3aaba517d50674eb13c7818c419f7acf02622af`
+
+Résultat :
+
+```text
+Java 24.0.1
+232 tests exécutés
+230 PASS
+2 FAIL
+0 ERROR
+BUILD FAILURE
+```
+
+Défauts identifiés puis corrigés :
+
+1. création de `MINOS_HOME` lors de `project add --help` → bootstrap autonome rendu lazy ;
+2. test M9 imposant encore `index --scip` → contrat réaligné sur `index` autonome + `import-scip` manuel.
+
+## Qualification #2 — `68e93bd7b2ccd5caa78f6596e392ad9e0fdba600`
+
+Gate Maven :
+
+```text
+181 sources main
+91 sources test
+232/232 tests PASS
+ShadedJarSmokeIT 1/1 PASS
+BUILD SUCCESS
+MINOS 0.2.0-SNAPSHOT
+```
+
+Replay TypeScript : **PASS** :
+
+```text
+installation scip-typescript 0.4.0 READY
+premier plan FULL
+première indexation SUCCEEDED
+second run NO_CHANGES / NONE
+```
+
+Replay Java : **BLOCKED au premier index réel** :
+
+```text
+provider déclaré READY
+scip-java 0.12.3
+démarrage du run
+provider exit code 1
+```
+
+Diagnostic : le runtime M14 utilisait une version/commande Java différente du chemin Windows déjà qualifié pendant M0 et ne portait pas les trois adaptations Windows nécessaires.
+
+Corrections postérieures :
+
+- retour au provider M0 qualifié `scip-java 0.13.1` ;
+- coordonnée `org.scip-code:scip-java:0.13.1` ;
+- runner Windows embarqué ;
+- shims Maven/javac ;
+- patch `ScipWriter` ;
+- diagnostic automatique des logs provider en cas d'échec ;
+- distribution native complétée avec `lib/minos.jar` et les assets Docker.
+
+**Le head courant doit être requalifié intégralement : les PASS du SHA `68e93bd...` sont des preuves historiques, pas une validation du nouveau head.**
+
 ---
 
 # Portes de qualification finale
 
 M14 ne devient **TERMINÉ** que lorsque le même SHA passe :
 
-1. `java -version` = Java 24 ;
-2. `git rev-parse HEAD` capturé ;
-3. `.\mvnw.cmd clean verify` vert ;
-4. tests nouveaux M14 verts ;
-5. installation provider TypeScript réelle ;
-6. indexation TypeScript réelle ;
-7. second run TypeScript inchangé → `NONE` ;
-8. indexation Java/Maven réelle sous Windows ;
-9. échec Java de refresh → état `STALE` et ancien snapshot lisible ;
-10. construction `minos-<version>-windows-x64.zip` ;
-11. vérification SHA-256 ;
-12. installation dans un répertoire vierge ;
-13. `minos --version` = version de release ;
-14. `minos doctor` fonctionnel sans JDK système requis pour la CLI ;
-15. `minos mcp` handshake STDIO ;
-16. image Docker construite depuis le même shaded JAR ;
-17. Docker `network=none`, projets/read-only confirmés.
+1. Java 24 ;
+2. SHA Git exact capturé et worktree propre ;
+3. `mvnw clean verify` vert ;
+4. tous les tests M14 verts ;
+5. installation `scip-typescript` réelle ;
+6. TypeScript FULL → SUCCEEDED → NONE ;
+7. installation `scip-java 0.13.1` réelle ;
+8. Java/Maven FULL → SUCCEEDED → NONE sous Windows ;
+9. échec Java volontaire → `STALE` avec ancien snapshot actif ;
+10. récupération Java → `SUCCEEDED` ;
+11. construction du ZIP Windows ;
+12. vérification SHA-256 ;
+13. installation dans un répertoire vierge ;
+14. `minos --version` = version de release ;
+15. `minos doctor` ;
+16. handshake MCP STDIO natif ;
+17. avec gate Docker : image construite depuis **`<installation>/lib/minos.jar`** et assets installés ;
+18. Docker `network=none` et projets read-only confirmés.
 
 ## Hors périmètre
 
