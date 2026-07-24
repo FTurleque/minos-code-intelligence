@@ -5,9 +5,7 @@ import com.minos.integration.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -30,10 +28,14 @@ public final class NexusExportCommand {
               -h, --help     Show this help
             """.stripTrailing();
 
-    private final NexusExportService exportService;
+    private final ExportOperation exportOperation;
 
     public NexusExportCommand(NexusExportService exportService) {
-        this.exportService = Objects.requireNonNull(exportService, "exportService");
+        this(Objects.requireNonNull(exportService, "exportService")::export);
+    }
+
+    NexusExportCommand(ExportOperation exportOperation) {
+        this.exportOperation = Objects.requireNonNull(exportOperation, "exportOperation");
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -58,7 +60,7 @@ public final class NexusExportCommand {
 
         NexusExportContract.ExportSnapshot snapshot;
         try {
-            snapshot = exportService.export(root);
+            snapshot = exportOperation.export(root);
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
                     .append(failureMessage(exception))
@@ -165,5 +167,10 @@ public final class NexusExportCommand {
         return message == null || message.isBlank()
                 ? exception.getClass().getSimpleName()
                 : message.replace('\r', ' ').replace('\n', ' ');
+    }
+
+    @FunctionalInterface
+    interface ExportOperation {
+        NexusExportContract.ExportSnapshot export(Path projectRoot) throws Exception;
     }
 }
