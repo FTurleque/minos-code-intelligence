@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexingRun;
@@ -47,7 +48,7 @@ class LocalProjectOperationsM14StateTest {
                 Optional.of(successAt),
                 List.of(new IndexingRun.IndexerExecution(
                         Language.JAVA,
-                        "scip-java",
+                        ManagedScipProviderRuntimeManager.SCIP_JAVA_ID,
                         home.resolve("runs").resolve(successfulRunId.toString()).resolve("scip-java/index.scip")
                 )),
                 Optional.of("snapshot-1"),
@@ -69,7 +70,11 @@ class LocalProjectOperationsM14StateTest {
         assertEquals("STALE", view.indexState());
         assertEquals("snapshot-1", view.activeSnapshotId());
         assertEquals(successAt.toString(), view.lastSuccessfulIndexAt());
-        assertEquals("scip-java", view.providerId());
-        assertEquals("scip-java@0.12.3", view.providerVersion());
+        assertEquals(ManagedScipProviderRuntimeManager.SCIP_JAVA_ID, view.providerId());
+        assertEquals(
+                ManagedScipProviderRuntimeManager.SCIP_JAVA_ID + "@"
+                        + ManagedScipProviderRuntimeManager.SCIP_JAVA_VERSION,
+                view.providerVersion()
+        );
     }
 }
