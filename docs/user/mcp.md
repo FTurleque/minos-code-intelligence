@@ -94,6 +94,39 @@ Exemple JSON conceptuel sous Windows :
 }
 ```
 
+## Configurations IntelliJ DEV et PROD
+
+Le dépôt fournit huit configurations partagées dans `.run/`. Elles utilisent
+Windows PowerShell directement et ne nécessitent ni commande POSIX `export` ni
+chemin de JDK codé en dur :
+
+- `[MINOS Dev] MCP` détecte un JDK 24, reconstruit le JAR et utilise
+  `target/minos-dev-home` ;
+- `[MINOS Prod] Install` construit l'image Docker Java 24 sous
+  `%LOCALAPPDATA%\MINOS` et exécute un vrai handshake MCP ;
+- `[MINOS Prod] Start` démarre le conteneur persistant en arrière-plan ;
+- `[MINOS Prod] MCP` ouvre une session STDIO dans ce conteneur avec
+  `docker exec -i` ;
+- `Status`, `Validate` et `Stop` contrôlent l'installation sans supprimer les
+  données ;
+- `[MINOS] Verify launch configs` contrôle les XML, PowerShell et Compose.
+
+Les mêmes opérations sont disponibles hors IntelliJ :
+
+```powershell
+.\docker\scripts\prod-mcp.ps1 -Action Install
+.\docker\scripts\prod-mcp.ps1 -Action Start
+.\docker\scripts\prod-mcp.ps1 -Action Attach
+.\docker\scripts\prod-mcp.ps1 -Action Status
+.\docker\scripts\prod-mcp.ps1 -Action Validate
+.\docker\scripts\prod-mcp.ps1 -Action Stop
+```
+
+Le runtime Docker n'expose aucun port et utilise `network_mode: none`. Le home
+`%LOCALAPPDATA%\MINOS\data` est monté en lecture/écriture ; la racine des projets
+est montée dans `/workspace/projects` en lecture seule. Le conteneur reste actif
+entre deux sessions STDIO.
+
 ## Contraintes importantes
 
 Le serveur utilise **stdout pour MCP**. Ne pas entourer le lancement d’un script qui écrit des messages de diagnostic sur stdout.
