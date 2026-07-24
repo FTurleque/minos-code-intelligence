@@ -32,6 +32,50 @@ function Invoke-NativeChecked {
     }
 }
 
+function Invoke-PowerShellScriptChecked {
+    param(
+        [Parameter(Mandatory = $true)][string] $Script,
+        [Parameter(Mandatory = $true)][hashtable] $Parameters,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    try {
+        & $Script @Parameters
+    }
+    catch {
+        throw "$Failure`: $($_.Exception.Message)"
+    }
+}
+
+function Assert-VersionProvenance {
+    param(
+        [Parameter(Mandatory = $true)][string] $VersionFile,
+        [Parameter(Mandatory = $true)][string] $ExpectedVersion,
+        [Parameter(Mandatory = $true)][string] $ExpectedCommit,
+        [Parameter(Mandatory = $true)][string] $Context
+    )
+
+    if (-not (Test-Path -LiteralPath $VersionFile -PathType Leaf)) {
+        throw "$Context provenance file not found: $VersionFile"
+    }
+
+    $Metadata = @{}
+    foreach ($Line in Get-Content -LiteralPath $VersionFile) {
+        if ($Line -match '^([^=]+)=(.*)$') {
+            $Metadata[$Matches[1].Trim()] = $Matches[2].Trim()
+        }
+    }
+
+    $ArtifactVersion = $Metadata['version']
+    $ArtifactCommit = $Metadata['commit']
+    if ($ArtifactVersion -ne $ExpectedVersion) {
+        throw "$Context version provenance mismatch: expected=$ExpectedVersion actual=$ArtifactVersion"
+    }
+    if ($ArtifactCommit -ne $ExpectedCommit) {
+        throw "$Context commit provenance mismatch: expected=$ExpectedCommit actual=$ArtifactCommit"
+    }
+}
+
 function Verify-Sha256 {
     param(
         [Parameter(Mandatory = $true)][string] $Artifact,
@@ -103,14 +147,14 @@ if (-not $ValidateOnly) {
 }
 
 if (-not $SkipBuild) {
-    & (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1') -Version $Version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Windows release distribution build failed with exit code $LASTEXITCODE"
-    }
-    & (Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1') -Version $Version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Windows release setup build failed with exit code $LASTEXITCODE"
-    }
+    Invoke-PowerShellScriptChecked `
+        -Script (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1') `
+        -Parameters @{ Version = $Version } `
+        -Failure 'Windows release distribution build failed'
+    Invoke-PowerShellScriptChecked `
+        -Script (Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1') `
+        -Parameters @{ Version = $Version } `
+        -Failure 'Windows release setup build failed'
 }
 
 $DistributionName = "minos-$Version-windows-x64"
@@ -118,6 +162,18 @@ $Zip = Join-Path $RepoRoot "target\dist\$DistributionName.zip"
 $ZipChecksum = "$Zip.sha256"
 $Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
 $SetupChecksum = "$Setup.sha256"
+$RequiredInstalledFiles = @(
+    'minos.cmd',
+    'minos-mcp.cmd',
+    'VERSION',
+    'app\minos.exe',
+    'app\runtime\bin\java.exe',
+    'lib\minos.jar',
+    'docker\Dockerfile.mcp.release',
+    'docker\compose.mcp.prod.yaml',
+    'docker\scripts\prod-mcp-release.ps1',
+    'docker\scripts\configure-docker-mcp.ps1'
+)
 
 $ZipHash = Verify-Sha256 -Artifact $Zip -Checksum $ZipChecksum
 $SetupHash = Verify-Sha256 -Artifact $Setup -Checksum $SetupChecksum
@@ -135,9 +191,21 @@ try {
         throw "Packaged portable installer not found: $PackagedInstaller"
     }
 
-    & $PackagedInstaller -Package $Zip -InstallRoot $ZipInstallRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Packaged portable installer smoke test failed with exit code $LASTEXITCODE"
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $ExtractRoot "$DistributionName\VERSION") `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'ZIP'
+
+    Invoke-PowerShellScriptChecked `
+        -Script $PackagedInstaller `
+        -Parameters @{ Package = $Zip; InstallRoot = $ZipInstallRoot } `
+        -Failure 'Packaged portable installer smoke test failed'
+    foreach ($Required in $RequiredInstalledFiles) {
+        $InstalledFile = Join-Path $ZipInstallRoot $Required
+        if (-not (Test-Path -LiteralPath $InstalledFile -PathType Leaf)) {
+            throw "Portable installer did not install required file: $InstalledFile"
+        }
     }
 
     $InstalledMinos = Join-Path $ZipInstallRoot 'minos.cmd'
@@ -148,6 +216,11 @@ try {
     if ($VersionOutput -ne "MINOS $Version") {
         throw "Portable MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
     }
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $ZipInstallRoot 'VERSION') `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'Portable installation'
 }
 finally {
     Remove-Item -LiteralPath $ZipSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -167,10 +240,13 @@ try {
         '/TASKS="!addtopath,!docker"'
     ) -Failure 'MINOS setup.exe silent installation failed'
 
-    $InstalledMinos = Join-Path $SetupInstallRoot 'minos.cmd'
-    if (-not (Test-Path -LiteralPath $InstalledMinos -PathType Leaf)) {
-        throw "MINOS setup.exe did not install minos.cmd: $InstalledMinos"
+    foreach ($Required in $RequiredInstalledFiles) {
+        $InstalledFile = Join-Path $SetupInstallRoot $Required
+        if (-not (Test-Path -LiteralPath $InstalledFile -PathType Leaf)) {
+            throw "MINOS setup.exe did not install required file: $InstalledFile"
+        }
     }
+    $InstalledMinos = Join-Path $SetupInstallRoot 'minos.cmd'
     $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "setup.exe installed MINOS --version failed with exit code $LASTEXITCODE"
@@ -178,6 +254,11 @@ try {
     if ($VersionOutput -ne "MINOS $Version") {
         throw "setup.exe installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
     }
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $SetupInstallRoot 'VERSION') `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'setup.exe installation'
 
     $Uninstaller = Get-ChildItem -LiteralPath $SetupInstallRoot -File -Filter 'unins*.exe' |
         Sort-Object Name |
@@ -192,8 +273,8 @@ try {
         '/NORESTART'
     ) -Failure 'MINOS setup.exe silent uninstall failed'
 
-    if (Test-Path -LiteralPath $InstalledMinos -PathType Leaf) {
-        throw "MINOS setup.exe uninstall left installed launcher behind: $InstalledMinos"
+    if (Test-Path -LiteralPath $SetupInstallRoot) {
+        throw "MINOS setup.exe uninstall left the program directory behind: $SetupInstallRoot"
     }
 }
 finally {

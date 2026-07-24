@@ -69,10 +69,6 @@ try {
             return
         }
         & $DockerScript -Action Stop
-        if ($LASTEXITCODE -ne 0) {
-            Fail-Or-Warn "MINOS Docker MCP stop failed with exit code $LASTEXITCODE. See $LogPath"
-            return
-        }
         Write-Host 'MINOS Docker MCP stopped before uninstall.' -ForegroundColor Green
         return
     }
@@ -117,10 +113,6 @@ try {
         -Version $Version `
         -Commit $Commit `
         -ProjectsRoot $ProjectsRoot
-    if ($LASTEXITCODE -ne 0) {
-        Fail-Or-Warn "MINOS Docker MCP installation failed with exit code $LASTEXITCODE. See $LogPath"
-        return
-    }
 
     @"
 version=$Version
@@ -131,15 +123,7 @@ configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 
     if ($Start) {
         & $DockerScript -Action Start
-        if ($LASTEXITCODE -ne 0) {
-            Fail-Or-Warn "MINOS Docker MCP start failed with exit code $LASTEXITCODE. See $LogPath"
-            return
-        }
         & $DockerScript -Action Validate
-        if ($LASTEXITCODE -ne 0) {
-            Fail-Or-Warn "MINOS Docker MCP validation failed with exit code $LASTEXITCODE. See $LogPath"
-            return
-        }
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
