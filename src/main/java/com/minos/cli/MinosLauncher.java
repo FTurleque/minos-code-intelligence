@@ -67,12 +67,14 @@ public final class MinosLauncher {
         Objects.requireNonNull(error, "error");
 
         Path normalizedHome = home.toAbsolutePath().normalize();
+        NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
+                new NexusExportService(registry(normalizedHome), snapshots(normalizedHome)).export(projectRoot));
         return new MinosCli(
                 new LazyLocalProjectSymbolQuery(normalizedHome),
                 new LazyProjectOperations(normalizedHome),
                 new LazyProjectArchitectureQuery(normalizedHome),
                 new LazyProjectImpactQuery(normalizedHome),
-                new NexusExportService(registry(normalizedHome), snapshots(normalizedHome))
+                nexusExportCommand
         ).run(arguments, output, error);
     }
 
