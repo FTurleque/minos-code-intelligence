@@ -34,19 +34,43 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 ## État courant
 
-C0 à M13 sont terminés et livrés.
+**C0 à M14 sont terminés et livrés.**
 
-**M14 est en cours de qualification** : l’implémentation structurelle de l’indexation autonome et de l’installation native Windows est présente sur sa branche/PR de travail, mais elle ne sera déclarée livrée qu’après validation exacte du head, replays providers réels et packaging Windows.
+M14 a fermé l’indexation autonome, le runtime provider Windows, la distribution Windows native, le MCP natif et le packaging de release. La PR M14 #43 a été fusionnée dans `main` le 24 juillet 2026.
 
 Voir :
 
 - [`docs/STATUS.md`](docs/STATUS.md) — état livré ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit ;
-- [`docs/roadmap/M14_EXECUTION.md`](docs/roadmap/M14_EXECUTION.md) — progression détaillée M14.
+- [`docs/roadmap/M14_EXECUTION.md`](docs/roadmap/M14_EXECUTION.md) — qualification détaillée M14.
 
-## Utilisation cible M14
+## Installer MINOS sous Windows
 
-Après installation :
+L’utilisateur normal **ne clone pas le dépôt MINOS et ne lance pas Maven**.
+
+Une GitHub Release Windows expose :
+
+```text
+minos-<version>-windows-x64.zip
+minos-<version>-windows-x64.zip.sha256
+```
+
+Le ZIP contient une app-image `jpackage`, le runtime Java nécessaire à MINOS, les launchers CLI/MCP et l’installateur PowerShell.
+
+Parcours :
+
+```text
+GitHub Release
+→ télécharger ZIP + SHA-256
+→ vérifier SHA-256
+→ décompresser
+→ install.ps1
+→ minos.cmd doctor
+```
+
+Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, les providers, la mise à jour, le rollback et la désinstallation.
+
+## Utilisation après installation
 
 ```powershell
 minos.cmd --version
@@ -84,7 +108,7 @@ Sous Windows PowerShell :
 .\mvnw.cmd clean verify
 ```
 
-La version de développement M14 est actuellement :
+La version de développement est actuellement :
 
 ```text
 0.2.0-SNAPSHOT
@@ -103,24 +127,30 @@ Le launcher du checkout `minos.cmd` recherche automatiquement le shaded JAR cour
 .\minos.cmd doctor
 ```
 
-## Distribution Windows native
+## Construire ou publier une distribution Windows
 
-M14 introduit un build de distribution :
+Cette section concerne les mainteneurs. Les utilisateurs téléchargent une GitHub Release.
+
+Construire localement :
 
 ```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0
+.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc1
 ```
 
 Sorties :
 
 ```text
-target/dist/minos-0.2.0-windows-x64.zip
-target/dist/minos-0.2.0-windows-x64.zip.sha256
+target/dist/minos-0.2.0-rc1-windows-x64.zip
+target/dist/minos-0.2.0-rc1-windows-x64.zip.sha256
 ```
 
-Le ZIP contient une app-image `jpackage` avec le runtime Java nécessaire à MINOS, les launchers CLI/MCP et un installateur PowerShell.
+Publier depuis un poste Windows avec GitHub CLI authentifié :
 
-Voir [Installation PROD Windows](docs/user/production-installation.md).
+```powershell
+.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc1
+```
+
+Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. La publication vérifie le checksum, réalise un smoke d’installation depuis le ZIP, refuse de remplacer une version/tag existant, puis attache le ZIP et son `.sha256` à la GitHub Release.
 
 ## Capacités CLI
 
@@ -166,7 +196,7 @@ nexus-export — contrat JSON M13
 
 ## MCP
 
-Le mode natif M14 vise :
+Le mode natif recommandé est :
 
 ```text
 command = <installation>\minos.cmd
