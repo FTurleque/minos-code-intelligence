@@ -11,6 +11,17 @@ import org.scip_code.scip.SymbolInformation;
  */
 final class ScipSymbolKindMapper {
 
+    private final ScipDescriptorKindMapper descriptorKindMapper = new ScipDescriptorKindMapper();
+
+    SymbolKind map(SymbolInformation.Kind kind, String rawSymbol) {
+        SymbolKind providerKind = map(kind);
+        if (providerKind != SymbolKind.OTHER
+                || kind != null && kind != SymbolInformation.Kind.UnspecifiedKind) {
+            return providerKind;
+        }
+        return descriptorKindMapper.map(rawSymbol);
+    }
+
     SymbolKind map(SymbolInformation.Kind kind) {
         if (kind == null) {
             return SymbolKind.OTHER;

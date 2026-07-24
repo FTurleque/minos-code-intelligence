@@ -11,6 +11,7 @@ public enum SymbolKind {
     ENUM,
     ANNOTATION,
     TRAIT,
+    TYPE,
     METHOD,
     CONSTRUCTOR,
     FUNCTION,

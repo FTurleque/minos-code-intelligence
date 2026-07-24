@@ -139,7 +139,7 @@ ENUM                          -> ENUM
 ANNOTATION                    -> ANNOTATION
 METHOD / FUNCTION             -> METHOD
 CONSTRUCTOR                   -> CONSTRUCTOR
-STRUCT / TYPE_ALIAS           -> TYPE
+TYPE / STRUCT / TYPE_ALIAS    -> TYPE
 ```
 
 Les autres kinds sont ignorés.

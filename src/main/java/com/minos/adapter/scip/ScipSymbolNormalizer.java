@@ -44,7 +44,7 @@ final class ScipSymbolNormalizer {
             return Optional.empty();
         }
 
-        SymbolKind kind = kindMapper.map(fact.kind());
+        SymbolKind kind = kindMapper.map(fact.kind(), fact.rawSymbol());
         String qualifiedName = ScipQualifiedNameExtractor.extract(fact.rawSymbol(), fact.language())
                 .orElse(null);
         SymbolIdentityQuality identityQuality;

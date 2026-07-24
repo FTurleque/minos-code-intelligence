@@ -33,4 +33,32 @@ class ScipSymbolKindMapperTest {
         assertEquals(SymbolKind.OTHER, mapper.map(SymbolInformation.Kind.UnspecifiedKind));
         assertEquals(SymbolKind.OTHER, mapper.map(null));
     }
+
+    @Test
+    void infersOnlyKindsEncodedByDescriptorsWhenProviderKindIsUnspecified() {
+        String prefix = "scip-typescript npm fixture 1.0.0 src/`greeting.ts`/";
+
+        assertEquals(SymbolKind.TYPE, mapper.map(
+                SymbolInformation.Kind.UnspecifiedKind, prefix + "GreetingPort#"));
+        assertEquals(SymbolKind.METHOD, mapper.map(
+                SymbolInformation.Kind.UnspecifiedKind, prefix + "GreetingPort#greet()."));
+        assertEquals(SymbolKind.CONSTRUCTOR, mapper.map(
+                SymbolInformation.Kind.UnspecifiedKind,
+                prefix + "GreetingService#`<constructor>`()."));
+        assertEquals(SymbolKind.FUNCTION, mapper.map(
+                SymbolInformation.Kind.UnspecifiedKind, prefix + "greet()."));
+        assertEquals(SymbolKind.OTHER, mapper.map(
+                SymbolInformation.Kind.UnspecifiedKind, prefix + "greeting."));
+    }
+
+    @Test
+    void explicitProviderKindTakesPrecedenceOverDescriptorFallback() {
+        String methodDescriptor =
+                "scip-typescript npm fixture 1.0.0 src/`greeting.ts`/GreetingPort#greet().";
+
+        assertEquals(SymbolKind.OTHER, mapper.map(
+                SymbolInformation.Kind.Parameter, methodDescriptor));
+        assertEquals(SymbolKind.INTERFACE, mapper.map(
+                SymbolInformation.Kind.Interface, methodDescriptor));
+    }
 }
