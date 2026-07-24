@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -52,19 +53,64 @@ public final class MinosNativeMcpSmoke {
 
             System.out.println("MINOS native MCP handshake SUCCESS");
         } finally {
-            process.destroy();
-            if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
-            }
+            stopProcessTree(process);
             if (process.exitValue() != 0 && process.exitValue() != 143) {
                 String error = Files.exists(stderr) ? Files.readString(stderr) : "";
                 if (!error.isBlank()) {
                     System.err.println(error);
                 }
             }
-            Files.deleteIfExists(stderr);
+            deleteWithRetry(stderr);
         }
+    }
+
+    private static void stopProcessTree(Process process) throws InterruptedException {
+        List<ProcessHandle> descendants = process.descendants().toList();
+        boolean parentExited = process.waitFor(5, TimeUnit.SECONDS);
+        if (!parentExited || descendants.stream().anyMatch(ProcessHandle::isAlive)) {
+            for (ProcessHandle descendant : descendants.reversed()) {
+                if (descendant.isAlive()) {
+                    descendant.destroy();
+                }
+            }
+            if (process.isAlive()) {
+                process.destroy();
+            }
+            awaitExit(descendants, Duration.ofSeconds(2));
+        }
+        for (ProcessHandle descendant : descendants.reversed()) {
+            if (descendant.isAlive()) {
+                descendant.destroyForcibly();
+            }
+        }
+        if (process.isAlive()) {
+            process.destroyForcibly();
+        }
+        if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("MINOS MCP process did not terminate");
+        }
+        awaitExit(descendants, Duration.ofSeconds(5));
+    }
+
+    private static void awaitExit(List<ProcessHandle> processes, Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (processes.stream().anyMatch(ProcessHandle::isAlive) && System.nanoTime() < deadline) {
+            Thread.sleep(25L);
+        }
+    }
+
+    private static void deleteWithRetry(Path path) throws IOException, InterruptedException {
+        IOException lastFailure = null;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            try {
+                Files.deleteIfExists(path);
+                return;
+            } catch (IOException failure) {
+                lastFailure = failure;
+                Thread.sleep(100L);
+            }
+        }
+        throw lastFailure;
     }
 
     private static String[] command(Path launcher) {
