@@ -84,6 +84,11 @@ begin
     end;
     CurrentPath := CurrentPath + AppPath;
     RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+    RegWriteStringValue(
+      HKCU,
+      'Software\FTurleque\MINOS',
+      'ManagedPath',
+      AppPath);
   end;
 end;
 
@@ -93,11 +98,22 @@ var
   AppPath: String;
   PaddedPath: String;
   Needle: String;
+  ManagedPath: String;
 begin
-  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+  if not RegQueryStringValue(
+    HKCU,
+    'Software\FTurleque\MINOS',
+    'ManagedPath',
+    ManagedPath) then
     exit;
 
-  AppPath := TrimTrailingBackslash(ExpandConstant('{app}'));
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+  begin
+    RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
+    exit;
+  end;
+
+  AppPath := TrimTrailingBackslash(ManagedPath);
   PaddedPath := ';' + CurrentPath + ';';
   Needle := ';' + AppPath + ';';
   StringChangeEx(PaddedPath, Needle, ';', True);
@@ -108,6 +124,7 @@ begin
     Delete(PaddedPath, Length(PaddedPath), 1);
 
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', PaddedPath);
+  RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
 end;
 
 function DockerReady(): Boolean;

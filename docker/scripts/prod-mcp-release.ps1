@@ -8,8 +8,15 @@ param(
     [string] $Version = '',
     [string] $Commit = 'unknown',
     [string] $InstallRoot = '',
+    [string] $DataRoot = '',
     [string] $ProjectsRoot = '',
-    [string] $ImageTag = ''
+    [string] $ImageTag = '',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $ContainerName = 'minos-mcp-prod',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $ComposeProject = 'minos-mcp-prod'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,7 +25,8 @@ Set-StrictMode -Version Latest
 if ($env:OS -ne 'Windows_NT') {
     throw 'The packaged MINOS Docker workflow currently targets Windows hosts.'
 }
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+$DockerCommand = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $DockerCommand) {
     throw 'Docker is required.'
 }
 & docker version --format '{{.Server.Version}}' | Out-Null
@@ -32,19 +40,20 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     $InstallRoot = Join-Path $LocalAppData 'MINOS\docker'
 }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+if ([string]::IsNullOrWhiteSpace($DataRoot)) {
+    $DataRoot = Join-Path $LocalAppData 'MINOS\docker-data'
+}
+$DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
 if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
     $ProjectsRoot = Split-Path -Parent $RepoRoot
 }
 $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
-$DataRoot = Join-Path $LocalAppData 'MINOS\docker-data'
 $BackupsRoot = Join-Path $InstallRoot 'backups'
 $ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
-$ContainerName = 'minos-mcp-prod'
-$ComposeProject = 'minos-mcp-prod'
 
 function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
@@ -58,18 +67,35 @@ function Compose([string[]] $Arguments) {
 }
 
 function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
-    # `java -version` writes to stderr on success. Windows PowerShell 5.1 turns
-    # native stderr into ErrorRecord objects, which conflicts with the global
-    # ErrorActionPreference=Stop. Inspect the native exit code explicitly.
-    $PreviousErrorActionPreference = $ErrorActionPreference
+    # `java -version` writes to stderr on success. Capture both native streams
+    # directly so Windows PowerShell 5.1 never promotes the banner to a red
+    # NativeCommandError record.
+    $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ProcessInfo.FileName = $DockerCommand.Source
+    $ProcessInfo.Arguments = 'run --rm --network none --entrypoint java "{0}" -version' -f $Image
+    $ProcessInfo.UseShellExecute = $false
+    $ProcessInfo.CreateNoWindow = $true
+    $ProcessInfo.RedirectStandardOutput = $true
+    $ProcessInfo.RedirectStandardError = $true
+
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $ProcessInfo
     try {
-        $ErrorActionPreference = 'Continue'
-        $Output = ((& docker run --rm --network none --entrypoint java $Image -version 2>&1) | Out-String).Trim()
-        $ExitCode = $LASTEXITCODE
+        if (-not $Process.Start()) {
+            throw "$Failure (process did not start)"
+        }
+        $StandardOutput = $Process.StandardOutput.ReadToEnd().Trim()
+        $StandardError = $Process.StandardError.ReadToEnd().Trim()
+        $Process.WaitForExit()
+        $ExitCode = $Process.ExitCode
     }
     finally {
-        $ErrorActionPreference = $PreviousErrorActionPreference
+        $Process.Dispose()
     }
+    $Output = @($StandardError, $StandardOutput) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { $_.Trim() }
+    $Output = $Output -join [Environment]::NewLine
     if ($ExitCode -ne 0) {
         throw "$Failure (exit=$ExitCode): $Output"
     }
@@ -151,6 +177,8 @@ MINOS_GIT_COMMIT=$Commit
             dataRoot = $DataRoot
             projectsRoot = $ProjectsRoot
             containerProjectsRoot = '/workspace/projects'
+            containerName = $ContainerName
+            composeProject = $ComposeProject
         } | ConvertTo-Json | Set-Content -LiteralPath $MetadataFile -Encoding utf8
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green

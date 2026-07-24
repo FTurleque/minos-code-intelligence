@@ -9,7 +9,16 @@ param(
     [switch] $Stop,
     [switch] $Strict,
 
-    [string] $LogPath = ''
+    [string] $LogPath = '',
+    [string] $DockerInstallRoot = '',
+    [string] $DockerDataRoot = '',
+    [string] $DockerImageTag = '',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $DockerContainerName = 'minos-mcp-prod',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $DockerComposeProject = 'minos-mcp-prod'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +29,18 @@ function Fail-Or-Warn([string] $Message) {
         throw $Message
     }
     Write-Warning $Message
+}
+
+function Read-KeyValueFile([string] $Path) {
+    $Values = @{}
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        foreach ($Line in Get-Content -LiteralPath $Path) {
+            if ($Line -match '^([^=]+)=(.*)$') {
+                $Values[$Matches[1].Trim()] = $Matches[2].Trim()
+            }
+        }
+    }
+    return $Values
 }
 
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
@@ -51,6 +72,27 @@ try {
         return
     }
 
+    function Invoke-DockerWorkflow([string] $Action, [hashtable] $AdditionalParameters = @{}) {
+        $Parameters = @{
+            Action = $Action
+            ContainerName = $DockerContainerName
+            ComposeProject = $DockerComposeProject
+        }
+        if (-not [string]::IsNullOrWhiteSpace($DockerInstallRoot)) {
+            $Parameters['InstallRoot'] = $DockerInstallRoot
+        }
+        if (-not [string]::IsNullOrWhiteSpace($DockerDataRoot)) {
+            $Parameters['DataRoot'] = $DockerDataRoot
+        }
+        if (-not [string]::IsNullOrWhiteSpace($DockerImageTag)) {
+            $Parameters['ImageTag'] = $DockerImageTag
+        }
+        foreach ($Key in $AdditionalParameters.Keys) {
+            $Parameters[$Key] = $AdditionalParameters[$Key]
+        }
+        & $DockerScript @Parameters
+    }
+
     $Docker = Get-Command docker -ErrorAction SilentlyContinue
     if (-not $Docker) {
         Fail-Or-Warn 'Docker Desktop is not installed or docker.exe is not in PATH. MINOS native installation is unaffected.'
@@ -68,7 +110,21 @@ try {
             Write-Host 'MINOS Docker MCP was not managed by this setup; nothing to stop.'
             return
         }
-        & $DockerScript -Action Stop
+        $Managed = Read-KeyValueFile -Path $ManagedMarker
+        if (-not [string]::IsNullOrWhiteSpace($Managed['dockerInstallRoot'])) {
+            $DockerInstallRoot = $Managed['dockerInstallRoot']
+        }
+        if (-not [string]::IsNullOrWhiteSpace($Managed['dockerDataRoot'])) {
+            $DockerDataRoot = $Managed['dockerDataRoot']
+        }
+        if (-not [string]::IsNullOrWhiteSpace($Managed['containerName'])) {
+            $DockerContainerName = $Managed['containerName']
+        }
+        if (-not [string]::IsNullOrWhiteSpace($Managed['composeProject'])) {
+            $DockerComposeProject = $Managed['composeProject']
+        }
+        Invoke-DockerWorkflow -Action Stop
+        Remove-Item -LiteralPath $ManagedMarker -Force
         Write-Host 'MINOS Docker MCP stopped before uninstall.' -ForegroundColor Green
         return
     }
@@ -91,12 +147,7 @@ try {
         }
     }
 
-    $Metadata = @{}
-    foreach ($Line in Get-Content -LiteralPath $VersionFile) {
-        if ($Line -match '^([^=]+)=(.*)$') {
-            $Metadata[$Matches[1].Trim()] = $Matches[2].Trim()
-        }
-    }
+    $Metadata = Read-KeyValueFile -Path $VersionFile
     $Version = $Metadata['version']
     $Commit = $Metadata['commit']
     if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -107,23 +158,27 @@ try {
         $Commit = 'unknown'
     }
 
-    & $DockerScript `
-        -Action Install `
-        -Jar $Jar `
-        -Version $Version `
-        -Commit $Commit `
-        -ProjectsRoot $ProjectsRoot
+    Invoke-DockerWorkflow -Action Install -AdditionalParameters @{
+        Jar = $Jar
+        Version = $Version
+        Commit = $Commit
+        ProjectsRoot = $ProjectsRoot
+    }
 
     @"
 version=$Version
 commit=$Commit
 projectsRoot=$ProjectsRoot
+dockerInstallRoot=$DockerInstallRoot
+dockerDataRoot=$DockerDataRoot
+containerName=$DockerContainerName
+composeProject=$DockerComposeProject
 configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 "@ | Set-Content -LiteralPath $ManagedMarker -Encoding ascii
 
     if ($Start) {
-        & $DockerScript -Action Start
-        & $DockerScript -Action Validate
+        Invoke-DockerWorkflow -Action Start
+        Invoke-DockerWorkflow -Action Validate
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
