@@ -51,6 +51,10 @@ $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 if ($IsccCommand) {
     $IsccCandidates += $IsccCommand.Source
 }
+if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
+    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+}
 if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
     $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
     $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
