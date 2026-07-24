@@ -28,7 +28,8 @@ VersionInfoVersion={#MinosAppVersion}
 VersionInfoCompany=FTurleque
 VersionInfoDescription={#MinosName} Windows installer
 VersionInfoProductName={#MinosName}
-VersionInfoProductVersion={#MinosVersion}
+VersionInfoProductVersion={#MinosAppVersion}
+VersionInfoProductTextVersion={#MinosVersion}
 
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
@@ -76,8 +77,11 @@ begin
 
   if not PathContainsEntry(CurrentPath, AppPath) then
   begin
-    if (CurrentPath <> '') and (CurrentPath[Length(CurrentPath)] <> ';') then
-      CurrentPath := CurrentPath + ';';
+    if CurrentPath <> '' then
+    begin
+      if CurrentPath[Length(CurrentPath)] <> ';' then
+        CurrentPath := CurrentPath + ';';
+    end;
     CurrentPath := CurrentPath + AppPath;
     RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
   end;
@@ -133,14 +137,16 @@ begin
     wpSelectTasks,
     'MCP Docker MINOS',
     'Choisissez la racine des projets exposés au MCP Docker',
-    'Les projets de cette racine seront montés en lecture seule dans le conteneur MINOS.');
+    'Les projets de cette racine seront montés en lecture seule dans le conteneur MINOS.',
+    False,
+    '');
   DockerProjectsPage.Add('Racine des projets :');
 
   RequestedRoot := ExpandConstant('{param:DOCKERPROJECTSROOT|}');
   if RequestedRoot <> '' then
     DockerProjectsPage.Values[0] := RequestedRoot
   else
-    DockerProjectsPage.Values[0] := ExpandConstant('{userprofile}');
+    DockerProjectsPage.Values[0] := ExpandConstant('{%USERPROFILE}');
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
