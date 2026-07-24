@@ -31,6 +31,27 @@ function Invoke-NativeChecked {
     }
 }
 
+function Verify-Sha256 {
+    param(
+        [Parameter(Mandatory = $true)][string] $Artifact,
+        [Parameter(Mandatory = $true)][string] $Checksum
+    )
+
+    if (-not (Test-Path -LiteralPath $Artifact -PathType Leaf)) {
+        throw "Release artifact not found: $Artifact"
+    }
+    if (-not (Test-Path -LiteralPath $Checksum -PathType Leaf)) {
+        throw "Release checksum not found: $Checksum"
+    }
+
+    $ExpectedHash = ((Get-Content -LiteralPath $Checksum | Select-Object -First 1) -split '\s+')[0]
+    $ActualHash = (Get-FileHash -LiteralPath $Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($ExpectedHash) -or $ExpectedHash.ToLowerInvariant() -ne $ActualHash) {
+        throw "Release checksum mismatch for $Artifact`: expected=$ExpectedHash actual=$ActualHash"
+    }
+    return $ActualHash
+}
+
 $Git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $Git) {
     throw 'git is required to publish a MINOS release.'
@@ -79,58 +100,100 @@ if ([string]::IsNullOrWhiteSpace($Repository)) {
 if (-not $SkipBuild) {
     & (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1') -Version $Version
     if ($LASTEXITCODE -ne 0) {
-        throw "Windows release build failed with exit code $LASTEXITCODE"
+        throw "Windows release distribution build failed with exit code $LASTEXITCODE"
+    }
+    & (Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1') -Version $Version
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows release setup build failed with exit code $LASTEXITCODE"
     }
 }
 
 $DistributionName = "minos-$Version-windows-x64"
 $Zip = Join-Path $RepoRoot "target\dist\$DistributionName.zip"
-$Checksum = "$Zip.sha256"
+$ZipChecksum = "$Zip.sha256"
+$Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
+$SetupChecksum = "$Setup.sha256"
 
-if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) {
-    throw "Windows release ZIP not found: $Zip"
-}
-if (-not (Test-Path -LiteralPath $Checksum -PathType Leaf)) {
-    throw "Windows release checksum not found: $Checksum"
-}
+$ZipHash = Verify-Sha256 -Artifact $Zip -Checksum $ZipChecksum
+$SetupHash = Verify-Sha256 -Artifact $Setup -Checksum $SetupChecksum
 
-$ExpectedHash = ((Get-Content -LiteralPath $Checksum | Select-Object -First 1) -split '\s+')[0]
-$ActualHash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-if ([string]::IsNullOrWhiteSpace($ExpectedHash) -or $ExpectedHash.ToLowerInvariant() -ne $ActualHash) {
-    throw "Distribution checksum mismatch: expected=$ExpectedHash actual=$ActualHash"
-}
-
-# Validate the installer that is actually shipped in the ZIP, then use that
-# installer to consume the ZIP itself. This catches packaging/installer drift
-# before an immutable GitHub Release is created.
-$SmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-smoke-" + [Guid]::NewGuid())
-$ExtractRoot = Join-Path $SmokeRoot 'package'
-$InstallRoot = Join-Path $SmokeRoot 'installed'
+# Validate the portable installer that is actually shipped in the ZIP, then use
+# it to consume the ZIP itself. This protects the portable distribution path.
+$ZipSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-zip-smoke-" + [Guid]::NewGuid())
+$ExtractRoot = Join-Path $ZipSmokeRoot 'package'
+$ZipInstallRoot = Join-Path $ZipSmokeRoot 'installed'
 try {
     New-Item -ItemType Directory -Force -Path $ExtractRoot | Out-Null
     Expand-Archive -LiteralPath $Zip -DestinationPath $ExtractRoot -Force
 
     $PackagedInstaller = Join-Path $ExtractRoot "$DistributionName\install.ps1"
     if (-not (Test-Path -LiteralPath $PackagedInstaller -PathType Leaf)) {
-        throw "Packaged installer not found: $PackagedInstaller"
+        throw "Packaged portable installer not found: $PackagedInstaller"
     }
 
-    & $PackagedInstaller -Package $Zip -InstallRoot $InstallRoot
+    & $PackagedInstaller -Package $Zip -InstallRoot $ZipInstallRoot
     if ($LASTEXITCODE -ne 0) {
-        throw "Packaged installer smoke test failed with exit code $LASTEXITCODE"
+        throw "Packaged portable installer smoke test failed with exit code $LASTEXITCODE"
     }
 
-    $InstalledMinos = Join-Path $InstallRoot 'minos.cmd'
+    $InstalledMinos = Join-Path $ZipInstallRoot 'minos.cmd'
     $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) {
-        throw "Installed MINOS --version failed with exit code $LASTEXITCODE"
+        throw "Portable MINOS --version failed with exit code $LASTEXITCODE"
     }
     if ($VersionOutput -ne "MINOS $Version") {
-        throw "Installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
+        throw "Portable MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
     }
 }
 finally {
-    Remove-Item -LiteralPath $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $ZipSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Smoke-test the user-facing setup.exe without touching the caller's PATH or
+# Docker configuration. The setup is installed and then uninstalled silently.
+$SetupSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-setup-smoke-" + [Guid]::NewGuid())
+$SetupInstallRoot = Join-Path $SetupSmokeRoot 'installed'
+try {
+    New-Item -ItemType Directory -Force -Path $SetupSmokeRoot | Out-Null
+    Invoke-NativeChecked -File $Setup -Arguments @(
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        "/DIR=$SetupInstallRoot",
+        '/TASKS="!addtopath,!docker"'
+    ) -Failure 'MINOS setup.exe silent installation failed'
+
+    $InstalledMinos = Join-Path $SetupInstallRoot 'minos.cmd'
+    if (-not (Test-Path -LiteralPath $InstalledMinos -PathType Leaf)) {
+        throw "MINOS setup.exe did not install minos.cmd: $InstalledMinos"
+    }
+    $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "setup.exe installed MINOS --version failed with exit code $LASTEXITCODE"
+    }
+    if ($VersionOutput -ne "MINOS $Version") {
+        throw "setup.exe installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
+    }
+
+    $Uninstaller = Get-ChildItem -LiteralPath $SetupInstallRoot -File -Filter 'unins*.exe' |
+        Sort-Object Name |
+        Select-Object -First 1 -ExpandProperty FullName
+    if ([string]::IsNullOrWhiteSpace($Uninstaller)) {
+        throw "MINOS setup.exe did not register an uninstaller under $SetupInstallRoot"
+    }
+
+    Invoke-NativeChecked -File $Uninstaller -Arguments @(
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART'
+    ) -Failure 'MINOS setup.exe silent uninstall failed'
+
+    if (Test-Path -LiteralPath $InstalledMinos -PathType Leaf) {
+        throw "MINOS setup.exe uninstall left installed launcher behind: $InstalledMinos"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $SetupSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $Tag = "v$Version"
@@ -163,8 +226,10 @@ if ($ExistingTag.Count -gt 0) {
 
 $ReleaseArguments = @(
     'release', 'create', $Tag,
+    $Setup,
+    $SetupChecksum,
     $Zip,
-    $Checksum,
+    $ZipChecksum,
     '--repo', $Repository,
     '--target', $TargetCommit,
     '--title', "MINOS $Version",
@@ -179,8 +244,10 @@ Invoke-NativeChecked -File $Gh.Source -Arguments $ReleaseArguments `
 
 Write-Host ''
 Write-Host 'MINOS GitHub Release SUCCESS' -ForegroundColor Green
-Write-Host "Repository : $Repository"
-Write-Host "Tag        : $Tag"
-Write-Host "Commit     : $TargetCommit"
-Write-Host "ZIP        : $Zip"
-Write-Host "SHA-256    : $ActualHash"
+Write-Host "Repository    : $Repository"
+Write-Host "Tag           : $Tag"
+Write-Host "Commit        : $TargetCommit"
+Write-Host "Setup         : $Setup"
+Write-Host "Setup SHA-256 : $SetupHash"
+Write-Host "ZIP           : $Zip"
+Write-Host "ZIP SHA-256   : $ZipHash"
