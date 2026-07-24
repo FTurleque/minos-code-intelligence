@@ -2,7 +2,7 @@
 
 Dernière mise à jour documentaire : **24 juillet 2026**
 
-Ce fichier résume l’état produit. Les SHA exacts, résultats de gates et éventuels échecs intermédiaires restent suivis dans les issues et PR de jalon.
+Ce fichier résume l’état produit. Les preuves détaillées par jalon sont archivées dans [`history/milestones/`](history/milestones/) ; les décisions architecturales durables sont indexées dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
@@ -21,112 +21,91 @@ M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
 M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
 M11 — API publique                  TERMINÉ, VALIDÉ ET LIVRÉ
 M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
-M13 — Intégration NEXUS             IMPLÉMENTÉE — QUALIFICATION INTER-DÉPÔT EN COURS
+M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
 ```
 
-## Portes livrées récentes
+## Dernière porte MINOS validée
 
-### M11 — API publique
+M13 a été fusionné dans `main` puis revalidé sous Java 24 :
 
 ```text
-head validé   fae552e8e6f2aa66c327fb80485f5bad448d7520
-merge         3780785f167cf373dfe0e9cf34f3c3862e87b868
-tests         214/214 PASS
+main exact      7c5eda4727cda3d46cab24037e4f1276ff0b4a25
+sources main    163
+sources test    86
+Surefire        227 PASS
+Failsafe        1 ShadedJarSmokeIT PASS
+BUILD SUCCESS
 ```
 
-Contrat :
+Export interne M13 :
 
 ```text
-com.minos.api.MinosApi
-com.minos.api.LocalMinosApi
-CONTRACT_VERSION = 1
+M13 MINOS export: contract=1, symbols=19, relations=14
 ```
 
-### M12 — Multi-dépôts et intelligence Git
+## Intégration NEXUS livrée
+
+Compagnon : `FTurleque/nexus-context-engine` PR #12, fusionnée dans `main`.
 
 ```text
-head validé   6c771909e0b97b49fbd8e49090522d8a6c0b53aa
-merge         3bc6cc364b6d7d651c1c9ab3a93ecac28ce02e86
-tests         221/221 PASS
+head NEXUS validé   df61c9c07b5ec3271aba27f54da272b4689fb017
+merge NEXUS         13fd6970f7350602c7a86aae729ddd4adad771bd
+Java NEXUS          21.0.10 LTS
+Maven               3.9.11
+sources main        128
+sources test        41
+tests               80
+failures            0
+errors              0
+skipped             6
+BUILD SUCCESS
 ```
 
-Acquis : workspaces, résolution cross-repository exacte, Git via JGit, activité bornée par commits/fichiers/zones et contrat public M12 additif.
+Sonar NEXUS : **Quality Gate Passed**, 0 Security Hotspot.
 
-## M13 — Intégration NEXUS
-
-Suivi MINOS : issue #37 / PR #38.
-
-Compagnon NEXUS : `FTurleque/nexus-context-engine` issue #11 / PR #12.
-
-### Frontière actuelle
-
-```mermaid
-sequenceDiagram
-    actor O as Shell / IDE / JARVIS
-    participant M as MINOS Java 24
-    participant N as NEXUS Java 21
-
-    O->>M: nexus-export --root <project>
-    M-->>O: JSON contract v1
-    O->>N: minos-import <project> < JSON
-    N-->>O: faits MINOS persistés / résultat import
-```
-
-MINOS produit des faits ; NEXUS conserve le ranking, la sélection et le budget de contexte.
-
-### Surface MINOS M13
+### Replay réel MINOS → NEXUS
 
 ```text
-NexusExportContract.CONTRACT_VERSION = 1
-NexusExportContract.PRODUCER = MINOS
-NexusExportService
-NexusExportCommand
-minos nexus-export --root <project-root>
+MINOS Java 24
+  nexus-export --root <project>
+        |
+        | JSON contract v1
+        v
+NEXUS Java 21
+  minos-import <project> < stdin
 ```
 
-L’export :
-
-- lit uniquement le snapshot actif ;
-- reste read-only ;
-- conserve origine, nature, confiance et preuves ;
-- n’exporte que les symboles locaux rattachables à un fichier réel ;
-- reconstruit les `fileId` SCIP stables ;
-- exporte les relations symbol → symbol locales résolues ;
-- expose les omissions/troncatures sous forme de limitations.
-
-### Compagnon NEXUS
-
-Le design final de qualification repose sur un import JSON explicite côté NEXUS. NEXUS ne doit pas connaître le JAR MINOS ni lancer un runtime Java 24 depuis son cœur.
-
-La provenance des faits importés reste :
+Preuve finale :
 
 ```text
-sourceProvider = minos
+M13 MINOS->NEXUS: symbols=11, relations=6, nexus-symbols=11, search=5
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+M13 MINOS -> NEXUS replay SUCCESS
 ```
 
-### Porte inter-dépôt
+`GreetingPort` est importé avec `sourceProvider=minos` puis retrouvé par `SearchService`.
 
-La livraison M13 exige :
+## Frontières architecturales courantes
 
-1. validation du head exact MINOS sous Java 24 ;
-2. validation du head exact NEXUS sous Java 21 ;
-3. replay réel MINOS → JSON → NEXUS ;
-4. preuve que `GreetingPort` est importé avec `sourceProvider=minos` et retrouvé par `SearchService`.
+- MINOS reste propriétaire des faits de Code Intelligence ;
+- NEXUS reste propriétaire du ranking, de la sélection et du budget de contexte ;
+- les capacités fournisseur absentes ne sont jamais inventées ;
+- l’analyse d’impact reste potentielle, jamais une preuve runtime exhaustive ;
+- une relation cross-repository exige une identité exacte et unique ;
+- l’activité Git reste distincte de l’importance architecturale ;
+- CLI, API, MCP et export NEXUS exposent le même cœur métier.
 
-Tout nouveau commit sur un head après sa validation invalide la preuve correspondante.
-
-## GitHub Actions
-
-La porte locale MINOS reste fondée sur le build exact du SHA qualifié. L’anomalie historique GitHub Actions est suivie séparément dans #5.
+Voir l’index des décisions dans [`adr/README.md`](adr/README.md).
 
 ## Documentation
 
 - portail : [`README.md`](README.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
-- contrat M13 : [`m13/NEXUS_INTEGRATION.md`](m13/NEXUS_INTEGRATION.md) ;
-- décision M13 : [`m13/DECISION_M13.md`](m13/DECISION_M13.md).
+- décisions : [`adr/README.md`](adr/README.md) ;
+- preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
 
-## Sources de vérité opérationnelles
+## Source de vérité
 
-Pour une validation en cours, l’issue et la PR du jalon priment sur un ancien chiffre copié dans un document historique.
+`STATUS.md` décrit l’état livré. `ROADMAP.md` décrit la progression produit. Les ADR décrivent les décisions durables. Les rapports sous `history/milestones/` restent des archives et peuvent contenir des états intermédiaires propres à leur date de validation.
