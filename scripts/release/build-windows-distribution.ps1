@@ -104,6 +104,19 @@ try {
         throw "jpackage app image is incomplete: $AppImage"
     }
     Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
+
+    $LibDirectory = Join-Path $Distribution 'lib'
+    $DockerDirectory = Join-Path $Distribution 'docker'
+    $DockerScripts = Join-Path $DockerDirectory 'scripts'
+    New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts | Out-Null
+    Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
+        -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
+        -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
+        -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
+
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Destination (Join-Path $Distribution 'install.ps1')
 
@@ -139,6 +152,13 @@ Default data directory:
 MCP:
   command = <installation>\minos.cmd
   args    = mcp
+
+Optional hardened Docker MCP:
+  powershell -File <installation>\docker\scripts\prod-mcp-release.ps1 `
+    -Action Install `
+    -Jar <installation>\lib\minos.jar `
+    -Version $Version `
+    -ProjectsRoot N:\workspace-dev
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
     $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
