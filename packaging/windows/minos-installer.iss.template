@@ -1,0 +1,187 @@
+#define MinosName "MINOS Code Intelligence"
+#define MinosVersion "@@VERSION@@"
+#define MinosSourceDir "@@SOURCE_DIR@@"
+#define MinosOutputDir "@@OUTPUT_DIR@@"
+#define MinosOutputBaseFilename "@@OUTPUT_BASENAME@@"
+
+[Setup]
+AppId={{7B91F355-0B8A-4D28-A6C6-5CE4B1C5F62B}
+AppName={#MinosName}
+AppVersion={#MinosVersion}
+AppPublisher=FTurleque
+DefaultDirName={localappdata}\Programs\MINOS
+DefaultGroupName=MINOS
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+OutputDir={#MinosOutputDir}
+OutputBaseFilename={#MinosOutputBaseFilename}
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+ChangesEnvironment=yes
+SetupLogging=yes
+UninstallDisplayName={#MinosName}
+VersionInfoVersion={#MinosVersion}
+VersionInfoCompany=FTurleque
+VersionInfoDescription={#MinosName} Windows installer
+VersionInfoProductName={#MinosName}
+VersionInfoProductVersion={#MinosVersion}
+
+[Tasks]
+Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
+Name: "docker"; Description: "Configurer et démarrer le MCP Docker (Docker Desktop requis)"; GroupDescription: "MCP Docker optionnel :"; Flags: unchecked
+
+[Files]
+Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
+
+[Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -ProjectsRoot ""{code:GetDockerProjectsRoot}"" -Start"; StatusMsg: "Configuration et validation du MCP Docker MINOS..."; Flags: runhidden waituntilterminated; Tasks: docker; Check: DockerReady
+
+[Code]
+var
+  DockerProjectsPage: TInputDirWizardPage;
+  DockerWarningShown: Boolean;
+
+function TrimTrailingBackslash(Value: String): String;
+begin
+  Result := Value;
+  while (Length(Result) > 3) and (Result[Length(Result)] = '\') do
+    Delete(Result, Length(Result), 1);
+end;
+
+function PathContainsEntry(PathValue: String; Entry: String): Boolean;
+var
+  Haystack: String;
+  Needle: String;
+begin
+  Haystack := ';' + Lowercase(PathValue) + ';';
+  Needle := ';' + Lowercase(TrimTrailingBackslash(Entry)) + ';';
+  Result := Pos(Needle, StringChangeEx(Haystack, '\;', ';', True)) > 0;
+  if not Result then
+    Result := Pos(Needle, Haystack) > 0;
+end;
+
+procedure AddMinosToUserPath;
+var
+  CurrentPath: String;
+  AppPath: String;
+begin
+  AppPath := TrimTrailingBackslash(ExpandConstant('{app}'));
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    CurrentPath := '';
+
+  if not PathContainsEntry(CurrentPath, AppPath) then
+  begin
+    if (CurrentPath <> '') and (CurrentPath[Length(CurrentPath)] <> ';') then
+      CurrentPath := CurrentPath + ';';
+    CurrentPath := CurrentPath + AppPath;
+    RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
+  end;
+end;
+
+procedure RemoveMinosFromUserPath;
+var
+  CurrentPath: String;
+  AppPath: String;
+  PaddedPath: String;
+  Needle: String;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+    exit;
+
+  AppPath := TrimTrailingBackslash(ExpandConstant('{app}'));
+  PaddedPath := ';' + CurrentPath + ';';
+  Needle := ';' + AppPath + ';';
+  StringChangeEx(PaddedPath, Needle, ';', True);
+
+  while (Length(PaddedPath) > 0) and (PaddedPath[1] = ';') do
+    Delete(PaddedPath, 1, 1);
+  while (Length(PaddedPath) > 0) and (PaddedPath[Length(PaddedPath)] = ';') do
+    Delete(PaddedPath, Length(PaddedPath), 1);
+
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', PaddedPath);
+end;
+
+function DockerReady(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(
+    ExpandConstant('{cmd}'),
+    '/C docker version >NUL 2>&1',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode) and (ResultCode = 0);
+end;
+
+function GetDockerProjectsRoot(Param: String): String;
+begin
+  Result := DockerProjectsPage.Values[0];
+end;
+
+procedure InitializeWizard;
+var
+  RequestedRoot: String;
+begin
+  DockerWarningShown := False;
+  DockerProjectsPage := CreateInputDirPage(
+    wpSelectTasks,
+    'MCP Docker MINOS',
+    'Choisissez la racine des projets exposés au MCP Docker',
+    'Les projets de cette racine seront montés en lecture seule dans le conteneur MINOS.');
+  DockerProjectsPage.Add('Racine des projets :');
+
+  RequestedRoot := ExpandConstant('{param:DOCKERPROJECTSROOT|}');
+  if RequestedRoot <> '' then
+    DockerProjectsPage.Values[0] := RequestedRoot
+  else
+    DockerProjectsPage.Values[0] := ExpandConstant('{userprofile}');
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = DockerProjectsPage.ID) and (not WizardIsTaskSelected('docker'));
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = DockerProjectsPage.ID) and WizardIsTaskSelected('docker') then
+  begin
+    if not DirExists(DockerProjectsPage.Values[0]) then
+    begin
+      MsgBox('La racine des projets n''existe pas. Choisissez un dossier existant.', mbError, MB_OK);
+      Result := False;
+      exit;
+    end;
+
+    if (not DockerReady()) and (not DockerWarningShown) then
+    begin
+      DockerWarningShown := True;
+      MsgBox(
+        'Docker Desktop n''est pas disponible ou son daemon n''est pas démarré.' + #13#10 + #13#10 +
+        'MINOS sera installé normalement, mais la configuration du MCP Docker sera ignorée. ' +
+        'Vous pourrez la lancer plus tard depuis les scripts installés.',
+        mbInformation,
+        MB_OK);
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
+    AddMinosToUserPath;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    RemoveMinosFromUserPath;
+end;
