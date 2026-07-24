@@ -14,12 +14,14 @@ La frontière M13 transporte un document JSON versionné. MINOS n’intègre auc
 ```mermaid
 sequenceDiagram
     actor U as Utilisateur / Orchestrateur
-    participant M as MINOS Java 24
+    participant M as MINOS
     participant J as JSON contract v1
     participant N as NEXUS Java 21
     participant R as Index NEXUS
     participant S as SearchService NEXUS
 
+    U->>M: index <project>
+    M->>M: provider -> snapshot actif
     U->>M: nexus-export --root <project>
     M-->>J: stdout JSON
     U->>N: minos-import <project> < JSON
@@ -31,20 +33,32 @@ sequenceDiagram
     S-->>U: Résultats classés par NEXUS
 ```
 
-## Côté MINOS
+## Côté MINOS installé
 
-Commande :
+Préparer le projet :
 
 ```powershell
-java -jar $minos nexus-export --root N:\workspace-dev\my-project
+minos.cmd project add N:\workspace-dev\my-project --name my-project
+minos.cmd index my-project
+minos.cmd index-status my-project --format json
+```
+
+Puis exporter :
+
+```powershell
+minos.cmd nexus-export --root N:\workspace-dev\my-project
 ```
 
 Pour écrire dans un fichier :
 
 ```powershell
-java -jar $minos nexus-export --root N:\workspace-dev\my-project `
+minos.cmd nexus-export --root N:\workspace-dev\my-project `
   > N:\temp\minos-export.json
 ```
+
+Depuis un checkout source, `java -jar <minos-all.jar>` reste équivalent.
+
+## Contrat
 
 Le contrat courant expose :
 
@@ -73,14 +87,17 @@ Le document contient :
 2. qu’un snapshot MINOS actif existe ;
 3. que les fichiers exportés puissent être rattachés de façon sûre à la racine du projet.
 
-Exemple de préparation :
+Le parcours M14 normal est donc :
 
-```powershell
-java -jar $minos project add N:\workspace-dev\my-project --name my-project
-java -jar $minos index my-project `
-  --scip N:\workspace-dev\my-project\index.scip `
-  --provider scip-typescript
+```text
+project add
+→ tools/provider prêt
+→ index <project>
+→ snapshot READY
+→ nexus-export
 ```
+
+L’import SCIP manuel n’est plus nécessaire dans le parcours standard. Il reste disponible avec `import-scip` pour les diagnostics/providers externes.
 
 ## Résolution des identités de fichiers
 
@@ -113,7 +130,7 @@ Une limitation signifie que l’export ne doit pas être considéré comme exhau
 
 ## Consommation par NEXUS
 
-Sur la branche d’intégration NEXUS M13, l’import est explicite :
+L’import NEXUS reste explicite :
 
 ```text
 nexus minos-import <project> < minos-export.json
@@ -121,20 +138,22 @@ nexus minos-import <project> < minos-export.json
 
 Cette commande appartient à NEXUS, pas à MINOS. Le cœur MINOS reste indépendant de son consommateur.
 
-Le design courant évite que NEXUS pilote un processus MINOS : le shell, l’IDE, JARVIS ou un script d’orchestration réalise l’échange stdout/stdin.
+Le shell, l’IDE, JARVIS ou un script d’orchestration réalise l’échange stdout/stdin ; NEXUS ne pilote pas le processus d’indexation MINOS.
 
-## Exemple PowerShell de bout en bout
+## Exemple PowerShell bout en bout
 
 ```powershell
-$minosJar = 'N:\workspace-dev\minos-code-intelligence\target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar'
 $export = 'N:\temp\minos-export.json'
 
-# JVM 24
-& 'C:\path\to\jdk-24\bin\java.exe' -jar $minosJar `
-  nexus-export --root N:\workspace-dev\my-project > $export
+minos.cmd index my-project
+if ($LASTEXITCODE -ne 0) { throw 'MINOS indexing failed' }
+
+minos.cmd nexus-export --root N:\workspace-dev\my-project > $export
+if ($LASTEXITCODE -ne 0) { throw 'MINOS NEXUS export failed' }
 
 # Puis importer le fichier avec la CLI NEXUS Java 21.
-# La commande exacte dépend du packaging NEXUS utilisé.
+# Exemple selon le packaging NEXUS :
+# Get-Content -Raw $export | java -jar <nexus.jar> minos-import my-project
 ```
 
 ## Garanties de frontière
@@ -157,7 +176,21 @@ Enregistrer la racine avec `project add` ou utiliser exactement la racine canoni
 
 ### `project has no active MINOS knowledge snapshot`
 
-Importer un SCIP avec `index` avant l’export.
+Exécuter :
+
+```powershell
+minos.cmd index my-project
+minos.cmd index-status my-project
+```
+
+### Provider non prêt
+
+```powershell
+minos.cmd doctor
+minos.cmd tools list
+```
+
+Puis installer/corriger le provider concerné.
 
 ### Export vide ou partiel
 
