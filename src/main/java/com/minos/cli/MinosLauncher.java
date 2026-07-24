@@ -19,10 +19,12 @@ import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.integration.nexus.NexusExportService;
+import com.minos.mcp.MinosMcpServer;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 import com.minos.registry.LocalProjectRegistry;
+import com.minos.runtime.MinosVersion;
 import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
@@ -35,6 +37,7 @@ import java.util.Properties;
 /** Point d'entrée système de la CLI locale MINOS. */
 public final class MinosLauncher {
 
+    public static final String VERSION = MinosVersion.current();
     public static final String HOME_ENVIRONMENT_VARIABLE = "MINOS_HOME";
     public static final String HOME_SYSTEM_PROPERTY = "minos.home";
 
@@ -45,7 +48,18 @@ public final class MinosLauncher {
         int exitCode;
         try {
             Path home = resolveHome(System.getenv(), System.getProperties());
-            exitCode = run(home, arguments, System.out, System.err);
+            if (arguments.length == 1 && "--version".equals(arguments[0])) {
+                System.out.println("MINOS " + VERSION);
+                exitCode = FindSymbolCommand.SUCCESS;
+            } else if (arguments.length == 1 && "mcp".equals(arguments[0])) {
+                MinosMcpServer.run(home);
+                exitCode = FindSymbolCommand.SUCCESS;
+            } else {
+                exitCode = run(home, arguments, System.out, System.err);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            exitCode = FindSymbolCommand.EXECUTION_ERROR;
         } catch (Exception exception) {
             System.err.println("error: MINOS bootstrap failed: " + failureMessage(exception));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
@@ -94,8 +108,7 @@ public final class MinosLauncher {
         String userHome = properties.getProperty("user.home");
         if (userHome == null || userHome.isBlank()) {
             throw new IllegalStateException(
-                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory"
-            );
+                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory");
         }
         return Path.of(userHome).resolve(".minos");
     }
