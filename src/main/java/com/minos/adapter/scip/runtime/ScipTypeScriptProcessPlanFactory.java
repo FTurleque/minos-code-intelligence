@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
@@ -36,14 +37,13 @@ public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPla
             throw new IllegalStateException("scip-typescript incremental execution is not qualified");
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(executable.toString());
-        command.add("index");
+        List<String> arguments = new ArrayList<>();
+        arguments.add("index");
         if (!Files.isRegularFile(root.resolve("tsconfig.json")) && Files.isRegularFile(root.resolve("package.json"))) {
-            command.add("--infer-tsconfig");
+            arguments.add("--infer-tsconfig");
         }
         return new IndexerProcessPlan(
-                List.copyOf(command),
+                CommandLocator.invocation(executable, arguments.toArray(String[]::new)),
                 root,
                 Map.of(),
                 root.resolve("index.scip"),

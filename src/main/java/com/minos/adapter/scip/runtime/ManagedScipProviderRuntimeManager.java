@@ -37,7 +37,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_JAVA_COORDINATE =
             "com.sourcegraph:scip-java_2.13:" + SCIP_JAVA_VERSION;
 
-    private static final URI COURSER_WINDOWS_URI = URI.create(
+    private static final URI COURSIER_WINDOWS_URI = URI.create(
             "https://github.com/coursier/coursier/releases/download/v2.1.25-M26/cs-x86_64-pc-win32.exe");
 
     private final Path home;
@@ -158,8 +158,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         deleteRecursively(partial);
         Files.createDirectories(partial);
         try {
-            run(List.of(
-                    npm.toString(), "install",
+            run(CommandLocator.invocation(
+                    npm,
+                    "install",
                     "--prefix", partial.toString(),
                     "--no-audit", "--no-fund", "--ignore-scripts",
                     "@sourcegraph/scip-typescript@" + SCIP_TYPESCRIPT_VERSION
@@ -215,7 +216,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(30))
                 .build();
-        HttpRequest request = HttpRequest.newBuilder(COURSER_WINDOWS_URI)
+        HttpRequest request = HttpRequest.newBuilder(COURSIER_WINDOWS_URI)
                 .timeout(Duration.ofMinutes(2))
                 .header("User-Agent", "MINOS-Code-Intelligence")
                 .build();

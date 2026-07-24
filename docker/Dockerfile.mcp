@@ -11,7 +11,7 @@ LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
       org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence"
 
 WORKDIR /opt/minos
-COPY minos-code-intelligence-0.1.0-SNAPSHOT-all.jar /opt/minos/minos.jar
+COPY minos-code-intelligence-*-all.jar /opt/minos/minos.jar
 
 ENV MINOS_HOME=/var/lib/minos
 

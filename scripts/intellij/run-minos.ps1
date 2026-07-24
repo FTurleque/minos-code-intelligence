@@ -10,7 +10,6 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $repositoryRoot "scripts\windows\MinosWindows.ps1")
 $java = Resolve-MinosJava24
 
-$jar = Join-Path $repositoryRoot "target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar"
 $env:JAVA_HOME = $java.JavaHome
 $env:Path = "$($java.JavaHome)\bin;$env:Path"
 Push-Location $repositoryRoot
@@ -20,10 +19,15 @@ try {
 } finally {
     Pop-Location
 }
+
+$jar = Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'target') -File `
+    -Filter 'minos-code-intelligence-*-all.jar' |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 1 -ExpandProperty FullName
 $minosHome = Join-Path $repositoryRoot "target\minos-dev-home"
 
-if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
-    throw "JAR MINOS absent : $jar. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 24."
+if ([string]::IsNullOrWhiteSpace($jar) -or -not (Test-Path -LiteralPath $jar -PathType Leaf)) {
+    throw "JAR shaded MINOS absent. Lancez d'abord le profil DEV ou .\mvnw.cmd package sous Java 24."
 }
 
 if ($ValidateOnly) {
@@ -35,5 +39,5 @@ if ($ValidateOnly) {
 }
 
 New-Item -ItemType Directory -Path $minosHome -Force | Out-Null
-& $java.JavaExecutable "-Dminos.home=$minosHome" -cp $jar com.minos.mcp.MinosMcpServer
+& $java.JavaExecutable "-Dminos.home=$minosHome" -jar $jar mcp
 exit $LASTEXITCODE

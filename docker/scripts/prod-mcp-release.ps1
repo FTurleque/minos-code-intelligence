@@ -47,11 +47,7 @@ $ContainerName = 'minos-mcp-prod'
 $ComposeProject = 'minos-mcp-prod'
 
 function ConvertTo-DockerPath([string] $Path) {
-    $Full = [System.IO.Path]::GetFullPath($Path)
-    if ($Full -match '^([A-Za-z]):\\(.*)$') {
-        return '/' + $Matches[1].ToLowerInvariant() + '/' + ($Matches[2] -replace '\\', '/')
-    }
-    return ($Full -replace '\\', '/')
+    return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
 function Compose([string[]] $Arguments) {
@@ -99,7 +95,8 @@ switch ($Action) {
         $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         if ([string]::IsNullOrWhiteSpace($ImageTag)) {
             $SafeVersion = $Version.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
-            $ImageTag = "$SafeVersion-$($Commit.Substring(0, [Math]::Min(12, $Commit.Length)))"
+            $ShortCommit = $Commit.Substring(0, [Math]::Min(12, $Commit.Length))
+            $ImageTag = "$SafeVersion-$ShortCommit"
         }
         $Image = "minos-code-intelligence:$ImageTag"
         & docker build --file $Dockerfile --tag $Image `

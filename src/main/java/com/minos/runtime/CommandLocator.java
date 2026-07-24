@@ -3,11 +3,12 @@ package com.minos.runtime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Résolution locale de commandes sans shell. */
+/** Résolution et invocation locale de commandes sans shell implicite. */
 public final class CommandLocator {
 
     private CommandLocator() {
@@ -39,16 +40,32 @@ public final class CommandLocator {
         return Optional.empty();
     }
 
+    /**
+     * Construit une invocation ProcessBuilder portable. Sous Windows, les
+     * launchers npm sont des .cmd/.bat et doivent passer explicitement par
+     * cmd.exe ; les exécutables natifs restent lancés directement.
+     */
+    public static List<String> invocation(Path executable, String... arguments) {
+        Path normalized = executable.toAbsolutePath().normalize();
+        String fileName = normalized.getFileName().toString().toLowerCase(Locale.ROOT);
+        List<String> values = new ArrayList<>();
+        if (isWindows() && (fileName.endsWith(".cmd") || fileName.endsWith(".bat"))) {
+            String commandProcessor = System.getenv("ComSpec");
+            values.add(commandProcessor == null || commandProcessor.isBlank() ? "cmd.exe" : commandProcessor);
+            values.add("/d");
+            values.add("/c");
+            values.add("call");
+        }
+        values.add(normalized.toString());
+        values.addAll(Arrays.asList(arguments));
+        return List.copyOf(values);
+    }
+
     private static List<String> candidates(String command) {
         if (!isWindows() || command.contains(".")) {
             return List.of(command);
         }
-        List<String> values = new ArrayList<>();
-        values.add(command + ".exe");
-        values.add(command + ".cmd");
-        values.add(command + ".bat");
-        values.add(command);
-        return List.copyOf(values);
+        return List.of(command + ".exe", command + ".cmd", command + ".bat", command);
     }
 
     private static Optional<Path> executable(Path path) {

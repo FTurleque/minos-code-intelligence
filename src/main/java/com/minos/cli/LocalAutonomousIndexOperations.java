@@ -34,7 +34,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -97,9 +96,8 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
 
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            return new IndexExecutionView(
-                    prepared.view(), run.id().toString(), run.status().name(),
-                    run.activeSnapshotAfter().orElse(null), false, run.message().orElse(null));
+            throw new IllegalStateException("indexing run " + run.id() + " failed: "
+                    + run.message().orElse("provider/staging/promotion failure"));
         }
 
         ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
@@ -140,7 +138,6 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             baseline = fingerprintStore.loadActive(project.id());
             invalidation = invalidationService.assess(indexState, baseline, current, discovery);
         } catch (IOException exception) {
-            baseline = Optional.empty();
             invalidation = new ProjectInvalidationAssessment(
                     project.id(),
                     indexState.activeSnapshotId(),
@@ -212,22 +209,27 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         if (identifier == null || identifier.isBlank()) {
             throw new IllegalArgumentException("project identifier must not be blank");
         }
+        UUID parsed = null;
         try {
-            UUID id = UUID.fromString(identifier);
+            parsed = UUID.fromString(identifier);
+        } catch (IllegalArgumentException ignored) {
+            // display name path below
+        }
+        if (parsed != null) {
+            UUID id = parsed;
             return projectRegistry.findProject(id)
                     .orElseThrow(() -> new IllegalArgumentException("unknown project: " + identifier));
-        } catch (IllegalArgumentException notUuid) {
-            List<RegisteredProject> matches = projectRegistry.listProjects().stream()
-                    .filter(project -> identifier.equals(project.displayName()))
-                    .toList();
-            if (matches.isEmpty()) {
-                throw new IllegalArgumentException("unknown project: " + identifier);
-            }
-            if (matches.size() > 1) {
-                throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
-            }
-            return matches.getFirst();
         }
+        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
+                .filter(project -> identifier.equals(project.displayName()))
+                .toList();
+        if (matches.isEmpty()) {
+            throw new IllegalArgumentException("unknown project: " + identifier);
+        }
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
+        }
+        return matches.getFirst();
     }
 
     private static ProviderView view(ProviderRuntimeStatus status) {
