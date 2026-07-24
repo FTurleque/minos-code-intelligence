@@ -76,32 +76,13 @@ public record IndexingRun(
         COMPLETED
     }
 
-    /**
-     * Trace exacte d'un provider ayant participé au run.
-     *
-     * <p>La version est persistée avec le run afin que l'état historique ne soit
-     * jamais réinterprété à partir du catalogue provider courant.</p>
-     */
-    public record IndexerExecution(
-            Language language,
-            String indexerId,
-            Optional<String> indexerVersion,
-            Path finalArtifact
-    ) {
+    public record IndexerExecution(Language language, String indexerId, Path finalArtifact) {
         public IndexerExecution {
             Objects.requireNonNull(language, "language");
             if (indexerId == null || indexerId.isBlank()) {
                 throw new IllegalArgumentException("indexerId must not be blank");
             }
-            indexerVersion = normalizeText(Objects.requireNonNull(indexerVersion, "indexerVersion"), "indexerVersion");
             Objects.requireNonNull(finalArtifact, "finalArtifact");
-        }
-
-        /**
-         * Compatibilité avec les callers historiques ne connaissant pas encore la version.
-         */
-        public IndexerExecution(Language language, String indexerId, Path finalArtifact) {
-            this(language, indexerId, Optional.empty(), finalArtifact);
         }
     }
 }
