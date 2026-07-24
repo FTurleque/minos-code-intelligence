@@ -51,16 +51,21 @@ $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 if ($IsccCommand) {
     $IsccCandidates += $IsccCommand.Source
 }
-$IsccCandidates += @(
-    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-    (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
-    'C:\ProgramData\chocolatey\bin\ISCC.exe'
-)
+if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
+    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
+    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+}
+if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
+    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+}
+$IsccCandidates += 'C:\ProgramData\chocolatey\bin\ISCC.exe'
+
 $Iscc = $IsccCandidates |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
     Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($Iscc)) {
-    throw 'Inno Setup 6 is required to build MINOS setup.exe. Install Inno Setup or expose ISCC.exe in PATH.'
+    throw 'Inno Setup is required to build MINOS setup.exe. Install Inno Setup 6/7 or expose ISCC.exe in PATH.'
 }
 
 $Template = Join-Path $RepoRoot 'packaging\windows\minos-installer.iss.template'
