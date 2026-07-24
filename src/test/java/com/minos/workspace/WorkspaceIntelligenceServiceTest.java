@@ -50,21 +50,27 @@ class WorkspaceIntelligenceServiceTest {
                 "source-symbol", projectA.id().toString(), "Client", "Client",
                 "scip-typescript npm @example/app 1.0.0 app/Client#", origin
         );
-        Relationship unresolved = new Relationship(
+        Relationship exactProviderTarget = unresolved(
                 "relationship-a-b",
                 projectA.id().toString(),
-                new CodeEntityRef(CodeEntityType.SYMBOL, source.id()),
-                null,
+                source.id(),
                 targetProviderId,
-                RelationshipKind.REFERENCES,
-                null,
-                ResolutionStatus.UNRESOLVED,
-                InformationNature.FACTUAL,
-                null,
-                origin,
-                List.of()
+                origin
         );
-        snapshots.publish(projectA.id(), "snapshot-a", List.of(source), List.of(), List.of(unresolved));
+        Relationship nameOnlyTarget = unresolved(
+                "relationship-name-only",
+                projectA.id().toString(),
+                source.id(),
+                "GreetingPort",
+                origin
+        );
+        snapshots.publish(
+                projectA.id(),
+                "snapshot-a",
+                List.of(source),
+                List.of(),
+                List.of(exactProviderTarget, nameOnlyTarget)
+        );
 
         Symbol target = symbol(
                 "target-symbol", projectB.id().toString(), "GreetingPort", "GreetingPort",
@@ -78,9 +84,9 @@ class WorkspaceIntelligenceServiceTest {
         assertEquals(2, report.projects().size());
         assertEquals(1, report.exactResolutionCount());
         assertEquals(0, report.ambiguousTargetCount());
-        assertEquals(0, report.unresolvedTargetCount());
+        assertEquals(1, report.unresolvedTargetCount());
         assertFalse(report.relationshipsTruncated());
-        assertTrue(report.limitations().isEmpty());
+        assertTrue(report.limitations().contains("UNRESOLVED_CROSS_REPOSITORY_TARGETS"));
 
         WorkspaceIntelligenceService.CrossRepositoryRelationship relation =
                 report.crossRepositoryRelationships().getFirst();
@@ -90,6 +96,29 @@ class WorkspaceIntelligenceServiceTest {
         assertEquals("GreetingPort", relation.targetQualifiedName());
         assertEquals("EXACT_PROVIDER_REFERENCE", relation.resolutionBasis());
         assertEquals(1.0, relation.confidence());
+    }
+
+    private static Relationship unresolved(
+            String id,
+            String projectId,
+            String sourceSymbolId,
+            String unresolvedTarget,
+            Origin origin
+    ) {
+        return new Relationship(
+                id,
+                projectId,
+                new CodeEntityRef(CodeEntityType.SYMBOL, sourceSymbolId),
+                null,
+                unresolvedTarget,
+                RelationshipKind.REFERENCES,
+                null,
+                ResolutionStatus.UNRESOLVED,
+                InformationNature.FACTUAL,
+                null,
+                origin,
+                List.of()
+        );
     }
 
     private static Symbol symbol(
