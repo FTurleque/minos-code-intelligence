@@ -1,10 +1,15 @@
 package com.minos.cli;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotReport;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
+import com.minos.orchestration.FileIndexStateStore;
+import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexingRun;
+import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -23,29 +28,42 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Implémentation locale de l'administration CLI M9.
+ * Implémentation locale de l'administration CLI des projets.
+ *
+ * <p>M14 conserve la compatibilité d'import manuel M9 tout en rendant les états
+ * persistants du lifecycle autonome visibles dans {@code inspect} et
+ * {@code index-status}.</p>
  */
 public final class LocalProjectOperations implements ProjectOperations {
 
     private final LocalProjectRegistry registry;
     private final FileSymbolSnapshotStore snapshotStore;
+    private final FileIndexStateStore stateStore;
     private final ProjectDiscoveryService discoveryService;
     private final Path historyDirectory;
+    private final Map<String, IndexerDescriptor> knownProviders;
 
     public LocalProjectOperations(Path home) throws IOException {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.registry = new LocalProjectRegistry(normalizedHome.resolve("registry"));
         this.snapshotStore = new FileSymbolSnapshotStore(normalizedHome.resolve("symbol-snapshots"));
+        this.stateStore = new FileIndexStateStore(normalizedHome.resolve("index-state"));
         this.discoveryService = new ProjectDiscoveryService();
         this.historyDirectory = normalizedHome.resolve("cli-index-history");
+        this.knownProviders = ScipIndexerCatalog.qualifiedM1Descriptors().stream()
+                .collect(Collectors.toUnmodifiableMap(IndexerDescriptor::id, Function.identity()));
     }
 
     @Override
@@ -107,6 +125,14 @@ public final class LocalProjectOperations implements ProjectOperations {
                 blankToNull(providerVersion),
                 completedAt
         ));
+        stateStore.saveProjectState(new ProjectIndexState(
+                project.id(),
+                ProjectIndexState.Availability.READY,
+                Optional.of(effectiveSnapshotId),
+                Optional.empty(),
+                completedAt,
+                Optional.of("active snapshot imported explicitly through import-scip")
+        ));
         return new IndexImportResult(
                 project.id().toString(),
                 report.snapshotId(),
@@ -135,8 +161,35 @@ public final class LocalProjectOperations implements ProjectOperations {
         }
 
         Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(project.id());
-        Optional<IndexHistory> history = readHistory(project.id()).filter(candidate ->
-                active.map(CodeKnowledgeSnapshot::snapshotId).filter(candidate.snapshotId()::equals).isPresent());
+        String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
+        Optional<ProjectIndexState> persistedState = stateStore.findProjectState(project.id());
+        String indexState = persistedState
+                .map(state -> state.availability().name())
+                .orElse(active.isPresent() ? ProjectIndexState.Availability.READY.name()
+                        : ProjectIndexState.Availability.NEVER_INDEXED.name());
+
+        Optional<IndexingRun> activeRun = activeSnapshotId == null
+                ? Optional.empty()
+                : stateStore.listRuns(project.id()).stream()
+                    .filter(run -> run.status() == IndexingRun.Status.SUCCEEDED)
+                    .filter(run -> run.activeSnapshotAfter().filter(activeSnapshotId::equals).isPresent())
+                    .max(Comparator.comparing(run -> run.completedAt().orElse(run.createdAt())));
+
+        Optional<IndexHistory> manualHistory = readHistory(project.id()).filter(candidate ->
+                activeSnapshotId != null && activeSnapshotId.equals(candidate.snapshotId()));
+
+        String lastSuccessfulIndexAt = activeRun
+                .flatMap(IndexingRun::completedAt)
+                .map(Instant::toString)
+                .orElseGet(() -> manualHistory.map(value -> value.completedAt().toString()).orElse(null));
+        String providerId = activeRun
+                .map(LocalProjectOperations::providerIds)
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> manualHistory.map(IndexHistory::providerId).orElse(null));
+        String providerVersion = activeRun
+                .map(this::providerVersions)
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> manualHistory.map(IndexHistory::providerVersion).orElse(null));
 
         return new ProjectView(
                 project.id().toString(),
@@ -146,12 +199,32 @@ public final class LocalProjectOperations implements ProjectOperations {
                 languages,
                 buildSystems,
                 moduleCount,
-                active.isPresent() ? "READY" : "NEVER_INDEXED",
-                active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null),
-                history.map(value -> value.completedAt().toString()).orElse(null),
-                history.map(IndexHistory::providerId).orElse(null),
-                history.map(IndexHistory::providerVersion).orElse(null)
+                indexState,
+                activeSnapshotId,
+                lastSuccessfulIndexAt,
+                providerId,
+                providerVersion
         );
+    }
+
+    private static String providerIds(IndexingRun run) {
+        return run.executions().stream()
+                .map(IndexingRun.IndexerExecution::indexerId)
+                .distinct()
+                .sorted()
+                .collect(Collectors.joining(","));
+    }
+
+    private String providerVersions(IndexingRun run) {
+        return run.executions().stream()
+                .map(IndexingRun.IndexerExecution::indexerId)
+                .distinct()
+                .sorted()
+                .map(id -> Optional.ofNullable(knownProviders.get(id))
+                        .map(IndexerDescriptor::version)
+                        .map(version -> id + "@" + version)
+                        .orElse(id + "@unknown"))
+                .collect(Collectors.joining(","));
     }
 
     private RegisteredProject resolveProject(String identifier) throws IOException {
