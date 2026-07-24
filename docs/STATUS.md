@@ -18,11 +18,12 @@ M6 — Intelligence d’architecture    TERMINÉ, VALIDÉ ET LIVRÉ
 M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
 M8 — Analyse d’impact               TERMINÉ, VALIDÉ ET LIVRÉ
 M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
-M10 — Serveur MCP                   FONCTIONNELLEMENT COMPLET — PORTE FINALE EN ATTENTE
-M11 à M13                           NON DÉMARRÉS
+M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
+M11 — API publique                  IMPLÉMENTÉ — PORTE FINALE EN ATTENTE
+M12 à M13                           NON DÉMARRÉS
 ```
 
-GitHub Actions reste volontairement hors de la porte locale courante ; l’anomalie historique est suivie séparément dans #5.
+GitHub Actions reste hors de la porte locale courante ; l’anomalie historique est suivie séparément dans #5.
 
 ## Portes acquises
 
@@ -35,50 +36,21 @@ M6  162 tests   BUILD SUCCESS
 M7  196 tests   BUILD SUCCESS
 M8  203 tests   BUILD SUCCESS
 M9  207 tests   BUILD SUCCESS
+M10 210 tests   BUILD SUCCESS
 ```
-
-## M7 — Indexation incrémentale — LIVRÉ
-
-Issue #22 clôturée. Merge final :
-
-```text
-c66382705880158b9ccac63b5662b81bf2d8d255
-```
-
-Head validé : `ab9367dd532891ba5d5099a7bc9fa7d0ef5074f7`.
-
-Porte : **134 sources main / 69 test / 196 PASS**.
-
-Décision : `docs/m7/DECISION_M7.md`.
 
 ## M8 — Analyse d’impact — LIVRÉ
 
-Issue #27 clôturée `completed`.
-
-PR finale : #28.
-
-Head exact validé :
+Issue #27 clôturée. PR #28.
 
 ```text
-08bbdeab18873a2209f02b58bc8d7e547443ea0f
+head validé   08bbdeab18873a2209f02b58bc8d7e547443ea0f
+merge         8147db5c246c7bad92c9b6ab21be81084dc64f59
+sources       143 main / 72 test
+tests         203/203 PASS
 ```
 
-Merge final :
-
-```text
-8147db5c246c7bad92c9b6ab21be81084dc64f59
-```
-
-Porte finale :
-
-```text
-143 sources main
-72 sources test
-203/203 tests PASS
-BUILD SUCCESS
-```
-
-Replay réel :
+Replay :
 
 ```text
 M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
@@ -88,169 +60,182 @@ Décision : `docs/m8/DECISION_M8.md`.
 
 ## M9 — CLI stabilisée — LIVRÉ
 
-Issue #29 clôturée `completed`.
-
-PR finale : #30.
-
-Head exact validé :
+Issue #29 clôturée. PR #30.
 
 ```text
-ae82f24897ea925f04f450f793541b39d13b6d47
+head validé   ae82f24897ea925f04f450f793541b39d13b6d47
+merge         22afe31339dc3a75dc51c491a725330c6d433ecc
+sources       150 main / 75 test
+tests         207/207 PASS
 ```
 
-Merge final :
-
-```text
-22afe31339dc3a75dc51c491a725330c6d433ecc
-```
-
-Porte finale :
-
-```text
-150 sources main
-75 sources test
-207/207 tests PASS
-BUILD SUCCESS
-```
-
-Replay réel :
+Replay :
 
 ```text
 M9 stable CLI: project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, architecture-modules=3, impact-root=GreetingPort
 ```
 
-Acquis M9 :
-
-- surface CLI administration/recherche/relations/architecture/impact ;
-- formats `text` et `json` ;
-- codes de sortie `0 / 1 / 2` ;
-- erreurs sur stderr ;
-- aide lazy ;
-- import SCIP explicite sans runner externe inventé ;
-- statut aligné sur un snapshot réellement relisible ;
-- replay end-to-end réel.
-
 Décision : `docs/m9/DECISION_M9.md`.
 
-## M10 — Serveur MCP — IMPLÉMENTÉ
+## M10 — Serveur MCP — LIVRÉ
 
-Suivi : issue #31.
-
-Branche :
+Issue #31 clôturée. PR #32 fusionnée.
 
 ```text
-m10/mcp-server
+head validé   3f3657a6e5c1a783993348c892f97138d990feff
+merge         eb042852a936ad2e62e337ee35ed8a349096e794
+sources       152 main / 77 test
+tests         210/210 PASS
 ```
 
-### Choix techniques
+Choix techniques :
 
 ```text
 SDK MCP Java officiel   2.0.0
 Transport               STDIO
-API                     synchrone
+API serveur             synchrone
 Framework web           aucun
 Tools                    15 read-only
 ```
 
-### Tools M10
-
-```text
-minos_project_structure
-minos_index_status
-minos_search_code
-minos_find_symbols
-minos_find_usages
-minos_find_implementations
-minos_find_callers
-minos_find_callees
-minos_dependencies
-minos_dependents
-minos_related_tests
-minos_symbol_context
-minos_module_context
-minos_architecture
-minos_impact
-```
-
-### Frontière
-
-Les handlers MCP traduisent les arguments vers la surface JSON M9 puis délèguent à `MinosLauncher.run(...)`.
-
-Aucune intelligence M1–M8 n’est réimplémentée dans le protocole.
-
-Le serveur est read-only : aucune indexation, mutation de registre ou écriture projet n’est exposée par MCP.
-
-### Sécurité contractuelle
-
-- JSON Schemas bornés ;
-- `additionalProperties=false` ;
-- validation d’entrée du SDK conservée ;
-- erreur tool structurée pour les échecs CLI ;
-- aucune sortie applicative sur stdout hors protocole ;
-- transport local process-based uniquement.
-
-### Packaging
-
-Le build conserve le JAR CLI et ajoute :
-
-```text
-target/minos-code-intelligence-0.1.0-SNAPSHOT-all.jar
-```
-
-Le Shade Plugin fusionne `META-INF/services` pour les fournisseurs chargés par `ServiceLoader`.
-
-### Qualification
-
-`MinosMcpToolsTest` couvre catalogue/traduction/erreurs.
-
-`MinosMcpServerIntegrationTest` lance un serveur enfant réel via STDIO avec le client du SDK officiel et vérifie :
-
-```text
-15 tools
-architecture modules = 3
-impact GreetingPort = 2
-related impacted tests = 1
-schema depth=99 rejeté
-```
-
-Replay attendu :
+Replay :
 
 ```text
 M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modules=3, impact-root=GreetingPort
 ```
 
-Documents :
+Décision : `docs/m10/DECISION_M10.md`.
 
-- `docs/m10/MCP_SERVER.md` ;
-- `docs/m10/DECISION_M10.md`.
+## M11 — API publique — IMPLÉMENTÉ
 
-## Porte active — finale M10
+Suivi : issue #33.
+
+PR Draft : #34.
+
+Branche :
+
+```text
+m11/public-api
+```
+
+### Contrat
+
+```text
+com.minos.api.MinosApi
+com.minos.api.LocalMinosApi
+CONTRACT_VERSION = 1
+```
+
+La surface publique couvre :
+
+```text
+projets : add / list / inspect
+index : import SCIP explicite + statut
+symboles
+usages
+relations
+architecture
+contexte module
+impact
+```
+
+### Frontière publique
+
+Les signatures de `MinosApi` utilisent uniquement :
+
+- des types JDK ;
+- des DTO/requêtes définis par `MinosApi` ;
+- `MinosApiException` et `ErrorCode`.
+
+Aucun type SCIP/Glean, store, CLI/MCP ou modèle interne n’est exposé au consommateur.
+
+`LocalMinosApi` délègue aux capacités déjà qualifiées M1–M9 ; aucune intelligence métier n’est réimplémentée dans `com.minos.api`.
+
+### DTO et sémantique
+
+Les DTO M11 conservent notamment :
+
+- identité et provenance des symboles ;
+- localisation et résolution des usages ;
+- nature, confiance et preuves des relations ;
+- agrégats d’architecture et contexte module ;
+- chemins explicatifs, confiance, tests potentiels et limitations M8.
+
+Les valeurs d’enums métier traversent la frontière sous forme de chaînes pour éviter un couplage binaire aux enums internes.
+
+### Erreurs publiques
+
+```text
+INVALID_REQUEST
+UNAVAILABLE
+IO_FAILURE
+EXECUTION_FAILURE
+```
+
+### Qualification ajoutée
+
+`MinosApiContractTest` vérifie par réflexion qu’aucun type interne interdit ne fuite dans les méthodes ou composants de records publics.
+
+`LocalMinosApiIntegrationTest` rejoue :
+
+```text
+fixtures/typescript/typescript-modules
+```
+
+et couvre :
+
+```text
+project add/list/inspect
+SCIP import + READY
+GreetingPort
+IMPLEMENTS entrant
+architecture = 3 modules
+module context = packages/api
+impact = 2
+potential tests = 1
+invalid enum -> INVALID_REQUEST
+```
+
+Replay attendu :
+
+```text
+M11 public API: version=1, project=<uuid>, snapshot=<snapshot>, modules=3, impact=2, tests=1
+```
+
+### Contrôles GitHub actuels
+
+SonarQube Cloud sur PR #34 : **Quality Gate passed**, 0 Security Hotspots, 0.0 % duplication sur nouveau code. Trois issues non bloquantes restent signalées par Sonar.
+
+Aucun workflow GitHub Actions n’est lancé pour la PR ; la preuve finale reste donc locale.
+
+## Porte active — finale M11
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-Volumes attendus si le head ne change plus :
+Volumes attendus sur le code actuellement ajouté :
 
 ```text
-152 sources main
-77 sources test
-210 tests
+154 sources main
+79 sources test
+214 tests
 ```
 
-La PR M10 doit rester Draft jusqu’à validation locale du **head exact**.
+La PR #34 reste Draft jusqu’à validation locale du **head exact final**.
 
 Après porte verte et fusion explicitement autorisée :
 
-- issue #31 → `completed` ;
-- M10 → terminé, validé et livré ;
-- M11 — API → prochain jalon.
+- issue #33 → `completed` ;
+- M11 → terminé, validé et livré ;
+- M12 — Multi-dépôts et intelligence Git → prochain jalon.
 
 ## Sources de vérité
 
 - roadmap : `docs/ROADMAP.md` ;
 - état opérationnel : `docs/STATUS.md` ;
-- suivi M10 : issue #31 ;
-- M8 : `docs/m8/IMPACT_ANALYSIS.md`, `docs/m8/DECISION_M8.md` ;
+- suivi M11 : issue #33 ;
+- PR M11 : #34 ;
 - M9 : `docs/m9/CLI.md`, `docs/m9/DECISION_M9.md` ;
-- M10 : `docs/m10/MCP_SERVER.md`, `docs/m10/DECISION_M10.md`.
+- M10 : `docs/m10/MCP_SERVER.md`, `docs/m10/DECISION_M10.md` ;
+- M11 : `docs/m11/API.md`, `docs/m11/DECISION_M11.md`.
