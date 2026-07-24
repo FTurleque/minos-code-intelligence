@@ -1,5 +1,6 @@
 package com.minos.api;
 
+import java.io.Serial;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -68,6 +69,9 @@ public interface MinosApi {
     }
 
     final class MinosApiException extends Exception {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private final ErrorCode code;
 
         public MinosApiException(ErrorCode code, String message) {
