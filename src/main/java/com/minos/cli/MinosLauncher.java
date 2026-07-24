@@ -91,7 +91,7 @@ public final class MinosLauncher {
         Path normalizedHome = home.toAbsolutePath().normalize();
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(registry(normalizedHome), snapshots(normalizedHome)).export(projectRoot));
-        LocalAutonomousIndexOperations autonomousOperations = new LocalAutonomousIndexOperations(normalizedHome);
+        AutonomousIndexOperations autonomousOperations = new LazyAutonomousIndexOperations(normalizedHome);
         return new MinosCli(
                 new LazyLocalProjectSymbolQuery(normalizedHome),
                 new LazyProjectOperations(normalizedHome),
