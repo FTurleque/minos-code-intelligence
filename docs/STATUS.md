@@ -19,8 +19,9 @@ M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
 M8 — Analyse d’impact               TERMINÉ, VALIDÉ ET LIVRÉ
 M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
 M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
-M11 — API publique                  IMPLÉMENTÉ — PORTE FINALE EN ATTENTE
-M12 à M13                           NON DÉMARRÉS
+M11 — API publique                  VALIDÉ — FUSION EN ATTENTE D’AUTORISATION
+M12 — Multi-dépôts + Git            IMPLÉMENTÉ — PORTE FINALE EN ATTENTE
+M13 — Intégration NEXUS             NON DÉMARRÉ
 ```
 
 GitHub Actions reste hors de la porte locale courante ; l’anomalie historique est suivie séparément dans #5.
@@ -28,54 +29,17 @@ GitHub Actions reste hors de la porte locale courante ; l’anomalie historique 
 ## Portes acquises
 
 ```text
-M2   86 tests   BUILD SUCCESS
-M3  115 tests   BUILD SUCCESS
-M4  131 tests   BUILD SUCCESS
-M5  140 tests   BUILD SUCCESS
-M6  162 tests   BUILD SUCCESS
-M7  196 tests   BUILD SUCCESS
-M8  203 tests   BUILD SUCCESS
-M9  207 tests   BUILD SUCCESS
-M10 210 tests   BUILD SUCCESS
+M2    86 tests   BUILD SUCCESS
+M3   115 tests   BUILD SUCCESS
+M4   131 tests   BUILD SUCCESS
+M5   140 tests   BUILD SUCCESS
+M6   162 tests   BUILD SUCCESS
+M7   196 tests   BUILD SUCCESS
+M8   203 tests   BUILD SUCCESS
+M9   207 tests   BUILD SUCCESS
+M10  210 tests   BUILD SUCCESS
+M11  214 tests   BUILD SUCCESS
 ```
-
-## M8 — Analyse d’impact — LIVRÉ
-
-Issue #27 clôturée. PR #28.
-
-```text
-head validé   08bbdeab18873a2209f02b58bc8d7e547443ea0f
-merge         8147db5c246c7bad92c9b6ab21be81084dc64f59
-sources       143 main / 72 test
-tests         203/203 PASS
-```
-
-Replay :
-
-```text
-M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
-```
-
-Décision : `docs/m8/DECISION_M8.md`.
-
-## M9 — CLI stabilisée — LIVRÉ
-
-Issue #29 clôturée. PR #30.
-
-```text
-head validé   ae82f24897ea925f04f450f793541b39d13b6d47
-merge         22afe31339dc3a75dc51c491a725330c6d433ecc
-sources       150 main / 75 test
-tests         207/207 PASS
-```
-
-Replay :
-
-```text
-M9 stable CLI: project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, architecture-modules=3, impact-root=GreetingPort
-```
-
-Décision : `docs/m9/DECISION_M9.md`.
 
 ## M10 — Serveur MCP — LIVRÉ
 
@@ -106,11 +70,9 @@ M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modul
 
 Décision : `docs/m10/DECISION_M10.md`.
 
-## M11 — API publique — IMPLÉMENTÉ
+## M11 — API publique — VALIDÉ
 
-Suivi : issue #33.
-
-PR Draft : #34.
+Suivi : issue #33. PR #34 **Ready for review**, non fusionnée.
 
 Branche :
 
@@ -118,7 +80,25 @@ Branche :
 m11/public-api
 ```
 
-### Contrat
+Head exact validé :
+
+```text
+fae552e8e6f2aa66c327fb80485f5bad448d7520
+```
+
+Porte locale acquise sous Java 24 :
+
+```text
+154 sources main
+79 sources test
+214/214 tests PASS
+0 failures
+0 errors
+0 skipped
+BUILD SUCCESS
+```
+
+Contrat :
 
 ```text
 com.minos.api.MinosApi
@@ -126,116 +106,189 @@ com.minos.api.LocalMinosApi
 CONTRACT_VERSION = 1
 ```
 
-La surface publique couvre :
+Surface : projets, import SCIP explicite, symboles, usages, relations, architecture, contexte module et impact.
+
+La frontière publique n’expose ni SCIP/Glean, ni store, ni CLI/MCP, ni modèle métier interne.
+
+Replay acquis :
 
 ```text
-projets : add / list / inspect
-index : import SCIP explicite + statut
-symboles
-usages
-relations
-architecture
-contexte module
-impact
+M11 public API: version=1, project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, modules=3, impact=2, tests=1
 ```
 
-### Frontière publique
+Verdict :
 
-Les signatures de `MinosApi` utilisent uniquement :
+> **OUI, via un contrat Java local versionné dont les DTO publics restent indépendants des fournisseurs, protocoles et modèles internes, tout en déléguant l’intelligence au cœur MINOS existant.**
 
-- des types JDK ;
-- des DTO/requêtes définis par `MinosApi` ;
-- `MinosApiException` et `ErrorCode`.
+La fusion de #34 reste soumise à une autorisation explicite. Tant qu’elle n’est pas fusionnée, issue #33 reste ouverte.
 
-Aucun type SCIP/Glean, store, CLI/MCP ou modèle interne n’est exposé au consommateur.
+## M12 — Multi-dépôts et intelligence Git — IMPLÉMENTÉ
 
-`LocalMinosApi` délègue aux capacités déjà qualifiées M1–M9 ; aucune intelligence métier n’est réimplémentée dans `com.minos.api`.
+Suivi : issue #35.
 
-### DTO et sémantique
+PR Draft empilée : #36.
 
-Les DTO M11 conservent notamment :
-
-- identité et provenance des symboles ;
-- localisation et résolution des usages ;
-- nature, confiance et preuves des relations ;
-- agrégats d’architecture et contexte module ;
-- chemins explicatifs, confiance, tests potentiels et limitations M8.
-
-Les valeurs d’enums métier traversent la frontière sous forme de chaînes pour éviter un couplage binaire aux enums internes.
-
-### Erreurs publiques
+Branche :
 
 ```text
-INVALID_REQUEST
-UNAVAILABLE
-IO_FAILURE
-EXECUTION_FAILURE
+m12/multi-repo-git
+```
+
+Base fonctionnelle : head M11 validé `fae552e8e6f2aa66c327fb80485f5bad448d7520`.
+
+La PR #36 cible temporairement `m11/public-api`. Après fusion autorisée de #34, elle devra être retargetée sur `main` avant livraison finale.
+
+### Porte produit
+
+> MINOS peut-il raisonner factuellement sur plusieurs dépôts d’un même workspace et enrichir la Code Intelligence avec l’historique Git, sans inventer de relations inter-dépôts ni confondre activité Git et importance architecturale ?
+
+### Surface implémentée
+
+```text
+workspaces M1 exposés publiquement
+assignation projet -> workspace
+vue multi-projets
+résolution cross-repository exacte et unique
+inspection dépôt Git local
+HEAD / branche / remote assaini / shallow / detached / clean
+historique borné
+changements récents
+activité par fichier
+nombre d’auteurs distincts
+zones d’activité
+limitations explicites
+```
+
+### Contrat public M12
+
+M11 reste inchangé. M12 ajoute une interface additive :
+
+```text
+com.minos.api.MinosMultiRepositoryApi
+com.minos.api.LocalMinosMultiRepositoryApi
+MULTI_REPOSITORY_CONTRACT_VERSION = 1
+```
+
+Le contrat M12 ne fuit ni type interne MINOS, ni type JGit.
+
+### Résolution cross-repository
+
+Une relation non résolue n’est promue que si :
+
+```text
+relationship.origin.providerId + relationship.unresolvedTarget
+```
+
+correspond exactement à :
+
+```text
+localSymbol.providerReference.providerId + localSymbol.providerReference.externalId
+```
+
+et qu’une seule cible locale d’un autre projet du workspace correspond.
+
+Un nom ou `qualifiedName` identique ne suffit pas.
+
+### Intelligence Git
+
+Runtime :
+
+```text
+org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r
+```
+
+Aucune commande `git` native n’est lancée.
+
+Bornes publiques :
+
+```text
+maxCommits       1..10000
+maxFiles         1..10000
+zoneDepth        1..8
+maxRelationships 1..10000
+```
+
+Limitations possibles :
+
+```text
+NO_ORIGIN_REMOTE
+DETACHED_HEAD
+SHALLOW_HISTORY
+UNBORN_HEAD
+HISTORY_TRUNCATED
+FILES_TRUNCATED
+PROJECT_WITHOUT_ACTIVE_SNAPSHOT
+AMBIGUOUS_PROVIDER_IDENTITY
+UNRESOLVED_CROSS_REPOSITORY_TARGETS
+RELATIONSHIPS_TRUNCATED
 ```
 
 ### Qualification ajoutée
 
-`MinosApiContractTest` vérifie par réflexion qu’aucun type interne interdit ne fuite dans les méthodes ou composants de records publics.
-
-`LocalMinosApiIntegrationTest` rejoue :
-
 ```text
-fixtures/typescript/typescript-modules
-```
+MinosMultiRepositoryApiContractTest
+  -> frontière publique + absence de fuite JGit
 
-et couvre :
+GitIntelligenceServiceTest
+  -> dépôt JGit synthétique, 2 commits, 2 auteurs
+  -> fréquence fichier + zones + absence remote
 
-```text
-project add/list/inspect
-SCIP import + READY
-GreetingPort
-IMPLEMENTS entrant
-architecture = 3 modules
-module context = packages/api
-impact = 2
-potential tests = 1
-invalid enum -> INVALID_REQUEST
+WorkspaceIntelligenceServiceTest
+  -> 2 projets / 2 snapshots
+  -> 1 identité fournisseur exacte résolue
+  -> cible name-only volontairement non résolue
+
+LocalMinosMultiRepositoryApiIntegrationTest
+  -> API publique M11 + M12
+  -> workspace + Git + limitation projet non indexé
+  -> null query => INVALID_REQUEST
 ```
 
 Replay attendu :
 
 ```text
-M11 public API: version=1, project=<uuid>, snapshot=<snapshot>, modules=3, impact=2, tests=1
+M12 multi-repo Git: workspace=<uuid>, projects=1, git-commits=1, files=1, exact-cross-repo=0
 ```
 
-### Contrôles GitHub actuels
+## Porte active — finale M12
 
-SonarQube Cloud sur PR #34 : **Quality Gate passed**, 0 Security Hotspots, 0.0 % duplication sur nouveau code. Trois issues non bloquantes restent signalées par Sonar.
+Head exact : à figer après les derniers commits de documentation/administration.
 
-Aucun workflow GitHub Actions n’est lancé pour la PR ; la preuve finale reste donc locale.
-
-## Porte active — finale M11
+Commande :
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-Volumes attendus sur le code actuellement ajouté :
+Volumes attendus :
 
 ```text
-154 sources main
-79 sources test
-214 tests
+158 sources main
+83 sources test
+221 tests
 ```
 
-La PR #34 reste Draft jusqu’à validation locale du **head exact final**.
+Ces nombres sont **attendus mais non encore validés localement**.
 
-Après porte verte et fusion explicitement autorisée :
+La PR #36 reste Draft jusqu’à validation Java 24 du head exact final.
 
-- issue #33 → `completed` ;
-- M11 → terminé, validé et livré ;
-- M12 — Multi-dépôts et intelligence Git → prochain jalon.
+## Après porte M12 verte
+
+Sans autorisation explicite, aucune fusion n’est effectuée.
+
+Ordre administratif prévu :
+
+1. fusion explicitement autorisée de M11 / PR #34 ;
+2. retarget de PR #36 vers `main` ;
+3. vérification que le head M12 qualifié reste inchangé et que la diff est correcte ;
+4. passage Ready de #36 après preuve locale verte ;
+5. fusion M12 uniquement après autorisation explicite ;
+6. clôture issue #35 ;
+7. M13 — Intégration NEXUS devient le jalon actif.
 
 ## Sources de vérité
 
 - roadmap : `docs/ROADMAP.md` ;
 - état opérationnel : `docs/STATUS.md` ;
-- suivi M11 : issue #33 ;
-- PR M11 : #34 ;
-- M9 : `docs/m9/CLI.md`, `docs/m9/DECISION_M9.md` ;
-- M10 : `docs/m10/MCP_SERVER.md`, `docs/m10/DECISION_M10.md` ;
-- M11 : `docs/m11/API.md`, `docs/m11/DECISION_M11.md`.
+- M11 : issue #33 / PR #34 / `docs/m11/API.md` / `docs/m11/DECISION_M11.md` ;
+- M12 : issue #35 / PR #36 / `docs/m12/MULTI_REPO_GIT.md` / `docs/m12/DECISION_M12.md`.
