@@ -6,7 +6,8 @@ param(
 
     [string] $TargetCommit = '',
 
-    [switch] $SkipBuild
+    [switch] $SkipBuild,
+    [switch] $ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +16,7 @@ Set-StrictMode -Version Latest
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 
 if ($env:OS -ne 'Windows_NT') {
-    throw 'MINOS Windows releases must be published from Windows.'
+    throw 'MINOS Windows releases must be built and validated on Windows.'
 }
 
 function Invoke-NativeChecked {
@@ -54,16 +55,8 @@ function Verify-Sha256 {
 
 $Git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $Git) {
-    throw 'git is required to publish a MINOS release.'
+    throw 'git is required to build or publish a MINOS release.'
 }
-
-$Gh = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $Gh) {
-    throw 'GitHub CLI (gh) is required. Install it and run `gh auth login` first.'
-}
-
-Invoke-NativeChecked -File $Gh.Source -Arguments @('auth', 'status') `
-    -Failure 'GitHub CLI is not authenticated'
 
 $Head = ((& $Git.Source -C $RepoRoot rev-parse HEAD) | Select-Object -First 1).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Head)) {
@@ -75,7 +68,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Unable to inspect the Git worktree.'
 }
 if ($Dirty.Count -gt 0) {
-    throw "Release publication requires a clean worktree. Dirty entries:`n$($Dirty -join "`n")"
+    throw "Release validation requires a clean worktree. Dirty entries:`n$($Dirty -join "`n")"
 }
 
 if ([string]::IsNullOrWhiteSpace($TargetCommit)) {
@@ -85,16 +78,28 @@ if ($TargetCommit -ne $Head) {
     throw "Release target must be the exact commit used to build the assets. HEAD=$Head target=$TargetCommit"
 }
 
-$Repository = $env:GITHUB_REPOSITORY
-if ([string]::IsNullOrWhiteSpace($Repository)) {
-    $RepoJson = (& $Gh.Source repo view --json nameWithOwner | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($RepoJson)) {
-        throw 'Unable to resolve the GitHub repository with `gh repo view`.'
+$Gh = $null
+$Repository = ''
+if (-not $ValidateOnly) {
+    $Gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $Gh) {
+        throw 'GitHub CLI (gh) is required to publish a MINOS release. Install it and run `gh auth login` first.'
     }
-    $Repository = ($RepoJson | ConvertFrom-Json).nameWithOwner
-}
-if ([string]::IsNullOrWhiteSpace($Repository)) {
-    throw 'Unable to resolve the GitHub repository name.'
+
+    Invoke-NativeChecked -File $Gh.Source -Arguments @('auth', 'status') `
+        -Failure 'GitHub CLI is not authenticated'
+
+    $Repository = $env:GITHUB_REPOSITORY
+    if ([string]::IsNullOrWhiteSpace($Repository)) {
+        $RepoJson = (& $Gh.Source repo view --json nameWithOwner | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($RepoJson)) {
+            throw 'Unable to resolve the GitHub repository with `gh repo view`.'
+        }
+        $Repository = ($RepoJson | ConvertFrom-Json).nameWithOwner
+    }
+    if ([string]::IsNullOrWhiteSpace($Repository)) {
+        throw 'Unable to resolve the GitHub repository name.'
+    }
 }
 
 if (-not $SkipBuild) {
@@ -117,8 +122,7 @@ $SetupChecksum = "$Setup.sha256"
 $ZipHash = Verify-Sha256 -Artifact $Zip -Checksum $ZipChecksum
 $SetupHash = Verify-Sha256 -Artifact $Setup -Checksum $SetupChecksum
 
-# Validate the portable installer that is actually shipped in the ZIP, then use
-# it to consume the ZIP itself. This protects the portable distribution path.
+# Validate the portable installer actually shipped in the ZIP.
 $ZipSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-zip-smoke-" + [Guid]::NewGuid())
 $ExtractRoot = Join-Path $ZipSmokeRoot 'package'
 $ZipInstallRoot = Join-Path $ZipSmokeRoot 'installed'
@@ -194,6 +198,17 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $SetupSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+if ($ValidateOnly) {
+    Write-Host ''
+    Write-Host 'MINOS Windows release VALIDATION SUCCESS' -ForegroundColor Green
+    Write-Host "Commit        : $TargetCommit"
+    Write-Host "Setup         : $Setup"
+    Write-Host "Setup SHA-256 : $SetupHash"
+    Write-Host "ZIP           : $Zip"
+    Write-Host "ZIP SHA-256   : $ZipHash"
+    return
 }
 
 $Tag = "v$Version"
