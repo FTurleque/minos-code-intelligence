@@ -2,7 +2,7 @@
 
 Dernière mise à jour : **24 juillet 2026**
 
-Ce document est le tableau de bord opérationnel compact de MINOS. Les preuves détaillées restent dans les documents de jalon, les décisions et les issues GitHub.
+Ce document est le tableau de bord opérationnel compact de MINOS. Les preuves détaillées restent dans les documents de jalon, décisions, issues et PR.
 
 ## Synthèse
 
@@ -19,12 +19,12 @@ M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
 M8 — Analyse d’impact               TERMINÉ, VALIDÉ ET LIVRÉ
 M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
 M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
-M11 — API publique                  VALIDÉ — FUSION EN ATTENTE D’AUTORISATION
-M12 — Multi-dépôts + Git            IMPLÉMENTÉ — PORTE FINALE EN ATTENTE
-M13 — Intégration NEXUS             NON DÉMARRÉ
+M11 — API publique                  TERMINÉ, VALIDÉ ET LIVRÉ
+M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
+M13 — Intégration NEXUS             IMPLÉMENTÉ — VALIDATIONS FINALES EN ATTENTE
 ```
 
-GitHub Actions reste hors de la porte locale courante ; l’anomalie historique est suivie séparément dans #5.
+GitHub Actions reste hors de la porte locale MINOS ; l’anomalie historique est suivie séparément dans #5.
 
 ## Portes acquises
 
@@ -39,63 +39,18 @@ M8   203 tests   BUILD SUCCESS
 M9   207 tests   BUILD SUCCESS
 M10  210 tests   BUILD SUCCESS
 M11  214 tests   BUILD SUCCESS
+M12  221 tests   BUILD SUCCESS
 ```
 
-## M10 — Serveur MCP — LIVRÉ
+## M11 — API publique — LIVRÉ
 
-Issue #31 clôturée. PR #32 fusionnée.
-
-```text
-head validé   3f3657a6e5c1a783993348c892f97138d990feff
-merge         eb042852a936ad2e62e337ee35ed8a349096e794
-sources       152 main / 77 test
-tests         210/210 PASS
-```
-
-Choix techniques :
+Issue #33 clôturée. PR #34 fusionnée.
 
 ```text
-SDK MCP Java officiel   2.0.0
-Transport               STDIO
-API serveur             synchrone
-Framework web           aucun
-Tools                    15 read-only
-```
-
-Replay :
-
-```text
-M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modules=3, impact-root=GreetingPort
-```
-
-Décision : `docs/m10/DECISION_M10.md`.
-
-## M11 — API publique — VALIDÉ
-
-Suivi : issue #33. PR #34 **Ready for review**, non fusionnée.
-
-Branche :
-
-```text
-m11/public-api
-```
-
-Head exact validé :
-
-```text
-fae552e8e6f2aa66c327fb80485f5bad448d7520
-```
-
-Porte locale acquise sous Java 24 :
-
-```text
-154 sources main
-79 sources test
-214/214 tests PASS
-0 failures
-0 errors
-0 skipped
-BUILD SUCCESS
+head validé   fae552e8e6f2aa66c327fb80485f5bad448d7520
+merge         3780785f167cf373dfe0e9cf34f3c3862e87b868
+sources       154 main / 79 test
+tests         214/214 PASS
 ```
 
 Contrat :
@@ -106,189 +61,144 @@ com.minos.api.LocalMinosApi
 CONTRACT_VERSION = 1
 ```
 
-Surface : projets, import SCIP explicite, symboles, usages, relations, architecture, contexte module et impact.
-
-La frontière publique n’expose ni SCIP/Glean, ni store, ni CLI/MCP, ni modèle métier interne.
-
-Replay acquis :
+Replay :
 
 ```text
 M11 public API: version=1, project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, modules=3, impact=2, tests=1
 ```
 
-Verdict :
+## M12 — Multi-dépôts et intelligence Git — LIVRÉ
 
-> **OUI, via un contrat Java local versionné dont les DTO publics restent indépendants des fournisseurs, protocoles et modèles internes, tout en déléguant l’intelligence au cœur MINOS existant.**
-
-La fusion de #34 reste soumise à une autorisation explicite. Tant qu’elle n’est pas fusionnée, issue #33 reste ouverte.
-
-## M12 — Multi-dépôts et intelligence Git — IMPLÉMENTÉ
-
-Suivi : issue #35.
-
-PR Draft empilée : #36.
-
-Branche :
+Issue #35 clôturée. PR #36 fusionnée.
 
 ```text
-m12/multi-repo-git
+head validé   6c771909e0b97b49fbd8e49090522d8a6c0b53aa
+merge         3bc6cc364b6d7d651c1c9ab3a93ecac28ce02e86
+sources       158 main / 83 test
+tests         221/221 PASS
 ```
 
-Base fonctionnelle : head M11 validé `fae552e8e6f2aa66c327fb80485f5bad448d7520`.
+Acquis : workspaces publics, intelligence Git via JGit, activité bornée, zones, résolution cross-repository exacte et contrat public M12 additif.
 
-La PR #36 cible temporairement `m11/public-api`. Après fusion autorisée de #34, elle devra être retargetée sur `main` avant livraison finale.
-
-### Porte produit
-
-> MINOS peut-il raisonner factuellement sur plusieurs dépôts d’un même workspace et enrichir la Code Intelligence avec l’historique Git, sans inventer de relations inter-dépôts ni confondre activité Git et importance architecturale ?
-
-### Surface implémentée
-
-```text
-workspaces M1 exposés publiquement
-assignation projet -> workspace
-vue multi-projets
-résolution cross-repository exacte et unique
-inspection dépôt Git local
-HEAD / branche / remote assaini / shallow / detached / clean
-historique borné
-changements récents
-activité par fichier
-nombre d’auteurs distincts
-zones d’activité
-limitations explicites
-```
-
-### Contrat public M12
-
-M11 reste inchangé. M12 ajoute une interface additive :
-
-```text
-com.minos.api.MinosMultiRepositoryApi
-com.minos.api.LocalMinosMultiRepositoryApi
-MULTI_REPOSITORY_CONTRACT_VERSION = 1
-```
-
-Le contrat M12 ne fuit ni type interne MINOS, ni type JGit.
-
-### Résolution cross-repository
-
-Une relation non résolue n’est promue que si :
-
-```text
-relationship.origin.providerId + relationship.unresolvedTarget
-```
-
-correspond exactement à :
-
-```text
-localSymbol.providerReference.providerId + localSymbol.providerReference.externalId
-```
-
-et qu’une seule cible locale d’un autre projet du workspace correspond.
-
-Un nom ou `qualifiedName` identique ne suffit pas.
-
-### Intelligence Git
-
-Runtime :
-
-```text
-org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r
-```
-
-Aucune commande `git` native n’est lancée.
-
-Bornes publiques :
-
-```text
-maxCommits       1..10000
-maxFiles         1..10000
-zoneDepth        1..8
-maxRelationships 1..10000
-```
-
-Limitations possibles :
-
-```text
-NO_ORIGIN_REMOTE
-DETACHED_HEAD
-SHALLOW_HISTORY
-UNBORN_HEAD
-HISTORY_TRUNCATED
-FILES_TRUNCATED
-PROJECT_WITHOUT_ACTIVE_SNAPSHOT
-AMBIGUOUS_PROVIDER_IDENTITY
-UNRESOLVED_CROSS_REPOSITORY_TARGETS
-RELATIONSHIPS_TRUNCATED
-```
-
-### Qualification ajoutée
-
-```text
-MinosMultiRepositoryApiContractTest
-  -> frontière publique + absence de fuite JGit
-
-GitIntelligenceServiceTest
-  -> dépôt JGit synthétique, 2 commits, 2 auteurs
-  -> fréquence fichier + zones + absence remote
-
-WorkspaceIntelligenceServiceTest
-  -> 2 projets / 2 snapshots
-  -> 1 identité fournisseur exacte résolue
-  -> cible name-only volontairement non résolue
-
-LocalMinosMultiRepositoryApiIntegrationTest
-  -> API publique M11 + M12
-  -> workspace + Git + limitation projet non indexé
-  -> null query => INVALID_REQUEST
-```
-
-Replay attendu :
+Replay :
 
 ```text
 M12 multi-repo Git: workspace=<uuid>, projects=1, git-commits=1, files=1, exact-cross-repo=0
 ```
 
-## Porte active — finale M12
+## M13 — Intégration NEXUS — IMPLÉMENTÉ
 
-Head exact : à figer après les derniers commits de documentation/administration.
+Suivi MINOS : issue #37 / PR Draft #38.
 
-Commande :
+Compagnon NEXUS : `FTurleque/nexus-context-engine` issue #11 / PR Draft #12.
 
-```powershell
-.\mvnw.cmd clean verify
-```
+### Porte produit
 
-Volumes attendus :
+> NEXUS peut-il consommer la Code Intelligence normalisée de MINOS par un contrat local versionné, sans dépendance Maven croisée, sans déplacer le ranking/sélection de contexte dans MINOS et sans rendre l’un des deux moteurs obligatoire pour l’autre ?
+
+### Architecture
 
 ```text
-158 sources main
-83 sources test
-221 tests
+MINOS Java 24
+  NexusExportService
+  nexus-export --root <project>
+        |
+        | JSON contract v1 / stdout
+        v
+NEXUS Java 21
+  MinosCodeIndexImporter opt-in
+        |
+        v
+  IndexRepository -> SearchService -> ranking -> ContextBuilder
 ```
 
-Ces nombres sont **attendus mais non encore validés localement**.
+Le transport inter-processus évite un couplage Java 21/24 et tout lien Maven entre les deux dépôts.
 
-La PR #36 reste Draft jusqu’à validation Java 24 du head exact final.
+### MINOS livré dans M13
 
-## Après porte M12 verte
+```text
+NexusExportContract.CONTRACT_VERSION = 1
+NexusExportContract.PRODUCER = MINOS
+NexusExportService
+NexusExportCommand
+minos nexus-export --root <project-root>
+```
 
-Sans autorisation explicite, aucune fusion n’est effectuée.
+L’export :
 
-Ordre administratif prévu :
+- ne lit que le snapshot actif ;
+- est strictement read-only ;
+- conserve origine, nature, confiance et preuves ;
+- n’exporte que les symboles locaux rattachables à un fichier réel ;
+- reconstruit les `fileId` SCIP stables via la même identité SHA-256 ;
+- n’exporte que les relations symbol → symbol locales représentables dans le snapshot ;
+- expose toutes les omissions/troncatures comme limitations.
 
-1. fusion explicitement autorisée de M11 / PR #34 ;
-2. retarget de PR #36 vers `main` ;
-3. vérification que le head M12 qualifié reste inchangé et que la diff est correcte ;
-4. passage Ready de #36 après preuve locale verte ;
-5. fusion M12 uniquement après autorisation explicite ;
-6. clôture issue #35 ;
-7. M13 — Intégration NEXUS devient le jalon actif.
+### NEXUS compagnon
+
+`MinosCodeIndexImporter` :
+
+- désactivé par défaut ;
+- exige `NEXUS_MINOS_JAR` + `NEXUS_MINOS_JAVA` pour activation ;
+- lance MINOS avec Java 24 dans un processus local borné ;
+- valide version, producteur et racine projet ;
+- mappe uniquement les kinds/relations NEXUS ayant une équivalence explicite ;
+- conserve `sourceProvider=minos` ;
+- est appliqué avant SCIP direct ;
+- purge les anciennes données MINOS lorsqu’il est désactivé ;
+- ne modifie ni `SearchService`, ni le ranking, ni `DefaultContextBuilder`.
+
+### Qualification ajoutée
+
+MINOS :
+
+```text
+NexusExportContractTest
+NexusExportIntegrationTest
+```
+
+NEXUS :
+
+```text
+MinosCodeIndexImporterTest
+FakeMinosExportMain
+MinosRealIntegrationTest   opt-in, vrai JAR MINOS
+```
+
+Replay MINOS attendu :
+
+```text
+M13 MINOS export: contract=1, project=<uuid>, snapshot=<snapshot>, symbols=<n>, relations=<n>
+```
+
+Replay réel inter-dépôt attendu :
+
+```text
+M13 MINOS->NEXUS: symbols=<n>, relations=<n>, nexus-symbols=<n>, search=<n>
+```
+
+Le replay doit prouver que `GreetingPort` entre dans l’index NEXUS avec `sourceProvider=minos` puis est retourné par une recherche NEXUS.
+
+## Porte active M13
+
+Trois preuves sont obligatoires :
+
+1. `m13/nexus-integration` : `./mvnw clean verify` sous Java 24 ;
+2. `integration/minos-code-intelligence` : validation NEXUS complète sous Java 21 ;
+3. `MinosRealIntegrationTest` avec le shaded JAR issu du **head MINOS exact qualifié**.
+
+Tout nouveau commit sur l’un des heads après sa validation invalide la preuve correspondante.
+
+Verdict préparé :
+
+> **OUI, via un contrat JSON local versionné et un importer NEXUS optionnel : MINOS reste la source de faits de Code Intelligence, tandis que NEXUS reste seul responsable du classement, de la sélection et du budget du contexte.**
+
+Documents : `docs/m13/NEXUS_INTEGRATION.md`, `docs/m13/DECISION_M13.md`.
 
 ## Sources de vérité
 
 - roadmap : `docs/ROADMAP.md` ;
-- état opérationnel : `docs/STATUS.md` ;
-- M11 : issue #33 / PR #34 / `docs/m11/API.md` / `docs/m11/DECISION_M11.md` ;
-- M12 : issue #35 / PR #36 / `docs/m12/MULTI_REPO_GIT.md` / `docs/m12/DECISION_M12.md`.
+- suivi M13 : issue #37 / PR #38 ;
+- contrat M13 : `docs/m13/NEXUS_INTEGRATION.md` ;
+- décision : `docs/m13/DECISION_M13.md` ;
+- compagnon NEXUS : issue #11 / PR #12 / ADR-0044.
