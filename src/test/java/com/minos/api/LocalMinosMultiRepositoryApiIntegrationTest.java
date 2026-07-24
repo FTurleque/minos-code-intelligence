@@ -11,6 +11,7 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LocalMinosMultiRepositoryApiIntegrationTest {
@@ -63,6 +64,12 @@ class LocalMinosMultiRepositoryApiIntegrationTest {
         assertEquals(1, multiRepo.projects().size());
         assertFalse(multiRepo.projects().getFirst().indexed());
         assertTrue(multiRepo.limitations().contains("PROJECT_WITHOUT_ACTIVE_SNAPSHOT"));
+
+        MinosApi.MinosApiException invalidRequest = assertThrows(
+                MinosApi.MinosApiException.class,
+                () -> api.analyzeWorkspace(workspace.id(), null)
+        );
+        assertEquals(MinosApi.ErrorCode.INVALID_REQUEST, invalidRequest.code());
 
         System.out.printf(
                 "M12 multi-repo Git: workspace=%s, projects=%d, git-commits=%d, files=%d, exact-cross-repo=%d%n",
