@@ -116,6 +116,8 @@ try {
         -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
         -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
+        -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
 
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Destination (Join-Path $Distribution 'install.ps1')
@@ -149,16 +151,17 @@ Quick start:
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
 
-MCP:
+MCP native:
   command = <installation>\minos.cmd
   args    = mcp
 
 Optional hardened Docker MCP:
-  powershell -File <installation>\docker\scripts\prod-mcp-release.ps1 `
-    -Action Install `
-    -Jar <installation>\lib\minos.jar `
-    -Version $Version `
-    -ProjectsRoot N:\workspace-dev
+  powershell -File <installation>\docker\scripts\configure-docker-mcp.ps1 `
+    -InstallRoot <installation> `
+    -ProjectsRoot N:\workspace-dev `
+    -Start
+
+Docker Desktop must already be installed and running. The Windows setup.exe can run this configuration interactively.
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
     $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
