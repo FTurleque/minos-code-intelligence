@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -32,8 +33,12 @@ class ScipIndexerCatalogTest {
 
         assertTrue(javaResult.complete());
         assertEquals("scip-java", javaResult.selections().getFirst().indexer().id());
+        assertEquals(ManagedScipProviderRuntimeManager.SCIP_JAVA_VERSION,
+                javaResult.selections().getFirst().indexer().version());
         assertTrue(typeScriptResult.complete());
         assertEquals("scip-typescript", typeScriptResult.selections().getFirst().indexer().id());
+        assertEquals(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_VERSION,
+                typeScriptResult.selections().getFirst().indexer().version());
     }
 
     @Test
