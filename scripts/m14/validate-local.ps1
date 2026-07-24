@@ -70,7 +70,9 @@ try {
         throw 'Shaded MINOS JAR is missing after verify.'
     }
 
-    $ValidationRoot = Join-Path $RepoRoot 'target\m14-validation'
+    # Keep validation state outside target: the release build performs another
+    # `clean verify` and must not erase provider installations or the test home.
+    $ValidationRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-m14-" + $Head.Substring(0, 12))
     $script:ValidationHome = Join-Path $ValidationRoot 'home'
     $InstallRoot = Join-Path $ValidationRoot 'installed'
     Remove-Item -LiteralPath $ValidationRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -122,7 +124,7 @@ try {
         }
 
         Write-Host ''
-        Write-Host '=== Java provider replay ===' -ForegroundColor Cyan
+        Write-Host '=== Java provider replay + STALE recovery ===' -ForegroundColor Cyan
         $JavaFixture = Join-Path $RepoRoot 'fixtures\java\java-simple'
         Invoke-NativeChecked -File $script:JavaExecutable `
             -Arguments @("-Dminos.home=$script:ValidationHome", '-jar', $script:MinosJar,
@@ -133,6 +135,8 @@ try {
                 'project', 'add', $JavaFixture, '--name', 'm14-java') `
             -Failure 'Java fixture registration failed'
 
+        $JavaSource = Join-Path $JavaFixture 'src\main\java\com\minos\fixture\UserService.java'
+        $JavaSourceBytes = [System.IO.File]::ReadAllBytes($JavaSource)
         try {
             $JavaDryRun = Invoke-MinosJson @('index', 'm14-java', '--dry-run', '--format', 'json')
             if ($JavaDryRun.mode -ne 'FULL') {
@@ -146,10 +150,32 @@ try {
             if ($JavaSecond.status -ne 'NO_CHANGES' -or $JavaSecond.plan.mode -ne 'NONE') {
                 throw "Expected Java second run NO_CHANGES/NONE, found $($JavaSecond.status)/$($JavaSecond.plan.mode)"
             }
+
+            Add-Content -LiteralPath $JavaSource -Value "`nTHIS_IS_AN_INTENTIONAL_M14_COMPILE_FAILURE" -Encoding utf8
+            $FailureOutput = & $script:JavaExecutable "-Dminos.home=$script:ValidationHome" -jar $script:MinosJar `
+                index m14-java --format json 2>&1
+            $FailureExit = $LASTEXITCODE
+            if ($FailureExit -eq 0) {
+                throw "Expected Java refresh failure, but index returned success: $($FailureOutput | Out-String)"
+            }
+
+            $StaleStatus = Invoke-MinosJson @('index-status', 'm14-java', '--format', 'json')
+            if ($StaleStatus.state -ne 'STALE') {
+                throw "Expected STALE after failed Java refresh, found $($StaleStatus.state)"
+            }
+            if ($StaleStatus.activeSnapshotId -ne $JavaFirst.activeSnapshotId) {
+                throw "Failed refresh replaced the active snapshot: before=$($JavaFirst.activeSnapshotId) after=$($StaleStatus.activeSnapshotId)"
+            }
         }
         finally {
+            [System.IO.File]::WriteAllBytes($JavaSource, $JavaSourceBytes)
             Remove-Item -LiteralPath (Join-Path $JavaFixture 'index.scip') -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath (Join-Path $JavaFixture 'target') -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        $JavaRecovery = Invoke-MinosJson @('index', 'm14-java', '--force-full', '--format', 'json')
+        if ($JavaRecovery.status -ne 'SUCCEEDED') {
+            throw "Expected Java recovery SUCCEEDED, found $($JavaRecovery.status)"
         }
     }
 
@@ -183,8 +209,14 @@ try {
     $InstalledMinos = Join-Path $InstallRoot 'minos.cmd'
     Invoke-NativeChecked -File $InstalledMinos -Arguments @('--version') `
         -Failure 'Installed MINOS --version failed'
-    Invoke-NativeChecked -File $InstalledMinos -Arguments @('doctor') `
-        -Failure 'Installed MINOS doctor failed'
+    if (-not $SkipProviderReplays) {
+        Invoke-NativeChecked -File $InstalledMinos -Arguments @('doctor') `
+            -Failure 'Installed MINOS doctor failed'
+    }
+
+    Invoke-NativeChecked -File $script:JavaExecutable `
+        -Arguments @((Join-Path $RepoRoot 'scripts\m14\MinosNativeMcpSmoke.java'), $InstalledMinos, $script:ValidationHome) `
+        -Failure 'Installed native MCP handshake failed'
 
     if ($ValidateDocker) {
         Write-Host ''
