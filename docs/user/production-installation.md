@@ -1,6 +1,6 @@
 # Installation PROD de MINOS sous Windows
 
-Ce guide décrit l'installation **utilisateur** de MINOS. Il ne nécessite pas de checkout Git ni de Maven une fois l'artefact de release construit.
+Ce guide décrit l'installation **utilisateur** de MINOS. Il ne nécessite pas de checkout Git ni de Maven pour exécuter MINOS une fois l'artefact de release construit.
 
 ## 1. Artefacts de release
 
@@ -11,21 +11,28 @@ minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
 ```
 
-Le ZIP contient notamment :
+Le ZIP contient :
 
 ```text
 minos-<version>-windows-x64/
-├── app/                  # app-image jpackage + runtime Java embarqué
-├── minos.cmd             # launcher CLI
-├── minos-mcp.cmd         # launcher MCP direct
-├── install.ps1           # installateur utilisateur
+├── app/                                  # app-image jpackage + runtime Java embarqué
+├── lib/
+│   └── minos.jar                         # shaded JAR exact de la release
+├── docker/
+│   ├── Dockerfile.mcp.release
+│   ├── compose.mcp.prod.yaml
+│   └── scripts/
+│       └── prod-mcp-release.ps1
+├── minos.cmd                             # launcher CLI
+├── minos-mcp.cmd                         # launcher MCP direct
+├── install.ps1                           # installateur utilisateur
 ├── VERSION
 └── README.txt
 ```
 
 Le runtime Java nécessaire à MINOS est inclus dans `app/`. L'utilisateur n'a donc pas besoin de définir `JAVA_HOME` pour exécuter la CLI ou le MCP.
 
-> Les providers peuvent, eux, exiger la toolchain du projet analysé. `scip-java` nécessite un JDK de projet ; `scip-typescript` nécessite Node/npm.
+> Les providers peuvent, eux, exiger la toolchain du projet analysé. `scip-java` nécessite le JDK et le build Maven du projet ; `scip-typescript` nécessite Node/npm.
 
 ## 2. Vérifier le SHA-256
 
@@ -125,6 +132,12 @@ minos.cmd tools list
 
 ### Java
 
+Le provider Windows qualifié est verrouillé sur :
+
+```text
+scip-java 0.13.1
+```
+
 Pour indexer un projet Java, positionner d'abord le JDK du **projet** :
 
 ```powershell
@@ -138,7 +151,29 @@ Puis :
 minos.cmd tools install scip-java
 ```
 
-MINOS gère Coursier dans son home et verrouille la version du provider qu'il sait qualifier. Il n'installe pas un Maven global : le projet reste responsable de son build et MINOS privilégie les conventions du projet.
+MINOS gère Coursier dans son home et extrait son runner de compatibilité Windows sous :
+
+```text
+%LOCALAPPDATA%\MINOS\data\tools\scip-java\0.13.1\runtime\
+```
+
+Sur Windows, `scip-java 0.13.1` présente trois contraintes déjà mesurées pendant M0. MINOS les prend en charge sans modifier le PATH utilisateur :
+
+- shim local `mvn.exe` vers le Maven Wrapper du projet ou un Maven disponible ;
+- shim local `javac.exe` exécutant le launcher fournisseur via Git Bash ;
+- patch local de `ScipWriter` supprimant uniquement l'attribut POSIX non supporté par Windows.
+
+Préconditions Java Windows :
+
+```text
+JAVA_HOME -> JDK avec java/javac/jar
+pom.xml
+mvnw.cmd dans le projet ou un parent, sinon Maven dans PATH
+Git Bash (installé avec Git for Windows)
+csc.exe du .NET Framework Windows
+```
+
+MINOS n'installe pas un Maven global. Il utilise en priorité le wrapper trouvé dans le projet ou ses répertoires parents.
 
 ### TypeScript
 
@@ -250,6 +285,22 @@ Docker reste optionnel et utilise un home séparé :
 %LOCALAPPDATA%\MINOS\docker-data
 ```
 
+Le mode Docker est inclus dans l'installation utilisateur. Aucun checkout Git de MINOS n'est nécessaire :
+
+```powershell
+$Minos = "$env:LOCALAPPDATA\Programs\MINOS"
+
+& "$Minos\docker\scripts\prod-mcp-release.ps1" `
+  -Action Install `
+  -Jar "$Minos\lib\minos.jar" `
+  -Version 0.2.0 `
+  -Commit <release-commit> `
+  -ProjectsRoot N:\workspace-dev
+
+& "$Minos\docker\scripts\prod-mcp-release.ps1" -Action Start
+& "$Minos\docker\scripts\prod-mcp-release.ps1" -Action Validate
+```
+
 Ne pas partager le registre natif avec Docker : les racines de projets ne sont pas représentées avec les mêmes chemins (`N:\...` côté Windows, `/workspace/projects/...` côté conteneur).
 
 Voir [mcp.md](mcp.md).
@@ -264,7 +315,7 @@ Avec un JDK 24 :
 .\scripts\release\build-windows-distribution.ps1 -Version 0.2.0
 ```
 
-Le script exécute par défaut `clean verify`, construit l'app-image `jpackage`, produit le ZIP et son SHA-256.
+Le script exécute par défaut `clean verify`, construit l'app-image `jpackage`, copie le shaded JAR et les assets Docker dans la distribution, puis produit le ZIP et son SHA-256.
 
 Pour une qualification exploratoire uniquement :
 
