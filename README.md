@@ -43,26 +43,59 @@ Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md).
 
 ## Phase actuelle
 
-Les jalons **C0 à M9 sont terminés, validés et livrés**.
+Les jalons **C0 à M10 sont terminés, validés et livrés**.
 
-M9 — CLI stabilisée — a été fusionné via PR #30 au commit :
+M10 — Serveur MCP — a été fusionné via PR #32 au commit :
 
 ```text
-22afe31339dc3a75dc51c491a725330c6d433ecc
+eb042852a936ad2e62e337ee35ed8a349096e794
 ```
 
-Porte finale M9 :
+Porte finale M10 :
 
 ```text
-150 sources main
-75 sources test
-207 / 207 tests PASS
+152 sources main
+77 sources test
+210 / 210 tests PASS
 BUILD SUCCESS
 ```
 
-**M10 — Serveur MCP est maintenant intégralement implémenté** sur `m10/mcp-server` et attend sa porte locale finale.
+**M11 — API est maintenant intégralement implémenté** sur `m11/public-api` et attend sa porte locale finale.
 
-M10 expose **15 tools read-only** via un serveur local STDIO :
+M11 introduit un contrat Java public versionné :
+
+```text
+com.minos.api.MinosApi
+com.minos.api.LocalMinosApi
+CONTRACT_VERSION = 1
+```
+
+La surface publique couvre :
+
+```text
+projets
+index SCIP explicite
+symboles
+usages
+relations
+architecture
+contexte module
+analyse d'impact
+```
+
+Les signatures publiques n’exposent que des types JDK et des DTO `com.minos.api`. Les consommateurs ne dépendent donc ni de SCIP/Glean, ni des stores, ni de la CLI, ni du MCP, ni des modèles métier internes.
+
+Le replay M11 attendu sur la fixture réelle TypeScript est :
+
+```text
+M11 public API: version=1, project=<uuid>, snapshot=<snapshot>, modules=3, impact=2, tests=1
+```
+
+Voir [`docs/m11/API.md`](docs/m11/API.md) et [`docs/m11/DECISION_M11.md`](docs/m11/DECISION_M11.md).
+
+### Serveur MCP local
+
+M10 reste disponible en parallèle avec **15 tools read-only** via STDIO :
 
 ```text
 minos_project_structure
@@ -81,10 +114,6 @@ minos_module_context
 minos_architecture
 minos_impact
 ```
-
-Le serveur utilise le **SDK Java MCP officiel 2.0.0**, sans framework web. Les handlers ne recalculent pas l’intelligence métier : ils traduisent les arguments MCP vers la surface JSON M9 et délèguent au cœur MINOS.
-
-### Lancement MCP local
 
 Après :
 
@@ -112,8 +141,6 @@ MINOS_HOME=<path>
 ~/.minos
 ```
 
-Voir [`docs/m10/MCP_SERVER.md`](docs/m10/MCP_SERVER.md) et [`docs/m10/DECISION_M10.md`](docs/m10/DECISION_M10.md).
-
 ## Stack technique
 
 ```text
@@ -122,6 +149,7 @@ Build          Apache Maven 3.9.x
 Wrapper        Maven Wrapper 3.3.4 / Maven 3.9.16
 MCP SDK        Java MCP SDK 2.0.0
 MCP transport  STDIO local
+API M11        Java in-process, contrat v1
 Framework      Aucun framework serveur dans le cœur
 ```
 
@@ -166,10 +194,10 @@ MINOS Query Services
         ├── Architecture Intelligence
         └── Impact Analysis
         │
-        ├───────────────┐
-        ▼               ▼
-   Stable CLI       MCP STDIO
-                    15 tools
+        ├─────────────────┬─────────────────┐
+        ▼                 ▼                 ▼
+   Stable CLI         MCP STDIO       Public Java API
+                       15 tools          DTO v1
 ```
 
 Principe structurant :
@@ -191,11 +219,12 @@ SCIP est privilégié lorsqu’un fournisseur suffisamment fiable existe. Les co
 - l’absence de chemin observé ne prouve pas l’absence d’impact ;
 - la CLI reste une couche d’exposition et ne réimplémente pas l’intelligence métier ;
 - le serveur MCP reste une couche d’exposition read-only et ne réimplémente pas l’intelligence métier ;
-- stdout du serveur STDIO est réservé au protocole MCP.
+- stdout du serveur STDIO est réservé au protocole MCP ;
+- l’API publique M11 conserve une frontière DTO sans exposer les modèles ou adaptateurs internes.
 
-## Prochain jalon — M11 après clôture M10
+## Prochain jalon — M12 après clôture M11
 
-M11 vise une **API externe** permettant à d’autres systèmes de consommer MINOS via des DTO stables, sans coupler les consommateurs au protocole MCP ni aux adaptateurs internes.
+M12 vise le **multi-dépôts et l’intelligence Git** : résolution inter-dépôts, relations cross-repository, historique Git, fréquence de modification, changements récents et zones d’activité, sous réserve des preuves nécessaires.
 
 ## Documents de référence
 
@@ -211,6 +240,8 @@ M11 vise une **API externe** permettant à d’autres systèmes de consommer MIN
 - [`docs/m9/DECISION_M9.md`](docs/m9/DECISION_M9.md) — décision M9 ;
 - [`docs/m10/MCP_SERVER.md`](docs/m10/MCP_SERVER.md) — serveur et tools MCP ;
 - [`docs/m10/DECISION_M10.md`](docs/m10/DECISION_M10.md) — décision M10 ;
+- [`docs/m11/API.md`](docs/m11/API.md) — contrat API M11 ;
+- [`docs/m11/DECISION_M11.md`](docs/m11/DECISION_M11.md) — décision M11 ;
 - [`docs/adr/`](docs/adr/) — décisions d’architecture.
 
 ## Règle de développement
