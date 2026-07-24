@@ -32,9 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
-/**
- * Point d'entrée système de la CLI locale MINOS.
- */
+/** Point d'entrée système de la CLI locale MINOS. */
 public final class MinosLauncher {
 
     public static final String HOME_ENVIRONMENT_VARIABLE = "MINOS_HOME";
@@ -69,12 +67,15 @@ public final class MinosLauncher {
         Path normalizedHome = home.toAbsolutePath().normalize();
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(registry(normalizedHome), snapshots(normalizedHome)).export(projectRoot));
+        LocalAutonomousIndexOperations autonomousOperations = new LocalAutonomousIndexOperations(normalizedHome);
         return new MinosCli(
                 new LazyLocalProjectSymbolQuery(normalizedHome),
                 new LazyProjectOperations(normalizedHome),
                 new LazyProjectArchitectureQuery(normalizedHome),
                 new LazyProjectImpactQuery(normalizedHome),
-                nexusExportCommand
+                nexusExportCommand,
+                autonomousOperations,
+                normalizedHome
         ).run(arguments, output, error);
     }
 
@@ -115,155 +116,79 @@ public final class MinosLauncher {
     }
 
     private static final class LazyLocalProjectSymbolQuery implements ProjectSymbolQuery {
-
         private final Path home;
-
-        private LazyLocalProjectSymbolQuery(Path home) {
-            this.home = home;
-        }
-
-        @Override
-        public List<SymbolResult> findSymbols(String projectId, SymbolSearchCriteria criteria) throws Exception {
+        private LazyLocalProjectSymbolQuery(Path home) { this.home = home; }
+        @Override public List<SymbolResult> findSymbols(String projectId, SymbolSearchCriteria criteria) throws Exception {
             return delegate().findSymbols(projectId, criteria);
         }
-
-        @Override
-        public List<SymbolResult> getFileSymbols(String projectId, String fileId, int limit) throws Exception {
+        @Override public List<SymbolResult> getFileSymbols(String projectId, String fileId, int limit) throws Exception {
             return delegate().getFileSymbols(projectId, fileId, limit);
         }
-
-        @Override
-        public List<UsageResult> findUsages(String projectId, String symbolId, int limit) throws Exception {
+        @Override public List<UsageResult> findUsages(String projectId, String symbolId, int limit) throws Exception {
             return delegate().findUsages(projectId, symbolId, limit);
         }
-
-        @Override
-        public List<RelationshipResult> findRelationships(
-                String projectId,
-                RelationshipSearchCriteria criteria
-        ) throws Exception {
+        @Override public List<RelationshipResult> findRelationships(
+                String projectId, RelationshipSearchCriteria criteria) throws Exception {
             return delegate().findRelationships(projectId, criteria);
         }
-
-        @Override
-        public CodeSearchResponse searchCode(String projectId, CodeSearchCriteria criteria) throws Exception {
+        @Override public CodeSearchResponse searchCode(String projectId, CodeSearchCriteria criteria) throws Exception {
             return delegate().searchCode(projectId, criteria);
         }
-
-        @Override
-        public SourceExcerpt getSource(String projectId, String fileId) throws Exception {
+        @Override public SourceExcerpt getSource(String projectId, String fileId) throws Exception {
             return delegate().getSource(projectId, fileId);
         }
-
         private LocalProjectSymbolQuery delegate() throws IOException {
             return new LocalProjectSymbolQuery(registry(home), snapshots(home));
         }
     }
 
     private static final class LazyProjectOperations implements ProjectOperations {
-
         private final Path home;
-
-        private LazyProjectOperations(Path home) {
-            this.home = home;
-        }
-
-        @Override
-        public ProjectView addProject(Path rootPath, String displayName) throws Exception {
+        private LazyProjectOperations(Path home) { this.home = home; }
+        @Override public ProjectView addProject(Path rootPath, String displayName) throws Exception {
             return delegate().addProject(rootPath, displayName);
         }
-
-        @Override
-        public List<ProjectView> listProjects() throws Exception {
-            return delegate().listProjects();
-        }
-
-        @Override
-        public ProjectView inspectProject(String projectIdentifier) throws Exception {
+        @Override public List<ProjectView> listProjects() throws Exception { return delegate().listProjects(); }
+        @Override public ProjectView inspectProject(String projectIdentifier) throws Exception {
             return delegate().inspectProject(projectIdentifier);
         }
-
-        @Override
-        public IndexImportResult importScip(
-                String projectIdentifier,
-                Path indexFile,
-                String providerId,
-                String providerVersion,
-                String moduleId,
-                String snapshotId
-        ) throws Exception {
+        @Override public IndexImportResult importScip(
+                String projectIdentifier, Path indexFile, String providerId,
+                String providerVersion, String moduleId, String snapshotId) throws Exception {
             return delegate().importScip(
                     projectIdentifier, indexFile, providerId, providerVersion, moduleId, snapshotId);
         }
-
-        private LocalProjectOperations delegate() throws IOException {
-            return new LocalProjectOperations(home);
-        }
+        private LocalProjectOperations delegate() throws IOException { return new LocalProjectOperations(home); }
     }
 
     private static final class LazyProjectArchitectureQuery implements ProjectArchitectureQuery {
-
         private final Path home;
-
-        private LazyProjectArchitectureQuery(Path home) {
-            this.home = home;
-        }
-
-        @Override
-        public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
+        private LazyProjectArchitectureQuery(Path home) { this.home = home; }
+        @Override public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
             return delegate().getArchitectureOverview(projectIdentifier);
         }
-
-        @Override
-        public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
+        @Override public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
             return delegate().getModuleDependencies(projectIdentifier);
         }
-
-        @Override
-        public ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier)
-                throws IOException {
-            return delegate().getArchitectureConcentration(projectIdentifier);
-        }
-
-        @Override
-        public ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier)
-                throws IOException {
-            return delegate().getArchitectureCentrality(projectIdentifier);
-        }
-
-        @Override
-        public ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier)
-                throws IOException {
-            return delegate().getArchitectureTechnologies(projectIdentifier);
-        }
-
-        @Override
-        public ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier)
-                throws IOException {
-            return delegate().getArchitectureIntelligence(projectIdentifier);
-        }
-
-        @Override
-        public ArchitectureModuleContext getModuleContext(String projectIdentifier, String moduleIdentifier)
-                throws IOException {
-            return delegate().getModuleContext(projectIdentifier, moduleIdentifier);
-        }
-
+        @Override public ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier)
+                throws IOException { return delegate().getArchitectureConcentration(projectIdentifier); }
+        @Override public ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier)
+                throws IOException { return delegate().getArchitectureCentrality(projectIdentifier); }
+        @Override public ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier)
+                throws IOException { return delegate().getArchitectureTechnologies(projectIdentifier); }
+        @Override public ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier)
+                throws IOException { return delegate().getArchitectureIntelligence(projectIdentifier); }
+        @Override public ArchitectureModuleContext getModuleContext(String projectIdentifier, String moduleIdentifier)
+                throws IOException { return delegate().getModuleContext(projectIdentifier, moduleIdentifier); }
         private LocalProjectArchitectureQuery delegate() throws IOException {
             return new LocalProjectArchitectureQuery(registry(home), snapshots(home));
         }
     }
 
     private static final class LazyProjectImpactQuery implements ProjectImpactQuery {
-
         private final Path home;
-
-        private LazyProjectImpactQuery(Path home) {
-            this.home = home;
-        }
-
-        @Override
-        public ImpactAnalysisReport analyzeImpact(String projectIdentifier, ImpactAnalysisRequest request)
+        private LazyProjectImpactQuery(Path home) { this.home = home; }
+        @Override public ImpactAnalysisReport analyzeImpact(String projectIdentifier, ImpactAnalysisRequest request)
                 throws IOException {
             return new LocalProjectImpactQuery(registry(home), snapshots(home))
                     .analyzeImpact(projectIdentifier, request);
