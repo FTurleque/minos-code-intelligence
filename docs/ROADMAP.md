@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M13 terminés et livrés ; M14 en cours d'implémentation/qualification.**
+Statut : **C0 à M14 terminés, validés et livrés.**
 
 L’état courant livré reste résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves détaillées des jalons terminés sont archivées sous [`history/milestones/`](history/milestones/README.md).
 
@@ -188,34 +188,60 @@ Validation finale livrée : MINOS `7c5eda4727cda3d46cab24037e4f1276ff0b4a25`, NE
 
 ## M14 — Indexation autonome et installation PROD
 
-**EN COURS — IMPLÉMENTATION STRUCTURELLE 7/7, QUALIFICATION FINALE EN ATTENTE.**
+**TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-Objectif utilisateur :
+Parcours utilisateur livré :
 
 ```text
-minos project add <root> --name <project>
+minos doctor
 minos tools install <provider>
+minos project add <root> --name <project>
 minos index <project>
 ```
 
-MINOS doit prendre en charge découverte, négociation provider, diagnostic runtime, fingerprints, exécution, normalisation, staging et promotion sans demander à l’utilisateur de préparer `index.scip`.
+MINOS prend désormais en charge découverte, négociation provider, diagnostic runtime, fingerprints, exécution, normalisation, staging et promotion sans demander à l’utilisateur de préparer `index.scip`.
 
 Sous-incréments :
 
 ```text
-M14-S1  runtime providers + ProcessIndexerExecutor        🟡 implémenté, validation requise
-M14-S2  provider scip-typescript autonome                 🟡 implémenté, replay requis
-M14-S3  provider scip-java autonome                       🟡 implémenté, replay Windows requis
-M14-S4  staging projet multi-provider                     🟡 implémenté, validation requise
-M14-S5  CLI autonome + doctor/tools/import-scip           🟡 implémenté, validation requise
-M14-S6  distribution Windows native + runtime embarqué    🟡 implémenté, packaging réel requis
-M14-S7  release/Docker/docs alignés                       🟡 implémenté, qualification finale requise
+M14-S1  runtime providers + ProcessIndexerExecutor        ✅
+M14-S2  provider scip-typescript autonome                 ✅
+M14-S3  provider scip-java autonome Windows               ✅
+M14-S4  staging projet multi-provider                     ✅
+M14-S5  CLI autonome + doctor/tools/import-scip           ✅
+M14-S6  distribution Windows native + runtime embarqué    ✅
+M14-S7  release/Docker/docs alignés                       ✅
 ```
 
-La distinction est volontaire : **implémenté ne signifie pas encore validé/livré**. M14 ne passera à TERMINÉ qu’après build Java 24 exact-head, tests, replays Java/TypeScript réels et construction/validation de la distribution Windows.
+Qualification finale enregistrée :
+
+```text
+236 tests PASS
+ShadedJarSmokeIT PASS
+TypeScript FULL → SUCCEEDED → NONE
+Java FULL → SUCCEEDED → NONE
+Java refresh invalide → STALE avec snapshot précédent conservé
+Java recovery --force-full → SUCCEEDED / READY
+jpackage + ZIP + SHA-256 PASS
+installation vierge PASS
+MCP natif handshake PASS
+Docker MCP durci PASS
+```
+
+La distribution Windows sépare le programme de `MINOS_HOME`, embarque le runtime Java MINOS et conserve Docker comme mode MCP durci optionnel.
+
+La publication utilisateur des artefacts est industrialisée après M14 par :
+
+```text
+scripts/release/publish-windows-release.ps1
+.github/workflows/release-windows.yml
+```
+
+La publication reste volontairement explicite : elle est déclenchée manuellement depuis `main`, vérifie et smoke-teste le ZIP, crée `v<version>` puis attache le ZIP et son SHA-256 à GitHub Releases.
 
 - roadmap opérationnelle : [`roadmap/M14_EXECUTION.md`](roadmap/M14_EXECUTION.md)
 - issue : #42
+- PR : #43
 - décision : [ADR-0021](adr/0021-native-runtime-autonomous-indexing.md)
 
 ---
