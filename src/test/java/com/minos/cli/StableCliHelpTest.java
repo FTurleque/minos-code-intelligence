@@ -23,7 +23,8 @@ class StableCliHelpTest {
                 new String[]{"index-status", "--help"},
                 new String[]{"index", "--help"},
                 new String[]{"architecture", "--help"},
-                new String[]{"impact", "--help"}
+                new String[]{"impact", "--help"},
+                new String[]{"nexus-export", "--help"}
         );
 
         for (String[] command : commands) {
