@@ -337,6 +337,46 @@ Corrections postérieures :
 
 **Le head courant doit être requalifié intégralement : les PASS du SHA `68e93bd...` sont des preuves historiques, pas une validation du nouveau head.**
 
+## Qualification #3 — réparation du runtime `scip-java` Windows
+
+Le diagnostic du replay au SHA de départ `ee30e1f63930c90465015bced5bf6ad4dddf8ecc`
+a confirmé trois écarts avec le chemin M0 qualifié :
+
+1. `tools install scip-java` lançait la coordonnée Coursier sans classe
+   principale explicite et échouait avec `NoMainClassFound` ;
+2. le diagnostic exigeait uniquement `powershell.exe`, alors que le poste de
+   qualification expose PowerShell 7 via `pwsh.exe` ;
+3. le runner prenait le premier `bash.exe` du `PATH`, soit WSL Bash, au lieu de
+   `<Git>\bin\bash.exe`, rendant le launcher `javac` fournisseur introuvable.
+
+Le runtime corrigé :
+
+- sonde `org.scip-code:scip-java:0.13.1` avec `--jvm system`, la classe
+  `org.scip_code.scip_java.ScipJava` explicite et `--version` ;
+- vérifie dans le journal la réponse exacte `scip-java version 0.13.1` ;
+- accepte Windows PowerShell ou PowerShell 7 ;
+- résout strictement Git Bash depuis l'installation Git et refuse WSL Bash ;
+- conserve le classpath Coursier, les shims Maven/javac et le patch
+  `ScipWriter` M0.
+
+Validation progressive observée avant le gate exact-head :
+
+```text
+tests ciblés                 8 PASS
+clean verify                 236 PASS, 0 failure, 0 error, 0 skipped
+ShadedJarSmokeIT             1 PASS
+tools install scip-java      READY, version 0.13.1
+Java premier plan            FULL
+Java première indexation     SUCCEEDED
+Java second run              NO_CHANGES / NONE
+refresh Java invalide        échec provider attendu, STALE
+snapshot après échec         ancien snapshot conservé
+recovery --force-full        SUCCEEDED, READY
+```
+
+Ces résultats protègent le correctif, mais les étapes restent 🟡 jusqu'à la
+qualification native puis Docker sur un head Git propre et exact.
+
 ---
 
 # Portes de qualification finale

@@ -45,10 +45,6 @@ function Resolve-MavenCommand {
 }
 
 function Resolve-GitBash {
-    $bash = Get-Command bash.exe -ErrorAction SilentlyContinue
-    if ($bash) {
-        return $bash.Source
-    }
     $git = Get-Command git.exe -ErrorAction SilentlyContinue
     if ($git) {
         $gitRoot = Split-Path -Parent (Split-Path -Parent $git.Source)
@@ -57,7 +53,7 @@ function Resolve-GitBash {
             return $candidate
         }
     }
-    throw 'scip-java on Windows requires Git Bash (bash.exe).'
+    throw 'scip-java on Windows requires Git Bash at <Git>\bin\bash.exe; WSL bash.exe is not compatible.'
 }
 
 function Resolve-CSharpCompiler {

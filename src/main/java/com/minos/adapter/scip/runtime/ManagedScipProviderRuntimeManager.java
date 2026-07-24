@@ -39,6 +39,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_JAVA_VERSION = "0.13.1";
     public static final String SCIP_JAVA_COORDINATE =
             "org.scip-code:scip-java:" + SCIP_JAVA_VERSION;
+    static final String SCIP_JAVA_MAIN_CLASS = "org.scip_code.scip_java.ScipJava";
 
     private static final String COURSIER_LAUNCHER_ID = "windows-x64-official-launcher";
     private static final URI COURSIER_WINDOWS_URI = URI.create(
@@ -133,8 +134,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
         }
         if (CommandLocator.isWindows()) {
-            if (CommandLocator.find("powershell").isEmpty()) {
-                diagnostics.add("PowerShell is required for scip-java on Windows");
+            if (powerShellExecutable().isEmpty()) {
+                diagnostics.add("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows");
             }
             if (!gitBashAvailable()) {
                 diagnostics.add("Git Bash (bash.exe) is required for scip-java on Windows");
@@ -214,8 +215,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
         run(List.of(coursier.toString(), "--help"), home,
                 toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
-        run(List.of(coursier.toString(), "launch", SCIP_JAVA_COORDINATE, "--", "--help"), home,
-                toolsRoot.resolve("scip-java-install.log"), Duration.ofMinutes(10));
+        Path scipJavaLog = toolsRoot.resolve("scip-java-install.log");
+        run(scipJavaInstallationProbe(coursier), home, scipJavaLog, Duration.ofMinutes(10));
+        requireExpectedScipJavaVersion(scipJavaLog);
 
         ProviderRuntimeStatus status = inspectJava();
         if (!status.ready()) {
@@ -223,6 +225,27 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     + String.join("; ", status.diagnostics()));
         }
         return status;
+    }
+
+    static List<String> scipJavaInstallationProbe(Path coursier) {
+        return List.of(
+                coursier.toString(),
+                "launch", SCIP_JAVA_COORDINATE,
+                "--jvm", "system",
+                "--main", SCIP_JAVA_MAIN_CLASS,
+                "--", "--version"
+        );
+    }
+
+    static void requireExpectedScipJavaVersion(Path log) throws IOException {
+        String expected = "scip-java version " + SCIP_JAVA_VERSION;
+        boolean found = Files.readAllLines(log).stream()
+                .map(String::trim)
+                .anyMatch(expected::equals);
+        if (!found) {
+            throw new IllegalStateException(
+                    "scip-java version verification failed; expected `" + expected + "`; see " + log);
+        }
     }
 
     private void installJavaWindowsRuntime() throws IOException {
@@ -330,17 +353,21 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 && Files.isRegularFile(runtime.resolve(WINDOWS_PATCH_RESOURCE));
     }
 
+    static Optional<Path> powerShellExecutable() {
+        return CommandLocator.find("powershell").or(() -> CommandLocator.find("pwsh"));
+    }
+
     private static boolean gitBashAvailable() {
-        if (CommandLocator.find("bash").isPresent()) {
-            return true;
-        }
-        Optional<Path> git = CommandLocator.find("git");
-        if (git.isEmpty()) {
-            return false;
-        }
-        Path gitExecutable = git.orElseThrow();
+        return CommandLocator.find("git").flatMap(ManagedScipProviderRuntimeManager::gitBashForGit).isPresent();
+    }
+
+    static Optional<Path> gitBashForGit(Path gitExecutable) {
         Path gitRoot = gitExecutable.getParent() == null ? null : gitExecutable.getParent().getParent();
-        return gitRoot != null && Files.isRegularFile(gitRoot.resolve("bin").resolve("bash.exe"));
+        if (gitRoot == null) {
+            return Optional.empty();
+        }
+        Path gitBash = gitRoot.resolve("bin").resolve("bash.exe").toAbsolutePath().normalize();
+        return Files.isRegularFile(gitBash) ? Optional.of(gitBash) : Optional.empty();
     }
 
     private static boolean cSharpCompilerAvailable() {

@@ -50,8 +50,9 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             if (!Files.isRegularFile(windowsRunner)) {
                 throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
             }
-            Path powershell = CommandLocator.find("powershell")
-                    .orElseThrow(() -> new IllegalStateException("PowerShell is required for scip-java on Windows"));
+            Path powershell = ManagedScipProviderRuntimeManager.powerShellExecutable()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
             Path providerOutput = runDirectory.resolve("scip-java-output").toAbsolutePath().normalize();
             Files.createDirectories(providerOutput);
             return new IndexerProcessPlan(
@@ -74,7 +75,13 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         }
 
         return new IndexerProcessPlan(
-                List.of(coursier.toString(), "launch", coordinate, "--", "index"),
+                List.of(
+                        coursier.toString(),
+                        "launch", coordinate,
+                        "--jvm", "system",
+                        "--main", ManagedScipProviderRuntimeManager.SCIP_JAVA_MAIN_CLASS,
+                        "--", "index"
+                ),
                 root,
                 Map.of(),
                 root.resolve("index.scip"),
