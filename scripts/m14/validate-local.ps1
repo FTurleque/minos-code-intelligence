@@ -246,18 +246,26 @@ try {
 
     if ($ValidateDocker) {
         Write-Host ''
-        Write-Host '=== Packaged Docker validation ===' -ForegroundColor Cyan
-        $ReleaseJar = Join-Path $RepoRoot "target\minos-code-intelligence-$ReleaseVersion-all.jar"
+        Write-Host '=== Installed distribution Docker validation ===' -ForegroundColor Cyan
+        $InstalledDockerScript = Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1'
+        $InstalledReleaseJar = Join-Path $InstallRoot 'lib\minos.jar'
+        $DockerValidationRoot = Join-Path $ValidationRoot 'docker-install'
         Invoke-NativeChecked -File 'powershell.exe' `
             -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-                (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'),
-                '-Action', 'Install', '-Jar', $ReleaseJar, '-Version', $ReleaseVersion,
-                '-Commit', $Head, '-ProjectsRoot', (Split-Path -Parent $RepoRoot)) `
-            -Failure 'Packaged Docker install failed'
+                $InstalledDockerScript,
+                '-Action', 'Install',
+                '-Jar', $InstalledReleaseJar,
+                '-Version', $ReleaseVersion,
+                '-Commit', $Head,
+                '-InstallRoot', $DockerValidationRoot,
+                '-ProjectsRoot', (Split-Path -Parent $RepoRoot)) `
+            -Failure 'Installed distribution Docker install failed'
         Invoke-NativeChecked -File 'powershell.exe' `
             -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-                (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'), '-Action', 'Validate') `
-            -Failure 'Packaged Docker validation failed'
+                $InstalledDockerScript,
+                '-Action', 'Validate',
+                '-InstallRoot', $DockerValidationRoot) `
+            -Failure 'Installed distribution Docker validation failed'
     }
 
     Write-Host ''
