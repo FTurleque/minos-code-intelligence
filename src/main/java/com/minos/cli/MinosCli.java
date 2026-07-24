@@ -2,7 +2,6 @@ package com.minos.cli;
 
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
-import com.minos.integration.nexus.NexusExportService;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -80,12 +79,12 @@ public final class MinosCli {
         this(symbolQuery, projectOperations, architectureQuery, impactQuery, null);
     }
 
-    public MinosCli(
+    MinosCli(
             ProjectSymbolQuery symbolQuery,
             ProjectOperations projectOperations,
             ProjectArchitectureQuery architectureQuery,
             ProjectImpactQuery impactQuery,
-            NexusExportService nexusExportService
+            NexusExportCommand nexusExportCommand
     ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
@@ -101,7 +100,7 @@ public final class MinosCli {
         this.indexCommand = projectOperations == null ? null : new IndexCommand(projectOperations);
         this.architectureCommand = architectureQuery == null ? null : new ArchitectureCommand(architectureQuery);
         this.impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
-        this.nexusExportCommand = nexusExportService == null ? null : new NexusExportCommand(nexusExportService);
+        this.nexusExportCommand = nexusExportCommand;
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
