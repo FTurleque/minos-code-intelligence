@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M10 terminés et livrés — M11 implémenté, validation finale en attente**
+Statut : **C0 à M10 livrés — M11 validé, fusion en attente — M12 implémenté, porte finale en attente**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
 
@@ -92,18 +92,10 @@ Décision : `m6/DECISION_M6.md`.
 
 Suivi clôturé : issue #22.
 
-Merge final :
-
 ```text
-c66382705880158b9ccac63b5662b81bf2d8d255
-```
-
-Porte finale :
-
-```text
-134 sources main
-69 sources test
-196/196 tests PASS
+merge         c66382705880158b9ccac63b5662b81bf2d8d255
+sources       134 main / 69 test
+tests         196/196 PASS
 BUILD SUCCESS
 ```
 
@@ -130,7 +122,7 @@ tests         203/203 PASS
 
 Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limites runtime explicites.
 
-Replay réel :
+Replay :
 
 ```text
 M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
@@ -175,24 +167,11 @@ Décision : `m9/DECISION_M9.md`.
 
 Suivi clôturé : issue #31. PR finale : #32.
 
-Head exact validé :
-
 ```text
-3f3657a6e5c1a783993348c892f97138d990feff
-```
-
-Merge final :
-
-```text
-eb042852a936ad2e62e337ee35ed8a349096e794
-```
-
-Porte finale :
-
-```text
-152 sources main
-77 sources test
-210/210 tests PASS
+head validé   3f3657a6e5c1a783993348c892f97138d990feff
+merge         eb042852a936ad2e62e337ee35ed8a349096e794
+sources       152 main / 77 test
+tests         210/210 PASS
 BUILD SUCCESS
 ```
 
@@ -210,12 +189,6 @@ Acquis : négociation MCP, `tools/list`, `tools/call`, 15 tools read-only, JSON 
 
 Frontière : les handlers MCP délèguent à la surface existante et ne réimplémentent aucune intelligence M1–M8.
 
-Replay :
-
-```text
-M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modules=3, impact-root=GreetingPort
-```
-
 Porte M10 :
 
 > **OUI, via un serveur MCP STDIO read-only qui délègue à la surface MINOS existante et conserve les mêmes bornes, preuves et limitations.**
@@ -224,18 +197,34 @@ Décision : `m10/DECISION_M10.md`.
 
 ---
 
-## M11 — API
+## M11 — API publique
 
-État : **INTÉGRALEMENT IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
+État : **VALIDÉ — FUSION EN ATTENTE D’AUTORISATION EXPLICITE**
 
-Suivi : issue #33.
-
-PR Draft : #34.
+Suivi : issue #33. PR #34 **Ready for review**.
 
 Branche :
 
 ```text
 m11/public-api
+```
+
+Head exact validé :
+
+```text
+fae552e8e6f2aa66c327fb80485f5bad448d7520
+```
+
+Porte acquise le 24 juillet 2026 sous Java 24 :
+
+```text
+154 sources main
+79 sources test
+214/214 tests PASS
+0 failures
+0 errors
+0 skipped
+BUILD SUCCESS
 ```
 
 ### Objectif
@@ -250,115 +239,161 @@ com.minos.api.LocalMinosApi
 CONTRACT_VERSION = 1
 ```
 
-Les signatures publiques n’exposent que des types JDK et des DTO/requêtes `MinosApi`.
+Surface : projets, index SCIP explicite, symboles, usages, relations, architecture, contexte module et impact.
 
-### Surface implémentée
+Le champ `SymbolDto.language` conserve l’identifiant lexical normalisé (`typescript`, `java`, etc.), distinct des noms d’enums d’architecture/découverte (`TYPESCRIPT`, `NPM`, etc.).
 
-```text
-projets : add / list / inspect
-index : import SCIP explicite + statut
-symboles
-usages
-relations
-architecture
-contexte module
-impact
-```
-
-### DTO publics
-
-Le contrat conserve les informations importantes déjà qualifiées :
-
-- identité, localisation et provenance des symboles ;
-- rôles et résolution des usages ;
-- source/cible, nature, confiance et preuves des relations ;
-- topologie, dépendances, centralité, technologies et modules ;
-- chemins, confiance, tests potentiels et limitations de l’impact.
-
-Les enums internes sont exposés comme chaînes pour éviter un couplage binaire du consommateur aux enums métier MINOS.
-
-### Contrat d’erreur
+Replay acquis :
 
 ```text
-INVALID_REQUEST
-UNAVAILABLE
-IO_FAILURE
-EXECUTION_FAILURE
+M11 public API: version=1, project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, modules=3, impact=2, tests=1
 ```
 
-### Frontière M11
-
-- aucune analyse M1–M8 réimplémentée dans `com.minos.api` ;
-- aucun type interne dans les signatures publiques ;
-- aucun serveur HTTP ni framework web ;
-- import SCIP explicite uniquement ;
-- aucune capacité d’indexation absente n’est inventée ;
-- la sémantique conservatrice de M8 reste inchangée.
-
-### Qualification ajoutée
-
-`MinosApiContractTest` vérifie par réflexion que les méthodes et composants des DTO publics ne fuient aucun type interne interdit.
-
-`LocalMinosApiIntegrationTest` rejoue `fixtures/typescript/typescript-modules` et vérifie :
-
-```text
-contract version       1
-project modules        3
-index state            READY
-relation               IMPLEMENTS
-architecture modules   3
-module context          packages/api
-impact GreetingPort    2
-potential tests        1
-invalid enum           INVALID_REQUEST
-```
-
-Replay attendu :
-
-```text
-M11 public API: version=1, project=<uuid>, snapshot=<snapshot>, modules=3, impact=2, tests=1
-```
-
-### Contrôles actuels
-
-SonarQube Cloud sur PR #34 : **Quality Gate passed**, 0 Security Hotspots et 0.0 % duplication sur nouveau code. Trois issues non bloquantes sont signalées.
-
-Aucun workflow GitHub Actions n’est lancé ; la porte Maven locale reste la preuve finale.
-
-### Porte de décision M11
-
-> Des systèmes externes peuvent-ils consommer les capacités MINOS via un contrat Java public stable, sans dépendre de Glean, SCIP, du stockage local, de la CLI, du MCP ni des modèles internes ?
-
-Verdict préparé :
+Porte M11 :
 
 > **OUI, via un contrat Java local versionné dont les DTO publics restent indépendants des fournisseurs, protocoles et modèles internes, tout en déléguant l’intelligence au cœur MINOS existant.**
 
-Documents :
+Documents : `m11/API.md`, `m11/DECISION_M11.md`.
 
-- `m11/API.md` ;
-- `m11/DECISION_M11.md`.
-
-Porte finale :
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-Volumes attendus sur le code actuel :
-
-```text
-154 sources main
-79 sources test
-214 tests
-```
+La fusion de #34 reste explicitement hors automatisme et nécessite une autorisation utilisateur.
 
 ---
 
 ## M12 — Multi-dépôts et intelligence Git
 
-État : **NON DÉMARRÉ**
+État : **INTÉGRALEMENT IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
 
-Périmètre possible : résolution inter-dépôts, relations cross-repository, historique Git, fréquence de modification, changements récents et zones d’activité.
+Suivi : issue #35.
+
+PR Draft empilée : #36.
+
+Branche :
+
+```text
+m12/multi-repo-git
+```
+
+Base fonctionnelle : head M11 validé `fae552e8e6f2aa66c327fb80485f5bad448d7520`.
+
+La PR #36 cible temporairement `m11/public-api`. Après fusion explicitement autorisée de #34, elle devra être retargetée sur `main` avant livraison finale.
+
+### Objectif
+
+Permettre à MINOS de raisonner factuellement sur plusieurs dépôts d’un même workspace et d’exposer l’activité Git locale sans confondre fréquence de modification et importance architecturale.
+
+### Runtime Git
+
+```text
+org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r
+```
+
+Lecture Java pure ; aucune commande Git native n’est requise au runtime M12.
+
+### Contrat public additif
+
+Le contrat M11 reste inchangé. M12 ajoute :
+
+```text
+com.minos.api.MinosMultiRepositoryApi
+com.minos.api.LocalMinosMultiRepositoryApi
+MULTI_REPOSITORY_CONTRACT_VERSION = 1
+```
+
+### Surface implémentée
+
+```text
+workspaces : create / list / get / assign project
+Git repository inspection
+Git bounded activity
+recent commits + changed paths
+file modification frequency
+unique authors per file
+last change / last commit
+activity zones
+workspace intelligence
+cross-repository relationships
+explicit limitations
+```
+
+### Résolution cross-repository
+
+Une relation non résolue n’est promue que sur correspondance **exacte et unique** :
+
+```text
+relationship.origin.providerId
++
+relationship.unresolvedTarget
+==
+localSymbol.providerReference.providerId
++
+localSymbol.providerReference.externalId
+```
+
+La cible doit être locale, appartenir à un autre projet du même workspace et être unique.
+
+Aucune résolution n’est effectuée par nom, `qualifiedName`, chemin, proximité temporelle ou fréquence Git.
+
+La résolution est une vue dérivée : les snapshots M2/M3 ne sont pas réécrits.
+
+### Bornes
+
+```text
+Git maxCommits          1..10000
+Git maxFiles            1..10000
+Git zoneDepth           1..8
+Workspace relationships 1..10000
+```
+
+### Qualification ajoutée
+
+```text
+MinosMultiRepositoryApiContractTest
+GitIntelligenceServiceTest
+WorkspaceIntelligenceServiceTest
+LocalMinosMultiRepositoryApiIntegrationTest
+```
+
+Preuves visées :
+
+- contrat public sans fuite interne/JGit ;
+- dépôt Git synthétique avec 2 commits / 2 auteurs ;
+- activité fichier et zone ;
+- résolution cross-repository exacte ;
+- refus d’une cible name-only ;
+- limitation explicite pour projet sans snapshot ;
+- erreur publique `INVALID_REQUEST` pour requête nulle.
+
+Replay attendu :
+
+```text
+M12 multi-repo Git: workspace=<uuid>, projects=1, git-commits=1, files=1, exact-cross-repo=0
+```
+
+### Porte de décision M12
+
+> MINOS peut-il raisonner factuellement sur plusieurs dépôts d’un même workspace et enrichir la Code Intelligence avec l’historique Git, sans inventer de relations inter-dépôts ni confondre activité Git et importance architecturale ?
+
+Verdict préparé :
+
+> **OUI, à condition de séparer strictement les faits Git des signaux architecturaux et de ne promouvoir une relation cross-repository que sur une identité fournisseur exacte, unique et traçable.**
+
+Documents : `m12/MULTI_REPO_GIT.md`, `m12/DECISION_M12.md`.
+
+Porte locale finale :
+
+```powershell
+.\mvnw.cmd clean verify
+```
+
+Volumes attendus :
+
+```text
+158 sources main
+83 sources test
+221 tests
+```
+
+Ces volumes restent à confirmer sur le **head exact final M12**.
 
 ---
 
