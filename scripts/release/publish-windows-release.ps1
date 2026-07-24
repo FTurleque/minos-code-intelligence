@@ -134,9 +134,23 @@ finally {
 }
 
 $Tag = "v$Version"
-$ExistingRelease = & $Gh.Source release view $Tag --repo $Repository 2>$null
-if ($LASTEXITCODE -eq 0) {
+# Windows PowerShell 5.1 surfaces native stderr as an ErrorRecord. With the
+# script-wide ErrorActionPreference=Stop, the expected `release not found`
+# response would terminate the script before LASTEXITCODE could be inspected.
+$PreviousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $ReleaseProbeOutput = ((& $Gh.Source release view $Tag --repo $Repository 2>&1) | Out-String).Trim()
+    $ReleaseProbeExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+}
+if ($ReleaseProbeExitCode -eq 0) {
     throw "GitHub Release $Tag already exists. Releases are immutable; publish a new version instead."
+}
+if ($ReleaseProbeOutput -notmatch '(?i)release not found') {
+    throw "Unable to check GitHub Release $Tag (exit=$ReleaseProbeExitCode): $ReleaseProbeOutput"
 }
 
 $ExistingTag = @(& $Git.Source -C $RepoRoot ls-remote --tags origin "refs/tags/$Tag")
