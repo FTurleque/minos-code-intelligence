@@ -11,10 +11,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Descripteurs M1 fondés uniquement sur les capacités réellement qualifiées en M0.
+ * Descripteurs des providers SCIP qualifiés par MINOS.
  *
- * <p>Cette classe adapte la connaissance fournisseur vers les contrats
- * d'orchestration MINOS ; aucun type SCIP n'entre dans {@code orchestration}.</p>
+ * <p>M14 réutilise pour Java la version réellement qualifiée pendant M0 sous
+ * Windows. Les limites sémantiques restent conservatrices et l'incrémental
+ * n'est toujours pas revendiqué.</p>
  */
 public final class ScipIndexerCatalog {
 
@@ -46,8 +47,9 @@ public final class ScipIndexerCatalog {
                 IndexerQualification.QUALIFIED_WITH_CONSTRAINTS,
                 100,
                 List.of(
-                        "qualified in M0 on Maven projects only",
-                        "no final index is published when project compilation fails",
+                        "qualified semantics remain restricted to Maven projects",
+                        "Windows execution uses the M0-qualified Maven/javac shims and ScipWriter compatibility patch",
+                        "no final index may be promoted when provider execution or project compilation fails",
                         "incremental indexing has not been qualified for scip-java 0.13.1",
                         "CALLS relations are not emitted explicitly",
                         "some symbol kinds remain unspecified"

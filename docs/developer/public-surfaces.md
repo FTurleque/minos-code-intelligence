@@ -13,6 +13,13 @@ classDiagram
       architecture()
       impact()
     }
+    class AutonomousIndexing {
+      <<administration locale>>
+      discovery()
+      negotiate()
+      plan()
+      execute()
+    }
     class MinosCli {
       <<adapter>>
       run(args, stdout, stderr)
@@ -21,79 +28,72 @@ classDiagram
       <<public interface>>
       CONTRACT_VERSION = 1
     }
-    class MinosMultiRepositoryApi {
-      <<public interface>>
-      MULTI_REPOSITORY_CONTRACT_VERSION = 1
-    }
     class MinosMcpServer {
-      <<adapter>>
+      <<read-only adapter>>
       STDIO
     }
     class NexusExportService {
       <<integration>>
       contractVersion = 1
-      producer = MINOS
     }
 
     MinosCli --> CoreQueries
+    MinosCli --> AutonomousIndexing
     MinosApi --> CoreQueries
-    MinosMultiRepositoryApi --|> MinosApi
-    MinosMultiRepositoryApi --> CoreQueries
     MinosMcpServer --> CoreQueries
     NexusExportService --> CoreQueries
 ```
 
 ## CLI
 
-`MinosCli` est un dispatcher. Il instancie des commandes d’exposition et délègue à `ProjectSymbolQuery`, `ProjectOperations`, `ProjectArchitectureQuery` et `ProjectImpactQuery`.
+`MinosCli` reste le dispatcher de commandes.
 
-Le launcher garde les dépendances lazily ouvertes afin qu’un simple `--help` ne crée pas inutilement un home MINOS.
+M14 ajoute une surface d'administration locale dédiée :
 
-### Contrat stable
+```text
+doctor
+tools list / install / verify
+index <project>
+import-scip <project> ...
+```
 
-Codes de sortie :
+`LocalAutonomousIndexOperations` coordonne discovery, négociation, fingerprints et lifecycle existants ; la CLI ne contient pas elle-même la logique provider.
+
+### Bootstrap
+
+`MinosLauncher` :
+
+- traite `--version` sans ouvrir de store ;
+- traite `--help` sans créer de home ;
+- expose `mcp` comme sous-commande de lancement ;
+- n'ouvre les stores/services qu'une fois une commande fonctionnelle exécutée.
+
+### Codes de sortie
 
 ```text
 0 success
-1 execution failure
+1 execution failure / diagnostic action required
 2 usage error
 ```
 
-Les commandes qui supportent l’automatisation acceptent `--format json`.
+Un run d'indexation provider/staging/promotion en échec remonte en code `1` ; il n'est pas rendu comme un succès CLI.
 
-## API Java M11
+Les commandes d'automatisation acceptent `--format json` lorsqu'un format machine est pertinent.
 
-`MinosApi` est le contrat public fournisseur-indépendant.
+## API Java M11/M12
 
-```mermaid
-classDiagram
-    class MinosApi {
-      <<interface>>
-      +String contractVersion()
-      +ProjectDto addProject(Path, String)
-      +List~ProjectDto~ listProjects()
-      +ProjectDto getProject(String)
-      +IndexImportDto importScip(...)
-      +List~SymbolDto~ findSymbols(...)
-      +List~UsageDto~ findUsages(...)
-      +List~RelationshipDto~ findRelationships(...)
-      +ArchitectureDto getArchitecture(String)
-      +ModuleContextDto getModuleContext(...)
-      +ImpactReportDto analyzeImpact(...)
-    }
+`MinosApi` reste le contrat public fournisseur-indépendant versionné.
 
-    class LocalMinosApi
-    LocalMinosApi ..|> MinosApi
-```
+Il expose notamment l'administration projet, l'import SCIP explicite et les requêtes de Code Intelligence.
 
-### Règle de compatibilité
+M14 **n'étend pas silencieusement le contrat API v1 avec l'exécution des providers**. L'indexation autonome est d'abord une responsabilité d'administration locale CLI/runtime. Une future exposition API devra être additive/versionnée et ne devra pas faire fuiter les types de runtime provider.
 
 La surface publique utilise uniquement :
 
 - types JDK ;
-- DTOs déclarés par `MinosApi`.
+- DTOs déclarés par le contrat public.
 
-Elle ne doit pas exposer directement SCIP, MCP, les stores ou les modèles internes `com.minos.domain`.
+Elle ne doit pas exposer directement SCIP, MCP, les stores, Coursier, npm ou les modèles internes `com.minos.domain`.
 
 ### Erreurs publiques
 
@@ -104,42 +104,34 @@ IO_FAILURE
 EXECUTION_FAILURE
 ```
 
-Le consommateur peut donc traiter les erreurs sans dépendre des exceptions internes.
-
 ## API M12 multi-repository
 
-`MinosMultiRepositoryApi` **étend** `MinosApi` sans modifier le contrat M11 existant.
+`MinosMultiRepositoryApi` étend `MinosApi` sans modifier le contrat M11 existant.
 
-```mermaid
-classDiagram
-    class MinosApi
-    class MinosMultiRepositoryApi {
-      <<interface>>
-      +createWorkspace(String)
-      +listWorkspaces()
-      +getWorkspace(String)
-      +assignProjectToWorkspace(...)
-      +inspectGit(String)
-      +analyzeGitActivity(...)
-      +analyzeWorkspace(...)
-    }
-    MinosMultiRepositoryApi --|> MinosApi
-```
-
-Limites publiques :
-
-```text
-maxCommits        1..10000
-maxFiles          1..10000
-zoneDepth         1..8
-maxRelationships  1..10000
-```
+Les bornes publiques existantes restent inchangées : commits, fichiers, profondeur de zone et relations restent explicitement limités.
 
 ## MCP
 
-MCP est une couche read-only. Les handlers adaptent les arguments MCP vers la surface MINOS existante et restituent du JSON.
+MCP reste **strictement read-only**.
 
-Le serveur n’ajoute pas de logique métier spécifique aux agents.
+Les tools lisent la connaissance active et ne peuvent pas :
+
+```text
+project add
+tools install
+index
+import-scip
+```
+
+Ce choix empêche un agent MCP de déclencher implicitement une compilation, un téléchargement de provider ou une mutation administrative.
+
+Le launcher natif M14 fournit :
+
+```text
+minos mcp
+```
+
+mais la surface fonctionnelle MCP reste celle de M10.
 
 Voir le [guide utilisateur MCP](../user/mcp.md).
 
@@ -164,7 +156,18 @@ sequenceDiagram
     C-->>C: sérialiser JSON stdout
 ```
 
-Le contrat garde une information plus riche que ce que NEXUS est obligé de consommer. Le consommateur peut ignorer un kind non représentable, mais ne doit pas lui inventer une nouvelle signification.
+M14 change la manière de produire le snapshot (`index <project>` autonome), pas le contrat NEXUS.
+
+## Runtime natif vs Docker
+
+ADR-0021 sépare :
+
+```text
+runtime natif = administration + providers + CLI + MCP local
+Docker MCP    = consommation read-only durcie optionnelle
+```
+
+Les deux modes ne doivent pas partager aveuglément un registre contenant des racines projet, car les chemins hôte Windows et conteneur diffèrent.
 
 ## Ajouter une nouvelle surface
 
@@ -173,14 +176,15 @@ Pour un futur adapter HTTP, IDE ou autre protocole :
 1. réutiliser les services existants ;
 2. définir des DTOs/serialisations propres au contrat externe ;
 3. imposer les mêmes bornes ;
-4. conserver les limitations et la provenance ;
+4. conserver limitations et provenance ;
 5. ne pas déplacer la logique métier vers le transport ;
-6. ajouter des tests de frontière empêchant les fuites de types internes.
+6. décider explicitement si la surface est read-only ou administrative ;
+7. ajouter des tests de frontière empêchant les fuites de types internes.
 
 ## Tests de contrat
 
-Les tests `MinosApiContractTest` et `MinosMultiRepositoryApiContractTest` vérifient que la surface publique ne fuit pas les packages internes ou JGit.
+Les tests API continuent de vérifier l'absence de fuite des packages internes/JGit.
 
-Le serveur MCP possède ses tests de catalogue/schemas et un replay STDIO réel.
+Le MCP conserve ses tests de catalogue/schemas et replay STDIO.
 
-L’export NEXUS possède un test de version de contrat et un replay sur fixture réelle.
+M14 ajoute des tests ciblés pour l'exécution processus et la CLI autonome ; les replays providers réels et la distribution Windows font partie des portes de qualification du jalon.

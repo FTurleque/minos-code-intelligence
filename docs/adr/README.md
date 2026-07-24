@@ -35,6 +35,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0018](0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | M11 |
 | [0019](0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | M12 |
 | [0020](0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | M13 |
+| [0021](0021-native-runtime-autonomous-indexing.md) | Utiliser un runtime MINOS natif pour l’indexation autonome et conserver Docker MCP comme mode durci optionnel | Accepted | M14 |
 
 ## Règle de rédaction
 

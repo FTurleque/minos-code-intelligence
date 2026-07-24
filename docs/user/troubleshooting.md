@@ -1,163 +1,301 @@
 # Dépannage
 
-Ce guide part des surfaces stables de MINOS : CLI, registre projet, import SCIP, snapshots, MCP et export NEXUS.
+Ce guide couvre l’installation native M14, les providers, l’indexation autonome, les snapshots, MCP et NEXUS.
 
-## `BUILD FAILURE` avant compilation
+## Commencer par `doctor`
 
-Vérifier d’abord :
+Pour une installation utilisateur :
+
+```powershell
+minos.cmd doctor
+```
+
+Pour un checkout source :
+
+```powershell
+.\minos.cmd doctor
+```
+
+Le diagnostic indique le runtime MINOS, les commandes projet disponibles et l’état de chaque provider géré.
+
+## `BUILD FAILURE` lors du développement de MINOS
+
+Ce cas concerne le checkout source :
 
 ```powershell
 java -version
 .\mvnw.cmd -version
 ```
 
-MINOS exige Java 24 et Maven 3.9.x. Le Maven Wrapper doit lui aussi s’exécuter avec un JDK 24.
+Le développement de MINOS exige Java 24 et Maven 3.9.x via le wrapper.
+
+Une distribution installée embarque son propre runtime et n’exige pas un JDK système pour exécuter la CLI/MCP.
 
 ## `project root is not registered`
-
-Cause : une commande cible une racine qui n’existe pas dans le registre MINOS.
 
 Diagnostic :
 
 ```powershell
-java -jar $minos project list
-java -jar $minos inspect <project>
+minos.cmd project list
+minos.cmd inspect <project>
 ```
 
 Correction :
 
 ```powershell
-java -jar $minos project add <root> --name <name>
+minos.cmd project add <root> --name <name>
 ```
 
 ## Projet enregistré mais racine indisponible
 
-`inspect` expose `rootAvailable`. Si la racine a été déplacée, montée sous une autre lettre de lecteur ou supprimée, MINOS conserve le registre mais ne peut pas lire le workspace local.
+`inspect` expose `rootAvailable`.
 
-Réutiliser la racine enregistrée ou réenregistrer le projet approprié.
+Si la racine a été déplacée, si une lettre de lecteur a changé ou si un volume n’est plus monté, MINOS conserve l’identité enregistrée mais ne peut plus découvrir/lire le projet.
 
-## `index` échoue
+Réenregistrer le bon projet ou rétablir exactement la racine attendue.
+
+## `index` échoue avant de lancer le provider
+
+Exécuter :
+
+```powershell
+minos.cmd index <project> --dry-run --format json
+minos.cmd doctor --format json
+minos.cmd tools list --format json
+```
+
+Causes typiques :
+
+- aucun provider qualifié pour le langage/build détecté ;
+- runtime provider non installé ;
+- `JAVA_HOME` absent ou ne contenant pas `javac` pour `scip-java` ;
+- `node`/`npm` absents pour `scip-typescript` ;
+- configuration projet non supportée par la qualification courante.
+
+Installer un provider :
+
+```powershell
+minos.cmd tools install scip-java
+# ou
+minos.cmd tools install scip-typescript
+```
+
+## `scip-java` est `BLOCKED`
+
+`scip-java` utilise le JDK du projet, pas le runtime Java embarqué de MINOS.
 
 Vérifier :
 
-- l’existence de `index.scip` ;
-- le `--provider` ;
-- les permissions de lecture ;
-- la cohérence entre l’artefact et le projet ciblé.
+```powershell
+$env:JAVA_HOME
+& "$env:JAVA_HOME\bin\javac.exe" -version
+```
 
-Commande de référence :
+Puis relancer :
 
 ```powershell
-java -jar $minos index <project> `
-  --scip <index.scip> `
+minos.cmd doctor
+minos.cmd index <project> --dry-run
+```
+
+Le périmètre M14 initial qualifie le provider Java sur Maven. Un projet hors de ce périmètre doit rester explicitement non couvert plutôt que recevoir une fausse garantie.
+
+## `scip-typescript` est `BLOCKED`
+
+Vérifier :
+
+```powershell
+node --version
+npm --version
+```
+
+MINOS installe le provider, **pas les dépendances métier du projet**.
+
+Si `node_modules` ou les dépendances nécessaires au projet sont absentes, les préparer selon le workflow normal du projet avant `minos index`.
+
+## Provider installé mais indexation échoue
+
+Chaque run conserve ses diagnostics sous :
+
+```text
+<MINOS_HOME>/runs/<runId>/<provider>/
+```
+
+Consulter :
+
+```text
+provider.stdout.log
+provider.stderr.log
+process.txt
+failed-index.scip   # uniquement s’il existe
+```
+
+Le message CLI indique le `runId` ou le fichier de log lorsque cela est disponible.
+
+## Un `index.scip` existant dans le projet a disparu
+
+Le runtime M14 est conçu pour préserver/restaurer un `index.scip` préexistant autour de l’exécution provider.
+
+Si ce contrat semble violé, ne relancer pas plusieurs indexations en parallèle. Conserver le répertoire `<MINOS_HOME>/runs/<runId>` et signaler le SHA exact de MINOS.
+
+## Import manuel d’un artefact SCIP
+
+Pour diagnostiquer un artefact externe sans lancer le provider :
+
+```powershell
+minos.cmd import-scip <project> `
+  --file <index.scip> `
   --provider <provider-id> `
   --format json
 ```
 
-MINOS ne génère pas automatiquement l’artefact SCIP.
+La forme historique `index --scip` reste temporairement acceptée mais est dépréciée.
 
-## Pas de résultat dans `find-callers` ou `find-callees`
+## `NO_CHANGES`
 
-Une liste vide ne signifie pas forcément qu’aucun appel n’existe au runtime. Elle signifie qu’aucune relation `CALLS` correspondante n’est présente dans le snapshot observé.
+Ce résultat signifie que le fingerprint courant correspond à la baseline active et que le planner M7 a choisi `NONE`.
 
-Les limites possibles incluent notamment : dispatch dynamique, réflexion, configuration runtime et capacités incomplètes du fournisseur.
+Pour forcer une requalification :
 
-## `impact` retourne des limitations
+```powershell
+minos.cmd index <project> --force-full
+```
 
-C’est normal : l’analyse d’impact est volontairement conservatrice. Les limitations décrivent les dimensions que le graphe statique ne prouve pas.
+## Pourquoi MINOS fait `FULL` pour une petite modification ?
 
-Ne pas interpréter un rapport d’impact comme une preuve d’exhaustivité runtime.
+C’est volontaire lorsque le provider sélectionné ne possède pas une capacité `INCREMENTAL_INDEXING` explicitement qualifiée.
+
+M14 n’invente pas un incrémental que le fournisseur ne prouve pas.
 
 ## `STALE`
 
-`STALE` signifie qu’un rafraîchissement a échoué mais qu’un snapshot actif précédent reste disponible.
+`STALE` signifie qu’un refresh a échoué mais qu’un ancien snapshot actif reste disponible :
 
 ```mermaid
 stateDiagram-v2
     READY --> REFRESHING
     REFRESHING --> READY: nouveau snapshot promu
-    REFRESHING --> STALE: échec de rafraîchissement
+    REFRESHING --> STALE: échec
     STALE --> REFRESHING: nouvelle tentative
 ```
 
-Les requêtes peuvent continuer à utiliser le snapshot actif précédent ; vérifier cependant sa date et son contexte.
+Les requêtes peuvent continuer à lire l’ancien snapshot. Corriger la cause provider/build puis relancer `index`.
 
 ## `FAILED`
 
-`FAILED` indique un échec sans snapshot actif utilisable. Corriger la cause d’indexation puis relancer un import/run.
+`FAILED` signifie qu’aucun snapshot actif utilisable n’existe après un échec initial.
 
-## MCP : le client ne démarre pas MINOS
+Corriger `doctor`/provider/build puis relancer l’indexation.
+
+## Le workspace a changé pendant l’indexation
+
+MINOS compare un fingerprint avant/après le run.
+
+Si le workspace change pendant l’exécution, le fingerprint baseline n’est pas promu. Le prochain `index` replanifiera conservativement le projet.
+
+## Pas de résultat dans `find-callers` / `find-callees`
+
+Une liste vide signifie qu’aucune relation `CALLS` correspondante n’est présente dans le snapshot observé. Cela ne prouve pas une absence runtime.
+
+Limites possibles : dispatch dynamique, réflexion, configuration runtime ou capacités incomplètes du provider.
+
+## `impact` retourne des limitations
+
+Normal : l’impact est volontairement conservateur et décrit une estimation du graphe observé, pas une preuve d’exhaustivité runtime.
+
+## MCP natif ne démarre pas
+
+Installation :
+
+```powershell
+minos.cmd --version
+minos.cmd doctor
+minos.cmd mcp
+```
+
+Dans une configuration MCP, utiliser le launcher directement :
+
+```text
+command = <installation>\minos.cmd
+args    = mcp
+```
+
+Le processus MCP utilise stdout pour le protocole ; ne pas insérer de wrapper qui écrit du texte arbitraire sur stdout.
+
+## Docker MCP ne démarre pas
+
+Le mode Docker est optionnel et séparé du runtime natif.
 
 Vérifier :
 
-1. le chemin vers `java.exe` Java 24 ;
-2. le chemin du shaded JAR ;
-3. la classe `com.minos.mcp.MinosMcpServer` ;
-4. `MINOS_HOME` ;
-5. que le wrapper/script de lancement n’écrit rien sur stdout.
-
-Commande minimale :
-
 ```powershell
-java -cp <minos-all.jar> com.minos.mcp.MinosMcpServer
+docker version
+.\docker\scripts\prod-mcp-release.ps1 -Action Status
+.\docker\scripts\prod-mcp-release.ps1 -Action Validate
 ```
 
-## MCP : erreur de schema
+Le home Docker est distinct du home natif afin de ne pas mélanger des chemins `N:\...` avec `/workspace/projects/...`.
 
-Les schemas MCP rejettent les clés inconnues et les valeurs hors bornes. Vérifier les limites documentées dans [mcp.md](mcp.md).
+## MCP : erreur de schéma
+
+Les schemas rejettent les clés inconnues et valeurs hors bornes. Voir [mcp.md](mcp.md).
 
 ## `nexus-export` échoue
 
-Préconditions : projet enregistré + snapshot actif + racine réelle accessible.
+Préconditions : projet enregistré, snapshot actif et racine réelle accessible.
 
 ```powershell
-java -jar $minos inspect <project>
-java -jar $minos index-status <project>
+minos.cmd inspect <project>
+minos.cmd index-status <project>
+minos.cmd nexus-export --root <root> > export.json
 ```
 
-Pour inspecter le JSON :
+Si aucun snapshot n’existe encore :
 
 ```powershell
-java -jar $minos nexus-export --root <root> > export.json
-Get-Content export.json
+minos.cmd index <project>
 ```
 
-## JSON difficile à exploiter
-
-Préférer `--format json` sur les commandes CLI prévues pour l’automatisation. `nexus-export` produit directement le contrat JSON sur stdout.
-
-## Changer temporairement de home MINOS
+## Changer temporairement de home
 
 ```powershell
 $env:MINOS_HOME = 'N:\temp\minos-home'
-java -jar $minos project list
+minos.cmd project list
 ```
 
-Ou :
+Depuis un checkout source, la propriété JVM reste prioritaire :
 
 ```powershell
-java -Dminos.home=N:\temp\minos-home -jar $minos project list
+java -Dminos.home=N:\temp\minos-home -jar <minos-all.jar> project list
 ```
-
-La propriété JVM est prioritaire.
 
 ## Réinitialiser un environnement de test
 
-Pour un environnement de test dédié uniquement, utiliser un nouveau `MINOS_HOME` vide plutôt que supprimer arbitrairement des fichiers d’un home partagé.
+Utiliser de préférence un nouveau `MINOS_HOME` vide. Ne supprimer pas arbitrairement des fichiers dans un home partagé contenant des snapshots utiles.
 
 ## Collecter un diagnostic reproductible
 
-Fournir au minimum :
+Pour un checkout source :
 
 ```text
 git rev-parse HEAD
 java -version
-mvnw -version
-commande exécutée
+.\mvnw.cmd -version
+```
+
+Toujours fournir :
+
+```text
+MINOS --version
+commande exacte
 code de sortie
 stdout
 stderr
-MINOS_HOME utilisé
+MINOS_HOME
+minos doctor --format json
+minos index <project> --dry-run --format json
+runId
+logs du run provider
 ```
 
-Pour un problème d’index, ajouter le fournisseur SCIP, sa version et le résultat de `index-status`.
+Pour un problème de release, ajouter le nom du ZIP et son SHA-256.

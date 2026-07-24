@@ -77,11 +77,11 @@ class StableCliIntegrationTest {
     }
 
     @Test
-    void indexRequiresAnExplicitScipArtifact(@TempDir Path home) throws Exception {
-        CommandResult result = run(home, "index", "missing-project", "--provider", "scip-typescript");
+    void explicitScipImportRequiresAnArtifact(@TempDir Path home) throws Exception {
+        CommandResult result = run(home, "import-scip", "missing-project", "--provider", "scip-typescript");
 
         assertEquals(FindSymbolCommand.USAGE_ERROR, result.exitCode());
-        assertTrue(result.error().contains("--scip is required"), result.error());
+        assertTrue(result.error().contains("--file is required"), result.error());
         assertEquals("", result.output());
     }
 

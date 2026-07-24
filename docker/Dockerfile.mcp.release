@@ -1,0 +1,19 @@
+FROM eclipse-temurin:24-jre
+
+ARG MINOS_VERSION=dev
+ARG MINOS_GIT_COMMIT=unknown
+ARG MINOS_BUILD_TIMESTAMP=unknown
+
+LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
+      org.opencontainers.image.version="${MINOS_VERSION}" \
+      org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
+      org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
+      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence"
+
+WORKDIR /opt/minos
+COPY minos.jar /opt/minos/minos.jar
+
+ENV MINOS_HOME=/var/lib/minos
+
+USER 10001:10001
+ENTRYPOINT ["java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"]

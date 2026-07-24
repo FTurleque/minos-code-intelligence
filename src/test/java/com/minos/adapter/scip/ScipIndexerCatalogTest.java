@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.discovery.ProjectDiscovery.Language;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipIndexerCatalogTest {
@@ -32,8 +34,18 @@ class ScipIndexerCatalogTest {
 
         assertTrue(javaResult.complete());
         assertEquals("scip-java", javaResult.selections().getFirst().indexer().id());
+        assertEquals(ManagedScipProviderRuntimeManager.SCIP_JAVA_VERSION,
+                javaResult.selections().getFirst().indexer().version());
         assertTrue(typeScriptResult.complete());
         assertEquals("scip-typescript", typeScriptResult.selections().getFirst().indexer().id());
+        assertEquals(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_VERSION,
+                typeScriptResult.selections().getFirst().indexer().version());
+    }
+
+    @Test
+    void packagesQualifiedWindowsRuntimeResources() {
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("scip-java-windows-runner.ps1"));
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("ScipWriter.java"));
     }
 
     @Test
