@@ -169,7 +169,7 @@ class ScipIngestionAdapterTest {
         assertEquals("findUser", symbol.name());
         assertEquals("UserService.findUser", symbol.qualifiedName());
         assertEquals("typescript", symbol.language());
-        assertEquals(SymbolKind.OTHER, symbol.kind());
+        assertEquals(SymbolKind.METHOD, symbol.kind());
         assertTrue(symbol.providerReferences().stream()
                 .anyMatch(reference -> reference.externalId().equals(rawSymbol)));
     }

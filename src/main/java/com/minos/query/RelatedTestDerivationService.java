@@ -52,6 +52,7 @@ public final class RelatedTestDerivationService {
             SymbolKind.CLASS,
             SymbolKind.RECORD,
             SymbolKind.STRUCT,
+            SymbolKind.TYPE,
             SymbolKind.TRAIT,
             SymbolKind.ENUM
     );

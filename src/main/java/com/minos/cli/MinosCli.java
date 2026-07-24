@@ -40,6 +40,9 @@ public final class MinosCli {
               architecture       Inspect project or module architecture intelligence
               impact             Analyze potential impact from a symbol
 
+            Integration:
+              nexus-export       Export the active normalized snapshot as NEXUS contract JSON
+
             Exit codes:
               0  success
               1  execution failure
@@ -57,13 +60,14 @@ public final class MinosCli {
     private final IndexCommand indexCommand;
     private final ArchitectureCommand architectureCommand;
     private final ImpactCommand impactCommand;
+    private final NexusExportCommand nexusExportCommand;
 
     /**
      * Constructeur historique utilisé par les tests et adaptateurs ne nécessitant
      * que les requêtes symbole/relation.
      */
     public MinosCli(ProjectSymbolQuery symbolQuery) {
-        this(symbolQuery, null, null, null);
+        this(symbolQuery, null, null, null, null);
     }
 
     public MinosCli(
@@ -71,6 +75,16 @@ public final class MinosCli {
             ProjectOperations projectOperations,
             ProjectArchitectureQuery architectureQuery,
             ProjectImpactQuery impactQuery
+    ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand
     ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
@@ -86,6 +100,7 @@ public final class MinosCli {
         this.indexCommand = projectOperations == null ? null : new IndexCommand(projectOperations);
         this.architectureCommand = architectureQuery == null ? null : new ArchitectureCommand(architectureQuery);
         this.impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
+        this.nexusExportCommand = nexusExportCommand;
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -134,6 +149,11 @@ public final class MinosCli {
             return impactCommand == null
                     ? unavailable(command, error)
                     : impactCommand.run(commandArguments, output, error);
+        }
+        if (NexusExportCommand.NAME.equals(command)) {
+            return nexusExportCommand == null
+                    ? unavailable(command, error)
+                    : nexusExportCommand.run(commandArguments, output, error);
         }
         if (FindSymbolCommand.NAME.equals(command)) {
             return findSymbolCommand.run(commandArguments, output, error);

@@ -1,10 +1,16 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M10 livrés — M11 validé, fusion en attente — M12 implémenté, porte finale en attente**
+Statut : **C0 à M12 terminés et livrés — M13 implémenté, qualification inter-dépôt en cours**
 
-L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
+L’état opérationnel courant est résumé dans [`STATUS.md`](STATUS.md). Les documents `mX/` et ADR conservent les preuves et décisions détaillées de chaque jalon.
 
-La roadmap reste guidée par les preuves : un jalon peut être ajusté si une expérimentation invalide une hypothèse d’architecture.
+## Principes de roadmap
+
+- chaque jalon doit fermer une question produit identifiable ;
+- une capacité n’est déclarée acquise qu’avec une preuve reproductible ;
+- les limitations fournisseur restent explicites ;
+- un nouveau commit invalide la validation exacte d’un SHA précédent ;
+- les surfaces CLI/API/MCP ne doivent pas dupliquer le métier.
 
 ---
 
@@ -12,7 +18,7 @@ La roadmap reste guidée par les preuves : un jalon peut être ajusté si une ex
 
 État : **TERMINÉ**
 
-Objectif : définir précisément MINOS avant les implémentations produit.
+Définition du rôle de MINOS, de ses frontières et de sa place dans l’écosystème.
 
 ---
 
@@ -26,11 +32,11 @@ Décision : `m0/DECISION_M0.md`.
 
 ---
 
-## M1 — Découverte des projets et orchestration des indexeurs
+## M1 — Découverte des projets et orchestration
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : registre projets/workspaces, découverte langages/builds/modules/racines, ignores, registre/négociation indexeurs, lifecycle et promotion atomique.
+Acquis : registre projets/workspaces, découverte langages/builds/modules/racines, ignores, négociation des indexeurs, lifecycle et promotion atomique.
 
 ---
 
@@ -48,7 +54,7 @@ Décision : `m2/DECISION_M2.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : références, implémentations, héritage, appels lorsque disponibles, dépendances dérivées, provenance, preuves, confiance et requêtes directionnelles.
+Acquis : références, implémentations, héritage, appels lorsqu’ils existent, dépendances dérivées, provenance, preuves, confiance et requêtes directionnelles.
 
 Décision : `m3/DECISION_M3.md`.
 
@@ -58,7 +64,7 @@ Décision : `m3/DECISION_M3.md`.
 
 État : **TERMINÉ ET LIVRÉ**
 
-Acquis : recherche structurée, sorties compactes, limites résultats/tokens/profondeur, extraits pertinents, source explicite et benchmark de latence.
+Acquis : recherche structurée, sorties compactes, bornes résultats/tokens/profondeur, extraits pertinents et benchmark de latence.
 
 Décision : `m4/DECISION_M4.md`.
 
@@ -78,9 +84,9 @@ Décision : `m5/DECISION_M5.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Acquis : topologie modules/namespaces, dépendances inter-modules, concentration, centralité relative directionnelle, technologies factuelles, vue composée et contexte de module.
+Acquis : topologie modules/namespaces, dépendances inter-modules, concentration, centralité relative directionnelle, technologies factuelles et contexte de module.
 
-Porte finale : **162/162 tests PASS**.
+Porte : **162/162 tests PASS**.
 
 Décision : `m6/DECISION_M6.md`.
 
@@ -90,18 +96,15 @@ Décision : `m6/DECISION_M6.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #22.
-
 ```text
 merge         c66382705880158b9ccac63b5662b81bf2d8d255
-sources       134 main / 69 test
 tests         196/196 PASS
 BUILD SUCCESS
 ```
 
-Acquis : fingerprints, ChangeSet, snapshots d’empreintes, invalidation conservatrice, capacité incrémentale explicite, plan `NONE/INCREMENTAL/FULL`, fallback complet et baseline conditionnée à la stabilité du workspace.
+Acquis : fingerprints, ChangeSet, snapshots d’empreintes, invalidation conservatrice, capacité incrémentale explicite, plans `NONE/INCREMENTAL/FULL` et fallback complet.
 
-Porte M7 : **OUI, sous preuve explicite de capacité fournisseur.**
+Porte : **OUI, sous preuve explicite de capacité fournisseur.**
 
 Décision : `m7/DECISION_M7.md`.
 
@@ -111,24 +114,15 @@ Décision : `m7/DECISION_M7.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #27. PR finale : #28.
-
 ```text
 head validé   08bbdeab18873a2209f02b58bc8d7e547443ea0f
 merge         8147db5c246c7bad92c9b6ab21be81084dc64f59
-sources       143 main / 72 test
 tests         203/203 PASS
 ```
 
-Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limites runtime explicites.
+Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limitations runtime explicites.
 
-Replay :
-
-```text
-M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
-```
-
-Porte M8 :
+Porte :
 
 > **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
 
@@ -140,22 +134,15 @@ Décision : `m8/DECISION_M8.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #29. PR finale : #30.
-
 ```text
 head validé   ae82f24897ea925f04f450f793541b39d13b6d47
 merge         22afe31339dc3a75dc51c491a725330c6d433ecc
-sources       150 main / 75 test
 tests         207/207 PASS
 ```
 
-Acquis : administration du registre, import SCIP explicite, statut d’index factuel, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json`, codes de sortie stables, aides et replay end-to-end réel.
+Acquis : administration du registre, import SCIP explicite, statut d’index, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json`, codes de sortie stables et replay end-to-end.
 
-Frontière : aucun runner de production absent n’est simulé par `minos index`.
-
-Porte M9 :
-
-> **OUI, sous la frontière d’exécution réellement disponible : administration, requêtes M2–M8 et import SCIP explicite, sans revendiquer un runner automatique absent.**
+Frontière : aucun runner absent n’est simulé par `minos index`.
 
 Décision : `m9/DECISION_M9.md`.
 
@@ -165,33 +152,13 @@ Décision : `m9/DECISION_M9.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #31. PR finale : #32.
-
 ```text
 head validé   3f3657a6e5c1a783993348c892f97138d990feff
 merge         eb042852a936ad2e62e337ee35ed8a349096e794
-sources       152 main / 77 test
 tests         210/210 PASS
-BUILD SUCCESS
 ```
 
-Choix techniques :
-
-```text
-SDK MCP Java officiel   2.0.0
-Transport               STDIO
-API serveur             synchrone
-Framework web           aucun
-Tools                    15 read-only
-```
-
-Acquis : négociation MCP, `tools/list`, `tools/call`, 15 tools read-only, JSON Schemas bornés, validation SDK, erreurs structurées, stdout réservé au protocole, packaging `-all.jar` et replay réel TypeScript.
-
-Frontière : les handlers MCP délèguent à la surface existante et ne réimplémentent aucune intelligence M1–M8.
-
-Porte M10 :
-
-> **OUI, via un serveur MCP STDIO read-only qui délègue à la surface MINOS existante et conserve les mêmes bornes, preuves et limitations.**
+Acquis : serveur MCP STDIO Java officiel 2.0.0, 15 tools read-only, schemas bornés, erreurs structurées et shaded JAR.
 
 Décision : `m10/DECISION_M10.md`.
 
@@ -199,39 +166,15 @@ Décision : `m10/DECISION_M10.md`.
 
 ## M11 — API publique
 
-État : **VALIDÉ — FUSION EN ATTENTE D’AUTORISATION EXPLICITE**
-
-Suivi : issue #33. PR #34 **Ready for review**.
-
-Branche :
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
 ```text
-m11/public-api
+head validé   fae552e8e6f2aa66c327fb80485f5bad448d7520
+merge         3780785f167cf373dfe0e9cf34f3c3862e87b868
+tests         214/214 PASS
 ```
 
-Head exact validé :
-
-```text
-fae552e8e6f2aa66c327fb80485f5bad448d7520
-```
-
-Porte acquise le 24 juillet 2026 sous Java 24 :
-
-```text
-154 sources main
-79 sources test
-214/214 tests PASS
-0 failures
-0 errors
-0 skipped
-BUILD SUCCESS
-```
-
-### Objectif
-
-Permettre à des systèmes externes de consommer MINOS via des DTO stables sans dépendre de Glean, SCIP, des adaptateurs internes, du stockage, de la CLI ou du protocole MCP.
-
-### Contrat public
+Contrat :
 
 ```text
 com.minos.api.MinosApi
@@ -239,179 +182,113 @@ com.minos.api.LocalMinosApi
 CONTRACT_VERSION = 1
 ```
 
-Surface : projets, index SCIP explicite, symboles, usages, relations, architecture, contexte module et impact.
+Surface : projets, import SCIP, symboles, usages, relations, architecture, contexte module et impact.
 
-Le champ `SymbolDto.language` conserve l’identifiant lexical normalisé (`typescript`, `java`, etc.), distinct des noms d’enums d’architecture/découverte (`TYPESCRIPT`, `NPM`, etc.).
-
-Replay acquis :
-
-```text
-M11 public API: version=1, project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, modules=3, impact=2, tests=1
-```
-
-Porte M11 :
-
-> **OUI, via un contrat Java local versionné dont les DTO publics restent indépendants des fournisseurs, protocoles et modèles internes, tout en déléguant l’intelligence au cœur MINOS existant.**
-
-Documents : `m11/API.md`, `m11/DECISION_M11.md`.
-
-La fusion de #34 reste explicitement hors automatisme et nécessite une autorisation utilisateur.
+Décision : `m11/DECISION_M11.md`.
 
 ---
 
 ## M12 — Multi-dépôts et intelligence Git
 
-État : **INTÉGRALEMENT IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
-
-Suivi : issue #35.
-
-PR Draft empilée : #36.
-
-Branche :
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
 ```text
-m12/multi-repo-git
+head validé   6c771909e0b97b49fbd8e49090522d8a6c0b53aa
+merge         3bc6cc364b6d7d651c1c9ab3a93ecac28ce02e86
+tests         221/221 PASS
 ```
 
-Base fonctionnelle : head M11 validé `fae552e8e6f2aa66c327fb80485f5bad448d7520`.
+Acquis : workspaces publics, inspection Git via JGit, historique borné, activité fichiers/auteurs/zones, résolution cross-repository exacte et contrat M12 additif.
 
-La PR #36 cible temporairement `m11/public-api`. Après fusion explicitement autorisée de #34, elle devra être retargetée sur `main` avant livraison finale.
-
-### Objectif
-
-Permettre à MINOS de raisonner factuellement sur plusieurs dépôts d’un même workspace et d’exposer l’activité Git locale sans confondre fréquence de modification et importance architecturale.
-
-### Runtime Git
-
-```text
-org.eclipse.jgit:org.eclipse.jgit:7.6.0.202603022253-r
-```
-
-Lecture Java pure ; aucune commande Git native n’est requise au runtime M12.
-
-### Contrat public additif
-
-Le contrat M11 reste inchangé. M12 ajoute :
-
-```text
-com.minos.api.MinosMultiRepositoryApi
-com.minos.api.LocalMinosMultiRepositoryApi
-MULTI_REPOSITORY_CONTRACT_VERSION = 1
-```
-
-### Surface implémentée
-
-```text
-workspaces : create / list / get / assign project
-Git repository inspection
-Git bounded activity
-recent commits + changed paths
-file modification frequency
-unique authors per file
-last change / last commit
-activity zones
-workspace intelligence
-cross-repository relationships
-explicit limitations
-```
-
-### Résolution cross-repository
-
-Une relation non résolue n’est promue que sur correspondance **exacte et unique** :
-
-```text
-relationship.origin.providerId
-+
-relationship.unresolvedTarget
-==
-localSymbol.providerReference.providerId
-+
-localSymbol.providerReference.externalId
-```
-
-La cible doit être locale, appartenir à un autre projet du même workspace et être unique.
-
-Aucune résolution n’est effectuée par nom, `qualifiedName`, chemin, proximité temporelle ou fréquence Git.
-
-La résolution est une vue dérivée : les snapshots M2/M3 ne sont pas réécrits.
-
-### Bornes
-
-```text
-Git maxCommits          1..10000
-Git maxFiles            1..10000
-Git zoneDepth           1..8
-Workspace relationships 1..10000
-```
-
-### Qualification ajoutée
-
-```text
-MinosMultiRepositoryApiContractTest
-GitIntelligenceServiceTest
-WorkspaceIntelligenceServiceTest
-LocalMinosMultiRepositoryApiIntegrationTest
-```
-
-Preuves visées :
-
-- contrat public sans fuite interne/JGit ;
-- dépôt Git synthétique avec 2 commits / 2 auteurs ;
-- activité fichier et zone ;
-- résolution cross-repository exacte ;
-- refus d’une cible name-only ;
-- limitation explicite pour projet sans snapshot ;
-- erreur publique `INVALID_REQUEST` pour requête nulle.
-
-Replay attendu :
-
-```text
-M12 multi-repo Git: workspace=<uuid>, projects=1, git-commits=1, files=1, exact-cross-repo=0
-```
-
-### Porte de décision M12
-
-> MINOS peut-il raisonner factuellement sur plusieurs dépôts d’un même workspace et enrichir la Code Intelligence avec l’historique Git, sans inventer de relations inter-dépôts ni confondre activité Git et importance architecturale ?
-
-Verdict préparé :
+Porte :
 
 > **OUI, à condition de séparer strictement les faits Git des signaux architecturaux et de ne promouvoir une relation cross-repository que sur une identité fournisseur exacte, unique et traçable.**
 
 Documents : `m12/MULTI_REPO_GIT.md`, `m12/DECISION_M12.md`.
 
-Porte locale finale :
-
-```powershell
-.\mvnw.cmd clean verify
-```
-
-Volumes attendus :
-
-```text
-158 sources main
-83 sources test
-221 tests
-```
-
-Ces volumes restent à confirmer sur le **head exact final M12**.
-
 ---
 
 ## M13 — Intégration NEXUS
 
-État : **NON DÉMARRÉ**
+État : **IMPLÉMENTÉ — QUALIFICATION INTER-DÉPÔT EN COURS**
 
-Objectif : permettre à NEXUS de consommer la Code Intelligence de MINOS pour sélectionner un contexte adapté à une tâche.
+Suivi MINOS : issue #37 / PR #38.
 
-Frontière :
+Compagnon NEXUS : `FTurleque/nexus-context-engine` issue #11 / PR #12.
 
-- MINOS fournit faits, relations, preuves et vues compactes du code ;
-- NEXUS classe et sélectionne les informations à injecter dans le contexte IA.
+### Objectif
 
-MINOS doit rester pleinement utilisable sans NEXUS.
+Permettre à NEXUS de consommer les faits MINOS sans couplage Java direct et sans déplacer le ranking, la sélection ou le budget de contexte dans MINOS.
+
+### Décision technique actuelle
+
+```text
+MINOS Java 24
+  NexusExportContract v1
+  nexus-export --root <project>
+        |
+        | JSON stdout
+        v
+NEXUS Java 21
+  minos-import <project> < stdin
+        |
+        v
+  IndexRepository -> SearchService -> ranking -> ContextBuilder
+```
+
+Le shell, l’IDE, JARVIS ou un script orchestre l’échange. NEXUS ne doit pas lancer MINOS depuis son cœur M13.
+
+### Surface MINOS
+
+```text
+NexusExportContract
+NexusExportService
+NexusExportCommand
+```
+
+L’export reconstruit les `fileId` SCIP stables vers des chemins relatifs sûrs et conserve provenance, nature, confiance, preuves et limitations.
+
+### Surface NEXUS compagnon
+
+Le compagnon M13 fournit un adaptateur JSON pur et une importation explicite. Les faits persistés conservent :
+
+```text
+sourceProvider = minos
+```
+
+Les kinds/relations sans équivalence explicite sont ignorés plutôt que reclassés.
+
+### Qualification
+
+Replay MINOS attendu :
+
+```text
+M13 MINOS export: contract=1, project=<uuid>, snapshot=<snapshot>, symbols=<n>, relations=<n>
+```
+
+Replay inter-dépôt attendu :
+
+```text
+M13 MINOS->NEXUS: symbols=<n>, relations=<n>, nexus-symbols=<n>, search=<n>
+M13 MINOS -> NEXUS replay SUCCESS
+```
+
+La preuve finale doit vérifier `GreetingPort` dans NEXUS avec `sourceProvider=minos` puis dans les résultats de `SearchService`.
+
+### Porte finale M13
+
+1. validation Java 24 du head exact MINOS ;
+2. validation Java 21 du head exact NEXUS ;
+3. replay réel Java 24 → JSON → Java 21 sur ces heads.
+
+Verdict préparé :
+
+> **OUI, via un contrat JSON local versionné et un import NEXUS explicite : MINOS reste la source de faits de Code Intelligence, tandis que NEXUS reste seul responsable du classement, de la sélection et du budget du contexte.**
+
+Documents : `m13/NEXUS_INTEGRATION.md`, `m13/DECISION_M13.md`.
 
 ---
 
 ## Explorations futures
 
-Non engagées dans la roadmap principale : Code Property Graph, flux de données, sécurité, recherche sémantique, embeddings, plugins IDE, indexation distante GitHub/GitLab, indexation distribuée et mode service hébergé.
+Non engagées dans la roadmap principale : Code Property Graph, flux de données, sécurité avancée, recherche sémantique, embeddings, plugins IDE, indexation distante GitHub/GitLab, indexation distribuée et mode service hébergé.

@@ -18,6 +18,7 @@ import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
+import com.minos.integration.nexus.NexusExportService;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
@@ -66,11 +67,14 @@ public final class MinosLauncher {
         Objects.requireNonNull(error, "error");
 
         Path normalizedHome = home.toAbsolutePath().normalize();
+        NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
+                new NexusExportService(registry(normalizedHome), snapshots(normalizedHome)).export(projectRoot));
         return new MinosCli(
                 new LazyLocalProjectSymbolQuery(normalizedHome),
                 new LazyProjectOperations(normalizedHome),
                 new LazyProjectArchitectureQuery(normalizedHome),
-                new LazyProjectImpactQuery(normalizedHome)
+                new LazyProjectImpactQuery(normalizedHome),
+                nexusExportCommand
         ).run(arguments, output, error);
     }
 

@@ -1,0 +1,35 @@
+name: "${MINOS_COMPOSE_PROJECT}"
+
+services:
+  minos-mcp:
+    image: "${MINOS_IMAGE}"
+    container_name: "${MINOS_CONTAINER_NAME}"
+    entrypoint:
+      - sleep
+      - infinity
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+    working_dir: /workspace/projects
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+      - type: bind
+        source: "${MINOS_PROJECTS_DIR}"
+        target: /workspace/projects
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
