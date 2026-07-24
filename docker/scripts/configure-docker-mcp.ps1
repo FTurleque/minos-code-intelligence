@@ -26,6 +26,7 @@ $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
     $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 }
+$ManagedMarker = Join-Path $InstallRoot '.docker-mcp-managed'
 
 if ([string]::IsNullOrWhiteSpace($LogPath)) {
     $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
@@ -63,6 +64,10 @@ try {
     }
 
     if ($Stop) {
+        if (-not (Test-Path -LiteralPath $ManagedMarker -PathType Leaf)) {
+            Write-Host 'MINOS Docker MCP was not managed by this setup; nothing to stop.'
+            return
+        }
         & $DockerScript -Action Stop
         if ($LASTEXITCODE -ne 0) {
             Fail-Or-Warn "MINOS Docker MCP stop failed with exit code $LASTEXITCODE. See $LogPath"
@@ -116,6 +121,13 @@ try {
         Fail-Or-Warn "MINOS Docker MCP installation failed with exit code $LASTEXITCODE. See $LogPath"
         return
     }
+
+    @"
+version=$Version
+commit=$Commit
+projectsRoot=$ProjectsRoot
+configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+"@ | Set-Content -LiteralPath $ManagedMarker -Encoding ascii
 
     if ($Start) {
         & $DockerScript -Action Start
