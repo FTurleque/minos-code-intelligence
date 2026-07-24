@@ -41,9 +41,6 @@ Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 [Icons]
 Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 
-[Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -ProjectsRoot ""{code:GetDockerProjectsRoot}"" -Start"; StatusMsg: "Configuration et validation du MCP Docker MINOS..."; Flags: runhidden waituntilterminated; Tasks: docker; Check: DockerReady
-
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopMinosDockerMcp"; Check: DockerMcpCanStop
 
@@ -137,6 +134,32 @@ begin
   Result := DockerProjectsPage.Values[0];
 end;
 
+procedure ConfigureDockerMcp;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShell: String;
+begin
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters :=
+    '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\docker\scripts\configure-docker-mcp.ps1') +
+    '" -InstallRoot "' + ExpandConstant('{app}') +
+    '" -ProjectsRoot "' + DockerProjectsPage.Values[0] +
+    '" -Start -Strict';
+
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) then
+  begin
+    MsgBox(
+      'MINOS est installé, mais la configuration du MCP Docker a échoué.' + #13#10 + #13#10 +
+      'Le CLI et le MCP natif restent utilisables.' + #13#10 +
+      'Diagnostic : %LOCALAPPDATA%\MINOS\docker-setup.log',
+      mbError,
+      MB_OK);
+  end;
+end;
+
 procedure InitializeWizard;
 var
   RequestedRoot: String;
@@ -190,8 +213,14 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
-    AddMinosToUserPath;
+  if CurStep = ssPostInstall then
+  begin
+    if WizardIsTaskSelected('addtopath') then
+      AddMinosToUserPath;
+
+    if WizardIsTaskSelected('docker') and DockerReady() then
+      ConfigureDockerMcp;
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
