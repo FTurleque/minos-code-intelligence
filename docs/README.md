@@ -11,11 +11,11 @@ flowchart LR
     A[Documentation MINOS] --> U[Utiliser]
     A --> D[Développer]
     A --> ADR[Comprendre les décisions]
-    A --> H[Consulter les preuves historiques]
+    A --> H[Consulter l'historique]
     U --> U1[user/]
     D --> D1[developer/]
     ADR --> A1[adr/]
-    H --> H1[history/milestones/]
+    H --> H1[history/]
 ```
 
 ## Documentation utilisateur
@@ -44,21 +44,21 @@ Les choix techniques durables sont documentés sous forme d’[Architecture Deci
 
 Les ADR répondent à la question **« pourquoi MINOS est-il architecturé ainsi aujourd’hui ? »**. Ils ne servent pas de journal de validation de milestone.
 
-## Historique et preuves de jalon
+## Historique
 
-Les anciens dossiers `m0/` à `m13/` sont regroupés sous :
+L'ensemble du cadrage et des preuves historiques est regroupé sous :
 
-- [Historique des jalons](history/milestones/README.md)
+- [Index historique](history/README.md)
+- [Cadrage C0](history/c0/README.md)
+- [Validations transverses historiques](history/validation/README.md)
+- [Historique des jalons M0 → M13](history/milestones/README.md)
 
-Ces documents répondent à la question **« comment cette capacité a-t-elle été expérimentée, prouvée et livrée à ce moment-là ? »**. Ils conservent volontairement leurs SHA, nombres de tests, limitations fournisseur et états historiques.
+Ces documents répondent aux questions **« comment MINOS a-t-il été cadré ? »** et **« comment cette capacité a-t-elle été expérimentée, prouvée et livrée ? »**. Ils conservent volontairement leurs hypothèses, anciens SHA, nombres de tests, limitations fournisseur et états intermédiaires.
 
-## Documents transverses
+## Documents courants à la racine
 
 - [État opérationnel](STATUS.md)
 - [Roadmap](ROADMAP.md)
-- [Cahier des charges](CAHIER_DES_CHARGES.md)
-- [MVP](MVP.md)
-- [Écosystème](ECOSYSTEME.md)
 - [ADR](adr/README.md)
 
-> Pour installer ou utiliser MINOS, privilégier `user/`. Pour modifier le code, privilégier `developer/`. Pour comprendre une décision durable, privilégier `adr/`. Pour auditer une livraison historique, utiliser `history/milestones/`.
+> Pour installer ou utiliser MINOS, privilégier `user/`. Pour modifier le code, privilégier `developer/`. Pour comprendre une décision durable, privilégier `adr/`. Pour auditer le cadrage ou une livraison passée, utiliser `history/`.
