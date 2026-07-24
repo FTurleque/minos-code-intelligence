@@ -117,7 +117,6 @@ public final class FileIndexStateStore implements IndexStateStore {
             String prefix = "execution." + index + ".";
             properties.setProperty(prefix + "language", execution.language().name());
             properties.setProperty(prefix + "indexerId", execution.indexerId());
-            putOptional(properties, prefix + "indexerVersion", execution.indexerVersion());
             properties.setProperty(prefix + "artifact", execution.finalArtifact().toString());
         }
         store(runRoot.resolve(run.id() + ".properties"), properties, "MINOS indexing run");
@@ -140,7 +139,6 @@ public final class FileIndexStateStore implements IndexStateStore {
             executions.add(new IndexerExecution(
                     Language.valueOf(required(properties, prefix + "language", file)),
                     required(properties, prefix + "indexerId", file),
-                    optional(properties, prefix + "indexerVersion"),
                     Path.of(required(properties, prefix + "artifact", file))
             ));
         }
