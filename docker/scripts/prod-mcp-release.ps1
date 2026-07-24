@@ -57,6 +57,27 @@ function Compose([string[]] $Arguments) {
     }
 }
 
+function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
+    # `java -version` writes to stderr on success. Windows PowerShell 5.1 turns
+    # native stderr into ErrorRecord objects, which conflicts with the global
+    # ErrorActionPreference=Stop. Inspect the native exit code explicitly.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $Output = ((& docker run --rm --network none --entrypoint java $Image -version 2>&1) | Out-String).Trim()
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    if ($ExitCode -ne 0) {
+        throw "$Failure (exit=$ExitCode): $Output"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Output)) {
+        Write-Host $Output
+    }
+}
+
 function Require-Installed {
     foreach ($File in @($ComposeFile, $EnvironmentFile, $MetadataFile)) {
         if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
@@ -120,10 +141,7 @@ MINOS_GIT_COMMIT=$Commit
 "@ | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
 
         Compose @('config', '--quiet')
-        & docker run --rm --network none --entrypoint java $Image -version
-        if ($LASTEXITCODE -ne 0) {
-            throw 'The MINOS Docker image does not expose a valid Java runtime.'
-        }
+        Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
         [ordered]@{
             formatVersion = 2
             installedAt = $Timestamp
@@ -162,10 +180,7 @@ MINOS_GIT_COMMIT=$Commit
         Require-Installed
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
-        & docker run --rm --network none --entrypoint java $Metadata.image -version
-        if ($LASTEXITCODE -ne 0) {
-            throw 'MINOS Docker validation failed.'
-        }
+        Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
         Write-Host 'MINOS Docker configuration validated.' -ForegroundColor Green
     }
     'Stop' {
