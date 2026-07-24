@@ -128,14 +128,16 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             String projectIdentifier,
             GitActivityQuery query
     ) throws MinosApiException {
-        Objects.requireNonNull(query, "query");
         ProjectDto project = delegate.getProject(projectIdentifier);
-        return execute(() -> gitActivity(gitIntelligence.analyze(
-                Path.of(project.rootPath()),
-                new GitIntelligenceService.ActivityQuery(
-                        query.since(), query.maxCommits(), query.maxFiles(), query.zoneDepth()
-                )
-        )));
+        return execute(() -> {
+            GitActivityQuery value = required(query, "query");
+            return gitActivity(gitIntelligence.analyze(
+                    Path.of(project.rootPath()),
+                    new GitIntelligenceService.ActivityQuery(
+                            value.since(), value.maxCommits(), value.maxFiles(), value.zoneDepth()
+                    )
+            ));
+        });
     }
 
     @Override
@@ -143,10 +145,13 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             String workspaceIdentifier,
             WorkspaceQuery query
     ) throws MinosApiException {
-        Objects.requireNonNull(query, "query");
-        return execute(() -> workspaceReport(
-                workspaceIntelligence.analyze(workspaceIdentifier, query.maxRelationships())
-        ));
+        return execute(() -> {
+            WorkspaceQuery value = required(query, "query");
+            return workspaceReport(workspaceIntelligence.analyze(
+                    workspaceIdentifier,
+                    value.maxRelationships()
+            ));
+        });
     }
 
     private static WorkspaceDto workspace(WorkspaceIntelligenceService.WorkspaceView value) {
@@ -229,6 +234,13 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
                 value.targetProjectId(), value.targetSymbolId(), value.targetQualifiedName(), value.kind(),
                 value.providerId(), value.providerExternalId(), value.resolutionBasis(), value.confidence()
         );
+    }
+
+    private static <T> T required(T value, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException(field + " must not be null");
+        }
+        return value;
     }
 
     private static <T> T execute(ApiCall<T> call) throws MinosApiException {
