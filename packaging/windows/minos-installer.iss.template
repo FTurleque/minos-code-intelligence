@@ -129,7 +129,7 @@ end;
 function DockerMcpCanStop(): Boolean;
 begin
   Result := DockerReady() and FileExists(
-    ExpandConstant('{localappdata}\MINOS\docker\runtime\installation.json'));
+    ExpandConstant('{app}\.docker-mcp-managed'));
 end;
 
 function GetDockerProjectsRoot(Param: String): String;
