@@ -10,16 +10,12 @@ Il vise notamment à répondre à des questions comme :
 
 - Où est défini ce symbole ?
 - Qui l’utilise, l’appelle, l’étend ou l’implémente ?
-- De quoi dépend-il ?
-- Qu’est-ce qui dépend de lui ?
+- De quoi dépend-il et qu’est-ce qui dépend de lui ?
 - Quels tests lui sont liés ?
-- Quelle est la topologie générale du projet ?
-- Quels modules sont structurellement centraux dans le graphe observé ?
-- Quelles technologies sont réellement détectées ?
-- Le projet doit-il être réindexé entièrement ou une portée incrémentale est-elle prouvable ?
-- Quels éléments et tests peuvent potentiellement être impactés par une modification, et par quel chemin ?
-- Quels dépôts appartiennent au même workspace et quelles relations inter-dépôts sont réellement prouvables ?
-- Quels fichiers et zones ont été modifiés récemment dans Git, à quelle fréquence et par combien d’auteurs distincts ?
+- Quelle est la topologie du projet et quels modules sont centraux dans le graphe observé ?
+- Quels éléments peuvent potentiellement être impactés par une modification ?
+- Quelles relations inter-dépôts sont réellement prouvables ?
+- Quels fichiers et zones ont été modifiés récemment dans Git ?
 
 ## Position dans l’écosystème
 
@@ -43,45 +39,20 @@ MINOS reste autonome et ne dépend fonctionnellement ni de JARVIS, ni de NEXUS, 
 
 Voir [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md).
 
-## Phase actuelle
+## État actuel
 
-Les jalons **C0 à M10 sont terminés, validés et livrés**.
+Les jalons **C0 à M12 sont terminés, validés et livrés**.
 
-M10 — Serveur MCP — a été fusionné via PR #32 au commit :
-
-```text
-eb042852a936ad2e62e337ee35ed8a349096e794
-```
-
-Porte finale M10 :
+### M11 — API publique
 
 ```text
-152 sources main
-77 sources test
-210 / 210 tests PASS
-BUILD SUCCESS
+head validé   fae552e8e6f2aa66c327fb80485f5bad448d7520
+merge         3780785f167cf373dfe0e9cf34f3c3862e87b868
+sources       154 main / 79 test
+tests         214/214 PASS
 ```
 
-### M11 — API publique — VALIDÉ
-
-M11 est intégralement implémenté et **validé localement sous Java 24** sur le head exact :
-
-```text
-fae552e8e6f2aa66c327fb80485f5bad448d7520
-```
-
-Porte acquise :
-
-```text
-154 sources main
-79 sources test
-214 / 214 tests PASS
-BUILD SUCCESS
-```
-
-PR #34 : **Ready for review**, fusion non effectuée tant qu’elle n’est pas explicitement autorisée.
-
-M11 introduit un contrat Java public versionné :
+Contrat :
 
 ```text
 com.minos.api.MinosApi
@@ -89,76 +60,141 @@ com.minos.api.LocalMinosApi
 CONTRACT_VERSION = 1
 ```
 
-La surface publique couvre projets, import SCIP explicite, symboles, usages, relations, architecture, contexte module et analyse d’impact sans exposer les modèles internes.
-
-Replay acquis :
+### M12 — Multi-dépôts et intelligence Git
 
 ```text
-M11 public API: version=1, project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, modules=3, impact=2, tests=1
+head validé   6c771909e0b97b49fbd8e49090522d8a6c0b53aa
+merge         3bc6cc364b6d7d651c1c9ab3a93ecac28ce02e86
+sources       158 main / 83 test
+tests         221/221 PASS
 ```
 
-Voir [`docs/m11/API.md`](docs/m11/API.md) et [`docs/m11/DECISION_M11.md`](docs/m11/DECISION_M11.md).
+M12 apporte : workspaces multi-projets, résolution cross-repository exacte, inspection Git Java pure via JGit, historique borné, activité par fichier/auteur/zone et contrat public additif.
 
-### M12 — Multi-dépôts et intelligence Git — IMPLÉMENTÉ
+## M13 — Intégration NEXUS
 
-M12 est intégralement implémenté sur la branche :
+M13 est **intégralement implémenté** sur la branche :
 
 ```text
-m12/multi-repo-git
+m13/nexus-integration
 ```
 
-Suivi : issue #35. PR Draft empilée : #36, temporairement basée sur `m11/public-api` jusqu’à fusion autorisée de M11.
+Suivi : issue #37 / PR Draft #38.
 
-M12 ajoute une API publique additive :
+Compagnon NEXUS : `FTurleque/nexus-context-engine` issue #11 / PR Draft #12.
+
+### Principe
+
+MINOS et NEXUS gardent leurs responsabilités :
 
 ```text
-com.minos.api.MinosMultiRepositoryApi
-com.minos.api.LocalMinosMultiRepositoryApi
-MULTI_REPOSITORY_CONTRACT_VERSION = 1
+MINOS
+  faits / symboles / relations / provenance / preuves
+                    │
+                    │ JSON local versionné
+                    ▼
+NEXUS
+  index / recherche / ranking / sélection / budget / ContextBundle
 ```
 
-Capacités :
+NEXUS compile en Java 21 et MINOS impose Java 24. M13 utilise donc une frontière **inter-processus**, sans dépendance Maven croisée.
+
+### Export MINOS
+
+Contrat :
 
 ```text
-workspaces multi-projets
-résolution cross-repository sur identité fournisseur exacte et unique
-inspection Git locale Java pure via JGit
-historique borné
-changements récents
-fréquence de modification par fichier
-nombre d’auteurs distincts
-zones d’activité
-limitations explicites
+NexusExportContract.CONTRACT_VERSION = 1
+NexusExportContract.PRODUCER = MINOS
 ```
 
-Principe de résolution cross-repository :
+Commande :
 
-> **aucune relation n’est promue par simple nom ou `qualifiedName` ; seule une identité fournisseur exacte, unique et traçable constitue une preuve suffisante.**
+```powershell
+java -Dminos.home=<home> `
+  -jar .\target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar `
+  nexus-export --root <project-root>
+```
 
-Principe Git :
+Le JSON exporte uniquement le snapshot actif et conserve :
 
-> **l’activité observée décrit l’historique Git ; elle n’est jamais assimilée automatiquement à une criticité métier ou à une centralité architecturale.**
+- identité projet/snapshot ;
+- symboles locaux ;
+- chemins relatifs sûrs ;
+- kinds, noms, signatures, langues et plages ;
+- origine et qualité d’identité ;
+- relations résolues ;
+- nature, confiance et preuves ;
+- limitations explicites.
 
-Replay attendu :
+Les `fileId` SCIP stables sont reconstruits vers les chemins réels avec la même identité :
 
 ```text
-M12 multi-repo Git: workspace=<uuid>, projects=1, git-commits=1, files=1, exact-cross-repo=0
+file:<sha256(projectId + US + relativePath)>
 ```
 
-Porte locale finale encore à acquérir sur le head exact M12 :
+Aucun faux chemin n’est produit lorsqu’un identifiant reste non résolu.
+
+### Consommation NEXUS
+
+NEXUS utilise un `MinosCodeIndexImporter` optionnel derrière son contrat `CodeIndexImporter`.
+
+Configuration côté NEXUS :
 
 ```text
-158 sources main attendues
-83 sources test attendues
-221 tests attendus
-BUILD SUCCESS attendu
+NEXUS_MINOS_JAR=<MINOS shaded jar>
+NEXUS_MINOS_JAVA=<java 24 executable>
+NEXUS_MINOS_HOME=<MINOS home>                  optionnel
+NEXUS_MINOS_TIMEOUT_SECONDS=<1..300>           optionnel
 ```
 
-Voir [`docs/m12/MULTI_REPO_GIT.md`](docs/m12/MULTI_REPO_GIT.md) et [`docs/m12/DECISION_M12.md`](docs/m12/DECISION_M12.md).
+L’intégration est désactivée par défaut. Lorsqu’elle est active :
+
+- NEXUS lance MINOS localement avec Java 24 ;
+- valide la version du contrat et la racine projet ;
+- importe seulement les kinds/relations ayant une équivalence explicite ;
+- conserve `sourceProvider=minos` ;
+- injecte ces faits avant l’import SCIP direct ;
+- ne modifie ni `SearchService`, ni le ranking, ni `DefaultContextBuilder`.
+
+MINOS ne calcule jamais le budget ou le ranking NEXUS.
+
+### Qualification M13
+
+MINOS :
+
+```text
+NexusExportContractTest
+NexusExportIntegrationTest
+```
+
+NEXUS :
+
+```text
+MinosCodeIndexImporterTest
+FakeMinosExportMain
+MinosRealIntegrationTest
+```
+
+Replay MINOS attendu :
+
+```text
+M13 MINOS export: contract=1, project=<uuid>, snapshot=<snapshot>, symbols=<n>, relations=<n>
+```
+
+Replay inter-dépôt attendu :
+
+```text
+M13 MINOS->NEXUS: symbols=<n>, relations=<n>, nexus-symbols=<n>, search=<n>
+```
+
+La preuve réelle doit montrer `GreetingPort` dans NEXUS avec `sourceProvider=minos` puis dans les résultats de recherche.
+
+Voir [`docs/m13/NEXUS_INTEGRATION.md`](docs/m13/NEXUS_INTEGRATION.md) et [`docs/m13/DECISION_M13.md`](docs/m13/DECISION_M13.md).
 
 ## Serveur MCP local
 
-M10 reste disponible en parallèle avec **15 tools read-only** via STDIO :
+M10 reste disponible avec **15 tools read-only** via STDIO :
 
 ```text
 minos_project_structure
@@ -190,7 +226,7 @@ le build produit notamment :
 target/minos-code-intelligence-0.1.0-SNAPSHOT-all.jar
 ```
 
-Le serveur MCP STDIO se lance avec :
+Le serveur MCP se lance avec :
 
 ```powershell
 java -cp .\target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar com.minos.mcp.MinosMcpServer
@@ -216,21 +252,20 @@ MCP transport  STDIO local
 API M11        Java in-process, contrat v1
 API M12        Java in-process additive, contrat multi-repo v1
 Git M12        Eclipse JGit 7.6.0.202603022253-r
+NEXUS M13      JSON local inter-processus, contrat v1
 Framework      Aucun framework serveur dans le cœur
 ```
 
-## Fondation technique
+## Architecture
 
 ```text
 Repository / Workspace
         │
-        ├── Git Intelligence (M12)
-        │
+        ├── Git Intelligence
         ▼
 Project Discovery / Registry
         │
-        ├── Workspace Intelligence (M12)
-        │
+        ├── Workspace Intelligence
         ▼
 Fingerprint / Invalidation
         │
@@ -250,10 +285,6 @@ MINOS Normalization
         ▼
 CodeKnowledgeStore
         │
-        ├── InMemory
-        ├── Lightweight local
-        └── Glean optionnel
-        │
         ▼
 MINOS Query Services
         │
@@ -264,39 +295,27 @@ MINOS Query Services
         ├── Architecture Intelligence
         └── Impact Analysis
         │
-        ├───────────────┬───────────────┬────────────────────┐
-        ▼               ▼               ▼                    ▼
-   Stable CLI       MCP STDIO      Public Java API     Multi-Repo API
-                    15 tools          DTO v1           Git + Workspace
+        ├──────────┬──────────┬──────────┬───────────────┐
+        ▼          ▼          ▼          ▼               ▼
+       CLI      MCP STDIO   API M11   API M12       NEXUS export
 ```
 
 Principe structurant :
 
 > **MINOS-first, Glean-optional.**
 
-SCIP est privilégié lorsqu’un fournisseur suffisamment fiable existe. Les contrats métier MINOS ne doivent pas dépendre des types SCIP, Glean, JGit ou d’un backend particulier.
-
 ## Principes d’architecture
 
 - faits, dérivations et heuristiques sont distingués explicitement ;
 - toute dérivation importante conserve provenance et preuves ;
-- les résultats publics sont compacts et déterministes ;
-- le code source complet n’est retourné que sur demande explicite ;
-- les limitations d’un fournisseur ne sont jamais transformées en garanties ;
+- les limitations d’un fournisseur ne deviennent jamais des garanties ;
 - une portée incrémentale n’est jamais exécutée sans capacité fournisseur qualifiée ;
-- un doute d’invalidation provoque un fallback complet ;
-- une analyse d’impact décrit des impacts **potentiels observables**, jamais une certitude runtime ;
-- l’absence de chemin observé ne prouve pas l’absence d’impact ;
-- la CLI, MCP et les API publiques restent des couches d’exposition ;
-- stdout du serveur STDIO est réservé au protocole MCP ;
-- M11 conserve une frontière DTO sans exposer les modèles ou adaptateurs internes ;
-- M12 conserve une frontière DTO sans exposer JGit ni les services multi-repo internes ;
+- l’analyse d’impact décrit des impacts potentiels observables, jamais une certitude runtime ;
+- CLI, MCP et API restent des couches d’exposition ;
 - une relation cross-repository requiert une preuve d’identité exacte et unique ;
-- les métriques Git ne constituent pas une mesure automatique d’importance architecturale.
-
-## Prochain jalon
-
-Après validation et livraison de M12, **M13 — Intégration NEXUS** permettra à NEXUS de consommer les faits, relations, preuves et vues compactes de MINOS sans rendre MINOS dépendant de NEXUS.
+- l’activité Git n’est pas une mesure automatique d’importance architecturale ;
+- M13 ne déplace ni ranking, ni sélection, ni budget de contexte depuis NEXUS vers MINOS ;
+- MINOS reste utilisable sans NEXUS.
 
 ## Documents de référence
 
@@ -305,17 +324,15 @@ Après validation et livraison de M12, **M13 — Intégration NEXUS** permettra 
 - [`docs/CAHIER_DES_CHARGES.md`](docs/CAHIER_DES_CHARGES.md) — cahier des charges ;
 - [`docs/MVP.md`](docs/MVP.md) — MVP ;
 - [`docs/ECOSYSTEME.md`](docs/ECOSYSTEME.md) — positionnement ;
-- [`docs/m8/IMPACT_ANALYSIS.md`](docs/m8/IMPACT_ANALYSIS.md) — conception M8 ;
-- [`docs/m9/CLI.md`](docs/m9/CLI.md) — contrat CLI M9 ;
-- [`docs/m10/MCP_SERVER.md`](docs/m10/MCP_SERVER.md) — serveur et tools MCP ;
-- [`docs/m11/API.md`](docs/m11/API.md) — contrat API M11 ;
-- [`docs/m11/DECISION_M11.md`](docs/m11/DECISION_M11.md) — décision M11 ;
-- [`docs/m12/MULTI_REPO_GIT.md`](docs/m12/MULTI_REPO_GIT.md) — conception M12 ;
-- [`docs/m12/DECISION_M12.md`](docs/m12/DECISION_M12.md) — décision M12 ;
+- [`docs/m10/MCP_SERVER.md`](docs/m10/MCP_SERVER.md) — serveur MCP ;
+- [`docs/m11/API.md`](docs/m11/API.md) — API publique ;
+- [`docs/m12/MULTI_REPO_GIT.md`](docs/m12/MULTI_REPO_GIT.md) — multi-dépôts et Git ;
+- [`docs/m13/NEXUS_INTEGRATION.md`](docs/m13/NEXUS_INTEGRATION.md) — intégration NEXUS ;
+- [`docs/m13/DECISION_M13.md`](docs/m13/DECISION_M13.md) — décision M13 ;
 - [`docs/adr/`](docs/adr/) — décisions d’architecture.
 
 ## Règle de développement
 
 > **Mesurer avant d’industrialiser.**
 
-MINOS doit produire des faits, profils de qualité et décisions documentées avant d’ajouter une infrastructure ou une sémantique qui ne serait pas nécessaire à la prochaine porte de décision.
+MINOS doit produire des faits, profils de qualité et décisions documentées avant d’ajouter une infrastructure ou une sémantique non nécessaire à la prochaine porte de décision.
