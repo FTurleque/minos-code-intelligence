@@ -35,8 +35,11 @@ class LocalMinosMultiRepositoryApiIntegrationTest {
         assertEquals("1", api.multiRepositoryContractVersion());
 
         MinosApi.ProjectDto project = api.addProject(projectRoot, "m12-project");
-        MinosMultiRepositoryApi.WorkspaceDto workspace = api.createWorkspace("m12-workspace");
-        workspace = api.assignProjectToWorkspace(project.id(), workspace.id());
+        MinosMultiRepositoryApi.WorkspaceDto createdWorkspace = api.createWorkspace("m12-workspace");
+        MinosMultiRepositoryApi.WorkspaceDto workspace = api.assignProjectToWorkspace(
+                project.id(),
+                createdWorkspace.id()
+        );
         assertEquals(1, workspace.projectIds().size());
         assertEquals(project.id(), workspace.projectIds().getFirst());
         assertEquals(1, api.listWorkspaces().size());
