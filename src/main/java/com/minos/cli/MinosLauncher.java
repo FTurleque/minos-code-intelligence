@@ -47,15 +47,20 @@ public final class MinosLauncher {
     public static void main(String[] arguments) {
         int exitCode;
         try {
-            Path home = resolveHome(System.getenv(), System.getProperties());
             if (arguments.length == 1 && "--version".equals(arguments[0])) {
                 System.out.println("MINOS " + VERSION);
                 exitCode = FindSymbolCommand.SUCCESS;
-            } else if (arguments.length == 1 && "mcp".equals(arguments[0])) {
-                MinosMcpServer.run(home);
+            } else if (isHelp(arguments)) {
+                System.out.println(MinosCli.usage());
                 exitCode = FindSymbolCommand.SUCCESS;
             } else {
-                exitCode = run(home, arguments, System.out, System.err);
+                Path home = resolveHome(System.getenv(), System.getProperties());
+                if (arguments.length == 1 && "mcp".equals(arguments[0])) {
+                    MinosMcpServer.run(home);
+                    exitCode = FindSymbolCommand.SUCCESS;
+                } else {
+                    exitCode = run(home, arguments, System.out, System.err);
+                }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -77,6 +82,11 @@ public final class MinosLauncher {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
+
+        if (isHelp(arguments)) {
+            output.append(MinosCli.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
 
         Path normalizedHome = home.toAbsolutePath().normalize();
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
@@ -111,6 +121,10 @@ public final class MinosLauncher {
                     "neither minos.home, MINOS_HOME nor user.home defines a storage directory");
         }
         return Path.of(userHome).resolve(".minos");
+    }
+
+    private static boolean isHelp(String[] arguments) {
+        return arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]));
     }
 
     private static String failureMessage(Exception exception) {
