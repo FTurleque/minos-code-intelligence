@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M9 terminés et livrés — M10 implémenté, validation finale en attente**
+Statut : **C0 à M10 terminés et livrés — M11 implémenté, validation finale en attente**
 
 L’état opérationnel et la porte active sont maintenus dans [`STATUS.md`](STATUS.md). Cette feuille conserve la séquence produit, le périmètre attendu de chaque jalon et ses portes de décision.
 
@@ -119,40 +119,26 @@ Décision : `m7/DECISION_M7.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #27.
-
-PR finale : #28.
-
-Head validé :
+Suivi clôturé : issue #27. PR finale : #28.
 
 ```text
-08bbdeab18873a2209f02b58bc8d7e547443ea0f
-```
-
-Merge final :
-
-```text
-8147db5c246c7bad92c9b6ab21be81084dc64f59
-```
-
-Porte finale :
-
-```text
-143 sources main
-72 sources test
-203/203 tests PASS
-BUILD SUCCESS
+head validé   08bbdeab18873a2209f02b58bc8d7e547443ea0f
+merge         8147db5c246c7bad92c9b6ab21be81084dc64f59
+sources       143 main / 72 test
+tests         203/203 PASS
 ```
 
 Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limites runtime explicites.
 
-Replay réel final :
+Replay réel :
 
 ```text
 M8 typescript-modules impact: root=GreetingPort, impacts=2, tests=1, max-depth=2, limitations=[DYNAMIC_DISPATCH_NOT_PROVEN, REFLECTION_NOT_PROVEN, RUNTIME_CONFIGURATION_NOT_PROVEN]
 ```
 
-Porte M8 : **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
+Porte M8 :
+
+> **OUI, comme estimation potentielle fondée sur le graphe observé — jamais comme preuve d’exhaustivité runtime.**
 
 Décision : `m8/DECISION_M8.md`.
 
@@ -162,35 +148,13 @@ Décision : `m8/DECISION_M8.md`.
 
 État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi clôturé : issue #29.
-
-PR finale : #30.
-
-Head exact validé :
+Suivi clôturé : issue #29. PR finale : #30.
 
 ```text
-ae82f24897ea925f04f450f793541b39d13b6d47
-```
-
-Merge final :
-
-```text
-22afe31339dc3a75dc51c491a725330c6d433ecc
-```
-
-Porte finale :
-
-```text
-150 sources main
-75 sources test
-207/207 tests PASS
-BUILD SUCCESS
-```
-
-Replay réel :
-
-```text
-M9 stable CLI: project=<uuid>, snapshot=scip-7f41649a3cdad442a3235c0a, architecture-modules=3, impact-root=GreetingPort
+head validé   ae82f24897ea925f04f450f793541b39d13b6d47
+merge         22afe31339dc3a75dc51c491a725330c6d433ecc
+sources       150 main / 75 test
+tests         207/207 PASS
 ```
 
 Acquis : administration du registre, import SCIP explicite, statut d’index factuel, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json`, codes de sortie stables, aides et replay end-to-end réel.
@@ -207,21 +171,32 @@ Décision : `m9/DECISION_M9.md`.
 
 ## M10 — Serveur MCP
 
-État : **FONCTIONNELLEMENT COMPLET — VALIDATION LOCALE FINALE EN ATTENTE**
+État : **TERMINÉ, VALIDÉ ET LIVRÉ**
 
-Suivi : issue #31.
+Suivi clôturé : issue #31. PR finale : #32.
 
-Branche :
+Head exact validé :
 
 ```text
-m10/mcp-server
+3f3657a6e5c1a783993348c892f97138d990feff
 ```
 
-### Objectif
+Merge final :
 
-Exposer aux agents IA les capacités MINOS M1–M9 via un serveur MCP local, borné et fournisseur-indépendant, sans déplacer la logique métier dans le protocole.
+```text
+eb042852a936ad2e62e337ee35ed8a349096e794
+```
 
-### Choix techniques
+Porte finale :
+
+```text
+152 sources main
+77 sources test
+210/210 tests PASS
+BUILD SUCCESS
+```
+
+Choix techniques :
 
 ```text
 SDK MCP Java officiel   2.0.0
@@ -231,84 +206,137 @@ Framework web           aucun
 Tools                    15 read-only
 ```
 
-### Surface implémentée
+Acquis : négociation MCP, `tools/list`, `tools/call`, 15 tools read-only, JSON Schemas bornés, validation SDK, erreurs structurées, stdout réservé au protocole, packaging `-all.jar` et replay réel TypeScript.
 
-```text
-minos_project_structure
-minos_index_status
-minos_search_code
-minos_find_symbols
-minos_find_usages
-minos_find_implementations
-minos_find_callers
-minos_find_callees
-minos_dependencies
-minos_dependents
-minos_related_tests
-minos_symbol_context
-minos_module_context
-minos_architecture
-minos_impact
-```
+Frontière : les handlers MCP délèguent à la surface existante et ne réimplémentent aucune intelligence M1–M8.
 
-### Frontière MCP
-
-Les handlers MCP traduisent les arguments validés vers la surface CLI JSON M9 puis délèguent à `MinosLauncher.run(...)`.
-
-Aucune analyse M1–M8 n’est réimplémentée dans `com.minos.mcp`.
-
-Le serveur M10 est read-only : aucune mutation de projet, aucune indexation et aucune écriture applicative ne sont exposées comme tool.
-
-### Contrat protocolaire
-
-- [x] serveur STDIO ;
-- [x] SDK officiel épinglé ;
-- [x] négociation et `tools/list` ;
-- [x] `tools/call` ;
-- [x] JSON Schemas bornés ;
-- [x] `additionalProperties=false` ;
-- [x] validation d’entrée SDK ;
-- [x] erreurs tool explicites ;
-- [x] aucune sortie applicative parasite sur stdout ;
-- [x] home `minos.home > MINOS_HOME > ~/.minos` ;
-- [x] test unitaire du catalogue ;
-- [x] test d’intégration protocolaire STDIO ;
-- [x] replay réel TypeScript ;
-- [x] distribution `-all.jar` ;
-- [x] documentation et décision ;
-- [ ] validation locale finale du head exact ;
-- [ ] fusion et clôture administrative.
-
-### Qualification attendue
-
-Le test d’intégration démarre un vrai sous-processus MCP puis vérifie :
-
-```text
-15 tools
-architecture modules = 3
-impact GreetingPort = 2
-related impacted tests = 1
-schema impact depth=99 rejeté
-```
-
-Replay attendu :
+Replay :
 
 ```text
 M10 MCP stdio: tools=15, project=<uuid>, snapshot=<snapshot>, architecture-modules=3, impact-root=GreetingPort
 ```
 
-### Porte de décision M10
-
-> Un client MCP standard peut-il découvrir et appeler les capacités MINOS M1–M9 via un serveur local fiable, borné et fournisseur-indépendant, sans divergence avec le cœur métier ?
-
-Verdict préparé :
+Porte M10 :
 
 > **OUI, via un serveur MCP STDIO read-only qui délègue à la surface MINOS existante et conserve les mêmes bornes, preuves et limitations.**
 
+Décision : `m10/DECISION_M10.md`.
+
+---
+
+## M11 — API
+
+État : **INTÉGRALEMENT IMPLÉMENTÉ — VALIDATION LOCALE FINALE EN ATTENTE**
+
+Suivi : issue #33.
+
+PR Draft : #34.
+
+Branche :
+
+```text
+m11/public-api
+```
+
+### Objectif
+
+Permettre à des systèmes externes de consommer MINOS via des DTO stables sans dépendre de Glean, SCIP, des adaptateurs internes, du stockage, de la CLI ou du protocole MCP.
+
+### Contrat public
+
+```text
+com.minos.api.MinosApi
+com.minos.api.LocalMinosApi
+CONTRACT_VERSION = 1
+```
+
+Les signatures publiques n’exposent que des types JDK et des DTO/requêtes `MinosApi`.
+
+### Surface implémentée
+
+```text
+projets : add / list / inspect
+index : import SCIP explicite + statut
+symboles
+usages
+relations
+architecture
+contexte module
+impact
+```
+
+### DTO publics
+
+Le contrat conserve les informations importantes déjà qualifiées :
+
+- identité, localisation et provenance des symboles ;
+- rôles et résolution des usages ;
+- source/cible, nature, confiance et preuves des relations ;
+- topologie, dépendances, centralité, technologies et modules ;
+- chemins, confiance, tests potentiels et limitations de l’impact.
+
+Les enums internes sont exposés comme chaînes pour éviter un couplage binaire du consommateur aux enums métier MINOS.
+
+### Contrat d’erreur
+
+```text
+INVALID_REQUEST
+UNAVAILABLE
+IO_FAILURE
+EXECUTION_FAILURE
+```
+
+### Frontière M11
+
+- aucune analyse M1–M8 réimplémentée dans `com.minos.api` ;
+- aucun type interne dans les signatures publiques ;
+- aucun serveur HTTP ni framework web ;
+- import SCIP explicite uniquement ;
+- aucune capacité d’indexation absente n’est inventée ;
+- la sémantique conservatrice de M8 reste inchangée.
+
+### Qualification ajoutée
+
+`MinosApiContractTest` vérifie par réflexion que les méthodes et composants des DTO publics ne fuient aucun type interne interdit.
+
+`LocalMinosApiIntegrationTest` rejoue `fixtures/typescript/typescript-modules` et vérifie :
+
+```text
+contract version       1
+project modules        3
+index state            READY
+relation               IMPLEMENTS
+architecture modules   3
+module context          packages/api
+impact GreetingPort    2
+potential tests        1
+invalid enum           INVALID_REQUEST
+```
+
+Replay attendu :
+
+```text
+M11 public API: version=1, project=<uuid>, snapshot=<snapshot>, modules=3, impact=2, tests=1
+```
+
+### Contrôles actuels
+
+SonarQube Cloud sur PR #34 : **Quality Gate passed**, 0 Security Hotspots et 0.0 % duplication sur nouveau code. Trois issues non bloquantes sont signalées.
+
+Aucun workflow GitHub Actions n’est lancé ; la porte Maven locale reste la preuve finale.
+
+### Porte de décision M11
+
+> Des systèmes externes peuvent-ils consommer les capacités MINOS via un contrat Java public stable, sans dépendre de Glean, SCIP, du stockage local, de la CLI, du MCP ni des modèles internes ?
+
+Verdict préparé :
+
+> **OUI, via un contrat Java local versionné dont les DTO publics restent indépendants des fournisseurs, protocoles et modèles internes, tout en déléguant l’intelligence au cœur MINOS existant.**
+
 Documents :
 
-- `m10/MCP_SERVER.md` ;
-- `m10/DECISION_M10.md`.
+- `m11/API.md` ;
+- `m11/DECISION_M11.md`.
 
 Porte finale :
 
@@ -316,23 +344,13 @@ Porte finale :
 .\mvnw.cmd clean verify
 ```
 
-Volumes attendus si le head reste inchangé :
+Volumes attendus sur le code actuel :
 
 ```text
-152 sources main
-77 sources test
-210 tests
+154 sources main
+79 sources test
+214 tests
 ```
-
----
-
-## M11 — API
-
-État : **NON DÉMARRÉ**
-
-Objectif : permettre à des systèmes externes de consommer MINOS via des DTO stables sans dépendre de Glean ou des adaptateurs internes.
-
-Périmètre : projets/index, symboles, relations, architecture, impact et contrats publics.
 
 ---
 
