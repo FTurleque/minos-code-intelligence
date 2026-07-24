@@ -1,6 +1,6 @@
 # M14 — Exécution : indexation autonome et installation PROD
 
-Statut : **EN COURS — implémentation 7/7 ; qualification finale en cours**
+Statut : **TERMINÉ — implémentation 7/7 ; qualification native et Docker verte**
 
 Issue : **#42**  
 PR de travail : **#43**
@@ -40,13 +40,13 @@ project
 
 | Étape | Fonction | État du head courant | Gate final |
 |---|---|---:|---|
-| M14-S1 | Runtime providers + processus | 🟡 | `clean verify` + vrai processus enfant |
-| M14-S2 | scip-typescript autonome | 🟡 | installation + FULL → SUCCEEDED → NONE |
-| M14-S3 | scip-java autonome Windows | 🟡 | 0.13.1 + replay Maven + STALE/recovery |
-| M14-S4 | Staging multi-provider | 🟡 | collision/échec/promotion atomique |
-| M14-S5 | CLI autonome | 🟡 | `dry-run`, NONE, FULL, erreurs runtime |
-| M14-S6 | Installation native Windows | 🟡 | jpackage + ZIP + SHA-256 + install vierge |
-| M14-S7 | Release + Docker + docs | 🟡 | mêmes artefacts installés + Docker smoke |
+| M14-S1 | Runtime providers + processus | ✅ | `clean verify` + vrai processus enfant |
+| M14-S2 | scip-typescript autonome | ✅ | installation + FULL → SUCCEEDED → NONE |
+| M14-S3 | scip-java autonome Windows | ✅ | 0.13.1 + replay Maven + STALE/recovery |
+| M14-S4 | Staging multi-provider | ✅ | collision/échec/promotion atomique |
+| M14-S5 | CLI autonome | ✅ | `dry-run`, NONE, FULL, erreurs runtime |
+| M14-S6 | Installation native Windows | ✅ | jpackage + ZIP + SHA-256 + install vierge |
+| M14-S7 | Release + Docker + docs | ✅ | mêmes artefacts installés + Docker smoke |
 
 **Une validation réussie sur un ancien SHA ne transforme pas le head courant en ✅.**
 
@@ -374,8 +374,54 @@ snapshot après échec         ancien snapshot conservé
 recovery --force-full        SUCCEEDED, READY
 ```
 
-Ces résultats protègent le correctif, mais les étapes restent 🟡 jusqu'à la
-qualification native puis Docker sur un head Git propre et exact.
+À ce stade historique, ces résultats protégeaient le correctif, mais les étapes
+restaient 🟡 jusqu'à la qualification native puis Docker sur un head Git propre
+et exact.
+
+## Qualification #4 — gate natif et Docker complet
+
+Première qualification complète observée sur :
+
+```text
+7a3ed0c14c2188b1ef6cbed6eb12a6c57c51bbb7
+```
+
+Résultat natif :
+
+```text
+Java                         24.0.1
+sources main / test          181 / 92
+tests                        236 PASS, 0 failure, 0 error, 0 skipped
+ShadedJarSmokeIT             1 PASS
+TypeScript                   FULL → SUCCEEDED → NO_CHANGES / NONE
+Java                         FULL → SUCCEEDED → NO_CHANGES / NONE
+Java invalide                échec attendu → STALE
+snapshot après échec         snapshot précédent conservé
+Java recovery                --force-full → SUCCEEDED → READY
+release                      0.2.0-rc1
+jpackage / ZIP / SHA-256     PASS
+installation vierge         PASS
+minos --version              MINOS 0.2.0-rc1
+minos doctor                 READY
+MCP natif                    handshake SUCCESS
+```
+
+Résultat Docker, lancé seulement après le gate natif vert :
+
+```text
+source image                 JAR et scripts de la distribution installée
+image                        minos-code-intelligence:0.2.0-rc1-7a3ed0c14c21
+Java image                   24.0.2
+network                      none
+projects                     /workspace/projects read-only
+data                         /var/lib/minos
+configuration               validated
+SHA-256 ZIP du gate Docker   09a9822e891535936a423cbd90118820c4eac9e0b5891620b2e35b148551d8dd
+```
+
+Le head final incluant cette mise à jour de roadmap doit passer les mêmes deux
+commandes exact-head avant publication. Les ✅ ne sont conservés que si cette
+seconde qualification réussit.
 
 ---
 
