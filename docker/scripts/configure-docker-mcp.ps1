@@ -3,10 +3,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $InstallRoot,
 
-    [Parameter(Mandatory = $true)]
-    [string] $ProjectsRoot,
+    [string] $ProjectsRoot = '',
 
     [switch] $Start,
+    [switch] $Stop,
     [switch] $Strict,
 
     [string] $LogPath = ''
@@ -23,7 +23,9 @@ function Fail-Or-Warn([string] $Message) {
 }
 
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
-$ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
+if (-not [string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
+}
 
 if ([string]::IsNullOrWhiteSpace($LogPath)) {
     $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
@@ -42,31 +44,50 @@ try {
         # A transcript is useful but must never be a prerequisite for setup.
     }
 
-    $VersionFile = Join-Path $InstallRoot 'VERSION'
-    $Jar = Join-Path $InstallRoot 'lib\minos.jar'
     $DockerScript = Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1'
+    if (-not (Test-Path -LiteralPath $DockerScript -PathType Leaf)) {
+        Fail-Or-Warn "MINOS Docker MCP helper is missing: $DockerScript"
+        return
+    }
 
-    foreach ($Required in @($VersionFile, $Jar, $DockerScript)) {
-        if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
-            Fail-Or-Warn "MINOS Docker MCP cannot be configured: missing $Required"
+    $Docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $Docker) {
+        Fail-Or-Warn 'Docker Desktop is not installed or docker.exe is not in PATH. MINOS native installation is unaffected.'
+        return
+    }
+
+    & $Docker.Source version --format '{{.Server.Version}}' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Fail-Or-Warn 'Docker Desktop is installed but its daemon does not respond. MINOS native installation is unaffected.'
+        return
+    }
+
+    if ($Stop) {
+        & $DockerScript -Action Stop
+        if ($LASTEXITCODE -ne 0) {
+            Fail-Or-Warn "MINOS Docker MCP stop failed with exit code $LASTEXITCODE. See $LogPath"
             return
         }
+        Write-Host 'MINOS Docker MCP stopped before uninstall.' -ForegroundColor Green
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+        Fail-Or-Warn '-ProjectsRoot is required when configuring Docker MCP.'
+        return
     }
     if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
         Fail-Or-Warn "MINOS Docker MCP projects root does not exist: $ProjectsRoot"
         return
     }
 
-    $Docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $Docker) {
-        Fail-Or-Warn 'Docker Desktop is not installed or docker.exe is not in PATH. MINOS itself is installed; configure Docker MCP later.'
-        return
-    }
-
-    & $Docker.Source version --format '{{.Server.Version}}' | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Fail-Or-Warn 'Docker Desktop is installed but its daemon does not respond. MINOS itself is installed; start Docker Desktop and configure Docker MCP later.'
-        return
+    $VersionFile = Join-Path $InstallRoot 'VERSION'
+    $Jar = Join-Path $InstallRoot 'lib\minos.jar'
+    foreach ($Required in @($VersionFile, $Jar)) {
+        if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
+            Fail-Or-Warn "MINOS Docker MCP cannot be configured: missing $Required"
+            return
+        }
     }
 
     $Metadata = @{}
@@ -117,7 +138,7 @@ catch {
     if ($Strict) {
         throw
     }
-    Write-Warning "MINOS is installed, but Docker MCP configuration failed: $($_.Exception.Message)"
+    Write-Warning "MINOS native installation is valid, but Docker MCP management failed: $($_.Exception.Message)"
     Write-Warning "See $LogPath"
 }
 finally {
