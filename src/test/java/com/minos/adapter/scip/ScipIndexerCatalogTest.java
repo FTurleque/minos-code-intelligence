@@ -15,6 +15,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipIndexerCatalogTest {
@@ -39,6 +40,12 @@ class ScipIndexerCatalogTest {
         assertEquals("scip-typescript", typeScriptResult.selections().getFirst().indexer().id());
         assertEquals(ManagedScipProviderRuntimeManager.SCIP_TYPESCRIPT_VERSION,
                 typeScriptResult.selections().getFirst().indexer().version());
+    }
+
+    @Test
+    void packagesQualifiedWindowsRuntimeResources() {
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("scip-java-windows-runner.ps1"));
+        assertNotNull(ManagedScipProviderRuntimeManager.class.getResource("ScipWriter.java"));
     }
 
     @Test
