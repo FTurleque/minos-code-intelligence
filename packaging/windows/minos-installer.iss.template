@@ -44,6 +44,11 @@ Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopMinosDockerMcp"; Check: DockerMcpCanStop
 
+[UninstallDelete]
+; The setup-owned marker must not keep {app} behind when Docker is unavailable.
+; Docker runtime and persistent data live outside {app} and are intentionally preserved.
+Type: files; Name: "{app}\.docker-mcp-managed"
+
 [Code]
 var
   DockerProjectsPage: TInputDirWizardPage;
