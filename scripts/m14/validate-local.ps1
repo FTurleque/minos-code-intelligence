@@ -24,11 +24,37 @@ function Invoke-NativeChecked {
     }
 }
 
+function Write-LatestProviderDiagnostics {
+    $runsRoot = Join-Path $script:ValidationHome 'runs'
+    if (-not (Test-Path -LiteralPath $runsRoot -PathType Container)) {
+        return
+    }
+    $latestProcess = Get-ChildItem -LiteralPath $runsRoot -Recurse -File -Filter 'process.txt' |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if (-not $latestProcess) {
+        return
+    }
+
+    Write-Host ''
+    Write-Host '=== Latest provider diagnostics ===' -ForegroundColor Yellow
+    Write-Host "directory: $($latestProcess.Directory.FullName)"
+    foreach ($name in @('process.txt', 'provider.stdout.log', 'provider.stderr.log')) {
+        $file = Join-Path $latestProcess.Directory.FullName $name
+        if (Test-Path -LiteralPath $file -PathType Leaf) {
+            Write-Host "--- $name ---" -ForegroundColor Yellow
+            Get-Content -LiteralPath $file -Tail 160 | ForEach-Object { Write-Host $_ }
+        }
+    }
+}
+
 function Invoke-MinosJson {
     param([Parameter(Mandatory = $true)][string[]] $Arguments)
     $lines = & $script:JavaExecutable "-Dminos.home=$script:ValidationHome" -jar $script:MinosJar @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "MINOS command failed: $($Arguments -join ' ') (exit=$LASTEXITCODE)"
+        $exitCode = $LASTEXITCODE
+        Write-LatestProviderDiagnostics
+        throw "MINOS command failed: $($Arguments -join ' ') (exit=$exitCode)"
     }
     return (($lines | Out-String).Trim() | ConvertFrom-Json)
 }
