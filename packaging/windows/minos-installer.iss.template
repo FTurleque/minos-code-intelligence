@@ -44,6 +44,9 @@ Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -ProjectsRoot ""{code:GetDockerProjectsRoot}"" -Start"; StatusMsg: "Configuration et validation du MCP Docker MINOS..."; Flags: runhidden waituntilterminated; Tasks: docker; Check: DockerReady
 
+[UninstallRun]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopMinosDockerMcp"; Check: DockerMcpCanStop
+
 [Code]
 var
   DockerProjectsPage: TInputDirWizardPage;
@@ -121,6 +124,12 @@ begin
     SW_HIDE,
     ewWaitUntilTerminated,
     ResultCode) and (ResultCode = 0);
+end;
+
+function DockerMcpCanStop(): Boolean;
+begin
+  Result := DockerReady() and FileExists(
+    ExpandConstant('{localappdata}\MINOS\docker\runtime\installation.json'));
 end;
 
 function GetDockerProjectsRoot(Param: String): String;
