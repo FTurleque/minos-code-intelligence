@@ -13,9 +13,9 @@ import java.util.Set;
 /**
  * Descripteurs des providers SCIP qualifiés par MINOS.
  *
- * <p>M14 aligne le runtime Java géré sur la dernière release upstream vérifiée
- * au démarrage du jalon. Les limites sémantiques restent conservatrices et
- * l'incrémental n'est toujours pas revendiqué.</p>
+ * <p>M14 réutilise pour Java la version réellement qualifiée pendant M0 sous
+ * Windows. Les limites sémantiques restent conservatrices et l'incrémental
+ * n'est toujours pas revendiqué.</p>
  */
 public final class ScipIndexerCatalog {
 
@@ -33,7 +33,7 @@ public final class ScipIndexerCatalog {
     public static IndexerDescriptor scipJava() {
         return new IndexerDescriptor(
                 "scip-java",
-                "0.12.3",
+                "0.13.1",
                 "scip-java",
                 Set.of(Language.JAVA),
                 Set.of(BuildSystem.MAVEN),
@@ -48,9 +48,9 @@ public final class ScipIndexerCatalog {
                 100,
                 List.of(
                         "qualified semantics remain restricted to Maven projects",
-                        "M14 runtime execution must be replayed on Windows before milestone closure",
+                        "Windows execution uses the M0-qualified Maven/javac shims and ScipWriter compatibility patch",
                         "no final index may be promoted when provider execution or project compilation fails",
-                        "incremental indexing has not been qualified for scip-java 0.12.3",
+                        "incremental indexing has not been qualified for scip-java 0.13.1",
                         "CALLS relations are not emitted explicitly",
                         "some symbol kinds remain unspecified"
                 )
