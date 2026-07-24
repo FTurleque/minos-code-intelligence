@@ -36,13 +36,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_TYPESCRIPT_ID = "scip-typescript";
     public static final String SCIP_TYPESCRIPT_VERSION = "0.4.0";
     public static final String SCIP_JAVA_ID = "scip-java";
-    public static final String SCIP_JAVA_VERSION = "0.12.3";
+    public static final String SCIP_JAVA_VERSION = "0.13.1";
     public static final String SCIP_JAVA_COORDINATE =
-            "com.sourcegraph:scip-java_2.13:" + SCIP_JAVA_VERSION;
+            "org.scip-code:scip-java:" + SCIP_JAVA_VERSION;
 
     private static final String COURSIER_LAUNCHER_ID = "windows-x64-official-launcher";
     private static final URI COURSIER_WINDOWS_URI = URI.create(
             "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip");
+    private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
+    private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
     private final Path home;
     private final Path toolsRoot;
@@ -87,7 +89,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow()));
             case SCIP_JAVA_ID -> new ProcessIndexerExecutor(
                     providerId, home, new ScipJavaProcessPlanFactory(
-                            status.executable().orElseThrow(), SCIP_JAVA_COORDINATE));
+                            status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner()));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -123,23 +125,40 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private ProviderRuntimeStatus inspectJava() {
         List<String> diagnostics = new ArrayList<>();
         Optional<Path> coursier = coursierExecutable();
+        boolean windowsRuntimeInstalled = !CommandLocator.isWindows() || windowsRuntimeInstalled();
         if (coursier.isEmpty()) {
             diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
+        }
+        if (!windowsRuntimeInstalled) {
+            diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
+        }
+        if (CommandLocator.isWindows()) {
+            if (CommandLocator.find("powershell").isEmpty()) {
+                diagnostics.add("PowerShell is required for scip-java on Windows");
+            }
+            if (!gitBashAvailable()) {
+                diagnostics.add("Git Bash (bash.exe) is required for scip-java on Windows");
+            }
+            if (!cSharpCompilerAvailable()) {
+                diagnostics.add("csc.exe is required to build scip-java Windows command shims");
+            }
         }
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome == null || javaHome.isBlank()) {
             diagnostics.add("JAVA_HOME is not set to the project JDK");
         } else {
-            boolean windows = CommandLocator.isWindows();
-            Path javac = Path.of(javaHome).resolve("bin").resolve(windows ? "javac.exe" : "javac");
+            Path javac = Path.of(javaHome).resolve("bin")
+                    .resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
             if (!Files.isRegularFile(javac)) {
                 diagnostics.add("JAVA_HOME does not contain javac: " + javaHome);
             }
         }
-        ProviderRuntimeStatus.State state = diagnostics.isEmpty()
-                ? ProviderRuntimeStatus.State.READY
-                : coursier.isEmpty()
-                    ? ProviderRuntimeStatus.State.NOT_INSTALLED
+
+        boolean installed = coursier.isPresent() && windowsRuntimeInstalled;
+        ProviderRuntimeStatus.State state = !installed
+                ? ProviderRuntimeStatus.State.NOT_INSTALLED
+                : diagnostics.isEmpty()
+                    ? ProviderRuntimeStatus.State.READY
                     : ProviderRuntimeStatus.State.BLOCKED;
         return new ProviderRuntimeStatus(
                 SCIP_JAVA_ID,
@@ -190,16 +209,39 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private ProviderRuntimeStatus installJava() throws Exception {
         Files.createDirectories(toolsRoot);
         Path coursier = ensureCoursier();
+        if (CommandLocator.isWindows()) {
+            installJavaWindowsRuntime();
+        }
         run(List.of(coursier.toString(), "--help"), home,
                 toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
         run(List.of(coursier.toString(), "launch", SCIP_JAVA_COORDINATE, "--", "--help"), home,
                 toolsRoot.resolve("scip-java-install.log"), Duration.ofMinutes(10));
 
         ProviderRuntimeStatus status = inspectJava();
-        if (status.executable().isEmpty()) {
-            throw new IllegalStateException("Coursier installation is not visible after scip-java bootstrap");
+        if (!status.ready()) {
+            throw new IllegalStateException("scip-java installation is incomplete: "
+                    + String.join("; ", status.diagnostics()));
         }
         return status;
+    }
+
+    private void installJavaWindowsRuntime() throws IOException {
+        Path runtime = scipJavaRuntimeRoot();
+        Files.createDirectories(runtime);
+        copyPackagedResource(WINDOWS_RUNNER_RESOURCE, runtime.resolve(WINDOWS_RUNNER_RESOURCE));
+        copyPackagedResource(WINDOWS_PATCH_RESOURCE, runtime.resolve(WINDOWS_PATCH_RESOURCE));
+    }
+
+    private void copyPackagedResource(String name, Path destination) throws IOException {
+        try (InputStream input = ManagedScipProviderRuntimeManager.class.getResourceAsStream(name)) {
+            if (input == null) {
+                throw new IllegalStateException("packaged scip-java runtime resource is missing: " + name);
+            }
+            Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
+            Files.deleteIfExists(partial);
+            Files.copy(input, partial, StandardCopyOption.REPLACE_EXISTING);
+            move(partial, destination);
+        }
     }
 
     private Path ensureCoursier() throws Exception {
@@ -272,6 +314,49 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private Path typeScriptExecutable() {
         return typeScriptRoot().resolve("node_modules").resolve(".bin")
                 .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
+    }
+
+    private Path scipJavaRuntimeRoot() {
+        return toolsRoot.resolve("scip-java").resolve(SCIP_JAVA_VERSION).resolve("runtime");
+    }
+
+    private Path scipJavaWindowsRunner() {
+        return scipJavaRuntimeRoot().resolve(WINDOWS_RUNNER_RESOURCE);
+    }
+
+    private boolean windowsRuntimeInstalled() {
+        Path runtime = scipJavaRuntimeRoot();
+        return Files.isRegularFile(runtime.resolve(WINDOWS_RUNNER_RESOURCE))
+                && Files.isRegularFile(runtime.resolve(WINDOWS_PATCH_RESOURCE));
+    }
+
+    private static boolean gitBashAvailable() {
+        if (CommandLocator.find("bash").isPresent()) {
+            return true;
+        }
+        Optional<Path> git = CommandLocator.find("git");
+        if (git.isEmpty()) {
+            return false;
+        }
+        Path gitExecutable = git.orElseThrow();
+        Path gitRoot = gitExecutable.getParent() == null ? null : gitExecutable.getParent().getParent();
+        return gitRoot != null && Files.isRegularFile(gitRoot.resolve("bin").resolve("bash.exe"));
+    }
+
+    private static boolean cSharpCompilerAvailable() {
+        String systemRoot = System.getenv("SystemRoot");
+        if (systemRoot != null && !systemRoot.isBlank()) {
+            Path root = Path.of(systemRoot);
+            if (Files.isRegularFile(root.resolve("Microsoft.NET").resolve("Framework64")
+                    .resolve("v4.0.30319").resolve("csc.exe"))) {
+                return true;
+            }
+            if (Files.isRegularFile(root.resolve("Microsoft.NET").resolve("Framework")
+                    .resolve("v4.0.30319").resolve("csc.exe"))) {
+                return true;
+            }
+        }
+        return CommandLocator.find("csc").isPresent();
     }
 
     private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
