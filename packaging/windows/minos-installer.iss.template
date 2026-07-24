@@ -1,5 +1,6 @@
 #define MinosName "MINOS Code Intelligence"
 #define MinosVersion "@@VERSION@@"
+#define MinosAppVersion "@@APP_VERSION@@"
 #define MinosSourceDir "@@SOURCE_DIR@@"
 #define MinosOutputDir "@@OUTPUT_DIR@@"
 #define MinosOutputBaseFilename "@@OUTPUT_BASENAME@@"
@@ -23,7 +24,7 @@ WizardStyle=modern
 ChangesEnvironment=yes
 SetupLogging=yes
 UninstallDisplayName={#MinosName}
-VersionInfoVersion={#MinosVersion}
+VersionInfoVersion={#MinosAppVersion}
 VersionInfoCompany=FTurleque
 VersionInfoDescription={#MinosName} Windows installer
 VersionInfoProductName={#MinosName}
@@ -61,9 +62,7 @@ var
 begin
   Haystack := ';' + Lowercase(PathValue) + ';';
   Needle := ';' + Lowercase(TrimTrailingBackslash(Entry)) + ';';
-  Result := Pos(Needle, StringChangeEx(Haystack, '\;', ';', True)) > 0;
-  if not Result then
-    Result := Pos(Needle, Haystack) > 0;
+  Result := Pos(Needle, Haystack) > 0;
 end;
 
 procedure AddMinosToUserPath;
