@@ -12,11 +12,16 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +42,7 @@ public final class NexusExportService {
 
     public static final int MAX_EXPORTED_SYMBOLS = 1_000_000;
     public static final int MAX_EXPORTED_RELATIONS = 1_000_000;
+    public static final int MAX_FILE_PATH_CANDIDATES = 1_000_000;
 
     private final LocalProjectRegistry registry;
     private final FileSymbolSnapshotStore snapshots;
@@ -58,11 +64,19 @@ public final class NexusExportService {
                         "project has no active MINOS knowledge snapshot: " + project.displayName()));
 
         Set<String> limitations = new LinkedHashSet<>();
-        Map<String, NexusExportContract.ExportSymbol> exportedById = exportSymbols(root, snapshot, limitations);
-        List<NexusExportContract.ExportRelation> relations = exportRelations(
+        Map<String, String> pathByFileId = resolveFilePaths(
                 root,
+                project.id().toString(),
+                snapshot,
+                limitations);
+        Map<String, NexusExportContract.ExportSymbol> exportedById = exportSymbols(
+                snapshot,
+                pathByFileId,
+                limitations);
+        List<NexusExportContract.ExportRelation> relations = exportRelations(
                 snapshot,
                 exportedById,
+                pathByFileId,
                 limitations);
 
         return new NexusExportContract.ExportSnapshot(
@@ -79,8 +93,8 @@ public final class NexusExportService {
     }
 
     private static Map<String, NexusExportContract.ExportSymbol> exportSymbols(
-            Path root,
             CodeKnowledgeSnapshot snapshot,
+            Map<String, String> pathByFileId,
             Set<String> limitations
     ) {
         Map<String, NexusExportContract.ExportSymbol> exported = new LinkedHashMap<>();
@@ -101,7 +115,7 @@ public final class NexusExportService {
                 omittedLocation++;
                 continue;
             }
-            String relativePath = safeRelativePath(root, location.fileId());
+            String relativePath = pathByFileId.get(location.fileId());
             if (relativePath == null) {
                 omittedPath++;
                 continue;
@@ -134,15 +148,15 @@ public final class NexusExportService {
             limitations.add("SYMBOL_WITHOUT_LOCAL_LOCATION_OMITTED");
         }
         if (omittedPath > 0) {
-            limitations.add("UNSAFE_SYMBOL_PATH_OMITTED");
+            limitations.add("UNRESOLVED_SYMBOL_FILE_ID_OMITTED");
         }
         return exported;
     }
 
     private static List<NexusExportContract.ExportRelation> exportRelations(
-            Path root,
             CodeKnowledgeSnapshot snapshot,
             Map<String, NexusExportContract.ExportSymbol> symbols,
+            Map<String, String> pathByFileId,
             Set<String> limitations
     ) {
         List<NexusExportContract.ExportRelation> exported = new ArrayList<>();
@@ -167,7 +181,7 @@ public final class NexusExportService {
             }
             String relativePath = relationship.location() == null
                     ? source.filePath()
-                    : safeRelativePath(root, relationship.location().fileId());
+                    : pathByFileId.get(relationship.location().fileId());
             if (relativePath == null) {
                 omittedPath++;
                 continue;
@@ -197,9 +211,101 @@ public final class NexusExportService {
             limitations.add("NON_LOCAL_RELATIONS_OMITTED");
         }
         if (omittedPath > 0) {
-            limitations.add("UNSAFE_RELATION_PATH_OMITTED");
+            limitations.add("UNRESOLVED_RELATION_FILE_ID_OMITTED");
         }
         return List.copyOf(exported);
+    }
+
+    /**
+     * Resolves both path-like file identifiers and the stable hashed SCIP file ids
+     * produced by {@code ScipIngestionAdapter.fileIdFor}.
+     */
+    private static Map<String, String> resolveFilePaths(
+            Path root,
+            String projectId,
+            CodeKnowledgeSnapshot snapshot,
+            Set<String> limitations
+    ) throws IOException {
+        Set<String> requiredFileIds = new LinkedHashSet<>();
+        snapshot.symbols().stream()
+                .map(Symbol::location)
+                .filter(Objects::nonNull)
+                .map(SymbolLocation::fileId)
+                .filter(Objects::nonNull)
+                .forEach(requiredFileIds::add);
+        snapshot.relationships().stream()
+                .map(Relationship::location)
+                .filter(Objects::nonNull)
+                .map(SymbolLocation::fileId)
+                .filter(Objects::nonNull)
+                .forEach(requiredFileIds::add);
+
+        Map<String, String> resolved = new HashMap<>();
+        for (String fileId : requiredFileIds) {
+            String direct = directRelativePath(root, fileId);
+            if (direct != null) {
+                resolved.put(fileId, direct);
+            }
+        }
+
+        Set<String> unresolvedStableIds = requiredFileIds.stream()
+                .filter(fileId -> !resolved.containsKey(fileId))
+                .filter(fileId -> fileId.startsWith("file:"))
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (unresolvedStableIds.isEmpty()) {
+            return Map.copyOf(resolved);
+        }
+
+        int scanned = 0;
+        try (var paths = Files.walk(root)) {
+            var iterator = paths.filter(Files::isRegularFile).iterator();
+            while (iterator.hasNext() && !unresolvedStableIds.isEmpty()) {
+                if (scanned >= MAX_FILE_PATH_CANDIDATES) {
+                    limitations.add("FILE_PATH_DISCOVERY_TRUNCATED");
+                    break;
+                }
+                Path file = iterator.next();
+                scanned++;
+                String relativePath = root.relativize(file).toString().replace('\\', '/');
+                String stableId = stableFileId(projectId, relativePath);
+                if (unresolvedStableIds.remove(stableId)) {
+                    resolved.put(stableId, relativePath);
+                }
+            }
+        }
+        if (!unresolvedStableIds.isEmpty()) {
+            limitations.add("UNRESOLVED_FILE_IDS");
+        }
+        return Map.copyOf(resolved);
+    }
+
+    private static String directRelativePath(Path root, String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            return null;
+        }
+        try {
+            Path raw = Path.of(fileId);
+            Path resolved = raw.isAbsolute() ? raw.normalize() : root.resolve(raw).normalize();
+            if (!resolved.startsWith(root) || resolved.equals(root) || !Files.isRegularFile(resolved)) {
+                return null;
+            }
+            return root.relativize(resolved).toString().replace('\\', '/');
+        } catch (InvalidPathException exception) {
+            return null;
+        }
+    }
+
+    private static String stableFileId(String projectId, String relativePath) {
+        return "file:" + sha256(projectId + "\u001F" + relativePath);
+    }
+
+    private static String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private static NexusExportContract.ExportOrigin origin(Origin origin) {
@@ -225,22 +331,6 @@ public final class NexusExportService {
             throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
         }
         return root;
-    }
-
-    private static String safeRelativePath(Path root, String fileId) {
-        if (fileId == null || fileId.isBlank()) {
-            return null;
-        }
-        try {
-            Path raw = Path.of(fileId);
-            Path resolved = raw.isAbsolute() ? raw.normalize() : root.resolve(raw).normalize();
-            if (!resolved.startsWith(root) || resolved.equals(root)) {
-                return null;
-            }
-            return root.relativize(resolved).toString().replace('\\', '/');
-        } catch (InvalidPathException exception) {
-            return null;
-        }
     }
 
     private static String textOr(String value, String fallback) {
