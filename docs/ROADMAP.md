@@ -1,8 +1,8 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M13 terminés, validés et livrés**.
+Statut : **C0 à M13 terminés et livrés ; M14 en cours d'implémentation/qualification.**
 
-L’état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves détaillées de chaque jalon sont archivées sous [`history/milestones/`](history/milestones/README.md).
+L’état courant livré reste résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves détaillées des jalons terminés sont archivées sous [`history/milestones/`](history/milestones/README.md).
 
 ## Principes de roadmap
 
@@ -129,9 +129,9 @@ Porte : **estimation potentielle fondée sur le graphe observé, jamais preuve d
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-Acquis : administration, import SCIP explicite, statut, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json` et codes de sortie stables.
+Acquis M9 : administration, import SCIP explicite, statut, recherche/symboles/relations/tests liés, architecture, impact, formats `text/json` et codes de sortie stables.
 
-Frontière : aucun runner absent n’est simulé par `minos index`.
+La frontière M9 « ne pas simuler un runner absent » reste historiquement correcte ; M14 ajoute désormais le runner réel derrière les ports prévus.
 
 - historique : [`history/milestones/m9/`](history/milestones/m9/)
 - décision : [ADR-0016](adr/0016-stable-cli-contract.md)
@@ -142,7 +142,7 @@ Frontière : aucun runner absent n’est simulé par `minos index`.
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-Acquis : serveur MCP STDIO Java officiel 2.0.0, 15 tools read-only, schémas bornés, erreurs structurées et shaded JAR.
+Acquis : serveur MCP STDIO Java officiel, 15 tools read-only, schémas bornés, erreurs structurées et shaded JAR.
 
 - historique : [`history/milestones/m10/`](history/milestones/m10/)
 - décision : [ADR-0017](adr/0017-mcp-stdio-read-only.md)
@@ -179,20 +179,44 @@ Porte : **faits Git séparés des signaux architecturaux ; relation cross-reposi
 
 MINOS Java 24 exporte un contrat JSON v1 local ; NEXUS Java 21 l’importe explicitement. MINOS reste propriétaire des faits de Code Intelligence et NEXUS du ranking, de la sélection et du budget de contexte.
 
-```text
-MINOS Java 24
-  nexus-export --root <project>
-        |
-        | JSON stdout
-        v
-NEXUS Java 21
-  minos-import <project> < stdin
-```
-
-Validation finale : MINOS `7c5eda4727cda3d46cab24037e4f1276ff0b4a25`, NEXUS head validé `df61c9c07b5ec3271aba27f54da272b4689fb017`, replay réel `M13 MINOS -> NEXUS replay SUCCESS`.
+Validation finale livrée : MINOS `7c5eda4727cda3d46cab24037e4f1276ff0b4a25`, NEXUS head validé `df61c9c07b5ec3271aba27f54da272b4689fb017`.
 
 - historique : [`history/milestones/m13/`](history/milestones/m13/)
 - décision : [ADR-0020](adr/0020-minos-nexus-json-boundary.md)
+
+---
+
+## M14 — Indexation autonome et installation PROD
+
+**EN COURS — IMPLÉMENTATION STRUCTURELLE 7/7, QUALIFICATION FINALE EN ATTENTE.**
+
+Objectif utilisateur :
+
+```text
+minos project add <root> --name <project>
+minos tools install <provider>
+minos index <project>
+```
+
+MINOS doit prendre en charge découverte, négociation provider, diagnostic runtime, fingerprints, exécution, normalisation, staging et promotion sans demander à l’utilisateur de préparer `index.scip`.
+
+Sous-incréments :
+
+```text
+M14-S1  runtime providers + ProcessIndexerExecutor        🟡 implémenté, validation requise
+M14-S2  provider scip-typescript autonome                 🟡 implémenté, replay requis
+M14-S3  provider scip-java autonome                       🟡 implémenté, replay Windows requis
+M14-S4  staging projet multi-provider                     🟡 implémenté, validation requise
+M14-S5  CLI autonome + doctor/tools/import-scip           🟡 implémenté, validation requise
+M14-S6  distribution Windows native + runtime embarqué    🟡 implémenté, packaging réel requis
+M14-S7  release/Docker/docs alignés                       🟡 implémenté, qualification finale requise
+```
+
+La distinction est volontaire : **implémenté ne signifie pas encore validé/livré**. M14 ne passera à TERMINÉ qu’après build Java 24 exact-head, tests, replays Java/TypeScript réels et construction/validation de la distribution Windows.
+
+- roadmap opérationnelle : [`roadmap/M14_EXECUTION.md`](roadmap/M14_EXECUTION.md)
+- issue : #42
+- décision : [ADR-0021](adr/0021-native-runtime-autonomous-indexing.md)
 
 ---
 

@@ -1,83 +1,81 @@
-# Référence CLI
+# Référence CLI MINOS
 
-La CLI stable est exposée par `com.minos.cli.MinosLauncher`.
+Le launcher stable est `com.minos.cli.MinosLauncher`.
 
-```powershell
-java -jar .\target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar <commande>
-```
-
-Pour toute commande, `--help` reste la source de vérité exécutable.
-
-## Vue d’ensemble
-
-```text
-Project and index
-  project add
-  project list
-  project inspect
-  inspect
-  index
-  index-status
-
-Code intelligence
-  search
-  find-symbol
-  get-source
-  find-usages
-  find-implementations
-  find-callers
-  find-callees
-  dependencies
-  dependents
-  related-tests
-  architecture
-  impact
-
-Integration
-  nexus-export
-```
-
-## Administration des projets
-
-### `project add`
-
-```text
-minos project add <path> [--name <name>] [--format <text|json>]
-```
-
-Exemple :
+Installation native :
 
 ```powershell
-java -jar $minos project add N:\workspace-dev\app --name app --format json
+minos.cmd <commande>
 ```
 
-Sans `--name`, MINOS utilise le nom du dernier segment du chemin.
+Checkout source :
 
-### `project list`
-
-```text
-minos project list [--format <text|json>]
+```powershell
+java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar <commande>
 ```
 
-### `project inspect` / `inspect`
+`--help` reste la source de vérité exécutable.
+
+## Administration
 
 ```text
-minos project inspect <project> [--format <text|json>]
-minos inspect <project> [--format <text|json>]
+project add <path> [--name <name>] [--format <text|json>]
+project list [--format <text|json>]
+project inspect <project> [--format <text|json>]
+inspect <project> [--format <text|json>]
+index-status <project> [--format <text|json>]
 ```
 
-L’inspection expose notamment la racine, les langages, les build systems, le nombre de modules, l’état d’index, le snapshot actif et le fournisseur connu.
-
-### `index-status`
+## Diagnostic runtime
 
 ```text
-minos index-status <project> [--format <text|json>]
+doctor [--format <text|json>]
+tools list [--format <text|json>]
+tools verify [--format <text|json>]
+tools install <provider> [--format <text|json>]
 ```
 
-## Importer un index SCIP
+`doctor` retourne `1` lorsqu'une action est requise pour obtenir tous les runtimes providers gérés.
+
+## Indexation autonome
 
 ```text
-minos index <project> --scip <index.scip> --provider <id> [options]
+index <project> [options]
+```
+
+Options :
+
+```text
+--provider <id>       override de négociation
+--force-full          exécution FULL explicite
+--dry-run             calculer le plan sans lancer le provider
+--format <text|json>
+```
+
+Exemples :
+
+```powershell
+minos.cmd index nexus --dry-run
+minos.cmd index nexus
+minos.cmd index nexus --force-full --format json
+```
+
+Le plan expose le provider, son runtime, la portée et les raisons.
+
+### Compatibilité M9
+
+Pendant la transition M14, cette forme reste acceptée avec warning :
+
+```text
+index <project> --scip <index.scip> --provider <id>
+```
+
+Préférer désormais `import-scip`.
+
+## Import SCIP manuel
+
+```text
+import-scip <project> --file <index.scip> --provider <id> [options]
 ```
 
 Options :
@@ -89,17 +87,13 @@ Options :
 --format <text|json>
 ```
 
-Le snapshot par défaut est dérivé de l’artefact lorsque `--snapshot` n’est pas fourni.
-
-> `index` importe un artefact SCIP existant. La commande ne lance pas automatiquement un indexeur externe.
-
 ## Recherche contextuelle
 
 ```text
-minos search <project> <query> [options]
+search <project> <query> [options]
 ```
 
-Options :
+Options principales :
 
 ```text
 --qualified-name <name>
@@ -115,147 +109,73 @@ Options :
 --format <text|json>
 ```
 
-Exemple :
-
-```powershell
-java -jar $minos search my-project GreetingPort `
-  --depth 2 `
-  --usages 5 `
-  --relationships 20 `
-  --max-tokens 6000 `
-  --format json
-```
-
-## Recherche de symboles
+## Symboles et sources
 
 ```text
-minos find-symbol <project> <symbol> [options]
+find-symbol <project> <symbol> [options]
+get-source <project> <file-id> [--format <text|json>]
+find-usages <project> <symbol-id> [--limit <count>] [--format <text|json>]
 ```
 
-Options :
+## Relations
 
 ```text
---qualified-name <name>
---kind <kind>
---module <module>
---limit <1..1000>            défaut 20
---format <text|json>
+find-implementations <project> <symbol-id>
+find-callers <project> <symbol-id>
+find-callees <project> <symbol-id>
+dependencies <project> <symbol-id>
+dependents <project> <symbol-id>
+related-tests <project> <symbol-id>
 ```
 
-Utiliser l’identifiant de symbole retourné pour les commandes relationnelles et d’impact.
-
-## Lire le source complet d’un fichier
-
-```text
-minos get-source <project> <file-id> [--format <text|json>]
-```
-
-`get-source` est explicite : contrairement à `search`, il peut restituer le contenu complet du fichier local ciblé.
-
-## Usages
-
-```text
-minos find-usages <project> <symbol-id> [--limit <count>] [--format <text|json>]
-```
-
-Limite maximale : 1000.
-
-## Relations spécialisées
-
-Toutes les commandes ci-dessous utilisent la forme :
-
-```text
-minos <commande> <project> <symbol-id> [--limit <count>] [--format <text|json>]
-```
-
-| Commande | Direction | Relation |
-|---|---:|---|
-| `find-implementations` | entrante | `IMPLEMENTS` |
-| `find-callers` | entrante | `CALLS` |
-| `find-callees` | sortante | `CALLS` |
-| `dependencies` | sortante | `DEPENDS_ON` |
-| `dependents` | entrante | `DEPENDS_ON` |
-| `related-tests` | entrante | `RELATED_TEST` |
-
-Une liste vide signifie qu’aucune relation correspondante n’est présente dans le snapshot observé ; elle ne prouve pas nécessairement une absence runtime.
+Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime.
 
 ## Architecture
 
 ```text
-minos architecture <project> [--module <module>] [--format <text|json>]
+architecture <project> [--module <module>] [--format <text|json>]
 ```
 
-Sans `--module`, MINOS restitue une vue projet composée : modules, dépendances, centralité relative et technologies observées.
-
-Avec `--module`, la commande retourne un contexte compact du module ciblé.
-
-Exemple :
-
-```powershell
-java -jar $minos architecture my-project --format json
-```
-
-## Analyse d’impact
+## Impact
 
 ```text
-minos impact <project> <symbol-id> [options]
+impact <project> <symbol-id> [--depth <1..32>] [--limit <1..10000>] [--format <text|json>]
 ```
 
-Options :
+L'impact reste une estimation potentielle fondée sur le graphe observé.
+
+## NEXUS
 
 ```text
---depth <1..32>         défaut 4
---limit <1..10000>      défaut 200
---format <text|json>
+nexus-export --root <project-root>
 ```
 
-L’impact est une **estimation potentielle fondée sur le graphe observé**, pas une garantie d’exhaustivité runtime. Le rapport expose ses limitations.
+Le JSON versionné est écrit sur stdout.
 
-## Export NEXUS
+## MCP
+
+Le launcher système accepte :
 
 ```text
-minos nexus-export --root <project-root>
+minos mcp
 ```
 
-La commande écrit le contrat JSON MINOS → NEXUS sur stdout. Pour conserver un fichier :
+Cette commande bloque volontairement sur une session MCP STDIO jusqu'à fermeture par le client.
 
-```powershell
-java -jar $minos nexus-export --root N:\workspace-dev\my-project > minos-export.json
+## Version
+
+```text
+minos --version
 ```
 
-Voir [nexus.md](nexus.md).
-
-## États d’index observables
-
-```mermaid
-stateDiagram-v2
-    [*] --> NEVER_INDEXED
-    NEVER_INDEXED --> INDEXING: premier run
-    INDEXING --> READY: promotion réussie
-    INDEXING --> FAILED: échec sans snapshot actif
-    READY --> REFRESHING: nouveau run
-    REFRESHING --> READY: promotion réussie
-    REFRESHING --> STALE: échec, ancien snapshot conservé
-    STALE --> REFRESHING: nouvelle tentative
-    FAILED --> INDEXING: nouvelle tentative
-```
-
-`STALE` conserve un snapshot actif précédent ; `FAILED` correspond à un projet sans snapshot utilisable après échec.
+Dans un artefact packagé, la version est lue dans le manifest du JAR afin d'être identique à celle de la release.
 
 ## Codes de sortie
 
 ```text
 0  succès
-1  erreur d’exécution
-2  erreur d’usage
+1  erreur d'exécution / diagnostic action requise
+2  erreur d'usage
 ```
 
-En automatisation, tester toujours le code de sortie avant de consommer stdout.
-
-## Conseils pour les scripts
-
-- utiliser `--format json` ;
-- fixer explicitement `MINOS_HOME` ;
-- conserver les identifiants de projet/symbole retournés par MINOS ;
-- ne pas analyser le rendu `text` comme un format machine ;
-- utiliser `nexus-export` uniquement lorsque le projet possède un snapshot actif.
+En automatisation : utiliser `--format json` et tester le code de sortie avant de consommer stdout.

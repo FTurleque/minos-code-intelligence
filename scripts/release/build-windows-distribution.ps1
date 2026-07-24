@@ -104,6 +104,8 @@ try {
         throw "jpackage app image is incomplete: $AppImage"
     }
     Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
+        -Destination (Join-Path $Distribution 'install.ps1')
 
     @'
 @echo off

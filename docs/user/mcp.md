@@ -1,48 +1,52 @@
 # Utiliser MINOS via MCP
 
-MINOS expose un serveur **Model Context Protocol** local via STDIO. Il permet à un IDE, un agent ou un orchestrateur compatible MCP de consommer la Code Intelligence sans parser la CLI.
+MINOS expose un serveur **Model Context Protocol local via STDIO**. Les 15 tools restent read-only.
 
-## Lancer le serveur
+## Mode recommandé M14 : runtime natif
 
-Construire d’abord le shaded JAR :
+Après installation Windows :
 
-```powershell
-.\mvnw.cmd clean package
+```text
+command = C:\Users\<user>\AppData\Local\Programs\MINOS\minos.cmd
+args    = mcp
 ```
 
-Puis :
+Exemple conceptuel :
+
+```json
+{
+  "mcpServers": {
+    "minos": {
+      "command": "C:\\Users\\<user>\\AppData\\Local\\Programs\\MINOS\\minos.cmd",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Le launcher fixe par défaut :
+
+```text
+MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+```
+
+La CLI et le MCP lisent donc le même registre et le même snapshot actif, avec les mêmes chemins Windows.
+
+## Depuis un checkout de développement
 
 ```powershell
-java -cp .\target\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar `
+$env:MINOS_HOME = 'N:\minos-data'
+java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar mcp
+```
+
+Le point d’entrée historique reste disponible :
+
+```powershell
+java -cp .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar `
   com.minos.mcp.MinosMcpServer
 ```
 
-Le serveur utilise le même `MINOS_HOME` que la CLI.
-
-## Architecture d’utilisation
-
-```mermaid
-sequenceDiagram
-    participant A as Agent / IDE
-    participant M as MinosMcpServer
-    participant T as MinosMcpTools
-    participant Q as Services MINOS
-    participant S as Snapshot actif
-
-    A->>M: initialize (STDIO)
-    A->>M: tools/list
-    M-->>A: 15 tools read-only
-    A->>M: tools/call minos_search_code
-    M->>T: Valider / adapter les arguments
-    T->>Q: Requête MINOS bornée
-    Q->>S: Lecture du snapshot actif
-    S-->>Q: Symboles / relations / contexte
-    Q-->>T: Résultat structuré
-    T-->>M: JSON
-    M-->>A: CallToolResult
-```
-
-## Catalogue des 15 tools
+## Catalogue des tools
 
 | Tool | Usage |
 |---|---|
@@ -62,115 +66,79 @@ sequenceDiagram
 | `minos_architecture` | vue d’architecture projet |
 | `minos_impact` | impact potentiel d’un symbole |
 
-Tous les tools sont **read-only**. Le serveur MCP ne permet ni `project add` ni import SCIP.
+Le MCP reste **read-only** : `project add`, `tools install` et `index` sont des opérations administratives CLI explicites.
 
-## Configuration conceptuelle d’un client MCP
-
-La syntaxe exacte dépend du client. Le processus à enregistrer est :
-
-```text
-command = <java 24>
-args    = -cp <minos-all.jar> com.minos.mcp.MinosMcpServer
-env     = MINOS_HOME=<home MINOS>
-```
-
-Exemple JSON conceptuel sous Windows :
-
-```json
-{
-  "mcpServers": {
-    "minos": {
-      "command": "C:\\Program Files\\Java\\jdk-24\\bin\\java.exe",
-      "args": [
-        "-cp",
-        "N:\\workspace-dev\\minos-code-intelligence\\target\\minos-code-intelligence-0.1.0-SNAPSHOT-all.jar",
-        "com.minos.mcp.MinosMcpServer"
-      ],
-      "env": {
-        "MINOS_HOME": "N:\\minos-data"
-      }
-    }
-  }
-}
-```
-
-## Configurations IntelliJ DEV et PROD
-
-Le dépôt fournit huit configurations partagées dans `.run/`. Elles utilisent
-Windows PowerShell directement et ne nécessitent ni commande POSIX `export` ni
-chemin de JDK codé en dur :
-
-- `[MINOS Dev] MCP` détecte un JDK 24, reconstruit le JAR et utilise
-  `target/minos-dev-home` ;
-- `[MINOS Prod] Install` construit l'image Docker Java 24 sous
-  `%LOCALAPPDATA%\MINOS` et exécute un vrai handshake MCP ;
-- `[MINOS Prod] Start` démarre le conteneur persistant en arrière-plan ;
-- `[MINOS Prod] MCP` ouvre une session STDIO dans ce conteneur avec
-  `docker exec -i` ;
-- `Status`, `Validate` et `Stop` contrôlent l'installation sans supprimer les
-  données ;
-- `[MINOS] Verify launch configs` contrôle les XML, PowerShell et Compose.
-
-Les mêmes opérations sont disponibles hors IntelliJ :
+## Préparer un projet avant MCP
 
 ```powershell
-.\docker\scripts\prod-mcp.ps1 -Action Install
-.\docker\scripts\prod-mcp.ps1 -Action Start
-.\docker\scripts\prod-mcp.ps1 -Action Attach
-.\docker\scripts\prod-mcp.ps1 -Action Status
-.\docker\scripts\prod-mcp.ps1 -Action Validate
-.\docker\scripts\prod-mcp.ps1 -Action Stop
-```
-
-Le runtime Docker n'expose aucun port et utilise `network_mode: none`. Le home
-`%LOCALAPPDATA%\MINOS\data` est monté en lecture/écriture ; la racine des projets
-est montée dans `/workspace/projects` en lecture seule. Le conteneur reste actif
-entre deux sessions STDIO.
-
-## Contraintes importantes
-
-Le serveur utilise **stdout pour MCP**. Ne pas entourer le lancement d’un script qui écrit des messages de diagnostic sur stdout.
-
-Les entrées sont bornées par schema. Parmi les limites principales :
-
-```text
-search limit          1..20
-symbol/relation limit 1..1000
-search depth          0..3
-usages                0..50
-relationships         0..50
-context lines         0..50
-impact depth          1..32
-impact limit          1..10000
-```
-
-Les clés inconnues sont rejetées par les schemas MCP plutôt qu’ignorées silencieusement.
-
-## Préparer les données avant MCP
-
-Le serveur ne réalise pas l’indexation. Avant de le démarrer :
-
-```powershell
-java -jar $minos project add <project-root> --name my-project
-java -jar $minos index my-project --scip <index.scip> --provider <provider>
+minos.cmd tools install scip-java
+minos.cmd project add N:\workspace-dev\my-project --name my-project
+minos.cmd index my-project
 ```
 
 Le client MCP peut ensuite interroger le snapshot actif.
 
+## Mode Docker durci optionnel
+
+Docker n’est plus le chemin PROD principal. Il reste utile lorsque l’on veut isoler la surface MCP :
+
+```text
+network_mode: none
+filesystem: read-only
+projects: read-only
+capabilities: dropped
+STDIO only
+```
+
+Le home Docker est volontairement séparé :
+
+```text
+%LOCALAPPDATA%\MINOS\docker-data
+```
+
+Ne pas partager directement un registre natif avec le conteneur : les chemins projet diffèrent.
+
+### Construire Docker depuis le même JAR de release
+
+Avec le shaded JAR correspondant exactement à la release :
+
+```powershell
+.\docker\scripts\prod-mcp-release.ps1 `
+  -Action Install `
+  -Jar .\minos-code-intelligence-0.2.0-all.jar `
+  -Version 0.2.0 `
+  -Commit <sha> `
+  -ProjectsRoot N:\workspace-dev
+
+.\docker\scripts\prod-mcp-release.ps1 -Action Start
+```
+
+Configuration MCP :
+
+```text
+command = powershell.exe
+args = -NoProfile -ExecutionPolicy Bypass -File <repo>\docker\scripts\prod-mcp-release.ps1 -Action Attach
+```
+
+Contrôle :
+
+```powershell
+.\docker\scripts\prod-mcp-release.ps1 -Action Status
+.\docker\scripts\prod-mcp-release.ps1 -Action Validate
+.\docker\scripts\prod-mcp-release.ps1 -Action Stop
+```
+
+## Contraintes STDIO
+
+Le serveur utilise stdout pour le protocole MCP. Aucun wrapper ne doit écrire de diagnostics arbitraires sur stdout pendant la session.
+
+Les entrées restent bornées par schema : recherche, profondeurs, usages, relations et impact disposent de limites explicites.
+
 ## Erreurs
 
-Une erreur MINOS devient un `CallToolResult` en erreur. Les erreurs de schema sont généralement rejetées avant l’appel du handler.
+Pour diagnostiquer une erreur MCP, reproduire d’abord la requête équivalente avec la CLI et `--format json`, puis vérifier :
 
-Pour diagnostiquer un problème de données, reproduire d’abord la requête équivalente avec la CLI et `--format json`.
-
-## Limites de la surface MCP
-
-Le serveur MCP ne revendique pas :
-
-- de transport HTTP distant ;
-- d’authentification réseau ;
-- de mutation ;
-- d’indexation automatique ;
-- de garantie d’exhaustivité supérieure au snapshot MINOS.
-
-Pour les détails d’implémentation, voir [../developer/public-surfaces.md](../developer/public-surfaces.md).
+```powershell
+minos.cmd index-status <project> --format json
+minos.cmd doctor --format json
+```

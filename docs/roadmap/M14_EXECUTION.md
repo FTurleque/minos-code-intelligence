@@ -1,278 +1,276 @@
 # M14 — Exécution : indexation autonome et installation PROD
 
-Statut : **EN COURS — 0/7**
+Statut : **EN COURS — implémentation 7/7 ; qualification finale en attente**
 
-Issue : **#42 — M14 — Indexation autonome et installation PROD reproductible**
+Issue : **#42**  
+PR de travail : **#43**
 
 ## Objectif produit
 
-M14 transforme MINOS d'un moteur local nécessitant un artefact SCIP préparé manuellement en un produit installable qui sait exécuter le bon provider et publier un snapshot en une commande :
-
-```text
-minos index <project>
-```
-
-Le parcours cible est :
-
-```text
-project add
-   ↓
-project discovery
-   ↓
-provider negotiation
-   ↓
-runtime diagnosis
-   ↓
-NONE / FULL / INCREMENTAL
-   ↓
-provider execution
-   ↓
-SCIP validation + normalization
-   ↓
-project staging
-   ↓
-atomic promotion
-   ↓
-READY
-```
-
-L'utilisateur ne manipule plus `index.scip` dans le parcours normal.
-
-## Décisions de base
-
-1. **Runtime natif principal** : la CLI, l'indexation et le MCP local utilisent les chemins et toolchains réels du poste.
-2. **Docker MCP reste optionnel et durci** : il continue à servir la Code Intelligence en lecture seule, mais ne devient pas un conteneur de build universel.
-3. **Aucun incrémental inventé** : tant que le provider ne porte pas `INCREMENTAL_INDEXING`, un changement déclenche `FULL`; aucune modification déclenche `NONE`.
-4. **Aucune préparation destructive implicite** : MINOS ne lance jamais `npm install`, `mvn clean`, `gradle` de préparation ou autre mutation de dépendances sans contrat provider explicite.
-5. **Import SCIP manuel conservé** : il devient un chemin explicite de secours/diagnostic distinct de l'indexation autonome.
-6. **Promotion projet atomique** : tous les providers sélectionnés doivent réussir et être normalisés avant activation du nouveau snapshot.
-7. **Une installation utilisateur ne compile pas MINOS** : les releases doivent fournir un artefact exécutable/versionné avec runtime Java embarqué.
-
----
-
-## Progression
-
-| Étape | Objet | État | Critère de sortie |
-|---|---|---|---|
-| M14-S1 | Runtime providers + exécution de processus | ⬜ | exécuteur générique, diagnostics, logs de run, état persistant |
-| M14-S2 | Provider TypeScript autonome | ⬜ | runtime géré + executor `scip-typescript`, sans installation globale |
-| M14-S3 | Provider Java autonome | ⬜ | runtime/executor `scip-java`, diagnostic JDK/build, Windows qualifié |
-| M14-S4 | Normalisation/staging multi-provider | ⬜ | aucun provider ne publie directement ; assemblage puis promotion unique |
-| M14-S5 | `minos index <project>` autonome | ⬜ | discovery → negotiation → plan → execute → promote via CLI |
-| M14-S6 | Installation native PROD | ⬜ | distribution Windows versionnée, runtime Java embarqué, `minos doctor` |
-| M14-S7 | Release + Docker alignés | ⬜ | Docker construit depuis le même artefact de release ; docs PROD finales |
-
-L'état de ce tableau doit être mis à jour dans chaque PR M14.
-
----
-
-# M14-S1 — Runtime providers et exécution
-
-## Livrables
-
-- `ProviderRuntimeManager` et modèles de diagnostic fournisseur-indépendants ;
-- `ProcessIndexerExecutor` derrière `IndexingRuntimePorts.IndexerExecutor` ;
-- workspace de run sous `<MINOS_HOME>/runs/<runId>/` ;
-- capture stdout/stderr, commande effective, exit code, durée et artefact ;
-- timeout et destruction de l'arbre de processus ;
-- masquage minimal des variables sensibles ;
-- `FileIndexStateStore` persistant pour ne pas perdre `READY/STALE/FAILED` entre processus.
-
-## Porte
-
-Un faux provider de test doit pouvoir produire un artefact via un vrai processus enfant, avec diagnostic reproductible et aucun type SCIP dans `orchestration`.
-
----
-
-# M14-S2 — TypeScript autonome
-
-## Livrables
-
-- runtime géré sous `<MINOS_HOME>/tools/scip-typescript/<version>/` ;
-- installation transactionnelle via npm ;
-- version verrouillée et vérifiée ;
-- détection `node`, `npm`, `tsconfig.json` / configuration supportée ;
-- executor qui lance `scip-typescript index` dans la racine projet ;
-- aucun `npm install` implicite des dépendances du projet ;
-- artefact copié dans le run avant ingestion.
-
-## Porte
-
-Fixture TypeScript réelle : installation provider, indexation FULL, artefact SCIP lisible, import normalisé, second run sans changement → `NONE`.
-
----
-
-# M14-S3 — Java autonome
-
-## Livrables
-
-- runtime `scip-java` versionné ;
-- diagnostic du JDK projet et du build Maven qualifié ;
-- priorité au Maven Wrapper du projet ;
-- reprise des adaptations Windows démontrées en M0, sans dépendance au checkout MINOS ;
-- conservation des logs de compilation/indexation ;
-- aucun shard intermédiaire promu comme index final.
-
-## Porte
-
-Fixture Maven Java réelle sous Windows : `minos index` produit et promeut un snapshot ; échec de build conserve l'ancien snapshot en `STALE`.
-
----
-
-# M14-S4 — Staging projet multi-provider
-
-## Refactor
-
-Le chemin actuel :
-
-```text
-SCIP -> normalize -> FileSymbolSnapshotStore.publish
-```
-
-devient :
-
-```text
-SCIP -> normalize -> NormalizedProviderSnapshot
-                         ↓
-               ProjectSnapshotAssembler
-                         ↓
-                  staged snapshot
-                         ↓
-                 atomic promotion
-```
-
-## Invariants
-
-- provenance provider conservée ;
-- collisions détectées ;
-- aucun fait contradictoire fusionné silencieusement ;
-- ordre déterministe ;
-- activation unique après succès de tous les providers.
-
----
-
-# M14-S5 — CLI autonome
-
-## Contrat cible
-
-```text
-minos index <project>
-minos index <project> --provider <id>
-minos index <project> --force-full
-minos index <project> --dry-run
-minos index <project> --format json
-```
-
-Le chemin manuel devient :
-
-```text
-minos import-scip <project> --file <index.scip> --provider <id>
-```
-
-Une compatibilité `minos index --scip` peut être maintenue temporairement avec avertissement.
-
-## `--dry-run`
-
-Doit expliquer sans exécuter :
-
-- projet/racine ;
-- langages/builds détectés ;
-- provider sélectionné et pourquoi ;
-- runtime/provider disponible ou bloqué ;
-- changements détectés ;
-- plan `NONE/FULL/INCREMENTAL` et raison ;
-- commande qui serait exécutée.
-
----
-
-# M14-S6 — Installation native PROD
-
-## Distribution cible Windows
-
-```text
-minos-<version>-windows-x64.zip
-  bin/minos.exe (ou launcher .cmd lors du premier incrément)
-  runtime/       Java 24 réduit/embarqué
-  lib/minos.jar
-  VERSION
-```
-
-Installation recommandée :
-
-```text
-C:\Program Files\MINOS\       programme immutable
-%LOCALAPPDATA%\MINOS\         données mutables
-  data/
-  tools/
-  cache/
-  runs/
-  backups/
-```
-
-Le lancement de MINOS ne dépend pas du `JAVA_HOME` utilisateur.
-
-## Diagnostic
+Le parcours normal doit être :
 
 ```text
 minos doctor
-minos doctor --format json
+minos tools install <provider>
+minos project add <root> --name <project>
+minos index <project>
+```
+
+L'utilisateur ne prépare plus `index.scip` manuellement.
+
+```text
+project
+  ↓ discovery
+  ↓ provider negotiation
+  ↓ runtime diagnosis
+  ↓ fingerprint / invalidation
+  ↓ NONE | FULL | INCREMENTAL qualifié
+  ↓ provider execution
+  ↓ normalization
+  ↓ project staging
+  ↓ atomic promotion
+  ↓ READY
+```
+
+## Lecture de l'avancement
+
+- ✅ = implémenté **et validé** sur le SHA courant ;
+- 🟡 = implémenté mais qualification locale/replay encore nécessaire ;
+- ⬜ = non implémenté.
+
+| Étape | Fonction | Implémentation | Validation attendue |
+|---|---|---:|---|
+| M14-S1 | Runtime providers + processus | 🟡 | tests + vrai processus enfant |
+| M14-S2 | scip-typescript autonome | 🟡 | installation + replay fixture TS |
+| M14-S3 | scip-java autonome | 🟡 | replay Maven Windows réel |
+| M14-S4 | Staging multi-provider | 🟡 | collision/échec/promotion atomique |
+| M14-S5 | CLI autonome | 🟡 | `dry-run`, `NONE`, `FULL`, erreur provider |
+| M14-S6 | Installation native Windows | 🟡 | build `jpackage`, ZIP, install, `doctor` |
+| M14-S7 | Release + Docker + docs | 🟡 | même JAR release + Docker smoke |
+
+**Aucune étape n'est marquée ✅ avant validation exacte du head final.**
+
+---
+
+## M14-S1 — Runtime providers
+
+Implémenté :
+
+- `ProcessIndexerExecutor` derrière le port historique `IndexerExecutor` ;
+- `IndexerProcessPlan` / factory provider ;
+- timeout ;
+- capture stdout/stderr ;
+- destruction de l'arbre de processus ;
+- préservation d'un `index.scip` préexistant ;
+- artefact final copié sous `<MINOS_HOME>/runs/<runId>/<provider>/` ;
+- masquage des arguments manifestement sensibles ;
+- `FileIndexStateStore` persistant pour les états projet/run.
+
+À valider : build/tests et cas timeout/process tree.
+
+---
+
+## M14-S2 — TypeScript
+
+Implémenté :
+
+```text
+MINOS_HOME/tools/scip-typescript/0.4.0/
+```
+
+- installation npm locale transactionnelle ;
+- aucun `npm -g` ;
+- `node` / `npm` diagnostiqués ;
+- `tsconfig.json` ou package compatible requis ;
+- aucune installation silencieuse des dépendances métier ;
+- `scip-typescript index` exécuté dans la racine projet ;
+- incrémental explicitement refusé tant qu'il n'est pas qualifié.
+
+À valider : replay TypeScript réel et second run `NONE`.
+
+---
+
+## M14-S3 — Java
+
+Implémenté :
+
+- runtime `scip-java` verrouillé ;
+- résolution via Coursier géré/PATH ;
+- téléchargement Coursier Windows dans `MINOS_HOME/tools` ;
+- `JAVA_HOME` doit désigner un JDK avec `javac` ;
+- portée actuelle limitée aux projets Maven qualifiés ;
+- exécution dans la racine du projet ;
+- incrémental non revendiqué.
+
+À valider impérativement sous Windows : Maven réel, projet multi-module, échec de build et conservation du snapshot précédent.
+
+---
+
+## M14-S4 — Staging projet
+
+Le chemin actif devient :
+
+```text
+provider artifact
+  ↓
+temporary provider normalization
+  ↓
+normalized provider snapshot
+  ↓
+Project assembly
+  ↓
+staged project snapshot
+  ↓
+atomic active publication
+```
+
+Implémenté :
+
+- chaque provider normalisé dans un store temporaire ;
+- aucun provider ne publie directement dans le store actif ;
+- assemblage projet ;
+- collision d'identifiant = échec explicite ;
+- promotion finale via `FileSymbolSnapshotStore`.
+
+---
+
+## M14-S5 — CLI autonome
+
+Implémenté :
+
+```text
+minos index <project>
+minos index <project> --dry-run
+minos index <project> --provider <id>
+minos index <project> --force-full
+minos import-scip <project> --file ... --provider ...
+minos doctor
 minos tools list
 minos tools install <provider>
 minos tools verify
 ```
 
-`doctor` doit distinguer : runtime MINOS, prérequis du projet, providers gérés, build tools et Docker optionnel.
+Le mode historique `index --scip` reste temporairement accepté avec warning.
+
+### Planification
+
+Le service réutilise :
+
+- `ProjectDiscoveryService` ;
+- `IndexerRegistry` ;
+- `ProjectFingerprintService` ;
+- `ProjectInvalidationService` ;
+- `IncrementalIndexingPlanner` ;
+- `IndexingLifecycleService`.
+
+Donc M14 ne réimplémente pas M1/M7.
+
+### Politique actuelle
+
+```text
+aucun changement -> NONE
+changement       -> FULL
+```
+
+car les versions providers gérées ne déclarent pas `INCREMENTAL_INDEXING`.
 
 ---
 
-# M14-S7 — Release et Docker
+## M14-S6 — Installation native Windows
 
-## Livrables
+Implémenté :
 
-- version de release non `SNAPSHOT` pour l'artefact distribuable ;
-- ZIP Windows ;
-- SHA-256 ;
-- image Docker construite depuis l'artefact distribué, pas depuis un build différent ;
-- métadonnées version/commit cohérentes entre CLI, MCP et image ;
-- documentation : installation utilisateur / installation développeur / providers / Docker MCP.
+```powershell
+.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0
+```
 
-## Docker
+Produit :
 
-Le mode Docker conserve :
+```text
+target/dist/minos-0.2.0-windows-x64.zip
+target/dist/minos-0.2.0-windows-x64.zip.sha256
+```
+
+Le ZIP contient :
+
+```text
+app/              app-image jpackage + runtime Java
+minos.cmd
+minos-mcp.cmd
+install.ps1
+VERSION
+README.txt
+```
+
+Installation par défaut sans élévation :
+
+```text
+%LOCALAPPDATA%\Programs\MINOS
+```
+
+Données :
+
+```text
+%LOCALAPPDATA%\MINOS\data
+```
+
+Le launcher utilisateur n'exige pas de `JAVA_HOME` pour exécuter MINOS.
+
+---
+
+## M14-S7 — Release et Docker
+
+Implémenté :
+
+- version de développement portée à `0.2.0-SNAPSHOT` ;
+- version de release injectée dans un POM temporaire lors du packaging ;
+- `Implementation-Version` dans le manifest ;
+- `minos --version` lit la version packagée ;
+- ZIP + SHA-256 ;
+- Dockerfile release consommant un `minos.jar` déjà construit ;
+- workflow Docker packagé séparé du build source ;
+- `docker-data` distinct du home natif ;
+- documentation PROD/native/Docker mise à jour.
+
+Le Docker garde :
 
 ```text
 network_mode: none
 read_only: true
 projects: read-only
-MCP STDIO: read-only
+cap_drop: ALL
+no-new-privileges
 ```
-
-Il reste une surface de consommation, pas le moteur de compilation des projets.
 
 ---
 
-## Validation globale M14
+# Portes de qualification finale
 
-M14 ne peut être déclaré terminé que si les scénarios suivants sont reproductibles :
+M14 ne devient **TERMINÉ** que lorsque le même SHA passe :
 
-1. installation MINOS depuis un artefact de release sans checkout source ;
-2. `minos doctor` donne un diagnostic actionnable ;
-3. enregistrement d'un projet local ;
-4. installation/vérification d'un provider géré ;
-5. `minos index <project>` produit un snapshot sans `--scip` ;
-6. second run inchangé → `NONE` ;
-7. changement avec provider non incrémental → `FULL` ;
-8. échec de refresh → ancien snapshot toujours lisible et état `STALE` ;
-9. requêtes CLI et MCP lisent exactement le snapshot actif ;
-10. Docker MCP reste sans réseau et read-only ;
-11. installation/upgrade conserve ou sauvegarde les données ;
-12. `mvnw clean verify` sous Java 24 passe sur le SHA final.
+1. `java -version` = Java 24 ;
+2. `git rev-parse HEAD` capturé ;
+3. `.\mvnw.cmd clean verify` vert ;
+4. tests nouveaux M14 verts ;
+5. installation provider TypeScript réelle ;
+6. indexation TypeScript réelle ;
+7. second run TypeScript inchangé → `NONE` ;
+8. indexation Java/Maven réelle sous Windows ;
+9. échec Java de refresh → état `STALE` et ancien snapshot lisible ;
+10. construction `minos-<version>-windows-x64.zip` ;
+11. vérification SHA-256 ;
+12. installation dans un répertoire vierge ;
+13. `minos --version` = version de release ;
+14. `minos doctor` fonctionnel sans JDK système requis pour la CLI ;
+15. `minos mcp` handshake STDIO ;
+16. image Docker construite depuis le même shaded JAR ;
+17. Docker `network=none`, projets/read-only confirmés.
 
-## Hors périmètre M14
+## Hors périmètre
 
-- service HTTP distant ;
+- HTTP distant ;
 - authentification réseau ;
+- daemon/watch permanent ;
 - indexation distribuée ;
-- daemon de filesystem/watch permanent ;
 - installation automatique des dépendances métier d'un projet ;
-- activation de `INCREMENTAL` sans qualification provider dédiée.
+- vrai `INCREMENTAL` avant qualification provider dédiée.
