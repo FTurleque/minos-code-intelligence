@@ -261,7 +261,7 @@ public final class GitIntelligenceService {
                         uri.getHost(),
                         uri.getPort(),
                         trimGitSuffix(uri.getPath()),
-                        uri.getQuery(),
+                        null,
                         null
                 );
                 return sanitized.toString();
