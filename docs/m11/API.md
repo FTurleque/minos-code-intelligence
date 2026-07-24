@@ -84,6 +84,8 @@ List<UsageDto> findUsages(String projectIdentifier, String symbolId, int limit)
 
 `SymbolDto` conserve identité, qualité d'identité, type, nom, signature, langue, localisation, résolution, provenance et flags `external/generated`.
 
+Le champ `SymbolDto.language` conserve l'identifiant lexical normalisé porté par la connaissance de symbole (`typescript`, `javascript`, `java`, etc.). Il ne doit pas être confondu avec les langages/technologies issus d'enums de découverte ou d'architecture, exposés sous forme de noms d'enums (`TYPESCRIPT`, `NPM`, etc.).
+
 ### Relations
 
 ```java
