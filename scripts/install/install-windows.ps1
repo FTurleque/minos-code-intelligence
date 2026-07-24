@@ -47,7 +47,8 @@ try {
         'lib\minos.jar',
         'docker\Dockerfile.mcp.release',
         'docker\compose.mcp.prod.yaml',
-        'docker\scripts\prod-mcp-release.ps1'
+        'docker\scripts\prod-mcp-release.ps1',
+        'docker\scripts\configure-docker-mcp.ps1'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $Source $Required))) {
             throw "Invalid MINOS distribution: missing $Required"
@@ -90,7 +91,7 @@ try {
     Write-Host "Install : $InstallRoot"
     Write-Host "Data    : $([Environment]::GetFolderPath('LocalApplicationData'))\MINOS\data"
     Write-Host "Command : $(Join-Path $InstallRoot 'minos.cmd')"
-    Write-Host "Docker  : $(Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1')"
+    Write-Host "Docker  : $(Join-Path $InstallRoot 'docker\scripts\configure-docker-mcp.ps1')"
     if ($AddToPath) {
         Write-Host 'PATH    : added for the current user; open a new terminal before using `minos.cmd` by name.'
     }
