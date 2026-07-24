@@ -7,6 +7,7 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,6 +22,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Gestion locale des runtimes SCIP qualifiés par MINOS.
@@ -37,8 +40,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     public static final String SCIP_JAVA_COORDINATE =
             "com.sourcegraph:scip-java_2.13:" + SCIP_JAVA_VERSION;
 
+    private static final String COURSIER_LAUNCHER_ID = "windows-x64-official-launcher";
     private static final URI COURSIER_WINDOWS_URI = URI.create(
-            "https://github.com/coursier/coursier/releases/download/v2.1.25-M26/cs-x86_64-pc-win32.exe");
+            "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip");
 
     private final Path home;
     private final Path toolsRoot;
@@ -207,10 +211,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             throw new IllegalStateException(
                     "automatic Coursier installation is currently packaged for Windows x64; install `cs` in PATH");
         }
-        Path directory = toolsRoot.resolve("coursier").resolve("2.1.25-M26");
+
+        Path directory = toolsRoot.resolve("coursier").resolve(COURSIER_LAUNCHER_ID);
         Files.createDirectories(directory);
         Path destination = directory.resolve("cs.exe");
-        Path partial = directory.resolve("cs.partial.exe");
+        Path archive = directory.resolve("cs-x86_64-pc-win32.zip");
+        Path archivePartial = directory.resolve("cs-x86_64-pc-win32.partial.zip");
+        Path executablePartial = directory.resolve("cs.partial.exe");
+        Files.deleteIfExists(archivePartial);
+        Files.deleteIfExists(executablePartial);
 
         HttpClient client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -220,17 +229,35 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .timeout(Duration.ofMinutes(2))
                 .header("User-Agent", "MINOS-Code-Intelligence")
                 .build();
-        HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(partial));
-        if (response.statusCode() < 200 || response.statusCode() >= 300 || Files.size(partial) == 0L) {
-            Files.deleteIfExists(partial);
-            throw new IllegalStateException("Coursier download failed with HTTP " + response.statusCode());
+        HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(archivePartial));
+        if (response.statusCode() < 200 || response.statusCode() >= 300 || Files.size(archivePartial) == 0L) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Coursier launcher download failed with HTTP " + response.statusCode());
         }
-        move(partial, destination);
+        move(archivePartial, archive);
+
+        boolean extracted = false;
+        try (InputStream input = Files.newInputStream(archive);
+             ZipInputStream zip = new ZipInputStream(input)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".exe")) {
+                    Files.copy(zip, executablePartial, StandardCopyOption.REPLACE_EXISTING);
+                    extracted = true;
+                    break;
+                }
+            }
+        }
+        if (!extracted || !Files.isRegularFile(executablePartial) || Files.size(executablePartial) == 0L) {
+            Files.deleteIfExists(executablePartial);
+            throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
+        }
+        move(executablePartial, destination);
         return destination;
     }
 
     private Optional<Path> coursierExecutable() {
-        Path managed = toolsRoot.resolve("coursier").resolve("2.1.25-M26")
+        Path managed = toolsRoot.resolve("coursier").resolve(COURSIER_LAUNCHER_ID)
                 .resolve(CommandLocator.isWindows() ? "cs.exe" : "cs");
         if (Files.isRegularFile(managed)) {
             return Optional.of(managed);
