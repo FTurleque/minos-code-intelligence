@@ -24,6 +24,16 @@ function Invoke-NativeChecked {
     }
 }
 
+function Resolve-PowerShellHost {
+    foreach ($name in @('powershell.exe', 'pwsh.exe')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) {
+            return $command.Source
+        }
+    }
+    throw 'M14 validation requires Windows PowerShell or PowerShell 7.'
+}
+
 function Write-LatestProviderDiagnostics {
     $runsRoot = Join-Path $script:ValidationHome 'runs'
     if (-not (Test-Path -LiteralPath $runsRoot -PathType Container)) {
@@ -78,6 +88,7 @@ try {
 
     $Java = Resolve-MinosJava24
     $script:JavaExecutable = $Java.JavaExecutable
+    $script:PowerShellExecutable = Resolve-PowerShellHost
     $env:JAVA_HOME = $Java.JavaHome
     $env:Path = "$($Java.JavaHome)\bin;$env:Path"
 
@@ -207,7 +218,7 @@ try {
 
     Write-Host ''
     Write-Host '=== Windows distribution ===' -ForegroundColor Cyan
-    Invoke-NativeChecked -File 'powershell.exe' `
+    Invoke-NativeChecked -File $script:PowerShellExecutable `
         -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1'),
             '-Version', $ReleaseVersion) `
@@ -225,7 +236,7 @@ try {
         throw "Distribution checksum mismatch: expected=$ExpectedHash actual=$ActualHash"
     }
 
-    Invoke-NativeChecked -File 'powershell.exe' `
+    Invoke-NativeChecked -File $script:PowerShellExecutable `
         -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             (Join-Path $RepoRoot 'scripts\install\install-windows.ps1'),
             '-Package', $Zip,
@@ -250,7 +261,7 @@ try {
         $InstalledDockerScript = Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1'
         $InstalledReleaseJar = Join-Path $InstallRoot 'lib\minos.jar'
         $DockerValidationRoot = Join-Path $ValidationRoot 'docker-install'
-        Invoke-NativeChecked -File 'powershell.exe' `
+        Invoke-NativeChecked -File $script:PowerShellExecutable `
             -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
                 $InstalledDockerScript,
                 '-Action', 'Install',
@@ -260,7 +271,7 @@ try {
                 '-InstallRoot', $DockerValidationRoot,
                 '-ProjectsRoot', (Split-Path -Parent $RepoRoot)) `
             -Failure 'Installed distribution Docker install failed'
-        Invoke-NativeChecked -File 'powershell.exe' `
+        Invoke-NativeChecked -File $script:PowerShellExecutable `
             -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
                 $InstalledDockerScript,
                 '-Action', 'Validate',
