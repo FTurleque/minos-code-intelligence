@@ -33,7 +33,22 @@ if (-not (Test-Path -LiteralPath $Java -PathType Leaf) -or
     throw "JAVA_HOME does not expose java.exe and jpackage.exe: $JavaHome"
 }
 
-$JavaVersion = (& $Java -version 2>&1 | Select-Object -First 1) -join ''
+# `java -version` writes its version banner to stderr even on success. Windows
+# PowerShell 5.1 turns native stderr into ErrorRecord objects, so the global
+# ErrorActionPreference=Stop would abort before the exit code can be checked.
+$PreviousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $JavaVersionOutput = ((& $Java -version 2>&1) | Out-String).Trim()
+    $JavaVersionExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+}
+if ($JavaVersionExitCode -ne 0) {
+    throw "Unable to execute JAVA_HOME java.exe -version (exit=$JavaVersionExitCode): $JavaVersionOutput"
+}
+$JavaVersion = ($JavaVersionOutput -split "`r?`n" | Select-Object -First 1).Trim()
 if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
     throw "MINOS distribution requires JDK 24; found: $JavaVersion"
 }
