@@ -50,7 +50,7 @@ class LocalMinosApiIntegrationTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals("GreetingPort", greetingPort.name());
-        assertEquals("TYPESCRIPT", greetingPort.language());
+        assertEquals("typescript", greetingPort.language());
         assertNotNull(greetingPort.origin());
 
         var incoming = api.findRelationships(
