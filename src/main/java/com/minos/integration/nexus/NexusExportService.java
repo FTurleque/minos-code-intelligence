@@ -266,6 +266,10 @@ public final class NexusExportService {
                 }
                 Path file = iterator.next();
                 scanned++;
+                Path canonical = file.toRealPath();
+                if (!canonical.startsWith(root)) {
+                    continue;
+                }
                 String relativePath = root.relativize(file).toString().replace('\\', '/');
                 String stableId = stableFileId(projectId, relativePath);
                 if (unresolvedStableIds.remove(stableId)) {
@@ -289,8 +293,12 @@ public final class NexusExportService {
             if (!resolved.startsWith(root) || resolved.equals(root) || !Files.isRegularFile(resolved)) {
                 return null;
             }
+            Path canonical = resolved.toRealPath();
+            if (!canonical.startsWith(root)) {
+                return null;
+            }
             return root.relativize(resolved).toString().replace('\\', '/');
-        } catch (InvalidPathException exception) {
+        } catch (InvalidPathException | IOException exception) {
             return null;
         }
     }
