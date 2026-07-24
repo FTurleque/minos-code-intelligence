@@ -44,4 +44,12 @@ Un document historique peut donc contenir un ancien SHA, un ancien nombre de tes
 | M12 | Multi-dépôts et Git | ADR-0019 |
 | M13 | Intégration NEXUS | ADR-0020 |
 
+## Compléments M0
+
+Les documents de conception initialement placés sous `docs/architecture/` mais explicitement validés **pour M0** sont eux aussi archivés dans `m0/` :
+
+- `MODELE_DOMAINE.md` ;
+- `INDEXEURS_CAPACITES.md` ;
+- `RETOURS_MODELE_DOMAINE.md` — retours expérimentaux ayant alimenté le modèle M0.
+
 Les scripts et benchmarks expérimentaux restent volontairement dans `scripts/m0/` et `benchmarks/m0/` : ils sont des artefacts reproductibles, pas des documents d’architecture.
