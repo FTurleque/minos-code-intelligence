@@ -32,6 +32,56 @@ function Invoke-NativeChecked {
     }
 }
 
+function Invoke-ProcessChecked {
+    param(
+        [Parameter(Mandatory = $true)][string] $File,
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    $Process = Start-Process -FilePath $File -ArgumentList $Arguments -Wait -PassThru
+    if ($Process.ExitCode -ne 0) {
+        throw "$Failure (exit=$($Process.ExitCode))"
+    }
+}
+
+function Invoke-MinosVersion {
+    param(
+        [Parameter(Mandatory = $true)][string] $Launcher,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    # Capture stdout and stderr independently. The embedded JVM can emit
+    # harmless warnings on stderr, which Windows PowerShell 5.1 otherwise
+    # promotes to ErrorRecord objects when ErrorActionPreference is Stop.
+    $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ProcessInfo.FileName = $env:ComSpec
+    $ProcessInfo.Arguments = '/d /s /c ""{0}" --version"' -f $Launcher
+    $ProcessInfo.WorkingDirectory = Split-Path -Parent $Launcher
+    $ProcessInfo.UseShellExecute = $false
+    $ProcessInfo.CreateNoWindow = $true
+    $ProcessInfo.RedirectStandardOutput = $true
+    $ProcessInfo.RedirectStandardError = $true
+
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $ProcessInfo
+    try {
+        if (-not $Process.Start()) {
+            throw "$Failure (process did not start)"
+        }
+        $StandardOutput = $Process.StandardOutput.ReadToEnd().Trim()
+        $StandardError = $Process.StandardError.ReadToEnd().Trim()
+        $Process.WaitForExit()
+        if ($Process.ExitCode -ne 0) {
+            throw "$Failure (exit=$($Process.ExitCode)): $StandardError"
+        }
+        return $StandardOutput
+    }
+    finally {
+        $Process.Dispose()
+    }
+}
+
 function Invoke-PowerShellScriptChecked {
     param(
         [Parameter(Mandatory = $true)][string] $Script,
@@ -210,10 +260,9 @@ try {
     }
 
     $InstalledMinos = Join-Path $ZipInstallRoot 'minos.cmd'
-    $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Portable MINOS --version failed with exit code $LASTEXITCODE"
-    }
+    $VersionOutput = Invoke-MinosVersion `
+        -Launcher $InstalledMinos `
+        -Failure 'Portable MINOS --version failed'
     if ($VersionOutput -ne "MINOS $Version") {
         throw "Portable MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
     }
@@ -229,17 +278,20 @@ finally {
 
 # Smoke-test the user-facing setup.exe without touching the caller's PATH or
 # Docker configuration. The setup is installed and then uninstalled silently.
-$SetupSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-setup-smoke-" + [Guid]::NewGuid())
-$SetupInstallRoot = Join-Path $SetupSmokeRoot 'installed'
+$SetupSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos release setup smoke " + [Guid]::NewGuid())
+$SetupInstallRoot = Join-Path $SetupSmokeRoot 'installed with spaces'
+$SetupInstalled = $false
+$SetupUninstalled = $false
 try {
     New-Item -ItemType Directory -Force -Path $SetupSmokeRoot | Out-Null
-    Invoke-NativeChecked -File $Setup -Arguments @(
+    Invoke-ProcessChecked -File $Setup -Arguments @(
         '/VERYSILENT',
         '/SUPPRESSMSGBOXES',
         '/NORESTART',
-        "/DIR=$SetupInstallRoot",
+        ('/DIR="{0}"' -f $SetupInstallRoot),
         '/TASKS="!addtopath,!docker"'
     ) -Failure 'MINOS setup.exe silent installation failed'
+    $SetupInstalled = $true
 
     foreach ($Required in $RequiredInstalledFiles) {
         $InstalledFile = Join-Path $SetupInstallRoot $Required
@@ -248,10 +300,9 @@ try {
         }
     }
     $InstalledMinos = Join-Path $SetupInstallRoot 'minos.cmd'
-    $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "setup.exe installed MINOS --version failed with exit code $LASTEXITCODE"
-    }
+    $VersionOutput = Invoke-MinosVersion `
+        -Launcher $InstalledMinos `
+        -Failure 'setup.exe installed MINOS --version failed'
     if ($VersionOutput -ne "MINOS $Version") {
         throw "setup.exe installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
     }
@@ -268,17 +319,35 @@ try {
         throw "MINOS setup.exe did not register an uninstaller under $SetupInstallRoot"
     }
 
-    Invoke-NativeChecked -File $Uninstaller -Arguments @(
+    Invoke-ProcessChecked -File $Uninstaller -Arguments @(
         '/VERYSILENT',
         '/SUPPRESSMSGBOXES',
         '/NORESTART'
     ) -Failure 'MINOS setup.exe silent uninstall failed'
+    $SetupUninstalled = $true
 
     if (Test-Path -LiteralPath $SetupInstallRoot) {
         throw "MINOS setup.exe uninstall left the program directory behind: $SetupInstallRoot"
     }
 }
 finally {
+    if ($SetupInstalled -and -not $SetupUninstalled) {
+        try {
+            $RollbackUninstaller = Get-ChildItem -LiteralPath $SetupInstallRoot -File -Filter 'unins*.exe' -ErrorAction SilentlyContinue |
+                Sort-Object Name |
+                Select-Object -First 1 -ExpandProperty FullName
+            if (-not [string]::IsNullOrWhiteSpace($RollbackUninstaller)) {
+                Invoke-ProcessChecked -File $RollbackUninstaller -Arguments @(
+                    '/VERYSILENT',
+                    '/SUPPRESSMSGBOXES',
+                    '/NORESTART'
+                ) -Failure 'MINOS setup.exe rollback uninstall failed'
+            }
+        }
+        catch {
+            Write-Warning "Setup smoke-test rollback failed: $($_.Exception.Message)"
+        }
+    }
     Remove-Item -LiteralPath $SetupSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

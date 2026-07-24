@@ -11,6 +11,37 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Invoke-MinosVersion([string] $Launcher) {
+    # Keep Windows PowerShell 5.1 from promoting harmless JVM stderr warnings
+    # to terminating ErrorRecord objects while still checking the real exit.
+    $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ProcessInfo.FileName = $env:ComSpec
+    $ProcessInfo.Arguments = '/d /s /c ""{0}" --version"' -f $Launcher
+    $ProcessInfo.WorkingDirectory = Split-Path -Parent $Launcher
+    $ProcessInfo.UseShellExecute = $false
+    $ProcessInfo.CreateNoWindow = $true
+    $ProcessInfo.RedirectStandardOutput = $true
+    $ProcessInfo.RedirectStandardError = $true
+
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $ProcessInfo
+    try {
+        if (-not $Process.Start()) {
+            throw 'Installed MINOS launcher validation process did not start.'
+        }
+        $StandardOutput = $Process.StandardOutput.ReadToEnd().Trim()
+        $StandardError = $Process.StandardError.ReadToEnd().Trim()
+        $Process.WaitForExit()
+        if ($Process.ExitCode -ne 0) {
+            throw "Installed MINOS launcher validation failed (exit=$($Process.ExitCode)): $StandardError"
+        }
+        return $StandardOutput
+    }
+    finally {
+        $Process.Dispose()
+    }
+}
+
 if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS Windows installer can only run on Windows.'
 }
@@ -81,10 +112,8 @@ try {
         }
     }
 
-    & (Join-Path $InstallRoot 'minos.cmd') --version
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Installed MINOS launcher validation failed.'
-    }
+    $InstalledVersion = Invoke-MinosVersion -Launcher (Join-Path $InstallRoot 'minos.cmd')
+    Write-Host $InstalledVersion
 
     Write-Host ''
     Write-Host 'MINOS installation SUCCESS' -ForegroundColor Green
