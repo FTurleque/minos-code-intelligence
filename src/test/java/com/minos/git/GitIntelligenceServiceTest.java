@@ -76,6 +76,21 @@ class GitIntelligenceServiceTest {
                 .orElseThrow();
         assertEquals(2, src.commitTouches());
         assertEquals(1, src.distinctFileCount());
+
+        try (Git git = Git.open(repositoryRoot.toFile())) {
+            var config = git.getRepository().getConfig();
+            config.setString(
+                    "remote",
+                    "origin",
+                    "url",
+                    "https://user:secret@example.com/org/repo.git?token=should-not-leak"
+            );
+            config.save();
+        }
+        GitIntelligenceService.RepositoryView sanitized = service.inspect(repositoryRoot);
+        assertEquals("https://example.com/org/repo", sanitized.originRemote());
+        assertFalse(sanitized.originRemote().contains("secret"));
+        assertFalse(sanitized.originRemote().contains("token"));
     }
 
     @Test
