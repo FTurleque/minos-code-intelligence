@@ -10,88 +10,136 @@ NEXUS peut-il consommer la Code Intelligence normalisée de MINOS pour enrichir 
 
 ## Contraintes observées
 
-- MINOS est compilé et validé avec Java 24 ;
-- NEXUS conserve Java 21 comme niveau minimal ;
-- NEXUS possède déjà `CodeIndexImporter` pour les index de code externes ;
-- NEXUS possède déjà son propre ranking, sa sélection sous budget et son `ContextBuilder` ;
-- MINOS possède déjà la connaissance normalisée des symboles, relations, preuves et provenance ;
-- les deux moteurs doivent rester utilisables indépendamment.
+- MINOS est compilé avec Java 24 ;
+- NEXUS conserve Java 21 ;
+- NEXUS possède son propre ranking, sa sélection sous budget et son `ContextBuilder` ;
+- MINOS possède la connaissance normalisée des symboles, relations, preuves et provenance ;
+- les deux moteurs doivent rester utilisables indépendamment ;
+- aucun réseau n’est nécessaire pour la frontière M13.
 
 ## Options étudiées
 
 ### A — Dépendance Maven NEXUS → MINOS
 
-Rejetée.
-
-Elle imposerait à NEXUS le bytecode Java 24 et créerait un couplage de modèles contraire aux frontières des deux projets.
+Rejetée. Elle imposerait à NEXUS le bytecode Java 24 et couplerait les modèles internes.
 
 ### B — Réimplémenter la connaissance MINOS dans NEXUS
 
-Rejetée.
-
-Cette option dupliquerait symboles, relations, preuves et logique de normalisation et ferait diverger les sources de vérité.
+Rejetée. Cette option dupliquerait la normalisation et créerait deux sources de vérité.
 
 ### C — Faire sélectionner le contexte final par MINOS
 
-Rejetée.
+Rejetée. Le ranking, les sources contextuelles, les contraintes et le budget appartiennent à NEXUS.
 
-Le ranking, les sources contextuelles, les contraintes et le budget de tokens sont la responsabilité de NEXUS.
+### D — NEXUS lance directement le JAR MINOS
 
-### D — Contrat JSON local versionné, consommé par un importer NEXUS optionnel
+Écartée dans le design final. Cette option oblige NEXUS à connaître le chemin du JAR et le runtime Java 24, et introduit une orchestration de processus qui n’est pas nécessaire au cœur de Context Intelligence.
+
+### E — Export JSON MINOS + import explicite NEXUS
 
 Retenue.
 
-MINOS exporte sa connaissance active en lecture seule. NEXUS lance le JAR MINOS avec un runtime Java 24 explicitement configuré, valide le contrat puis transforme seulement le sous-ensemble représentable dans son modèle d’index.
+MINOS produit un document JSON versionné en lecture seule. Un shell, un IDE, JARVIS ou un script transporte ce document vers une commande d’import NEXUS explicite.
 
 ## Décision retenue
 
-M13 adopte :
-
 ```text
-MINOS NexusExportContract v1
-        +
-CLI nexus-export JSON
-        +
-NEXUS MinosCodeIndexImporter opt-in
+MINOS Java 24
+  NexusExportContract v1
+  nexus-export --root <project>
+        |
+        | JSON stdout
+        v
+NEXUS Java 21
+  minos-import <project> < stdin
+        |
+        v
+  index local -> SearchService -> ranking -> ContextBuilder
 ```
 
-Le transport est local et inter-processus. Aucun protocole réseau ni framework serveur n’est requis.
+Le transport est local, versionné et sans couplage Java direct.
 
 ## Invariants
 
 1. MINOS ne référence aucun type NEXUS.
 2. NEXUS ne référence aucun type MINOS.
 3. MINOS ne calcule ni ranking NEXUS ni budget de contexte.
-4. NEXUS ne reconstruit pas les faits MINOS qu’il peut importer.
-5. Une donnée MINOS non représentable côté NEXUS est ignorée explicitement, jamais convertie vers une sémantique approximative.
-6. La provenance `minos` reste identifiable dans NEXUS.
-7. L’intégration est désactivée par défaut.
-8. Un runtime Java 24 est explicitement fourni à NEXUS lorsque MINOS est activé.
+4. NEXUS ne doit pas réinterpréter arbitrairement un kind MINOS non représentable.
+5. La provenance `minos` reste identifiable dans NEXUS.
+6. NEXUS ne lance pas MINOS depuis son cœur M13.
+7. Aucun chemin de JAR MINOS ni runtime Java 24 n’appartient au contrat Java NEXUS.
+8. Les données projet transitent dans le document JSON/stdin, pas comme couplage binaire.
 9. Aucun accès réseau n’est nécessaire.
 10. Les deux moteurs continuent à fonctionner indépendamment.
 
-## Conséquences
+## Responsabilités
 
-### Positives
+### MINOS
 
-- compatibilité Java 21 / Java 24 sans abaisser MINOS ni relever NEXUS ;
+- produire les faits normalisés ;
+- conserver origine, nature, confiance, preuves et limitations ;
+- exporter le snapshot actif dans `NexusExportContract` v1 ;
+- ne pas sélectionner le contexte final.
+
+### NEXUS
+
+- valider le contrat reçu ;
+- mapper uniquement les concepts représentables ;
+- persister les faits avec `sourceProvider=minos` ;
+- classer, sélectionner et budgéter le contexte ;
+- rester fonctionnel sans import MINOS.
+
+### Orchestrateur externe
+
+- exécuter MINOS avec Java 24 ;
+- transporter le JSON ;
+- exécuter NEXUS avec Java 21 ;
+- gérer les erreurs des deux processus.
+
+## Conséquences positives
+
+- compatibilité Java 21 / Java 24 sans modifier les baselines ;
+- aucun lien Maven privé croisé ;
+- aucune orchestration de processus dans le cœur NEXUS ;
 - contrat testable et versionnable ;
-- absence de dépendance Maven privée croisée ;
-- réutilisation du pipeline NEXUS existant ;
-- conservation du ranking et du budget NEXUS ;
-- possibilité d’enrichir NEXUS avec une connaissance plus riche que son analyse locale.
+- réutilisation du moteur de recherche/ranking NEXUS ;
+- MINOS reste une source de faits, NEXUS reste un moteur de contexte.
 
-### Acceptées
+## Conséquences acceptées
 
-- lancement d’un processus Java supplémentaire lors de l’import MINOS ;
-- besoin de configurer le chemin du JAR MINOS et le runtime Java 24 ;
-- sous-ensemble des kinds/relations MINOS actuellement représentable dans NEXUS ;
-- nécessité d’un replay inter-dépôt pour chaque évolution incompatible du contrat.
+- un orchestrateur doit relier les deux commandes ;
+- le contrat NEXUS ne représente pas nécessairement toute la richesse MINOS ;
+- chaque évolution incompatible du contrat impose un replay inter-dépôt ;
+- les deux runtimes Java restent nécessaires pour une qualification complète.
+
+## UML de responsabilité
+
+```mermaid
+classDiagram
+    class MINOS {
+      <<Code Intelligence>>
+      +exportSnapshot()
+    }
+    class Orchestrator {
+      <<process boundary>>
+      +transportJson()
+    }
+    class NEXUS {
+      <<Context Intelligence>>
+      +importMinos()
+      +search()
+      +rank()
+      +buildContext()
+    }
+
+    MINOS --> Orchestrator : JSON v1
+    Orchestrator --> NEXUS : stdin / payload
+```
 
 ## Porte
 
 Verdict préparé :
 
-> **OUI, via un contrat JSON local versionné et un importer NEXUS optionnel : MINOS reste la source de faits de Code Intelligence, tandis que NEXUS reste seul responsable du classement, de la sélection et du budget du contexte.**
+> **OUI, via un contrat JSON local versionné et un import NEXUS explicite : MINOS reste la source de faits de Code Intelligence, tandis que NEXUS reste seul responsable du classement, de la sélection et du budget du contexte.**
 
-Ce verdict devient définitif après validation exacte des deux heads et succès du replay réel Java 24 → Java 21 décrit dans `NEXUS_INTEGRATION.md`.
+Le verdict devient définitif après validation exacte des deux heads et succès du replay réel Java 24 → JSON → Java 21 décrit dans `NEXUS_INTEGRATION.md`.

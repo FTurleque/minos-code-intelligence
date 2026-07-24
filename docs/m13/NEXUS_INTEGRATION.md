@@ -12,21 +12,38 @@ Permettre à NEXUS de consommer la connaissance de code normalisée de MINOS pou
 
 ## Frontière d’architecture
 
+MINOS et NEXUS n’ont pas le même niveau Java et ne partagent pas leurs modèles internes :
+
 ```text
-MINOS — Java 24
-  faits / symboles / relations / provenance / preuves
-                    |
-                    | contrat JSON local v1
-                    v
-NEXUS — Java 21
-  import structurel -> recherche -> ranking -> sélection -> budget
+MINOS  Java 24  — Code Intelligence
+NEXUS  Java 21  — Context Intelligence
 ```
 
-Une dépendance Java directe est volontairement exclue : NEXUS maintient Java 21 comme niveau de compilation alors que MINOS impose Java 24. Le contrat inter-processus évite également un couplage binaire des modèles métier.
+La frontière retenue est un **contrat JSON local versionné**.
+
+```mermaid
+sequenceDiagram
+    actor O as Shell / IDE / JARVIS
+    participant M as MINOS Java 24
+    participant J as JSON contract v1
+    participant N as NEXUS Java 21
+    participant R as IndexRepository NEXUS
+    participant S as SearchService NEXUS
+
+    O->>M: nexus-export --root <project>
+    M-->>J: stdout JSON
+    O->>N: minos-import <project> < JSON
+    N->>N: valider version / producer / root / paths
+    N->>R: replaceExternalCodeIntelligence(source=minos)
+    O->>S: recherche / contexte
+    S->>R: lire la connaissance importée
+    R-->>S: symboles / relations MINOS
+    S-->>O: résultats classés par NEXUS
+```
+
+NEXUS ne doit pas lancer MINOS depuis son cœur. L’orchestration des deux JVM appartient au shell, à l’IDE, à JARVIS ou à un script de qualification.
 
 ## Contrat MINOS
-
-Version :
 
 ```text
 contractVersion = 1
@@ -40,30 +57,19 @@ java -Dminos.home=<home> -jar minos-code-intelligence-0.1.0-SNAPSHOT-all.jar `
   nexus-export --root <project-root>
 ```
 
-La commande écrit **uniquement le JSON du contrat sur stdout**. Les erreurs utilisent stderr et les codes de sortie stables de la CLI MINOS.
+La commande écrit le JSON du contrat sur stdout. Les erreurs utilisent stderr et les codes de sortie stables de la CLI MINOS.
 
-### Projet
+## Projet exporté
 
-Le document exporté identifie :
+Le document identifie : UUID projet, nom, racine canonique et snapshot actif. L’export échoue si la racine n’est pas enregistrée ou si aucun snapshot actif n’existe.
 
-- l’UUID projet MINOS ;
-- le nom ;
-- la racine canonique ;
-- le snapshot actif.
+## Symboles
 
-L’export échoue si la racine n’est pas enregistrée dans MINOS ou si aucun snapshot actif n’existe.
+MINOS exporte seulement les symboles locaux dotés d’une localisation et rattachables à un fichier réel sous la racine projet.
 
-### Symboles
+Chaque symbole conserve notamment : identité MINOS, `symbolKey`, chemin relatif, module, kind, nom, qualified name, signature, langue, lignes, statut de résolution, qualité d’identité, flag generated et origine.
 
-MINOS exporte seulement les symboles :
-
-- locaux ;
-- dotés d’une localisation ;
-- dont le fichier peut être rattaché de manière sûre à un fichier réel sous la racine projet.
-
-Chaque symbole conserve notamment : identité MINOS, `symbolKey`, chemin relatif, module, kind, nom, qualified-name, signature, langue, lignes, statut de résolution, qualité d’identité, flag generated et origine.
-
-### Résolution des `fileId`
+## Résolution des `fileId`
 
 Le modèle MINOS n’impose pas qu’un `fileId` soit un chemin. L’adaptateur SCIP produit notamment :
 
@@ -71,27 +77,15 @@ Le modèle MINOS n’impose pas qu’un `fileId` soit un chemin. L’adaptateur 
 file:<sha256(projectId + US + relativePath)>
 ```
 
-M13 reconstruit donc un index local `fileId -> relativePath` en recalculant cette identité sur les fichiers réels du projet. Les fileId directement exprimés comme chemins restent supportés s’ils désignent un fichier réel sous la racine.
+M13 reconstruit `fileId -> relativePath` en recalculant cette identité sur les fichiers réels du projet. Un identifiant non résolu n’est jamais transformé en faux chemin.
 
-Aucun identifiant non résolu n’est transformé en faux chemin.
+## Relations
 
-### Relations
+Le contrat transporte les relations symbol → symbol locales et résolues avec kind, identités et qualified names source/cible, résolution, nature, confiance, origine et preuves.
 
-Le contrat transporte les relations symbol → symbol locales et résolues avec :
-
-- kind ;
-- identités et qualified-names source/cible ;
-- résolution ;
-- nature factuelle/dérivée/heuristique ;
-- confiance ;
-- origine ;
-- preuves structurées simplifiées.
-
-Le contrat est volontairement plus riche que le modèle NEXUS actuel. Un consommateur peut ignorer un champ qu’il ne sait pas représenter, mais MINOS ne détruit pas cette information à la frontière.
+Le contrat peut être plus riche que le modèle NEXUS. Le consommateur peut ignorer un champ non représentable mais ne doit pas lui inventer une autre sémantique.
 
 ## Limitations explicites
-
-Selon le snapshot, l’export peut notamment signaler :
 
 ```text
 SYMBOLS_TRUNCATED
@@ -106,101 +100,72 @@ NON_LOCAL_RELATIONS_OMITTED
 UNRESOLVED_RELATION_FILE_ID_OMITTED
 ```
 
-Les limitations décrivent une perte ou une borne de projection ; elles ne sont jamais transformées en garantie d’exhaustivité.
+Une limitation décrit une perte ou une borne de projection ; elle n’est jamais une garantie d’exhaustivité.
 
 ## Consommation NEXUS
 
-La PR NEXUS compagnon ajoute `MinosCodeIndexImporter` derrière le contrat existant `CodeIndexImporter`.
-
-Configuration :
+Sur la branche compagnon M13, NEXUS fournit un import explicite :
 
 ```text
-NEXUS_MINOS_JAR=<MINOS shaded jar>
-NEXUS_MINOS_JAVA=<java 24 executable>
-NEXUS_MINOS_HOME=<MINOS home>                  optionnel
-NEXUS_MINOS_TIMEOUT_SECONDS=<1..300>           optionnel, défaut 20
+nexus minos-import <project> < minos-export.json
 ```
 
-Sans `NEXUS_MINOS_JAR`, l’intégration est désactivée. NEXUS continue à fonctionner avec ses analyseurs et imports existants.
+`MinosCodeIndexImporter` est un adaptateur JSON pur : il reçoit un payload déjà fourni au processus NEXUS. Il ne connaît ni le chemin du JAR MINOS ni le runtime Java 24.
 
-Si un JAR MINOS est configuré, `NEXUS_MINOS_JAVA` est obligatoire : NEXUS ne suppose pas que son propre runtime Java 21 puisse exécuter MINOS.
+### Validation de frontière
 
-### Mapping conservateur
+NEXUS doit valider : version et `producer`, racine du projet, taille du payload et chemins relatifs. Les traversées `..`, chemins absolus ou fichiers inconnus ne doivent pas devenir des accès I/O pilotés par le JSON.
 
-NEXUS n’invente pas de correspondance pour les types qu’il ne sait pas représenter.
+## Mapping conservateur côté NEXUS
 
-Symboles MINOS pris en charge :
+Symboles représentables :
 
 ```text
-CLASS                         -> CLASS
-INTERFACE / TRAIT             -> INTERFACE
-RECORD                        -> RECORD
-ENUM                          -> ENUM
-ANNOTATION                    -> ANNOTATION
-METHOD / FUNCTION             -> METHOD
-CONSTRUCTOR                   -> CONSTRUCTOR
-TYPE / STRUCT / TYPE_ALIAS    -> TYPE
+MINOS                         NEXUS
+CLASS                         CLASS
+INTERFACE / TRAIT             INTERFACE
+RECORD                        RECORD
+ENUM                          ENUM
+ANNOTATION                    ANNOTATION
+METHOD / FUNCTION             METHOD
+CONSTRUCTOR                   CONSTRUCTOR
+TYPE / STRUCT / TYPE_ALIAS    TYPE
 ```
 
-Les autres kinds sont ignorés.
-
-Relations prises en charge :
+Relations représentables :
 
 ```text
-IMPORTS           -> IMPORTS
-EXTENDS           -> EXTENDS
-IMPLEMENTS        -> IMPLEMENTS
-CALLS             -> CALLS
-REFERENCES        -> REFERENCES
-TYPE_DEFINITION   -> TYPE_DEFINITION
-DEFINITION        -> DEFINITION_OF
+MINOS             NEXUS
+IMPORTS           IMPORTS
+EXTENDS           EXTENDS
+IMPLEMENTS        IMPLEMENTS
+CALLS             CALLS
+REFERENCES        REFERENCES
+TYPE_DEFINITION   TYPE_DEFINITION
+DEFINITION        DEFINITION_OF
 ```
 
-Les relations non représentables (`DEPENDS_ON`, `RELATED_TEST`, etc.) restent dans le contrat MINOS mais ne sont pas converties arbitrairement côté NEXUS.
+Les autres kinds/relations sont ignorés plutôt que reclassés arbitrairement. Seules les relations `RESOLVED` sont injectées.
 
-Seules les relations `RESOLVED` sont injectées dans le modèle NEXUS.
+## Provenance
 
-Pour une relation factuelle sans confiance explicite, NEXUS utilise `1.0`. Une relation dérivée/heuristique dépourvue de confiance est rejetée.
-
-## Ordre des providers
-
-NEXUS applique :
+Les faits importés dans NEXUS conservent :
 
 ```text
-1. MINOS importer
-2. SCIP importer direct NEXUS
+sourceProvider = minos
 ```
 
-La persistance NEXUS déduplique déjà les symboles externes par fichier/kind/nom/ligne et les relations par kind/source/target. Lorsque MINOS fournit le même fait, sa provenance `minos` est donc conservée et SCIP ne complète que les faits absents.
+Le remplacement de l’intelligence externe doit rester transactionnel.
 
-Quand MINOS est désactivé, un importer vide reste dans le pipeline afin que les anciennes données `source_provider=minos` soient purgées lors d’une nouvelle indexation au lieu de devenir silencieusement périmées.
+## Non-objectifs
 
-## Ce que M13 ne fait pas
-
-M13 n’ajoute dans MINOS :
-
-- aucun ranking de contexte NEXUS ;
-- aucun budget de tokens ;
-- aucun `ContextBundle` ;
-- aucun type `com.nexus` ;
-- aucune dépendance Maven vers NEXUS ;
-- aucun accès réseau ;
-- aucune exécution de modèle IA.
-
-M13 ne modifie dans NEXUS ni les poids du ranking, ni `SearchService`, ni `DefaultContextBuilder`.
+M13 n’ajoute dans MINOS ni ranking NEXUS, ni budget de tokens, ni `ContextBundle`, ni type `com.nexus`, ni dépendance Maven vers NEXUS, ni accès réseau, ni exécution de modèle IA.
 
 ## Qualification
 
 ### MINOS
 
-- test de version et frontière du contrat ;
-- replay réel TypeScript ;
-- vérification `GreetingPort` ;
-- résolution réelle des `fileId` SCIP ;
-- sortie CLI JSON déterministe ;
-- échec explicite pour projet non enregistré.
-
-Replay attendu :
+Le replay doit vérifier le contrat v1, un projet/snapshot réel, `GreetingPort`, la reconstruction des `fileId` et le JSON stdout.
 
 ```text
 M13 MINOS export: contract=1, project=<uuid>, snapshot=<snapshot>, symbols=<n>, relations=<n>
@@ -208,27 +173,15 @@ M13 MINOS export: contract=1, project=<uuid>, snapshot=<snapshot>, symbols=<n>, 
 
 ### NEXUS
 
-- intégration désactivée par défaut ;
-- Java 24 explicitement requis lorsqu’un JAR est configuré ;
-- validation du contrat et de la racine projet ;
-- mapping conservateur ;
-- test de processus local par JAR synthétique ;
-- harness opt-in avec le vrai JAR MINOS.
-
-Replay inter-dépôt attendu :
+Le replay compagnon doit prouver : production d’un vrai JSON par MINOS Java 24, import par NEXUS Java 21, persistance avec `sourceProvider=minos`, présence de `GreetingPort` et retour de ce symbole par `SearchService`.
 
 ```text
 M13 MINOS->NEXUS: symbols=<n>, relations=<n>, nexus-symbols=<n>, search=<n>
+M13 MINOS -> NEXUS replay SUCCESS
 ```
-
-Le harness réel vérifie que `GreetingPort` est présent dans l’index NEXUS avec `sourceProvider=minos` et qu’une recherche NEXUS le retourne.
 
 ## Porte finale
 
-M13 n’est validé que si :
+M13 n’est validé inter-dépôts que si le head exact MINOS passe sa validation Java 24, le head exact NEXUS passe sa validation Java 21 et le replay réel Java 24 → JSON → Java 21 passe sur ces versions qualifiées.
 
-1. le head exact MINOS passe `./mvnw clean verify` sous Java 24 ;
-2. le head exact NEXUS passe sa validation cœur sous Java 21 ;
-3. le harness réel inter-dépôt passe avec le JAR MINOS issu du head qualifié.
-
-Aucune fusion M13 ne doit modifier un head déjà qualifié sans rejouer la porte correspondante.
+Toute modification d’un head après validation impose de rejouer sa porte.
