@@ -62,7 +62,7 @@ Il applique les règles suivantes :
 - les fichiers JSON modifiés sont sauvegardés avant écriture ;
 - les autres serveurs MCP et les autres propriétés des fichiers de configuration sont conservés ;
 - l'état des intégrations créées est enregistré sous `%LOCALAPPDATA%\MINOS\mcp-client-integrations.json` ;
-- la désinstallation retire uniquement les entrées gérées par MINOS ;
+- la désinstallation retire uniquement les entrées qui correspondent encore à la configuration créée par MINOS ;
 - si une entrée gérée a été modifiée manuellement depuis l'installation, elle est conservée plutôt que supprimée aveuglément ;
 - le journal est `%LOCALAPPDATA%\MINOS\mcp-clients.log`.
 
@@ -70,7 +70,7 @@ Les cases sont décochées par défaut : la modification d'un client tiers reste
 
 ## GitHub Copilot dans IntelliJ / JetBrains
 
-Le setup peut fusionner l'entrée `minos` dans la configuration utilisateur globale du plugin Copilot JetBrains :
+Le setup peut fusionner l'entrée `minos` dans la configuration utilisateur du plugin Copilot JetBrains utilisée par l'intégration MINOS :
 
 ```text
 %LOCALAPPDATA%\github-copilot\intellij\mcp.json
@@ -94,7 +94,7 @@ La structure utilisée est :
 
 Dans Copilot Chat, passer en mode **Agent** puis ouvrir la liste des tools MCP. Les tools MINOS doivent apparaître.
 
-Configuration manuelle équivalente : dans Copilot Chat → Agent → outils → **Add MCP Tools / Configure your MCP server**, ajouter le serveur ci-dessus dans `mcp.json`.
+Configuration manuelle équivalente : dans Copilot Chat → Agent → outils → **Add MCP Tools / Configure your MCP server**, ajouter le serveur ci-dessus dans le `mcp.json` ouvert par le plugin.
 
 ## GitHub Copilot CLI
 
@@ -126,15 +126,18 @@ La configuration utilisateur Copilot CLI est conservée sous `~/.copilot/mcp-con
 
 ## Claude Code
 
-Lorsque `claude` est disponible dans le `PATH`, le setup utilise le scope `user` :
+Lorsque `claude` est disponible dans le `PATH`, le setup utilise le scope `user`.
+
+Claude Code impose que les options de `mcp add` soient placées **avant** le nom du serveur :
 
 ```powershell
 $MinosExe = "$env:LOCALAPPDATA\Programs\MINOS\app\minos.exe"
 $MinosHome = "$env:LOCALAPPDATA\MINOS\data"
 
-claude mcp add minos `
+claude mcp add `
   --scope user `
   --env "MINOS_HOME=$MinosHome" `
+  minos `
   -- "$MinosExe" mcp
 ```
 
@@ -159,11 +162,13 @@ project  configuration partageable avec le projet
 user     configuration utilisateur gérée par Claude Code
 ```
 
-Suppression manuelle de l'entrée créée au scope utilisateur :
+Suppression manuelle :
 
 ```powershell
-claude mcp remove minos --scope user
+claude mcp remove minos
 ```
+
+Le setup enregistre MINOS au scope `user`, puis mémorise qu'il est propriétaire de cette entrée afin de ne pas supprimer une configuration étrangère lors de la désinstallation.
 
 ## Claude Desktop
 
@@ -191,7 +196,7 @@ Le setup fusionne uniquement `mcpServers.minos` :
 
 Quitter complètement Claude Desktop puis le relancer après l'installation pour recharger les serveurs locaux.
 
-Claude Desktop propose également le format moderne d'extensions MCP (`.dxt` / MCP bundle). MINOS utilise ici la configuration locale développeur, qui permet de référencer directement le binaire déjà installé sans dupliquer le runtime MINOS dans une extension.
+Claude Desktop propose également le format moderne d'extensions MCP (`.dxt`). MINOS utilise ici la configuration locale développeur afin de référencer directement le binaire déjà installé sans dupliquer le runtime MINOS dans une extension.
 
 ## OpenAI Codex
 
@@ -218,6 +223,8 @@ Suppression manuelle :
 ```powershell
 codex mcp remove minos
 ```
+
+Codex CLI et l'extension IDE partagent la configuration MCP utilisateur du même environnement Codex.
 
 ## Configuration portable / manuelle de plusieurs clients
 
