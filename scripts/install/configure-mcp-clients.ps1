@@ -98,12 +98,100 @@ function Read-JsonObject([string] $Path) {
     }
 }
 
+function Format-JsonText([string] $Json) {
+    if ([string]::IsNullOrWhiteSpace($Json)) {
+        return $Json
+    }
+
+    $Builder = New-Object System.Text.StringBuilder
+    $Indent = 0
+    $InString = $false
+    $Escaped = $false
+
+    for ($Index = 0; $Index -lt $Json.Length; $Index++) {
+        $Char = $Json[$Index]
+
+        if ($InString) {
+            [void]$Builder.Append($Char)
+            if ($Escaped) {
+                $Escaped = $false
+            }
+            elseif ($Char -eq '\') {
+                $Escaped = $true
+            }
+            elseif ($Char -eq '"') {
+                $InString = $false
+            }
+            continue
+        }
+
+        switch ($Char) {
+            '"' {
+                $InString = $true
+                [void]$Builder.Append($Char)
+            }
+            '{' {
+                [void]$Builder.Append($Char)
+                $Indent++
+                $Next = if ($Index + 1 -lt $Json.Length) { $Json[$Index + 1] } else { [char]0 }
+                if ($Next -ne '}') {
+                    [void]$Builder.Append([Environment]::NewLine)
+                    [void]$Builder.Append('  ' * $Indent)
+                }
+            }
+            '[' {
+                [void]$Builder.Append($Char)
+                $Indent++
+                $Next = if ($Index + 1 -lt $Json.Length) { $Json[$Index + 1] } else { [char]0 }
+                if ($Next -ne ']') {
+                    [void]$Builder.Append([Environment]::NewLine)
+                    [void]$Builder.Append('  ' * $Indent)
+                }
+            }
+            '}' {
+                $Indent--
+                $Previous = if ($Index -gt 0) { $Json[$Index - 1] } else { [char]0 }
+                if ($Previous -ne '{') {
+                    [void]$Builder.Append([Environment]::NewLine)
+                    [void]$Builder.Append('  ' * $Indent)
+                }
+                [void]$Builder.Append($Char)
+            }
+            ']' {
+                $Indent--
+                $Previous = if ($Index -gt 0) { $Json[$Index - 1] } else { [char]0 }
+                if ($Previous -ne '[') {
+                    [void]$Builder.Append([Environment]::NewLine)
+                    [void]$Builder.Append('  ' * $Indent)
+                }
+                [void]$Builder.Append($Char)
+            }
+            ',' {
+                [void]$Builder.Append($Char)
+                [void]$Builder.Append([Environment]::NewLine)
+                [void]$Builder.Append('  ' * $Indent)
+            }
+            ':' {
+                [void]$Builder.Append(': ')
+            }
+            default {
+                if (-not [char]::IsWhiteSpace($Char)) {
+                    [void]$Builder.Append($Char)
+                }
+            }
+        }
+    }
+
+    return $Builder.ToString()
+}
+
 function Write-JsonObject([string] $Path, [object] $Value) {
     $Parent = Split-Path -Parent $Path
     if (-not [string]::IsNullOrWhiteSpace($Parent)) {
         New-Item -ItemType Directory -Force -Path $Parent | Out-Null
     }
-    $Json = $Value | ConvertTo-Json -Depth 32
+    $CompactJson = $Value | ConvertTo-Json -Depth 32 -Compress
+    $Json = Format-JsonText -Json $CompactJson
     [System.IO.File]::WriteAllText($Path, $Json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
@@ -174,6 +262,13 @@ function Get-ManagedEntry([string] $Id) {
     return $Match
 }
 
+function Get-EntryOwnership([object] $Entry) {
+    if ($null -ne $Entry -and $Entry.PSObject.Properties['ownership']) {
+        return [string]$Entry.ownership
+    }
+    return 'managed'
+}
+
 function Upsert-ManagedEntry([object] $Entry) {
     $script:ManagedEntries = @($script:ManagedEntries | Where-Object { $_.id -ne $Entry.id }) + @($Entry)
 }
@@ -223,6 +318,36 @@ function Test-ManagedJsonEntryMatches([object] $Entry, [object] $Current) {
             $CurrentHome.Equals($ExpectedHome, [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-DesiredJsonEntryMatches([object] $Current) {
+    $Expected = [pscustomobject]@{
+        command = $MinosExe
+        dataRoot = $DataRoot
+    }
+    return Test-ManagedJsonEntryMatches -Entry $Expected -Current $Current
+}
+
+function New-JsonStateEntry(
+    [string] $Id,
+    [string] $DisplayName,
+    [string] $ConfigPath,
+    [string] $ContainerName,
+    [string] $Ownership,
+    [string] $BackupPath
+) {
+    return [pscustomobject][ordered]@{
+        id = $Id
+        displayName = $DisplayName
+        kind = 'json'
+        ownership = $Ownership
+        configPath = $ConfigPath
+        container = $ContainerName
+        command = $MinosExe
+        dataRoot = $DataRoot
+        backupPath = $BackupPath
+        configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+}
+
 function Install-JsonClient(
     [string] $Id,
     [string] $DisplayName,
@@ -237,11 +362,35 @@ function Install-JsonClient(
         $Managed = Get-ManagedEntry -Id $Id
 
         if ($null -ne $Existing) {
-            if ($null -eq $Managed) {
-                Write-IntegrationLog "SKIP client=$Id reason=existing-unmanaged-minos-entry path='$ConfigPath'"
-                Fail-Or-Warn "$DisplayName already contains an unmanaged MCP server named 'minos'; MINOS did not overwrite it."
+            if (Test-DesiredJsonEntryMatches -Current $Existing) {
+                if ($null -eq $Managed) {
+                    Upsert-ManagedEntry (New-JsonStateEntry -Id $Id -DisplayName $DisplayName `
+                        -ConfigPath $ConfigPath -ContainerName $ContainerName -Ownership 'preexisting' -BackupPath '')
+                    Write-IntegrationLog "KEEP client=$Id reason=existing-compatible-minos-entry path='$ConfigPath'"
+                }
+                else {
+                    $Ownership = Get-EntryOwnership -Entry $Managed
+                    $BackupPath = if ($Managed.PSObject.Properties['backupPath']) { [string]$Managed.backupPath } else { '' }
+                    Upsert-ManagedEntry (New-JsonStateEntry -Id $Id -DisplayName $DisplayName `
+                        -ConfigPath $ConfigPath -ContainerName $ContainerName -Ownership $Ownership -BackupPath $BackupPath)
+                    Write-IntegrationLog "KEEP client=$Id reason=already-compatible path='$ConfigPath'"
+                }
+                Write-Host "MINOS MCP already configured for $DisplayName" -ForegroundColor Green
                 return
             }
+
+            if ($null -eq $Managed) {
+                Write-IntegrationLog "SKIP client=$Id reason=existing-unmanaged-minos-entry path='$ConfigPath'"
+                Fail-Or-Warn "$DisplayName already contains a different unmanaged MCP server named 'minos'; MINOS did not overwrite it."
+                return
+            }
+
+            if ((Get-EntryOwnership -Entry $Managed) -eq 'preexisting') {
+                Write-IntegrationLog "PRESERVE client=$Id reason=preexisting-entry-changed path='$ConfigPath'"
+                Fail-Or-Warn "$DisplayName had a pre-existing MINOS MCP entry and it no longer matches the expected configuration; preserving it."
+                return
+            }
+
             if (-not (Test-ManagedJsonEntryMatches -Entry $Managed -Current $Existing)) {
                 Write-IntegrationLog "SKIP client=$Id reason=managed-entry-modified path='$ConfigPath'"
                 Fail-Or-Warn "$DisplayName MCP entry 'minos' was modified after MINOS configured it; preserving the user's current entry."
@@ -252,17 +401,8 @@ function Install-JsonClient(
         $Backup = Backup-Configuration -ClientId $Id -Path $ConfigPath
         $Container | Add-Member -MemberType NoteProperty -Name 'minos' -Value (New-MinosServerConfig) -Force
         Write-JsonObject -Path $ConfigPath -Value $Root
-        Upsert-ManagedEntry ([pscustomobject][ordered]@{
-            id = $Id
-            displayName = $DisplayName
-            kind = 'json'
-            configPath = $ConfigPath
-            container = $ContainerName
-            command = $MinosExe
-            dataRoot = $DataRoot
-            backupPath = $Backup
-            configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-        })
+        Upsert-ManagedEntry (New-JsonStateEntry -Id $Id -DisplayName $DisplayName `
+            -ConfigPath $ConfigPath -ContainerName $ContainerName -Ownership 'managed' -BackupPath $Backup)
         Write-IntegrationLog "INSTALL client=$Id kind=json path='$ConfigPath'"
         Write-Host "MINOS MCP configured for $DisplayName" -ForegroundColor Green
     }
@@ -272,6 +412,12 @@ function Install-JsonClient(
 }
 
 function Uninstall-JsonClient([object] $Entry) {
+    if ((Get-EntryOwnership -Entry $Entry) -eq 'preexisting') {
+        Write-IntegrationLog "PRESERVE client=$($Entry.id) reason=preexisting-compatible-entry"
+        Remove-ManagedEntry -Id ([string]$Entry.id)
+        return
+    }
+
     $Path = [string]$Entry.configPath
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         Write-IntegrationLog "UNINSTALL client=$($Entry.id) status=config-missing"
@@ -325,7 +471,22 @@ function Invoke-NativeCapture([string] $File, [string[]] $Arguments) {
     $PreviousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $Output = ((& $File @Arguments 2>&1) | Out-String).Trim()
+        $InvocationFile = $File
+        $InvocationArguments = @($Arguments)
+
+        if ([System.IO.Path]::GetExtension($File).Equals('.ps1', [StringComparison]::OrdinalIgnoreCase)) {
+            $PowerShellCore = Resolve-CommandPath -Name 'pwsh'
+            if ([string]::IsNullOrWhiteSpace($PowerShellCore)) {
+                return [pscustomobject]@{
+                    ExitCode = -2
+                    Output = "PowerShell 6+ (pwsh.exe) is required to invoke '$File' on Windows."
+                }
+            }
+            $InvocationFile = $PowerShellCore
+            $InvocationArguments = @('-NoProfile', '-File', $File) + @($Arguments)
+        }
+
+        $Output = ((& $InvocationFile @InvocationArguments 2>&1) | Out-String).Trim()
         $ExitCode = $LASTEXITCODE
     }
     catch {
@@ -348,6 +509,38 @@ function Test-ManagedCliProbeMatches([object] $Entry, [object] $Probe) {
             $Normalized.IndexOf($ExpectedHome, [StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
+function Test-DesiredCliProbeMatches([object] $Probe) {
+    $Expected = [pscustomobject]@{
+        command = $MinosExe
+        dataRoot = $DataRoot
+    }
+    return Test-ManagedCliProbeMatches -Entry $Expected -Probe $Probe
+}
+
+function New-CliStateEntry(
+    [string] $Id,
+    [string] $DisplayName,
+    [string] $ToolName,
+    [string] $ToolPath,
+    [string[]] $GetArguments,
+    [string[]] $RemoveArguments,
+    [string] $Ownership
+) {
+    return [pscustomobject][ordered]@{
+        id = $Id
+        displayName = $DisplayName
+        kind = 'cli'
+        ownership = $Ownership
+        toolName = $ToolName
+        toolPath = $ToolPath
+        command = $MinosExe
+        dataRoot = $DataRoot
+        getArguments = @($GetArguments)
+        removeArguments = @($RemoveArguments)
+        configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+}
+
 function Install-CliClient(
     [string] $Id,
     [string] $DisplayName,
@@ -365,38 +558,52 @@ function Install-CliClient(
 
         $Managed = Get-ManagedEntry -Id $Id
         $Probe = Invoke-NativeCapture -File $ToolPath -Arguments $GetArguments
-        if ($Probe.ExitCode -eq 0 -and $null -eq $Managed) {
-            Write-IntegrationLog "SKIP client=$Id reason=existing-unmanaged-minos-entry tool='$ToolPath'"
-            Fail-Or-Warn "$DisplayName already contains an unmanaged MCP server named 'minos'; MINOS did not overwrite it."
-            return
-        }
+        if ($Probe.ExitCode -eq 0) {
+            if (Test-DesiredCliProbeMatches -Probe $Probe) {
+                if ($null -eq $Managed) {
+                    Upsert-ManagedEntry (New-CliStateEntry -Id $Id -DisplayName $DisplayName -ToolName $ToolName `
+                        -ToolPath $ToolPath -GetArguments $GetArguments -RemoveArguments $RemoveArguments -Ownership 'preexisting')
+                    Write-IntegrationLog "KEEP client=$Id reason=existing-compatible-minos-entry tool='$ToolPath'"
+                }
+                else {
+                    Write-IntegrationLog "KEEP client=$Id reason=already-compatible tool='$ToolPath'"
+                }
+                Write-Host "MINOS MCP already configured for $DisplayName" -ForegroundColor Green
+                return
+            }
 
-        if ($Probe.ExitCode -eq 0 -and $null -ne $Managed) {
+            if ($null -eq $Managed) {
+                Write-IntegrationLog "SKIP client=$Id reason=existing-unmanaged-minos-entry tool='$ToolPath'"
+                Fail-Or-Warn "$DisplayName already contains a different unmanaged MCP server named 'minos'; MINOS did not overwrite it."
+                return
+            }
+
+            if ((Get-EntryOwnership -Entry $Managed) -eq 'preexisting') {
+                Write-IntegrationLog "PRESERVE client=$Id reason=preexisting-entry-changed tool='$ToolPath'"
+                Fail-Or-Warn "$DisplayName had a pre-existing MINOS MCP entry and it no longer matches the expected configuration; preserving it."
+                return
+            }
+
             if (Test-ManagedCliProbeMatches -Entry $Managed -Probe $Probe) {
                 Write-IntegrationLog "KEEP client=$Id reason=already-managed tool='$ToolPath'"
                 return
             }
+
             Write-IntegrationLog "PRESERVE client=$Id reason=managed-entry-modified tool='$ToolPath'"
             Fail-Or-Warn "$DisplayName MCP entry 'minos' no longer matches the entry managed by MINOS; preserving the user's current entry."
             return
+        }
+
+        if ($Probe.ExitCode -eq -2) {
+            throw $Probe.Output
         }
 
         $Add = Invoke-NativeCapture -File $ToolPath -Arguments $AddArguments
         if ($Add.ExitCode -ne 0) {
             throw "add command failed (exit=$($Add.ExitCode)): $($Add.Output)"
         }
-        Upsert-ManagedEntry ([pscustomobject][ordered]@{
-            id = $Id
-            displayName = $DisplayName
-            kind = 'cli'
-            toolName = $ToolName
-            toolPath = $ToolPath
-            command = $MinosExe
-            dataRoot = $DataRoot
-            getArguments = @($GetArguments)
-            removeArguments = @($RemoveArguments)
-            configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-        })
+        Upsert-ManagedEntry (New-CliStateEntry -Id $Id -DisplayName $DisplayName -ToolName $ToolName `
+            -ToolPath $ToolPath -GetArguments $GetArguments -RemoveArguments $RemoveArguments -Ownership 'managed')
         Write-IntegrationLog "INSTALL client=$Id kind=cli tool='$ToolPath'"
         Write-Host "MINOS MCP configured for $DisplayName" -ForegroundColor Green
     }
@@ -406,6 +613,12 @@ function Install-CliClient(
 }
 
 function Uninstall-CliClient([object] $Entry) {
+    if ((Get-EntryOwnership -Entry $Entry) -eq 'preexisting') {
+        Write-IntegrationLog "PRESERVE client=$($Entry.id) reason=preexisting-compatible-entry"
+        Remove-ManagedEntry -Id ([string]$Entry.id)
+        return
+    }
+
     try {
         $ToolPath = Resolve-CommandPath -Name ([string]$Entry.toolName)
         if ([string]::IsNullOrWhiteSpace($ToolPath)) {
@@ -475,7 +688,9 @@ if ($Action -eq 'Install') {
 }
 
 # Uninstall is driven exclusively by the state file. This prevents MINOS from
-# removing an identically named MCP server that it did not create.
+# removing an identically named MCP server that it did not create. Entries that
+# were already present and compatible at install time are tracked as
+# ownership=preexisting and are never removed by MINOS.
 foreach ($Entry in @($ManagedEntries)) {
     if ([string]$Entry.kind -eq 'json') {
         Uninstall-JsonClient -Entry $Entry
