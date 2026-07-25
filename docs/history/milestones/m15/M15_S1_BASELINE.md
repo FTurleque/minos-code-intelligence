@@ -1,6 +1,6 @@
 # M15-S1 — Baseline de non-régression
 
-Statut : **EN COURS — qualification exacte non encore exécutée sur le head final S1**
+Statut : **EN COURS — le prochain run complet du head final doit fournir la preuve S1 définitive**
 
 Issue principale : **#55**
 
@@ -10,9 +10,29 @@ M15 modifie profondément la structure interne de MINOS. Avant le premier refact
 
 La dernière qualification M14 enregistrait notamment **236 tests PASS**, mais cette preuve reste historique : elle ne valide pas automatiquement le head M15 courant.
 
-## Outil de capture
+## Runner unique
 
-Le script dédié est :
+La qualification S1 complète se lance désormais avec une seule commande depuis la racine du dépôt :
+
+```powershell
+.\scripts\m15\run-s1.ps1
+```
+
+Le runner :
+
+1. vérifie le worktree ;
+2. fetch la branche `m15-s1-baseline` ;
+3. se place sur cette branche si nécessaire ;
+4. effectue uniquement un fast-forward vers le dernier head distant ;
+5. exécute la baseline fonctionnelle exacte ;
+6. rejoue M14 avec les providers Java et TypeScript ;
+7. capture automatiquement la baseline de coût des requêtes répétées.
+
+Le mode complet est le seul mode suffisant pour fermer S1.
+
+## Capture fonctionnelle
+
+Le script fonctionnel appelé par le runner est :
 
 ```powershell
 .\scripts\m15\capture-baseline.ps1
@@ -31,48 +51,54 @@ Il impose :
 - replay M14 par `scripts/m14/validate-local.ps1` sauf désactivation explicite ;
 - génération d'artefacts lisibles et machine-readable.
 
-## Qualification exacte recommandée
-
-Depuis PowerShell, à la racine du dépôt :
-
-```powershell
-$head = git rev-parse HEAD
-.\scripts\m15\capture-baseline.ps1 -ExpectedHead $head
-```
-
-Avec validation Docker disponible :
-
-```powershell
-$head = git rev-parse HEAD
-.\scripts\m15\capture-baseline.ps1 -ExpectedHead $head -ValidateDocker
-```
-
 ### Modes de diagnostic
 
 Les options suivantes existent pour isoler un problème d'environnement :
 
 ```powershell
--SkipM14Replay
--SkipProviderReplays
+.\scripts\m15\run-s1.ps1 -SkipM14Replay
+.\scripts\m15\run-s1.ps1 -SkipProviderReplays
+.\scripts\m15\run-s1.ps1 -ValidateDocker
 ```
 
-Elles **ne suffisent pas à déclarer M15-S1 terminé**. Une gate S1 complète doit conserver les replays nécessaires à la non-régression M14.
+`-SkipM14Replay` et `-SkipProviderReplays` **ne suffisent pas à déclarer M15-S1 terminé**.
+
+## Baseline de coût des requêtes répétées
+
+Après un replay M14 complet, le runner appelle :
+
+```powershell
+.\scripts\m15\capture-query-baseline.ps1
+```
+
+Cette mesure utilise le projet `m14-java` réellement indexé par le replay M14 et le probe non-production :
+
+```text
+scripts/m15/M15RepeatedQueryProbe.java
+```
+
+Le probe n'est pas compilé dans MINOS et ne modifie aucun comportement du moteur. Il mesure le chemin S1 existant via `LocalProjectSymbolQuery` avant l'introduction du cache et des indexes de M15.
+
+La métrique `active_snapshot_load_count` est rattachée explicitement au comportement du head S1 : `LocalProjectSymbolQuery.loadQueryStore()` appelle `loadActiveKnowledge()` une fois par invocation de requête mesurée. Le probe exclut de ce compteur la lecture directe utilisée uniquement pour découvrir les métadonnées du fixture.
 
 ## Artefacts produits
 
-Après exécution :
+Après un run complet :
 
 ```text
 target/m15-baseline/
 ├── baseline.json
 ├── baseline.md
 ├── maven-verify.log
-└── m14-replay.log          # si le replay M14 est exécuté
+├── m14-replay.log
+├── query-baseline.json
+├── query-baseline.md
+└── query-baseline.log
 ```
 
-`baseline.json` est la source machine-readable. `baseline.md` fournit le résumé humain.
+`baseline.json` est la source machine-readable de la qualification fonctionnelle. `query-baseline.json` est la source machine-readable des mesures avant refactor.
 
-## Données capturées
+## Données fonctionnelles capturées
 
 ```text
 HEAD_SHA
@@ -93,23 +119,44 @@ failure diagnostic
 
 ## Mesures performance M15-S1
 
-Le script initial capture la qualification fonctionnelle et la structure du build. Les mesures fines suivantes doivent être ajoutées avant fermeture de S1 ou au plus tard dans le premier PR qui introduit l'instrumentation nécessaire :
+Sur le fixture Java stable produit par le replay M14, le runner enregistre :
 
 ```text
 active_snapshot_load_count
-first_query_latency
-repeated_query_latency
-heap_after_load
+first_query_latency_ms
+repeated_query_latency_average_ms
+repeated_query_latency_p50_ms
+repeated_query_latency_p95_ms
+heap_after_load_bytes
 symbol_count
 occurrence_count
 relationship_count
 ```
 
-Ces mesures ne sont pas les benchmarks de grande échelle M16. Leur rôle est uniquement de fournir un **avant/après M15** sur un fixture stable.
+Ces mesures ne sont pas les benchmarks de grande échelle M16. Leur rôle est uniquement de fournir un **avant/après M15** sur un fixture stable et de rendre visibles les effets de S7/S8 sur les rechargements de snapshot et le coût des requêtes répétées.
+
+## Couverture de non-régression
+
+Le replay M14 et les tests du reactor couvrent notamment :
+
+- CLI structurante ;
+- API publique ;
+- catalogue MCP et serveur stdio ;
+- provider TypeScript ;
+- provider Java ;
+- transition volontaire vers `STALE` après échec d'indexation ;
+- recovery Java ;
+- build de distribution Windows ;
+- installation de la distribution ;
+- `doctor` sur installation ;
+- handshake MCP natif ;
+- intégrations MCP natives Copilot/Claude/Codex.
+
+Les sorties correspondantes sont conservées dans `maven-verify.log` et `m14-replay.log`.
 
 ## Gate S1
 
-M15-S1 devient ✅ uniquement lorsque le head exact satisfait :
+M15-S1 devient ✅ uniquement lorsque **le même head exact** satisfait :
 
 - [ ] worktree propre ;
 - [ ] Java 24 ;
@@ -117,15 +164,13 @@ M15-S1 devient ✅ uniquement lorsque le head exact satisfait :
 - [ ] tests JUnit : 0 failure / 0 error ;
 - [ ] replay M14 PASS ;
 - [ ] sorties CLI/API/MCP de référence conservées ;
-- [ ] mesures de requêtes répétées capturées ;
-- [ ] `baseline.json` et résumé final archivés comme preuve de jalon ;
-- [ ] SHA exact inscrit dans la preuve finale.
+- [ ] baseline de requêtes répétées PASS ;
+- [ ] métriques de volumes/latence/heap enregistrées ;
+- [ ] `baseline.json`, `query-baseline.json` et résumés générés ;
+- [ ] SHA exact inscrit dans la preuve finale de PR.
 
 ## Principe de validation
 
 Une exécution réussie sur un SHA précédent ne transforme jamais un nouveau head en ✅.
 
-Toute modification postérieure à la qualification finale S1 impose soit :
-
-1. de rejouer la qualification ; soit
-2. de conserver S1 comme preuve historique et de qualifier explicitement le nouveau head dans l'étape M15 suivante.
+La qualification finale est donc publiée dans la PR S1 **après** le dernier run complet, sans nouveau commit sur la branche. Toute modification ultérieure du head impose une nouvelle qualification explicite.
