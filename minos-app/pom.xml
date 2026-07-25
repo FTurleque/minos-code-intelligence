@@ -85,12 +85,28 @@
                 </configuration>
             </plugin>
 
+            <!--
+              Existing tests intentionally use repository-relative fixtures. Maven now
+              executes this module from minos-app/, so preserve the historical root
+              working directory until those fixtures are expressed through an explicit
+              repository-root abstraction in a later refactor.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
+                    <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
                     <systemPropertyVariables>
                         <minos.shaded.jar>${project.build.directory}/${project.build.finalName}-all.jar</minos.shaded.jar>
                     </systemPropertyVariables>
