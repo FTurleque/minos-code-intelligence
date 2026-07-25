@@ -123,7 +123,8 @@ try {
     $LibDirectory = Join-Path $Distribution 'lib'
     $DockerDirectory = Join-Path $Distribution 'docker'
     $DockerScripts = Join-Path $DockerDirectory 'scripts'
-    New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts | Out-Null
+    $IntegrationDirectory = Join-Path $Distribution 'integration'
+    New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $IntegrationDirectory | Out-Null
     Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
         -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
@@ -133,6 +134,8 @@ try {
         -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
         -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients.ps1') `
+        -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients.ps1') -Force
 
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Destination (Join-Path $Distribution 'install.ps1')
@@ -167,16 +170,29 @@ Default data directory:
   %LOCALAPPDATA%\MINOS\data
 
 MCP native:
-  command = <installation>\minos.cmd
+  command = <installation>\app\minos.exe
   args    = mcp
+  env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+
+The Windows setup can register this native MCP server in:
+  - GitHub Copilot for JetBrains / IntelliJ
+  - GitHub Copilot CLI
+  - Claude Code
+  - Claude Desktop
+  - OpenAI Codex
+
+Portable/manual client integration:
+  & "<installation>\integration\configure-mcp-clients.ps1" `
+    -InstallRoot "<installation>" `
+    -CopilotJetBrains -ClaudeCode -ClaudeDesktop -Codex
 
 Optional hardened Docker MCP:
-  powershell -File <installation>\docker\scripts\configure-docker-mcp.ps1 `
-    -InstallRoot <installation> `
+  & "<installation>\docker\scripts\configure-docker-mcp.ps1" `
+    -InstallRoot "<installation>" `
     -ProjectsRoot N:\workspace-dev `
     -Start
 
-Docker Desktop must already be installed and running. The Windows setup.exe can run this configuration interactively.
+Docker Desktop must already be installed and running. Docker is optional and is not required by the native MCP integrations above.
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
     $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
