@@ -4,6 +4,43 @@ Ce guide s'adresse à une personne qui veut **installer, alimenter et interroger
 
 Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il ne faut pas cloner le dépôt MINOS ni lancer Maven pour installer le produit.
 
+## Trouver une information en moins d'une minute
+
+| Je veux... | Ouvrir directement |
+|---|---|
+| Installer / mettre à jour / désinstaller MINOS | **[Installation PROD Windows](production-installation.md)** |
+| **Voir le graphe d'architecture** | **[Visualiser le graphe d'architecture](architecture-graph.md)** |
+| Comprendre `--format text/json/mermaid/dot` | [Référence CLI](cli.md) |
+| Connecter Copilot, Claude ou Codex au MCP natif | [Serveur MCP](mcp.md) |
+| Comprendre / lancer l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
+| Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
+| Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
+| Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
+| Développer MINOS depuis les sources | [Installation depuis les sources](installation.md) |
+
+### Je veux juste voir mon graphe maintenant
+
+MINOS **ne possède pas de fenêtre graphique intégrée**. Il calcule le graphe puis l'exporte en JSON, Mermaid ou Graphviz DOT.
+
+```powershell
+# Données du graphe
+minos.cmd architecture my-project --format json
+
+# Source Mermaid
+minos.cmd architecture my-project --format mermaid |
+  Set-Content .\architecture.mmd -Encoding utf8
+
+# Source Graphviz DOT
+minos.cmd architecture my-project --format dot |
+  Set-Content .\architecture.dot -Encoding utf8
+```
+
+Pour savoir **quoi ouvrir ensuite, comment obtenir un SVG/PNG, comment filtrer un gros projet et comment diagnostiquer un graphe vide**, utiliser la page dédiée :
+
+**→ [Visualiser le graphe d'architecture MINOS](architecture-graph.md)**
+
+---
+
 ## Parcours recommandé
 
 ```text
@@ -107,7 +144,7 @@ minos.cmd architecture my-project --format mermaid
 minos.cmd architecture my-project --format dot
 ```
 
-Voir [Référence CLI](cli.md) pour l'export Mermaid/Graphviz et le filtrage par module.
+**Guide dédié : [Visualiser le graphe d'architecture](architecture-graph.md).**
 
 ---
 
@@ -141,22 +178,7 @@ Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le gr
 
 ---
 
-## 4. Choisir le bon document
-
-| Besoin | Document |
-|---|---|
-| Télécharger, installer, mettre à jour ou désinstaller MINOS | [Installation PROD Windows](production-installation.md) |
-| Comprendre l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
-| Connaître toutes les commandes et visualiser le graphe | [Référence CLI](cli.md) |
-| Connecter Copilot / Claude / Codex au MCP | [Serveur MCP](mcp.md) |
-| Utiliser MINOS depuis Java et lire le graphe | [API Java locale](java-api.md) |
-| Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
-| Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
-| Développer MINOS lui-même | [Installation depuis les sources](installation.md) |
-
----
-
-## 5. Fonctionnalités principales
+## 4. Fonctionnalités principales
 
 | Besoin | Commande / surface |
 |---|---|
@@ -174,7 +196,7 @@ Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le gr
 | Implémentations/appels/dépendances | commandes relationnelles |
 | Trouver les tests liés | `related-tests` |
 | Lire l'architecture | `architecture` |
-| Voir/exporter le graphe | `architecture --format json|mermaid|dot` |
+| **Voir/exporter le graphe** | `architecture --format json|mermaid|dot` — [guide](architecture-graph.md) |
 | Estimer un impact | `impact` |
 | Consommer depuis Java | `MinosApi`, `MinosMultiRepositoryApi` |
 | Lire le graphe depuis Java | `MinosApi.getArchitectureGraph` |
@@ -184,7 +206,7 @@ Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le gr
 
 ---
 
-## 6. Import SCIP manuel
+## 5. Import SCIP manuel
 
 Le chemin manuel est conservé pour le diagnostic ou pour un provider non piloté par MINOS :
 
@@ -198,7 +220,7 @@ minos.cmd import-scip my-project `
 
 ---
 
-## 7. Où MINOS stocke ses données
+## 6. Où MINOS stocke ses données
 
 Par défaut :
 
@@ -213,7 +235,7 @@ La séparation est volontaire : mettre à jour ou désinstaller le programme ne 
 
 ---
 
-## 8. En cas de problème
+## 7. En cas de problème
 
 Commencer par :
 
@@ -222,6 +244,15 @@ minos.cmd --version
 minos.cmd doctor --format json
 minos.cmd project list --format json
 ```
+
+Pour un problème de graphe :
+
+```powershell
+minos.cmd index-status my-project --format json
+minos.cmd architecture my-project --format json
+```
+
+Puis consulter **[Visualiser le graphe — diagnostic rapide](architecture-graph.md#le-graphe-est-vide--diagnostic-rapide)**.
 
 Pour les intégrations MCP du setup :
 
