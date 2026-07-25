@@ -114,9 +114,6 @@ function Ensure-ObjectProperty([object] $Root, [string] $Name) {
         $Root | Add-Member -MemberType NoteProperty -Name $Name -Value $Container -Force
         return $Container
     }
-    if ($Property.Value -isnot [psobject]) {
-        throw "JSON property '$Name' is not an object."
-    }
     return $Property.Value
 }
 
@@ -201,9 +198,23 @@ function Test-ManagedJsonEntryMatches([object] $Entry, [object] $Current) {
     if ($null -eq $Current) {
         return $false
     }
+
     $CurrentCommand = [string](Get-ObjectPropertyValue -Root $Current -Name 'command')
-    return -not [string]::IsNullOrWhiteSpace($CurrentCommand) -and
-            $CurrentCommand.Equals([string]$Entry.command, [StringComparison]::OrdinalIgnoreCase)
+    if ([string]::IsNullOrWhiteSpace($CurrentCommand) -or
+        -not $CurrentCommand.Equals([string]$Entry.command, [StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    $CurrentArgs = @(Get-ObjectPropertyValue -Root $Current -Name 'args')
+    if ($CurrentArgs.Count -ne 1 -or [string]$CurrentArgs[0] -ne 'mcp') {
+        return $false
+    }
+
+    $CurrentEnv = Get-ObjectPropertyValue -Root $Current -Name 'env'
+    $CurrentHome = [string](Get-ObjectPropertyValue -Root $CurrentEnv -Name 'MINOS_HOME')
+    $ExpectedHome = if ($Entry.PSObject.Properties['dataRoot']) { [string]$Entry.dataRoot } else { $DataRoot }
+    return -not [string]::IsNullOrWhiteSpace($CurrentHome) -and
+            $CurrentHome.Equals($ExpectedHome, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Install-JsonClient(
@@ -242,6 +253,7 @@ function Install-JsonClient(
             configPath = $ConfigPath
             container = $ContainerName
             command = $MinosExe
+            dataRoot = $DataRoot
             backupPath = $Backup
             configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         })
@@ -319,6 +331,17 @@ function Invoke-NativeCapture([string] $File, [string[]] $Arguments) {
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
 }
 
+function Test-ManagedCliProbeMatches([object] $Entry, [object] $Probe) {
+    if ($Probe.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace([string]$Probe.Output)) {
+        return $false
+    }
+    $Normalized = ([string]$Probe.Output).Replace('\\', '\')
+    $Command = [string]$Entry.command
+    $ExpectedHome = if ($Entry.PSObject.Properties['dataRoot']) { [string]$Entry.dataRoot } else { $DataRoot }
+    return $Normalized.IndexOf($Command, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            $Normalized.IndexOf($ExpectedHome, [StringComparison]::OrdinalIgnoreCase) -ge 0
+}
+
 function Install-CliClient(
     [string] $Id,
     [string] $DisplayName,
@@ -343,15 +366,13 @@ function Install-CliClient(
         }
 
         if ($Probe.ExitCode -eq 0 -and $null -ne $Managed) {
-            $OldCommand = [string]$Managed.command
-            if ($OldCommand.Equals($MinosExe, [StringComparison]::OrdinalIgnoreCase)) {
+            if (Test-ManagedCliProbeMatches -Entry $Managed -Probe $Probe) {
                 Write-IntegrationLog "KEEP client=$Id reason=already-managed tool='$ToolPath'"
                 return
             }
-            $Remove = Invoke-NativeCapture -File $ToolPath -Arguments @($Managed.removeArguments)
-            if ($Remove.ExitCode -ne 0) {
-                throw "unable to refresh previous managed entry: $($Remove.Output)"
-            }
+            Write-IntegrationLog "PRESERVE client=$Id reason=managed-entry-modified tool='$ToolPath'"
+            Fail-Or-Warn "$DisplayName MCP entry 'minos' no longer matches the entry managed by MINOS; preserving the user's current entry."
+            return
         }
 
         $Add = Invoke-NativeCapture -File $ToolPath -Arguments $AddArguments
@@ -365,6 +386,7 @@ function Install-CliClient(
             toolName = $ToolName
             toolPath = $ToolPath
             command = $MinosExe
+            dataRoot = $DataRoot
             getArguments = @($GetArguments)
             removeArguments = @($RemoveArguments)
             configuredAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -389,6 +411,11 @@ function Uninstall-CliClient([object] $Entry) {
         if ($Probe.ExitCode -ne 0) {
             Write-IntegrationLog "UNINSTALL client=$($Entry.id) status=entry-missing tool='$ToolPath'"
             Remove-ManagedEntry -Id ([string]$Entry.id)
+            return
+        }
+        if (-not (Test-ManagedCliProbeMatches -Entry $Entry -Probe $Probe)) {
+            Write-IntegrationLog "PRESERVE client=$($Entry.id) reason=entry-modified tool='$ToolPath'"
+            Fail-Or-Warn "$($Entry.displayName) MCP entry 'minos' no longer matches the entry managed by MINOS; it was preserved."
             return
         }
 
@@ -424,8 +451,8 @@ if ($Action -eq 'Install') {
     if ($ClaudeCode) {
         Install-CliClient -Id 'claude-code' -DisplayName 'Claude Code' -ToolName 'claude' `
             -GetArguments @('mcp', 'get', 'minos') `
-            -AddArguments @('mcp', 'add', 'minos', '--scope', 'user', '--env', "MINOS_HOME=$DataRoot", '--', $MinosExe, 'mcp') `
-            -RemoveArguments @('mcp', 'remove', 'minos', '--scope', 'user')
+            -AddArguments @('mcp', 'add', '--scope', 'user', '--env', "MINOS_HOME=$DataRoot", 'minos', '--', $MinosExe, 'mcp') `
+            -RemoveArguments @('mcp', 'remove', 'minos')
     }
     if ($Codex) {
         Install-CliClient -Id 'codex' -DisplayName 'OpenAI Codex' -ToolName 'codex' `
