@@ -261,7 +261,7 @@ function Install-JsonClient(
         Write-Host "MINOS MCP configured for $DisplayName" -ForegroundColor Green
     }
     catch {
-        Fail-Or-Warn "Failed to configure $DisplayName: $($_.Exception.Message)"
+        Fail-Or-Warn "Failed to configure ${DisplayName}: $($_.Exception.Message)"
     }
 }
 
@@ -395,7 +395,7 @@ function Install-CliClient(
         Write-Host "MINOS MCP configured for $DisplayName" -ForegroundColor Green
     }
     catch {
-        Fail-Or-Warn "Failed to configure $DisplayName: $($_.Exception.Message)"
+        Fail-Or-Warn "Failed to configure ${DisplayName}: $($_.Exception.Message)"
     }
 }
 
