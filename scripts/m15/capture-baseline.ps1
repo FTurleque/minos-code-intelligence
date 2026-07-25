@@ -65,10 +65,11 @@ function Get-ReactorModuleCount {
     param([Parameter(Mandatory = $true)][string] $PomPath)
 
     [xml] $pom = Get-Content -LiteralPath $PomPath -Raw
-    $modules = @($pom.project.modules.module)
-    if ($modules.Count -eq 0) {
-        return 1
-    }
+
+    # The M14 baseline is intentionally a single-module Maven project and
+    # therefore has no <modules> element. XPath keeps this StrictMode-safe
+    # while remaining compatible with the multi-module POM introduced by M15-S2.
+    $modules = @($pom.SelectNodes('/*[local-name()="project"]/*[local-name()="modules"]/*[local-name()="module"]'))
     return 1 + $modules.Count
 }
 
