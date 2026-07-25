@@ -20,8 +20,23 @@ function Invoke-NativeCaptured {
         [Parameter(Mandatory = $true)][string] $Failure
     )
 
-    & $File @Arguments 2>&1 | Tee-Object -FilePath $LogPath
-    $exitCode = $LASTEXITCODE
+    # Windows PowerShell 5.1 materializes native stderr as ErrorRecord objects
+    # when stderr is merged into the success stream. With the script-wide
+    # ErrorActionPreference=Stop, harmless JVM warnings would therefore abort
+    # an otherwise successful Maven run. Native process success is determined
+    # exclusively from its exit code here; stderr is still preserved in logs.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $File @Arguments 2>&1 |
+            ForEach-Object { $_.ToString() } |
+            Tee-Object -FilePath $LogPath
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     if ($exitCode -ne 0) {
         throw "$Failure (exit=$exitCode)"
     }
@@ -168,18 +183,26 @@ try {
         $verifyStatus = 'PASS'
 
         if (-not $SkipM14Replay) {
-            $m14Parameters = @{
-                ExpectedHead = $head
-            }
+            # Run M14 validation in a separate Windows PowerShell process so its
+            # native stderr cannot be reinterpreted as a terminating ErrorRecord
+            # by this parent PowerShell 5.1 session.
+            $powerShell = (Get-Command 'powershell.exe' -ErrorAction Stop).Source
+            $m14Script = Join-Path $RepoRoot 'scripts\m14\validate-local.ps1'
+            $m14Arguments = @(
+                '-NoProfile',
+                '-ExecutionPolicy', 'Bypass',
+                '-File', $m14Script,
+                '-ExpectedHead', $head
+            )
             if ($SkipProviderReplays) {
-                $m14Parameters['SkipProviderReplays'] = $true
+                $m14Arguments += '-SkipProviderReplays'
             }
             if ($ValidateDocker) {
-                $m14Parameters['ValidateDocker'] = $true
+                $m14Arguments += '-ValidateDocker'
             }
 
-            $m14Script = Join-Path $RepoRoot 'scripts\m14\validate-local.ps1'
-            & $m14Script @m14Parameters 2>&1 | Tee-Object -FilePath $m14Log
+            Invoke-NativeCaptured -File $powerShell -Arguments $m14Arguments -LogPath $m14Log `
+                -Failure 'M14 replay failed'
             $m14ReplayStatus = 'PASS'
         }
     }
