@@ -93,6 +93,31 @@ function Escape-InnoString([string] $Value) {
     return $Value.Replace('"', '""')
 }
 
+function Assert-InnoTaskNames([string] $ScriptContent) {
+    $InTasksSection = $false
+    foreach ($Line in ($ScriptContent -split "`r?`n")) {
+        $Trimmed = $Line.Trim()
+        if ($Trimmed -match '^\[([^\]]+)\]$') {
+            $InTasksSection = $Matches[1] -eq 'Tasks'
+            continue
+        }
+        if (-not $InTasksSection -or [string]::IsNullOrWhiteSpace($Trimmed) -or $Trimmed.StartsWith(';')) {
+            continue
+        }
+        if ($Trimmed -notmatch '^Name:\s*"([^"]+)"') {
+            continue
+        }
+
+        $TaskName = $Matches[1]
+        $ValidCharacters = $TaskName -match '^[A-Za-z_][A-Za-z0-9_/\\]*$'
+        $Reserved = $TaskName -match '^(?i:not|and|or)$'
+        $EndsWithSeparator = $TaskName.EndsWith('/') -or $TaskName.EndsWith('\')
+        if (-not $ValidCharacters -or $Reserved -or $EndsWithSeparator) {
+            throw "Invalid Inno Setup task Name '$TaskName'. Use letters, digits, underscores, '/' or '\'; do not start with a digit/separator, end with a separator, or use reserved names not/and/or."
+        }
+    }
+}
+
 $BaseVersion = ($Version -split '[-+]')[0]
 $NumericVersion = "$BaseVersion.0"
 # Read and write the Inno Setup template explicitly as UTF-8 so Windows
@@ -104,6 +129,7 @@ $Iss = $Iss.Replace('@@APP_VERSION@@', (Escape-InnoString $NumericVersion))
 $Iss = $Iss.Replace('@@SOURCE_DIR@@', (Escape-InnoString $DistributionRoot))
 $Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $OutputRoot))
 $Iss = $Iss.Replace('@@OUTPUT_BASENAME@@', (Escape-InnoString $OutputBaseFilename))
+Assert-InnoTaskNames -ScriptContent $Iss
 [System.IO.File]::WriteAllText($GeneratedIss, $Iss, $Utf8)
 
 try {
