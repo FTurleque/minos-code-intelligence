@@ -9,6 +9,7 @@ Il répond notamment à des questions comme :
 - de quoi dépend-il ?
 - quels tests lui sont liés ?
 - quelle est l’architecture observée du projet ?
+- quelles sont les dépendances réelles entre modules et comment les visualiser ?
 - quels éléments peuvent être potentiellement impactés par une modification ?
 - quelles relations entre dépôts sont réellement prouvables ?
 - quelles zones ont récemment changé dans Git ?
@@ -38,11 +39,11 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 M14 a fermé l’indexation autonome, le runtime provider Windows, la distribution Windows native, le MCP natif et le packaging de release. La PR M14 #43 a été fusionnée dans `main` le 24 juillet 2026.
 
-L'issue #46 fait évoluer le packaging Windows vers un **setup.exe complet** tout en conservant le ZIP portable.
+Le packaging Windows fournit un **setup.exe complet** tout en conservant le ZIP portable. Les évolutions post-M14 ajoutent la visualisation du graphe d'architecture et l'intégration optionnelle du MCP natif dans les clients IA locaux.
 
 Voir :
 
-- [`docs/STATUS.md`](docs/STATUS.md) — état livré ;
+- [`docs/STATUS.md`](docs/STATUS.md) — état livré sur `main` ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit ;
 - [`docs/roadmap/M14_EXECUTION.md`](docs/roadmap/M14_EXECUTION.md) — qualification détaillée M14.
 
@@ -50,7 +51,7 @@ Voir :
 
 L’utilisateur normal **ne clone pas le dépôt MINOS et ne lance pas Maven**.
 
-Une GitHub Release Windows expose désormais deux canaux :
+Une GitHub Release Windows expose deux canaux :
 
 ```text
 MINOS-<version>-windows-x64-setup.exe
@@ -60,9 +61,21 @@ minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
 ```
 
-Le **`setup.exe` est le canal recommandé** pour un poste Windows. Il installe l'application, son runtime Java, la CLI, le MCP natif, l'intégration PATH et le désinstalleur Windows. Il peut également configurer le MCP Docker si Docker Desktop est déjà installé et démarré.
+Le **`setup.exe` est le canal recommandé** pour un poste Windows. Il installe l'application, son runtime Java, la CLI, le MCP natif, l'intégration PATH et le désinstalleur Windows.
 
-Le ZIP reste le canal **portable / automatisation / diagnostic** et contient la même application MINOS ainsi que les scripts Docker et l'installateur PowerShell historique.
+Pendant l'installation, l'utilisateur peut choisir explicitement d'enregistrer le MCP natif MINOS dans :
+
+```text
+GitHub Copilot — JetBrains / IntelliJ
+GitHub Copilot CLI
+Claude Code
+Claude Desktop
+OpenAI Codex
+```
+
+Ces intégrations utilisent directement `app\minos.exe mcp` et **ne nécessitent pas Docker**. Le setup peut séparément configurer le MCP Docker si Docker Desktop est déjà installé et démarré.
+
+Le ZIP reste le canal **portable / automatisation / diagnostic** et contient la même application MINOS, les scripts d'intégration MCP natifs, les scripts Docker et l'installateur PowerShell portable.
 
 Parcours recommandé :
 
@@ -71,11 +84,12 @@ GitHub Release
 → télécharger setup.exe + SHA-256
 → vérifier SHA-256
 → lancer setup.exe
-→ choisir éventuellement « Configurer le MCP Docker »
+→ choisir éventuellement les clients MCP natifs
+→ choisir éventuellement le MCP Docker
 → minos.cmd doctor
 ```
 
-Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, le MCP Docker, les providers, la mise à jour, le rollback et la désinstallation.
+Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, les clients MCP natifs, le MCP Docker, les providers, la mise à jour, le rollback et la désinstallation.
 
 ## Utilisation après installation
 
@@ -98,6 +112,36 @@ minos.cmd import-scip my-project `
   --file N:\temp\index.scip `
   --provider external-provider
 ```
+
+## Visualiser le graphe d'architecture
+
+MINOS expose les arêtes de dépendances agrégées entre modules dans la sortie JSON :
+
+```powershell
+minos.cmd architecture my-project --format json
+```
+
+Pour produire directement un diagramme Mermaid :
+
+```powershell
+minos.cmd architecture my-project --format mermaid |
+  Set-Content .\architecture.mmd -Encoding utf8
+```
+
+Ou Graphviz DOT :
+
+```powershell
+minos.cmd architecture my-project --format dot |
+  Set-Content .\architecture.dot -Encoding utf8
+```
+
+Sur un gros projet, limiter le graphe au voisinage direct d'un module :
+
+```powershell
+minos.cmd architecture my-project --module packages/api --format mermaid
+```
+
+Les rendus utilisent uniquement les arêtes réellement présentes dans le snapshot actif.
 
 ## Développer MINOS depuis les sources
 
@@ -144,7 +188,7 @@ Construire la distribution portable :
 .\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc2
 ```
 
-Construire ensuite le setup Windows avec Inno Setup 6 :
+Construire ensuite le setup Windows avec Inno Setup 6/7 :
 
 ```powershell
 .\scripts\release\build-windows-installer.ps1 -Version 0.2.0-rc2
@@ -165,7 +209,7 @@ Publier depuis un poste Windows avec GitHub CLI authentifié :
 .\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc2
 ```
 
-Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. Le workflow installe Inno Setup, construit les deux distributions, vérifie les checksums, smoke-teste le ZIP et le `setup.exe`, vérifie la désinstallation du setup, refuse de remplacer une version/tag existant, puis attache les quatre assets à la GitHub Release.
+Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. Le workflow valide aussi le cycle installation/désinstallation des intégrations MCP natives, construit les deux distributions, vérifie les checksums, smoke-teste le ZIP et le `setup.exe`, vérifie la désinstallation, refuse de remplacer une version/tag existant, puis attache les quatre assets à la GitHub Release.
 
 ## Capacités CLI
 
@@ -199,11 +243,13 @@ architecture
 impact
 ```
 
+`architecture` supporte `text`, `json`, `mermaid` et `dot` ; la sortie JSON contient les arêtes inter-modules détaillées.
+
 ### Intégrations
 
 ```text
-API Java M11/M12
-MCP STDIO — 15 tools read-only
+API Java M11/M12 + getArchitectureGraph
+MCP STDIO — 16 tools read-only
 Git Intelligence via JGit
 Workspaces multi-repositories
 nexus-export — contrat JSON M13
@@ -211,14 +257,17 @@ nexus-export — contrat JSON M13
 
 ## MCP
 
-Le mode natif recommandé est :
+Le mode natif recommandé pour les clients est :
 
 ```text
-command = <installation>\minos.cmd
+command = <installation>\app\minos.exe
 args    = mcp
+env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 ```
 
-Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Le `setup.exe` peut préparer, démarrer et valider ce mode si Docker Desktop est déjà opérationnel. Docker n’est pas le moteur principal de compilation/indexation des projets.
+Le tool `minos_architecture_graph` expose le graphe en JSON, Mermaid ou DOT.
+
+Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Le `setup.exe` peut préparer, démarrer et valider ce mode si Docker Desktop est déjà opérationnel. Docker n’est pas le moteur principal de compilation/indexation des projets et n'est pas requis pour les intégrations MCP natives.
 
 ## Documentation
 

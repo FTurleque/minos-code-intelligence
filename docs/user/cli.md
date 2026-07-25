@@ -16,6 +16,119 @@ java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar <commande>
 
 `--help` reste la source de vérité exécutable.
 
+## Formats de sortie
+
+La plupart des commandes qui acceptent `--format` proposent deux représentations du **même résultat métier** :
+
+- `text` : sortie compacte destinée à être lue directement dans un terminal ; c'est le format par défaut ;
+- `json` : sortie structurée destinée aux scripts PowerShell, à la CI, aux intégrations et aux clients MCP.
+
+`--format <text|json>` dans la syntaxe signifie donc : remplacer `<text|json>` par **une seule** des valeurs `text` ou `json`.
+
+Exemples équivalents :
+
+```powershell
+# Format texte implicite : lisible par un humain
+minos.cmd architecture my-project
+
+# Même format demandé explicitement
+minos.cmd architecture my-project --format text
+
+# Format structuré : destiné aux outils et scripts
+minos.cmd architecture my-project --format json
+```
+
+La commande `architecture` ajoute deux formats de graphe :
+
+```text
+--format <text|json|mermaid|dot>
+```
+
+- `mermaid` : graphe `flowchart` directement intégrable dans Markdown/GitHub/les outils compatibles Mermaid ;
+- `dot` : graphe Graphviz DOT permettant de produire SVG, PNG ou PDF avec Graphviz.
+
+Exemple représentatif de sortie `text` pour `architecture` :
+
+```text
+project: my-project (<project-id>)
+snapshot: <snapshot-id>
+modules: 3
+languages: [JAVA]
+buildSystems: [MAVEN]
+symbols: local=1240, external=317
+relationships: 2861
+dependencies: total=842, inter=94, intra=731, unassigned=17
+moduleEdges: 8
+topIncomingModules: [<module-id>]
+topOutgoingModules: [<module-id>]
+technologies: [JAVA, MAVEN]
+```
+
+La sortie `json` expose des champs nommés et, pour `architecture`, la **liste réelle des arêtes agrégées entre modules** :
+
+```json
+{
+  "projectId": "<project-id>",
+  "projectName": "my-project",
+  "snapshotId": "<snapshot-id>",
+  "nature": "DERIVED",
+  "languages": ["JAVA"],
+  "buildSystems": ["MAVEN"],
+  "moduleCount": 3,
+  "localSymbolCount": 1240,
+  "externalSymbolCount": 317,
+  "relationshipCount": 2861,
+  "dependencies": {
+    "total": 842,
+    "interModule": 94,
+    "intraModule": 731,
+    "unassigned": 17,
+    "moduleEdges": 8
+  },
+  "topIncomingModuleIds": ["<module-id>"],
+  "topOutgoingModuleIds": ["<module-id>"],
+  "technologies": ["JAVA", "MAVEN"],
+  "modules": [],
+  "moduleDependencies": [
+    {
+      "id": "<edge-id>",
+      "sourceModuleId": "<source-module-id>",
+      "sourceModuleName": "application",
+      "targetModuleId": "<target-module-id>",
+      "targetModuleName": "domain",
+      "dependencyCount": 37,
+      "sourceSymbolCount": 12,
+      "targetSymbolCount": 9,
+      "sampleDependencyIds": ["<relationship-id>"],
+      "nature": "DERIVED",
+      "confidence": 1.0,
+      "evidence": []
+    }
+  ]
+}
+```
+
+Les valeurs ci-dessus sont illustratives ; la structure correspond à la surface actuelle de la commande.
+
+Exemple PowerShell :
+
+```powershell
+$architecture = minos.cmd architecture my-project --format json | ConvertFrom-Json
+
+$architecture.moduleCount
+$architecture.dependencies.interModule
+$architecture.moduleDependencies
+```
+
+Pour enregistrer le résultat :
+
+```powershell
+minos.cmd architecture my-project --format json |
+  Set-Content .\architecture.json -Encoding utf8
+```
+
+Le serveur MCP MINOS utilise lui-même la surface CLI JSON pour ses vues structurées.
+
 ## Administration
 
 ```text
@@ -130,10 +243,82 @@ related-tests <project> <symbol-id>
 
 Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime.
 
-## Architecture
+## Architecture et visualisation du graphe
 
 ```text
-architecture <project> [--module <module>] [--format <text|json>]
+architecture <project> [--module <module>] [--format <text|json|mermaid|dot>]
+```
+
+MINOS dérive un **graphe orienté de dépendances inter-modules** à partir du snapshot actif. Une arête :
+
+```text
+module A ──N dépendances──> module B
+```
+
+signifie que le snapshot contient `N` dépendances agrégées depuis des symboles du module A vers des symboles du module B.
+
+Le graphe n'est pas une supposition d'interface utilisateur : les arêtes rendues proviennent directement de `ArchitectureDependencyGraph.dependencies()`.
+
+### Voir les arêtes en JSON
+
+```powershell
+minos.cmd architecture my-project --format json |
+  ConvertFrom-Json |
+  Select-Object -ExpandProperty moduleDependencies
+```
+
+Chaque arête fournit notamment source, cible, nombre de dépendances, nombres de symboles, échantillons de relations, nature et confiance.
+
+### Produire un diagramme Mermaid
+
+```powershell
+minos.cmd architecture my-project --format mermaid |
+  Set-Content .\architecture.mmd -Encoding utf8
+```
+
+Exemple de rendu produit :
+
+```mermaid
+flowchart LR
+  m0["application<br/>app"]
+  m1["domain<br/>domain"]
+  m0 -->|"37 deps"| m1
+```
+
+Le contenu peut être placé dans un bloc `mermaid` Markdown ou ouvert dans n'importe quel renderer Mermaid compatible.
+
+### Produire un graphe Graphviz DOT
+
+```powershell
+minos.cmd architecture my-project --format dot |
+  Set-Content .\architecture.dot -Encoding utf8
+```
+
+Avec Graphviz installé :
+
+```powershell
+dot -Tsvg .\architecture.dot -o .\architecture.svg
+dot -Tpng .\architecture.dot -o .\architecture.png
+```
+
+Graphviz n'est **pas** requis par MINOS : MINOS génère le DOT, et Graphviz ne sert qu'au rendu graphique.
+
+### Se concentrer sur un module
+
+Avec un format graphique, `--module` conserve le module choisi et ses voisins directs entrants/sortants :
+
+```powershell
+minos.cmd architecture my-project `
+  --module packages/api `
+  --format mermaid
+```
+
+Cela évite de produire un diagramme illisible sur un gros projet.
+
+Pour la vue métier compacte d'un module :
+
+```powershell
+minos.cmd architecture my-project --module packages/api --format json
 ```
 
 ## Impact
@@ -161,6 +346,10 @@ minos mcp
 ```
 
 Cette commande bloque volontairement sur une session MCP STDIO jusqu'à fermeture par le client.
+
+Le MCP expose également `minos_architecture_graph`, qui peut demander le graphe en `json`, `mermaid` ou `dot`.
+
+Voir [Serveur MCP](mcp.md) pour les configurations concrètes de clients MCP.
 
 ## Version
 

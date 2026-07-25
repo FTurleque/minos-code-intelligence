@@ -3,6 +3,7 @@ package com.minos.api;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
+import com.minos.architecture.ArchitectureModuleDependency;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.cli.LocalProjectOperations;
@@ -36,8 +37,10 @@ import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -163,6 +166,11 @@ public final class LocalMinosApi implements MinosApi {
     }
 
     @Override
+    public ArchitectureGraphDto getArchitectureGraph(String projectIdentifier) throws MinosApiException {
+        return execute(() -> architectureGraph(architectureQuery.getArchitectureIntelligence(projectIdentifier)));
+    }
+
+    @Override
     public ModuleContextDto getModuleContext(
             String projectIdentifier,
             String moduleIdentifier
@@ -245,6 +253,42 @@ public final class LocalMinosApi implements MinosApi {
                 view.centrality().topOutgoingModuleIds(),
                 view.technologies().technologies().stream().map(value -> value.name()).toList(),
                 view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList()
+        );
+    }
+
+    private static ArchitectureGraphDto architectureGraph(ArchitectureIntelligenceView view) {
+        Map<String, ArchitectureModule> modulesById = new LinkedHashMap<>();
+        view.overview().modules().forEach(module -> modulesById.put(module.id(), module));
+        return new ArchitectureGraphDto(
+                view.projectId(),
+                view.projectName(),
+                view.snapshotId(),
+                view.nature().name(),
+                view.overview().modules().stream().map(LocalMinosApi::architectureModule).toList(),
+                view.dependencies().dependencies().stream()
+                        .map(edge -> architectureDependency(edge, modulesById))
+                        .toList()
+        );
+    }
+
+    private static ArchitectureDependencyDto architectureDependency(
+            ArchitectureModuleDependency edge,
+            Map<String, ArchitectureModule> modulesById
+    ) {
+        ArchitectureModule source = modulesById.get(edge.sourceModuleId());
+        ArchitectureModule target = modulesById.get(edge.targetModuleId());
+        return new ArchitectureDependencyDto(
+                edge.id(),
+                edge.sourceModuleId(),
+                source == null ? null : source.name(),
+                edge.targetModuleId(),
+                target == null ? null : target.name(),
+                edge.dependencyCount(),
+                edge.sourceSymbolCount(),
+                edge.targetSymbolCount(),
+                edge.sampleDependencyIds(),
+                edge.nature().name(),
+                edge.confidence()
         );
     }
 

@@ -51,6 +51,15 @@ public interface MinosApi {
 
     ArchitectureDto getArchitecture(String projectIdentifier) throws MinosApiException;
 
+    /**
+     * Returns the actual inter-module dependency graph behind the architecture
+     * aggregate. This default keeps contract-v1 source/binary compatibility for
+     * third-party implementations while LocalMinosApi provides the full graph.
+     */
+    default ArchitectureGraphDto getArchitectureGraph(String projectIdentifier) throws MinosApiException {
+        throw new MinosApiException(ErrorCode.UNAVAILABLE, "architecture graph is not available in this implementation");
+    }
+
     ModuleContextDto getModuleContext(
             String projectIdentifier,
             String moduleIdentifier
@@ -329,6 +338,46 @@ public interface MinosApi {
             topOutgoingModuleIds = immutable(topOutgoingModuleIds);
             technologies = immutable(technologies);
             modules = immutable(modules);
+        }
+    }
+
+    record ArchitectureDependencyDto(
+            String id,
+            String sourceModuleId,
+            String sourceModuleName,
+            String targetModuleId,
+            String targetModuleName,
+            int dependencyCount,
+            int sourceSymbolCount,
+            int targetSymbolCount,
+            List<String> sampleDependencyIds,
+            String nature,
+            Double confidence
+    ) {
+        public ArchitectureDependencyDto {
+            sampleDependencyIds = immutable(sampleDependencyIds);
+        }
+    }
+
+    record ArchitectureGraphDto(
+            String projectId,
+            String projectName,
+            String snapshotId,
+            String nature,
+            List<ArchitectureModuleDto> modules,
+            List<ArchitectureDependencyDto> dependencies
+    ) {
+        public ArchitectureGraphDto {
+            modules = immutable(modules);
+            dependencies = immutable(dependencies);
+        }
+
+        public int moduleCount() {
+            return modules.size();
+        }
+
+        public int edgeCount() {
+            return dependencies.size();
         }
     }
 

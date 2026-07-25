@@ -65,6 +65,7 @@ class MinosMcpServerIntegrationTest {
             List<String> names = listed.tools().stream().map(tool -> tool.name()).toList();
             assertTrue(names.contains("minos_project_structure"));
             assertTrue(names.contains("minos_architecture"));
+            assertTrue(names.contains("minos_architecture_graph"));
             assertTrue(names.contains("minos_impact"));
 
             var architecture = client.callTool(CallToolRequest.builder("minos_architecture")
@@ -73,6 +74,16 @@ class MinosMcpServerIntegrationTest {
             assertFalse(Boolean.TRUE.equals(architecture.isError()));
             String architectureJson = ((TextContent) architecture.content().getFirst()).text();
             assertTrue(architectureJson.contains("\"moduleCount\":3"), architectureJson);
+            assertTrue(architectureJson.contains("\"moduleDependencies\":["), architectureJson);
+
+            var graph = client.callTool(CallToolRequest.builder("minos_architecture_graph")
+                    .arguments(Map.of("project", "m10-typescript", "format", "mermaid"))
+                    .build());
+            assertFalse(Boolean.TRUE.equals(graph.isError()));
+            String graphMermaid = ((TextContent) graph.content().getFirst()).text();
+            assertTrue(graphMermaid.startsWith("flowchart LR"), graphMermaid);
+            assertTrue(graphMermaid.contains("packages/app"), graphMermaid);
+            assertTrue(graphMermaid.contains("packages/api"), graphMermaid);
 
             var impact = client.callTool(CallToolRequest.builder("minos_impact")
                     .arguments(Map.of("project", "m10-typescript", "symbolId", greetingPort.id()))
@@ -92,7 +103,7 @@ class MinosMcpServerIntegrationTest {
             assertTrue(Boolean.TRUE.equals(invalidImpact.isError()));
 
             System.out.printf(
-                    "M10 MCP stdio: tools=%d, project=%s, snapshot=%s, architecture-modules=3, impact-root=GreetingPort%n",
+                    "M10 MCP stdio: tools=%d, project=%s, snapshot=%s, architecture-modules=3, graph=mermaid, impact-root=GreetingPort%n",
                     listed.tools().size(), project.id(), snapshot.snapshotId());
         } finally {
             client.closeGracefully();

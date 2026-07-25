@@ -28,6 +28,7 @@ class MinosMcpToolsTest {
         assertEquals(MinosMcpTools.TOOL_COUNT,
                 specs.stream().map(spec -> spec.tool().name()).distinct().count());
         assertTrue(specs.stream().allMatch(spec -> spec.tool().name().startsWith("minos_")));
+        assertTrue(specs.stream().anyMatch(spec -> "minos_architecture_graph".equals(spec.tool().name())));
 
         SyncToolSpecification symbols = specs.stream()
                 .filter(spec -> "minos_find_symbols".equals(spec.tool().name()))
@@ -40,6 +41,32 @@ class MinosMcpToolsTest {
         assertEquals("{\"count\":0}", ((TextContent) result.content().getFirst()).text());
         assertEquals(List.of(
                 "find-symbol", "demo", "Greeting", "--format", "json", "--limit", "7"
+        ), invoked.get());
+    }
+
+    @Test
+    void architectureGraphSelectsExplicitGraphFormatWithoutDuplicateFormatOption() {
+        AtomicReference<List<String>> invoked = new AtomicReference<>();
+        MinosMcpTools tools = new MinosMcpTools(arguments -> {
+            invoked.set(arguments);
+            return new MinosMcpTools.CommandResult(0, "flowchart LR\n  m0 --> m1\n", "");
+        });
+        SyncToolSpecification graph = tools.specifications().stream()
+                .filter(spec -> "minos_architecture_graph".equals(spec.tool().name()))
+                .findFirst().orElseThrow();
+
+        var result = graph.callHandler().apply(null, CallToolRequest.builder("minos_architecture_graph")
+                .arguments(Map.of(
+                        "project", "demo",
+                        "module", "api",
+                        "format", "mermaid"
+                ))
+                .build());
+
+        assertFalse(Boolean.TRUE.equals(result.isError()));
+        assertTrue(((TextContent) result.content().getFirst()).text().startsWith("flowchart LR"));
+        assertEquals(List.of(
+                "architecture", "demo", "--module", "api", "--format", "mermaid"
         ), invoked.get());
     }
 

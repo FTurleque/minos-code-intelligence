@@ -15,7 +15,13 @@ installation Windows
    ├── runtime Java MINOS
    ├── CLI
    ├── MCP natif
-   ├── PATH utilisateur
+   ├── PATH utilisateur optionnel
+   ├── intégrations MCP natives optionnelles
+   │    ├── Copilot JetBrains / IntelliJ
+   │    ├── Copilot CLI
+   │    ├── Claude Code
+   │    ├── Claude Desktop
+   │    └── OpenAI Codex
    └── MCP Docker optionnel
    ↓
 minos doctor
@@ -26,7 +32,7 @@ minos project add <path> --name <name>
    ↓
 minos index <name>
    ↓
-search / architecture / impact / MCP
+search / architecture / graphe / impact / MCP
 ```
 
 Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
@@ -50,11 +56,13 @@ Le guide couvre :
 - installation utilisateur sans droits administrateur ;
 - ajout de MINOS au `PATH` ;
 - MCP natif installé avec MINOS ;
+- choix optionnel des clients MCP natifs dans le setup ;
+- GitHub Copilot JetBrains / CLI, Claude Code, Claude Desktop et Codex ;
 - configuration optionnelle du MCP Docker lorsque Docker Desktop est déjà disponible ;
 - emplacement du programme et de `MINOS_HOME` ;
 - premier démarrage ;
 - providers Java et TypeScript ;
-- premier projet ;
+- premier projet et visualisation du graphe ;
 - mise à jour, rollback et désinstallation ;
 - publication d'une release pour les mainteneurs.
 
@@ -91,20 +99,45 @@ minos.cmd index-status my-project
 minos.cmd search my-project GreetingPort --format json
 ```
 
+Pour voir le graphe de dépendances entre modules :
+
+```powershell
+minos.cmd architecture my-project --format json
+minos.cmd architecture my-project --format mermaid
+minos.cmd architecture my-project --format dot
+```
+
+Voir [Référence CLI](cli.md) pour l'export Mermaid/Graphviz et le filtrage par module.
+
 ---
 
 ## 3. MCP natif et MCP Docker
 
-Le MCP natif est installé avec MINOS et reste le mode recommandé :
+Le MCP natif est installé avec MINOS et reste le mode recommandé pour les clients :
 
 ```text
-command = <installation>\minos.cmd
+command = <installation>\app\minos.exe
 args    = mcp
+env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 ```
 
-Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP Docker** si l'utilisateur sélectionne cette option et si Docker Desktop est déjà installé et démarré.
+Le `setup.exe` peut enregistrer cette configuration dans les clients sélectionnés par l'utilisateur :
 
-MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide et la configuration Docker peut être lancée plus tard.
+```text
+GitHub Copilot — JetBrains / IntelliJ
+GitHub Copilot CLI
+Claude Code
+Claude Desktop
+OpenAI Codex
+```
+
+Docker n'est nécessaire pour aucune de ces intégrations.
+
+Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP Docker** si l'utilisateur sélectionne cette option séparée et si Docker Desktop est déjà installé et démarré.
+
+MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide.
+
+Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le graphe en JSON, Mermaid ou DOT.
 
 ---
 
@@ -114,9 +147,9 @@ MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pe
 |---|---|
 | Télécharger, installer, mettre à jour ou désinstaller MINOS | [Installation PROD Windows](production-installation.md) |
 | Comprendre l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
-| Connaître toutes les commandes | [Référence CLI](cli.md) |
-| Connecter un client MCP | [Serveur MCP](mcp.md) |
-| Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
+| Connaître toutes les commandes et visualiser le graphe | [Référence CLI](cli.md) |
+| Connecter Copilot / Claude / Codex au MCP | [Serveur MCP](mcp.md) |
+| Utiliser MINOS depuis Java et lire le graphe | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
 | Développer MINOS lui-même | [Installation depuis les sources](installation.md) |
@@ -141,9 +174,12 @@ MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pe
 | Implémentations/appels/dépendances | commandes relationnelles |
 | Trouver les tests liés | `related-tests` |
 | Lire l'architecture | `architecture` |
+| Voir/exporter le graphe | `architecture --format json|mermaid|dot` |
 | Estimer un impact | `impact` |
 | Consommer depuis Java | `MinosApi`, `MinosMultiRepositoryApi` |
+| Lire le graphe depuis Java | `MinosApi.getArchitectureGraph` |
 | Exposer MINOS à un agent | `minos mcp` |
+| Lire le graphe depuis un agent | `minos_architecture_graph` |
 | Exporter vers NEXUS | `nexus-export` |
 
 ---
@@ -167,9 +203,10 @@ minos.cmd import-scip my-project `
 Par défaut :
 
 ```text
-programme : %LOCALAPPDATA%\Programs\MINOS
-MINOS_HOME: %LOCALAPPDATA%\MINOS\data
-Docker    : %LOCALAPPDATA%\MINOS\docker + docker-data
+programme        : %LOCALAPPDATA%\Programs\MINOS
+MINOS_HOME       : %LOCALAPPDATA%\MINOS\data
+intégrations MCP : %LOCALAPPDATA%\MINOS\mcp-client-integrations.json
+Docker           : %LOCALAPPDATA%\MINOS\docker + docker-data
 ```
 
 La séparation est volontaire : mettre à jour ou désinstaller le programme ne doit pas supprimer automatiquement les données persistantes.
@@ -184,6 +221,12 @@ Commencer par :
 minos.cmd --version
 minos.cmd doctor --format json
 minos.cmd project list --format json
+```
+
+Pour les intégrations MCP du setup :
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\MINOS\mcp-clients.log" -Tail 200
 ```
 
 Puis consulter [Dépannage](troubleshooting.md).

@@ -66,6 +66,11 @@ jobs:
           git rev-parse HEAD
           Write-Host "Ref: $env:GITHUB_REF"
 
+      - name: Valider les intégrations MCP natives Windows
+        shell: powershell
+        run: |
+          .\scripts\install\verify-mcp-client-integration.ps1
+
       - name: Construire et qualifier la distribution Windows
         if: github.ref != 'refs/heads/main'
         shell: pwsh

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StableCliIntegrationTest {
@@ -55,6 +56,30 @@ class StableCliIntegrationTest {
         assertTrue(architecture.output().contains("\"moduleCount\":3"), architecture.output());
         assertTrue(architecture.output().contains("\"technologies\":[\"TYPESCRIPT\",\"NPM\"]"),
                 architecture.output());
+        assertTrue(architecture.output().contains("\"moduleDependencies\":["), architecture.output());
+        assertTrue(architecture.output().contains("\"sourceModuleId\":"), architecture.output());
+        assertTrue(architecture.output().contains("\"targetModuleId\":"), architecture.output());
+        assertTrue(architecture.output().contains("\"dependencyCount\":4"), architecture.output());
+
+        CommandResult mermaid = run(home, "architecture", "m9-typescript", "--format", "mermaid");
+        assertEquals(0, mermaid.exitCode(), mermaid.error());
+        assertTrue(mermaid.output().startsWith("flowchart LR\n"), mermaid.output());
+        assertTrue(mermaid.output().contains("packages/app"), mermaid.output());
+        assertTrue(mermaid.output().contains("packages/api"), mermaid.output());
+        assertTrue(mermaid.output().contains("4 deps"), mermaid.output());
+
+        CommandResult moduleMermaid = run(home,
+                "architecture", "m9-typescript", "--module", "packages/api", "--format", "mermaid");
+        assertEquals(0, moduleMermaid.exitCode(), moduleMermaid.error());
+        assertTrue(moduleMermaid.output().contains("packages/api"), moduleMermaid.output());
+        assertTrue(moduleMermaid.output().contains("packages/app"), moduleMermaid.output());
+        assertFalse(moduleMermaid.output().contains("typescript-modules<br/>"), moduleMermaid.output());
+
+        CommandResult dot = run(home, "architecture", "m9-typescript", "--format", "dot");
+        assertEquals(0, dot.exitCode(), dot.error());
+        assertTrue(dot.output().startsWith("digraph minos_architecture {\n"), dot.output());
+        assertTrue(dot.output().contains("rankdir=\"LR\""), dot.output());
+        assertTrue(dot.output().contains("4 deps"), dot.output());
 
         RegisteredProject project = new LocalProjectRegistry(home.resolve("registry"))
                 .listProjects().getFirst();
