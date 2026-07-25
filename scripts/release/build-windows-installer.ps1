@@ -37,6 +37,7 @@ foreach ($Required in @(
     'app\minos.exe',
     'lib\minos.jar',
     'integration\configure-mcp-clients.ps1',
+    'integration\configure-mcp-clients-setup.ps1',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',
