@@ -33,6 +33,11 @@ VersionInfoProductTextVersion={#MinosVersion}
 
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
+Name: "mcp-copilot-jetbrains"; Description: "GitHub Copilot — JetBrains / IntelliJ"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
+Name: "mcp-copilot-cli"; Description: "GitHub Copilot CLI"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
+Name: "mcp-claude-code"; Description: "Claude Code"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
+Name: "mcp-claude-desktop"; Description: "Claude Desktop"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
+Name: "mcp-codex"; Description: "OpenAI Codex"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
 Name: "docker"; Description: "Configurer et démarrer le MCP Docker (Docker Desktop requis)"; GroupDescription: "MCP Docker optionnel :"; Flags: unchecked
 
 [Files]
@@ -42,11 +47,12 @@ Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 
 [UninstallRun]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\integration\configure-mcp-clients.ps1"" -InstallRoot ""{app}"" -Action Uninstall"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMinosNativeMcpClients"
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"
 
 [UninstallDelete]
-; The setup-owned marker must not keep {app} behind when Docker is unavailable.
-; Docker runtime and persistent data live outside {app} and are intentionally preserved.
+; The setup-owned Docker marker must not keep {app} behind when Docker is unavailable.
+; Runtime state and persistent MINOS data live outside {app} and are managed separately.
 Type: files; Name: "{app}\.docker-mcp-managed"
 
 [Code]
@@ -150,6 +156,54 @@ begin
   Result := DockerProjectsPage.Values[0];
 end;
 
+function NativeMcpClientSelected(): Boolean;
+begin
+  Result :=
+    WizardIsTaskSelected('mcp-copilot-jetbrains') or
+    WizardIsTaskSelected('mcp-copilot-cli') or
+    WizardIsTaskSelected('mcp-claude-code') or
+    WizardIsTaskSelected('mcp-claude-desktop') or
+    WizardIsTaskSelected('mcp-codex');
+end;
+
+procedure ConfigureNativeMcpClients;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShell: String;
+begin
+  if not NativeMcpClientSelected() then
+    exit;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters :=
+    '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\configure-mcp-clients.ps1') +
+    '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+
+  if WizardIsTaskSelected('mcp-copilot-jetbrains') then
+    Parameters := Parameters + ' -CopilotJetBrains';
+  if WizardIsTaskSelected('mcp-copilot-cli') then
+    Parameters := Parameters + ' -CopilotCli';
+  if WizardIsTaskSelected('mcp-claude-code') then
+    Parameters := Parameters + ' -ClaudeCode';
+  if WizardIsTaskSelected('mcp-claude-desktop') then
+    Parameters := Parameters + ' -ClaudeDesktop';
+  if WizardIsTaskSelected('mcp-codex') then
+    Parameters := Parameters + ' -Codex';
+
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) then
+  begin
+    MsgBox(
+      'MINOS est installé, mais une ou plusieurs intégrations MCP natives n''ont pas pu être configurées.' + #13#10 + #13#10 +
+      'Le CLI et le MCP natif restent utilisables directement.' + #13#10 +
+      'Diagnostic : %LOCALAPPDATA%\MINOS\mcp-clients.log',
+      mbError,
+      MB_OK);
+  end;
+end;
+
 procedure ConfigureDockerMcp;
 var
   ResultCode: Integer;
@@ -233,6 +287,8 @@ begin
   begin
     if WizardIsTaskSelected('addtopath') then
       AddMinosToUserPath;
+
+    ConfigureNativeMcpClients;
 
     if WizardIsTaskSelected('docker') and DockerReady() then
       ConfigureDockerMcp;
