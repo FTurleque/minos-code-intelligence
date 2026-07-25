@@ -72,7 +72,7 @@ sequenceDiagram
     L->>SS: READY + snapshot actif
 ```
 
-La CLI M9 actuelle ne prétend toutefois pas fournir un runner automatique universel : `minos index` importe explicitement un artefact SCIP déjà produit.
+M14 fournit désormais l'exécution autonome des providers qualifiés derrière les ports d'orchestration ; l'import SCIP explicite reste disponible pour le diagnostic et le fallback.
 
 ## Couche normalisée
 
@@ -98,6 +98,22 @@ Les services `context` bornent les résultats, extraits source et budgets estim�
 
 Le package `architecture` dérive topologie, dépendances, concentration, centralité relative et technologies observées.
 
+`ArchitectureDependencyGraph` conserve notamment les arêtes agrégées entre modules sous forme de `ArchitectureModuleDependency`. Ces arêtes restent **dérivées** : elles sont calculées à partir des relations normalisées du snapshot et portent nature, confiance et preuves.
+
+Le graphe est désormais exposé sans recopier la logique métier :
+
+```text
+ArchitectureDependencyGraph
+        │
+        ├── CLI architecture --format json
+        ├── CLI architecture --format mermaid
+        ├── CLI architecture --format dot
+        ├── MinosApi.getArchitectureGraph(...)
+        └── MCP minos_architecture_graph
+```
+
+Les renderers Mermaid/DOT sont des adapters d'exposition ; ils ne recalculent aucune dépendance.
+
 ### Impact
 
 Le package `impact` propage un changement potentiel sur le graphe observé. Son résultat est explicatif et borné ; il n’est pas une preuve d’exhaustivité runtime.
@@ -110,21 +126,23 @@ classDiagram
       <<internal>>
       symbol queries
       relationships
-      architecture
+      architecture graph
       impact
     }
     class CLI {
       <<adapter>>
       text/json
+      mermaid/dot architecture
     }
     class MCP {
       <<adapter>>
       STDIO
-      15 read-only tools
+      16 read-only tools
     }
     class MinosApi {
       <<public interface>>
       contractVersion=1
+      getArchitectureGraph
     }
     class MinosMultiRepositoryApi {
       <<public interface>>
