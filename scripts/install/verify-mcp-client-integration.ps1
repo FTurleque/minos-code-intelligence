@@ -24,6 +24,19 @@ function Read-Json([string] $Path) {
     return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
 }
 
+function Read-TextLines([string] $Path) {
+    return [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8)
+}
+
+function Assert-Utf8WithoutBom([string] $Path, [string] $DisplayName) {
+    $Bytes = [System.IO.File]::ReadAllBytes($Path)
+    $HasUtf8Bom = $Bytes.Length -ge 3 -and
+        $Bytes[0] -eq 0xEF -and
+        $Bytes[1] -eq 0xBB -and
+        $Bytes[2] -eq 0xBF
+    Assert-True (-not $HasUtf8Bom) "$DisplayName JSON contains a UTF-8 BOM."
+}
+
 function Write-Utf8Json([string] $Path, [object] $Value) {
     $Parent = Split-Path -Parent $Path
     New-Item -ItemType Directory -Force -Path $Parent | Out-Null
@@ -31,8 +44,42 @@ function Write-Utf8Json([string] $Path, [object] $Value) {
     [System.IO.File]::WriteAllText($Path, $Json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
-function New-FakeMcpCli([string] $Directory, [string] $Name) {
-    $Path = Join-Path $Directory "$Name.cmd"
+function New-FakeMcpCli(
+    [string] $Directory,
+    [string] $Name,
+    [ValidateSet('cmd', 'ps1')]
+    [string] $Extension = 'cmd'
+) {
+    $Path = Join-Path $Directory "$Name.$Extension"
+    if ($Extension -eq 'ps1') {
+        $Script = @'
+$State = Join-Path $PSScriptRoot '__NAME__.state'
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    exit 97
+}
+if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'get') {
+    if (Test-Path -LiteralPath $State -PathType Leaf) {
+        [System.IO.File]::ReadAllText($State, [System.Text.Encoding]::ASCII)
+        exit 0
+    }
+    exit 1
+}
+if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'add') {
+    $Content = 'runner=' + $PSVersionTable.PSVersion.Major + ' ' + ($args -join ' ')
+    [System.IO.File]::WriteAllText($State, $Content, [System.Text.Encoding]::ASCII)
+    exit 0
+}
+if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'remove') {
+    Remove-Item -LiteralPath $State -Force -ErrorAction SilentlyContinue
+    exit 0
+}
+exit 2
+'@
+        $Script = $Script.Replace('__NAME__', $Name)
+        [System.IO.File]::WriteAllText($Path, $Script + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+        return $Path
+    }
+
     @"
 @echo off
 setlocal
@@ -72,7 +119,10 @@ try {
 
     New-Item -ItemType Directory -Force -Path $AppRoot, $FakeBin, $DataRoot | Out-Null
     New-Item -ItemType File -Force -Path (Join-Path $AppRoot 'minos.exe') | Out-Null
-    New-FakeMcpCli -Directory $FakeBin -Name 'copilot' | Out-Null
+    # The installed Copilot CLI is commonly exposed as copilot.ps1. Running the
+    # fake only under PowerShell 6+ proves that the Windows PowerShell 5.1
+    # manager routes a .ps1 launcher through pwsh.exe.
+    New-FakeMcpCli -Directory $FakeBin -Name 'copilot' -Extension 'ps1' | Out-Null
     New-FakeMcpCli -Directory $FakeBin -Name 'claude' | Out-Null
     New-FakeMcpCli -Directory $FakeBin -Name 'codex' | Out-Null
     $env:Path = "$FakeBin;$OldPath"
@@ -124,19 +174,30 @@ try {
     # JSON written by Windows PowerShell 5.1 must remain human-readable. The
     # previous implementation inherited ConvertTo-Json's excessive indentation
     # when serializing parsed PSCustomObjects.
-    $CopilotRaw = [System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8)
-    $ClaudeDesktopRaw = [System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8)
-    Assert-True ($CopilotRaw -match '(?m)^  "servers": \{$') 'Copilot JSON is not formatted with two-space indentation.'
-    Assert-True ($CopilotRaw -match '(?m)^    "minos": \{$') 'Copilot MINOS JSON entry indentation is incorrect.'
-    Assert-True ($ClaudeDesktopRaw -match '(?m)^  "mcpServers": \{$') 'Claude Desktop JSON is not formatted with two-space indentation.'
-    Assert-True ($ClaudeDesktopRaw -match '(?m)^    "minos": \{$') 'Claude Desktop MINOS JSON entry indentation is incorrect.'
-    Assert-True (-not ($CopilotRaw -match '(?m)^ {20,}\S')) 'Copilot JSON contains excessive indentation.'
-    Assert-True (-not ($ClaudeDesktopRaw -match '(?m)^ {20,}\S')) 'Claude Desktop JSON contains excessive indentation.'
+    # ReadAllLines removes CRLF/LF terminators before comparison. Exact line
+    # equality therefore enforces the required spaces without making the test
+    # depend on the host line-ending convention.
+    $CopilotLines = Read-TextLines -Path $CopilotConfig
+    $ClaudeDesktopLines = Read-TextLines -Path $ClaudeDesktopConfig
+    $StateLines = Read-TextLines -Path $StatePath
+    Assert-True ($CopilotLines -ccontains '  "servers": {') 'Copilot JSON is not formatted with two-space indentation.'
+    Assert-True ($CopilotLines -ccontains '    "minos": {') 'Copilot MINOS JSON entry indentation is incorrect.'
+    Assert-True ($ClaudeDesktopLines -ccontains '  "mcpServers": {') 'Claude Desktop JSON is not formatted with two-space indentation.'
+    Assert-True ($ClaudeDesktopLines -ccontains '    "minos": {') 'Claude Desktop MINOS JSON entry indentation is incorrect.'
+    Assert-True ($StateLines -ccontains '  "formatVersion": 1,') 'Managed integration state JSON is not formatted with two-space indentation.'
+    Assert-True ($StateLines -ccontains '  "clients": [') 'Managed integration state clients indentation is incorrect.'
+    Assert-True (-not ($CopilotLines -match '^ {20,}\S')) 'Copilot JSON contains excessive indentation.'
+    Assert-True (-not ($ClaudeDesktopLines -match '^ {20,}\S')) 'Claude Desktop JSON contains excessive indentation.'
+    Assert-True (-not ($StateLines -match '^ {20,}\S')) 'Managed integration state JSON contains excessive indentation.'
+    Assert-Utf8WithoutBom -Path $CopilotConfig -DisplayName 'Copilot'
+    Assert-Utf8WithoutBom -Path $ClaudeDesktopConfig -DisplayName 'Claude Desktop'
+    Assert-Utf8WithoutBom -Path $StatePath -DisplayName 'Managed integration state'
 
     $CopilotState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'copilot.state')
     $ClaudeState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'claude.state')
     $CodexState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'codex.state')
     Assert-True ($CopilotState.Contains($ExpectedExe) -and $CopilotState.Contains($DataRoot)) 'Copilot CLI did not receive the MINOS command/environment.'
+    Assert-True ($CopilotState -match '^runner=([6-9]|\d{2,}) ') 'Copilot CLI PowerShell launcher was not invoked through pwsh.exe.'
     Assert-True ($ClaudeState.Contains($ExpectedExe) -and $ClaudeState.Contains($DataRoot)) 'Claude Code did not receive the MINOS command/environment.'
     Assert-True ($ClaudeState -match 'mcp add --scope user --env .* minos -- ') 'Claude Code options are not placed before the server name.'
     Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
