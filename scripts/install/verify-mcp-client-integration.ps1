@@ -38,11 +38,14 @@ function New-FakeMcpCli([string] $Directory, [string] $Name) {
 setlocal
 set "STATE=%~dp0$Name.state"
 if /I "%~1"=="mcp" if /I "%~2"=="get" (
-  if exist "%STATE%" exit /b 0
+  if exist "%STATE%" (
+    type "%STATE%"
+    exit /b 0
+  )
   exit /b 1
 )
 if /I "%~1"=="mcp" if /I "%~2"=="add" (
-  >"%STATE%" echo minos
+  >"%STATE%" echo %*
   exit /b 0
 )
 if /I "%~1"=="mcp" if /I "%~2"=="remove" (
@@ -118,9 +121,13 @@ try {
     Assert-True ($ClaudeDesktopValue.mcpServers.minos.command -eq $ExpectedExe) 'Claude Desktop MINOS command is incorrect.'
     Assert-True (@($State.clients).Count -eq 5) 'Expected five managed MCP client integrations.'
 
-    Assert-True (Test-Path -LiteralPath (Join-Path $FakeBin 'copilot.state')) 'Copilot CLI was not configured.'
-    Assert-True (Test-Path -LiteralPath (Join-Path $FakeBin 'claude.state')) 'Claude Code was not configured.'
-    Assert-True (Test-Path -LiteralPath (Join-Path $FakeBin 'codex.state')) 'Codex was not configured.'
+    $CopilotState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'copilot.state')
+    $ClaudeState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'claude.state')
+    $CodexState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'codex.state')
+    Assert-True ($CopilotState.Contains($ExpectedExe) -and $CopilotState.Contains($DataRoot)) 'Copilot CLI did not receive the MINOS command/environment.'
+    Assert-True ($ClaudeState.Contains($ExpectedExe) -and $ClaudeState.Contains($DataRoot)) 'Claude Code did not receive the MINOS command/environment.'
+    Assert-True ($ClaudeState -match 'mcp add --scope user --env .* minos -- ') 'Claude Code options are not placed before the server name.'
+    Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
     Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -ge 2) 'Expected JSON configuration backups.'
 
     & $Manager `
@@ -147,7 +154,7 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $FakeBin 'codex.state'))) 'Codex entry remained after uninstall.'
     Assert-True (-not (Test-Path -LiteralPath $StatePath)) 'Managed integration state remained after clean uninstall.'
 
-    # Collision safety: an unmanaged existing `minos` entry must never be overwritten.
+    # Collision safety: an unmanaged existing JSON `minos` entry must never be overwritten.
     $CollisionConfig = Join-Path $Root 'collision\mcp.json'
     $CollisionState = Join-Path $Root 'collision\state.json'
     Write-Utf8Json -Path $CollisionConfig -Value ([pscustomobject][ordered]@{
@@ -175,10 +182,46 @@ try {
     $CollisionAfter = Read-Json -Path $CollisionConfig
     Assert-True ($CollisionAfter.servers.minos.command -eq 'C:\Other\minos.exe') 'Existing unmanaged MINOS MCP entry was overwritten.'
 
+    # Modification safety: an entry originally managed through a CLI must be
+    # preserved if the user changes its command/environment before uninstall.
+    $ModifiedStatePath = Join-Path $Root 'modified\state.json'
+    $ModifiedLogPath = Join-Path $Root 'modified\log.txt'
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -Codex `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $ModifiedStatePath `
+        -LogPath $ModifiedLogPath `
+        -BackupRoot (Join-Path $Root 'modified\backups') `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    $CodexFakeState = Join-Path $FakeBin 'codex.state'
+    Set-Content -LiteralPath $CodexFakeState -Value 'mcp add minos -- C:\Other\minos.exe mcp MINOS_HOME=C:\Other\data' -Encoding ascii
+
+    $PreserveRaised = $false
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -Action Uninstall `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath $ModifiedStatePath `
+            -LogPath $ModifiedLogPath `
+            -BackupRoot (Join-Path $Root 'modified\backups') `
+            -CopilotJetBrainsConfigPath $CopilotConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $PreserveRaised = $true
+    }
+    Assert-True $PreserveRaised 'Modified managed CLI entry should have been preserved with a strict-mode warning.'
+    Assert-True (Test-Path -LiteralPath $CodexFakeState) 'Modified managed CLI entry was removed.'
+
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green
     Write-Host 'Clients : Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop, Codex'
-    Write-Host 'Safety  : existing entries preserved; managed entries removed selectively'
+    Write-Host 'Safety  : existing/modified entries preserved; unchanged managed entries removed selectively'
 }
 finally {
     $env:Path = $OldPath
