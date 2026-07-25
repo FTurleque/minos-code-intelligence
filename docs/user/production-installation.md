@@ -449,18 +449,30 @@ Get-Content ".\minos-$Version-windows-x64.zip.sha256"
 
 ### 11.2 Installer le ZIP
 
-L'installateur PowerShell accepte directement le ZIP :
+Le ZIP est autonome : **aucun checkout Git de MINOS n'est nécessaire**.
+
+Depuis le répertoire qui contient le ZIP, le décompresser puis exécuter le
+`install.ps1` embarqué à la racine de la distribution :
 
 ```powershell
 $Version = '0.2.0-rc2'
+$Zip = (Resolve-Path ".\minos-$Version-windows-x64.zip").Path
+$ExtractRoot = Join-Path $PWD "minos-$Version-extracted"
+$Distribution = Join-Path $ExtractRoot "minos-$Version-windows-x64"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File .\scripts\install\install-windows.ps1 `
-  -Package ".\minos-$Version-windows-x64.zip" `
+Expand-Archive -LiteralPath $Zip -DestinationPath $ExtractRoot -Force
+
+# Le script est exécuté par le PowerShell déjà ouvert : aucune dépendance
+# à une commande `powershell.exe` ou `pwsh.exe` présente dans le PATH.
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+& "$Distribution\install.ps1" `
+  -Package $Distribution `
   -AddToPath
 ```
 
-Lorsqu'on utilise le script **contenu dans le ZIP**, on peut aussi décompresser l'archive puis lancer `install.ps1` depuis sa racine.
+Le script `scripts\install\install-windows.ps1` appartient au **checkout
+source** et ne doit pas être utilisé comme chemin d'installation dans le
+parcours utilisateur d'une GitHub Release.
 
 Le chemin par défaut reste :
 

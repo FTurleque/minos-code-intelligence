@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Install', 'Start', 'Attach', 'Status', 'Validate', 'Stop')]
+    [ValidateSet('Install', 'Start', 'Attach', 'Status', 'Validate', 'Stop', 'Uninstall')]
     [string] $Action,
 
     [string] $Jar = '',
@@ -63,6 +63,25 @@ function Compose([string[]] $Arguments) {
     & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "docker compose failed: $($Arguments -join ' ')"
+    }
+}
+
+function Invoke-DockerAllowFailure([string[]] $Arguments) {
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 can surface native stderr as ErrorRecord objects.
+        # Cleanup commands must inspect the native exit code instead of failing on
+        # harmless diagnostic output.
+        $ErrorActionPreference = 'Continue'
+        $Output = ((& $DockerCommand.Source @Arguments 2>&1) | Out-String).Trim()
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    return [pscustomobject]@{
+        ExitCode = $ExitCode
+        Output = $Output
     }
 }
 
@@ -215,5 +234,26 @@ MINOS_GIT_COMMIT=$Commit
         Require-Installed
         Compose @('stop', '--timeout', '10', 'minos-mcp')
         Write-Host 'MINOS Docker MCP stopped.' -ForegroundColor Green
+    }
+    'Uninstall' {
+        Require-Installed
+        $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
+        $ManagedImage = [string] $Metadata.image
+
+        # `down` removes the setup-managed container rather than merely leaving
+        # it stopped in Docker Desktop. Persistent MINOS data is a bind mount
+        # outside this runtime directory and is intentionally preserved.
+        Compose @('down', '--timeout', '10', '--remove-orphans')
+
+        if (-not [string]::IsNullOrWhiteSpace($ManagedImage)) {
+            $ImageRemoval = Invoke-DockerAllowFailure -Arguments @('image', 'rm', $ManagedImage)
+            if ($ImageRemoval.ExitCode -ne 0) {
+                Write-Warning "MINOS Docker container was removed, but image '$ManagedImage' could not be removed: $($ImageRemoval.Output)"
+            }
+        }
+
+        Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host 'MINOS Docker MCP container and runtime configuration removed.' -ForegroundColor Green
+        Write-Host "Persistent data preserved: $DataRoot"
     }
 }
