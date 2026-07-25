@@ -17,6 +17,13 @@
     <description>Local-first, language-agnostic Code Intelligence Engine.</description>
 
     <dependencies>
+        <!-- First real S2 boundary: domain is compiled and packaged by its own module. -->
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Infrastructure only: imports must remain confined to adapter.scip. -->
         <dependency>
             <groupId>org.scip-code</groupId>
@@ -47,10 +54,11 @@
 
     <build>
         <!--
-          Transitional S2 bridge: keep the historical source layout while the reactor
-          is introduced. Later S2 commits move packages into their owning modules and
-          remove these external source roots. Keeping target at repository root also
-          preserves M14 release/install scripts during the structural migration.
+          Transitional S2 bridge: non-domain sources still use the historical source
+          layout. The domain package is excluded here because minos-domain owns it.
+          Later S2 commits relocate all packages into their owning modules and remove
+          these external source roots. Keeping target at repository root preserves
+          M14 release/install scripts during the structural migration.
         -->
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
         <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
@@ -67,6 +75,16 @@
         </testResources>
 
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>com/minos/domain/**/*.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
