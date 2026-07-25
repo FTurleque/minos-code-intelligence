@@ -11,6 +11,7 @@ classDiagram
       symbols()
       relationships()
       architecture()
+      architectureGraph()
       impact()
     }
     class AutonomousIndexing {
@@ -23,14 +24,17 @@ classDiagram
     class MinosCli {
       <<adapter>>
       run(args, stdout, stderr)
+      architecture text/json/mermaid/dot
     }
     class MinosApi {
       <<public interface>>
       CONTRACT_VERSION = 1
+      getArchitectureGraph()
     }
     class MinosMcpServer {
       <<read-only adapter>>
       STDIO
+      16 tools
     }
     class NexusExportService {
       <<integration>>
@@ -59,6 +63,17 @@ import-scip <project> ...
 
 `LocalAutonomousIndexOperations` coordonne discovery, négociation, fingerprints et lifecycle existants ; la CLI ne contient pas elle-même la logique provider.
 
+La surface `architecture` expose désormais le graphe inter-modules réellement dérivé :
+
+```text
+architecture <project> --format json
+architecture <project> --format mermaid
+architecture <project> --format dot
+architecture <project> --module <module> --format mermaid|dot
+```
+
+`json` conserve une vue structurée des arêtes ; Mermaid et DOT sont seulement des renderers d'exposition du même `ArchitectureDependencyGraph`.
+
 ### Bootstrap
 
 `MinosLauncher` :
@@ -86,7 +101,15 @@ Les commandes d'automatisation acceptent `--format json` lorsqu'un format machin
 
 Il expose notamment l'administration projet, l'import SCIP explicite et les requêtes de Code Intelligence.
 
-M14 **n'étend pas silencieusement le contrat API v1 avec l'exécution des providers**. L'indexation autonome est d'abord une responsabilité d'administration locale CLI/runtime. Une future exposition API devra être additive/versionnée et ne devra pas faire fuiter les types de runtime provider.
+Le graphe d'architecture est ajouté de manière compatible au contrat v1 par :
+
+```java
+ArchitectureGraphDto getArchitectureGraph(String projectIdentifier)
+```
+
+La méthode est `default` dans l'interface afin de préserver la compatibilité des implémentations tierces existantes ; `LocalMinosApi` retourne la vue complète. Les DTOs publics exposent modules, source/cible des arêtes, compteurs, échantillons de relations, nature et confiance sans faire fuiter `com.minos.architecture`.
+
+M14 **n'étend pas silencieusement le contrat API v1 avec l'exécution des providers**. L'indexation autonome reste une responsabilité d'administration locale CLI/runtime.
 
 La surface publique utilise uniquement :
 
@@ -106,7 +129,7 @@ EXECUTION_FAILURE
 
 ## API M12 multi-repository
 
-`MinosMultiRepositoryApi` étend `MinosApi` sans modifier le contrat M11 existant.
+`MinosMultiRepositoryApi` étend `MinosApi` et hérite donc aussi de la vue de graphe du projet individuel.
 
 Les bornes publiques existantes restent inchangées : commits, fichiers, profondeur de zone et relations restent explicitement limités.
 
@@ -125,13 +148,22 @@ import-scip
 
 Ce choix empêche un agent MCP de déclencher implicitement une compilation, un téléchargement de provider ou une mutation administrative.
 
-Le launcher natif M14 fournit :
+Le launcher natif fournit :
 
 ```text
 minos mcp
 ```
 
-mais la surface fonctionnelle MCP reste celle de M10.
+Le catalogue contient désormais **16 tools**, dont :
+
+```text
+minos_architecture
+minos_architecture_graph
+```
+
+`minos_architecture_graph` accepte `json`, `mermaid` ou `dot` et un module optionnel. Le handler traduit l'appel vers la CLI ; il ne duplique pas l'analyse d'architecture.
+
+Le setup Windows peut enregistrer ce MCP natif dans Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop et Codex. Cette intégration de clients reste une responsabilité de packaging/runtime et ne modifie pas le cœur métier MCP.
 
 Voir le [guide utilisateur MCP](../user/mcp.md).
 
@@ -183,8 +215,8 @@ Pour un futur adapter HTTP, IDE ou autre protocole :
 
 ## Tests de contrat
 
-Les tests API continuent de vérifier l'absence de fuite des packages internes/JGit.
+Les tests API vérifient l'absence de fuite des packages internes/JGit et couvrent la vue `ArchitectureGraphDto`.
 
-Le MCP conserve ses tests de catalogue/schemas et replay STDIO.
+Le MCP conserve ses tests de catalogue/schemas et replay STDIO, avec un appel réel de `minos_architecture_graph`.
 
-M14 ajoute des tests ciblés pour l'exécution processus et la CLI autonome ; les replays providers réels et la distribution Windows font partie des portes de qualification du jalon.
+La qualification Windows vérifie en plus le cycle installation/désinstallation des intégrations MCP natives dans des configurations temporaires avant de construire une release.
