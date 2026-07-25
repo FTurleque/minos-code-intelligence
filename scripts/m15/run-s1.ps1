@@ -59,7 +59,7 @@ try {
         throw "M15-S1 runner requires a clean worktree. Dirty entries:`n$($dirty -join "`n")"
     }
 
-    Write-Host '[1/4] Fetching M15-S1 branch...'
+    Write-Host '[1/5] Fetching M15-S1 branch...'
     Invoke-GitChecked -Arguments @('fetch', 'origin', $Branch)
 
     $currentBranch = ((& git branch --show-current) | Select-Object -First 1).Trim()
@@ -71,7 +71,7 @@ try {
         & git show-ref --verify --quiet "refs/heads/$Branch"
         $localBranchExists = ($LASTEXITCODE -eq 0)
 
-        Write-Host "[2/4] Switching from '$currentBranch' to '$Branch'..."
+        Write-Host "[2/5] Switching from '$currentBranch' to '$Branch'..."
         if ($localBranchExists) {
             Invoke-GitChecked -Arguments @('switch', $Branch)
         }
@@ -80,10 +80,10 @@ try {
         }
     }
     else {
-        Write-Host "[2/4] Already on '$Branch'."
+        Write-Host "[2/5] Already on '$Branch'."
     }
 
-    Write-Host '[3/4] Fast-forwarding to the latest remote head...'
+    Write-Host '[3/5] Fast-forwarding to the latest remote head...'
     Invoke-GitChecked -Arguments @('pull', '--ff-only', 'origin', $Branch)
 
     $head = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
@@ -95,7 +95,7 @@ try {
     # the host-path guarantee before capture-baseline.ps1 starts its M14 child.
     Ensure-WindowsPowerShellOnPath
 
-    Write-Host "[4/4] Validating exact HEAD $head..." -ForegroundColor Cyan
+    Write-Host "[4/5] Validating exact HEAD $head..." -ForegroundColor Cyan
 
     $captureScript = Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1'
     $parameters = @{
@@ -113,8 +113,21 @@ try {
 
     & $captureScript @parameters
 
+    if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
+        Write-Host '[5/5] Capturing repeated-query cost baseline...' -ForegroundColor Cyan
+        & (Join-Path $RepoRoot 'scripts\m15\capture-query-baseline.ps1')
+    }
+    else {
+        Write-Host '[5/5] Repeated-query baseline skipped because the full M14/provider replay was disabled.' -ForegroundColor Yellow
+    }
+
     Write-Host ''
-    Write-Host "M15-S1 validation finished for $head" -ForegroundColor Green
+    if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
+        Write-Host "M15-S1 FULL VALIDATION SUCCESS for $head" -ForegroundColor Green
+    }
+    else {
+        Write-Host "M15-S1 diagnostic validation finished for $head (not sufficient to close S1)" -ForegroundColor Yellow
+    }
 }
 finally {
     Pop-Location
