@@ -71,12 +71,17 @@ public final class MinosDockerMcpSmoke {
             input.write("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n");
             input.flush();
             String tools = readResponse(outputReader, output, 2, process, standardError);
-            for (String tool : List.of("minos_project_structure", "minos_architecture", "minos_impact")) {
+            for (String tool : List.of(
+                    "minos_project_structure",
+                    "minos_architecture",
+                    "minos_architecture_graph",
+                    "minos_impact"
+            )) {
                 require(tools.contains("\"name\":\"" + tool + "\""), "missing MCP tool " + tool, tools);
             }
 
             String mode = runningContainer ? "docker-exec" : "compose-run";
-            System.out.println("MINOS Docker MCP smoke SUCCESS: initialize=OK, tools=15, mode=" + mode);
+            System.out.println("MINOS Docker MCP smoke SUCCESS: initialize=OK, tools=16, mode=" + mode);
         } finally {
             outputReader.shutdownNow();
             if (process.isAlive()) {
