@@ -82,7 +82,7 @@ try {
         throw "M15-S2 runner requires a clean worktree. Dirty entries:`n$($dirty -join "`n")"
     }
 
-    Write-Host '[1/5] Fetching M15-S2 branch...'
+    Write-Host '[1/6] Fetching M15-S2 branch...'
     Invoke-GitChecked -Arguments @('fetch', 'origin', $Branch)
 
     $currentBranch = ((& git branch --show-current) | Select-Object -First 1).Trim()
@@ -94,7 +94,7 @@ try {
         & git show-ref --verify --quiet "refs/heads/$Branch"
         $localBranchExists = ($LASTEXITCODE -eq 0)
 
-        Write-Host "[2/5] Switching from '$currentBranch' to '$Branch'..."
+        Write-Host "[2/6] Switching from '$currentBranch' to '$Branch'..."
         if ($localBranchExists) {
             Invoke-GitChecked -Arguments @('switch', $Branch)
         }
@@ -103,10 +103,10 @@ try {
         }
     }
     else {
-        Write-Host "[2/5] Already on '$Branch'."
+        Write-Host "[2/6] Already on '$Branch'."
     }
 
-    Write-Host '[3/5] Fast-forwarding to the latest remote head...'
+    Write-Host '[3/6] Fast-forwarding to the latest remote head...'
     Invoke-GitChecked -Arguments @('pull', '--ff-only', 'origin', $Branch)
 
     $head = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
@@ -114,11 +114,11 @@ try {
         throw 'Unable to resolve exact HEAD after update.'
     }
 
-    Write-Host '[4/5] Checking reactor shape...'
+    Write-Host '[4/6] Checking reactor shape...'
     Assert-ReactorShape
     Ensure-WindowsPowerShellOnPath
 
-    Write-Host "[5/5] Replaying S1/M14 qualification on exact HEAD $head..." -ForegroundColor Cyan
+    Write-Host "[5/6] Replaying functional S1/M14 qualification on exact HEAD $head..." -ForegroundColor Cyan
     $captureScript = Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1'
     $parameters = @{ ExpectedHead = $head }
     if ($SkipM14Replay) { $parameters['SkipM14Replay'] = $true }
@@ -126,6 +126,14 @@ try {
     if ($ValidateDocker) { $parameters['ValidateDocker'] = $true }
 
     & $captureScript @parameters
+
+    if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
+        Write-Host '[6/6] Capturing repeated-query cost baseline...' -ForegroundColor Cyan
+        & (Join-Path $RepoRoot 'scripts\m15\capture-query-baseline.ps1')
+    }
+    else {
+        Write-Host '[6/6] Repeated-query baseline skipped because the full M14/provider replay was disabled.' -ForegroundColor Yellow
+    }
 
     $jar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'target') -File `
         -Filter 'minos-code-intelligence-*-all.jar' -ErrorAction SilentlyContinue |
@@ -136,7 +144,12 @@ try {
     }
 
     Write-Host ''
-    Write-Host 'M15-S2 REACTOR VALIDATION SUCCESS' -ForegroundColor Green
+    if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
+        Write-Host 'M15-S2 FULL REACTOR VALIDATION SUCCESS' -ForegroundColor Green
+    }
+    else {
+        Write-Host 'M15-S2 diagnostic reactor validation finished (not sufficient to close S2)' -ForegroundColor Yellow
+    }
     Write-Host "HEAD : $head"
     Write-Host "JAR  : $($jar.FullName)"
 }
