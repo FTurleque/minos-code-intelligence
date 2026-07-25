@@ -57,6 +57,10 @@ $State = Join-Path $PSScriptRoot '__NAME__.state'
 if ($PSVersionTable.PSVersion.Major -lt 6) {
     exit 97
 }
+$NonInteractive = [Environment]::GetCommandLineArgs() -contains '-NonInteractive'
+if (-not $NonInteractive) {
+    exit 96
+}
 if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'get') {
     if (Test-Path -LiteralPath $State -PathType Leaf) {
         [System.IO.File]::ReadAllText($State, [System.Text.Encoding]::ASCII)
@@ -65,7 +69,8 @@ if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'get') {
     exit 1
 }
 if ($args.Count -ge 2 -and $args[0] -ieq 'mcp' -and $args[1] -ieq 'add') {
-    $Content = 'runner=' + $PSVersionTable.PSVersion.Major + ' ' + ($args -join ' ')
+    $Content = 'runner=' + $PSVersionTable.PSVersion.Major +
+        ' nonInteractive=' + $NonInteractive + ' ' + ($args -join ' ')
     [System.IO.File]::WriteAllText($State, $Content, [System.Text.Encoding]::ASCII)
     exit 0
 }
@@ -101,6 +106,19 @@ if /I "%~1"=="mcp" if /I "%~2"=="remove" (
 )
 exit /b 2
 "@ | Set-Content -LiteralPath $Path -Encoding ascii
+    return $Path
+}
+
+function New-HangingMcpCli([string] $Directory, [string] $Name) {
+    $Path = Join-Path $Directory "$Name.ps1"
+    $Script = @'
+$PidPath = Join-Path $PSScriptRoot '__NAME__.pid'
+[System.IO.File]::WriteAllText($PidPath, [string]$PID, [System.Text.Encoding]::ASCII)
+Start-Sleep -Seconds 30
+exit 0
+'@
+    $Script = $Script.Replace('__NAME__', $Name)
+    [System.IO.File]::WriteAllText($Path, $Script + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
     return $Path
 }
 
@@ -198,6 +216,7 @@ try {
     $CodexState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'codex.state')
     Assert-True ($CopilotState.Contains($ExpectedExe) -and $CopilotState.Contains($DataRoot)) 'Copilot CLI did not receive the MINOS command/environment.'
     Assert-True ($CopilotState -match '^runner=([6-9]|\d{2,}) ') 'Copilot CLI PowerShell launcher was not invoked through pwsh.exe.'
+    Assert-True ($CopilotState.Contains('nonInteractive=True')) 'Copilot CLI PowerShell launcher was not invoked non-interactively.'
     Assert-True ($ClaudeState.Contains($ExpectedExe) -and $ClaudeState.Contains($DataRoot)) 'Claude Code did not receive the MINOS command/environment.'
     Assert-True ($ClaudeState -match 'mcp add --scope user --env .* minos -- ') 'Claude Code options are not placed before the server name.'
     Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
@@ -369,6 +388,64 @@ try {
     }
     Assert-True $PreserveRaised 'Modified managed CLI entry should have been preserved with a strict-mode warning.'
     Assert-True (Test-Path -LiteralPath $CodexFakeState) 'Modified managed CLI entry was removed.'
+
+    # A hidden setup must not wait forever on an interactive or stalled client.
+    # Strict failure after the first client also proves that ownership is saved
+    # incrementally instead of being lost before the final aggregate save.
+    $TimeoutBin = Join-Path $Root 'timeout\fake-bin'
+    $TimeoutConfig = Join-Path $Root 'timeout\copilot\mcp.json'
+    $TimeoutStatePath = Join-Path $Root 'timeout\state.json'
+    $TimeoutLogPath = Join-Path $Root 'timeout\mcp-clients.log'
+    New-Item -ItemType Directory -Force -Path $TimeoutBin | Out-Null
+    New-HangingMcpCli -Directory $TimeoutBin -Name 'copilot' | Out-Null
+    Write-Utf8Json -Path $TimeoutConfig -Value ([pscustomobject][ordered]@{
+        servers = [pscustomobject][ordered]@{
+            memory = [pscustomobject][ordered]@{ command = 'npx'; args = @('memory-server') }
+        }
+        keepMe = 'timeout-value'
+    })
+    $env:Path = "$TimeoutBin;$OldPath"
+    $TimeoutRaised = $false
+    $TimeoutMessage = ''
+    $TimeoutWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -CopilotJetBrains `
+            -CopilotCli `
+            -Strict `
+            -NativeCommandTimeoutSeconds 1 `
+            -DataRoot $DataRoot `
+            -StatePath $TimeoutStatePath `
+            -LogPath $TimeoutLogPath `
+            -BackupRoot (Join-Path $Root 'timeout\backups') `
+            -CopilotJetBrainsConfigPath $TimeoutConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $TimeoutRaised = $true
+        $TimeoutMessage = $_.Exception.Message
+    }
+    finally {
+        $TimeoutWatch.Stop()
+    }
+    Assert-True $TimeoutRaised 'A stalled Copilot CLI should have caused a strict-mode timeout failure.'
+    Assert-True ($TimeoutMessage -match 'timed out after 1 seconds') 'The stalled Copilot CLI failure did not report its timeout.'
+    Assert-True ($TimeoutWatch.Elapsed.TotalSeconds -lt 10) 'The stalled Copilot CLI was not bounded by the configured timeout.'
+
+    $TimeoutPidPath = Join-Path $TimeoutBin 'copilot.pid'
+    Assert-True (Test-Path -LiteralPath $TimeoutPidPath -PathType Leaf) 'The stalled Copilot CLI test did not start.'
+    $TimeoutProcessId = [int](Get-Content -Raw -LiteralPath $TimeoutPidPath)
+    Start-Sleep -Milliseconds 100
+    Assert-True ($null -eq (Get-Process -Id $TimeoutProcessId -ErrorAction SilentlyContinue)) 'The timed-out Copilot CLI process was left running.'
+
+    $TimeoutState = Read-Json -Path $TimeoutStatePath
+    $TimeoutValue = Read-Json -Path $TimeoutConfig
+    Assert-True (@($TimeoutState.clients).Count -eq 1) 'Completed MCP client ownership was lost after a later strict failure.'
+    Assert-True ($TimeoutState.clients[0].id -eq 'copilot-jetbrains') 'The wrong partial MCP client state was persisted.'
+    Assert-True ($TimeoutState.clients[0].ownership -eq 'managed') 'Partial MCP client ownership was not persisted as managed.'
+    Assert-True ($null -ne $TimeoutValue.servers.memory) 'Timeout handling removed a pre-existing MCP server.'
+    Assert-True ($TimeoutValue.keepMe -eq 'timeout-value') 'Timeout handling changed an unrelated JSON property.'
 
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green

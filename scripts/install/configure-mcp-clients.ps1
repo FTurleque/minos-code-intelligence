@@ -13,6 +13,9 @@ param(
     [switch] $Codex,
     [switch] $Strict,
 
+    [ValidateRange(1, 300)]
+    [int] $NativeCommandTimeoutSeconds = 20,
+
     [string] $DataRoot = '',
     [string] $StatePath = '',
     [string] $LogPath = '',
@@ -271,10 +274,12 @@ function Get-EntryOwnership([object] $Entry) {
 
 function Upsert-ManagedEntry([object] $Entry) {
     $script:ManagedEntries = @($script:ManagedEntries | Where-Object { $_.id -ne $Entry.id }) + @($Entry)
+    Save-ManagedState
 }
 
 function Remove-ManagedEntry([string] $Id) {
     $script:ManagedEntries = @($script:ManagedEntries | Where-Object { $_.id -ne $Id })
+    Save-ManagedState
 }
 
 function Save-ManagedState {
@@ -467,35 +472,137 @@ function Resolve-CommandPath([string] $Name) {
     return $Command.Name
 }
 
-function Invoke-NativeCapture([string] $File, [string[]] $Arguments) {
-    $PreviousPreference = $ErrorActionPreference
+function Stop-NativeProcessTree([System.Diagnostics.Process] $Process) {
+    if ($null -eq $Process) {
+        return
+    }
+
     try {
-        $ErrorActionPreference = 'Continue'
-        $InvocationFile = $File
-        $InvocationArguments = @($Arguments)
-
-        if ([System.IO.Path]::GetExtension($File).Equals('.ps1', [StringComparison]::OrdinalIgnoreCase)) {
-            $PowerShellCore = Resolve-CommandPath -Name 'pwsh'
-            if ([string]::IsNullOrWhiteSpace($PowerShellCore)) {
-                return [pscustomobject]@{
-                    ExitCode = -2
-                    Output = "PowerShell 6+ (pwsh.exe) is required to invoke '$File' on Windows."
-                }
-            }
-            $InvocationFile = $PowerShellCore
-            $InvocationArguments = @('-NoProfile', '-File', $File) + @($Arguments)
+        if ($Process.HasExited) {
+            return
         }
-
-        $Output = ((& $InvocationFile @InvocationArguments 2>&1) | Out-String).Trim()
-        $ExitCode = $LASTEXITCODE
     }
     catch {
+        return
+    }
+
+    try {
+        $TaskKill = Join-Path ([Environment]::SystemDirectory) 'taskkill.exe'
+        if (Test-Path -LiteralPath $TaskKill -PathType Leaf) {
+            & $TaskKill /PID ([string]$Process.Id) /T /F 2>&1 | Out-Null
+        }
+    }
+    catch {
+    }
+
+    try {
+        $StillRunning = -not $Process.HasExited
+    }
+    catch {
+        $StillRunning = $false
+    }
+    if ($StillRunning) {
+        try {
+            $Process.Kill()
+        }
+        catch {
+        }
+    }
+}
+
+function Invoke-NativeCapture([string] $File, [string[]] $Arguments) {
+    $PowerShellHost = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    if ([System.IO.Path]::GetExtension($File).Equals('.ps1', [StringComparison]::OrdinalIgnoreCase)) {
+        $PowerShellHost = Resolve-CommandPath -Name 'pwsh'
+        if ([string]::IsNullOrWhiteSpace($PowerShellHost)) {
+            return [pscustomobject]@{
+                ExitCode = -2
+                Output = "PowerShell 6+ (pwsh.exe) is required to invoke '$File' on Windows."
+            }
+        }
+    }
+
+    # Run every client command in a separate, non-interactive PowerShell host.
+    # The JSON payload avoids lossy Windows command-line quoting for executable
+    # paths and arguments containing spaces. A bounded wait prevents a hidden
+    # setup window from waiting forever on an interactive client bootstrapper.
+    $Payload = [pscustomobject][ordered]@{
+        file = $File
+        arguments = @($Arguments)
+    } | ConvertTo-Json -Depth 4 -Compress
+    $PayloadBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Payload))
+    $ChildScript = @'
+$ErrorActionPreference = 'Continue'
+try {
+    $PayloadJson = [System.Text.Encoding]::UTF8.GetString(
+        [Convert]::FromBase64String($env:MINOS_MCP_NATIVE_INVOCATION))
+    $Request = $PayloadJson | ConvertFrom-Json
+    $InvocationArguments = @($Request.arguments | ForEach-Object { [string]$_ })
+    & ([string]$Request.file) @InvocationArguments
+    $ExitCode = $LASTEXITCODE
+    if ($null -eq $ExitCode) {
+        $ExitCode = if ($?) { 0 } else { 1 }
+    }
+    exit ([int]$ExitCode)
+}
+catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+'@
+    $EncodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($ChildScript))
+
+    $StartInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $StartInfo.FileName = $PowerShellHost
+    $StartInfo.Arguments = "-NoLogo -NoProfile -NonInteractive -EncodedCommand $EncodedCommand"
+    $StartInfo.UseShellExecute = $false
+    $StartInfo.CreateNoWindow = $true
+    $StartInfo.RedirectStandardInput = $true
+    $StartInfo.RedirectStandardOutput = $true
+    $StartInfo.RedirectStandardError = $true
+    $StartInfo.EnvironmentVariables['MINOS_MCP_NATIVE_INVOCATION'] = $PayloadBase64
+
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $StartInfo
+    try {
+        if (-not $Process.Start()) {
+            throw "Failed to start '$PowerShellHost'."
+        }
+        $Process.StandardInput.Close()
+        $StandardOutput = $Process.StandardOutput.ReadToEndAsync()
+        $StandardError = $Process.StandardError.ReadToEndAsync()
+        $TimeoutMilliseconds = [int]([Math]::Min([int]::MaxValue, $NativeCommandTimeoutSeconds * 1000))
+        if (-not $Process.WaitForExit($TimeoutMilliseconds)) {
+            Stop-NativeProcessTree -Process $Process
+            [void]$Process.WaitForExit(5000)
+            return [pscustomobject]@{
+                ExitCode = -3
+                Output = "Command '$File' timed out after $NativeCommandTimeoutSeconds seconds."
+            }
+        }
+
+        # Complete asynchronous stream reads after process exit to avoid losing
+        # the final diagnostic lines emitted by a CLI.
+        $Process.WaitForExit()
+        $OutputParts = @()
+        if (-not [string]::IsNullOrWhiteSpace($StandardOutput.Result)) {
+            $OutputParts += $StandardOutput.Result.Trim()
+        }
+        if (-not [string]::IsNullOrWhiteSpace($StandardError.Result)) {
+            $OutputParts += $StandardError.Result.Trim()
+        }
+        return [pscustomobject]@{
+            ExitCode = $Process.ExitCode
+            Output = ($OutputParts -join [Environment]::NewLine).Trim()
+        }
+    }
+    catch {
+        Stop-NativeProcessTree -Process $Process
         return [pscustomobject]@{ ExitCode = -1; Output = $_.Exception.Message }
     }
     finally {
-        $ErrorActionPreference = $PreviousPreference
+        $Process.Dispose()
     }
-    return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
 }
 
 function Test-ManagedCliProbeMatches([object] $Entry, [object] $Probe) {
