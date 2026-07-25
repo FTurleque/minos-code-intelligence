@@ -20,9 +20,36 @@ function Invoke-GitChecked {
     }
 }
 
+function Ensure-WindowsPowerShellOnPath {
+    if ($env:OS -ne 'Windows_NT') {
+        return
+    }
+
+    # Some developer shells can start Windows PowerShell successfully while its
+    # installation directory is absent from PATH. M15-S1 and the historical M14
+    # replay intentionally spawn a fresh PowerShell process, so make the standard
+    # Windows host discoverable before either script resolves powershell.exe.
+    $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
+        throw "Windows PowerShell executable not found at the standard path: $windowsPowerShell"
+    }
+
+    $powerShellDirectory = Split-Path -Parent $windowsPowerShell
+    $alreadyPresent = @($env:Path -split ';') | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_) -and
+        $_.TrimEnd('\').Equals($powerShellDirectory.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+    } | Select-Object -First 1
+
+    if ($null -eq $alreadyPresent) {
+        $env:Path = "$powerShellDirectory;$env:Path"
+    }
+}
+
 Push-Location $RepoRoot
 try {
-    Write-Host '=== MINOS M15-S1 — update + exact-head validation ===' -ForegroundColor Cyan
+    Ensure-WindowsPowerShellOnPath
+
+    Write-Host '=== MINOS M15-S1 - update + exact-head validation ===' -ForegroundColor Cyan
 
     $dirty = @(& git status --porcelain)
     if ($LASTEXITCODE -ne 0) {
@@ -63,6 +90,10 @@ try {
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
         throw 'Unable to resolve exact HEAD after update.'
     }
+
+    # Re-apply after the pull so a future runner update cannot accidentally lose
+    # the host-path guarantee before capture-baseline.ps1 starts its M14 child.
+    Ensure-WindowsPowerShellOnPath
 
     Write-Host "[4/4] Validating exact HEAD $head..." -ForegroundColor Cyan
 
