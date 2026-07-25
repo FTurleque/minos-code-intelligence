@@ -16,6 +16,8 @@ MinosApi.CONTRACT_VERSION = 1
 MinosMultiRepositoryApi.MULTI_REPOSITORY_CONTRACT_VERSION = 1
 ```
 
+L'ajout de la vue de graphe est additif : `getArchitectureGraph(...)` est un `default method` dans le contrat v1 afin de ne pas casser les implémentations tierces existantes. `LocalMinosApi` fournit l'implémentation complète.
+
 ## Implémentations locales
 
 Pour le contrat M11 :
@@ -88,11 +90,51 @@ var outgoing = minos.findRelationships(
 
 ## Architecture
 
+Vue agrégée :
+
 ```java
 MinosApi.ArchitectureDto architecture = minos.getArchitecture(project.id());
 ```
 
-La vue expose notamment les modules, langages, builds, dépendances, modules centraux relatifs et technologies observées.
+Elle expose notamment les modules, langages, builds, compteurs de dépendances, modules centraux relatifs et technologies observées.
+
+### Graphe de dépendances inter-modules
+
+Pour obtenir les **arêtes réelles** agrégées par MINOS :
+
+```java
+MinosApi.ArchitectureGraphDto graph = minos.getArchitectureGraph(project.id());
+
+System.out.println(graph.moduleCount());
+System.out.println(graph.edgeCount());
+
+for (MinosApi.ArchitectureDependencyDto edge : graph.dependencies()) {
+    System.out.printf(
+            "%s -> %s : %d dépendances%n",
+            edge.sourceModuleName(),
+            edge.targetModuleName(),
+            edge.dependencyCount()
+    );
+}
+```
+
+Une arête contient notamment :
+
+```text
+id
+sourceModuleId / sourceModuleName
+targetModuleId / targetModuleName
+dependencyCount
+sourceSymbolCount
+targetSymbolCount
+sampleDependencyIds
+nature
+confidence
+```
+
+Le graphe expose uniquement les dépendances observées et dérivées du snapshot actif ; aucune arête n'est inventée pour compléter la topologie.
+
+Pour un rendu Mermaid ou Graphviz DOT, utiliser la CLI `architecture --format mermaid|dot` ou le tool MCP `minos_architecture_graph`.
 
 ## Impact
 
@@ -157,6 +199,7 @@ classDiagram
       +findUsages(...)
       +findRelationships(...)
       +getArchitecture(...)
+      +getArchitectureGraph(...)
       +analyzeImpact(...)
     }
     class MinosMultiRepositoryApi {
