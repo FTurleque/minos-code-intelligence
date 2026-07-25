@@ -24,8 +24,50 @@ function Invoke-NativeChecked {
     }
 }
 
+function Invoke-NativeExpectedFailure {
+    param(
+        [Parameter(Mandatory = $true)][string] $File,
+        [Parameter(Mandatory = $true)][string[]] $Arguments
+    )
+
+    # Windows PowerShell 5.1 turns merged native stderr into ErrorRecord objects.
+    # This helper is specifically for commands that are expected to fail: preserve
+    # their diagnostics, but let the caller decide from the native exit code.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $File @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = @($output)
+    }
+}
+
 function Resolve-PowerShellHost {
-    foreach ($name in @('powershell.exe', 'pwsh.exe')) {
+    try {
+        $currentHost = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        if (-not [string]::IsNullOrWhiteSpace($currentHost) -and
+            (Test-Path -LiteralPath $currentHost -PathType Leaf)) {
+            return $currentHost
+        }
+    }
+    catch {
+    }
+
+    if ($env:OS -eq 'Windows_NT' -and -not [string]::IsNullOrWhiteSpace($env:SystemRoot)) {
+        $standardWindowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        if (Test-Path -LiteralPath $standardWindowsPowerShell -PathType Leaf) {
+            return $standardWindowsPowerShell
+        }
+    }
+
+    foreach ($name in @('pwsh.exe', 'powershell.exe')) {
         $command = Get-Command $name -ErrorAction SilentlyContinue
         if ($command) {
             return $command.Source
@@ -189,11 +231,13 @@ try {
             }
 
             Add-Content -LiteralPath $JavaSource -Value "`nTHIS_IS_AN_INTENTIONAL_M14_COMPILE_FAILURE" -Encoding utf8
-            $FailureOutput = & $script:JavaExecutable "-Dminos.home=$script:ValidationHome" -jar $script:MinosJar `
-                index m14-java --format json 2>&1
-            $FailureExit = $LASTEXITCODE
-            if ($FailureExit -eq 0) {
-                throw "Expected Java refresh failure, but index returned success: $($FailureOutput | Out-String)"
+            $ExpectedFailure = Invoke-NativeExpectedFailure -File $script:JavaExecutable -Arguments @(
+                "-Dminos.home=$script:ValidationHome",
+                '-jar', $script:MinosJar,
+                'index', 'm14-java', '--format', 'json'
+            )
+            if ($ExpectedFailure.ExitCode -eq 0) {
+                throw "Expected Java refresh failure, but index returned success: $($ExpectedFailure.Output | Out-String)"
             }
 
             $StaleStatus = Invoke-MinosJson @('index-status', 'm14-java', '--format', 'json')
