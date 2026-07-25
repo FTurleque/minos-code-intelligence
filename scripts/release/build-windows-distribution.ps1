@@ -150,6 +150,8 @@ try {
         -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients.ps1') `
         -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients-setup.ps1') `
+        -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients-setup.ps1') -Force
 
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Destination (Join-Path $Distribution 'install.ps1')
