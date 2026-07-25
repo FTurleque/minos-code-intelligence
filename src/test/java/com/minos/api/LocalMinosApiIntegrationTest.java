@@ -67,6 +67,15 @@ class LocalMinosApiIntegrationTest {
         assertTrue(architecture.technologies().contains("TYPESCRIPT"));
         assertTrue(architecture.technologies().contains("NPM"));
 
+        MinosApi.ArchitectureGraphDto graph = api.getArchitectureGraph("m11-typescript");
+        assertEquals(architecture.projectId(), graph.projectId());
+        assertEquals(architecture.snapshotId(), graph.snapshotId());
+        assertEquals(3, graph.moduleCount());
+        assertTrue(graph.edgeCount() > 0);
+        assertTrue(graph.dependencies().stream().anyMatch(edge ->
+                "app".equals(edge.sourceModuleName()) && "api".equals(edge.targetModuleName())));
+        assertTrue(graph.dependencies().stream().allMatch(edge -> edge.dependencyCount() > 0));
+
         MinosApi.ModuleContextDto apiModule = api.getModuleContext("m11-typescript", "packages/api");
         assertEquals("packages/api", apiModule.module().relativePath());
         assertTrue(apiModule.incomingDependencyCount() > 0);
@@ -90,9 +99,9 @@ class LocalMinosApiIntegrationTest {
         assertEquals(MinosApi.ErrorCode.INVALID_REQUEST, invalidKind.code());
 
         System.out.printf(
-                "M11 public API: version=%s, project=%s, snapshot=%s, modules=%d, impact=%d, tests=%d%n",
+                "M11 public API: version=%s, project=%s, snapshot=%s, modules=%d, graph-edges=%d, impact=%d, tests=%d%n",
                 api.contractVersion(), indexed.id(), indexed.activeSnapshotId(), architecture.moduleCount(),
-                impact.impactCount(), impact.testCount()
+                graph.edgeCount(), impact.impactCount(), impact.testCount()
         );
     }
 }
