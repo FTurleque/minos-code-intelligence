@@ -11,17 +11,20 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
  * Catalogue M10 des outils MCP MINOS. Les handlers ne portent aucune logique
- * d'analyse : ils traduisent les arguments MCP vers la surface CLI JSON M9.
+ * d'analyse : ils traduisent les arguments MCP vers la surface CLI.
  */
 public final class MinosMcpTools {
 
-    public static final int TOOL_COUNT = 15;
+    public static final int TOOL_COUNT = 16;
+    private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
 
     private final CommandExecutor executor;
 
@@ -66,8 +69,9 @@ public final class MinosMcpTools {
                 tool("minos_symbol_context", "Build one-root compact context for a symbol query, including bounded usages, relationships and relevant source.", symbolContextSchema(), this::symbolContextCommand),
                 tool("minos_module_context", "Read the compact M6 architecture context for one module.", moduleSchema(), args ->
                         command("architecture", required(args, "project"), "--module", required(args, "module"))),
-                tool("minos_architecture", "Read the composed M6 architecture intelligence view for a project.", projectSchema(), args ->
+                tool("minos_architecture", "Read the composed M6 architecture intelligence view for a project, including explicit module dependency edges.", projectSchema(), args ->
                         command("architecture", required(args, "project"))),
+                tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), this::architectureGraphCommand),
                 tool("minos_impact", "Estimate direct and indirect potential impact with deterministic explanatory paths and explicit limitations.", impactSchema(), this::impactCommand)
         );
     }
@@ -148,6 +152,20 @@ public final class MinosMcpTools {
         return command;
     }
 
+    private List<String> architectureGraphCommand(Map<String, Object> args) {
+        List<String> command = new ArrayList<>();
+        command.add("architecture");
+        command.add(required(args, "project"));
+        option(command, args, "module", "--module");
+        String format = stringValue(args.get("format"), "json").toLowerCase(Locale.ROOT);
+        if (!ARCHITECTURE_GRAPH_FORMATS.contains(format)) {
+            throw new IllegalArgumentException("unsupported architecture graph format: " + format);
+        }
+        command.add("--format");
+        command.add(format);
+        return command;
+    }
+
     private List<String> impactCommand(Map<String, Object> args) {
         List<String> command = command("impact", required(args, "project"), required(args, "symbolId"));
         option(command, args, "depth", "--depth");
@@ -179,6 +197,16 @@ public final class MinosMcpTools {
         return text;
     }
 
+    private static String stringValue(Object value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("MCP argument must be a non-blank string");
+        }
+        return text;
+    }
+
     private static Map<String, Object> arguments(Map<String, Object> arguments) {
         return arguments == null ? Map.of() : arguments;
     }
@@ -191,6 +219,14 @@ public final class MinosMcpTools {
         return objectSchema(
                 "\"project\":{\"type\":\"string\",\"minLength\":1},\"module\":{\"type\":\"string\",\"minLength\":1}",
                 "\"project\",\"module\"");
+    }
+
+    private static String architectureGraphSchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"module\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"format\":{\"type\":\"string\",\"enum\":[\"json\",\"mermaid\",\"dot\"]}",
+                "\"project\"");
     }
 
     private static String relationSchema() {
@@ -264,9 +300,5 @@ public final class MinosMcpTools {
     }
 
     record CommandResult(int exitCode, String stdout, String stderr) {
-        CommandResult {
-            Objects.requireNonNull(stdout, "stdout");
-            Objects.requireNonNull(stderr, "stderr");
-        }
     }
 }
