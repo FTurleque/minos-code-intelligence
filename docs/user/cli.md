@@ -16,6 +16,93 @@ java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar <commande>
 
 `--help` reste la source de vérité exécutable.
 
+## Formats de sortie : `--format <text|json>`
+
+Les commandes qui acceptent `--format` proposent deux représentations du **même résultat métier** :
+
+- `text` : sortie compacte destinée à être lue directement dans un terminal ; c'est le format par défaut ;
+- `json` : sortie structurée destinée aux scripts PowerShell, à la CI, aux intégrations et aux clients MCP.
+
+`--format <text|json>` dans la syntaxe signifie donc : remplacer `<text|json>` par **une seule** des valeurs `text` ou `json`.
+
+Exemples équivalents :
+
+```powershell
+# Format texte implicite : lisible par un humain
+minos.cmd architecture my-project
+
+# Même format demandé explicitement
+minos.cmd architecture my-project --format text
+
+# Format structuré : destiné aux outils et scripts
+minos.cmd architecture my-project --format json
+```
+
+Exemple représentatif de sortie `text` pour `architecture` :
+
+```text
+project: my-project (<project-id>)
+snapshot: <snapshot-id>
+modules: 3
+languages: [JAVA]
+buildSystems: [MAVEN]
+symbols: local=1240, external=317
+relationships: 2861
+dependencies: total=842, inter=94, intra=731, unassigned=17
+topIncomingModules: [<module-id>]
+topOutgoingModules: [<module-id>]
+technologies: [JAVA, MAVEN]
+```
+
+La sortie `json` expose des champs nommés et peut donc être consommée sans parser du texte :
+
+```json
+{
+  "projectId": "<project-id>",
+  "projectName": "my-project",
+  "snapshotId": "<snapshot-id>",
+  "nature": "DERIVED",
+  "languages": ["JAVA"],
+  "buildSystems": ["MAVEN"],
+  "moduleCount": 3,
+  "localSymbolCount": 1240,
+  "externalSymbolCount": 317,
+  "relationshipCount": 2861,
+  "dependencies": {
+    "total": 842,
+    "interModule": 94,
+    "intraModule": 731,
+    "unassigned": 17,
+    "moduleEdges": 8
+  },
+  "topIncomingModuleIds": ["<module-id>"],
+  "topOutgoingModuleIds": ["<module-id>"],
+  "technologies": ["JAVA", "MAVEN"],
+  "modules": []
+}
+```
+
+Les valeurs ci-dessus sont illustratives ; les champs correspondent à la surface actuelle de la commande.
+
+Exemple PowerShell :
+
+```powershell
+$architecture = minos.cmd architecture my-project --format json | ConvertFrom-Json
+
+$architecture.moduleCount
+$architecture.dependencies.interModule
+$architecture.modules
+```
+
+Pour enregistrer le résultat :
+
+```powershell
+minos.cmd architecture my-project --format json |
+  Set-Content .\architecture.json -Encoding utf8
+```
+
+Le serveur MCP MINOS utilise lui-même la surface CLI JSON : les appels MCP sont traduits en commandes MINOS avec `--format json`.
+
 ## Administration
 
 ```text
@@ -136,6 +223,33 @@ Une liste vide signifie qu'aucune relation correspondante n'est présente dans l
 architecture <project> [--module <module>] [--format <text|json>]
 ```
 
+### Où consulter le graphe ?
+
+MINOS construit bien en interne un **graphe de dépendances entre modules** à partir du snapshot actif. La surface utilisateur actuelle n'en propose toutefois **pas encore de visualisation graphique ni d'export Mermaid/Graphviz**.
+
+La commande `architecture` expose aujourd'hui :
+
+- les modules détectés ;
+- les compteurs de dépendances totales, inter-modules, intra-module et non assignées ;
+- le nombre d'arêtes agrégées entre modules (`moduleEdges`) en JSON ;
+- les modules les plus centraux en entrée et en sortie ;
+- les technologies observées.
+
+Elle **n'expose pas encore la liste détaillée des arêtes du graphe** dans sa sortie CLI. Le suivi de cette évolution est porté par l'issue GitHub **#49 — Architecture — exposer et visualiser le graphe de dépendances**.
+
+Pour inspecter l'architecture actuelle :
+
+```powershell
+# Vue humaine compacte
+minos.cmd architecture my-project
+
+# Vue structurée exploitable par script
+minos.cmd architecture my-project --format json
+
+# Contexte d'un module précis
+minos.cmd architecture my-project --module my-module --format json
+```
+
 ## Impact
 
 ```text
@@ -161,6 +275,8 @@ minos mcp
 ```
 
 Cette commande bloque volontairement sur une session MCP STDIO jusqu'à fermeture par le client.
+
+Voir [Serveur MCP](mcp.md) pour des configurations concrètes de clients MCP.
 
 ## Version
 
