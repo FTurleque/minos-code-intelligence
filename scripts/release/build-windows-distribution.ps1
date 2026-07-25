@@ -67,96 +67,85 @@ if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
     throw "MINOS distribution requires JDK 24; found: $JavaVersion"
 }
 
-$BuildPom = Join-Path $RepoRoot '.minos-release-pom.xml'
-$SourcePom = Join-Path $RepoRoot 'pom.xml'
-$SourcePomContent = Get-Content -Raw -LiteralPath $SourcePom
-$CurrentVersionMatch = [regex]::Match($SourcePomContent, '<version>([^<]+)</version>')
-if (-not $CurrentVersionMatch.Success) {
-    throw 'Unable to locate the MINOS project version in pom.xml.'
-}
-$ReleasePomContent = $SourcePomContent.Remove(
-    $CurrentVersionMatch.Groups[1].Index,
-    $CurrentVersionMatch.Groups[1].Length
-).Insert($CurrentVersionMatch.Groups[1].Index, $Version)
-[System.IO.File]::WriteAllText($BuildPom, $ReleasePomContent, [System.Text.UTF8Encoding]::new($false))
-
+# M15-S2 makes the repository POM a real multi-module reactor. Release versions
+# are now supplied through Maven's CI-friendly `revision` property so every
+# module sees one coherent version; do not generate a temporary mono-module POM.
+Push-Location $RepoRoot
 try {
-    Push-Location $RepoRoot
-    try {
-        $MavenArgs = @('-f', $BuildPom, 'clean')
-        $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
-        & '.\mvnw.cmd' @MavenArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "MINOS Maven build failed with exit code $LASTEXITCODE"
-        }
-    } finally {
-        Pop-Location
-    }
-
-    $Jar = Join-Path $RepoRoot "target\minos-code-intelligence-$Version-all.jar"
-    if (-not (Test-Path -LiteralPath $Jar -PathType Leaf)) {
-        throw "Shaded MINOS JAR not found: $Jar"
-    }
-
-    $Stage = Join-Path $OutputRoot '.jpackage-input'
-    $AppImages = Join-Path $OutputRoot '.jpackage-output'
-    $DistributionName = "minos-$Version-windows-x64"
-    $Distribution = Join-Path $OutputRoot $DistributionName
-    $Zip = Join-Path $OutputRoot "$DistributionName.zip"
-    $Checksum = "$Zip.sha256"
-
-    Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Distribution -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Force -Path $Stage, $AppImages, $Distribution | Out-Null
-
-    Copy-Item -LiteralPath $Jar -Destination (Join-Path $Stage 'minos.jar')
-    $AppVersion = ($Version -split '[-+]')[0]
-    & $Jpackage @(
-        '--type', 'app-image',
-        '--name', 'minos',
-        '--app-version', $AppVersion,
-        '--input', $Stage,
-        '--main-jar', 'minos.jar',
-        '--main-class', 'com.minos.cli.MinosLauncher',
-        '--dest', $AppImages,
-        '--win-console'
-    )
+    $MavenArgs = @("-Drevision=$Version", 'clean')
+    $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
+    & '.\mvnw.cmd' @MavenArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "jpackage failed with exit code $LASTEXITCODE"
+        throw "MINOS Maven build failed with exit code $LASTEXITCODE"
     }
+} finally {
+    Pop-Location
+}
 
-    $AppImage = Join-Path $AppImages 'minos'
-    if (-not (Test-Path -LiteralPath (Join-Path $AppImage 'minos.exe') -PathType Leaf)) {
-        throw "jpackage app image is incomplete: $AppImage"
-    }
-    Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
+$Jar = Join-Path $RepoRoot "target\minos-code-intelligence-$Version-all.jar"
+if (-not (Test-Path -LiteralPath $Jar -PathType Leaf)) {
+    throw "Shaded MINOS JAR not found: $Jar"
+}
 
-    $LibDirectory = Join-Path $Distribution 'lib'
-    $DockerDirectory = Join-Path $Distribution 'docker'
-    $DockerScripts = Join-Path $DockerDirectory 'scripts'
-    $IntegrationDirectory = Join-Path $Distribution 'integration'
-    New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $IntegrationDirectory | Out-Null
-    Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
-        -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
-        -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
-        -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
-        -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients.ps1') `
-        -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients-setup.ps1') `
-        -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients-setup.ps1') -Force
+$Stage = Join-Path $OutputRoot '.jpackage-input'
+$AppImages = Join-Path $OutputRoot '.jpackage-output'
+$DistributionName = "minos-$Version-windows-x64"
+$Distribution = Join-Path $OutputRoot $DistributionName
+$Zip = Join-Path $OutputRoot "$DistributionName.zip"
+$Checksum = "$Zip.sha256"
 
-    Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
-        -Destination (Join-Path $Distribution 'install.ps1')
+Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $Distribution -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $Stage, $AppImages, $Distribution | Out-Null
 
-    @'
+Copy-Item -LiteralPath $Jar -Destination (Join-Path $Stage 'minos.jar')
+$AppVersion = ($Version -split '[-+]')[0]
+& $Jpackage @(
+    '--type', 'app-image',
+    '--name', 'minos',
+    '--app-version', $AppVersion,
+    '--input', $Stage,
+    '--main-jar', 'minos.jar',
+    '--main-class', 'com.minos.cli.MinosLauncher',
+    '--dest', $AppImages,
+    '--win-console'
+)
+if ($LASTEXITCODE -ne 0) {
+    throw "jpackage failed with exit code $LASTEXITCODE"
+}
+
+$AppImage = Join-Path $AppImages 'minos'
+if (-not (Test-Path -LiteralPath (Join-Path $AppImage 'minos.exe') -PathType Leaf)) {
+    throw "jpackage app image is incomplete: $AppImage"
+}
+Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
+
+$LibDirectory = Join-Path $Distribution 'lib'
+$DockerDirectory = Join-Path $Distribution 'docker'
+$DockerScripts = Join-Path $DockerDirectory 'scripts'
+$IntegrationDirectory = Join-Path $Distribution 'integration'
+New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $IntegrationDirectory | Out-Null
+Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
+    -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
+    -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
+    -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients.ps1') `
+    -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients-setup.ps1') `
+    -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients-setup.ps1') -Force
+
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
+    -Destination (Join-Path $Distribution 'install.ps1')
+
+@'
 @echo off
 setlocal
 if not defined MINOS_HOME set "MINOS_HOME=%LOCALAPPDATA%\MINOS\data"
@@ -164,7 +153,7 @@ if not defined MINOS_HOME set "MINOS_HOME=%LOCALAPPDATA%\MINOS\data"
 exit /b %ERRORLEVEL%
 '@ | Set-Content -LiteralPath (Join-Path $Distribution 'minos.cmd') -Encoding ascii
 
-    @'
+@'
 @echo off
 setlocal
 if not defined MINOS_HOME set "MINOS_HOME=%LOCALAPPDATA%\MINOS\data"
@@ -172,7 +161,7 @@ if not defined MINOS_HOME set "MINOS_HOME=%LOCALAPPDATA%\MINOS\data"
 exit /b %ERRORLEVEL%
 '@ | Set-Content -LiteralPath (Join-Path $Distribution 'minos-mcp.cmd') -Encoding ascii
 
-    @"
+@"
 MINOS Code Intelligence $Version
 
 Quick start:
@@ -211,27 +200,23 @@ Optional hardened Docker MCP:
 Docker Desktop must already be installed and running. Docker is optional and is not required by the native MCP integrations above.
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
-    $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
-    @"
+$Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
+@"
 version=$Version
 commit=$Commit
 java=$JavaVersion
 builtAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'VERSION') -Encoding ascii
 
-    Compress-Archive -LiteralPath $Distribution -DestinationPath $Zip -CompressionLevel Optimal
-    $Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-    "$Hash  $([System.IO.Path]::GetFileName($Zip))" | Set-Content -LiteralPath $Checksum -Encoding ascii
+Compress-Archive -LiteralPath $Distribution -DestinationPath $Zip -CompressionLevel Optimal
+$Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+"$Hash  $([System.IO.Path]::GetFileName($Zip))" | Set-Content -LiteralPath $Checksum -Encoding ascii
 
-    Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
 
-    Write-Host ''
-    Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
-    Write-Host "Distribution : $Distribution"
-    Write-Host "ZIP          : $Zip"
-    Write-Host "SHA-256      : $Hash"
-}
-finally {
-    Remove-Item -LiteralPath $BuildPom -Force -ErrorAction SilentlyContinue
-}
+Write-Host ''
+Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
+Write-Host "Distribution : $Distribution"
+Write-Host "ZIP          : $Zip"
+Write-Host "SHA-256      : $Hash"
