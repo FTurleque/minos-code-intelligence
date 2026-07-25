@@ -121,6 +121,18 @@ try {
     Assert-True ($ClaudeDesktopValue.mcpServers.minos.command -eq $ExpectedExe) 'Claude Desktop MINOS command is incorrect.'
     Assert-True (@($State.clients).Count -eq 5) 'Expected five managed MCP client integrations.'
 
+    # JSON written by Windows PowerShell 5.1 must remain human-readable. The
+    # previous implementation inherited ConvertTo-Json's excessive indentation
+    # when serializing parsed PSCustomObjects.
+    $CopilotRaw = [System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8)
+    $ClaudeDesktopRaw = [System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8)
+    Assert-True ($CopilotRaw -match '(?m)^  "servers": \{$') 'Copilot JSON is not formatted with two-space indentation.'
+    Assert-True ($CopilotRaw -match '(?m)^    "minos": \{$') 'Copilot MINOS JSON entry indentation is incorrect.'
+    Assert-True ($ClaudeDesktopRaw -match '(?m)^  "mcpServers": \{$') 'Claude Desktop JSON is not formatted with two-space indentation.'
+    Assert-True ($ClaudeDesktopRaw -match '(?m)^    "minos": \{$') 'Claude Desktop MINOS JSON entry indentation is incorrect.'
+    Assert-True (-not ($CopilotRaw -match '(?m)^ {20,}\S')) 'Copilot JSON contains excessive indentation.'
+    Assert-True (-not ($ClaudeDesktopRaw -match '(?m)^ {20,}\S')) 'Claude Desktop JSON contains excessive indentation.'
+
     $CopilotState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'copilot.state')
     $ClaudeState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'claude.state')
     $CodexState = Get-Content -Raw -LiteralPath (Join-Path $FakeBin 'codex.state')
@@ -129,6 +141,35 @@ try {
     Assert-True ($ClaudeState -match 'mcp add --scope user --env .* minos -- ') 'Claude Code options are not placed before the server name.'
     Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
     Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -ge 2) 'Expected JSON configuration backups.'
+
+    # Re-running installation with the same selection must be idempotent: no
+    # duplicate MINOS server, no rewrite and no additional JSON backup.
+    $CopilotBeforeSecondInstall = [System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8)
+    $ClaudeBeforeSecondInstall = [System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8)
+    $BackupCountBeforeSecondInstall = (Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -CopilotCli `
+        -ClaudeCode `
+        -ClaudeDesktop `
+        -Codex `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $StatePath `
+        -LogPath $LogPath `
+        -BackupRoot $BackupRoot `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $CopilotAfterSecondInstall = Read-Json -Path $CopilotConfig
+    $ClaudeAfterSecondInstall = Read-Json -Path $ClaudeDesktopConfig
+    Assert-True (@($CopilotAfterSecondInstall.servers.PSObject.Properties | Where-Object { $_.Name -eq 'minos' }).Count -eq 1) 'Copilot contains duplicate MINOS entries after reinstall.'
+    Assert-True (@($ClaudeAfterSecondInstall.mcpServers.PSObject.Properties | Where-Object { $_.Name -eq 'minos' }).Count -eq 1) 'Claude Desktop contains duplicate MINOS entries after reinstall.'
+    Assert-True ([System.IO.File]::ReadAllText($CopilotConfig, [System.Text.Encoding]::UTF8) -eq $CopilotBeforeSecondInstall) 'Copilot configuration was unnecessarily rewritten on idempotent reinstall.'
+    Assert-True ([System.IO.File]::ReadAllText($ClaudeDesktopConfig, [System.Text.Encoding]::UTF8) -eq $ClaudeBeforeSecondInstall) 'Claude Desktop configuration was unnecessarily rewritten on idempotent reinstall.'
+    Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -eq $BackupCountBeforeSecondInstall) 'Idempotent reinstall created unnecessary JSON backups.'
 
     & $Manager `
         -InstallRoot $InstallRoot `
@@ -154,7 +195,57 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $FakeBin 'codex.state'))) 'Codex entry remained after uninstall.'
     Assert-True (-not (Test-Path -LiteralPath $StatePath)) 'Managed integration state remained after clean uninstall.'
 
-    # Collision safety: an unmanaged existing JSON `minos` entry must never be overwritten.
+    # A compatible pre-existing MINOS entry is already connected. It must be
+    # adopted as a successful selection without creating a second entry, and it
+    # must remain untouched during MINOS uninstall because MINOS did not create it.
+    $PreexistingConfig = Join-Path $Root 'preexisting\mcp.json'
+    $PreexistingState = Join-Path $Root 'preexisting\state.json'
+    Write-Utf8Json -Path $PreexistingConfig -Value ([pscustomobject][ordered]@{
+        servers = [pscustomobject][ordered]@{
+            minos = [pscustomobject][ordered]@{
+                command = $ExpectedExe
+                args = @('mcp')
+                env = [pscustomobject][ordered]@{ MINOS_HOME = $DataRoot }
+            }
+            memory = [pscustomobject][ordered]@{ command = 'npx'; args = @('memory-server') }
+        }
+    })
+    $PreexistingRawBefore = [System.IO.File]::ReadAllText($PreexistingConfig, [System.Text.Encoding]::UTF8)
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $PreexistingState `
+        -LogPath (Join-Path $Root 'preexisting\log.txt') `
+        -BackupRoot (Join-Path $Root 'preexisting\backups') `
+        -CopilotJetBrainsConfigPath $PreexistingConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $PreexistingValue = Read-Json -Path $PreexistingConfig
+    $PreexistingTracking = Read-Json -Path $PreexistingState
+    Assert-True (@($PreexistingValue.servers.PSObject.Properties | Where-Object { $_.Name -eq 'minos' }).Count -eq 1) 'Compatible pre-existing MINOS entry was duplicated.'
+    Assert-True ($PreexistingTracking.clients[0].ownership -eq 'preexisting') 'Compatible pre-existing MINOS entry ownership was not tracked safely.'
+    Assert-True ([System.IO.File]::ReadAllText($PreexistingConfig, [System.Text.Encoding]::UTF8) -eq $PreexistingRawBefore) 'Compatible pre-existing MINOS configuration was unnecessarily rewritten.'
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -Action Uninstall `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $PreexistingState `
+        -LogPath (Join-Path $Root 'preexisting\log.txt') `
+        -BackupRoot (Join-Path $Root 'preexisting\backups') `
+        -CopilotJetBrainsConfigPath $PreexistingConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $PreexistingAfterUninstall = Read-Json -Path $PreexistingConfig
+    Assert-True ($null -ne $PreexistingAfterUninstall.servers.minos) 'Pre-existing compatible MINOS entry was removed during uninstall.'
+    Assert-True (-not (Test-Path -LiteralPath $PreexistingState)) 'Pre-existing integration tracking state remained after uninstall.'
+
+    # Collision safety: an unmanaged existing JSON `minos` entry with a
+    # different target must never be overwritten.
     $CollisionConfig = Join-Path $Root 'collision\mcp.json'
     $CollisionState = Join-Path $Root 'collision\state.json'
     Write-Utf8Json -Path $CollisionConfig -Value ([pscustomobject][ordered]@{
@@ -221,6 +312,7 @@ try {
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green
     Write-Host 'Clients : Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop, Codex'
+    Write-Host 'JSON    : two-space indentation; idempotent install; no duplicate MINOS entries'
     Write-Host 'Safety  : existing/modified entries preserved; unchanged managed entries removed selectively'
 }
 finally {
