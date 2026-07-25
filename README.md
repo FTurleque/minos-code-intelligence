@@ -115,6 +115,10 @@ minos.cmd import-scip my-project `
 
 ## Visualiser le graphe d'architecture
 
+**Guide utilisateur détaillé : [Visualiser le graphe d'architecture MINOS](docs/user/architecture-graph.md).**
+
+À retenir : MINOS calcule et exporte le graphe mais n'ouvre pas actuellement une fenêtre graphique intégrée. Pour voir un diagramme, utiliser Mermaid ou Graphviz DOT.
+
 MINOS expose les arêtes de dépendances agrégées entre modules dans la sortie JSON :
 
 ```powershell
@@ -133,6 +137,13 @@ Ou Graphviz DOT :
 ```powershell
 minos.cmd architecture my-project --format dot |
   Set-Content .\architecture.dot -Encoding utf8
+```
+
+Avec Graphviz installé, produire puis ouvrir un SVG :
+
+```powershell
+dot -Tsvg .\architecture.dot -o .\architecture.svg
+Start-Process .\architecture.svg
 ```
 
 Sur un gros projet, limiter le graphe au voisinage direct d'un module :
@@ -273,7 +284,8 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 
 ### Utilisateur
 
-- [Guide utilisateur](docs/user/README.md)
+- **[Guide utilisateur — commencer ici](docs/user/README.md)**
+- **[Visualiser le graphe d'architecture](docs/user/architecture-graph.md)**
 - [Installation PROD Windows](docs/user/production-installation.md)
 - [Indexation autonome](docs/user/autonomous-indexing.md)
 - [Installation depuis les sources](docs/user/installation.md)
