@@ -5,12 +5,20 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.minos</groupId>
-    <artifactId>minos-code-intelligence</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
-    <name>MINOS Code Intelligence</name>
-    <description>Local-first, language-agnostic Code Intelligence Engine.</description>
+    <artifactId>minos-parent</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+    <name>MINOS Parent</name>
+    <description>Parent reactor for MINOS Code Intelligence.</description>
+
+    <modules>
+        <module>minos-app</module>
+    </modules>
 
     <properties>
+        <!-- CI-friendly version: release scripts override with -Drevision=... -->
+        <revision>0.2.0-SNAPSHOT</revision>
+
         <maven.compiler.release>24</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -37,35 +45,6 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <dependencies>
-        <!-- Infrastructure only: imports must remain confined to adapter.scip. -->
-        <dependency>
-            <groupId>org.scip-code</groupId>
-            <artifactId>scip-java-bindings</artifactId>
-            <version>${scip.java.bindings.version}</version>
-        </dependency>
-
-        <!-- Official MCP Java SDK bundle: core transports + Jackson 3 binding. -->
-        <dependency>
-            <groupId>io.modelcontextprotocol.sdk</groupId>
-            <artifactId>mcp</artifactId>
-        </dependency>
-
-        <!-- Pure-Java Git reader used only by M12 Git intelligence. -->
-        <dependency>
-            <groupId>org.eclipse.jgit</groupId>
-            <artifactId>org.eclipse.jgit</artifactId>
-            <version>${jgit.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 
     <build>
         <plugins>
@@ -110,80 +89,6 @@
                 <configuration>
                     <useModulePath>false</useModulePath>
                 </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <version>${maven.surefire.plugin.version}</version>
-                <configuration>
-                    <useModulePath>false</useModulePath>
-                    <systemPropertyVariables>
-                        <minos.shaded.jar>${project.build.directory}/${project.build.finalName}-all.jar</minos.shaded.jar>
-                    </systemPropertyVariables>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>${maven.jar.plugin.version}</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.minos.cli.MinosLauncher</mainClass>
-                        </manifest>
-                        <manifestEntries>
-                            <Implementation-Version>${project.version}</Implementation-Version>
-                        </manifestEntries>
-                    </archive>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>${maven.shade.plugin.version}</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>all</shadedClassifierName>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.minos.cli.MinosLauncher</mainClass>
-                                    <manifestEntries>
-                                        <Implementation-Version>${project.version}</Implementation-Version>
-                                    </manifestEntries>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
