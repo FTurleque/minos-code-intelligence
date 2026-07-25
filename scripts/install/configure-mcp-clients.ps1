@@ -168,7 +168,10 @@ if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
 }
 
 function Get-ManagedEntry([string] $Id) {
-    return @($script:ManagedEntries | Where-Object { $_.id -eq $Id } | Select-Object -First 1)[0]
+    $Match = $script:ManagedEntries |
+        Where-Object { $_.id -eq $Id } |
+        Select-Object -First 1
+    return $Match
 }
 
 function Upsert-ManagedEntry([object] $Entry) {
@@ -206,7 +209,10 @@ function Test-ManagedJsonEntryMatches([object] $Entry, [object] $Current) {
     }
 
     $CurrentArgs = @(Get-ObjectPropertyValue -Root $Current -Name 'args')
-    if ($CurrentArgs.Count -ne 1 -or [string]$CurrentArgs[0] -ne 'mcp') {
+    if ($CurrentArgs.Count -ne 1) {
+        return $false
+    }
+    if ([string]$CurrentArgs[0] -ne 'mcp') {
         return $false
     }
 
