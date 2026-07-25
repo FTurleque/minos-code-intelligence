@@ -42,7 +42,7 @@ Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopMinosDockerMcp"; Check: DockerMcpCanStop
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"
 
 [UninstallDelete]
 ; The setup-owned marker must not keep {app} behind when Docker is unavailable.
@@ -143,12 +143,6 @@ begin
     SW_HIDE,
     ewWaitUntilTerminated,
     ResultCode) and (ResultCode = 0);
-end;
-
-function DockerMcpCanStop(): Boolean;
-begin
-  Result := DockerReady() and FileExists(
-    ExpandConstant('{app}\.docker-mcp-managed'));
 end;
 
 function GetDockerProjectsRoot(Param: String): String;
