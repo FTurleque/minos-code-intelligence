@@ -32,6 +32,144 @@ MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 
 La CLI et le MCP lisent donc le même registre et le même snapshot actif, avec les mêmes chemins Windows.
 
+### Variante robuste pour les clients qui lancent mal les `.cmd`
+
+Certains clients MCP Windows lancent plus fiablement un exécutable natif qu'un script `.cmd`. La distribution MINOS contient justement :
+
+```text
+%LOCALAPPDATA%\Programs\MINOS\app\minos.exe
+```
+
+On peut alors lancer directement l'exécutable et fournir explicitement `MINOS_HOME` :
+
+```json
+{
+  "command": "C:\\Users\\<user>\\AppData\\Local\\Programs\\MINOS\\app\\minos.exe",
+  "args": ["mcp"],
+  "env": {
+    "MINOS_HOME": "C:\\Users\\<user>\\AppData\\Local\\MINOS\\data"
+  }
+}
+```
+
+Cette variante expose le même serveur MCP natif ; elle ne passe pas par Docker.
+
+## GitHub Copilot dans IntelliJ / JetBrains
+
+Les versions actuelles de GitHub Copilot dans les IDE JetBrains prennent en charge les serveurs MCP **locaux**. Dans Copilot Chat, utiliser le mode **Agent**, ouvrir les outils puis **Add MCP Tools / Configure your MCP server** pour éditer `mcp.json`.
+
+Exemple MINOS :
+
+```json
+{
+  "servers": {
+    "minos": {
+      "command": "C:\\Users\\<user>\\AppData\\Local\\Programs\\MINOS\\app\\minos.exe",
+      "args": ["mcp"],
+      "env": {
+        "MINOS_HOME": "C:\\Users\\<user>\\AppData\\Local\\MINOS\\data"
+      }
+    }
+  }
+}
+```
+
+Après enregistrement, ouvrir la liste des outils de Copilot Agent. Les tools MINOS doivent apparaître avec des noms tels que :
+
+```text
+minos_project_structure
+minos_search_code
+minos_find_symbols
+minos_find_usages
+minos_architecture
+minos_impact
+```
+
+Documentation GitHub :
+
+```text
+https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/extend-copilot-chat-with-mcp
+```
+
+> Pour Copilot Business / Enterprise, une politique d'organisation peut interdire ou autoriser les serveurs MCP. Ce point dépend de l'administration GitHub de l'organisation.
+
+## Claude Code
+
+Claude Code prend en charge les serveurs MCP locaux STDIO.
+
+Sous PowerShell Windows :
+
+```powershell
+$MinosExe = "$env:LOCALAPPDATA\Programs\MINOS\app\minos.exe"
+$MinosHome = "$env:LOCALAPPDATA\MINOS\data"
+
+claude mcp add minos `
+  --scope user `
+  --env "MINOS_HOME=$MinosHome" `
+  -- "$MinosExe" mcp
+```
+
+Vérifier :
+
+```powershell
+claude mcp list
+claude mcp get minos
+```
+
+Puis, dans Claude Code :
+
+```text
+/mcp
+```
+
+Le scope peut être adapté :
+
+```text
+local    configuration privée liée au projet courant
+project  configuration partageable avec le projet
+user     disponible dans tous les projets de l'utilisateur
+```
+
+Documentation Anthropic :
+
+```text
+https://docs.anthropic.com/en/docs/claude-code/mcp
+```
+
+## Claude Desktop
+
+Claude Desktop sait également démarrer des serveurs MCP locaux. Sur Windows, le fichier de configuration développeur est :
+
+```text
+%APPDATA%\Claude\claude_desktop_config.json
+```
+
+Exemple :
+
+```json
+{
+  "mcpServers": {
+    "minos": {
+      "command": "C:\\Users\\<user>\\AppData\\Local\\Programs\\MINOS\\app\\minos.exe",
+      "args": ["mcp"],
+      "env": {
+        "MINOS_HOME": "C:\\Users\\<user>\\AppData\\Local\\MINOS\\data"
+      }
+    }
+  }
+}
+```
+
+Quitter complètement Claude Desktop puis le relancer après modification.
+
+La distribution moderne de Claude Desktop propose aussi les extensions Desktop (DXT). MINOS n'est pas encore empaqueté en extension DXT : la configuration ci-dessus correspond au serveur MCP local développeur classique.
+
+Documentation MCP :
+
+```text
+https://modelcontextprotocol.io/docs/develop/connect-local-servers
+```
+
 ## Depuis un checkout de développement
 
 ```powershell
