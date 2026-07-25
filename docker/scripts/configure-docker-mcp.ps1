@@ -4,7 +4,6 @@ param(
     [string] $InstallRoot,
 
     [string] $ProjectsRoot = '',
-
     [switch] $Start,
     [switch] $Stop,
     [switch] $Strict,
@@ -107,7 +106,7 @@ try {
 
     if ($Stop) {
         if (-not (Test-Path -LiteralPath $ManagedMarker -PathType Leaf)) {
-            Write-Host 'MINOS Docker MCP was not managed by this setup; nothing to stop.'
+            Write-Host 'MINOS Docker MCP was not managed by this setup; nothing to remove.'
             return
         }
         $Managed = Read-KeyValueFile -Path $ManagedMarker
@@ -123,9 +122,14 @@ try {
         if (-not [string]::IsNullOrWhiteSpace($Managed['composeProject'])) {
             $DockerComposeProject = $Managed['composeProject']
         }
-        Invoke-DockerWorkflow -Action Stop
+
+        # The setup's uninstall hook historically invokes this helper with
+        # -Stop. For a setup-managed Docker MCP, uninstall must remove the
+        # container/runtime configuration rather than leave a stopped container
+        # visible in Docker Desktop. Persistent docker-data remains untouched.
+        Invoke-DockerWorkflow -Action Uninstall
         Remove-Item -LiteralPath $ManagedMarker -Force
-        Write-Host 'MINOS Docker MCP stopped before uninstall.' -ForegroundColor Green
+        Write-Host 'MINOS Docker MCP removed before uninstall.' -ForegroundColor Green
         return
     }
 
