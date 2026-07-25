@@ -95,7 +95,7 @@ class MinosLauncherTest {
         ProcessBuilder builder = new ProcessBuilder(
                 javaExecutable.toString(),
                 "-cp",
-                Path.of("target", "classes").toAbsolutePath().normalize().toString(),
+                testRuntimeClasspath(),
                 MinosLauncher.class.getName(),
                 "find-implementations",
                 project.id().toString(),
@@ -261,13 +261,24 @@ class MinosLauncherTest {
         List<String> command = new java.util.ArrayList<>(List.of(
                 javaExecutable.toString(),
                 "-cp",
-                Path.of("target", "classes").toAbsolutePath().normalize().toString(),
+                testRuntimeClasspath(),
                 MinosLauncher.class.getName()
         ));
         command.addAll(List.of(arguments));
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().put(MinosLauncher.HOME_ENVIRONMENT_VARIABLE, home.toString());
         return builder.start();
+    }
+
+    private static String testRuntimeClasspath() {
+        String classpath = System.getProperty("surefire.test.class.path");
+        if (classpath == null || classpath.isBlank()) {
+            classpath = System.getProperty("java.class.path");
+        }
+        if (classpath == null || classpath.isBlank()) {
+            throw new IllegalStateException("test runtime classpath is unavailable");
+        }
+        return classpath;
     }
 
     private static Symbol greetingService(RegisteredProject project) {
