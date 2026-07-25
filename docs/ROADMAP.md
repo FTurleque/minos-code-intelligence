@@ -1,8 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M14 terminés, validés et livrés.**
+Statut : **C0 à M14 terminés, validés et livrés ; M15 à M20 planifiés.**
 
 L’état courant livré reste résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves détaillées des jalons terminés sont archivées sous [`history/milestones/`](history/milestones/README.md).
+
+La trajectoire détaillée de la nouvelle phase produit est décrite dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md).
 
 ## Principes de roadmap
 
@@ -12,7 +14,9 @@ L’état courant livré reste résumé dans [`STATUS.md`](STATUS.md). Les déci
 - un nouveau commit invalide la validation exacte d’un SHA précédent ;
 - les surfaces CLI/API/MCP/NEXUS ne dupliquent pas le métier ;
 - les décisions durables sont formalisées en ADR ;
-- les logs, mesures et validations historiques restent dans les archives de jalon.
+- les logs, mesures et validations historiques restent dans les archives de jalon ;
+- les optimisations et choix de backend sont gouvernés par des mesures ;
+- la recherche sémantique et les heuristiques complètent les faits MINOS sans les remplacer.
 
 ---
 
@@ -142,7 +146,7 @@ La frontière M9 « ne pas simuler un runner absent » reste historiquement corr
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-Acquis : serveur MCP STDIO Java officiel, 15 tools read-only, schémas bornés, erreurs structurées et shaded JAR.
+Acquis M10 : serveur MCP STDIO Java officiel, 15 tools read-only, schémas bornés, erreurs structurées et shaded JAR. Les évolutions post-M14 ont porté le catalogue courant à 16 tools avec l’exposition dédiée du graphe d’architecture.
 
 - historique : [`history/milestones/m10/`](history/milestones/m10/)
 - décision : [ADR-0017](adr/0017-mcp-stdio-read-only.md)
@@ -246,6 +250,192 @@ La publication reste volontairement explicite : elle est déclenchée manuelleme
 
 ---
 
-## Explorations futures
+# Nouvelle phase — Industrialisation et complétion de MINOS
 
-Non engagées dans la roadmap principale : Code Property Graph, flux de données, sécurité avancée, recherche sémantique, embeddings, plugins IDE, indexation distante GitHub/GitLab, indexation distribuée et mode service hébergé.
+Les jalons M15 à M20 sont **planifiés mais non acquis**. Le document détaillé [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md) définit leurs sous-incréments, gates et dépendances.
+
+```text
+M15  Industrialiser le Core Engine
+  ↓
+M16  Prouver la scalabilité
+  ↓
+M17  Généraliser discovery + providers
+  ↓
+M18  Intégrer MINOS à IntelliJ
+  ↓
+M19  Ajouter l'intelligence de programme avancée
+  ↓
+M20  Ajouter la recherche sémantique hybride
+```
+
+M18 peut avancer en parallèle de M17 une fois les contrats M15 stabilisés. M19 et M20 peuvent être explorés plus tôt, mais leur promotion produit dépend des garanties de scalabilité M16.
+
+---
+
+## M15 — Industrialisation du Core Engine
+
+**PLANIFIÉ — priorité immédiate.**
+
+Objectif : transformer le socle M14 en plateforme modulaire et durable sans régression fonctionnelle.
+
+Acquis visés :
+
+- architecture Maven multi-module fondée sur de vraies frontières de compilation ;
+- `MinosApplication` comme composition root commun ;
+- suppression du chemin MCP → CLI → moteur ;
+- résolution projet mutualisée ;
+- persistance séparant repository, codecs, active pointer, intégrité et rétention ;
+- cache du snapshot actif identifié par `(projectId, snapshotId)` ;
+- indexes mémoire dédiés pour symboles, fichiers, occurrences et relations ;
+- couverture ciblée par JaCoCo ;
+- CI automatique bloquante sur les PR ;
+- contrôles de cohérence documentaire.
+
+Porte : **les contrats et replays M14 restent fonctionnellement identiques ; les requêtes répétées ne rechargent plus systématiquement tout le snapshot ; les frontières principales deviennent imposées par le build.**
+
+Sous-incréments : M15-S1 à M15-S11 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m15--industrialisation-du-core-engine).
+
+---
+
+## M16 — Scalabilité et performance à grande échelle
+
+**PLANIFIÉ.**
+
+Objectif : mesurer puis prouver le comportement de MINOS sur de grands codebases avant de sélectionner un backend plus complexe.
+
+Acquis visés :
+
+- benchmark harness reproductible ;
+- datasets synthétiques et réels gradués ;
+- p50/p95/p99 sur les requêtes structurantes ;
+- profil mémoire/disque ;
+- benchmark MCP sous séquences de requêtes ;
+- benchmark d'indexation ;
+- décision backend par ADR fondée sur mesures ;
+- politique de rétention/compaction des snapshots et runs.
+
+Porte : **aucun backend n'est adopté parce qu'il semble plus industriel ; le choix doit démontrer un gain mesurable sur les goulots observés sans dégrader déterminisme ou exactitude.**
+
+Sous-incréments : M16-S1 à M16-S9 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m16--scalabilité-et-performance-à-grande-échelle).
+
+---
+
+## M17 — Provider & Discovery Platform
+
+**PLANIFIÉ.**
+
+Objectif : rendre réellement extensibles les langages, systèmes de build et providers sans introduire de branches spécifiques dans le cœur.
+
+Acquis visés :
+
+- SPI de discovery (`ProjectDetector`, `BuildSystemDetector`, `SourceRootDetector`, `LanguageDetector`) ;
+- SPI provider/indexer ;
+- modèle de capacités plus fin ;
+- provider conformance kit reproductible ;
+- support Gradle ;
+- qualification des workspaces npm/pnpm/yarn selon disponibilité ;
+- qualification d'au moins un nouvel écosystème/langage au-delà du périmètre M14 ;
+- installation et diagnostic providers extensibles.
+
+Porte : **ajouter un provider ou un build system ne doit pas nécessiter de modifier le modèle métier MINOS ni un orchestrateur central par branchement spécifique.**
+
+Sous-incréments : M17-S1 à M17-S9 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m17--provider--discovery-platform).
+
+---
+
+## M18 — MINOS for IntelliJ
+
+**PLANIFIÉ.**
+
+Objectif : rendre les capacités MINOS directement exploitables dans IntelliJ sans dépendre d'un agent IA.
+
+Acquis visés :
+
+- plugin IntelliJ versionné ;
+- état projet/provider/snapshot ;
+- navigation symboles/usages/implémentations ;
+- graphe d'architecture interactif ;
+- vues impact et related tests avec preuves ;
+- déclenchement contrôlé de l'indexation/doctor ;
+- intelligence Git ;
+- actions contextuelles depuis l'éditeur.
+
+Porte : **le plugin reste un client du moteur ; il ne duplique pas l'intelligence de code et le graphe affiché correspond aux mêmes faits que CLI/API/MCP.**
+
+Sous-incréments : M18-S1 à M18-S9 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m18--minos-for-intellij).
+
+---
+
+## M19 — Advanced Code Intelligence
+
+**PLANIFIÉ.**
+
+Objectif : enrichir le modèle avec structure d'exécution et flux de données afin d'améliorer analyse d'impact et sécurité.
+
+Trajectoire :
+
+```text
+Call Graph v2
+  ↓
+Control Flow Graph
+  ↓
+Data Flow
+  ↓
+Code Property Graph
+  ↓
+Impact v2 / Security Intelligence
+```
+
+Acquis visés :
+
+- modèle de graphe de programme provider-independent ;
+- call graph enrichi et qualifié ;
+- CFG ;
+- data-flow local puis interprocédural borné ;
+- CPG si son bénéfice aval est démontré ;
+- impact v2 ;
+- primitives de sécurité/taint explicables ;
+- exposition API/MCP versionnée.
+
+Porte : **aucun chemin de flux incomplet n'est présenté comme preuve d'absence ; les capacités sont qualifiées par précision/rappel et conservent provenance, confiance et limitations.**
+
+Sous-incréments : M19-S1 à M19-S9 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m19--advanced-code-intelligence).
+
+---
+
+## M20 — Semantic & Hybrid Code Intelligence
+
+**PLANIFIÉ.**
+
+Objectif : ajouter une recherche par intention/concept et un ranking hybride sans remplacer les faits déterministes MINOS.
+
+Acquis visés :
+
+- modèle de documents sémantiques ;
+- SPI d'embeddings locaux ;
+- abstraction de vector store reconstructible ;
+- recherche sémantique ;
+- ranking hybride lexical + graph + semantic ;
+- context builder v2 borné ;
+- index sémantique incrémental ;
+- contrats API/MCP explicites ;
+- intégration NEXUS v2 préservant les responsabilités respectives.
+
+Porte : **les embeddings restent optionnels et ne sont jamais présentés comme preuve structurelle ; le ranking hybride doit démontrer un gain mesurable sur une vérité terrain.**
+
+Sous-incréments : M20-S1 à M20-S9 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m20--semantic--hybrid-code-intelligence).
+
+---
+
+## Après M20 — Explorations non engagées
+
+Restent volontairement hors engagement de cette phase :
+
+- indexation distante directe GitHub/GitLab ;
+- indexation distribuée ;
+- mode service MINOS hébergé ;
+- collaboration multi-utilisateur ;
+- analyse runtime/dynamique ;
+- support massif de langages sans provider qualifié.
+
+Ces thèmes devront chacun disposer d'une question produit, de métriques et d'une décision avant d'entrer dans la roadmap principale.
