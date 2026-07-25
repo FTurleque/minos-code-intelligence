@@ -93,13 +93,17 @@ function Escape-InnoString([string] $Value) {
 
 $BaseVersion = ($Version -split '[-+]')[0]
 $NumericVersion = "$BaseVersion.0"
-$Iss = Get-Content -Raw -LiteralPath $Template
+# Windows PowerShell 5.1 treats UTF-8 without BOM as the active ANSI code page
+# when Get-Content is used without -Encoding. Read explicitly as UTF-8 so
+# French installer strings survive template expansion without mojibake.
+$Utf8 = New-Object System.Text.UTF8Encoding($false)
+$Iss = [System.IO.File]::ReadAllText($Template, $Utf8)
 $Iss = $Iss.Replace('@@VERSION@@', (Escape-InnoString $Version))
 $Iss = $Iss.Replace('@@APP_VERSION@@', (Escape-InnoString $NumericVersion))
 $Iss = $Iss.Replace('@@SOURCE_DIR@@', (Escape-InnoString $DistributionRoot))
 $Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $OutputRoot))
 $Iss = $Iss.Replace('@@OUTPUT_BASENAME@@', (Escape-InnoString $OutputBaseFilename))
-[System.IO.File]::WriteAllText($GeneratedIss, $Iss, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($GeneratedIss, $Iss, $Utf8)
 
 try {
     & $Iscc $GeneratedIss
