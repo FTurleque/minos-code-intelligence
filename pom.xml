@@ -12,6 +12,7 @@
     <description>Parent reactor for MINOS Code Intelligence.</description>
 
     <modules>
+        <module>minos-domain</module>
         <module>minos-app</module>
     </modules>
 
