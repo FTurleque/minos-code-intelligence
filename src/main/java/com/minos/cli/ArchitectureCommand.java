@@ -234,7 +234,7 @@ public final class ArchitectureCommand {
         for (ArchitectureModule module : selection.modules()) {
             String label = module.relativePath().isBlank()
                     ? module.name()
-                    : module.name() + "\\n" + module.relativePath();
+                    : module.name() + "\n" + module.relativePath();
             result.append("  \"").append(dotText(module.id())).append("\" [label=\"")
                     .append(dotText(label)).append("\"];\n");
         }
