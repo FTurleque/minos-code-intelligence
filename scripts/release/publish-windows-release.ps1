@@ -6,7 +6,8 @@ param(
 
     [string] $TargetCommit = '',
 
-    [switch] $SkipBuild
+    [switch] $SkipBuild,
+    [switch] $ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +16,7 @@ Set-StrictMode -Version Latest
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 
 if ($env:OS -ne 'Windows_NT') {
-    throw 'MINOS Windows releases must be published from Windows.'
+    throw 'MINOS Windows releases must be built and validated on Windows.'
 }
 
 function Invoke-NativeChecked {
@@ -31,18 +32,125 @@ function Invoke-NativeChecked {
     }
 }
 
+function Invoke-ProcessChecked {
+    param(
+        [Parameter(Mandatory = $true)][string] $File,
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    $Process = Start-Process -FilePath $File -ArgumentList $Arguments -Wait -PassThru
+    if ($Process.ExitCode -ne 0) {
+        throw "$Failure (exit=$($Process.ExitCode))"
+    }
+}
+
+function Invoke-MinosVersion {
+    param(
+        [Parameter(Mandatory = $true)][string] $Launcher,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    # Capture stdout and stderr independently. The embedded JVM can emit
+    # harmless warnings on stderr, which Windows PowerShell 5.1 otherwise
+    # promotes to ErrorRecord objects when ErrorActionPreference is Stop.
+    $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ProcessInfo.FileName = $env:ComSpec
+    $ProcessInfo.Arguments = '/d /s /c ""{0}" --version"' -f $Launcher
+    $ProcessInfo.WorkingDirectory = Split-Path -Parent $Launcher
+    $ProcessInfo.UseShellExecute = $false
+    $ProcessInfo.CreateNoWindow = $true
+    $ProcessInfo.RedirectStandardOutput = $true
+    $ProcessInfo.RedirectStandardError = $true
+
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $ProcessInfo
+    try {
+        if (-not $Process.Start()) {
+            throw "$Failure (process did not start)"
+        }
+        $StandardOutput = $Process.StandardOutput.ReadToEnd().Trim()
+        $StandardError = $Process.StandardError.ReadToEnd().Trim()
+        $Process.WaitForExit()
+        if ($Process.ExitCode -ne 0) {
+            throw "$Failure (exit=$($Process.ExitCode)): $StandardError"
+        }
+        return $StandardOutput
+    }
+    finally {
+        $Process.Dispose()
+    }
+}
+
+function Invoke-PowerShellScriptChecked {
+    param(
+        [Parameter(Mandatory = $true)][string] $Script,
+        [Parameter(Mandatory = $true)][hashtable] $Parameters,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+
+    try {
+        & $Script @Parameters
+    }
+    catch {
+        throw "$Failure`: $($_.Exception.Message)"
+    }
+}
+
+function Assert-VersionProvenance {
+    param(
+        [Parameter(Mandatory = $true)][string] $VersionFile,
+        [Parameter(Mandatory = $true)][string] $ExpectedVersion,
+        [Parameter(Mandatory = $true)][string] $ExpectedCommit,
+        [Parameter(Mandatory = $true)][string] $Context
+    )
+
+    if (-not (Test-Path -LiteralPath $VersionFile -PathType Leaf)) {
+        throw "$Context provenance file not found: $VersionFile"
+    }
+
+    $Metadata = @{}
+    foreach ($Line in Get-Content -LiteralPath $VersionFile) {
+        if ($Line -match '^([^=]+)=(.*)$') {
+            $Metadata[$Matches[1].Trim()] = $Matches[2].Trim()
+        }
+    }
+
+    $ArtifactVersion = $Metadata['version']
+    $ArtifactCommit = $Metadata['commit']
+    if ($ArtifactVersion -ne $ExpectedVersion) {
+        throw "$Context version provenance mismatch: expected=$ExpectedVersion actual=$ArtifactVersion"
+    }
+    if ($ArtifactCommit -ne $ExpectedCommit) {
+        throw "$Context commit provenance mismatch: expected=$ExpectedCommit actual=$ArtifactCommit"
+    }
+}
+
+function Verify-Sha256 {
+    param(
+        [Parameter(Mandatory = $true)][string] $Artifact,
+        [Parameter(Mandatory = $true)][string] $Checksum
+    )
+
+    if (-not (Test-Path -LiteralPath $Artifact -PathType Leaf)) {
+        throw "Release artifact not found: $Artifact"
+    }
+    if (-not (Test-Path -LiteralPath $Checksum -PathType Leaf)) {
+        throw "Release checksum not found: $Checksum"
+    }
+
+    $ExpectedHash = ((Get-Content -LiteralPath $Checksum | Select-Object -First 1) -split '\s+')[0]
+    $ActualHash = (Get-FileHash -LiteralPath $Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($ExpectedHash) -or $ExpectedHash.ToLowerInvariant() -ne $ActualHash) {
+        throw "Release checksum mismatch for $Artifact`: expected=$ExpectedHash actual=$ActualHash"
+    }
+    return $ActualHash
+}
+
 $Git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $Git) {
-    throw 'git is required to publish a MINOS release.'
+    throw 'git is required to build or publish a MINOS release.'
 }
-
-$Gh = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $Gh) {
-    throw 'GitHub CLI (gh) is required. Install it and run `gh auth login` first.'
-}
-
-Invoke-NativeChecked -File $Gh.Source -Arguments @('auth', 'status') `
-    -Failure 'GitHub CLI is not authenticated'
 
 $Head = ((& $Git.Source -C $RepoRoot rev-parse HEAD) | Select-Object -First 1).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Head)) {
@@ -54,7 +162,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Unable to inspect the Git worktree.'
 }
 if ($Dirty.Count -gt 0) {
-    throw "Release publication requires a clean worktree. Dirty entries:`n$($Dirty -join "`n")"
+    throw "Release validation requires a clean worktree. Dirty entries:`n$($Dirty -join "`n")"
 }
 
 if ([string]::IsNullOrWhiteSpace($TargetCommit)) {
@@ -64,73 +172,194 @@ if ($TargetCommit -ne $Head) {
     throw "Release target must be the exact commit used to build the assets. HEAD=$Head target=$TargetCommit"
 }
 
-$Repository = $env:GITHUB_REPOSITORY
-if ([string]::IsNullOrWhiteSpace($Repository)) {
-    $RepoJson = (& $Gh.Source repo view --json nameWithOwner | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($RepoJson)) {
-        throw 'Unable to resolve the GitHub repository with `gh repo view`.'
+$Gh = $null
+$Repository = ''
+if (-not $ValidateOnly) {
+    $Gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $Gh) {
+        throw 'GitHub CLI (gh) is required to publish a MINOS release. Install it and run `gh auth login` first.'
     }
-    $Repository = ($RepoJson | ConvertFrom-Json).nameWithOwner
-}
-if ([string]::IsNullOrWhiteSpace($Repository)) {
-    throw 'Unable to resolve the GitHub repository name.'
+
+    Invoke-NativeChecked -File $Gh.Source -Arguments @('auth', 'status') `
+        -Failure 'GitHub CLI is not authenticated'
+
+    $Repository = $env:GITHUB_REPOSITORY
+    if ([string]::IsNullOrWhiteSpace($Repository)) {
+        $RepoJson = (& $Gh.Source repo view --json nameWithOwner | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($RepoJson)) {
+            throw 'Unable to resolve the GitHub repository with `gh repo view`.'
+        }
+        $Repository = ($RepoJson | ConvertFrom-Json).nameWithOwner
+    }
+    if ([string]::IsNullOrWhiteSpace($Repository)) {
+        throw 'Unable to resolve the GitHub repository name.'
+    }
 }
 
 if (-not $SkipBuild) {
-    & (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1') -Version $Version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Windows release build failed with exit code $LASTEXITCODE"
-    }
+    Invoke-PowerShellScriptChecked `
+        -Script (Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1') `
+        -Parameters @{ Version = $Version } `
+        -Failure 'Windows release distribution build failed'
+    Invoke-PowerShellScriptChecked `
+        -Script (Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1') `
+        -Parameters @{ Version = $Version } `
+        -Failure 'Windows release setup build failed'
 }
 
 $DistributionName = "minos-$Version-windows-x64"
 $Zip = Join-Path $RepoRoot "target\dist\$DistributionName.zip"
-$Checksum = "$Zip.sha256"
+$ZipChecksum = "$Zip.sha256"
+$Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
+$SetupChecksum = "$Setup.sha256"
+$RequiredInstalledFiles = @(
+    'minos.cmd',
+    'minos-mcp.cmd',
+    'VERSION',
+    'app\minos.exe',
+    'app\runtime\bin\server\jvm.dll',
+    'app\runtime\lib\modules',
+    'lib\minos.jar',
+    'docker\Dockerfile.mcp.release',
+    'docker\compose.mcp.prod.yaml',
+    'docker\scripts\prod-mcp-release.ps1',
+    'docker\scripts\configure-docker-mcp.ps1'
+)
 
-if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) {
-    throw "Windows release ZIP not found: $Zip"
-}
-if (-not (Test-Path -LiteralPath $Checksum -PathType Leaf)) {
-    throw "Windows release checksum not found: $Checksum"
-}
+$ZipHash = Verify-Sha256 -Artifact $Zip -Checksum $ZipChecksum
+$SetupHash = Verify-Sha256 -Artifact $Setup -Checksum $SetupChecksum
 
-$ExpectedHash = ((Get-Content -LiteralPath $Checksum | Select-Object -First 1) -split '\s+')[0]
-$ActualHash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-if ([string]::IsNullOrWhiteSpace($ExpectedHash) -or $ExpectedHash.ToLowerInvariant() -ne $ActualHash) {
-    throw "Distribution checksum mismatch: expected=$ExpectedHash actual=$ActualHash"
-}
-
-# Validate the installer that is actually shipped in the ZIP, then use that
-# installer to consume the ZIP itself. This catches packaging/installer drift
-# before an immutable GitHub Release is created.
-$SmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-smoke-" + [Guid]::NewGuid())
-$ExtractRoot = Join-Path $SmokeRoot 'package'
-$InstallRoot = Join-Path $SmokeRoot 'installed'
+# Validate the portable installer actually shipped in the ZIP.
+$ZipSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-zip-smoke-" + [Guid]::NewGuid())
+$ExtractRoot = Join-Path $ZipSmokeRoot 'package'
+$ZipInstallRoot = Join-Path $ZipSmokeRoot 'installed'
 try {
     New-Item -ItemType Directory -Force -Path $ExtractRoot | Out-Null
     Expand-Archive -LiteralPath $Zip -DestinationPath $ExtractRoot -Force
 
     $PackagedInstaller = Join-Path $ExtractRoot "$DistributionName\install.ps1"
     if (-not (Test-Path -LiteralPath $PackagedInstaller -PathType Leaf)) {
-        throw "Packaged installer not found: $PackagedInstaller"
+        throw "Packaged portable installer not found: $PackagedInstaller"
     }
 
-    & $PackagedInstaller -Package $Zip -InstallRoot $InstallRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Packaged installer smoke test failed with exit code $LASTEXITCODE"
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $ExtractRoot "$DistributionName\VERSION") `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'ZIP'
+
+    Invoke-PowerShellScriptChecked `
+        -Script $PackagedInstaller `
+        -Parameters @{ Package = $Zip; InstallRoot = $ZipInstallRoot } `
+        -Failure 'Packaged portable installer smoke test failed'
+    foreach ($Required in $RequiredInstalledFiles) {
+        $InstalledFile = Join-Path $ZipInstallRoot $Required
+        if (-not (Test-Path -LiteralPath $InstalledFile -PathType Leaf)) {
+            throw "Portable installer did not install required file: $InstalledFile"
+        }
     }
 
-    $InstalledMinos = Join-Path $InstallRoot 'minos.cmd'
-    $VersionOutput = ((& $InstalledMinos --version) | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Installed MINOS --version failed with exit code $LASTEXITCODE"
-    }
+    $InstalledMinos = Join-Path $ZipInstallRoot 'minos.cmd'
+    $VersionOutput = Invoke-MinosVersion `
+        -Launcher $InstalledMinos `
+        -Failure 'Portable MINOS --version failed'
     if ($VersionOutput -ne "MINOS $Version") {
-        throw "Installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
+        throw "Portable MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
+    }
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $ZipInstallRoot 'VERSION') `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'Portable installation'
+}
+finally {
+    Remove-Item -LiteralPath $ZipSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Smoke-test the user-facing setup.exe without touching the caller's PATH or
+# Docker configuration. The setup is installed and then uninstalled silently.
+$SetupSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos release setup smoke " + [Guid]::NewGuid())
+$SetupInstallRoot = Join-Path $SetupSmokeRoot 'installed with spaces'
+$SetupInstalled = $false
+$SetupUninstalled = $false
+try {
+    New-Item -ItemType Directory -Force -Path $SetupSmokeRoot | Out-Null
+    Invoke-ProcessChecked -File $Setup -Arguments @(
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        ('/DIR="{0}"' -f $SetupInstallRoot),
+        '/TASKS="!addtopath,!docker"'
+    ) -Failure 'MINOS setup.exe silent installation failed'
+    $SetupInstalled = $true
+
+    foreach ($Required in $RequiredInstalledFiles) {
+        $InstalledFile = Join-Path $SetupInstallRoot $Required
+        if (-not (Test-Path -LiteralPath $InstalledFile -PathType Leaf)) {
+            throw "MINOS setup.exe did not install required file: $InstalledFile"
+        }
+    }
+    $InstalledMinos = Join-Path $SetupInstallRoot 'minos.cmd'
+    $VersionOutput = Invoke-MinosVersion `
+        -Launcher $InstalledMinos `
+        -Failure 'setup.exe installed MINOS --version failed'
+    if ($VersionOutput -ne "MINOS $Version") {
+        throw "setup.exe installed MINOS version mismatch: expected='MINOS $Version' actual='$VersionOutput'"
+    }
+    Assert-VersionProvenance `
+        -VersionFile (Join-Path $SetupInstallRoot 'VERSION') `
+        -ExpectedVersion $Version `
+        -ExpectedCommit $TargetCommit `
+        -Context 'setup.exe installation'
+
+    $Uninstaller = Get-ChildItem -LiteralPath $SetupInstallRoot -File -Filter 'unins*.exe' |
+        Sort-Object Name |
+        Select-Object -First 1 -ExpandProperty FullName
+    if ([string]::IsNullOrWhiteSpace($Uninstaller)) {
+        throw "MINOS setup.exe did not register an uninstaller under $SetupInstallRoot"
+    }
+
+    Invoke-ProcessChecked -File $Uninstaller -Arguments @(
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART'
+    ) -Failure 'MINOS setup.exe silent uninstall failed'
+    $SetupUninstalled = $true
+
+    if (Test-Path -LiteralPath $SetupInstallRoot) {
+        throw "MINOS setup.exe uninstall left the program directory behind: $SetupInstallRoot"
     }
 }
 finally {
-    Remove-Item -LiteralPath $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+    if ($SetupInstalled -and -not $SetupUninstalled) {
+        try {
+            $RollbackUninstaller = Get-ChildItem -LiteralPath $SetupInstallRoot -File -Filter 'unins*.exe' -ErrorAction SilentlyContinue |
+                Sort-Object Name |
+                Select-Object -First 1 -ExpandProperty FullName
+            if (-not [string]::IsNullOrWhiteSpace($RollbackUninstaller)) {
+                Invoke-ProcessChecked -File $RollbackUninstaller -Arguments @(
+                    '/VERYSILENT',
+                    '/SUPPRESSMSGBOXES',
+                    '/NORESTART'
+                ) -Failure 'MINOS setup.exe rollback uninstall failed'
+            }
+        }
+        catch {
+            Write-Warning "Setup smoke-test rollback failed: $($_.Exception.Message)"
+        }
+    }
+    Remove-Item -LiteralPath $SetupSmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+if ($ValidateOnly) {
+    Write-Host ''
+    Write-Host 'MINOS Windows release VALIDATION SUCCESS' -ForegroundColor Green
+    Write-Host "Commit        : $TargetCommit"
+    Write-Host "Setup         : $Setup"
+    Write-Host "Setup SHA-256 : $SetupHash"
+    Write-Host "ZIP           : $Zip"
+    Write-Host "ZIP SHA-256   : $ZipHash"
+    return
 }
 
 $Tag = "v$Version"
@@ -163,8 +392,10 @@ if ($ExistingTag.Count -gt 0) {
 
 $ReleaseArguments = @(
     'release', 'create', $Tag,
+    $Setup,
+    $SetupChecksum,
     $Zip,
-    $Checksum,
+    $ZipChecksum,
     '--repo', $Repository,
     '--target', $TargetCommit,
     '--title', "MINOS $Version",
@@ -179,8 +410,10 @@ Invoke-NativeChecked -File $Gh.Source -Arguments $ReleaseArguments `
 
 Write-Host ''
 Write-Host 'MINOS GitHub Release SUCCESS' -ForegroundColor Green
-Write-Host "Repository : $Repository"
-Write-Host "Tag        : $Tag"
-Write-Host "Commit     : $TargetCommit"
-Write-Host "ZIP        : $Zip"
-Write-Host "SHA-256    : $ActualHash"
+Write-Host "Repository    : $Repository"
+Write-Host "Tag           : $Tag"
+Write-Host "Commit        : $TargetCommit"
+Write-Host "Setup         : $Setup"
+Write-Host "Setup SHA-256 : $SetupHash"
+Write-Host "ZIP           : $Zip"
+Write-Host "ZIP SHA-256   : $ZipHash"

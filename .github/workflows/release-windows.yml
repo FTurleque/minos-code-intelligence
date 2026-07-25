@@ -3,37 +3,31 @@ name: Publish Windows Release
 on:
   # Politique du dépôt : la publication reste une action explicite. Une fois
   # déclenché depuis main, le workflow construit, valide et publie les assets.
+  # Sur une autre branche, le même workflow qualifie les artefacts sans publier.
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version SemVer à publier, par exemple 0.2.0 ou 0.2.0-rc1'
+        description: 'Version SemVer à qualifier/publier, par exemple 0.2.0 ou 0.2.0-rc2'
         required: true
-        default: '0.2.0-rc1'
+        default: '0.2.0-rc2'
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: windows-release-${{ inputs.version }}
+  group: windows-release-${{ github.ref }}-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
   publish:
     name: Build, smoke test and publish Windows x64
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Refuser une publication hors de main
-        shell: pwsh
-        run: |
-          if ('${{ github.ref }}' -ne 'refs/heads/main') {
-            throw 'MINOS releases must be published from the main branch.'
-          }
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -46,6 +40,23 @@ jobs:
           java-version: '24'
           cache: maven
 
+      - name: Installer Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $iscc = @(
+            (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
+            'C:\Program Files\Inno Setup 7\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe',
+            'C:\ProgramData\chocolatey\bin\ISCC.exe'
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $iscc) {
+            throw 'Inno Setup installation did not expose ISCC.exe.'
+          }
+          Write-Host "ISCC: $iscc"
+
       - name: Afficher la toolchain
         shell: pwsh
         run: |
@@ -53,8 +64,19 @@ jobs:
           .\mvnw.cmd -version
           gh --version
           git rev-parse HEAD
+          Write-Host "Ref: $env:GITHUB_REF"
 
-      - name: Construire, valider et publier la GitHub Release
+      - name: Construire et qualifier la distribution Windows
+        if: github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: |
+          .\scripts\release\publish-windows-release.ps1 `
+            -Version '${{ inputs.version }}' `
+            -TargetCommit '${{ github.sha }}' `
+            -ValidateOnly
+
+      - name: Construire, qualifier et publier la GitHub Release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           .\scripts\release\publish-windows-release.ps1 `
@@ -70,5 +92,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           path: |
+            target/dist/MINOS-${{ inputs.version }}-windows-x64-setup.exe
+            target/dist/MINOS-${{ inputs.version }}-windows-x64-setup.exe.sha256
             target/dist/minos-${{ inputs.version }}-windows-x64.zip
             target/dist/minos-${{ inputs.version }}-windows-x64.zip.sha256

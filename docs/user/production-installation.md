@@ -6,35 +6,45 @@ Le parcours normal ne nécessite **ni clone Git de MINOS, ni Maven, ni JDK pour 
 
 > Le JDK, Maven, Node ou npm peuvent toutefois être nécessaires au **projet analysé** et à son provider d'indexation. Ils ne servent pas à démarrer MINOS lui-même.
 
+---
+
 ## 1. Parcours recommandé
+
+Pour un poste Windows, utiliser le `setup.exe` :
 
 ```text
 GitHub Release MINOS
         ↓
-télécharger ZIP + SHA-256
+MINOS-<version>-windows-x64-setup.exe
+        +
+MINOS-<version>-windows-x64-setup.exe.sha256
         ↓
 vérifier SHA-256
         ↓
-décompresser le ZIP
-        ↓
-lancer install.ps1
+lancer setup.exe
         ↓
 %LOCALAPPDATA%\Programs\MINOS
         ↓
+CLI + MCP natif + PATH
+        ↓
+MCP Docker optionnel
+        ↓
 minos.cmd doctor
         ↓
-installer le provider du projet
-        ↓
-project add → index → search / MCP
+provider → project add → index → search / MCP
 ```
 
-Le checkout source est un autre parcours, réservé au développement de MINOS : [Installation depuis les sources](installation.md).
+Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
+
+Le checkout source est un troisième parcours, réservé au développement de MINOS : [Installation depuis les sources](installation.md).
+
+> La release historique `0.2.0-rc1` a été publiée avant l'introduction du `setup.exe` et ne contient que le ZIP. Le setup commence avec la release qui intègre l'issue #46.
 
 ---
 
 ## 2. Télécharger une GitHub Release
 
-Ouvrir la page **Releases** du dépôt :
+Ouvrir :
 
 ```text
 https://github.com/FTurleque/minos-code-intelligence/releases
@@ -42,156 +52,149 @@ https://github.com/FTurleque/minos-code-intelligence/releases
 
 Le dépôt étant privé, GitHub peut demander une authentification avant d'afficher ou télécharger les assets.
 
-Une release Windows publie deux assets :
+Une release Windows complète publie quatre assets :
 
 ```text
+MINOS-<version>-windows-x64-setup.exe
+MINOS-<version>-windows-x64-setup.exe.sha256
+
 minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
-```
-
-Exemple release candidate :
-
-```text
-minos-0.2.0-rc1-windows-x64.zip
-minos-0.2.0-rc1-windows-x64.zip.sha256
-```
-
-Une version contenant un suffixe comme `-rc1` est publiée comme **pre-release**. Une version stable comme `0.2.0` est publiée comme release normale.
-
-## 3. Contenu du ZIP
-
-Le ZIP contient :
-
-```text
-minos-<version>-windows-x64/
-├── app/                                  # app-image jpackage + runtime Java embarqué
-├── lib/
-│   └── minos.jar                         # shaded JAR exact de la release
-├── docker/
-│   ├── Dockerfile.mcp.release
-│   ├── compose.mcp.prod.yaml
-│   └── scripts/
-│       └── prod-mcp-release.ps1
-├── minos.cmd                             # launcher CLI
-├── minos-mcp.cmd                         # launcher MCP direct
-├── install.ps1                           # installateur utilisateur
-├── VERSION                               # version, commit, Java de build
-└── README.txt
-```
-
-Le runtime Java de MINOS est inclus dans `app/`.
-
----
-
-## 4. Vérifier le SHA-256
-
-Depuis le répertoire où les deux fichiers ont été téléchargés :
-
-```powershell
-$Version = '0.2.0-rc1'
-
-Get-FileHash ".\minos-$Version-windows-x64.zip" -Algorithm SHA256
-Get-Content ".\minos-$Version-windows-x64.zip.sha256"
 ```
 
 Exemple :
 
 ```text
-Get-FileHash
-845DE6C42CE3C497EC48F5CCF93420CCCE0E64559AA80178727772156CF63B37
-
-fichier .sha256
-845de6c42ce3c497ec48f5ccf93420ccce0e64559aa80178727772156cf63b37  minos-0.2.0-rc1-windows-x64.zip
+MINOS-0.2.0-rc2-windows-x64-setup.exe
+MINOS-0.2.0-rc2-windows-x64-setup.exe.sha256
+minos-0.2.0-rc2-windows-x64.zip
+minos-0.2.0-rc2-windows-x64.zip.sha256
 ```
 
-La casse hexadécimale n'a pas d'importance. Les 64 caractères du hash doivent être identiques.
-
-**Ne pas installer l'archive si les deux empreintes diffèrent.**
+Une version avec suffixe comme `-rc2` est une **pre-release**. Une version comme `0.2.0` est une release stable.
 
 ---
 
-## 5. Installation utilisateur sans droits administrateur
+## 3. Vérifier le SHA-256 du setup
 
-### 5.1 Décompresser la release
-
-Exemple si le ZIP est dans le répertoire courant :
+Depuis le répertoire de téléchargement :
 
 ```powershell
-$Version = '0.2.0-rc1'
-$Staging = Join-Path $env:TEMP "minos-$Version-install"
+$Version = '0.2.0-rc2'
 
-Remove-Item $Staging -Recurse -Force -ErrorAction SilentlyContinue
-Expand-Archive ".\minos-$Version-windows-x64.zip" $Staging
-
-$Package = Join-Path $Staging "minos-$Version-windows-x64"
+Get-FileHash ".\MINOS-$Version-windows-x64-setup.exe" -Algorithm SHA256
+Get-Content ".\MINOS-$Version-windows-x64-setup.exe.sha256"
 ```
 
-### 5.2 Lancer l'installateur contenu dans le ZIP
+Les 64 caractères hexadécimaux doivent être identiques. La casse n'a pas d'importance.
 
-```powershell
-& "$Package\install.ps1" `
-  -Package $Package `
-  -AddToPath
+**Ne pas lancer l'installateur si les deux empreintes diffèrent.**
+
+---
+
+## 4. Installer avec `setup.exe`
+
+Lancer :
+
+```text
+MINOS-<version>-windows-x64-setup.exe
 ```
 
-Si la politique PowerShell bloque l'exécution du script :
+L'installation est conçue pour l'utilisateur courant et ne demande normalement pas de droits administrateur.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File "$Package\install.ps1" `
-  -Package $Package `
-  -AddToPath
-```
-
-L'emplacement par défaut est :
+Emplacement par défaut :
 
 ```text
 %LOCALAPPDATA%\Programs\MINOS
 ```
 
-`-AddToPath` ajoute ce répertoire au `PATH` de l'utilisateur courant.
-
-Ouvrir **un nouveau terminal** après l'installation pour utiliser `minos.cmd` directement par son nom.
-
-### 5.3 Installation sans modification du PATH
-
-Omettre `-AddToPath` :
-
-```powershell
-& "$Package\install.ps1" -Package $Package
-```
-
-Puis appeler explicitement :
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\MINOS\minos.cmd" --version
-```
-
----
-
-## 6. Installation sous Program Files
-
-Cette variante nécessite un PowerShell élevé :
-
-```powershell
-& "$Package\install.ps1" `
-  -Package $Package `
-  -InstallRoot "$env:ProgramFiles\MINOS" `
-  -AddToPath
-```
-
-Le programme et les données restent séparés.
-
----
-
-## 7. Programme et données persistantes
-
-Installation utilisateur par défaut :
+Le setup installe :
 
 ```text
-programme : %LOCALAPPDATA%\Programs\MINOS
+MINOS
+├── app\                         runtime Java + minos.exe
+├── lib\minos.jar
+├── minos.cmd                    CLI + entrée MCP native
+├── minos-mcp.cmd
+├── docker\                      assets MCP Docker
+├── VERSION
+└── désinstalleur Windows
+```
 
-données   : %LOCALAPPDATA%\MINOS\data
+### 4.1 PATH utilisateur
+
+La tâche :
+
+```text
+Ajouter MINOS au PATH de l'utilisateur
+```
+
+est proposée par le setup.
+
+Après installation, ouvrir un **nouveau terminal** avant d'utiliser :
+
+```powershell
+minos.cmd --version
+```
+
+### 4.2 MCP natif
+
+Aucune installation supplémentaire n'est nécessaire pour le MCP natif.
+
+Le même launcher sert de serveur MCP :
+
+```text
+command = <installation>\minos.cmd
+args    = mcp
+```
+
+### 4.3 MCP Docker pendant le setup
+
+Le setup propose la tâche optionnelle :
+
+```text
+Configurer et démarrer le MCP Docker
+```
+
+Si elle est sélectionnée, le setup demande la **racine des projets** à exposer au conteneur, par exemple :
+
+```text
+N:\workspace-dev
+```
+
+Cette racine est montée en lecture seule dans le conteneur.
+
+Le setup exécute alors :
+
+```text
+construction de l'image MINOS de la release
+→ génération de la configuration Docker
+→ montage des projets read-only
+→ démarrage du conteneur
+→ validation du runtime Docker MCP
+```
+
+**Docker Desktop doit déjà être installé et démarré.** MINOS n'installe pas Docker Desktop.
+
+Si Docker n'est pas disponible, le setup affiche un avertissement mais poursuit l'installation native. CLI et MCP natif restent utilisables.
+
+Le journal de configuration Docker est conservé sous :
+
+```text
+%LOCALAPPDATA%\MINOS\docker-setup.log
+```
+
+---
+
+## 5. Programme et données persistantes
+
+Installation par défaut :
+
+```text
+programme    : %LOCALAPPDATA%\Programs\MINOS
+MINOS_HOME   : %LOCALAPPDATA%\MINOS\data
+Docker config: %LOCALAPPDATA%\MINOS\docker
+Docker data  : %LOCALAPPDATA%\MINOS\docker-data
 ```
 
 Le launcher fixe par défaut :
@@ -213,9 +216,9 @@ Le home se remplit progressivement :
 └── tools\
 ```
 
-Une mise à jour du programme ne doit donc pas supprimer les snapshots, projets enregistrés ou providers stockés dans `MINOS_HOME`.
+Cette séparation est volontaire : mettre à jour ou désinstaller le programme ne doit pas supprimer automatiquement les snapshots, projets enregistrés ou providers.
 
-`MINOS_HOME` peut être remplacé explicitement avant le lancement :
+Pour utiliser temporairement un autre home :
 
 ```powershell
 $env:MINOS_HOME = 'N:\minos-data'
@@ -224,7 +227,7 @@ minos.cmd project list
 
 ---
 
-## 8. Vérifier l'installation
+## 6. Vérifier l'installation
 
 Dans un nouveau terminal :
 
@@ -233,10 +236,10 @@ minos.cmd --version
 minos.cmd doctor
 ```
 
-Exemple attendu pour la version :
+Exemple :
 
 ```text
-MINOS 0.2.0-rc1
+MINOS 0.2.0-rc2
 ```
 
 `doctor` distingue notamment :
@@ -247,27 +250,27 @@ MINOS 0.2.0-rc1
 - l'état des providers gérés ;
 - les actions nécessaires lorsqu'un provider est absent ou bloqué.
 
-Le code de sortie de `doctor` peut être `1` lorsqu'une action provider reste nécessaire. Cela ne signifie pas que l'installation native de MINOS est elle-même corrompue.
+Le code de sortie de `doctor` peut être `1` lorsqu'une action provider reste nécessaire. Cela ne signifie pas que l'installation native est corrompue.
 
 ---
 
-## 9. Installer le provider du projet
+## 7. Installer le provider du projet
 
-Lister les providers :
+Lister :
 
 ```powershell
 minos.cmd tools list
 ```
 
-### 9.1 Projet Java / Maven
+### 7.1 Java / Maven
 
-Le provider Windows qualifié est :
+Provider qualifié :
 
 ```text
 scip-java 0.13.1
 ```
 
-MINOS embarque son propre runtime Java, mais `scip-java` doit utiliser le **JDK du projet**.
+MINOS embarque son propre runtime Java, mais `scip-java` utilise le **JDK du projet**.
 
 Exemple :
 
@@ -286,19 +289,13 @@ Préconditions Java Windows actuellement qualifiées :
 JAVA_HOME -> JDK avec java/javac/jar
 pom.xml
 mvnw.cmd dans le projet ou un parent, sinon Maven dans PATH
-Git Bash (Git for Windows)
+Git Bash
 csc.exe du .NET Framework Windows
 ```
 
 MINOS n'installe pas un Maven global. Il utilise en priorité le Maven Wrapper du projet.
 
-Le runtime géré est installé sous :
-
-```text
-%LOCALAPPDATA%\MINOS\data\tools\scip-java\0.13.1\runtime\
-```
-
-### 9.2 Projet TypeScript
+### 7.2 TypeScript
 
 Préconditions :
 
@@ -313,27 +310,25 @@ Puis :
 minos.cmd tools install scip-typescript
 ```
 
-Le provider est installé sous `MINOS_HOME\tools`. Aucune installation npm globale n'est effectuée.
-
-MINOS **ne lance pas** `npm install`, `yarn install` ou `pnpm install` pour préparer les dépendances métier du projet. Elles doivent déjà être disponibles selon le workflow normal du projet.
+MINOS installe le provider sous `MINOS_HOME\tools`, mais n'exécute pas silencieusement `npm install`, `yarn install` ou `pnpm install` pour les dépendances métier du projet.
 
 ---
 
-## 10. Premier projet : de zéro à une recherche
+## 8. Premier projet
 
-Enregistrer un projet :
+Enregistrer :
 
 ```powershell
 minos.cmd project add N:\workspace-dev\my-project --name my-project
 ```
 
-Inspecter la découverte :
+Inspecter :
 
 ```powershell
 minos.cmd inspect my-project
 ```
 
-Voir le plan sans exécuter le provider :
+Planifier sans exécuter :
 
 ```powershell
 minos.cmd index my-project --dry-run
@@ -345,44 +340,22 @@ Indexer :
 minos.cmd index my-project
 ```
 
-Vérifier le snapshot :
+Vérifier :
 
 ```powershell
 minos.cmd index-status my-project --format json
 ```
 
-Faire une première recherche :
+Rechercher :
 
 ```powershell
 minos.cmd search my-project SearchService --format json
 minos.cmd architecture my-project --format json
 ```
 
-Le parcours autonome est :
-
-```text
-discovery
-→ provider negotiation
-→ runtime check
-→ fingerprint/invalidation
-→ provider execution
-→ staging
-→ atomic promotion
-→ active snapshot
-```
-
-Les versions de providers actuellement qualifiées ne revendiquent pas l'incrémental provider :
-
-```text
-aucun changement -> NONE
-changement       -> FULL
-```
-
 ---
 
-## 11. MCP natif — mode recommandé
-
-La CLI et le MCP natif utilisent le même `MINOS_HOME` et les mêmes chemins Windows.
+## 9. MCP natif — mode recommandé
 
 Configuration conceptuelle :
 
@@ -397,24 +370,15 @@ Configuration conceptuelle :
 }
 ```
 
-Pour une installation sous Program Files :
+CLI et MCP natif utilisent le même `MINOS_HOME` et les mêmes chemins Windows.
 
-```text
-command = C:\Program Files\MINOS\minos.cmd
-args    = mcp
-```
-
-Le serveur utilise STDIO. Il n'expose pas de serveur HTTP dans le cœur MINOS.
-
-Voir [MCP](mcp.md) pour les clients et les outils disponibles.
+Voir [MCP](mcp.md).
 
 ---
 
-## 12. Docker MCP durci — optionnel
+## 10. MCP Docker — mode durci optionnel
 
-Docker n'est **pas** requis pour le parcours normal CLI/indexation/MCP natif.
-
-Le mode Docker reste disponible dans la distribution pour un MCP plus isolé :
+Le mode Docker conserve les invariants :
 
 ```text
 network_mode: none
@@ -429,55 +393,100 @@ Il utilise un home distinct :
 %LOCALAPPDATA%\MINOS\docker-data
 ```
 
-Exemple après installation :
+### 10.1 Configuration après installation
+
+Si l'option Docker n'a pas été sélectionnée pendant le setup :
 
 ```powershell
 $Minos = "$env:LOCALAPPDATA\Programs\MINOS"
 
-& "$Minos\docker\scripts\prod-mcp-release.ps1" `
-  -Action Install `
-  -Jar "$Minos\lib\minos.jar" `
-  -Version 0.2.0-rc1 `
-  -Commit <release-commit> `
-  -ProjectsRoot N:\workspace-dev
-
-& "$Minos\docker\scripts\prod-mcp-release.ps1" -Action Start
-& "$Minos\docker\scripts\prod-mcp-release.ps1" -Action Validate
+& "$Minos\docker\scripts\configure-docker-mcp.ps1" `
+  -InstallRoot $Minos `
+  -ProjectsRoot N:\workspace-dev `
+  -Start
 ```
 
-Ne pas partager le registre natif avec Docker : les racines de projet ne sont pas représentées avec les mêmes chemins (`N:\...` côté Windows, `/workspace/projects/...` côté conteneur).
+Le script lit lui-même la version et le commit dans `VERSION`.
+
+### 10.2 État / démarrage / arrêt
+
+```powershell
+$DockerMcp = "$env:LOCALAPPDATA\Programs\MINOS\docker\scripts\prod-mcp-release.ps1"
+
+& $DockerMcp -Action Status
+& $DockerMcp -Action Start
+& $DockerMcp -Action Validate
+& $DockerMcp -Action Stop
+```
+
+Ne pas partager le registre natif avec Docker : les racines ne sont pas représentées avec les mêmes chemins (`N:\...` côté Windows, `/workspace/projects/...` côté conteneur).
 
 ---
 
-## 13. Mettre MINOS à jour
+## 11. Distribution ZIP portable
 
-MINOS n'a pas encore d'auto-updater. Une mise à jour suit le même parcours qu'une première installation :
-
-```text
-nouvelle GitHub Release
-→ télécharger ZIP + SHA-256
-→ vérifier le SHA-256
-→ décompresser
-→ exécuter install.ps1 vers le même InstallRoot
-```
-
-L'installateur détecte une installation existante et la déplace avant remplacement vers :
+Le ZIP reste utile lorsque l'on veut :
 
 ```text
-<InstallRoot>.backup-YYYYMMDD-HHMMSS
+ne pas utiliser le setup Windows
+installer par script
+faire du CI/CD
+tester plusieurs distributions
+inspecter précisément le contenu de la release
+gérer manuellement le répertoire d'installation
 ```
 
-Exemple installation utilisateur :
+Ce n'est pas un niveau de compétence : c'est simplement un **mode de déploiement portable**.
+
+### 11.1 Vérifier le ZIP
+
+```powershell
+$Version = '0.2.0-rc2'
+
+Get-FileHash ".\minos-$Version-windows-x64.zip" -Algorithm SHA256
+Get-Content ".\minos-$Version-windows-x64.zip.sha256"
+```
+
+### 11.2 Installer le ZIP
+
+L'installateur PowerShell accepte directement le ZIP :
+
+```powershell
+$Version = '0.2.0-rc2'
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\install\install-windows.ps1 `
+  -Package ".\minos-$Version-windows-x64.zip" `
+  -AddToPath
+```
+
+Lorsqu'on utilise le script **contenu dans le ZIP**, on peut aussi décompresser l'archive puis lancer `install.ps1` depuis sa racine.
+
+Le chemin par défaut reste :
 
 ```text
 %LOCALAPPDATA%\Programs\MINOS
-%LOCALAPPDATA%\Programs\MINOS.backup-20260724-230000
 ```
+
+Le parcours ZIP conserve le mécanisme de backup `<InstallRoot>.backup-YYYYMMDD-HHMMSS` lors d'un remplacement.
+
+---
+
+## 12. Mettre MINOS à jour
+
+MINOS n'a pas encore d'auto-updater.
+
+### 12.1 Mise à jour avec setup.exe
+
+Télécharger le nouveau setup + checksum, vérifier le SHA-256, puis lancer le nouveau setup.
+
+Le setup utilise un **AppId Windows stable**, retrouve l'installation précédente et réutilise son répertoire.
 
 Les données restent dans :
 
 ```text
 %LOCALAPPDATA%\MINOS\data
+%LOCALAPPDATA%\MINOS\docker-data
 ```
 
 Après mise à jour :
@@ -488,98 +497,82 @@ minos.cmd doctor
 minos.cmd project list
 ```
 
-Ne supprimer un backup d'ancienne installation qu'après avoir validé la nouvelle version.
+Si l'option Docker est sélectionnée à nouveau pendant la mise à jour, la configuration Docker est reconstruite depuis le JAR de la nouvelle release.
+
+### 12.2 Mise à jour ZIP
+
+Le parcours PowerShell conserve le backup automatique de l'ancienne installation programme.
 
 ---
 
-## 14. Revenir à l'installation précédente
+## 13. Désinstaller MINOS
 
-Cette opération concerne le **programme** ; elle ne remplace pas `MINOS_HOME`.
+Avec le `setup.exe`, utiliser **Paramètres Windows → Applications → Applications installées → MINOS Code Intelligence → Désinstaller**.
 
-Fermer les clients MCP utilisant MINOS, puis identifier le backup :
+Le désinstalleur :
 
-```powershell
-$Programs = "$env:LOCALAPPDATA\Programs"
-Get-ChildItem $Programs -Directory -Filter 'MINOS.backup-*' |
-  Sort-Object LastWriteTime -Descending
-```
+- retire le programme ;
+- retire le chemin MINOS ajouté au `PATH` ;
+- tente de stopper le MCP Docker s'il a été configuré et si Docker répond ;
+- **ne supprime pas automatiquement les données persistantes**.
 
-Exemple de rollback manuel :
-
-```powershell
-$InstallRoot = "$env:LOCALAPPDATA\Programs\MINOS"
-$Backup = "$env:LOCALAPPDATA\Programs\MINOS.backup-20260724-230000"
-
-Move-Item $InstallRoot "$InstallRoot.failed" 
-Move-Item $Backup $InstallRoot
-
-& "$InstallRoot\minos.cmd" --version
-```
-
-Après validation, l'installation `.failed` peut être supprimée manuellement.
-
----
-
-## 15. Désinstaller MINOS
-
-### 15.1 Supprimer le programme en conservant les données
-
-```powershell
-$InstallRoot = "$env:LOCALAPPDATA\Programs\MINOS"
-Remove-Item $InstallRoot -Recurse -Force
-```
-
-Si `-AddToPath` avait été utilisé, retirer aussi le chemin du `PATH` utilisateur :
-
-```powershell
-$InstallRoot = "$env:LOCALAPPDATA\Programs\MINOS"
-$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$NewPath = (($UserPath -split ';' |
-  Where-Object { $_ -and $_ -ne $InstallRoot }) -join ';')
-
-[Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
-```
-
-Ouvrir ensuite un nouveau terminal.
-
-Cette désinstallation **conserve** :
+Les répertoires suivants sont conservés :
 
 ```text
 %LOCALAPPDATA%\MINOS\data
+%LOCALAPPDATA%\MINOS\docker
+%LOCALAPPDATA%\MINOS\docker-data
 ```
 
-Une réinstallation peut donc retrouver les données MINOS existantes.
+Une réinstallation peut donc retrouver l'état natif existant.
 
-### 15.2 Suppression complète des données
+### 13.1 Suppression complète des données
 
-Cette opération est irréversible :
+Après avoir arrêté Docker MCP si nécessaire, cette opération est irréversible :
 
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\MINOS" -Recurse -Force
 ```
 
-Elle supprime notamment registre, snapshots, états d'indexation, providers gérés et logs de runs.
+Elle supprime registre, snapshots, états d'indexation, providers gérés, logs et données Docker MINOS.
 
 ---
 
-## 16. Publication d'une release — mainteneurs uniquement
+## 14. Revenir à une version précédente
+
+Les releases publiées restent versionnées dans GitHub Releases.
+
+Pour revenir à une version antérieure :
+
+1. arrêter les clients MCP ;
+2. télécharger le setup ou le ZIP de la version souhaitée ;
+3. vérifier son SHA-256 ;
+4. réinstaller cette version ;
+5. vérifier `minos.cmd --version` et `minos.cmd doctor`.
+
+`MINOS_HOME` reste séparé du programme. Avant un rollback important, sauvegarder `%LOCALAPPDATA%\MINOS` si les données sont critiques.
+
+---
+
+## 15. Publication d'une release — mainteneurs uniquement
 
 Un utilisateur normal **ne doit pas exécuter cette section**.
 
-La publication est volontairement explicite : le dépôt ne déclenche pas automatiquement une release sur chaque push.
-
-### Depuis GitHub Actions
-
-Dans **Actions → Publish Windows Release → Run workflow**, sélectionner `main` et fournir la version :
+Une release complète doit produire :
 
 ```text
-0.2.0-rc1
+MINOS-<version>-windows-x64-setup.exe
+MINOS-<version>-windows-x64-setup.exe.sha256
+minos-<version>-windows-x64.zip
+minos-<version>-windows-x64.zip.sha256
 ```
 
-ou :
+### 15.1 GitHub Actions
+
+Dans **Actions → Publish Windows Release → Run workflow**, sélectionner `main` et fournir la version, par exemple :
 
 ```text
-0.2.0
+0.2.0-rc2
 ```
 
 Le workflow :
@@ -587,50 +580,46 @@ Le workflow :
 ```text
 Java 24
 → clean verify
-→ jpackage
+→ jpackage app-image
 → ZIP + SHA-256
-→ vérification checksum
-→ installation smoke depuis le ZIP
+→ installation d'Inno Setup
+→ setup.exe + SHA-256
+→ smoke install ZIP
+→ smoke install setup.exe
 → vérification MINOS <version>
+→ désinstallation silencieuse du setup
 → création du tag v<version>
 → création GitHub Release
-→ upload ZIP + SHA-256
+→ upload des quatre assets
 ```
 
-Une version avec suffixe (`-rc1`, `-beta1`, etc.) devient automatiquement une pre-release.
+Une version avec suffixe (`-rc2`, `-beta1`, etc.) devient automatiquement une pre-release.
 
-Une release/tag déjà existant est refusé afin de ne pas remplacer silencieusement un artefact publié.
+Une release/tag déjà existant est refusé.
 
-### Depuis un poste Windows mainteneur
+### 15.2 Poste Windows mainteneur
 
-Avec `gh` installé et authentifié :
+Prérequis supplémentaires au build du setup : **Inno Setup avec `ISCC.exe`**.
+
+Construire :
+
+```powershell
+.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc2
+.\scripts\release\build-windows-installer.ps1 -Version 0.2.0-rc2
+```
+
+Publier avec `gh` authentifié :
 
 ```powershell
 gh auth status
-.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc1
+.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc2
 ```
 
-Le script construit et publie la release depuis le **HEAD Git exact** d'un worktree propre.
-
-Pour publier un ZIP déjà construit et contrôlé :
-
-```powershell
-.\scripts\release\publish-windows-release.ps1 `
-  -Version 0.2.0-rc1 `
-  -SkipBuild
-```
-
-Le ZIP attendu reste :
-
-```text
-target\dist\minos-0.2.0-rc1-windows-x64.zip
-```
-
-Le script vérifie son checksum et réalise un smoke d'installation avant publication.
+`-SkipBuild` ne peut être utilisé que si **les quatre assets** existent déjà dans `target\dist`.
 
 ---
 
-## 17. Dépannage
+## 16. Dépannage
 
 Commencer par :
 
@@ -639,14 +628,21 @@ minos.cmd --version
 minos.cmd doctor --format json
 ```
 
+Pour Docker :
+
+```powershell
+docker version
+Get-Content "$env:LOCALAPPDATA\MINOS\docker-setup.log" -Tail 200
+```
+
 Puis consulter [Dépannage](troubleshooting.md).
 
 Pour un problème de release, conserver :
 
 ```text
-nom exact du ZIP
-fichier .sha256
+nom exact du setup/ZIP
+fichier .sha256 correspondant
 MINOS --version
 commande d'installation exacte
-sortie PowerShell
+sortie PowerShell / log setup
 ```

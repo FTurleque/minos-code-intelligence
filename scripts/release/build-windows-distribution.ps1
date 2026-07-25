@@ -33,7 +33,22 @@ if (-not (Test-Path -LiteralPath $Java -PathType Leaf) -or
     throw "JAVA_HOME does not expose java.exe and jpackage.exe: $JavaHome"
 }
 
-$JavaVersion = (& $Java -version 2>&1 | Select-Object -First 1) -join ''
+# `java -version` writes its version banner to stderr even on success. Windows
+# PowerShell 5.1 turns native stderr into ErrorRecord objects, so the global
+# ErrorActionPreference=Stop would abort before the exit code can be checked.
+$PreviousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $JavaVersionOutput = ((& $Java -version 2>&1) | Out-String).Trim()
+    $JavaVersionExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $PreviousErrorActionPreference
+}
+if ($JavaVersionExitCode -ne 0) {
+    throw "Unable to execute JAVA_HOME java.exe -version (exit=$JavaVersionExitCode): $JavaVersionOutput"
+}
+$JavaVersion = ($JavaVersionOutput -split "`r?`n" | Select-Object -First 1).Trim()
 if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
     throw "MINOS distribution requires JDK 24; found: $JavaVersion"
 }
@@ -116,6 +131,8 @@ try {
         -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
         -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
+        -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
 
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Destination (Join-Path $Distribution 'install.ps1')
@@ -149,16 +166,17 @@ Quick start:
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
 
-MCP:
+MCP native:
   command = <installation>\minos.cmd
   args    = mcp
 
 Optional hardened Docker MCP:
-  powershell -File <installation>\docker\scripts\prod-mcp-release.ps1 `
-    -Action Install `
-    -Jar <installation>\lib\minos.jar `
-    -Version $Version `
-    -ProjectsRoot N:\workspace-dev
+  powershell -File <installation>\docker\scripts\configure-docker-mcp.ps1 `
+    -InstallRoot <installation> `
+    -ProjectsRoot N:\workspace-dev `
+    -Start
+
+Docker Desktop must already be installed and running. The Windows setup.exe can run this configuration interactively.
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
     $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()

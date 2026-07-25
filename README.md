@@ -38,6 +38,8 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 M14 a fermé l’indexation autonome, le runtime provider Windows, la distribution Windows native, le MCP natif et le packaging de release. La PR M14 #43 a été fusionnée dans `main` le 24 juillet 2026.
 
+L'issue #46 fait évoluer le packaging Windows vers un **setup.exe complet** tout en conservant le ZIP portable.
+
 Voir :
 
 - [`docs/STATUS.md`](docs/STATUS.md) — état livré ;
@@ -48,27 +50,32 @@ Voir :
 
 L’utilisateur normal **ne clone pas le dépôt MINOS et ne lance pas Maven**.
 
-Une GitHub Release Windows expose :
+Une GitHub Release Windows expose désormais deux canaux :
 
 ```text
+MINOS-<version>-windows-x64-setup.exe
+MINOS-<version>-windows-x64-setup.exe.sha256
+
 minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
 ```
 
-Le ZIP contient une app-image `jpackage`, le runtime Java nécessaire à MINOS, les launchers CLI/MCP et l’installateur PowerShell.
+Le **`setup.exe` est le canal recommandé** pour un poste Windows. Il installe l'application, son runtime Java, la CLI, le MCP natif, l'intégration PATH et le désinstalleur Windows. Il peut également configurer le MCP Docker si Docker Desktop est déjà installé et démarré.
 
-Parcours :
+Le ZIP reste le canal **portable / automatisation / diagnostic** et contient la même application MINOS ainsi que les scripts Docker et l'installateur PowerShell historique.
+
+Parcours recommandé :
 
 ```text
 GitHub Release
-→ télécharger ZIP + SHA-256
+→ télécharger setup.exe + SHA-256
 → vérifier SHA-256
-→ décompresser
-→ install.ps1
+→ lancer setup.exe
+→ choisir éventuellement « Configurer le MCP Docker »
 → minos.cmd doctor
 ```
 
-Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, les providers, la mise à jour, le rollback et la désinstallation.
+Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, le MCP Docker, les providers, la mise à jour, le rollback et la désinstallation.
 
 ## Utilisation après installation
 
@@ -131,26 +138,34 @@ Le launcher du checkout `minos.cmd` recherche automatiquement le shaded JAR cour
 
 Cette section concerne les mainteneurs. Les utilisateurs téléchargent une GitHub Release.
 
-Construire localement :
+Construire la distribution portable :
 
 ```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc1
+.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc2
+```
+
+Construire ensuite le setup Windows avec Inno Setup 6 :
+
+```powershell
+.\scripts\release\build-windows-installer.ps1 -Version 0.2.0-rc2
 ```
 
 Sorties :
 
 ```text
-target/dist/minos-0.2.0-rc1-windows-x64.zip
-target/dist/minos-0.2.0-rc1-windows-x64.zip.sha256
+target/dist/MINOS-0.2.0-rc2-windows-x64-setup.exe
+target/dist/MINOS-0.2.0-rc2-windows-x64-setup.exe.sha256
+target/dist/minos-0.2.0-rc2-windows-x64.zip
+target/dist/minos-0.2.0-rc2-windows-x64.zip.sha256
 ```
 
 Publier depuis un poste Windows avec GitHub CLI authentifié :
 
 ```powershell
-.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc1
+.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc2
 ```
 
-Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. La publication vérifie le checksum, réalise un smoke d’installation depuis le ZIP, refuse de remplacer une version/tag existant, puis attache le ZIP et son `.sha256` à la GitHub Release.
+Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. Le workflow installe Inno Setup, construit les deux distributions, vérifie les checksums, smoke-teste le ZIP et le `setup.exe`, vérifie la désinstallation du setup, refuse de remplacer une version/tag existant, puis attache les quatre assets à la GitHub Release.
 
 ## Capacités CLI
 
@@ -203,7 +218,7 @@ command = <installation>\minos.cmd
 args    = mcp
 ```
 
-Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Il n’est pas le moteur principal de compilation/indexation des projets.
+Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Le `setup.exe` peut préparer, démarrer et valider ce mode si Docker Desktop est déjà opérationnel. Docker n’est pas le moteur principal de compilation/indexation des projets.
 
 ## Documentation
 

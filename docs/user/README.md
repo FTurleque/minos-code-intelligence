@@ -9,9 +9,14 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 ```text
 GitHub Release
    ↓
-ZIP + SHA-256
+MINOS-<version>-windows-x64-setup.exe
    ↓
-Installation PROD Windows
+installation Windows
+   ├── runtime Java MINOS
+   ├── CLI
+   ├── MCP natif
+   ├── PATH utilisateur
+   └── MCP Docker optionnel
    ↓
 minos doctor
    ↓
@@ -24,6 +29,8 @@ minos index <name>
 search / architecture / impact / MCP
 ```
 
+Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
+
 L'utilisateur normal ne prépare plus `index.scip` manuellement. `minos index <project>` découvre le projet, sélectionne le provider qualifié, calcule la portée d'indexation, exécute le provider puis promeut le nouveau snapshot de manière atomique.
 
 ---
@@ -34,20 +41,21 @@ Commencer ici :
 
 **[Installation PROD Windows](production-installation.md)**
 
-Le guide couvre maintenant :
+Le guide couvre :
 
 - téléchargement depuis GitHub Releases ;
+- `setup.exe` recommandé et ZIP portable ;
 - différence release stable / pre-release ;
 - vérification SHA-256 ;
-- installation utilisateur et Program Files ;
+- installation utilisateur sans droits administrateur ;
+- ajout de MINOS au `PATH` ;
+- MCP natif installé avec MINOS ;
+- configuration optionnelle du MCP Docker lorsque Docker Desktop est déjà disponible ;
 - emplacement du programme et de `MINOS_HOME` ;
 - premier démarrage ;
 - providers Java et TypeScript ;
 - premier projet ;
-- MCP natif et Docker optionnel ;
-- mise à jour ;
-- rollback ;
-- désinstallation ;
+- mise à jour, rollback et désinstallation ;
 - publication d'une release pour les mainteneurs.
 
 Le parcours `git clone` / Maven est volontairement séparé dans [Installation depuis les sources](installation.md).
@@ -85,7 +93,22 @@ minos.cmd search my-project GreetingPort --format json
 
 ---
 
-## 3. Choisir le bon document
+## 3. MCP natif et MCP Docker
+
+Le MCP natif est installé avec MINOS et reste le mode recommandé :
+
+```text
+command = <installation>\minos.cmd
+args    = mcp
+```
+
+Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP Docker** si l'utilisateur sélectionne cette option et si Docker Desktop est déjà installé et démarré.
+
+MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide et la configuration Docker peut être lancée plus tard.
+
+---
+
+## 4. Choisir le bon document
 
 | Besoin | Document |
 |---|---|
@@ -100,7 +123,7 @@ minos.cmd search my-project GreetingPort --format json
 
 ---
 
-## 4. Fonctionnalités principales
+## 5. Fonctionnalités principales
 
 | Besoin | Commande / surface |
 |---|---|
@@ -125,7 +148,7 @@ minos.cmd search my-project GreetingPort --format json
 
 ---
 
-## 5. Import SCIP manuel
+## 6. Import SCIP manuel
 
 Le chemin manuel est conservé pour le diagnostic ou pour un provider non piloté par MINOS :
 
@@ -139,22 +162,21 @@ minos.cmd import-scip my-project `
 
 ---
 
-## 6. Où MINOS stocke ses données
+## 7. Où MINOS stocke ses données
 
 Par défaut :
 
 ```text
 programme : %LOCALAPPDATA%\Programs\MINOS
 MINOS_HOME: %LOCALAPPDATA%\MINOS\data
+Docker    : %LOCALAPPDATA%\MINOS\docker + docker-data
 ```
 
-La séparation est volontaire : mettre à jour ou remplacer le programme ne doit pas supprimer les données persistantes.
-
-Voir [Installation PROD Windows](production-installation.md#7-programme-et-données-persistantes).
+La séparation est volontaire : mettre à jour ou désinstaller le programme ne doit pas supprimer automatiquement les données persistantes.
 
 ---
 
-## 7. En cas de problème
+## 8. En cas de problème
 
 Commencer par :
 
