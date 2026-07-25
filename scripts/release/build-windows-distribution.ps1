@@ -22,6 +22,20 @@ if ($env:OS -ne 'Windows_NT') {
     throw 'The Windows distribution must be built on Windows.'
 }
 
+# The setup modifies third-party MCP client configuration. Qualify this lifecycle
+# on every Windows distribution build so local -ValidateOnly runs provide the
+# same safety gate even when GitHub Actions is unavailable.
+$McpClientVerifier = Join-Path $RepoRoot 'scripts\install\verify-mcp-client-integration.ps1'
+if (-not (Test-Path -LiteralPath $McpClientVerifier -PathType Leaf)) {
+    throw "MINOS MCP client integration verifier not found: $McpClientVerifier"
+}
+try {
+    & $McpClientVerifier
+}
+catch {
+    throw "MINOS native MCP client integration verification failed: $($_.Exception.Message)"
+}
+
 $JavaHome = $env:JAVA_HOME
 if ([string]::IsNullOrWhiteSpace($JavaHome)) {
     throw 'JAVA_HOME must point to a JDK 24 installation.'
