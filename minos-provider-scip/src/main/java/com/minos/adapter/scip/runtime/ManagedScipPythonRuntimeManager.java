@@ -10,6 +10,7 @@ import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -28,6 +29,30 @@ import java.util.concurrent.TimeUnit;
 public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeManager {
     public static final String PROVIDER_ID = "scip-python";
     public static final String VERSION = ScipIndexerCatalog.SCIP_PYTHON_VERSION;
+
+    private static final String WINDOWS_COMPATIBILITY_PRELOAD = "minos-windows-regexp-compat.cjs";
+    private static final String WINDOWS_COMPATIBILITY_SOURCE = """
+            // MINOS compatibility shim for sourcegraph/scip-python#210 / PR #211.
+            // scip-python 0.6.6 evaluates new RegExp(path.sep, 'g'); on Windows path.sep is a lone
+            // backslash, which is not a valid regexp pattern. Intercept only that exact constructor
+            // input and apply the escaping proposed upstream. Remove this shim when the pinned
+            // upstream release contains the fix.
+            const NativeRegExp = global.RegExp;
+            const normalizeArgs = (args) => {
+              if (args.length > 0 && args[0] === '\\') {
+                return ['\\\\', ...args.slice(1)];
+              }
+              return args;
+            };
+            global.RegExp = new Proxy(NativeRegExp, {
+              apply(target, thisArg, args) {
+                return Reflect.apply(target, thisArg, normalizeArgs(args));
+              },
+              construct(target, args, newTarget) {
+                return Reflect.construct(target, normalizeArgs(args), newTarget);
+              }
+            });
+            """;
 
     private final Path home;
     private final Path toolsRoot;
@@ -62,6 +87,13 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         boolean installed = Files.isRegularFile(executable);
         if (!installed) {
             diagnostics.add("managed scip-python " + VERSION + " is not installed");
+        } else if (CommandLocator.isWindows()) {
+            if (!Files.isRegularFile(packageEntryPoint())) {
+                diagnostics.add("managed scip-python package entry point is missing");
+            }
+            if (!Files.isRegularFile(windowsCompatibilityPreload())) {
+                diagnostics.add("managed scip-python Windows compatibility preload is missing");
+            }
         }
         ProviderRuntimeStatus.State state = diagnostics.isEmpty()
                 ? ProviderRuntimeStatus.State.READY
@@ -107,6 +139,18 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             if (!Files.isRegularFile(installed)) {
                 throw new IllegalStateException("scip-python executable was not created: " + installed);
             }
+            if (CommandLocator.isWindows()) {
+                Path entryPoint = partial.resolve("node_modules").resolve("@sourcegraph")
+                        .resolve("scip-python").resolve("index.js");
+                if (!Files.isRegularFile(entryPoint)) {
+                    throw new IllegalStateException("scip-python package entry point was not created: " + entryPoint);
+                }
+                Files.writeString(
+                        partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
+                        WINDOWS_COMPATIBILITY_SOURCE,
+                        StandardCharsets.UTF_8
+                );
+            }
             deleteRecursively(destination);
             move(partial, destination);
         } finally {
@@ -130,7 +174,17 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         Path python = pythonExecutable().orElseThrow();
         Path pip = pipExecutable(python).orElseThrow();
         Map<String, String> providerEnvironment = providerEnvironment(python, pip);
-        ScipPythonProcessPlanFactory delegate = new ScipPythonProcessPlanFactory(status.executable().orElseThrow());
+        ScipPythonProcessPlanFactory delegate;
+        if (CommandLocator.isWindows()) {
+            Path node = CommandLocator.find("node").orElseThrow();
+            delegate = new ScipPythonProcessPlanFactory(List.of(
+                    node.toAbsolutePath().normalize().toString(),
+                    "--require", windowsCompatibilityPreload().toString(),
+                    packageEntryPoint().toString()
+            ));
+        } else {
+            delegate = new ScipPythonProcessPlanFactory(status.executable().orElseThrow());
+        }
         return new ProcessIndexerExecutor(
                 providerId,
                 home,
@@ -146,6 +200,14 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     private Path executable() {
         return root().resolve("node_modules").resolve(".bin")
                 .resolve(CommandLocator.isWindows() ? "scip-python.cmd" : "scip-python");
+    }
+
+    private Path packageEntryPoint() {
+        return root().resolve("node_modules").resolve("@sourcegraph").resolve("scip-python").resolve("index.js");
+    }
+
+    private Path windowsCompatibilityPreload() {
+        return root().resolve(WINDOWS_COMPATIBILITY_PRELOAD);
     }
 
     private static Optional<Path> pythonExecutable() {
