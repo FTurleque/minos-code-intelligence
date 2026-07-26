@@ -48,10 +48,7 @@ def enum_values(source: str, enum_name: str) -> list[str]:
         f"{enum_name} values",
         re.S,
     )
-    values = [
-        value.lower()
-        for value in re.findall(r"\b([A-Z][A-Z0-9_]*)\b", body)
-    ]
+    values = [value.lower() for value in re.findall(r"\b([A-Z][A-Z0-9_]*)\b", body)]
     if not values:
         raise RuntimeError(f"cannot derive values for {enum_name}")
     return values
@@ -59,19 +56,28 @@ def enum_values(source: str, enum_name: str) -> list[str]:
 
 def provider_facts(source: str) -> list[tuple[str, str, list[str]]]:
     facts: list[tuple[str, str, list[str]]] = []
-    for method in ("scipJava", "scipTypeScript"):
+    for method in ("scipJava", "scipTypeScript", "scipPython"):
         block = require(
             rf'public static IndexerDescriptor {method}\(\) \{{(.*?)\n    \}}',
             source,
             method,
             re.S,
         )
-        descriptor = re.search(
-            r'new IndexerDescriptor\(\s*"([^"]+)",\s*"([^"]+)"', block, re.S)
+        descriptor = re.search(r'new IndexerDescriptor\(\s*"([^"]+)",\s*([^,]+),', block, re.S)
         if not descriptor:
             raise RuntimeError(f"cannot derive provider descriptor for {method}")
+        provider_id = descriptor.group(1)
+        raw_version = descriptor.group(2).strip()
+        if raw_version.startswith('"') and raw_version.endswith('"'):
+            provider_version = raw_version.strip('"')
+        else:
+            provider_version = require(
+                rf'public static final String {re.escape(raw_version)}\s*=\s*"([^"]+)"',
+                source,
+                f"provider version constant {raw_version}",
+            )
         capabilities = sorted(set(re.findall(r"IndexerCapability\.([A-Z0-9_]+)", block)))
-        facts.append((descriptor.group(1), descriptor.group(2), capabilities))
+        facts.append((provider_id, provider_version, capabilities))
     return facts
 
 
@@ -98,20 +104,11 @@ def render() -> str:
     architecture_formats = enum_values(architecture_formats_source, "ArchitectureOutputFormat")
 
     lines = [
-        "# MINOS — Facts produit générés",
-        "",
+        "# MINOS — Facts produit générés", "",
         "> Ce fichier est généré depuis les sources par `scripts/docs/product-facts.py`.",
-        "> Ne pas modifier manuellement.",
-        "",
-        "## Versions",
-        "",
-        f"- version Maven : `{version}`",
-        f"- contrat API Java : `v{api_version}`",
-        "",
-        "## Catalogue MCP",
-        "",
-        f"Nombre de tools : **{declared_tool_count}**",
-        "",
+        "> Ne pas modifier manuellement.", "",
+        "## Versions", "", f"- version Maven : `{version}`", f"- contrat API Java : `v{api_version}`", "",
+        "## Catalogue MCP", "", f"Nombre de tools : **{declared_tool_count}**", "",
     ]
     lines.extend(f"- `{name}`" for name in tool_names)
     lines.extend(["", "## Commandes CLI", ""])
@@ -123,11 +120,9 @@ def render() -> str:
         lines.append("Capabilities : " + ", ".join(f"`{value}`" for value in capabilities))
         lines.append("")
     lines.extend([
-        "## Formats calculables",
-        "",
+        "## Formats calculables", "",
         "- formats symboles : " + ", ".join(f"`{value}`" for value in symbol_formats),
-        "- formats architecture : " + ", ".join(f"`{value}`" for value in architecture_formats),
-        "",
+        "- formats architecture : " + ", ".join(f"`{value}`" for value in architecture_formats), "",
     ])
     return "\n".join(lines)
 
@@ -136,13 +131,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="fail if generated facts are stale")
     args = parser.parse_args()
-
     try:
         expected = render()
     except Exception as exception:
         print(f"PRODUCT FACTS ERROR: {exception}", file=sys.stderr)
         return 2
-
     if args.check:
         if not OUTPUT.is_file():
             print(f"PRODUCT FACTS ERROR: missing {OUTPUT.relative_to(ROOT)}", file=sys.stderr)
@@ -154,7 +147,6 @@ def main() -> int:
             return 1
         print("M15 PRODUCT FACTS CONSISTENCY SUCCESS")
         return 0
-
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(expected, encoding="utf-8")
     print(f"Generated {OUTPUT.relative_to(ROOT)}")
