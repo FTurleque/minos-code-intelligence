@@ -73,6 +73,20 @@ minos-engine
 
 `CodeKnowledgeStore` appartient à la frontière moteur car son contrat est défini par les besoins MINOS et ne reflète aucun backend particulier. Les implémentations mémoire/fichier restent hors de `minos-engine` et dépendent de ce port. À ce checkpoint, `minos-engine` dépend uniquement de `minos-domain`.
 
+Le checkpoint suivant fixe deux frontières d'infrastructure supplémentaires :
+
+```text
+minos-storage-local
+└── com.minos.store.*                    # hors CodeKnowledgeStore
+
+minos-integration-git
+└── com.minos.git.*
+```
+
+`minos-storage-local` dépend de `minos-engine`, jamais l'inverse : les implémentations mémoire et fichier restent donc derrière le port moteur. `minos-integration-git` est le seul module qui déclare directement `org.eclipse.jgit`; `minos-app` consomme l'intégration via l'artefact MINOS au lieu de porter JGit lui-même.
+
+Le runtime SCIP n'est pas encore extrait à ce checkpoint. Il dépend de ports d'orchestration actuellement situés hors du noyau extrait ; ces ports doivent être positionnés explicitement avant la création de `minos-provider-scip`, afin d'éviter une dépendance inversée ou un module artificiel.
+
 ## Migration séquentielle
 
 S2 suit une migration en plusieurs commits qualifiables :
@@ -87,7 +101,7 @@ S2 suit une migration en plusieurs commits qualifiables :
 8. relocaliser physiquement les sources dans leurs modules et supprimer toute compatibilité transitoire de source layout ;
 9. qualifier le reactor complet et les distributions M14.
 
-Les checkpoints 3 et 4 utilisent volontairement une phase d'**ownership Maven avant relocation physique** : les sources restent temporairement dans l'arbre historique, mais chaque module cible les compile explicitement et `minos-app` les exclut. Les runners S2 inspectent ensuite les JARs et `target/classes` pour prouver que l'ownership est réellement imposé par Maven.
+Les checkpoints 3 à 5 utilisent volontairement une phase d'**ownership Maven avant relocation physique** : les sources restent temporairement dans l'arbre historique, mais chaque module cible les compile explicitement et `minos-app` les exclut. Les runners S2 inspectent ensuite les JARs et `target/classes` pour prouver que l'ownership est réellement imposé par Maven.
 
 Cette configuration est transitoire et doit disparaître avant la fermeture de M15-S2. La relocation physique devient alors une opération mécanique effectuée après stabilisation des frontières, plutôt qu'un mélange de décisions architecturales et de mouvements de fichiers.
 
