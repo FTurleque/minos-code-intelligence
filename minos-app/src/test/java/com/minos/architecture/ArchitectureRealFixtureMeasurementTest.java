@@ -93,7 +93,10 @@ class ArchitectureRealFixtureMeasurementTest {
                 .map(ArchitectureTechnology::name)
                 .toList());
         assertEquals(Set.of(api.id(), app.id()), Set.copyOf(technology(technologies, "TYPESCRIPT").moduleIds()));
-        assertEquals(List.of(rootModule.id()), technology(technologies, "NPM").moduleIds());
+        assertEquals(
+                Set.of(rootModule.id(), api.id(), app.id()),
+                Set.copyOf(technology(technologies, "NPM").moduleIds())
+        );
 
         assertEquals(projectId.toString(), intelligence.projectId());
         assertEquals("snapshot-m6-real-typescript-modules", intelligence.snapshotId());
@@ -108,7 +111,7 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(0, apiContext.outgoingModuleEdgeCount());
         assertEquals(4, apiContext.concentration().incomingDependencyCount());
         assertEquals(1, apiContext.centrality().incomingRank());
-        assertEquals(List.of("TYPESCRIPT"), apiContext.technologies().stream()
+        assertEquals(List.of("TYPESCRIPT", "NPM"), apiContext.technologies().stream()
                 .map(ArchitectureTechnology::name)
                 .toList());
 
@@ -117,7 +120,7 @@ class ArchitectureRealFixtureMeasurementTest {
         assertEquals(1, appContext.outgoingModuleEdgeCount());
         assertEquals(4, appContext.concentration().outgoingDependencyCount());
         assertEquals(1, appContext.centrality().outgoingRank());
-        assertEquals(List.of("TYPESCRIPT"), appContext.technologies().stream()
+        assertEquals(List.of("TYPESCRIPT", "NPM"), appContext.technologies().stream()
                 .map(ArchitectureTechnology::name)
                 .toList());
 
