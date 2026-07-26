@@ -31,7 +31,16 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             LocalProjectRegistry projectRegistry,
             FileSymbolSnapshotStore snapshotStore
     ) {
-        this(projectRegistry, snapshotStore, new ProjectDiscoveryService());
+        this(
+                projectRegistry,
+                snapshotStore,
+                new ProjectDiscoveryService(),
+                new ArchitectureTopologyService(),
+                new ArchitectureDependencyService(),
+                new ArchitectureConcentrationService(),
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
+        );
     }
 
     /** Composition constructor used by MinosApplication to share discovery state. */
@@ -95,6 +104,47 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ProjectDiscoveryService discoveryService,
             ArchitectureTopologyService topologyService,
             ArchitectureDependencyService dependencyService,
+            ArchitectureConcentrationService concentrationService
+    ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                dependencyService,
+                concentrationService,
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
+        );
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService,
+            ArchitectureConcentrationService concentrationService,
+            ArchitectureCentralityService centralityService
+    ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                dependencyService,
+                concentrationService,
+                centralityService,
+                new ArchitectureTechnologyService()
+        );
+    }
+
+    LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService,
             ArchitectureConcentrationService concentrationService,
             ArchitectureCentralityService centralityService,
             ArchitectureTechnologyService technologyService
@@ -111,78 +161,87 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
 
     @Override
     public ArchitectureOverview getArchitectureOverview(String projectIdentifier) throws IOException {
-        return load(projectIdentifier).overview();
+        ProjectContext context = loadContext(projectIdentifier);
+        return topologyService.build(context.discovery(), context.snapshot());
     }
 
     @Override
     public ArchitectureDependencyGraph getModuleDependencies(String projectIdentifier) throws IOException {
-        return load(projectIdentifier).dependencies();
+        ProjectContext context = loadContext(projectIdentifier);
+        return dependencyService.build(context.discovery(), context.snapshot());
     }
 
     @Override
     public ArchitectureConcentrationReport getArchitectureConcentration(String projectIdentifier) throws IOException {
-        return load(projectIdentifier).concentration();
+        ProjectContext context = loadContext(projectIdentifier);
+        return concentration(context);
     }
 
     @Override
     public ArchitectureCentralityReport getArchitectureCentrality(String projectIdentifier) throws IOException {
-        return load(projectIdentifier).centrality();
+        ProjectContext context = loadContext(projectIdentifier);
+        return centralityService.rank(concentration(context));
     }
 
     @Override
     public ArchitectureTechnologyReport getArchitectureTechnologies(String projectIdentifier) throws IOException {
-        return load(projectIdentifier).technologies();
+        ProjectContext context = loadContext(projectIdentifier);
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        return technologyService.detect(context.discovery(), overview);
     }
 
     @Override
     public ArchitectureIntelligenceView getArchitectureIntelligence(String projectIdentifier) throws IOException {
-        LoadedArchitecture loaded = load(projectIdentifier);
-        return intelligenceService.compose(
-                loaded.overview(),
-                loaded.dependencies(),
-                loaded.concentration(),
-                loaded.centrality(),
-                loaded.technologies()
-        );
+        return intelligence(loadContext(projectIdentifier));
     }
 
     @Override
-    public ArchitectureModuleContext getModuleContext(String projectIdentifier, String moduleIdentifier)
-            throws IOException {
-        LoadedArchitecture loaded = load(projectIdentifier);
-        return intelligenceService.moduleContext(
-                loaded.overview(),
-                loaded.dependencies(),
-                loaded.concentration(),
-                loaded.centrality(),
-                loaded.technologies(),
-                moduleIdentifier
-        );
+    public ArchitectureModuleContext getModuleContext(
+            String projectIdentifier,
+            String moduleIdentifier
+    ) throws IOException {
+        ProjectContext context = loadContext(projectIdentifier);
+        return intelligenceService.moduleContext(intelligence(context), moduleIdentifier);
     }
 
-    private LoadedArchitecture load(String projectIdentifier) throws IOException {
+    private ArchitectureIntelligenceView intelligence(ProjectContext context) {
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        ArchitectureDependencyGraph dependencies = dependencyService.build(context.discovery(), context.snapshot());
+        ArchitectureConcentrationReport concentration = concentrationService.analyze(overview, dependencies);
+        ArchitectureCentralityReport centrality = centralityService.rank(concentration);
+        ArchitectureTechnologyReport technologies = technologyService.detect(context.discovery(), overview);
+        return intelligenceService.compose(overview, dependencies, concentration, centrality, technologies);
+    }
+
+    private ArchitectureConcentrationReport concentration(ProjectContext context) {
+        ArchitectureOverview overview = topologyService.build(context.discovery(), context.snapshot());
+        ArchitectureDependencyGraph graph = dependencyService.build(context.discovery(), context.snapshot());
+        return concentrationService.analyze(overview, graph);
+    }
+
+    private ProjectContext loadContext(String projectIdentifier) throws IOException {
         RegisteredProject project = resolveProject(projectIdentifier);
-        ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException(
-                        "project has no active code knowledge snapshot: " + project.id()));
-        ArchitectureOverview overview = topologyService.analyze(project, discovery, snapshot);
-        ArchitectureDependencyGraph dependencies = dependencyService.analyze(overview, snapshot);
-        ArchitectureConcentrationReport concentration = concentrationService.analyze(overview, dependencies);
-        ArchitectureCentralityReport centrality = centralityService.analyze(overview, dependencies);
-        ArchitectureTechnologyReport technologies = technologyService.analyze(overview);
-        return new LoadedArchitecture(overview, dependencies, concentration, centrality, technologies);
+                        "project has no active code knowledge snapshot: " + project.id()
+                ));
+        ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
+        return new ProjectContext(discovery, snapshot);
     }
 
     private RegisteredProject resolveProject(String identifier) throws IOException {
         if (identifier == null || identifier.isBlank()) {
             throw new IllegalArgumentException("project identifier must not be blank");
         }
+
         UUID projectId = parseUuid(identifier);
         if (projectId != null) {
             return projectRegistry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("unknown project: " + identifier));
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "unknown project: " + identifier
+                    ));
         }
+
         List<RegisteredProject> matches = projectRegistry.listProjects().stream()
                 .filter(project -> identifier.equals(project.displayName()))
                 .toList();
@@ -190,7 +249,9 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             throw new IllegalArgumentException("unknown project: " + identifier);
         }
         if (matches.size() > 1) {
-            throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
+            throw new IllegalArgumentException(
+                    "ambiguous project name, use its UUID: " + identifier
+            );
         }
         return matches.getFirst();
     }
@@ -203,12 +264,10 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
         }
     }
 
-    private record LoadedArchitecture(
-            ArchitectureOverview overview,
-            ArchitectureDependencyGraph dependencies,
-            ArchitectureConcentrationReport concentration,
-            ArchitectureCentralityReport centrality,
-            ArchitectureTechnologyReport technologies
-    ) {
+    private record ProjectContext(ProjectDiscovery discovery, CodeKnowledgeSnapshot snapshot) {
+        private ProjectContext {
+            Objects.requireNonNull(discovery, "discovery");
+            Objects.requireNonNull(snapshot, "snapshot");
+        }
     }
 }
