@@ -1,10 +1,19 @@
 package com.minos.store;
 
+import com.minos.domain.OccurrenceRole;
+import com.minos.domain.Origin;
+import com.minos.domain.OriginType;
+import com.minos.domain.PositionEncoding;
+import com.minos.domain.ResolutionStatus;
+import com.minos.domain.ResolvedSymbolReference;
+import com.minos.domain.SymbolLocation;
+import com.minos.domain.SymbolOccurrence;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,25 +68,29 @@ class SnapshotCodecTest {
     @Test
     void v1RejectsM3Collections(@TempDir Path root) {
         UUID projectId = UUID.randomUUID();
-        CodeKnowledgeSnapshot base = new CodeKnowledgeSnapshot(
-                projectId,
-                "legacy",
-                FileSymbolSnapshotStoreTest.symbols(projectId),
-                List.of(),
-                List.of()
+        SymbolOccurrence occurrence = new SymbolOccurrence(
+                "occ-1",
+                projectId.toString(),
+                new ResolvedSymbolReference("method-int"),
+                new SymbolLocation("file-converter", 8, 1, 8, 2, PositionEncoding.UTF16_CODE_UNITS),
+                Set.of(OccurrenceRole.REFERENCE),
+                ResolutionStatus.RESOLVED,
+                new Origin("fixture-provider", "TEST", "1", "run-1", OriginType.OTHER),
+                Set.of()
         );
         CodeKnowledgeSnapshot incompatible = new CodeKnowledgeSnapshot(
                 projectId,
-                base.snapshotId(),
-                base.symbols(),
-                List.of(),
+                "legacy",
+                FileSymbolSnapshotStoreTest.symbols(projectId),
+                List.of(occurrence),
                 List.of()
         );
-
-        // The explicit guard is exercised by a non-empty M3 snapshot in the facade regression suite;
-        // here the codec remains directly constructible and testable without repository state.
         SnapshotCodec codec = new SnapshotCodecV1();
-        assertEquals(1, codec.formatVersion());
-        assertEquals("legacy", incompatible.snapshotId());
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> codec.write(root.resolve("snapshot.symbols"), incompatible)
+        );
+        assertEquals("snapshot codec v1 supports symbols only", exception.getMessage());
     }
 }
