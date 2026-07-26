@@ -1,78 +1,81 @@
 package com.minos.mcp;
 
-import com.minos.cli.MinosCliRunner;
+import com.minos.application.MinosApplication;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import io.modelcontextprotocol.spec.McpSchema.Tool;
 
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 
 /**
- * Catalogue M10 des outils MCP MINOS. Les handlers ne portent aucune logique
- * d'analyse : ils traduisent les arguments MCP vers la surface CLI.
+ * Catalogue M10 des outils MCP MINOS.
+ *
+ * <p>Handlers map protocol arguments directly to typed application requests. No
+ * MCP business invocation is translated to CLI commands.</p>
  */
 public final class MinosMcpTools {
 
     public static final int TOOL_COUNT = 16;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
 
-    private final CommandExecutor executor;
+    private final MinosMcpBackend backend;
 
     public MinosMcpTools(Path home) {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        this.executor = arguments -> {
-            StringBuilder output = new StringBuilder();
-            StringBuilder error = new StringBuilder();
-            try {
-                int exitCode = MinosCliRunner.run(
-                        normalizedHome,
-                        arguments.toArray(String[]::new),
-                        output,
-                        error
-                );
-                return new CommandResult(exitCode, output.toString(), error.toString());
-            } catch (java.io.IOException exception) {
-                throw new UncheckedIOException(exception);
-            }
-        };
+        try {
+            this.backend = new MinosApplicationMcpBackend(MinosApplication.open(normalizedHome));
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
-    MinosMcpTools(CommandExecutor executor) {
-        this.executor = Objects.requireNonNull(executor, "executor");
+    MinosMcpTools(MinosMcpBackend backend) {
+        this.backend = Objects.requireNonNull(backend, "backend");
     }
 
     public List<SyncToolSpecification> specifications() {
         return List.of(
                 tool("minos_project_structure", "Inspect a registered MINOS project, its detected languages/builds and current index snapshot.", projectSchema(), args ->
-                        command("inspect", required(args, "project"))),
+                        backend.projectStructure(required(args, "project"))),
                 tool("minos_index_status", "Read the active index status and factual last-success metadata known by MINOS.", projectSchema(), args ->
-                        command("index-status", required(args, "project"))),
-                tool("minos_search_code", "Build bounded compact code context from normalized MINOS knowledge.", searchSchema(), this::searchCommand),
-                tool("minos_find_symbols", "Find normalized symbols in the active project snapshot.", symbolSearchSchema(), this::findSymbolsCommand),
-                tool("minos_find_usages", "Find resolved usages of a normalized symbol.", relationSchema(), args -> relationCommand("find-usages", args)),
-                tool("minos_find_implementations", "Find implementations of a normalized symbol.", relationSchema(), args -> relationCommand("find-implementations", args)),
-                tool("minos_find_callers", "Find incoming CALLS relations when the provider exposes them.", relationSchema(), args -> relationCommand("find-callers", args)),
-                tool("minos_find_callees", "Find outgoing CALLS relations when the provider exposes them.", relationSchema(), args -> relationCommand("find-callees", args)),
-                tool("minos_dependencies", "Find outgoing derived DEPENDS_ON relations.", relationSchema(), args -> relationCommand("dependencies", args)),
-                tool("minos_dependents", "Find incoming derived DEPENDS_ON relations.", relationSchema(), args -> relationCommand("dependents", args)),
-                tool("minos_related_tests", "Find tests related to a production symbol with MINOS evidence and confidence.", relationSchema(), args -> relationCommand("related-tests", args)),
-                tool("minos_symbol_context", "Build one-root compact context for a symbol query, including bounded usages, relationships and relevant source.", symbolContextSchema(), this::symbolContextCommand),
+                        backend.indexStatus(required(args, "project"))),
+                tool("minos_search_code", "Build bounded compact code context from normalized MINOS knowledge.", searchSchema(), args ->
+                        backend.searchCode(searchRequest(args))),
+                tool("minos_find_symbols", "Find normalized symbols in the active project snapshot.", symbolSearchSchema(), args ->
+                        backend.findSymbols(symbolSearchRequest(args))),
+                tool("minos_find_usages", "Find resolved usages of a normalized symbol.", relationSchema(), args ->
+                        backend.findUsages(relationRequest(args))),
+                tool("minos_find_implementations", "Find implementations of a normalized symbol.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.IMPLEMENTATIONS, relationRequest(args))),
+                tool("minos_find_callers", "Find incoming CALLS relations when the provider exposes them.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.CALLERS, relationRequest(args))),
+                tool("minos_find_callees", "Find outgoing CALLS relations when the provider exposes them.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.CALLEES, relationRequest(args))),
+                tool("minos_dependencies", "Find outgoing derived DEPENDS_ON relations.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.DEPENDENCIES, relationRequest(args))),
+                tool("minos_dependents", "Find incoming derived DEPENDS_ON relations.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.DEPENDENTS, relationRequest(args))),
+                tool("minos_related_tests", "Find tests related to a production symbol with MINOS evidence and confidence.", relationSchema(), args ->
+                        backend.findRelationships(MinosMcpBackend.RelationshipOperation.RELATED_TESTS, relationRequest(args))),
+                tool("minos_symbol_context", "Build one-root compact context for a symbol query, including bounded usages, relationships and relevant source.", symbolContextSchema(), args ->
+                        backend.symbolContext(symbolContextRequest(args))),
                 tool("minos_module_context", "Read the compact M6 architecture context for one module.", moduleSchema(), args ->
-                        command("architecture", required(args, "project"), "--module", required(args, "module"))),
+                        backend.moduleContext(required(args, "project"), required(args, "module"))),
                 tool("minos_architecture", "Read the composed M6 architecture intelligence view for a project, including explicit module dependency edges.", projectSchema(), args ->
-                        command("architecture", required(args, "project"))),
-                tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), this::architectureGraphCommand),
-                tool("minos_impact", "Estimate direct and indirect potential impact with deterministic explanatory paths and explicit limitations.", impactSchema(), this::impactCommand)
+                        backend.architecture(required(args, "project"))),
+                tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), args ->
+                        backend.architectureGraph(architectureGraphRequest(args))),
+                tool("minos_impact", "Estimate direct and indirect potential impact with deterministic explanatory paths and explicit limitations.", impactSchema(), args ->
+                        backend.impact(impactRequest(args)))
         );
     }
 
@@ -80,113 +83,100 @@ public final class MinosMcpTools {
             String name,
             String description,
             String schema,
-            Function<Map<String, Object>, List<String>> commandFactory
+            ToolInvocation invocation
     ) {
         return SyncToolSpecification.builder()
                 .tool(Tool.builder(name, McpJsonDefaults.getMapper(), schema)
                         .description(description)
                         .build())
-                .callHandler((exchange, request) -> execute(commandFactory.apply(arguments(request.arguments()))))
+                .callHandler((exchange, request) -> execute(invocation, arguments(request.arguments())))
                 .build();
     }
 
-    private CallToolResult execute(List<String> command) {
-        CommandResult result = executor.execute(command);
-        if (result.exitCode() == 0) {
-            String text = result.stdout().stripTrailing();
+    private static CallToolResult execute(ToolInvocation invocation, Map<String, Object> arguments) {
+        try {
+            String text = invocation.execute(arguments);
+            String result = text == null ? "" : text.stripTrailing();
             return CallToolResult.builder()
-                    .content(List.of(TextContent.builder(text.isEmpty() ? "{}" : text).build()))
+                    .content(List.of(TextContent.builder(result.isEmpty() ? "{}" : result).build()))
+                    .build();
+        } catch (Exception exception) {
+            return CallToolResult.builder()
+                    .content(List.of(TextContent.builder(errorMessage(exception)).build()))
+                    .isError(true)
                     .build();
         }
-        String message = result.stderr().isBlank() ? result.stdout() : result.stderr();
-        return CallToolResult.builder()
-                .content(List.of(TextContent.builder(message.strip()).build()))
-                .isError(true)
-                .build();
     }
 
-    private List<String> searchCommand(Map<String, Object> args) {
-        List<String> command = command("search", required(args, "project"), required(args, "query"));
-        option(command, args, "qualifiedName", "--qualified-name");
-        option(command, args, "kind", "--kind");
-        option(command, args, "module", "--module");
-        option(command, args, "limit", "--limit");
-        option(command, args, "depth", "--depth");
-        option(command, args, "usages", "--usages");
-        option(command, args, "relationships", "--relationships");
-        option(command, args, "contextLines", "--context-lines");
-        option(command, args, "maxTokens", "--max-tokens");
-        if (Boolean.FALSE.equals(args.get("includeSource"))) {
-            command.add("--no-source");
-        }
-        return command;
+    private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.searchDefaults(
+                required(args, "project"),
+                required(args, "query"),
+                optionalString(args, "qualifiedName"),
+                optionalString(args, "kind"),
+                optionalString(args, "module"),
+                optionalInteger(args, "limit", 1, 20),
+                optionalInteger(args, "depth", 0, 3),
+                optionalInteger(args, "usages", 0, 50),
+                optionalInteger(args, "relationships", 0, 50),
+                optionalInteger(args, "contextLines", 0, 50),
+                optionalInteger(args, "maxTokens", 256, 32768),
+                optionalBoolean(args, "includeSource", true)
+        );
     }
 
-    private List<String> findSymbolsCommand(Map<String, Object> args) {
-        List<String> command = command("find-symbol", required(args, "project"), required(args, "query"));
-        option(command, args, "qualifiedName", "--qualified-name");
-        option(command, args, "kind", "--kind");
-        option(command, args, "module", "--module");
-        option(command, args, "limit", "--limit");
-        return command;
+    private static MinosMcpBackend.SymbolSearchRequest symbolSearchRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.symbolDefaults(
+                required(args, "project"),
+                required(args, "query"),
+                optionalString(args, "qualifiedName"),
+                optionalString(args, "kind"),
+                optionalString(args, "module"),
+                optionalInteger(args, "limit", 1, 1000)
+        );
     }
 
-    private List<String> relationCommand(String operation, Map<String, Object> args) {
-        List<String> command = command(operation, required(args, "project"), required(args, "symbolId"));
-        option(command, args, "limit", "--limit");
-        return command;
+    private static MinosMcpBackend.RelationRequest relationRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.relationDefaults(
+                required(args, "project"),
+                required(args, "symbolId"),
+                optionalInteger(args, "limit", 1, 1000)
+        );
     }
 
-    private List<String> symbolContextCommand(Map<String, Object> args) {
-        List<String> command = command("search", required(args, "project"), required(args, "query"));
-        command.addAll(List.of("--limit", "1"));
-        option(command, args, "qualifiedName", "--qualified-name");
-        option(command, args, "kind", "--kind");
-        option(command, args, "module", "--module");
-        option(command, args, "depth", "--depth");
-        option(command, args, "maxTokens", "--max-tokens");
-        option(command, args, "contextLines", "--context-lines");
-        if (Boolean.FALSE.equals(args.get("includeSource"))) {
-            command.add("--no-source");
-        }
-        return command;
+    private static MinosMcpBackend.SymbolContextRequest symbolContextRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.symbolContextDefaults(
+                required(args, "project"),
+                required(args, "query"),
+                optionalString(args, "qualifiedName"),
+                optionalString(args, "kind"),
+                optionalString(args, "module"),
+                optionalInteger(args, "depth", 0, 3),
+                optionalInteger(args, "contextLines", 0, 50),
+                optionalInteger(args, "maxTokens", 256, 32768),
+                optionalBoolean(args, "includeSource", true)
+        );
     }
 
-    private List<String> architectureGraphCommand(Map<String, Object> args) {
-        List<String> command = new ArrayList<>();
-        command.add("architecture");
-        command.add(required(args, "project"));
-        option(command, args, "module", "--module");
+    private static MinosMcpBackend.ArchitectureGraphRequest architectureGraphRequest(Map<String, Object> args) {
         String format = stringValue(args.get("format"), "json").toLowerCase(Locale.ROOT);
         if (!ARCHITECTURE_GRAPH_FORMATS.contains(format)) {
             throw new IllegalArgumentException("unsupported architecture graph format: " + format);
         }
-        command.add("--format");
-        command.add(format);
-        return command;
+        return new MinosMcpBackend.ArchitectureGraphRequest(
+                required(args, "project"),
+                optionalString(args, "module"),
+                format
+        );
     }
 
-    private List<String> impactCommand(Map<String, Object> args) {
-        List<String> command = command("impact", required(args, "project"), required(args, "symbolId"));
-        option(command, args, "depth", "--depth");
-        option(command, args, "limit", "--limit");
-        return command;
-    }
-
-    private static List<String> command(String name, String... operands) {
-        List<String> values = new ArrayList<>();
-        values.add(name);
-        values.addAll(List.of(operands));
-        values.addAll(List.of("--format", "json"));
-        return values;
-    }
-
-    private static void option(List<String> command, Map<String, Object> args, String key, String cliOption) {
-        Object value = args.get(key);
-        if (value != null) {
-            command.add(cliOption);
-            command.add(String.valueOf(value));
-        }
+    private static MinosMcpBackend.ImpactRequest impactRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.impactDefaults(
+                required(args, "project"),
+                required(args, "symbolId"),
+                optionalInteger(args, "depth", 1, 32),
+                optionalInteger(args, "limit", 1, 10000)
+        );
     }
 
     private static String required(Map<String, Object> args, String key) {
@@ -195,6 +185,48 @@ public final class MinosMcpTools {
             throw new IllegalArgumentException("missing required MCP argument: " + key);
         }
         return text;
+    }
+
+    private static String optionalString(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
+        }
+        return text;
+    }
+
+    private static Integer optionalInteger(Map<String, Object> args, String key, int minimum, int maximum) {
+        Object value = args.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("MCP argument " + key + " must be an integer");
+        }
+        double raw = number.doubleValue();
+        int parsed = number.intValue();
+        if (!Double.isFinite(raw) || raw != parsed) {
+            throw new IllegalArgumentException("MCP argument " + key + " must be an integer");
+        }
+        if (parsed < minimum || parsed > maximum) {
+            throw new IllegalArgumentException(
+                    "MCP argument " + key + " must be between " + minimum + " and " + maximum);
+        }
+        return parsed;
+    }
+
+    private static boolean optionalBoolean(Map<String, Object> args, String key, boolean defaultValue) {
+        Object value = args.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Boolean flag)) {
+            throw new IllegalArgumentException("MCP argument " + key + " must be a boolean");
+        }
+        return flag;
     }
 
     private static String stringValue(Object value, String defaultValue) {
@@ -209,6 +241,22 @@ public final class MinosMcpTools {
 
     private static Map<String, Object> arguments(Map<String, Object> arguments) {
         return arguments == null ? Map.of() : arguments;
+    }
+
+    private static String errorMessage(Exception exception) {
+        Throwable effective = exception;
+        if (exception instanceof RuntimeException && exception.getCause() != null) {
+            effective = exception.getCause();
+        }
+        String message = effective.getMessage();
+        String detail = message == null || message.isBlank()
+                ? effective.getClass().getSimpleName()
+                : message.replace('\r', ' ').replace('\n', ' ');
+        return detail.startsWith("error:") ? detail : "error: " + detail;
+    }
+
+    private static Map<String, Object> projectSchemaArguments(Map<String, Object> arguments) {
+        return arguments(arguments);
     }
 
     private static String projectSchema() {
@@ -295,10 +343,7 @@ public final class MinosMcpTools {
     }
 
     @FunctionalInterface
-    interface CommandExecutor {
-        CommandResult execute(List<String> arguments);
-    }
-
-    record CommandResult(int exitCode, String stdout, String stderr) {
+    private interface ToolInvocation {
+        String execute(Map<String, Object> arguments) throws Exception;
     }
 }
