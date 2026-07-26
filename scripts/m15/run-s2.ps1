@@ -54,6 +54,44 @@ function Ensure-WindowsPowerShellOnPath {
     }
 }
 
+function Resolve-CurrentPowerShellHost {
+    try {
+        $hostPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        if (-not [string]::IsNullOrWhiteSpace($hostPath) -and
+            (Test-Path -LiteralPath $hostPath -PathType Leaf)) {
+            return $hostPath
+        }
+    }
+    catch {
+    }
+
+    if ($env:OS -eq 'Windows_NT') {
+        $fallback = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        if (Test-Path -LiteralPath $fallback -PathType Leaf) {
+            return $fallback
+        }
+    }
+
+    throw 'Unable to resolve the PowerShell host used to restart the updated M15-S2 runner.'
+}
+
+function Restart-UpdatedRunner {
+    param([Parameter(Mandatory = $true)][string] $Head)
+
+    $hostPath = Resolve-CurrentPowerShellHost
+    $runnerPath = Join-Path $RepoRoot 'scripts\m15\run-s2.ps1'
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runnerPath)
+    if ($SkipM14Replay) { $arguments += '-SkipM14Replay' }
+    if ($SkipProviderReplays) { $arguments += '-SkipProviderReplays' }
+    if ($ValidateDocker) { $arguments += '-ValidateDocker' }
+
+    Write-Host "Runner changed after pull; restarting from exact HEAD $Head..." -ForegroundColor Yellow
+    & $hostPath @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Restarted M15-S2 runner failed (exit=$LASTEXITCODE)."
+    }
+}
+
 function Assert-ReactorShape {
     [xml] $rootPom = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
     $project = $rootPom.project
@@ -67,13 +105,14 @@ function Assert-ReactorShape {
 
     $modules = @($rootPom.SelectNodes('/*[local-name()="project"]/*[local-name()="modules"]/*[local-name()="module"]') |
         ForEach-Object { $_.InnerText.Trim() })
-    foreach ($requiredModule in @('minos-domain', 'minos-app')) {
+    foreach ($requiredModule in @('minos-domain', 'minos-engine', 'minos-app')) {
         if ($modules -notcontains $requiredModule) {
             throw "M15-S2 reactor must contain $requiredModule; modules=$($modules -join ',')."
         }
     }
-    if ([Array]::IndexOf($modules, 'minos-domain') -gt [Array]::IndexOf($modules, 'minos-app')) {
-        throw 'minos-domain must precede minos-app in the reactor.'
+    if ([Array]::IndexOf($modules, 'minos-domain') -gt [Array]::IndexOf($modules, 'minos-engine') -or
+        [Array]::IndexOf($modules, 'minos-engine') -gt [Array]::IndexOf($modules, 'minos-app')) {
+        throw 'Expected reactor order: minos-domain -> minos-engine -> minos-app.'
     }
 
     $domainPomPath = Join-Path $RepoRoot 'minos-domain\pom.xml'
@@ -90,6 +129,28 @@ function Assert-ReactorShape {
         throw 'minos-domain must exclusively compile the historical com/minos/domain source tree during the S2 bridge.'
     }
 
+    $enginePomPath = Join-Path $RepoRoot 'minos-engine\pom.xml'
+    if (-not (Test-Path -LiteralPath $enginePomPath -PathType Leaf)) {
+        throw "M15-S2 engine POM is missing: $enginePomPath"
+    }
+    [xml] $enginePom = Get-Content -LiteralPath $enginePomPath -Raw
+    if ([string] $enginePom.project.artifactId -ne 'minos-engine') {
+        throw "Engine artifact coordinate changed unexpectedly: $($enginePom.project.artifactId)"
+    }
+    $engineIncludes = @($enginePom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
+        ForEach-Object { $_.InnerText.Trim() })
+    foreach ($requiredInclude in @('com/minos/query/**/*.java', 'com/minos/store/CodeKnowledgeStore.java')) {
+        if ($engineIncludes -notcontains $requiredInclude) {
+            throw "minos-engine must own $requiredInclude during the S2 bridge."
+        }
+    }
+    $engineDependencies = @($enginePom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
+    if ($engineDependencies.Count -ne 1 -or
+        [string] $engineDependencies[0].groupId -ne 'com.minos' -or
+        [string] $engineDependencies[0].artifactId -ne 'minos-domain') {
+        throw 'minos-engine must depend only on com.minos:minos-domain at this checkpoint.'
+    }
+
     $appPomPath = Join-Path $RepoRoot 'minos-app\pom.xml'
     if (-not (Test-Path -LiteralPath $appPomPath -PathType Leaf)) {
         throw "M15-S2 application POM is missing: $appPomPath"
@@ -99,19 +160,27 @@ function Assert-ReactorShape {
         throw "Public artifact coordinate changed unexpectedly: $($appPom.project.artifactId)"
     }
 
-    $domainDependencies = @($appPom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"][*[local-name()="groupId" and text()="com.minos"] and *[local-name()="artifactId" and text()="minos-domain"]]'))
-    if ($domainDependencies.Count -ne 1) {
-        throw "minos-app must have exactly one com.minos:minos-domain dependency; found $($domainDependencies.Count)."
+    foreach ($internalDependency in @('minos-domain', 'minos-engine')) {
+        $matches = @($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='com.minos'] and *[local-name()='artifactId' and text()='$internalDependency']]"))
+        if ($matches.Count -ne 1) {
+            throw "minos-app must have exactly one com.minos:$internalDependency dependency; found $($matches.Count)."
+        }
     }
 
     $appExcludes = @($appPom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
         ForEach-Object { $_.InnerText.Trim() })
-    if ($appExcludes -notcontains 'com/minos/domain/**/*.java') {
-        throw 'minos-app must exclude com/minos/domain sources so Maven enforces the ownership boundary.'
+    foreach ($requiredExclude in @(
+        'com/minos/domain/**/*.java',
+        'com/minos/query/**/*.java',
+        'com/minos/store/CodeKnowledgeStore.java'
+    )) {
+        if ($appExcludes -notcontains $requiredExclude) {
+            throw "minos-app must exclude $requiredExclude so Maven enforces module ownership."
+        }
     }
 }
 
-function Assert-DomainOwnershipArtifacts {
+function Assert-CoreOwnershipArtifacts {
     $domainJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'minos-domain\target') -File `
         -Filter 'minos-domain-*.jar' -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -notmatch '(sources|javadoc)' } |
@@ -121,9 +190,24 @@ function Assert-DomainOwnershipArtifacts {
         throw 'minos-domain JAR is missing after reactor verification.'
     }
 
-    $appDomainClass = Join-Path $RepoRoot 'target\classes\com\minos\domain\Symbol.class'
-    if (Test-Path -LiteralPath $appDomainClass -PathType Leaf) {
-        throw "minos-app compiled domain classes directly; ownership boundary is not enforced: $appDomainClass"
+    $engineJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'minos-engine\target') -File `
+        -Filter 'minos-engine-*.jar' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch '(sources|javadoc)' } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($null -eq $engineJar) {
+        throw 'minos-engine JAR is missing after reactor verification.'
+    }
+
+    foreach ($appOwnedClass in @(
+        'target\classes\com\minos\domain\Symbol.class',
+        'target\classes\com\minos\query\SymbolQueryService.class',
+        'target\classes\com\minos\store\CodeKnowledgeStore.class'
+    )) {
+        $path = Join-Path $RepoRoot $appOwnedClass
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            throw "minos-app compiled a class owned by another module: $path"
+        }
     }
 
     $shadedJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'target') -File `
@@ -147,13 +231,39 @@ function Assert-DomainOwnershipArtifacts {
         throw 'minos-domain JAR does not own com/minos/domain/Symbol.class.'
     }
 
+    $engineEntries = @(& $jarTool tf $engineJar.FullName)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect minos-engine JAR.'
+    }
+    foreach ($requiredEngineEntry in @(
+        'com/minos/query/SymbolQueryService.class',
+        'com/minos/store/CodeKnowledgeStore.class'
+    )) {
+        if ($engineEntries -notcontains $requiredEngineEntry) {
+            throw "minos-engine JAR does not own $requiredEngineEntry."
+        }
+    }
+    if ($engineEntries -contains 'com/minos/domain/Symbol.class') {
+        throw 'minos-engine JAR embeds domain classes instead of depending on minos-domain.'
+    }
+
     $shadedEntries = @(& $jarTool tf $shadedJar.FullName)
-    if ($LASTEXITCODE -ne 0 -or $shadedEntries -notcontains 'com/minos/domain/Symbol.class') {
-        throw 'Final shaded MINOS JAR no longer contains com/minos/domain/Symbol.class.'
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect final shaded MINOS JAR.'
+    }
+    foreach ($requiredShadedEntry in @(
+        'com/minos/domain/Symbol.class',
+        'com/minos/query/SymbolQueryService.class',
+        'com/minos/store/CodeKnowledgeStore.class'
+    )) {
+        if ($shadedEntries -notcontains $requiredShadedEntry) {
+            throw "Final shaded MINOS JAR no longer contains $requiredShadedEntry."
+        }
     }
 
     return [pscustomobject]@{
         DomainJar = $domainJar.FullName
+        EngineJar = $engineJar.FullName
         ShadedJar = $shadedJar.FullName
     }
 }
@@ -170,6 +280,11 @@ try {
     }
     if ($dirty.Count -gt 0) {
         throw "M15-S2 runner requires a clean worktree. Dirty entries:`n$($dirty -join "`n")"
+    }
+
+    $initialHead = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($initialHead)) {
+        throw 'Unable to resolve initial HEAD.'
     }
 
     Write-Host '[1/8] Fetching M15-S2 branch...'
@@ -204,13 +319,18 @@ try {
         throw 'Unable to resolve exact HEAD after update.'
     }
 
-    Write-Host '[4/8] Checking reactor and minos-domain ownership shape...'
+    if ($head -ne $initialHead) {
+        Restart-UpdatedRunner -Head $head
+        return
+    }
+
+    Write-Host '[4/8] Checking reactor, minos-domain and minos-engine ownership shape...'
     Assert-ReactorShape
     Ensure-WindowsPowerShellOnPath
 
-    Write-Host '[5/8] Building the domain boundary in isolation...'
-    Invoke-NativeChecked -File '.\mvnw.cmd' -Arguments @('-pl', 'minos-domain', '-am', 'test') `
-        -Failure 'Focused minos-domain Maven verification failed'
+    Write-Host '[5/8] Building engine boundary and upstream domain in isolation...'
+    Invoke-NativeChecked -File '.\mvnw.cmd' -Arguments @('-pl', 'minos-engine', '-am', 'test') `
+        -Failure 'Focused minos-engine Maven verification failed'
 
     Write-Host "[6/8] Replaying functional S1/M14 qualification on exact HEAD $head..." -ForegroundColor Cyan
     $captureScript = Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1'
@@ -222,7 +342,7 @@ try {
     & $captureScript @parameters
 
     Write-Host '[7/8] Verifying compiled artifact ownership...' -ForegroundColor Cyan
-    $artifacts = Assert-DomainOwnershipArtifacts
+    $artifacts = Assert-CoreOwnershipArtifacts
 
     if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
         Write-Host '[8/8] Capturing repeated-query cost baseline...' -ForegroundColor Cyan
@@ -241,6 +361,7 @@ try {
     }
     Write-Host "HEAD       : $head"
     Write-Host "Domain JAR : $($artifacts.DomainJar)"
+    Write-Host "Engine JAR : $($artifacts.EngineJar)"
     Write-Host "Shaded JAR : $($artifacts.ShadedJar)"
 }
 finally {
