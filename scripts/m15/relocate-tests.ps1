@@ -172,7 +172,13 @@ function Resolve-TestOwner {
             return 'minos-storage-local'
         }
         '^com/minos/adapter/scip/' {
-            if ($Content -match 'import com\.minos\.(architecture|cli|api|mcp|integration\.nexus|git)\.') { return 'minos-app' }
+            # Provider tests may use engine-owned discovery contracts, but application implementations
+            # (ProjectDiscoveryService, registry, context, etc.) must stay in the composition-test module
+            # to avoid introducing provider -> application test dependency cycles.
+            if ($Content -match 'import com\.minos\.discovery\.ProjectDiscoveryService;' -or
+                $Content -match 'import com\.minos\.(architecture|cli|api|mcp|integration\.nexus|git|registry|context|impact|incremental|output|workspace)\.') {
+                return 'minos-app'
+            }
             return 'minos-provider-scip'
         }
         '^com/minos/git/' {
@@ -240,6 +246,8 @@ function Assert-FinalTestLayout {
         'minos-app\src\test\java\com\minos\mcp\MinosMcpServerIntegrationTest.java',
         'minos-app\src\test\java\com\minos\integration\nexus\NexusExportIntegrationTest.java',
         'minos-app\src\test\java\com\minos\query\SymbolQueryServiceTest.java',
+        'minos-app\src\test\java\com\minos\adapter\scip\ScipIndexerCatalogTest.java',
+        'minos-app\src\test\java\com\minos\adapter\scip\ScipPersistentSnapshotExperiment.java',
         'minos-provider-scip\src\test\java\com\minos\adapter\scip\ScipIndexReaderTest.java',
         'minos-api\src\test\java\com\minos\api\MinosApiContractTest.java'
     )) {
