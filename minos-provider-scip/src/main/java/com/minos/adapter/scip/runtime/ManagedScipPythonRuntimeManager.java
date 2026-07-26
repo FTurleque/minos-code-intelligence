@@ -63,7 +63,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                 VERSION,
                 state,
                 installed ? Optional.of(executable) : Optional.empty(),
-                diagnostics
+                diagnostics,
+                false
         );
     }
 
