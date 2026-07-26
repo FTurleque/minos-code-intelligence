@@ -95,7 +95,7 @@ function Write-MarkdownReport {
     )
 
     $lines = @(
-        '# M15-S1 — Baseline capture',
+        '# M15-S1 - Baseline capture',
         '',
         "- UTC: ``$($Report.timestampUtc)``",
         "- HEAD: ``$($Report.head)``",
@@ -157,8 +157,18 @@ try {
     }
     $mavenVersionLine = ($mavenVersionOutput -split "`r?`n" | Select-Object -First 1).Trim()
 
-    $mainSourceCount = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\main\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue).Count
-    $testSourceCount = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\test\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue).Count
+    $mainSourceCount = @(
+        Get-ChildItem -LiteralPath $RepoRoot -Directory -Filter 'minos-*' |
+            ForEach-Object {
+                Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src\main\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue
+            }
+    ).Count
+    $testSourceCount = @(
+        Get-ChildItem -LiteralPath $RepoRoot -Directory -Filter 'minos-*' |
+            ForEach-Object {
+                Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src\test\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue
+            }
+    ).Count
     $reactorModules = Get-ReactorModuleCount -PomPath (Join-Path $RepoRoot 'pom.xml')
 
     $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-m15-baseline-" + $head.Substring(0, 12))
