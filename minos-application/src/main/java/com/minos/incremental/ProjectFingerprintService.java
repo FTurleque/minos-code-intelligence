@@ -22,20 +22,23 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
-/**
- * Capture et compare les empreintes factuelles visibles d'un projet.
- */
+/** Captures and compares the observable visible fingerprint of a project. */
 public final class ProjectFingerprintService {
 
-    private static final Set<String> BUILD_DESCRIPTOR_NAMES = Set.of(
-            "pom.xml",
-            "package.json",
-            "package-lock.json"
-    );
     private static final Set<String> ROOT_CONTROL_FILES = Set.of(
             ".gitignore",
             ".minosignore"
     );
+
+    private final BuildDescriptorPolicy buildDescriptorPolicy;
+
+    public ProjectFingerprintService() {
+        this(BuildDescriptorPolicy.m17Defaults());
+    }
+
+    public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {
+        this.buildDescriptorPolicy = Objects.requireNonNull(buildDescriptorPolicy, "buildDescriptorPolicy");
+    }
 
     public ProjectFingerprint capture(Path projectRoot) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
@@ -81,7 +84,7 @@ public final class ProjectFingerprintService {
         List<FileFingerprint> immutableFiles = List.copyOf(files);
         String projectHash = aggregateHash(immutableFiles);
         String buildHash = aggregateHash(immutableFiles.stream()
-                .filter(file -> isBuildDescriptor(file.relativePath()))
+                .filter(file -> buildDescriptorPolicy.isBuildDescriptor(Path.of(file.relativePath())))
                 .toList());
 
         return new ProjectFingerprint(projectHash, buildHash, immutableFiles);
@@ -146,12 +149,6 @@ public final class ProjectFingerprintService {
     private static boolean isRootControlFile(Path relativePath) {
         return relativePath.getNameCount() == 1
                 && ROOT_CONTROL_FILES.contains(relativePath.getFileName().toString());
-    }
-
-    private static boolean isBuildDescriptor(String relativePath) {
-        int separator = relativePath.lastIndexOf('/');
-        String fileName = separator < 0 ? relativePath : relativePath.substring(separator + 1);
-        return BUILD_DESCRIPTOR_NAMES.contains(fileName);
     }
 
     private static String aggregateHash(List<FileFingerprint> files) {
