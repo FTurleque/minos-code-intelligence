@@ -1,42 +1,42 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplication;
+import com.minos.application.ProjectQueryService;
 import com.minos.context.CodeSearchCriteria;
 import com.minos.context.CodeSearchResponse;
-import com.minos.context.CodeSearchService;
-import com.minos.context.LocalSourceReader;
 import com.minos.context.SourceExcerpt;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolSearchCriteria;
-import com.minos.query.RelationshipQueryService;
 import com.minos.query.RelationshipResult;
-import com.minos.query.SymbolQueryService;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 import com.minos.registry.LocalProjectRegistry;
-import com.minos.registry.RegisteredProject;
-import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
-import com.minos.store.InMemoryCodeKnowledgeStore;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
- * Bootstrap local de la requête projet vers le snapshot de symboles actif.
+ * CLI adapter over the shared application-level project query service.
  */
 public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
 
-    private final LocalProjectRegistry projectRegistry;
-    private final FileSymbolSnapshotStore snapshotStore;
+    private final ProjectQueryService service;
 
     public LocalProjectSymbolQuery(
             LocalProjectRegistry projectRegistry,
             FileSymbolSnapshotStore snapshotStore
     ) {
-        this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
-        this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
+        this(new ProjectQueryService(projectRegistry, snapshotStore));
+    }
+
+    public LocalProjectSymbolQuery(MinosApplication application) {
+        this(Objects.requireNonNull(application, "application").projectQueryService());
+    }
+
+    private LocalProjectSymbolQuery(ProjectQueryService service) {
+        this.service = Objects.requireNonNull(service, "service");
     }
 
     @Override
@@ -44,11 +44,7 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
             String projectIdentifier,
             SymbolSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return loadQueryService(project).findSymbolResults(
-                project.id().toString(),
-                Objects.requireNonNull(criteria, "criteria")
-        );
+        return service.findSymbols(projectIdentifier, criteria);
     }
 
     @Override
@@ -57,12 +53,7 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
             String fileId,
             int limit
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return loadQueryService(project).getFileSymbolResults(
-                project.id().toString(),
-                fileId,
-                limit
-        );
+        return service.getFileSymbols(projectIdentifier, fileId, limit);
     }
 
     @Override
@@ -71,12 +62,7 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
             String symbolId,
             int limit
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return new SymbolQueryService(loadQueryStore(project)).findUsageResults(
-                project.id().toString(),
-                symbolId,
-                limit
-        );
+        return service.findUsages(projectIdentifier, symbolId, limit);
     }
 
     @Override
@@ -84,11 +70,7 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
             String projectIdentifier,
             RelationshipSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return new RelationshipQueryService(loadQueryStore(project)).findRelationshipResults(
-                project.id().toString(),
-                Objects.requireNonNull(criteria, "criteria")
-        );
+        return service.findRelationships(projectIdentifier, criteria);
     }
 
     @Override
@@ -96,68 +78,11 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
             String projectIdentifier,
             CodeSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return new CodeSearchService(
-                loadQueryStore(project),
-                new LocalSourceReader(project.rootPath())
-        ).search(project.id().toString(), Objects.requireNonNull(criteria, "criteria"));
+        return service.searchCode(projectIdentifier, criteria);
     }
 
     @Override
     public SourceExcerpt getSource(String projectIdentifier, String fileId) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
-        return new LocalSourceReader(project.rootPath()).readFull(fileId);
-    }
-
-    private SymbolQueryService loadQueryService(RegisteredProject project) throws IOException {
-        return new SymbolQueryService(loadQueryStore(project));
-    }
-
-    private InMemoryCodeKnowledgeStore loadQueryStore(RegisteredProject project) throws IOException {
-        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
-                .orElseThrow(() -> new IllegalStateException(
-                        "project has no active symbol snapshot: " + project.id()
-                ));
-
-        InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore();
-        queryStore.putSymbols(snapshot.symbols());
-        queryStore.putOccurrences(snapshot.occurrences());
-        queryStore.putRelationships(snapshot.relationships());
-        return queryStore;
-    }
-
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        if (identifier == null || identifier.isBlank()) {
-            throw new IllegalArgumentException("project identifier must not be blank");
-        }
-
-        UUID projectId = parseUuid(identifier);
-        if (projectId != null) {
-            return projectRegistry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "unknown project: " + identifier
-                    ));
-        }
-
-        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException(
-                    "ambiguous project name, use its UUID: " + identifier
-            );
-        }
-        return matches.getFirst();
-    }
-
-    private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
+        return service.getSource(projectIdentifier, fileId);
     }
 }
