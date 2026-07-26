@@ -84,12 +84,8 @@
 
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
 
-        <testSourceDirectory>${maven.multiModuleProjectDirectory}/src/test/java</testSourceDirectory>
-        <testResources>
-            <testResource>
-                <directory>${maven.multiModuleProjectDirectory}/src/test/resources</directory>
-            </testResource>
-        </testResources>
+
+
 
         <plugins>
             <plugin>
