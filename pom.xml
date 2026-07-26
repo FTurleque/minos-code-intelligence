@@ -18,6 +18,11 @@
         <module>minos-storage-local</module>
         <module>minos-provider-scip</module>
         <module>minos-integration-git</module>
+        <module>minos-application</module>
+        <module>minos-nexus</module>
+        <module>minos-cli</module>
+        <module>minos-api</module>
+        <module>minos-mcp</module>
         <module>minos-app</module>
     </modules>
 
