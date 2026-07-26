@@ -24,7 +24,12 @@
         <artifactId>kotlin-maven-plugin</artifactId>
         <version>${kotlin.version}</version>
         <extensions>true</extensions>
-        <configuration><jvmTarget>17</jvmTarget></configuration>
+        <configuration>
+          <jvmTarget>17</jvmTarget>
+          <sourceDirs>
+            <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
+          </sourceDirs>
+        </configuration>
       </plugin>
     </plugins>
   </build>

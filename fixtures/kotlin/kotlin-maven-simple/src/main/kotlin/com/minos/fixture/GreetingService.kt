@@ -6,6 +6,6 @@ class GreetingService : GreetingPort {
     override fun greet(name: String): String = "Hello, $name"
 }
 
-class GreetingController(private val service: GreetingPort = GreetingService()) {
+class GreetingController(private val service: GreetingService = GreetingService()) {
     fun message(name: String): String = service.greet(name)
 }

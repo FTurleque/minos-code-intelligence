@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string] $ProjectPath,
     [Parameter(Mandatory = $true)][string] $CoursierCommand,
     [Parameter(Mandatory = $true)][string] $Coordinate,
+    [Parameter(Mandatory = $true)][ValidateSet('JAVA', 'KOTLIN')][string] $Language,
     [Parameter(Mandatory = $true)][string] $OutputDirectory
 )
 
@@ -237,6 +238,95 @@ function Resolve-ScipJavaClasspath {
     return $classpath.Trim()
 }
 
+function Resolve-MavenCompileClasspath {
+    param(
+        [Parameter(Mandatory = $true)][string] $Maven,
+        [Parameter(Mandatory = $true)][string] $Project,
+        [Parameter(Mandatory = $true)][string] $WorkRoot
+    )
+
+    $classpathFile = Join-Path $WorkRoot 'maven-compile-classpath.txt'
+    Remove-Item -LiteralPath $classpathFile -Force -ErrorAction SilentlyContinue
+    Push-Location $Project
+    try {
+        $mavenOutput = @(& $Maven --batch-mode `
+            org.apache.maven.plugins:maven-dependency-plugin:3.7.0:build-classpath `
+            "-Dmdep.outputFile=$classpathFile" 2>&1)
+        $exit = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+    if ($exit -ne 0) {
+        throw "Maven compile classpath resolution failed with exit code ${exit}: $($mavenOutput | Out-String)"
+    }
+    $mavenOutput | ForEach-Object { Write-Host $_ }
+    if (-not (Test-Path -LiteralPath $classpathFile -PathType Leaf)) {
+        throw "Maven did not produce the compile classpath file: $classpathFile"
+    }
+
+    $rawClasspath = [System.IO.File]::ReadAllText($classpathFile).Trim()
+    if ([string]::IsNullOrWhiteSpace($rawClasspath)) {
+        throw 'Maven returned an empty compile classpath for Kotlin indexing.'
+    }
+    return @($rawClasspath.Split([System.IO.Path]::PathSeparator) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+
+function Write-KotlinScipConfig {
+    param(
+        [Parameter(Mandatory = $true)][string] $Maven,
+        [Parameter(Mandatory = $true)][string] $Project,
+        [Parameter(Mandatory = $true)][string] $WorkRoot
+    )
+
+    $configPath = Join-Path $WorkRoot 'scip-java-kotlin.json'
+    $compileClasspath = @(Resolve-MavenCompileClasspath -Maven $Maven -Project $Project -WorkRoot $WorkRoot)
+    $config = [ordered]@{
+        sourceFiles = @('src/main/kotlin', 'src/main/java')
+        classpath = $compileClasspath
+        javaHome = $env:JAVA_HOME
+    }
+    $json = $config | ConvertTo-Json -Depth 4
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($configPath, $json, $utf8WithoutBom)
+    return $configPath
+}
+
+function Get-ProjectFilesystemBaseline {
+    param([Parameter(Mandatory = $true)][string] $Project)
+
+    $paths = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    Get-ChildItem -LiteralPath $Project -Recurse -Force | ForEach-Object {
+        [void]$paths.Add($_.FullName)
+    }
+    return [pscustomobject]@{ Paths = $paths }
+}
+
+function Remove-NewKotlinCompilerOutputs {
+    param(
+        [Parameter(Mandatory = $true)][string] $Project,
+        [Parameter(Mandatory = $true)] $Baseline
+    )
+
+    Get-ChildItem -LiteralPath $Project -Recurse -Force -File |
+        Where-Object {
+            -not $Baseline.Paths.Contains($_.FullName) -and
+            ($_.Extension -eq '.class' -or $_.Extension -eq '.kotlin_module')
+        } |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+
+    Get-ChildItem -LiteralPath $Project -Recurse -Force -Directory |
+        Sort-Object { $_.FullName.Length } -Descending |
+        Where-Object { -not $Baseline.Paths.Contains($_.FullName) } |
+        ForEach-Object {
+            if (@(Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0) {
+                Remove-Item -LiteralPath $_.FullName -Force
+            }
+        }
+}
+
 function Build-WindowsPatch {
     param(
         [string] $Classpath,
@@ -269,7 +359,7 @@ $project = (Resolve-Path -LiteralPath $ProjectPath).Path
 $coursier = (Resolve-Path -LiteralPath $CoursierCommand).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$workRoot = Join-Path $PSScriptRoot 'windows-work'
+$workRoot = Join-Path $output 'windows-work'
 New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 
 $java = Resolve-JdkTool -Name 'java'
@@ -293,6 +383,7 @@ $oldPath = $env:PATH
 $oldMaven = [Environment]::GetEnvironmentVariable('MINOS_M14_MAVEN_CMD', 'Process')
 $oldJavac = [Environment]::GetEnvironmentVariable('MINOS_M14_SCIP_JAVAC_EXE', 'Process')
 $oldBash = [Environment]::GetEnvironmentVariable('MINOS_M14_BASH_EXE', 'Process')
+$kotlinFilesystemBaseline = $null
 $env:MINOS_M14_MAVEN_CMD = $maven
 $env:MINOS_M14_SCIP_JAVAC_EXE = $shims.Javac
 $env:MINOS_M14_BASH_EXE = $bash
@@ -302,12 +393,23 @@ try {
     Write-Output "MINOS scip-java Windows runtime"
     Write-Output "project=$project"
     Write-Output "coordinate=$Coordinate"
+    Write-Output "language=$Language"
     Write-Output "maven=$maven"
     Write-Output "bash=$bash"
 
     Push-Location $project
     try {
-        & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index
+        if ($Language -eq 'KOTLIN') {
+            $kotlinFilesystemBaseline = Get-ProjectFilesystemBaseline -Project $project
+            $config = Write-KotlinScipConfig -Maven $maven -Project $project -WorkRoot $workRoot
+            $targetRoot = Join-Path $output 'scip-java-target'
+            Remove-Item -LiteralPath $targetRoot -Recurse -Force -ErrorAction SilentlyContinue
+            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index `
+                --scip-config $config --targetroot $targetRoot --output $generated
+        }
+        else {
+            & $java -classpath "$patch;$classpath" org.scip_code.scip_java.ScipJava index
+        }
         $exit = $LASTEXITCODE
     }
     finally {
@@ -328,6 +430,9 @@ finally {
     [Environment]::SetEnvironmentVariable('MINOS_M14_MAVEN_CMD', $oldMaven, 'Process')
     [Environment]::SetEnvironmentVariable('MINOS_M14_SCIP_JAVAC_EXE', $oldJavac, 'Process')
     [Environment]::SetEnvironmentVariable('MINOS_M14_BASH_EXE', $oldBash, 'Process')
+    if ($null -ne $kotlinFilesystemBaseline) {
+        Remove-NewKotlinCompilerOutputs -Project $project -Baseline $kotlinFilesystemBaseline
+    }
 }
 
 if (-not (Test-Path -LiteralPath $destination -PathType Leaf) -or (Get-Item -LiteralPath $destination).Length -eq 0) {
