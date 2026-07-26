@@ -68,5 +68,5 @@ Capabilities : `MULTI_MODULE`, `PARTIAL_INDEX_ON_BUILD_FAILURE`, `REFERENCES`, `
 
 ## Formats calculables
 
-- formats CLI structurants : `text`, `json`
-- graphe d'architecture : `json`, `mermaid`, `dot`
+- formats symboles : `text`, `json`
+- formats architecture : `text`, `json`, `mermaid`, `dot`
