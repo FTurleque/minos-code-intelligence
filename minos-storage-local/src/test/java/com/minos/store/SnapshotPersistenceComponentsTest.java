@@ -31,24 +31,16 @@ class SnapshotPersistenceComponentsTest {
                 2, "knowledge", "snapshot-knowledge.knowledge", "b".repeat(64), 4, 2, 3);
         active.promote(projectId, v2);
         assertEquals(v2, active.read(projectId).orElseThrow());
-    }
 
-    @Test
-    void activePointerRejectsUnsupportedVersionExplicitly(@TempDir Path root) throws Exception {
-        SnapshotRepository repository = new SnapshotRepository(root);
-        ActiveSnapshotRepository active = new ActiveSnapshotRepository(repository);
-        UUID projectId = UUID.randomUUID();
-        Path directory = repository.ensureProjectDirectory(projectId);
         Files.write(
-                directory.resolve("active.pointer"),
+                repository.projectDirectory(projectId).resolve("active.pointer"),
                 ByteBuffer.allocate(8).putInt(0x4D4E4150).putInt(99).array()
         );
-
-        java.io.IOException exception = assertThrows(
+        java.io.IOException unsupported = assertThrows(
                 java.io.IOException.class,
                 () -> active.read(projectId)
         );
-        assertEquals("unsupported active snapshot pointer version: 99", exception.getMessage());
+        assertEquals("unsupported active snapshot pointer version: 99", unsupported.getMessage());
     }
 
     @Test
