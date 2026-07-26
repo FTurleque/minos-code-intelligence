@@ -81,11 +81,7 @@
     </dependencies>
 
     <build>
-
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
-
-
-
 
         <plugins>
             <plugin>
@@ -107,6 +103,24 @@
                     <useModulePath>false</useModulePath>
                     <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jacoco-aggregate-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report-aggregate</goal>
+                        </goals>
+                        <configuration>
+                            <includeCurrentProject>true</includeCurrentProject>
+                            <outputDirectory>${maven.multiModuleProjectDirectory}/target/site/jacoco-aggregate</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
             <plugin>
