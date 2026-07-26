@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.minos</groupId>
+        <artifactId>minos-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>minos-runtime-local</artifactId>
+    <name>MINOS Local Provider Runtime</name>
+    <description>Provider-neutral local process execution and runtime management infrastructure.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Transitional S2 ownership bridge before physical source relocation. -->
+        <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>com/minos/runtime/CommandLocator.java</include>
+                        <include>com/minos/runtime/IndexerProcessPlan.java</include>
+                        <include>com/minos/runtime/IndexerProcessPlanFactory.java</include>
+                        <include>com/minos/runtime/ProcessIndexerExecutor.java</include>
+                        <include>com/minos/runtime/ProviderRuntimeManager.java</include>
+                        <include>com/minos/runtime/ProviderRuntimeStatus.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
