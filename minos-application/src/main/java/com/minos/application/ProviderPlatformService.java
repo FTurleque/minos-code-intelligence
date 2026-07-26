@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -20,6 +21,12 @@ public final class ProviderPlatformService {
     public ProviderPlatformService(List<? extends IndexerProvider> providers, ProviderRuntimeManager runtimes) {
         this.providers = List.copyOf(Objects.requireNonNull(providers, "providers"));
         this.runtimes = Objects.requireNonNull(runtimes, "runtimes");
+    }
+
+    /** Default M17 provider platform bound to one already-composed application. */
+    public static ProviderPlatformService defaults(MinosApplication application) {
+        MinosApplication app = Objects.requireNonNull(application, "application");
+        return new ProviderPlatformService(ScipIndexerCatalog.qualifiedM17Providers(), app.providerRuntimeManager());
     }
 
     public List<ProviderView> listProviders() {
