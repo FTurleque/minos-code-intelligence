@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M15 terminés, validés et livrés ; M16 à M20 planifiés.**
+Statut : **C0 à M16 terminés, validés et livrés ; M17 à M20 planifiés.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -170,7 +170,7 @@ Acquis : discovery, négociation provider, diagnostic runtime, fingerprints, ex�
 ```text
 M15  Industrialiser le Core Engine             ✅
   ↓
-M16  Prouver la scalabilité                    planifié
+M16  Prouver la scalabilité                    ✅
   ↓
 M17  Généraliser discovery + providers         planifié
   ↓
@@ -227,20 +227,40 @@ Porte finale : `scripts/m15/run-final.ps1` qualifie le SHA exact et conserve les
 
 ## M16 — Scalabilité et performance à grande échelle
 
-**PLANIFIÉ.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
 
-Objectif : mesurer puis prouver le comportement de MINOS sur de grands codebases avant de sélectionner un backend plus complexe.
+Objectif fermé : mesurer le backend industrialisé par M15 sur un dataset STANDARD reproductible, protéger les séquences MCP et l'indexation réelle, puis borner la croissance disque sans introduire un backend complexe sans preuve.
 
-Acquis visés :
+```text
+M16-S1   harness benchmark                       ✅
+M16-S2   datasets d'échelle                      ✅
+M16-S3   query benchmark                         ✅
+M16-S4   MCP sustained load                      ✅
+M16-S5   indexing benchmark                      ✅
+M16-S6   memory/disk profile                     ✅
+M16-S7   backend decision                        ✅ ADR-0025
+M16-S8   optimisations mesurées uniquement       ✅
+M16-S9   retention/compaction                    ✅
+```
 
-- benchmark harness reproductible ;
-- datasets synthétiques et réels gradués ;
-- p50/p95/p99 sur les requêtes structurantes ;
-- profil mémoire/disque ;
-- benchmark MCP sous séquences de requêtes ;
-- benchmark d'indexation ;
-- décision backend par ADR fondée sur mesures ;
-- politique de rétention/compaction des snapshots et runs.
+Acquis :
+
+- profils synthétiques déterministes `SMOKE`, `STANDARD`, `EXTENDED`, `STRESS` ;
+- gate STANDARD à 10 000 fichiers / 100 000 symboles / 500 000 occurrences / 250 000 relations ;
+- latences p50/p95/p99 pour les requêtes structurantes ;
+- profil peak/retained heap, RSS processus et disque ;
+- séquences MCP STDIO long-lived sans rechargement systématique d'une vue inchangée ;
+- benchmark provider réel FULL/NONE, débit fichiers/s et LOC/s ;
+- comparateur SQLite expérimental hors runtime ;
+- décision backend gouvernée par mesures, jamais par préférence technologique ;
+- snapshots : actif + 2 historiques par défaut ;
+- runs : 20 réussis + 10 non réussis, `latestRunId` protégé.
+
+Porte finale : `scripts/m16/run-final.ps1` rejoue d'abord la qualification M14 complète puis la campagne STANDARD. Aucun changement de backend n'est accepté si le backend courant respecte les seuils ; tout échec garde M16 ouvert jusqu'à optimisation ciblée et remesure.
+
+- roadmap opérationnelle : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md)
+- décision : [ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md)
+- issue : #63
 
 ---
 
@@ -280,4 +300,4 @@ Objectif : combiner recherche sémantique et faits structurés MINOS sans rempla
 
 ## Règle de progression
 
-M16 est le prochain jalon séquentiel. M18 peut ensuite progresser en parallèle de M17 lorsque les contrats le permettent. M19/M20 peuvent être explorés, mais leur promotion produit dépend des garanties de scalabilité et de qualité obtenues en M16.
+M17 est le prochain jalon séquentiel. M18 peut ensuite progresser en parallèle de M17 lorsque les contrats le permettent. M19/M20 peuvent être explorés, mais leur promotion produit dépend des garanties de scalabilité et de qualité désormais acquises en M16.
