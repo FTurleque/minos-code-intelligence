@@ -105,24 +105,21 @@ function Get-Pom {
 function Get-CompilerIncludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
-        ForEach-Object { $_.InnerText.Trim() })
-    Write-Output -NoEnumerate $values
+    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
+        ForEach-Object { $_.InnerText.Trim() }
 }
 
 function Get-CompilerExcludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
-        ForEach-Object { $_.InnerText.Trim() })
-    Write-Output -NoEnumerate $values
+    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
+        ForEach-Object { $_.InnerText.Trim() }
 }
 
 function Get-Dependencies {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
-    Write-Output -NoEnumerate $values
+    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]')
 }
 
 function Assert-SingleDependency {
@@ -133,7 +130,8 @@ function Assert-SingleDependency {
         [Parameter(Mandatory = $true)][string] $Message
     )
 
-    # Force array semantics even when PowerShell receives exactly one XML node.
+    # The array subexpression is deliberately at the call site. PowerShell functions
+    # enumerate pipeline output, so this keeps one and many dependency nodes consistent.
     $dependencies = @(Get-Dependencies -Pom $Pom)
     if ($dependencies.Count -ne 1 -or
         [string] $dependencies[0].groupId -ne $GroupId -or
