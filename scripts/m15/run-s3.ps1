@@ -60,7 +60,8 @@ function Read-RepoText {
 
 function Get-PomDependencies {
     param([Parameter(Mandatory = $true)][string] $RelativePath)
-    [xml] $pom = Read-RepoText $RelativePath
+    $text = Read-RepoText $RelativePath
+    [xml] $pom = $text
     @($pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]') |
         ForEach-Object { "$($_.groupId):$($_.artifactId)" })
 }
@@ -84,8 +85,7 @@ function Assert-NotContains {
 }
 
 function Assert-S3Shape {
-    $applicationPath = 'minos-application\src\main\java\com\minos\application\MinosApplication.java'
-    $application = Read-RepoText $applicationPath
+    $application = Read-RepoText 'minos-application\src\main\java\com\minos\application\MinosApplication.java'
     Assert-Contains $application 'public final class MinosApplication' 'MinosApplication'
     Assert-Contains $application 'public static MinosApplication open(Path home)' 'MinosApplication'
     Assert-Contains $application 'public static Builder builder(Path home)' 'MinosApplication'
@@ -113,7 +113,6 @@ function Assert-S3Shape {
     }
 
     $cliRunner = Read-RepoText 'minos-cli\src\main\java\com\minos\cli\MinosCliRunner.java'
-    Assert-Contains $cliRunner 'run(' 'MinosCliRunner'
     Assert-Contains $cliRunner 'MinosApplication application' 'MinosCliRunner'
     Assert-Contains $cliRunner 'new LocalProjectOperations(app)' 'MinosCliRunner'
     Assert-Contains $cliRunner 'new LocalAutonomousIndexOperations(app)' 'MinosCliRunner'
@@ -146,7 +145,7 @@ function Assert-S3Shape {
 
     $mcpServer = Read-RepoText 'minos-mcp\src\main\java\com\minos\mcp\MinosMcpServer.java'
     Assert-Contains $mcpServer 'run(MinosApplication application)' 'MinosMcpServer'
-    Assert-Contains $mcpServer 'new MinosApplicationCommandExecutor(app)' 'MinosMcpServer'
+    Assert-Contains $mcpServer 'MinosMcpApplicationTools.specifications(app)' 'MinosMcpServer'
     $mcpBridge = Read-RepoText 'minos-mcp\src\main\java\com\minos\mcp\MinosApplicationCommandExecutor.java'
     Assert-Contains $mcpBridge 'MinosCliRunner.run(' 'MinosApplicationCommandExecutor'
     Assert-Contains $mcpBridge 'application,' 'MinosApplicationCommandExecutor'
@@ -155,6 +154,12 @@ function Assert-S3Shape {
     Assert-Contains $launcher 'MinosApplication application = MinosApplication.open(home);' 'MinosLauncher'
     Assert-Contains $launcher 'MinosMcpServer.run(application);' 'MinosLauncher'
     Assert-Contains $launcher 'run(application, arguments, System.out, System.err)' 'MinosLauncher'
+
+    $crossSurfaceTest = Read-RepoText 'minos-app\src\test\java\com\minos\application\SharedMinosApplicationIntegrationTest.java'
+    Assert-Contains $crossSurfaceTest 'new LocalMinosApi(application)' 'SharedMinosApplicationIntegrationTest'
+    Assert-Contains $crossSurfaceTest 'MinosCliRunner.run(' 'SharedMinosApplicationIntegrationTest'
+    Assert-Contains $crossSurfaceTest 'new LocalMinosMultiRepositoryApi(application)' 'SharedMinosApplicationIntegrationTest'
+    Assert-Contains $crossSurfaceTest 'MinosMcpApplicationTools.specifications(application)' 'SharedMinosApplicationIntegrationTest'
 
     $legacyMain = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\main\java') -Recurse -File -ErrorAction SilentlyContinue)
     $legacyTests = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\test\java') -Recurse -File -ErrorAction SilentlyContinue)
@@ -170,8 +175,8 @@ function Assert-S3Shape {
         Get-ChildItem -LiteralPath $RepoRoot -Directory -Filter 'minos-*' |
             ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src\test\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue }
     )
-    if ($mainSources.Count -ne 185) { throw "Unexpected S3 production source count: expected=185 actual=$($mainSources.Count)" }
-    if ($testSources.Count -ne 93) { throw "Unexpected S3 test source count: expected=93 actual=$($testSources.Count)" }
+    if ($mainSources.Count -ne 186) { throw "Unexpected S3 production source count: expected=186 actual=$($mainSources.Count)" }
+    if ($testSources.Count -ne 94) { throw "Unexpected S3 test source count: expected=94 actual=$($testSources.Count)" }
 }
 
 function Get-LatestJar {
@@ -205,8 +210,9 @@ function Assert-Artifacts {
         if ($applicationEntries -notcontains $entry) { throw "minos-application does not own $entry" }
         if ($shadedEntries -notcontains $entry) { throw "shaded JAR does not contain $entry" }
     }
-    if ($mcpEntries -notcontains 'com/minos/mcp/MinosApplicationCommandExecutor.class') {
-        throw 'minos-mcp does not own MinosApplicationCommandExecutor.'
+    foreach ($entry in @('com/minos/mcp/MinosApplicationCommandExecutor.class','com/minos/mcp/MinosMcpApplicationTools.class')) {
+        if ($mcpEntries -notcontains $entry) { throw "minos-mcp does not own $entry" }
+        if ($shadedEntries -notcontains $entry) { throw "shaded JAR does not contain $entry" }
     }
 
     [pscustomobject]@{
@@ -268,10 +274,10 @@ try {
     $baseline = Get-Content -LiteralPath $baselinePath -Raw | ConvertFrom-Json
     if ($baseline.verifyStatus -ne 'PASS') { throw "M15-S3 verify status is $($baseline.verifyStatus)." }
     if (-not $SkipM14Replay -and $baseline.m14ReplayStatus -ne 'PASS') { throw "M15-S3 M14 replay status is $($baseline.m14ReplayStatus)." }
-    if ([long] $baseline.junit.tests -ne 240 -or [long] $baseline.junit.failures -ne 0 -or [long] $baseline.junit.errors -ne 0) {
+    if ([long] $baseline.junit.tests -ne 241 -or [long] $baseline.junit.failures -ne 0 -or [long] $baseline.junit.errors -ne 0) {
         throw "M15-S3 test summary mismatch: tests=$($baseline.junit.tests) failures=$($baseline.junit.failures) errors=$($baseline.junit.errors)"
     }
-    if ([long] $baseline.mainSourceCount -ne 185 -or [long] $baseline.testSourceCount -ne 93) {
+    if ([long] $baseline.mainSourceCount -ne 186 -or [long] $baseline.testSourceCount -ne 94) {
         throw "M15-S3 source count mismatch: main=$($baseline.mainSourceCount) tests=$($baseline.testSourceCount)"
     }
 
