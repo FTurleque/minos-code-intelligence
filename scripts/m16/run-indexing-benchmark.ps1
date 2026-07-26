@@ -30,11 +30,24 @@ function Invoke-MinosMeasured {
     $argList = @('-jar', $jar) + $Arguments
     $encoded = ($argList | ForEach-Object { Quote-Arg $_ }) -join ' '
     $previous = $env:MINOS_HOME
+    $process = $null
     try {
         $env:MINOS_HOME = $validationHomePath
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $java.JavaExecutable
+        $startInfo.Arguments = $encoded
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $startInfo
         $watch = [System.Diagnostics.Stopwatch]::StartNew()
-        $process = Start-Process -FilePath $java.JavaExecutable -ArgumentList $encoded -PassThru -NoNewWindow `
-            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        if (-not $process.Start()) {
+            throw "Unable to start measured MINOS command: $($Arguments -join ' ')"
+        }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
         [long] $peak = 0
         while (-not $process.HasExited) {
             try {
@@ -44,12 +57,15 @@ function Invoke-MinosMeasured {
             Start-Sleep -Milliseconds 100
             $process.Refresh()
         }
-        $watch.Stop()
         $process.WaitForExit()
-        $outText = if (Test-Path $stdout) { (Get-Content -LiteralPath $stdout -Raw).Trim() } else { '' }
-        $errText = if (Test-Path $stderr) { (Get-Content -LiteralPath $stderr -Raw).Trim() } else { '' }
-        if ($process.ExitCode -ne 0) {
-            throw "Measured MINOS command failed: $($Arguments -join ' ')`n$errText`n$outText"
+        $watch.Stop()
+        $outText = $stdoutTask.Result.Trim()
+        $errText = $stderrTask.Result.Trim()
+        $exitCode = $process.ExitCode
+        [System.IO.File]::WriteAllText($stdout, $outText)
+        [System.IO.File]::WriteAllText($stderr, $errText)
+        if ($exitCode -ne 0) {
+            throw "Measured MINOS command failed (exit=$exitCode): $($Arguments -join ' ')`n$errText`n$outText"
         }
         return [pscustomobject]@{
             DurationMs = [Math]::Round($watch.Elapsed.TotalMilliseconds, 4)
@@ -58,6 +74,7 @@ function Invoke-MinosMeasured {
             Stderr = $errText
         }
     } finally {
+        if ($null -ne $process) { $process.Dispose() }
         if ($null -eq $previous) { Remove-Item Env:MINOS_HOME -ErrorAction SilentlyContinue }
         else { $env:MINOS_HOME = $previous }
         Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
