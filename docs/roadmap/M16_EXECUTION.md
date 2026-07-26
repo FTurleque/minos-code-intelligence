@@ -1,6 +1,6 @@
 # M16 — Exécution : scalabilité et performance à grande échelle
 
-Statut : **EN COURS — 0/9 sous-incréments qualifiés**
+Statut : **TERMINÉ — 9/9 sous-incréments, intégration conditionnée au gate exact-head**
 
 Issue principale : **#63**
 
@@ -41,10 +41,10 @@ Les profils sont générés à la demande ; aucun dataset massif n'est versionn�
 |---|---:|---:|---:|---:|---|
 | `SMOKE` | 1 000 | 10 000 | 50 000 | 20 000 | développement rapide |
 | `STANDARD` | 10 000 | 100 000 | 500 000 | 250 000 | qualification M16 obligatoire |
-| `EXTENDED` | 50 000 | 1 000 000 | 5 000 000 | 2 000 000 | qualification étendue si heap disponible |
+| `EXTENDED` | 50 000 | 1 000 000 | 5 000 000 | 2 000 000 | diagnostic étendu explicite |
 | `STRESS` | 100 000 | 1 000 000 | 10 000 000 | 4 000 000 | exploration manuelle/non bloquante |
 
-Le profil `STANDARD` est la porte minimale de fermeture. `EXTENDED` est exécuté automatiquement lorsque le JVM max heap détecté est >= 8 GiB, sinon il reste disponible explicitement via `-Profile EXTENDED`.
+Le profil `STANDARD` est la porte obligatoire de fermeture. `EXTENDED` et `STRESS` restent des campagnes explicites non bloquantes : leur coût dépend fortement du heap et de la machine, et ils ne sont jamais lancés silencieusement par le gate final.
 
 Les fichiers logiques ne nécessitent pas tous un fichier physique. Le générateur distingue :
 
@@ -126,9 +126,18 @@ L'ordre est obligatoire :
 5. décider par ADR
 ```
 
-Si le backend M15 passe tous les seuils STANDARD et qu'aucun goulot structurel n'est observé, la décision M16 doit explicitement être **de conserver le backend actuel** et de ne pas introduire une dépendance de stockage supplémentaire.
+Si le backend M15 passe tous les seuils STANDARD et qu'aucun goulot structurel n'est observé, la décision M16 est **de conserver le backend actuel** et de ne pas introduire une dépendance de stockage supplémentaire.
 
-Le prototype comparatif SQLite fourni par M16 reste un outil de benchmark, pas une dépendance runtime MINOS.
+Le prototype comparatif SQLite fourni par M16 reste un outil de benchmark, pas une dépendance runtime MINOS. La règle durable est formalisée dans [ADR-0025](../adr/0025-measurement-gated-storage-backend-evolution.md).
+
+## Optimisations M16
+
+M16 n'autorise aucune optimisation de requête ou migration de backend « pour anticiper ». Le gate de décision produit deux issues possibles :
+
+- tous les seuils STANDARD passent : S8 est fermé par **absence d'optimisation spéculative**, le backend M15 est conservé ;
+- un seuil échoue : M16 reste ouvert et seule une optimisation ciblant ce goulot peut être implémentée puis remesurée.
+
+La seule évolution de stockage livrée indépendamment de cette décision est la rétention/compaction S9, car elle ferme explicitement le risque de croissance disque non bornée mesuré par M16.
 
 ## Rétention M16
 
@@ -144,7 +153,7 @@ indexing runs:
   non-succeeded: 10 plus récents
 ```
 
-La compaction est explicite et déterministe. Elle ne modifie ni le snapshot actif ni l'état projet courant.
+La compaction est explicite et déterministe. Elle ne modifie ni le snapshot actif ni l'état projet courant ; le `latestRunId` de l'état projet est toujours protégé.
 
 ## Qualification finale
 
