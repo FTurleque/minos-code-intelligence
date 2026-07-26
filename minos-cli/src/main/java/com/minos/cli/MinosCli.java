@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
 
@@ -28,6 +29,7 @@ public final class MinosCli {
               tools list        List managed providers
               tools install     Install/bootstrap a managed provider
               tools verify      Verify managed provider runtimes
+              providers         Show provider capabilities, limitations and runtime state
 
             Code intelligence:
               search             Build a bounded code context
@@ -64,12 +66,13 @@ public final class MinosCli {
     private final ImportScipCommand importScipCommand;
     private final ToolsCommand toolsCommand;
     private final DoctorCommand doctorCommand;
+    private final ProviderCommand providerCommand;
     private final ArchitectureCommand architectureCommand;
     private final ImpactCommand impactCommand;
     private final NexusExportCommand nexusExportCommand;
 
     public MinosCli(ProjectSymbolQuery symbolQuery) {
-        this(symbolQuery, null, null, null, null, null, null);
+        this(symbolQuery, null, null, null, null, null, null, null);
     }
 
     public MinosCli(
@@ -78,7 +81,7 @@ public final class MinosCli {
             ProjectArchitectureQuery architectureQuery,
             ProjectImpactQuery impactQuery
     ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, null, null, null);
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, null, null, null, null);
     }
 
     MinosCli(
@@ -88,7 +91,7 @@ public final class MinosCli {
             ProjectImpactQuery impactQuery,
             NexusExportCommand nexusExportCommand
     ) {
-        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand, null, null);
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand, null, null, null);
     }
 
     MinosCli(
@@ -99,6 +102,20 @@ public final class MinosCli {
             NexusExportCommand nexusExportCommand,
             AutonomousIndexOperations autonomousOperations,
             Path home
+    ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery,
+                nexusExportCommand, autonomousOperations, home, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService
     ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
@@ -115,6 +132,7 @@ public final class MinosCli {
         this.importScipCommand = projectOperations == null ? null : new ImportScipCommand(projectOperations);
         this.toolsCommand = autonomousOperations == null ? null : new ToolsCommand(autonomousOperations);
         this.doctorCommand = autonomousOperations == null || home == null ? null : new DoctorCommand(home, autonomousOperations);
+        this.providerCommand = providerPlatformService == null ? null : new ProviderCommand(providerPlatformService);
         this.architectureCommand = architectureQuery == null ? null : new ArchitectureCommand(architectureQuery);
         this.impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
         this.nexusExportCommand = nexusExportCommand;
@@ -124,7 +142,6 @@ public final class MinosCli {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-
         if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
@@ -133,26 +150,22 @@ public final class MinosCli {
             error.append("error: command is required\n").append(USAGE).append('\n');
             return FindSymbolCommand.USAGE_ERROR;
         }
-
         String command = arguments[0];
         String[] commandArguments = Arrays.copyOfRange(arguments, 1, arguments.length);
         if (ProjectCommand.NAME.equals(command)) {
             return projectCommand == null ? unavailable(command, error) : projectCommand.run(commandArguments, output, error);
         }
         if ("inspect".equals(command)) {
-            return projectCommand == null ? unavailable(command, error)
-                    : projectCommand.runInspectAlias(commandArguments, output, error);
+            return projectCommand == null ? unavailable(command, error) : projectCommand.runInspectAlias(commandArguments, output, error);
         }
         if (IndexCommand.NAME.equals(command)) {
             return indexCommand == null ? unavailable(command, error) : indexCommand.run(commandArguments, output, error);
         }
         if (ImportScipCommand.NAME.equals(command)) {
-            return importScipCommand == null ? unavailable(command, error)
-                    : importScipCommand.run(commandArguments, output, error);
+            return importScipCommand == null ? unavailable(command, error) : importScipCommand.run(commandArguments, output, error);
         }
         if ("index-status".equals(command)) {
-            return projectCommand == null ? unavailable(command, error)
-                    : projectCommand.runIndexStatus(commandArguments, output, error);
+            return projectCommand == null ? unavailable(command, error) : projectCommand.runIndexStatus(commandArguments, output, error);
         }
         if (ToolsCommand.NAME.equals(command)) {
             return toolsCommand == null ? unavailable(command, error) : toolsCommand.run(commandArguments, output, error);
@@ -160,42 +173,30 @@ public final class MinosCli {
         if (DoctorCommand.NAME.equals(command)) {
             return doctorCommand == null ? unavailable(command, error) : doctorCommand.run(commandArguments, output, error);
         }
+        if (ProviderCommand.NAME.equals(command)) {
+            return providerCommand == null ? unavailable(command, error) : providerCommand.run(commandArguments, output, error);
+        }
         if (ArchitectureCommand.NAME.equals(command)) {
-            return architectureCommand == null ? unavailable(command, error)
-                    : architectureCommand.run(commandArguments, output, error);
+            return architectureCommand == null ? unavailable(command, error) : architectureCommand.run(commandArguments, output, error);
         }
         if (ImpactCommand.NAME.equals(command)) {
             return impactCommand == null ? unavailable(command, error) : impactCommand.run(commandArguments, output, error);
         }
         if (NexusExportCommand.NAME.equals(command)) {
-            return nexusExportCommand == null ? unavailable(command, error)
-                    : nexusExportCommand.run(commandArguments, output, error);
+            return nexusExportCommand == null ? unavailable(command, error) : nexusExportCommand.run(commandArguments, output, error);
         }
-        if (FindSymbolCommand.NAME.equals(command)) {
-            return findSymbolCommand.run(commandArguments, output, error);
-        }
-        if (SearchCodeCommand.NAME.equals(command)) {
-            return searchCodeCommand.run(commandArguments, output, error);
-        }
-        if (GetSourceCommand.NAME.equals(command)) {
-            return getSourceCommand.run(commandArguments, output, error);
-        }
-        if (FindUsagesCommand.NAME.equals(command)) {
-            return findUsagesCommand.run(commandArguments, output, error);
-        }
+        if (FindSymbolCommand.NAME.equals(command)) return findSymbolCommand.run(commandArguments, output, error);
+        if (SearchCodeCommand.NAME.equals(command)) return searchCodeCommand.run(commandArguments, output, error);
+        if (GetSourceCommand.NAME.equals(command)) return getSourceCommand.run(commandArguments, output, error);
+        if (FindUsagesCommand.NAME.equals(command)) return findUsagesCommand.run(commandArguments, output, error);
         RelationshipCommand relationshipCommand = relationshipCommands.get(command);
-        if (relationshipCommand != null) {
-            return relationshipCommand.run(commandArguments, output, error);
-        }
-
+        if (relationshipCommand != null) return relationshipCommand.run(commandArguments, output, error);
         error.append("error: unknown command: ").append(command).append('\n');
         error.append(USAGE).append('\n');
         return FindSymbolCommand.USAGE_ERROR;
     }
 
-    public static String usage() {
-        return USAGE;
-    }
+    public static String usage() { return USAGE; }
 
     private static int unavailable(String command, Appendable error) throws IOException {
         error.append("error: ").append(command).append(" is not configured in this CLI bootstrap\n");
