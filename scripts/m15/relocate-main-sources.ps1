@@ -62,6 +62,20 @@ function Save-XmlUtf8NoBom {
     finally {
         $writer.Dispose()
     }
+
+    # Removing XML nodes while preserving whitespace can leave indentation-only
+    # lines behind. Normalize them before git diff --check so the relocation
+    # commit stays whitespace-clean on Windows PowerShell 5.1 as well.
+    $content = [System.IO.File]::ReadAllText($Path)
+    $normalized = [System.Text.RegularExpressions.Regex]::Replace(
+        $content,
+        '[ \t]+(?=\r?$)',
+        '',
+        [System.Text.RegularExpressions.RegexOptions]::Multiline
+    )
+    if ($normalized -ne $content) {
+        [System.IO.File]::WriteAllText($Path, $normalized, [System.Text.UTF8Encoding]::new($false))
+    }
 }
 
 function Remove-ExternalMainSourceBridge {
@@ -186,6 +200,11 @@ try {
         throw "Relocation requires a clean worktree.`n$($dirty -join "`n")"
     }
 
+    $startingHead = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($startingHead)) {
+        throw 'Unable to resolve relocation starting HEAD.'
+    }
+
     $sources = @(Get-ChildItem -LiteralPath $LegacyJavaRoot -Recurse -File -Filter '*.java' -ErrorAction Stop)
     if ($sources.Count -eq 0) {
         Write-Host 'Production sources are already physically relocated.' -ForegroundColor Yellow
@@ -212,65 +231,80 @@ try {
     $actualCounts = @{}
     foreach ($module in $expectedCounts.Keys) { $actualCounts[$module] = 0 }
 
-    Write-Host 'Relocating 183 production Java sources into Maven module roots...' -ForegroundColor Cyan
-    foreach ($file in $sources | Sort-Object FullName) {
-        $relative = $file.FullName.Substring($LegacyJavaRoot.Length + 1).Replace('\', '/')
-        $owner = Resolve-SourceOwner -RelativePath $relative
-        $sourceGitPath = "src/main/java/$relative"
-        $targetGitPath = "$owner/src/main/java/$relative"
-        $targetDirectory = Split-Path -Parent (Join-Path $RepoRoot $targetGitPath.Replace('/', '\'))
-        New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
-        Invoke-GitChecked @('mv','--',$sourceGitPath,$targetGitPath)
-        $actualCounts[$owner] = [int] $actualCounts[$owner] + 1
-    }
-
-    foreach ($module in $expectedCounts.Keys) {
-        if ([int] $actualCounts[$module] -ne [int] $expectedCounts[$module]) {
-            throw "$module ownership mismatch during relocation: expected=$($expectedCounts[$module]) actual=$($actualCounts[$module])"
+    $mutationStarted = $false
+    try {
+        $mutationStarted = $true
+        Write-Host 'Relocating 183 production Java sources into Maven module roots...' -ForegroundColor Cyan
+        foreach ($file in $sources | Sort-Object FullName) {
+            $relative = $file.FullName.Substring($LegacyJavaRoot.Length + 1).Replace('\', '/')
+            $owner = Resolve-SourceOwner -RelativePath $relative
+            $sourceGitPath = "src/main/java/$relative"
+            $targetGitPath = "$owner/src/main/java/$relative"
+            $targetDirectory = Split-Path -Parent (Join-Path $RepoRoot $targetGitPath.Replace('/', '\'))
+            New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+            Invoke-GitChecked @('mv','--',$sourceGitPath,$targetGitPath)
+            $actualCounts[$owner] = [int] $actualCounts[$owner] + 1
         }
-        Remove-ExternalMainSourceBridge -Module $module
-    }
 
-    $resources = @(Get-ChildItem -LiteralPath $LegacyResourceRoot -Recurse -File -ErrorAction SilentlyContinue)
-    if ($resources.Count -ne 2) {
-        throw "Expected exactly 2 historical production resources before relocation; found $($resources.Count)."
-    }
-    foreach ($resource in $resources | Sort-Object FullName) {
-        $relative = $resource.FullName.Substring($LegacyResourceRoot.Length + 1).Replace('\', '/')
-        if ($relative -notlike 'com/minos/adapter/scip/runtime/*') {
-            throw "Unexpected production resource outside SCIP ownership: $relative"
+        foreach ($module in $expectedCounts.Keys) {
+            if ([int] $actualCounts[$module] -ne [int] $expectedCounts[$module]) {
+                throw "$module ownership mismatch during relocation: expected=$($expectedCounts[$module]) actual=$($actualCounts[$module])"
+            }
+            Remove-ExternalMainSourceBridge -Module $module
         }
-        $sourceGitPath = "src/main/resources/$relative"
-        $targetGitPath = "minos-provider-scip/src/main/resources/$relative"
-        $targetDirectory = Split-Path -Parent (Join-Path $RepoRoot $targetGitPath.Replace('/', '\'))
-        New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
-        Invoke-GitChecked @('mv','--',$sourceGitPath,$targetGitPath)
+
+        $resources = @(Get-ChildItem -LiteralPath $LegacyResourceRoot -Recurse -File -ErrorAction SilentlyContinue)
+        if ($resources.Count -ne 2) {
+            throw "Expected exactly 2 historical production resources before relocation; found $($resources.Count)."
+        }
+        foreach ($resource in $resources | Sort-Object FullName) {
+            $relative = $resource.FullName.Substring($LegacyResourceRoot.Length + 1).Replace('\', '/')
+            if ($relative -notlike 'com/minos/adapter/scip/runtime/*') {
+                throw "Unexpected production resource outside SCIP ownership: $relative"
+            }
+            $sourceGitPath = "src/main/resources/$relative"
+            $targetGitPath = "minos-provider-scip/src/main/resources/$relative"
+            $targetDirectory = Split-Path -Parent (Join-Path $RepoRoot $targetGitPath.Replace('/', '\'))
+            New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+            Invoke-GitChecked @('mv','--',$sourceGitPath,$targetGitPath)
+        }
+        Remove-ExternalProviderResourceBridge
+        Update-BaselineSourceCounting
+        Assert-RelocatedLayout -ExpectedCounts $expectedCounts
+
+        Invoke-GitChecked @('add','-A')
+        & git diff --cached --check
+        if ($LASTEXITCODE -ne 0) { throw 'Relocation staged diff failed git diff --check.' }
+
+        $staged = @(& git diff --cached --name-only)
+        if ($LASTEXITCODE -ne 0 -or $staged.Count -eq 0) {
+            throw 'Relocation produced no staged changes.'
+        }
+
+        Invoke-GitChecked @('commit','-m','M15-S2 — relocate production sources into Maven modules')
+        $head = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
+            throw 'Unable to resolve relocation commit HEAD.'
+        }
+        Invoke-GitChecked @('push','origin',"HEAD:$Branch")
+
+        Write-Host ''
+        Write-Host 'M15-S2 PRODUCTION SOURCE RELOCATION COMMITTED AND PUSHED' -ForegroundColor Green
+        Write-Host "HEAD     : $head"
+        Write-Host "Sources  : $($sources.Count)"
+        Write-Host "Resources: $($resources.Count)"
     }
-    Remove-ExternalProviderResourceBridge
-    Update-BaselineSourceCounting
-    Assert-RelocatedLayout -ExpectedCounts $expectedCounts
-
-    Invoke-GitChecked @('add','-A')
-    & git diff --cached --check
-    if ($LASTEXITCODE -ne 0) { throw 'Relocation staged diff failed git diff --check.' }
-
-    $staged = @(& git diff --cached --name-only)
-    if ($LASTEXITCODE -ne 0 -or $staged.Count -eq 0) {
-        throw 'Relocation produced no staged changes.'
+    catch {
+        $failure = $_
+        if ($mutationStarted) {
+            Write-Warning "Relocation failed; restoring clean starting HEAD $startingHead before returning the error."
+            & git reset --hard $startingHead
+            if ($LASTEXITCODE -ne 0) {
+                throw "Relocation failed: $($failure.Exception.Message). Automatic rollback to $startingHead also failed."
+            }
+        }
+        throw $failure
     }
-
-    Invoke-GitChecked @('commit','-m','M15-S2 — relocate production sources into Maven modules')
-    $head = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
-        throw 'Unable to resolve relocation commit HEAD.'
-    }
-    Invoke-GitChecked @('push','origin',"HEAD:$Branch")
-
-    Write-Host ''
-    Write-Host 'M15-S2 PRODUCTION SOURCE RELOCATION COMMITTED AND PUSHED' -ForegroundColor Green
-    Write-Host "HEAD     : $head"
-    Write-Host "Sources  : $($sources.Count)"
-    Write-Host "Resources: $($resources.Count)"
 }
 finally {
     Pop-Location
