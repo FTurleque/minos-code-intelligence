@@ -26,11 +26,7 @@ import java.util.TreeSet;
  */
 public final class ProjectInvalidationService {
 
-    private static final Set<String> BUILD_DESCRIPTOR_NAMES = Set.of(
-            "pom.xml",
-            "package.json",
-            "package-lock.json"
-    );
+    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final Set<String> ROOT_IGNORE_FILES = Set.of(
             ".gitignore",
             ".minosignore"
@@ -233,14 +229,14 @@ public final class ProjectInvalidationService {
     private static boolean matchesLanguageExtension(String path, Language language) {
         return switch (language) {
             case JAVA -> path.endsWith(".java");
+            case KOTLIN -> path.endsWith(".kt") || path.endsWith(".kts");
             case TYPESCRIPT -> path.endsWith(".ts") || path.endsWith(".tsx");
+            case PYTHON -> path.endsWith(".py");
         };
     }
 
     private static boolean isBuildDescriptor(String relativePath) {
-        int separator = relativePath.lastIndexOf('/');
-        String fileName = separator < 0 ? relativePath : relativePath.substring(separator + 1);
-        return BUILD_DESCRIPTOR_NAMES.contains(fileName);
+        return BUILD_DESCRIPTOR_POLICY.isBuildDescriptor(Path.of(relativePath));
     }
 
     private static String portable(Path path) {
