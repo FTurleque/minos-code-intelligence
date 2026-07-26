@@ -106,21 +106,16 @@ function Assert-Structure {
             throw "Required M17 file is missing: $relative"
         }
     }
-
     $centralDiscovery = Get-Content -LiteralPath (Join-Path $RepoRoot 'minos-application\src\main\java\com\minos\discovery\ProjectDiscoveryService.java') -Raw
     foreach ($forbidden in @('pom.xml','package.json','build.gradle','pnpm','yarn','.java','.kt','.py')) {
-        if ($centralDiscovery.Contains($forbidden)) {
-            throw "M17 discovery orchestrator still contains ecosystem-specific token: $forbidden"
-        }
+        if ($centralDiscovery.Contains($forbidden)) { throw "M17 discovery orchestrator still contains ecosystem-specific token: $forbidden" }
     }
-
     $capabilities = Get-Content -LiteralPath (Join-Path $RepoRoot 'minos-engine\src\main\java\com\minos\orchestration\IndexerCapability.java') -Raw
     foreach ($name in @('STABLE_SYMBOL_IDENTITY','UNRESOLVED_REFERENCES','CALL_RELATIONS','POSITION_UTF16','RUNTIME_INSTALLATION')) {
         if (-not $capabilities.Contains($name)) { throw "M17 capability model is missing $name" }
     }
     $mcpTools = Get-Content -LiteralPath (Join-Path $RepoRoot 'minos-mcp\src\main\java\com\minos\mcp\MinosMcpTools.java') -Raw
     if ($mcpTools -notmatch 'TOOL_COUNT\s*=\s*16') { throw 'M17 must preserve the historical 16-tool MCP catalog.' }
-
     $mainSources = @(Get-ChildItem -LiteralPath $RepoRoot -Directory -Filter 'minos-*' | ForEach-Object {
         Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src\main\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue
     })
@@ -152,8 +147,8 @@ function Qualify-Project {
     ) -Failure "$Name registration failed"
 
     $dry = Invoke-MinosJson @('index',$Name,'--provider',$Provider,'--dry-run','--format','json')
-    if ($dry.mode -ne 'FULL' -or -not (@($dry.providerIds) -contains $Provider)) {
-        throw "$Name expected FULL with $Provider; mode=$($dry.mode) providers=$(@($dry.providerIds) -join ',')"
+    if ($dry.mode -ne 'FULL' -or -not (@($dry.providers) -contains $Provider)) {
+        throw "$Name expected FULL with $Provider; mode=$($dry.mode) providers=$(@($dry.providers) -join ',')"
     }
     $first = Invoke-MinosJson @('index',$Name,'--provider',$Provider,'--format','json')
     if ($first.status -ne 'SUCCEEDED' -or [string]::IsNullOrWhiteSpace([string]$first.activeSnapshotId)) {
@@ -258,16 +253,7 @@ try {
     if (-not (@($kotlinInspect.languages) -contains 'KOTLIN') -or -not (@($kotlinInspect.buildSystems) -contains 'MAVEN')) {
         throw 'Kotlin project inspection lost KOTLIN/MAVEN discovery.'
     }
-
-    foreach ($fixture in @(
-        (Join-Path $RepoRoot 'fixtures\python\python-simple'),
-        (Join-Path $RepoRoot 'fixtures\kotlin\kotlin-maven-simple')
-    )) {
-        Remove-Item -LiteralPath (Join-Path $fixture 'index.scip') -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $fixture 'target') -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $fixture '.scip-python') -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $fixture '__pycache__') -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Invoke-GitChecked @('clean','-fd','--','fixtures/python/python-simple','fixtures/kotlin/kotlin-maven-simple')
 
     Write-Host '[8/8] Verifying exact HEAD/worktree did not move...'
     $finalHead = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
