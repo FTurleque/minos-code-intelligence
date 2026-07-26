@@ -50,7 +50,7 @@ public final class MinosMcpServer {
                 .serverInfo(SERVER_NAME, SERVER_VERSION)
                 .instructions("MINOS exposes read-only local code intelligence. Tool results are bounded JSON produced by the validated MINOS core.")
                 .capabilities(ServerCapabilities.builder().tools(false).build())
-                .tools(new MinosMcpTools(new MinosApplicationCommandExecutor(app)).specifications())
+                .tools(MinosMcpApplicationTools.specifications(app))
                 .build();
         try {
             Thread.currentThread().join();
