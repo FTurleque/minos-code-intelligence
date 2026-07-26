@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplication;
 import com.minos.mcp.MinosMcpServer;
 import com.minos.runtime.MinosVersion;
 
@@ -27,13 +28,16 @@ public final class MinosLauncher {
             } else if (isHelp(arguments)) {
                 System.out.println(MinosCli.usage());
                 exitCode = FindSymbolCommand.SUCCESS;
+            } else if (MinosCliRunner.isStatelessHelpRequest(arguments)) {
+                exitCode = MinosCliRunner.runStatelessHelp(arguments, System.out, System.err);
             } else {
                 Path home = resolveHome(System.getenv(), System.getProperties());
+                MinosApplication application = MinosApplication.open(home);
                 if (arguments.length == 1 && "mcp".equals(arguments[0])) {
-                    MinosMcpServer.run(home);
+                    MinosMcpServer.run(application);
                     exitCode = FindSymbolCommand.SUCCESS;
                 } else {
-                    exitCode = run(home, arguments, System.out, System.err);
+                    exitCode = run(application, arguments, System.out, System.err);
                 }
             }
         } catch (InterruptedException exception) {
@@ -53,6 +57,15 @@ public final class MinosLauncher {
             Appendable error
     ) throws IOException {
         return MinosCliRunner.run(home, arguments, output, error);
+    }
+
+    public static int run(
+            MinosApplication application,
+            String[] arguments,
+            Appendable output,
+            Appendable error
+    ) throws IOException {
+        return MinosCliRunner.run(application, arguments, output, error);
     }
 
     static Path resolveHome(Map<String, String> environment, Properties properties) {

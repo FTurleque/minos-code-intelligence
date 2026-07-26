@@ -1,10 +1,10 @@
 package com.minos.api;
 
+import com.minos.application.MinosApplication;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
 import com.minos.architecture.ArchitectureModuleDependency;
-import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.cli.LocalProjectOperations;
 import com.minos.cli.LocalProjectSymbolQuery;
@@ -27,13 +27,10 @@ import com.minos.impact.ImpactAnalysisReport;
 import com.minos.impact.ImpactAnalysisRequest;
 import com.minos.impact.ImpactPathStep;
 import com.minos.impact.ImpactedSymbol;
-import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
-import com.minos.registry.LocalProjectRegistry;
-import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -58,17 +55,16 @@ public final class LocalMinosApi implements MinosApi {
     private final ProjectImpactQuery impactQuery;
 
     public LocalMinosApi(Path home) throws MinosApiException {
-        Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        try {
-            LocalProjectRegistry registry = new LocalProjectRegistry(normalizedHome.resolve("registry"));
-            FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(normalizedHome.resolve("symbol-snapshots"));
-            this.projectOperations = new LocalProjectOperations(normalizedHome);
-            this.symbolQuery = new LocalProjectSymbolQuery(registry, snapshots);
-            this.architectureQuery = new LocalProjectArchitectureQuery(registry, snapshots);
-            this.impactQuery = new LocalProjectImpactQuery(registry, snapshots);
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS API bootstrap failed", exception);
-        }
+        this(openApplication(home));
+    }
+
+    /** Uses an already-composed application so API and other surfaces share stateful infrastructure. */
+    public LocalMinosApi(MinosApplication application) {
+        MinosApplication app = Objects.requireNonNull(application, "application");
+        this.projectOperations = new LocalProjectOperations(app);
+        this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
+        this.architectureQuery = app.architectureQuery();
+        this.impactQuery = app.impactQuery();
     }
 
     @Override
@@ -437,6 +433,14 @@ public final class LocalMinosApi implements MinosApi {
             throw new MinosApiException(ErrorCode.IO_FAILURE, failureMessage(exception), exception);
         } catch (Exception exception) {
             throw new MinosApiException(ErrorCode.EXECUTION_FAILURE, failureMessage(exception), exception);
+        }
+    }
+
+    private static MinosApplication openApplication(Path home) throws MinosApiException {
+        try {
+            return MinosApplication.open(Objects.requireNonNull(home, "home"));
+        } catch (IOException exception) {
+            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS API bootstrap failed", exception);
         }
     }
 

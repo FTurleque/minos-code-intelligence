@@ -1,9 +1,9 @@
 package com.minos.cli;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotReport;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.application.MinosApplication;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.orchestration.FileIndexStateStore;
@@ -56,13 +56,17 @@ public final class LocalProjectOperations implements ProjectOperations {
     private final Map<String, IndexerDescriptor> knownProviders;
 
     public LocalProjectOperations(Path home) throws IOException {
-        Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        this.registry = new LocalProjectRegistry(normalizedHome.resolve("registry"));
-        this.snapshotStore = new FileSymbolSnapshotStore(normalizedHome.resolve("symbol-snapshots"));
-        this.stateStore = new FileIndexStateStore(normalizedHome.resolve("index-state"));
-        this.discoveryService = new ProjectDiscoveryService();
-        this.historyDirectory = normalizedHome.resolve("cli-index-history");
-        this.knownProviders = ScipIndexerCatalog.qualifiedM1Descriptors().stream()
+        this(MinosApplication.open(home));
+    }
+
+    public LocalProjectOperations(MinosApplication application) {
+        MinosApplication value = Objects.requireNonNull(application, "application");
+        this.registry = value.projectRegistry();
+        this.snapshotStore = value.snapshotStore();
+        this.stateStore = value.indexStateStore();
+        this.discoveryService = value.discoveryService();
+        this.historyDirectory = value.home().resolve("cli-index-history");
+        this.knownProviders = value.indexerDescriptors().stream()
                 .collect(Collectors.toUnmodifiableMap(IndexerDescriptor::id, Function.identity()));
     }
 
@@ -177,7 +181,6 @@ public final class LocalProjectOperations implements ProjectOperations {
 
         Optional<IndexHistory> manualHistory = readHistory(project.id()).filter(candidate ->
                 activeSnapshotId != null && activeSnapshotId.equals(candidate.snapshotId()));
-
         String lastSuccessfulIndexAt = activeRun
                 .flatMap(IndexingRun::completedAt)
                 .map(Instant::toString)

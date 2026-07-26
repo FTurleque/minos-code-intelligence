@@ -1,8 +1,7 @@
 package com.minos.api;
 
+import com.minos.application.MinosApplication;
 import com.minos.git.GitIntelligenceService;
-import com.minos.registry.LocalProjectRegistry;
-import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.io.IOException;
@@ -20,16 +19,15 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     public LocalMinosMultiRepositoryApi(Path home) throws MinosApiException {
-        Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        this.delegate = new LocalMinosApi(normalizedHome);
-        this.gitIntelligence = new GitIntelligenceService();
-        try {
-            LocalProjectRegistry registry = new LocalProjectRegistry(normalizedHome.resolve("registry"));
-            FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(normalizedHome.resolve("symbol-snapshots"));
-            this.workspaceIntelligence = new WorkspaceIntelligenceService(registry, snapshots);
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS M12 API bootstrap failed", exception);
-        }
+        this(openApplication(home));
+    }
+
+    /** Uses the same application composition as CLI/MCP instead of rebuilding local stores. */
+    public LocalMinosMultiRepositoryApi(MinosApplication application) {
+        MinosApplication app = Objects.requireNonNull(application, "application");
+        this.delegate = new LocalMinosApi(app);
+        this.gitIntelligence = app.gitIntelligence();
+        this.workspaceIntelligence = app.workspaceIntelligence();
     }
 
     @Override
@@ -256,6 +254,14 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             throw new MinosApiException(ErrorCode.IO_FAILURE, failureMessage(exception), exception);
         } catch (Exception exception) {
             throw new MinosApiException(ErrorCode.EXECUTION_FAILURE, failureMessage(exception), exception);
+        }
+    }
+
+    private static MinosApplication openApplication(Path home) throws MinosApiException {
+        try {
+            return MinosApplication.open(Objects.requireNonNull(home, "home"));
+        } catch (IOException exception) {
+            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS M12 API bootstrap failed", exception);
         }
     }
 

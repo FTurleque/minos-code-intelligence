@@ -42,6 +42,33 @@ function Invoke-NativeCaptured {
     }
 }
 
+function Resolve-PowerShellHost {
+    try {
+        $currentHost = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        if (-not [string]::IsNullOrWhiteSpace($currentHost) -and
+            (Test-Path -LiteralPath $currentHost -PathType Leaf)) {
+            return $currentHost
+        }
+    }
+    catch {
+    }
+
+    if ($env:OS -eq 'Windows_NT' -and -not [string]::IsNullOrWhiteSpace($env:SystemRoot)) {
+        $standardWindowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        if (Test-Path -LiteralPath $standardWindowsPowerShell -PathType Leaf) {
+            return $standardWindowsPowerShell
+        }
+    }
+
+    foreach ($name in @('pwsh.exe', 'powershell.exe')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) {
+            return $command.Source
+        }
+    }
+    throw 'M15 baseline replay requires Windows PowerShell or PowerShell 7.'
+}
+
 function Get-JUnitSummary {
     param([Parameter(Mandatory = $true)][string] $Root)
 
@@ -193,10 +220,11 @@ try {
         $verifyStatus = 'PASS'
 
         if (-not $SkipM14Replay) {
-            # Run M14 validation in a separate Windows PowerShell process so its
-            # native stderr cannot be reinterpreted as a terminating ErrorRecord
-            # by this parent PowerShell 5.1 session.
-            $powerShell = (Get-Command 'powershell.exe' -ErrorAction Stop).Source
+            # Run M14 validation in a separate PowerShell process so its native
+            # stderr cannot be reinterpreted as a terminating ErrorRecord by the
+            # parent Windows PowerShell 5.1 session. Resolve the actual host
+            # without assuming powershell.exe is present in PATH.
+            $powerShell = Resolve-PowerShellHost
             $m14Script = Join-Path $RepoRoot 'scripts\m14\validate-local.ps1'
             $m14Arguments = @(
                 '-NoProfile',

@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -36,12 +37,32 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     private final Map<String, IndexerDescriptor> descriptors;
 
     public ScipProjectSnapshotLifecycle(Path minosHome) throws IOException {
-        Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
+        this(
+                minosHome,
+                new FileSymbolSnapshotStore(normalizedHome(minosHome).resolve("symbol-snapshots")),
+                ScipIndexerCatalog.qualifiedM1Descriptors()
+        );
+    }
+
+    /**
+     * Composition constructor used by {@code MinosApplication} so staging/promotion
+     * share the same active store and qualified provider catalogue as other surfaces.
+     */
+    public ScipProjectSnapshotLifecycle(
+            Path minosHome,
+            FileSymbolSnapshotStore activeStore,
+            List<IndexerDescriptor> descriptors
+    ) throws IOException {
+        Path home = normalizedHome(minosHome);
         this.stagingRoot = home.resolve("staged-snapshots");
-        this.activeStore = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
+        this.activeStore = Objects.requireNonNull(activeStore, "activeStore");
+        Objects.requireNonNull(descriptors, "descriptors");
         Map<String, IndexerDescriptor> values = new LinkedHashMap<>();
-        for (IndexerDescriptor descriptor : ScipIndexerCatalog.qualifiedM1Descriptors()) {
-            values.put(descriptor.id(), descriptor);
+        for (IndexerDescriptor descriptor : descriptors) {
+            IndexerDescriptor value = Objects.requireNonNull(descriptor, "descriptor");
+            if (values.putIfAbsent(value.id(), value) != null) {
+                throw new IllegalArgumentException("duplicate SCIP descriptor: " + value.id());
+            }
         }
         this.descriptors = Map.copyOf(values);
         Files.createDirectories(stagingRoot);
@@ -131,6 +152,10 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             throw new IllegalArgumentException("no SCIP descriptor is registered for provider: " + providerId);
         }
         return descriptor;
+    }
+
+    private static Path normalizedHome(Path minosHome) {
+        return Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
     }
 
     private static <T> void putUnique(Map<String, T> values, String id, T value, String type) {

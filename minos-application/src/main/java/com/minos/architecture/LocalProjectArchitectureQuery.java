@@ -43,6 +43,24 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
         );
     }
 
+    /** Composition constructor used by MinosApplication to share discovery state. */
+    public LocalProjectArchitectureQuery(
+            LocalProjectRegistry projectRegistry,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService
+    ) {
+        this(
+                projectRegistry,
+                snapshotStore,
+                discoveryService,
+                new ArchitectureTopologyService(),
+                new ArchitectureDependencyService(),
+                new ArchitectureConcentrationService(),
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
+        );
+    }
+
     LocalProjectArchitectureQuery(
             LocalProjectRegistry projectRegistry,
             FileSymbolSnapshotStore snapshotStore,
