@@ -42,11 +42,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final int MAX_FILES = 10_000_000;
     private static final int MAX_STRING_BYTES = 8 * 1024 * 1024;
     private static final String ACTIVE_FILE = "active.pointer";
-    private static final Set<String> BUILD_DESCRIPTOR_NAMES = Set.of(
-            "pom.xml",
-            "package.json",
-            "package-lock.json"
-    );
+    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final HexFormat HEX = HexFormat.of();
 
     private final Path storageRoot;
@@ -315,9 +311,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static boolean isBuildDescriptor(String relativePath) {
-        int separator = relativePath.lastIndexOf('/');
-        String fileName = separator < 0 ? relativePath : relativePath.substring(separator + 1);
-        return BUILD_DESCRIPTOR_NAMES.contains(fileName);
+        return BUILD_DESCRIPTOR_POLICY.isBuildDescriptor(Path.of(relativePath));
     }
 
     private static void writePointer(Path file, ActivePointer pointer) throws IOException {
