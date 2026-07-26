@@ -13,6 +13,7 @@
 
     <modules>
         <module>minos-domain</module>
+        <module>minos-engine</module>
         <module>minos-app</module>
     </modules>
 
