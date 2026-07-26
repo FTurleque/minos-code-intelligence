@@ -39,6 +39,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0022](0022-maven-reactor-and-module-boundaries.md) | Imposer les frontières MINOS par un reactor Maven progressif | Accepted | M15-S2 |
 | [0023](0023-decomposed-local-snapshot-persistence.md) | Décomposer la persistance locale des snapshots sans changer le format disque | Accepted | M15-S6 |
 | [0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
+| [0025](0025-measurement-gated-storage-backend-evolution.md) | Gouverner l’évolution du backend par des mesures reproductibles | Accepted | M16 |
 
 ## Règle de rédaction
 
