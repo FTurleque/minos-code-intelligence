@@ -1,6 +1,6 @@
 # M15 — Exécution : industrialisation du Core Engine
 
-Statut : **DÉMARRÉ — 0/11 sous-incréments terminés**
+Statut : **DÉMARRÉ — 2/11 sous-incréments terminés**
 
 Issue principale : **#55**  
 PR de planification : **#54**
@@ -54,8 +54,8 @@ M15 est un jalon d'**industrialisation interne**. Il ne doit pas devenir un pré
 
 | Étape | Fonction | État | Gate principale |
 |---|---|---:|---|
-| M15-S1 | Baseline de non-régression | ⬜ | replays M14 + mesures de référence |
-| M15-S2 | Maven multi-module | ⬜ | reactor vert + frontières compilées |
+| M15-S1 | Baseline de non-régression | ✅ | replays M14 + mesures de référence |
+| M15-S2 | Maven multi-module | ✅ | reactor vert + frontières compilées |
 | M15-S3 | `MinosApplication` | ⬜ | composition root unique |
 | M15-S4 | Découplage MCP | ⬜ | aucun appel métier MCP → CLI |
 | M15-S5 | Résolution projet commune | ⬜ | résolution unique et cohérente |
@@ -190,6 +190,8 @@ Le but de S1 n'est pas encore de fixer les seuils M16, mais d'empêcher M15 d'am
 - mesures avant refactor enregistrées ;
 - SHA exact documenté.
 
+**Statut : ✅ terminé.** PR #56, merge `939dc9dc01c708a471bab0a048e7aacdd6dad7a1`.
+
 ---
 
 # M15-S2 — Maven multi-module
@@ -198,38 +200,46 @@ Le but de S1 n'est pas encore de fixer les seuils M16, mais d'empêcher M15 d'am
 
 Transformer les frontières aujourd'hui principalement logiques en frontières vérifiées par compilation.
 
-## Cible initiale
+## Découpage final ratifié
 
-Le découpage exact doit être ratifié par ADR, mais la cible de travail est :
+Le reactor final S2 est :
 
 ```text
 minos-parent
 ├── minos-domain
 ├── minos-engine
+├── minos-runtime-local
 ├── minos-storage-local
 ├── minos-provider-scip
 ├── minos-integration-git
-├── minos-api
-├── minos-cli
-├── minos-mcp
+├── minos-application
 ├── minos-nexus
+├── minos-cli
+├── minos-api
+├── minos-mcp
 └── minos-app
 ```
 
-Il est permis de fusionner certains modules si une frontière n'apporte aucune protection réelle. Il est interdit de créer des modules uniquement pour reproduire les packages existants.
+Soit **12 modules enfants + le parent = 13 projets Maven**.
 
-## Règles de dépendance cibles
+Les ajouts `minos-runtime-local` et `minos-application` par rapport à la cible initiale sont ratifiés par ADR-0022 car ils protègent des responsabilités réelles et évitent des dépendances artificielles.
+
+## Règles de dépendance
+
+Direction conceptuelle :
 
 ```text
 minos-domain
     ↑
 minos-engine
     ↑
-implementations/adapters
+runtime/storage
     ↑
-minos-app composition
+adapters/intégrations
     ↑
-CLI / API / MCP / NEXUS
+services/surfaces
+    ↑
+minos-app composition/process root
 ```
 
 Interdictions structurelles :
@@ -238,27 +248,86 @@ Interdictions structurelles :
 - domaine → MCP SDK ;
 - moteur → CLI ;
 - moteur → protocole MCP ;
+- moteur → runtime process local concret ;
+- runtime local générique → provider SCIP ;
 - architecture/impact → classes d'exposition ;
-- API publique → backend local concret lorsque le contrat peut dépendre d'un port.
+- API publique → backend local concret lorsqu'un port stable peut être utilisé.
 
-## Migration
+La dépendance métier MCP → CLI reste une dette **explicitement affectée à M15-S4**. S2 a déjà supprimé MCP → `MinosLauncher`.
 
-1. introduire le parent reactor sans déplacer tout le code ;
-2. déplacer d'abord le domaine et les contrats stables ;
-3. déplacer le moteur ;
-4. déplacer storage/provider/integrations ;
-5. déplacer les surfaces publiques ;
-6. déplacer le bootstrap final dans `minos-app` ;
-7. adapter packaging shaded/JPackage/release sans modifier le parcours utilisateur.
+## Migration réalisée
+
+1. introduire le parent reactor ;
+2. extraire le domaine et les contrats stables ;
+3. extraire le moteur ;
+4. extraire storage/runtime/provider/intégrations ;
+5. extraire `minos-application` et les surfaces publiques ;
+6. réduire le bootstrap final à `minos-app` ;
+7. adapter shaded/JPackage/release sans modifier le parcours utilisateur ;
+8. relocaliser physiquement **183 sources de production** et **2 ressources SCIP** ;
+9. relocaliser physiquement **92 sources de test** ;
+10. supprimer tous les bridges externes de sources/tests ;
+11. qualifier les modules, le packaging et les replays sur le SHA exact.
+
+Les tests qui traversent volontairement plusieurs frontières restent dans `minos-app/src/test/java` lorsqu'un déplacement vers un module plus bas créerait une dépendance inverse ou cyclique de test.
 
 ## Gate S2
 
-- `./mvnw clean verify` depuis la racine construit tout le reactor ;
-- les tests de frontières restent verts ou sont remplacés par des protections plus fortes ;
-- le shaded JAR/launcher final reste fonctionnel ;
-- les scripts de release continuent de produire la même surface utilisateur ;
-- IntelliJ importe les modules Maven correctement ;
-- aucune dépendance circulaire entre modules.
+- [x] `./mvnw clean verify` depuis la racine construit tout le reactor ;
+- [x] les tests de frontières restent verts ou sont remplacés par des protections Maven plus fortes ;
+- [x] le shaded JAR/launcher final reste fonctionnel ;
+- [x] les scripts de release continuent de produire la même surface utilisateur ;
+- [x] le dépôt possède un layout Maven physique standard par module, sans source root externe partagé, permettant l'import des sous-modules par IntelliJ ;
+- [x] aucune dépendance circulaire Maven entre modules.
+
+### Qualification finale S2
+
+SHA fonctionnel exact qualifié :
+
+```text
+637402782c29526b926968e0b8b525a2fa6fdc2c
+```
+
+Preuves enregistrées :
+
+```text
+Java                       OpenJDK 24.0.1
+Maven Wrapper              3.9.16
+Reactor                    13 projets PASS
+Surefire                   237 PASS
+Failsafe                   1 PASS
+Total                      238 PASS / 0 failure / 0 error
+M14 replay                 PASS
+Java/TypeScript providers  PASS
+STALE recovery             PASS
+Windows RC1                PASS
+installation/doctor        PASS / READY
+native MCP handshake       PASS
+module JAR ownership       PASS
+```
+
+Repeated-query sur le SHA qualifié :
+
+```text
+first   22.5657 ms
+p50      3.8794 ms
+p95      5.3350 ms
+loads   21
+```
+
+ZIP Windows qualifié :
+
+```text
+SHA-256 455cec6afeff2b9ea33afa2cf19244e2ca40c1fc23fce4974148d0faf285e26e
+```
+
+Verdict :
+
+```text
+M15-S2 FULL MODULE-BOUNDARY VALIDATION SUCCESS
+```
+
+**Statut : ✅ terminé.** PR #57 mergée dans `main`, merge commit `7b064196b31a0676852a5f7effb552beb396cc8a`.
 
 ---
 
@@ -732,8 +801,8 @@ M15 ne fixe pas les objectifs de très grande échelle de M16, mais aucune régr
 
 L'issue principale peut être fermée lorsque :
 
-- [ ] M15-S1 ✅
-- [ ] M15-S2 ✅
+- [x] M15-S1 ✅
+- [x] M15-S2 ✅
 - [ ] M15-S3 ✅
 - [ ] M15-S4 ✅
 - [ ] M15-S5 ✅
@@ -745,9 +814,9 @@ L'issue principale peut être fermée lorsque :
 - [ ] M15-S11 ✅
 - [ ] qualification finale sur SHA exact ✅
 - [ ] `docs/STATUS.md` mis à jour ✅
-- [ ] `docs/ROADMAP.md` mis à jour ✅
-- [ ] preuves archivées sous `docs/history/milestones/m15/` ✅
-- [ ] ADR M15 applicables référencées ✅
+- [x] `docs/ROADMAP.md` mis à jour pour le démarrage M15 ✅
+- [x] preuves S1 archivées sous `docs/history/milestones/m15/` ✅
+- [x] ADR-0022 référencée pour S2 ✅
 
 ---
 
