@@ -1,7 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
-import com.minos.cli.MinosCliRunner;
+import com.minos.application.MinosHome;
 import com.minos.runtime.MinosVersion;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServer;
@@ -60,6 +60,6 @@ public final class MinosMcpServer {
     }
 
     static Path resolveHome(Map<String, String> environment, Properties properties) {
-        return MinosCliRunner.resolveHome(environment, properties);
+        return MinosHome.resolve(environment, properties);
     }
 }

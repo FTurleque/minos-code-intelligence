@@ -20,18 +20,12 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-cli</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp</artifactId>
         </dependency>
     </dependencies>
 
     <build>
-
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosHome;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.integration.nexus.NexusExportService;
@@ -16,13 +17,13 @@ import java.util.Set;
 /**
  * Reusable local CLI execution surface, separated from the process/system launcher.
  *
- * <p>M15-S3 centralizes local composition in {@link MinosApplication}. M15-S4
- * will separately replace the temporary MCP -> CLI business routing.</p>
+ * <p>M15-S3 centralized local composition in {@link MinosApplication}; M15-S4
+ * makes the CLI a transport adapter over those shared application services.</p>
  */
 public final class MinosCliRunner {
 
-    public static final String HOME_ENVIRONMENT_VARIABLE = "MINOS_HOME";
-    public static final String HOME_SYSTEM_PROPERTY = "minos.home";
+    public static final String HOME_ENVIRONMENT_VARIABLE = MinosHome.ENVIRONMENT_VARIABLE;
+    public static final String HOME_SYSTEM_PROPERTY = MinosHome.SYSTEM_PROPERTY;
 
     private static final Set<String> STATELESS_HELP_COMMANDS = Set.of(
             ProjectCommand.NAME,
@@ -85,7 +86,7 @@ public final class MinosCliRunner {
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
         return new MinosCli(
-                new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore()),
+                new LocalProjectSymbolQuery(app),
                 new LocalProjectOperations(app),
                 app.architectureQuery(),
                 app.impactQuery(),
@@ -125,23 +126,7 @@ public final class MinosCliRunner {
     }
 
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
-        Objects.requireNonNull(environment, "environment");
-        Objects.requireNonNull(properties, "properties");
-
-        String property = properties.getProperty(HOME_SYSTEM_PROPERTY);
-        if (property != null && !property.isBlank()) {
-            return Path.of(property);
-        }
-        String environmentValue = environment.get(HOME_ENVIRONMENT_VARIABLE);
-        if (environmentValue != null && !environmentValue.isBlank()) {
-            return Path.of(environmentValue);
-        }
-        String userHome = properties.getProperty("user.home");
-        if (userHome == null || userHome.isBlank()) {
-            throw new IllegalStateException(
-                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory");
-        }
-        return Path.of(userHome).resolve(".minos");
+        return MinosHome.resolve(environment, properties);
     }
 
     private static MinosCli statelessHelpCli() {
