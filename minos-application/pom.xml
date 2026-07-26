@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.minos</groupId>
+        <artifactId>minos-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>minos-application</artifactId>
+    <name>MINOS Application Services</name>
+    <description>Shared provider-independent/local application services consumed by public surfaces.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Transitional S2 ownership before physical source relocation. -->
+        <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>com/minos/architecture/**/*.java</include>
+                        <include>com/minos/context/**/*.java</include>
+                        <include>com/minos/discovery/**/*.java</include>
+                        <include>com/minos/impact/**/*.java</include>
+                        <include>com/minos/incremental/**/*.java</include>
+                        <include>com/minos/orchestration/**/*.java</include>
+                        <include>com/minos/output/**/*.java</include>
+                        <include>com/minos/registry/**/*.java</include>
+                        <include>com/minos/workspace/**/*.java</include>
+                        <include>com/minos/runtime/MinosVersion.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>com/minos/discovery/ProjectDiscovery.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerCapability.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerQualification.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerDescriptor.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingRequirements.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerNegotiationResult.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerRegistry.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingMode.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingRuntimePorts.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
