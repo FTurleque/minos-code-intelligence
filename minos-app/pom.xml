@@ -17,7 +17,7 @@
     <description>Local-first, language-agnostic Code Intelligence Engine.</description>
 
     <dependencies>
-        <!-- S2 boundaries: domain and engine are compiled and packaged independently. -->
+        <!-- S2 boundaries compiled and packaged independently. -->
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-domain</artifactId>
@@ -28,8 +28,18 @@
             <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-integration-git</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
-        <!-- Infrastructure only: imports must remain confined to adapter.scip. -->
+        <!-- Infrastructure only: imports must remain confined to adapter.scip until provider extraction. -->
         <dependency>
             <groupId>org.scip-code</groupId>
             <artifactId>scip-java-bindings</artifactId>
@@ -40,13 +50,6 @@
         <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>
             <artifactId>mcp</artifactId>
-        </dependency>
-
-        <!-- Pure-Java Git reader used only by M12 Git intelligence. -->
-        <dependency>
-            <groupId>org.eclipse.jgit</groupId>
-            <artifactId>org.eclipse.jgit</artifactId>
-            <version>${jgit.version}</version>
         </dependency>
 
         <dependency>
@@ -60,10 +63,10 @@
     <build>
         <!--
           Transitional S2 bridge: sources still use the historical source layout, but
-          Maven ownership is already explicit. minos-domain owns com.minos.domain;
-          minos-engine owns com.minos.query and the CodeKnowledgeStore port.
-          Later S2 commits physically relocate sources and remove these external roots.
-          Keeping target at repository root preserves M14 release/install scripts.
+          Maven ownership is explicit. Domain, engine, local storage and Git integration
+          are excluded here and supplied through reactor dependencies. Later S2 commits
+          physically relocate sources and remove these external roots. Keeping target at
+          repository root preserves M14 release/install scripts.
         -->
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
         <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
@@ -87,7 +90,8 @@
                     <excludes>
                         <exclude>com/minos/domain/**/*.java</exclude>
                         <exclude>com/minos/query/**/*.java</exclude>
-                        <exclude>com/minos/store/CodeKnowledgeStore.java</exclude>
+                        <exclude>com/minos/store/**/*.java</exclude>
+                        <exclude>com/minos/git/**/*.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
