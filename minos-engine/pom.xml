@@ -13,7 +13,7 @@
 
     <artifactId>minos-engine</artifactId>
     <name>MINOS Engine</name>
-    <description>Provider-independent query services and core engine ports.</description>
+    <description>Provider-independent query services, discovery contracts, orchestration contracts and core engine ports.</description>
 
     <dependencies>
         <dependency>
@@ -25,9 +25,8 @@
 
     <build>
         <!--
-          Transitional S2 bridge: establish Maven ownership before the final physical
-          relocation. Only backend/protocol-independent query services and their
-          CodeKnowledgeStore port are compiled by this module.
+          Transitional S2 bridge: establish Maven ownership before final physical relocation.
+          The engine owns backend/protocol/provider-independent contracts and query services only.
         -->
         <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
         <plugins>
@@ -38,6 +37,15 @@
                     <includes>
                         <include>com/minos/query/**/*.java</include>
                         <include>com/minos/store/CodeKnowledgeStore.java</include>
+                        <include>com/minos/discovery/ProjectDiscovery.java</include>
+                        <include>com/minos/orchestration/IndexerCapability.java</include>
+                        <include>com/minos/orchestration/IndexerQualification.java</include>
+                        <include>com/minos/orchestration/IndexerDescriptor.java</include>
+                        <include>com/minos/orchestration/IndexingRequirements.java</include>
+                        <include>com/minos/orchestration/IndexerNegotiationResult.java</include>
+                        <include>com/minos/orchestration/IndexerRegistry.java</include>
+                        <include>com/minos/orchestration/IndexingMode.java</include>
+                        <include>com/minos/orchestration/IndexingRuntimePorts.java</include>
                     </includes>
                 </configuration>
             </plugin>
