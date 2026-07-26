@@ -1,10 +1,7 @@
 package com.minos.cli;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
-import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
-import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
+import com.minos.application.MinosApplication;
 import com.minos.discovery.ProjectDiscovery;
-import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.incremental.IncrementalIndexingPlanner;
@@ -16,16 +13,18 @@ import com.minos.incremental.ProjectInvalidationReason;
 import com.minos.incremental.ProjectInvalidationScope;
 import com.minos.incremental.ProjectInvalidationService;
 import com.minos.orchestration.FileIndexStateStore;
-import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRun;
+import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
+import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
@@ -42,24 +41,34 @@ import java.util.UUID;
 /** Implémentation locale du parcours autonome M14. */
 public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
 
+    private final MinosApplication application;
     private final LocalProjectRegistry projectRegistry;
     private final FileSymbolSnapshotStore snapshotStore;
     private final FileIndexStateStore stateStore;
     private final FileProjectFingerprintSnapshotStore fingerprintStore;
-    private final ManagedScipProviderRuntimeManager runtimeManager;
-    private final ProjectDiscoveryService discoveryService = new ProjectDiscoveryService();
-    private final ProjectFingerprintService fingerprintService = new ProjectFingerprintService();
-    private final ProjectInvalidationService invalidationService = new ProjectInvalidationService();
-    private final IncrementalIndexingPlanner planner = new IncrementalIndexingPlanner();
-    private final Path home;
+    private final ProviderRuntimeManager runtimeManager;
+    private final SnapshotStager snapshotStager;
+    private final SnapshotPromoter snapshotPromoter;
+    private final ProjectFingerprintService fingerprintService;
+    private final ProjectInvalidationService invalidationService;
+    private final IncrementalIndexingPlanner planner;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
-        this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
-        this.projectRegistry = new LocalProjectRegistry(home.resolve("registry"));
-        this.snapshotStore = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
-        this.stateStore = new FileIndexStateStore(home.resolve("index-state"));
-        this.fingerprintStore = new FileProjectFingerprintSnapshotStore(home.resolve("fingerprint-snapshots"));
-        this.runtimeManager = new ManagedScipProviderRuntimeManager(home);
+        this(MinosApplication.open(minosHome));
+    }
+
+    public LocalAutonomousIndexOperations(MinosApplication application) {
+        this.application = Objects.requireNonNull(application, "application");
+        this.projectRegistry = application.projectRegistry();
+        this.snapshotStore = application.snapshotStore();
+        this.stateStore = application.indexStateStore();
+        this.fingerprintStore = application.fingerprintStore();
+        this.runtimeManager = application.providerRuntimeManager();
+        this.snapshotStager = application.snapshotStager();
+        this.snapshotPromoter = application.snapshotPromoter();
+        this.fingerprintService = application.fingerprintService();
+        this.invalidationService = application.invalidationService();
+        this.planner = application.incrementalIndexingPlanner();
     }
 
     @Override
@@ -85,9 +94,8 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id()))
                 .toList();
-        ScipProjectSnapshotLifecycle snapshots = new ScipProjectSnapshotLifecycle(home);
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
-                executors, snapshots, snapshots, stateStore);
+                executors, snapshotStager, snapshotPromoter, stateStore);
 
         IndexingRun run = forceFull
                 ? lifecycle.execute(prepared.project().id(), prepared.project().rootPath(), prepared.negotiation())
@@ -129,7 +137,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
 
     private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
         RegisteredProject project = resolveProject(projectIdentifier);
-        ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
+        ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
         ProjectIndexState indexState = alignedIndexState(project.id());
         Optional<ProjectFingerprintSnapshot> baseline;
@@ -147,7 +155,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                     Optional.empty(), List.of(), List.of(), List.of());
         }
 
-        IndexerRegistry registry = providerRegistry(providerOverride);
+        IndexerRegistry registry = application.indexerRegistry(providerOverride);
         IndexerNegotiationResult negotiation = registry.negotiate(discovery, IndexingRequirements.baseline());
         if (!negotiation.complete()) {
             throw new IllegalStateException("no qualified provider covers languages: "
@@ -174,21 +182,6 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         return new Prepared(project, negotiation, plan, indexState, current, view);
     }
 
-    private IndexerRegistry providerRegistry(String providerOverride) {
-        List<IndexerDescriptor> descriptors = ScipIndexerCatalog.qualifiedM1Descriptors();
-        IndexerRegistry registry = new IndexerRegistry();
-        if (providerOverride == null || providerOverride.isBlank()) {
-            registry.registerAll(descriptors);
-            return registry;
-        }
-        IndexerDescriptor descriptor = descriptors.stream()
-                .filter(candidate -> providerOverride.equals(candidate.id()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("unknown provider override: " + providerOverride));
-        registry.register(descriptor);
-        return registry;
-    }
-
     private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
         Optional<ProjectIndexState> stored = stateStore.findProjectState(projectId);
         if (stored.isPresent()) {
@@ -213,7 +206,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         try {
             parsed = UUID.fromString(identifier);
         } catch (IllegalArgumentException ignored) {
-            // display name path below
+            // display name path below; centralized resolution is M15-S5.
         }
         if (parsed != null) {
             UUID id = parsed;
