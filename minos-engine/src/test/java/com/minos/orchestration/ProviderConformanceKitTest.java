@@ -47,7 +47,7 @@ class ProviderConformanceKitTest {
         assertThrows(IllegalArgumentException.class, () -> registry.register(provider));
 
         IndexerProvider mismatched = new IndexerProvider() {
-            @Override public IndexerDescriptor descriptor() { return descriptor("other"); }
+            @Override public IndexerDescriptor descriptor() { return ProviderConformanceKitTest.descriptor("other"); }
             @Override public ProviderCapabilityProfile capabilityProfile() {
                 return new ProviderCapabilityProfile("profile", exhaustive(CapabilitySupportLevel.FULL), List.of());
             }
