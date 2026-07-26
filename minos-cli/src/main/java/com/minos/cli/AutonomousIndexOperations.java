@@ -5,9 +5,7 @@ import com.minos.orchestration.IndexingMode;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Port CLI de l'indexation autonome M14.
- */
+/** CLI port for autonomous indexing and provider runtime administration. */
 public interface AutonomousIndexOperations {
 
     IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception;
@@ -23,13 +21,19 @@ public interface AutonomousIndexOperations {
             String version,
             String state,
             String executable,
-            List<String> diagnostics
+            List<String> diagnostics,
+            boolean requiredByDefault
     ) {
         public ProviderView {
             requireText(id, "id");
             requireText(version, "version");
             requireText(state, "state");
             diagnostics = List.copyOf(Objects.requireNonNull(diagnostics, "diagnostics"));
+        }
+
+        /** Compatibility constructor for historical baseline-required providers. */
+        public ProviderView(String id, String version, String state, String executable, List<String> diagnostics) {
+            this(id, version, state, executable, diagnostics, true);
         }
     }
 
