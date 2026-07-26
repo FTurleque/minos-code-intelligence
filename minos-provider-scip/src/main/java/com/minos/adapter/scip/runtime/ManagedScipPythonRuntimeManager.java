@@ -39,8 +39,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             // upstream release contains the fix.
             const NativeRegExp = global.RegExp;
             const normalizeArgs = (args) => {
-              if (args.length > 0 && args[0] === '\\') {
-                return ['\\\\', ...args.slice(1)];
+              if (args.length > 0 && typeof args[0] === 'string' && args[0].length === 1 && args[0].charCodeAt(0) === 92) {
+                return [String.fromCharCode(92, 92), ...args.slice(1)];
               }
               return args;
             };
