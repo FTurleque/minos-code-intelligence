@@ -36,6 +36,8 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0019](0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | M12 |
 | [0020](0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | M13 |
 | [0021](0021-native-runtime-autonomous-indexing.md) | Utiliser un runtime MINOS natif pour l’indexation autonome et conserver Docker MCP comme mode durci optionnel | Accepted | M14 |
+| [0022](0022-maven-reactor-and-module-boundaries.md) | Imposer les frontières MINOS par un reactor Maven progressif | Accepted | M15-S2 |
+| [0023](0023-decomposed-local-snapshot-persistence.md) | Décomposer la persistance locale des snapshots sans changer le format disque | Accepted | M15-S6 |
 
 ## Règle de rédaction
 
