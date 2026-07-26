@@ -26,6 +26,7 @@ class StableCliHelpTest {
                 new String[]{"index", "--help"},
                 new String[]{"import-scip", "--help"},
                 new String[]{"tools", "--help"},
+                new String[]{"providers", "--help"},
                 new String[]{"search", "--help"},
                 new String[]{"find-symbol", "--help"},
                 new String[]{"get-source", "--help"},
