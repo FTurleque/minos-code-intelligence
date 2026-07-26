@@ -9,7 +9,6 @@ import com.minos.runtime.IndexerProcessPlanFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -33,17 +32,22 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-python incremental execution is not qualified by MINOS M17");
         }
+        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Files.createDirectories(output.getParent());
         String projectName = root.getFileName() == null ? "minos-python-project" : root.getFileName().toString();
         return new IndexerProcessPlan(
                 CommandLocator.invocation(
                         executable,
-                        "index", ".",
+                        "index",
+                        "--cwd", root.toString(),
+                        "--output", output.toString(),
                         "--project-name", projectName,
-                        "--project-version", "_"
+                        "--project-version", "_",
+                        "--quiet"
                 ),
                 root,
                 Map.of(),
-                root.resolve("index.scip"),
+                output,
                 Duration.ofMinutes(30)
         );
     }
