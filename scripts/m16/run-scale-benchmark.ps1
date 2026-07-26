@@ -28,6 +28,42 @@ function Quote-Arg([string] $Value) {
     return '"' + ($Value -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
 }
 
+function Get-JavaVersionLine {
+    param([Parameter(Mandatory = $true)][string] $JavaExecutable)
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $JavaExecutable
+    $startInfo.Arguments = '-version'
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $versionProcess = New-Object System.Diagnostics.Process
+    $versionProcess.StartInfo = $startInfo
+    try {
+        if (-not $versionProcess.Start()) {
+            throw 'Unable to start java -version.'
+        }
+        $outTask = $versionProcess.StandardOutput.ReadToEndAsync()
+        $errTask = $versionProcess.StandardError.ReadToEndAsync()
+        $versionProcess.WaitForExit()
+        $outText = $outTask.Result
+        $errText = $errTask.Result
+        if ($versionProcess.ExitCode -ne 0) {
+            throw "java -version failed (exit=$($versionProcess.ExitCode)).`n$errText`n$outText"
+        }
+        $firstLine = @(($errText + "`n" + $outText) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+        if ($firstLine.Count -eq 0) {
+            throw 'java -version produced no version line.'
+        }
+        return $firstLine[0].Trim()
+    }
+    finally {
+        $versionProcess.Dispose()
+    }
+}
+
 $arguments = @('--class-path', $jar, $source, $homePath, $Profile, [string]$Repetitions, $output)
 $encoded = ($arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
 $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -88,7 +124,7 @@ $machine = [ordered]@{
     logical_processors = [System.Environment]::ProcessorCount
     total_physical_memory_bytes = $totalMemory
     java_home = $java.JavaHome
-    java_version = (& $java.JavaExecutable -version 2>&1 | Select-Object -First 1).ToString()
+    java_version = Get-JavaVersionLine -JavaExecutable $java.JavaExecutable
     profile = $Profile
     repetitions = $Repetitions
 }
