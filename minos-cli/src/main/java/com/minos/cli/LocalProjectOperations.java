@@ -5,6 +5,7 @@ import com.minos.adapter.scip.ScipSymbolSnapshotReport;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectInspectionService;
+import com.minos.application.ProjectResolver;
 import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.LocalProjectRegistry;
@@ -34,11 +35,12 @@ import java.util.UUID;
  *
  * <p>Read-only project/index views are owned by the shared application service;
  * this adapter keeps only CLI-facing mutation compatibility for project registration
- * and explicit SCIP import.</p>
+ * and explicit SCIP import. Project references use the common application resolver.</p>
  */
 public final class LocalProjectOperations implements ProjectOperations {
 
     private final LocalProjectRegistry registry;
+    private final ProjectResolver projectResolver;
     private final FileSymbolSnapshotStore snapshotStore;
     private final FileIndexStateStore stateStore;
     private final ProjectInspectionService inspectionService;
@@ -51,6 +53,7 @@ public final class LocalProjectOperations implements ProjectOperations {
     public LocalProjectOperations(MinosApplication application) {
         MinosApplication value = Objects.requireNonNull(application, "application");
         this.registry = value.projectRegistry();
+        this.projectResolver = new ProjectResolver(this.registry);
         this.snapshotStore = value.snapshotStore();
         this.stateStore = value.indexStateStore();
         this.inspectionService = value.projectInspectionService();
@@ -84,7 +87,7 @@ public final class LocalProjectOperations implements ProjectOperations {
             String moduleId,
             String snapshotId
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         Path artifact = Objects.requireNonNull(indexFile, "indexFile").toAbsolutePath().normalize();
         if (!Files.isRegularFile(artifact)) {
             throw new IllegalArgumentException("SCIP artifact must be an existing file: " + artifact);
@@ -154,25 +157,6 @@ public final class LocalProjectOperations implements ProjectOperations {
         );
     }
 
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        requireText(identifier, "project identifier");
-        UUID projectId = parseUuid(identifier);
-        if (projectId != null) {
-            return registry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("unknown project: " + identifier));
-        }
-        List<RegisteredProject> matches = registry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
-        }
-        return matches.getFirst();
-    }
-
     private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
         Files.createDirectories(historyDirectory);
         Path target = historyDirectory.resolve(projectId + ".properties");
@@ -208,14 +192,6 @@ public final class LocalProjectOperations implements ProjectOperations {
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
-
-    private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
         }
     }
 
