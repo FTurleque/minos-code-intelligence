@@ -1,7 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -83,14 +81,9 @@
     </dependencies>
 
     <build>
-        <!--
-          Transitional S2 bridge: only the two process composition entry points are still
-          compiled by minos-app. All product logic is supplied through reactor artifacts.
-          Physical source relocation remains mandatory before S2 closes. Keeping target at
-          repository root preserves M14 release/install scripts.
-        -->
+
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
-        <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
+
         <testSourceDirectory>${maven.multiModuleProjectDirectory}/src/test/java</testSourceDirectory>
         <testResources>
             <testResource>
@@ -182,7 +175,7 @@
                                 </filter>
                             </filters>
                             <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.minos.cli.MinosLauncher</mainClass>
                                     <manifestEntries>
