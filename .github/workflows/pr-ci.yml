@@ -1,0 +1,110 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Maven clean verify (Unix)
+        if: runner.os != 'Windows'
+        run: ./mvnw -B -ntp clean verify
+
+      - name: Maven clean verify (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\mvnw.cmd -B -ntp clean verify
+
+      - name: Targeted JaCoCo gate
+        run: python scripts/quality/check-jacoco.py
+
+      - name: Product facts consistency
+        run: python scripts/docs/product-facts.py --check
+
+      - name: Upload verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-validation-${{ runner.os }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+            target/site/jacoco-aggregate/**
+            target/m15-quality/**
+
+  m15-final-exact-head:
+    name: M15 final Windows exact-head gate
+    if: github.event_name == 'pull_request' && github.head_ref == 'm15-finalize-s7-s11'
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout finalization head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Run complete M15 final qualification
+        shell: powershell
+        run: .\scripts\m15\run-final.ps1
+
+      - name: Upload final M15 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m15-final-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            target/m15-baseline/**
+            target/m15-final/**
+            target/m15-quality/**
+            target/site/jacoco-aggregate/**
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
