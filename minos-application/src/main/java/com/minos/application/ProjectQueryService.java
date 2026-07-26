@@ -14,7 +14,6 @@ import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
 
@@ -26,7 +25,8 @@ import java.util.Objects;
  * Application-level read service over the active Code Intelligence snapshot of a project.
  *
  * <p>Transport adapters must use this service instead of rebuilding snapshot/query plumbing.
- * Project references are resolved exclusively through the shared {@link ProjectResolver}.</p>
+ * Project references are resolved exclusively through the shared {@link ProjectResolver}.
+ * The active snapshot store owns the bounded immutable query-view cache used here.</p>
  */
 public final class ProjectQueryService {
 
@@ -117,15 +117,10 @@ public final class ProjectQueryService {
     }
 
     private InMemoryCodeKnowledgeStore loadQueryStore(RegisteredProject project) throws IOException {
-        CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
+        return snapshotStore.loadActiveQueryView(project.id())
                 .orElseThrow(() -> new IllegalStateException(
                         "project has no active symbol snapshot: " + project.id()
-                ));
-
-        InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore();
-        queryStore.putSymbols(snapshot.symbols());
-        queryStore.putOccurrences(snapshot.occurrences());
-        queryStore.putRelationships(snapshot.relationships());
-        return queryStore;
+                ))
+                .queryStore();
     }
 }
