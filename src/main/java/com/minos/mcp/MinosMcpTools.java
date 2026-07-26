@@ -1,6 +1,6 @@
 package com.minos.mcp;
 
-import com.minos.cli.MinosLauncher;
+import com.minos.cli.MinosCliRunner;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
@@ -34,7 +34,7 @@ public final class MinosMcpTools {
             StringBuilder output = new StringBuilder();
             StringBuilder error = new StringBuilder();
             try {
-                int exitCode = MinosLauncher.run(
+                int exitCode = MinosCliRunner.run(
                         normalizedHome,
                         arguments.toArray(String[]::new),
                         output,
