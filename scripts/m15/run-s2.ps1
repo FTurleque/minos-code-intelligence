@@ -59,7 +59,7 @@ function Restart-UpdatedRunner {
     if ($SkipM14Replay) { $arguments += '-SkipM14Replay' }
     if ($SkipProviderReplays) { $arguments += '-SkipProviderReplays' }
     if ($ValidateDocker) { $arguments += '-ValidateDocker' }
-    Write-Host "Runner changed after pull; restarting from exact HEAD $Head..." -ForegroundColor Yellow
+    Write-Host "Restarting M15-S2 runner from exact HEAD $Head..." -ForegroundColor Yellow
     & (Resolve-CurrentPowerShellHost) @arguments
     if ($LASTEXITCODE -ne 0) { throw "Restarted M15-S2 runner failed (exit=$LASTEXITCODE)." }
 }
@@ -101,6 +101,66 @@ function Assert-DependencySet {
     }
     foreach ($coordinate in $Expected) {
         if ($actual -notcontains $coordinate) { throw "$Owner is missing dependency $coordinate." }
+    }
+}
+
+function Get-ModuleMainSourceCount {
+    param([Parameter(Mandatory = $true)][string] $Module)
+    $root = Join-Path $RepoRoot "$Module\src\main\java"
+    @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue).Count
+}
+
+function Assert-PhysicalSourceLayout {
+    $expectedCounts = @{
+        'minos-domain' = 24
+        'minos-engine' = 17
+        'minos-runtime-local' = 6
+        'minos-storage-local' = 4
+        'minos-provider-scip' = 22
+        'minos-integration-git' = 1
+        'minos-application' = 75
+        'minos-nexus' = 2
+        'minos-cli' = 24
+        'minos-api' = 4
+        'minos-mcp' = 2
+        'minos-app' = 2
+    }
+
+    $legacySources = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\main\java') -Recurse -File -ErrorAction SilentlyContinue)
+    if ($legacySources.Count -ne 0) {
+        throw "Historical src/main/java must be empty after physical relocation; found $($legacySources.Count) file(s)."
+    }
+
+    foreach ($module in $expectedCounts.Keys) {
+        $actual = Get-ModuleMainSourceCount -Module $module
+        if ($actual -ne [int] $expectedCounts[$module]) {
+            throw "$module physical source count mismatch: expected=$($expectedCounts[$module]) actual=$actual"
+        }
+        $pom = Get-Pom "$module\pom.xml"
+        $sourceNode = $pom.SelectSingleNode('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="sourceDirectory"]')
+        if ($null -ne $sourceNode) {
+            throw "$module still declares a non-standard sourceDirectory: $($sourceNode.InnerText.Trim())"
+        }
+    }
+
+    $legacyResources = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\main\resources') -Recurse -File -ErrorAction SilentlyContinue)
+    if ($legacyResources.Count -ne 0) {
+        throw "Historical src/main/resources must be empty after physical relocation; found $($legacyResources.Count) file(s)."
+    }
+
+    foreach ($resource in @(
+        'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\scip-java-windows-runner.ps1',
+        'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\ScipWriter.java'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $resource) -PathType Leaf)) {
+            throw "Relocated SCIP runtime resource is missing: $resource"
+        }
+    }
+
+    $providerPom = Get-Pom 'minos-provider-scip\pom.xml'
+    $resourceDirectory = $providerPom.SelectSingleNode('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="resources"]/*[local-name()="resource"]/*[local-name()="directory"]')
+    if ($null -ne $resourceDirectory -and $resourceDirectory.InnerText -match 'maven.multiModuleProjectDirectory') {
+        throw 'minos-provider-scip still uses an external production resource root.'
     }
 }
 
@@ -161,8 +221,10 @@ function Assert-ReactorShape {
         throw 'minos-cli must leave MinosLauncher to minos-app.'
     }
 
-    $mcpTools = Get-Content -LiteralPath (Join-Path $RepoRoot 'src\main\java\com\minos\mcp\MinosMcpTools.java') -Raw
-    $mcpServer = Get-Content -LiteralPath (Join-Path $RepoRoot 'src\main\java\com\minos\mcp\MinosMcpServer.java') -Raw
+    $mcpToolsPath = Join-Path $RepoRoot 'minos-mcp\src\main\java\com\minos\mcp\MinosMcpTools.java'
+    $mcpServerPath = Join-Path $RepoRoot 'minos-mcp\src\main\java\com\minos\mcp\MinosMcpServer.java'
+    $mcpTools = Get-Content -LiteralPath $mcpToolsPath -Raw
+    $mcpServer = Get-Content -LiteralPath $mcpServerPath -Raw
     if ($mcpTools -match 'MinosLauncher' -or $mcpServer -match 'MinosLauncher') {
         throw 'MCP must not depend on the minos-app system launcher.'
     }
@@ -189,6 +251,8 @@ function Assert-ReactorShape {
         $appIncludes -notcontains 'com/minos/integration/nexus/NexusExportBridgeMain.java') {
         throw "minos-app must compile only the two composition entry points; actual=[$($appIncludes -join ', ')]"
     }
+
+    Assert-PhysicalSourceLayout
 }
 
 function Get-LatestJar {
@@ -306,7 +370,24 @@ try {
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) { throw 'Unable to resolve exact HEAD.' }
     if ($head -ne $initialHead) { Restart-UpdatedRunner $head; return }
 
-    Write-Host '[4/8] Checking 12-project reactor and composition ownership shape...'
+    $legacySources = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'src\main\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue)
+    if ($legacySources.Count -gt 0) {
+        $relocator = Join-Path $RepoRoot 'scripts\m15\relocate-main-sources.ps1'
+        if (-not (Test-Path -LiteralPath $relocator -PathType Leaf)) {
+            throw "Physical relocation is pending but helper is missing: $relocator"
+        }
+        Write-Host ''
+        Write-Host "M15-S2 one-time production relocation required ($($legacySources.Count) sources)." -ForegroundColor Cyan
+        & $relocator
+        $relocatedHead = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($relocatedHead)) {
+            throw 'Unable to resolve HEAD after production relocation.'
+        }
+        Restart-UpdatedRunner $relocatedHead
+        return
+    }
+
+    Write-Host '[4/8] Checking 12-module reactor and physical production-source ownership shape...'
     Assert-ReactorShape
 
     Write-Host '[5/8] Building API/MCP surfaces and all upstream modules independently of minos-app...'
