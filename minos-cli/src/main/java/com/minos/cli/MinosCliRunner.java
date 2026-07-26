@@ -16,8 +16,8 @@ import java.util.Set;
 /**
  * Reusable local CLI execution surface, separated from the process/system launcher.
  *
- * <p>M15-S3 centralizes local composition in {@link MinosApplication}. M15-S4
- * will separately replace the temporary MCP -> CLI business routing.</p>
+ * <p>M15-S3 centralized local composition in {@link MinosApplication}; M15-S4
+ * makes the CLI a transport adapter over those shared application services.</p>
  */
 public final class MinosCliRunner {
 
@@ -85,7 +85,7 @@ public final class MinosCliRunner {
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
         return new MinosCli(
-                new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore()),
+                new LocalProjectSymbolQuery(app),
                 new LocalProjectOperations(app),
                 app.architectureQuery(),
                 app.impactQuery(),
