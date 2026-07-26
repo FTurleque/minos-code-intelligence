@@ -1,19 +1,24 @@
 package com.minos.orchestration;
 
 /**
- * Capacité observable qu'un indexeur peut annoncer à MINOS.
+ * Observable capability that a provider can explicitly qualify.
  *
- * <p>Une capacité signifie que le fournisseur a été qualifié pour produire ce
- * type d'information ou supporter ce scénario. Elle ne constitue jamais une
- * promesse de complétude sémantique.</p>
+ * <p>M17 capability model v2 deliberately separates facts which were previously
+ * bundled under broad indexing support. A capability is never inferred from a
+ * provider being able to start.</p>
  */
 public enum IndexerCapability {
     SYMBOLS,
+    STABLE_SYMBOL_IDENTITY,
     REFERENCES,
+    UNRESOLVED_REFERENCES,
     IMPLEMENTATION_RELATIONS,
     STRUCTURAL_RELATIONS,
+    CALL_RELATIONS,
     MULTI_MODULE,
     TEST_SOURCES,
     PARTIAL_INDEX_ON_BUILD_FAILURE,
-    INCREMENTAL_INDEXING
+    INCREMENTAL_INDEXING,
+    POSITION_UTF16,
+    RUNTIME_INSTALLATION
 }

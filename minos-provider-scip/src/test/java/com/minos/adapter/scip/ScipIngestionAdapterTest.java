@@ -139,7 +139,7 @@ class ScipIngestionAdapterTest {
     }
 
     @Test
-    void derivesMinimalMetadataWhenTypeScriptOmitsDisplayNameAndLanguage() {
+    void derivesMinimalMetadataWhenProvidersOmitDisplayNameAndLanguage() {
         String rawSymbol =
                 "scip-typescript npm fixture 1.0.0 src/`user-service.ts`/UserService#findUser().";
         Document document = Document.newBuilder()
@@ -170,6 +170,49 @@ class ScipIngestionAdapterTest {
         assertEquals("UserService.findUser", symbol.qualifiedName());
         assertEquals("typescript", symbol.language());
         assertEquals(SymbolKind.METHOD, symbol.kind());
+        assertTrue(symbol.providerReferences().stream()
+                .anyMatch(reference -> reference.externalId().equals(rawSymbol)));
+
+        assertPythonMetadataAndUsages();
+    }
+
+    private static void assertPythonMetadataAndUsages() {
+        String rawSymbol =
+                "scip-python python python-simple _ `src.minos_fixture.service`/GreetingService#";
+        String relativePath = "src\\minos_fixture\\service.py";
+        Document document = Document.newBuilder()
+                .setRelativePath(relativePath)
+                .addSymbols(SymbolInformation.newBuilder().setSymbol(rawSymbol))
+                .addOccurrences(occurrence(rawSymbol, 0, 6, 21, SymbolRole.Definition_VALUE))
+                .addOccurrences(occurrence(rawSymbol, 6, 11, 26, SymbolRole.ReadAccess_VALUE))
+                .build();
+        InMemoryCodeKnowledgeStore store = new InMemoryCodeKnowledgeStore();
+
+        ScipIngestionReport report = new ScipIngestionAdapter().ingest(
+                Index.newBuilder().addDocuments(document).build(),
+                new ScipIngestionRequest(
+                        "project-python",
+                        "module-main",
+                        "scip-python",
+                        "0.6.6",
+                        "run-python",
+                        Map.of(relativePath, "src/minos_fixture/service.py")
+                ),
+                store
+        );
+
+        assertEquals(1, report.normalizedSymbolCount());
+        assertEquals(0, report.skippedSymbolCount());
+        assertEquals(2, report.resolvedOccurrenceCount());
+        assertEquals(0, report.unresolvedOccurrenceCount());
+
+        SymbolQueryService queries = new SymbolQueryService(store);
+        var symbol = queries.findSymbol("project-python", "GreetingService", 10).getFirst();
+        assertEquals("GreetingService", symbol.name());
+        assertEquals("src.minos_fixture.service.GreetingService", symbol.qualifiedName());
+        assertEquals("python", symbol.language());
+        assertEquals(SymbolKind.TYPE, symbol.kind());
+        assertEquals(1, queries.findUsages("project-python", symbol.id(), 10).size());
         assertTrue(symbol.providerReferences().stream()
                 .anyMatch(reference -> reference.externalId().equals(rawSymbol)));
     }

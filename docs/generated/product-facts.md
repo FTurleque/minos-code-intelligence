@@ -42,6 +42,7 @@ Nombre de tools : **16**
 - `tools list`
 - `tools install`
 - `tools verify`
+- `providers`
 - `search`
 - `find-symbol`
 - `get-source`
@@ -60,11 +61,15 @@ Nombre de tools : **16**
 
 ### `scip-java` `0.13.1`
 
-Capabilities : `IMPLEMENTATION_RELATIONS`, `MULTI_MODULE`, `REFERENCES`, `SYMBOLS`, `TEST_SOURCES`
+Capabilities : `IMPLEMENTATION_RELATIONS`, `MULTI_MODULE`, `REFERENCES`, `RUNTIME_INSTALLATION`, `STABLE_SYMBOL_IDENTITY`, `SYMBOLS`, `TEST_SOURCES`
 
 ### `scip-typescript` `0.4.0`
 
-Capabilities : `MULTI_MODULE`, `PARTIAL_INDEX_ON_BUILD_FAILURE`, `REFERENCES`, `STRUCTURAL_RELATIONS`, `SYMBOLS`, `TEST_SOURCES`
+Capabilities : `MULTI_MODULE`, `PARTIAL_INDEX_ON_BUILD_FAILURE`, `REFERENCES`, `RUNTIME_INSTALLATION`, `STABLE_SYMBOL_IDENTITY`, `STRUCTURAL_RELATIONS`, `SYMBOLS`, `TEST_SOURCES`
+
+### `scip-python` `0.6.6`
+
+Capabilities : `REFERENCES`, `RUNTIME_INSTALLATION`, `SYMBOLS`, `TEST_SOURCES`
 
 ## Formats calculables
 

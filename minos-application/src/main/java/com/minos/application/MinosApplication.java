@@ -2,6 +2,7 @@ package com.minos.application;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
+import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
@@ -19,6 +20,7 @@ import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.registry.LocalProjectRegistry;
+import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
@@ -315,10 +317,13 @@ public final class MinosApplication {
                     : new IncrementalIndexingPlanner();
             List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null
                     ? indexerDescriptors
-                    : List.copyOf(ScipIndexerCatalog.qualifiedM1Descriptors());
+                    : List.copyOf(ScipIndexerCatalog.qualifiedM17Descriptors());
             ProviderRuntimeManager effectiveProviderRuntime = providerRuntimeManager != null
                     ? providerRuntimeManager
-                    : new ManagedScipProviderRuntimeManager(home);
+                    : new CompositeProviderRuntimeManager(List.of(
+                            new ManagedScipProviderRuntimeManager(home),
+                            new ManagedScipPythonRuntimeManager(home)
+                    ));
 
             SnapshotStager effectiveStager = snapshotStager;
             SnapshotPromoter effectivePromoter = snapshotPromoter;

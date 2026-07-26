@@ -16,6 +16,7 @@ class ScipSymbolCatalogTest {
     void catalogsDocumentAndExternalSymbolsWithoutNormalizingTheirIdentity() {
         String localSymbol = "scip-java maven example 1.0 io/example/UserService#";
         String externalSymbol = "scip-java maven external 1.0 java/lang/String#";
+        String pythonStubSymbol = "scip-python python example _ example/Protocol#";
 
         SymbolInformation local = SymbolInformation.newBuilder()
                 .setSymbol(localSymbol)
@@ -37,12 +38,15 @@ class ScipSymbolCatalogTest {
                         .setLanguage("java")
                         .setRelativePath("src/main/java/io/example/UserService.java")
                         .addSymbols(local))
+                .addDocuments(Document.newBuilder()
+                        .setRelativePath("src/example/protocol.pyi")
+                        .addSymbols(SymbolInformation.newBuilder().setSymbol(pythonStubSymbol)))
                 .addExternalSymbols(external)
                 .build();
 
         ScipSymbolCatalog catalog = ScipSymbolCatalog.from(index);
 
-        assertEquals(2, catalog.size());
+        assertEquals(3, catalog.size());
 
         ScipSymbolFact localFact = catalog.find(
                 "src/main/java/io/example/UserService.java",
@@ -56,6 +60,13 @@ class ScipSymbolCatalogTest {
         ScipSymbolFact externalFact = catalog.find("", externalSymbol).orElseThrow();
         assertEquals("String", externalFact.displayName());
         assertTrue(externalFact.external());
+
+        ScipSymbolFact pythonStubFact = catalog.find(
+                "src/example/protocol.pyi",
+                pythonStubSymbol
+        ).orElseThrow();
+        assertEquals("Protocol", pythonStubFact.displayName());
+        assertEquals("python", pythonStubFact.language());
     }
 
     @Test

@@ -65,6 +65,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                             "-ProjectPath", root.toString(),
                             "-CoursierCommand", coursier.toString(),
                             "-Coordinate", coordinate,
+                            "-Language", request.selection().language().name(),
                             "-OutputDirectory", providerOutput.toString()
                     ),
                     root,

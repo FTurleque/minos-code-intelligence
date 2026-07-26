@@ -114,6 +114,9 @@ final class ScipSymbolCatalog {
         if (normalized.endsWith(".java")) {
             return "java";
         }
+        if (normalized.endsWith(".py") || normalized.endsWith(".pyi")) {
+            return "python";
+        }
         return "";
     }
 }

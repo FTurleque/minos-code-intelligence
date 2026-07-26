@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M16 terminés, validés et livrés ; M17 à M20 planifiés.**
+Statut : **C0 à M17 terminés, validés et livrés ; M18 à M20 planifiés.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -14,6 +14,7 @@ La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](
 - CLI, API, MCP et NEXUS ne dupliquent pas le métier ;
 - les décisions durables sont formalisées en ADR ;
 - les optimisations et choix de backend sont gouvernés par des mesures ;
+- les capacités provider absentes ne sont jamais inventées ;
 - les facts documentaires calculables sont dérivés du code quand c'est possible.
 
 ---
@@ -172,7 +173,7 @@ M15  Industrialiser le Core Engine             ✅
   ↓
 M16  Prouver la scalabilité                    ✅
   ↓
-M17  Généraliser discovery + providers         planifié
+M17  Généraliser discovery + providers         ✅
   ↓
 M18  Intégrer MINOS à IntelliJ                 planifié
   ↓
@@ -201,24 +202,9 @@ M15-S10  CI automatique de PR                    ✅ PR #62
 M15-S11  cohérence documentaire                  ✅ PR #62
 ```
 
-Acquis structurants :
-
-- reactor Maven à 12 modules enfants + parent ;
-- `MinosApplication` comme composition partagée ;
-- MCP directement relié aux services typés, sans CLI comme couche métier ;
-- `ProjectResolver` unique ;
-- persistance séparant repository, pointeur actif, codecs, intégrité et rétention ;
-- cache borné des vues de snapshot actif ;
-- indexes reconstruisibles pour requêtes structurantes ;
-- JaCoCo et quality gates ciblées ;
-- CI PR Linux/Windows ;
-- facts produit générés depuis le code.
-
-Porte finale : `scripts/m15/run-final.ps1` qualifie le SHA exact et conserve les replays M14/providers/Windows, tout en prouvant la baisse des chargements complets sur requêtes répétées.
+Acquis structurants : reactor Maven multi-module, `MinosApplication`, MCP découplé de la CLI métier, résolution projet commune, persistance décomposée, cache snapshot actif, indexes reconstruisibles, JaCoCo/CI/facts calculables.
 
 - roadmap opérationnelle : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md)
-- qualité : [`developer/quality-gates.md`](developer/quality-gates.md)
-- facts générés : [`generated/product-facts.md`](generated/product-facts.md)
 - décisions : ADR-0022 à ADR-0024
 - issue : #55
 - PR finale : #62
@@ -243,34 +229,51 @@ M16-S8   optimisations mesurées uniquement       ✅
 M16-S9   retention/compaction                    ✅
 ```
 
-Acquis :
-
-- profils synthétiques déterministes `SMOKE`, `STANDARD`, `EXTENDED`, `STRESS` ;
-- gate STANDARD à 10 000 fichiers / 100 000 symboles / 500 000 occurrences / 250 000 relations ;
-- latences p50/p95/p99 pour les requêtes structurantes ;
-- profil peak/retained heap, RSS processus et disque ;
-- séquences MCP STDIO long-lived sans rechargement systématique d'une vue inchangée ;
-- benchmark provider réel FULL/NONE, débit fichiers/s et LOC/s ;
-- comparateur SQLite expérimental hors runtime ;
-- décision backend gouvernée par mesures, jamais par préférence technologique ;
-- snapshots : actif + 2 historiques par défaut ;
-- runs : 20 réussis + 10 non réussis, `latestRunId` protégé.
-
-Porte finale : `scripts/m16/run-final.ps1` rejoue d'abord la qualification M14 complète puis la campagne STANDARD. Aucun changement de backend n'est accepté si le backend courant respecte les seuils ; tout échec garde M16 ouvert jusqu'à optimisation ciblée et remesure.
+Acquis : profils `SMOKE/STANDARD/EXTENDED/STRESS`, gate STANDARD 10k fichiers/100k symboles/500k occurrences/250k relations, p50/p95/p99, heap/RSS/disque, MCP long-lived, benchmark FULL/NONE, décision backend mesurée et rétention bornée.
 
 - roadmap opérationnelle : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md)
 - décision : [ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md)
 - issue : #63
+- PR finale : #64
 
 ---
 
 ## M17 — Provider & Discovery Platform
 
-**PLANIFIÉ.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
 
-Objectif : rendre réellement extensibles les langages, systèmes de build et providers sans introduire de branches spécifiques dans le cœur.
+Objectif fermé : rendre discovery, providers et installation runtime extensibles sans branches d'écosystème dans les orchestrateurs centraux, puis qualifier de nouveaux écosystèmes sur les mêmes contrats MINOS.
 
-Acquis visés : SPI discovery/provider, conformance kit, Gradle, workspaces JS qualifiés et au moins un nouvel écosystème/langage.
+```text
+M17-S1   Discovery SPI                            ✅
+M17-S2   Provider SPI                             ✅
+M17-S3   Capability model v2                      ✅
+M17-S4   Gradle                                   ✅
+M17-S5   npm/pnpm/yarn workspaces                 ✅
+M17-S6   Kotlin                                   ✅
+M17-S7   Python / scip-python 0.6.6               ✅
+M17-S8   Provider conformance kit                 ✅
+M17-S9   Installation provider extensible         ✅
+```
+
+Acquis :
+
+- `ProjectDetector`, `BuildSystemDetector`, `SourceRootDetector`, `LanguageDetector` composables ;
+- `IndexerProvider` + registre d'extensions ;
+- profils exhaustifs `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED` ;
+- découverte Gradle Java/Kotlin et workspaces npm/pnpm/yarn ;
+- Kotlin/Maven négocié par `scip-java` ;
+- Python géré par `scip-python` `0.6.6`, installé sous `MINOS_HOME/tools` ;
+- `ProviderConformanceKit` déterministe ;
+- `CompositeProviderRuntimeManager` sans logique provider dans CLI/doctor/index ;
+- limitations visibles dans CLI, `ProviderPlatformApi` et diagnostics MCP ;
+- `MinosApi` v1 et le catalogue historique de 16 tools MCP restent stables.
+
+Porte finale : `scripts/m17/run-final.ps1` rejoue la qualification M14 complète, puis exige installation Python READY et indexation/requêtes end-to-end Python et Kotlin sur le SHA exact.
+
+- roadmap opérationnelle : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md)
+- décision : [ADR-0026](adr/0026-discovery-provider-spi-and-explicit-capability-profiles.md)
+- issue : #65
 
 ---
 
@@ -300,4 +303,4 @@ Objectif : combiner recherche sémantique et faits structurés MINOS sans rempla
 
 ## Règle de progression
 
-M17 est le prochain jalon séquentiel. M18 peut ensuite progresser en parallèle de M17 lorsque les contrats le permettent. M19/M20 peuvent être explorés, mais leur promotion produit dépend des garanties de scalabilité et de qualité désormais acquises en M16.
+M18 est le prochain jalon séquentiel. M19/M20 peuvent être explorés, mais leur promotion produit reste soumise aux garanties de scalabilité, de qualité et d'extensibilité acquises jusqu'à M17.

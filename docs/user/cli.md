@@ -14,122 +14,36 @@ Checkout source :
 java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar <commande>
 ```
 
-`--help` reste la source de vérité exécutable.
+`--help` reste la source de vérité exécutable. Les commandes d'aide, y compris `providers --help`, n'initialisent pas `MINOS_HOME`.
 
 ## Formats de sortie
 
-La plupart des commandes qui acceptent `--format` proposent deux représentations du **même résultat métier** :
+La plupart des commandes qui acceptent `--format` proposent deux représentations du même résultat métier :
 
-- `text` : sortie compacte destinée à être lue directement dans un terminal ; c'est le format par défaut ;
-- `json` : sortie structurée destinée aux scripts PowerShell, à la CI, aux intégrations et aux clients MCP.
+- `text` : sortie compacte destinée au terminal ;
+- `json` : sortie structurée destinée aux scripts, CI et intégrations.
 
-`--format <text|json>` dans la syntaxe signifie donc : remplacer `<text|json>` par **une seule** des valeurs `text` ou `json`.
+```text
+--format <text|json>
+```
 
-Exemples équivalents :
+Exemples :
 
 ```powershell
-# Format texte implicite : lisible par un humain
 minos.cmd architecture my-project
-
-# Même format demandé explicitement
-minos.cmd architecture my-project --format text
-
-# Format structuré : destiné aux outils et scripts
 minos.cmd architecture my-project --format json
 ```
 
-La commande `architecture` ajoute deux formats de graphe :
+La commande `architecture` ajoute :
 
 ```text
 --format <text|json|mermaid|dot>
 ```
 
-- `mermaid` : graphe `flowchart` directement intégrable dans Markdown/GitHub/les outils compatibles Mermaid ;
-- `dot` : graphe Graphviz DOT permettant de produire SVG, PNG ou PDF avec Graphviz.
+- `mermaid` : graphe `flowchart` ;
+- `dot` : graphe Graphviz DOT.
 
-Exemple représentatif de sortie `text` pour `architecture` :
-
-```text
-project: my-project (<project-id>)
-snapshot: <snapshot-id>
-modules: 3
-languages: [JAVA]
-buildSystems: [MAVEN]
-symbols: local=1240, external=317
-relationships: 2861
-dependencies: total=842, inter=94, intra=731, unassigned=17
-moduleEdges: 8
-topIncomingModules: [<module-id>]
-topOutgoingModules: [<module-id>]
-technologies: [JAVA, MAVEN]
-```
-
-La sortie `json` expose des champs nommés et, pour `architecture`, la **liste réelle des arêtes agrégées entre modules** :
-
-```json
-{
-  "projectId": "<project-id>",
-  "projectName": "my-project",
-  "snapshotId": "<snapshot-id>",
-  "nature": "DERIVED",
-  "languages": ["JAVA"],
-  "buildSystems": ["MAVEN"],
-  "moduleCount": 3,
-  "localSymbolCount": 1240,
-  "externalSymbolCount": 317,
-  "relationshipCount": 2861,
-  "dependencies": {
-    "total": 842,
-    "interModule": 94,
-    "intraModule": 731,
-    "unassigned": 17,
-    "moduleEdges": 8
-  },
-  "topIncomingModuleIds": ["<module-id>"],
-  "topOutgoingModuleIds": ["<module-id>"],
-  "technologies": ["JAVA", "MAVEN"],
-  "modules": [],
-  "moduleDependencies": [
-    {
-      "id": "<edge-id>",
-      "sourceModuleId": "<source-module-id>",
-      "sourceModuleName": "application",
-      "targetModuleId": "<target-module-id>",
-      "targetModuleName": "domain",
-      "dependencyCount": 37,
-      "sourceSymbolCount": 12,
-      "targetSymbolCount": 9,
-      "sampleDependencyIds": ["<relationship-id>"],
-      "nature": "DERIVED",
-      "confidence": 1.0,
-      "evidence": []
-    }
-  ]
-}
-```
-
-Les valeurs ci-dessus sont illustratives ; la structure correspond à la surface actuelle de la commande.
-
-Exemple PowerShell :
-
-```powershell
-$architecture = minos.cmd architecture my-project --format json | ConvertFrom-Json
-
-$architecture.moduleCount
-$architecture.dependencies.interModule
-$architecture.moduleDependencies
-```
-
-Pour enregistrer le résultat :
-
-```powershell
-minos.cmd architecture my-project --format json |
-  Set-Content .\architecture.json -Encoding utf8
-```
-
-Le serveur MCP MINOS utilise lui-même la surface CLI JSON pour ses vues structurées.
-
-## Administration
+## Administration des projets
 
 ```text
 project add <path> [--name <name>] [--format <text|json>]
@@ -139,6 +53,17 @@ inspect <project> [--format <text|json>]
 index-status <project> [--format <text|json>]
 ```
 
+`project inspect` et `inspect` exposent les faits de découverte : langages, systèmes de build, modules et état d'indexation.
+
+M17 reconnaît notamment :
+
+```text
+Langages     JAVA, KOTLIN, TYPESCRIPT, PYTHON
+Builds       MAVEN, GRADLE, NPM, PNPM, YARN
+```
+
+La détection d'un build system ne signifie pas qu'un runtime d'indexation est automatiquement qualifié pour ce build. Par exemple, Gradle Java/Kotlin est découvert, mais le runtime Windows `scip-java` qualifié par MINOS reste limité aux projets Maven tant qu'une qualification Gradle n'a pas été réalisée.
+
 ## Diagnostic runtime
 
 ```text
@@ -146,9 +71,79 @@ doctor [--format <text|json>]
 tools list [--format <text|json>]
 tools verify [--format <text|json>]
 tools install <provider> [--format <text|json>]
+providers [provider-id] [--format <text|json>]
 ```
 
-`doctor` retourne `1` lorsqu'une action est requise pour obtenir tous les runtimes providers gérés.
+### `doctor`
+
+`doctor` vérifie l'environnement MINOS et les runtimes **requis par défaut**.
+
+Un provider M17 peut être :
+
+- requis par la baseline : son absence rend `doctor` non READY ;
+- optionnel : il reste visible et installable, mais son absence ne casse pas la baseline historique.
+
+Ainsi `scip-java` et `scip-typescript` restent les runtimes de baseline M14. `scip-python` est optionnel tant qu'un projet Python n'en a pas besoin.
+
+Le format JSON expose `requiredByDefault` pour chaque runtime.
+
+### `tools`
+
+```powershell
+minos.cmd tools list
+minos.cmd tools verify
+minos.cmd tools install scip-java
+minos.cmd tools install scip-typescript
+minos.cmd tools install scip-python
+```
+
+`tools verify` vérifie les runtimes requis par défaut. Une indexation qui sélectionne un provider optionnel exige néanmoins que son runtime soit `READY`.
+
+`scip-python` est installé par MINOS sous `MINOS_HOME\tools`; aucune installation npm globale n'est nécessaire. Sa qualification M17 utilise `@sourcegraph/scip-python` `0.6.6` et requiert Node/npm ainsi que Python 3.10+ dans le `PATH`.
+
+### `providers`
+
+M17 ajoute une vue de diagnostic distincte de l'installation :
+
+```powershell
+minos.cmd providers
+minos.cmd providers scip-java
+minos.cmd providers scip-python --format json
+```
+
+Cette commande expose :
+
+```text
+id
+version
+languages
+buildSystems
+capabilities
+conformanceScorePercent
+limitations
+runtimeState
+runtimeDiagnostics
+```
+
+Chaque capability reçoit explicitement un niveau :
+
+```text
+FULL
+PARTIAL
+EXPERIMENTAL
+UNSUPPORTED
+```
+
+Une capacité absente du profil n'est pas interprétée implicitement comme supportée.
+
+Exemple de consommation PowerShell :
+
+```powershell
+$provider = minos.cmd providers scip-python --format json | ConvertFrom-Json
+$provider.capabilities
+$provider.limitations
+$provider.runtimeState
+```
 
 ## Indexation autonome
 
@@ -173,19 +168,35 @@ minos.cmd index nexus
 minos.cmd index nexus --force-full --format json
 ```
 
-Le plan expose le provider, son runtime, la portée et les raisons.
+Le plan expose les providers retenus, leurs runtimes, la portée (`NONE`, `INCREMENTAL`, `FULL`) et les raisons.
 
-### Compatibilité M9
+Une capacité incrémentale n'est utilisée que si le provider la déclare explicitement et si la planification MINOS l'autorise. M17 n'invente aucune capacité incrémentale pour les providers SCIP épinglés.
 
-Pendant la transition M14, cette forme reste acceptée avec warning :
+### Kotlin
+
+Pour le périmètre M17 qualifié :
 
 ```text
-index <project> --scip <index.scip> --provider <id>
+KOTLIN + MAVEN → scip-java
 ```
 
-Préférer désormais `import-scip`.
+Un projet Kotlin/Gradle est correctement découvert mais n'est pas automatiquement déclaré indexable par `scip-java`.
+
+### Python
+
+Pour un projet Python :
+
+```powershell
+minos.cmd tools install scip-python
+minos.cmd project add C:\workspace\my-python-project --name my-python
+minos.cmd index my-python --provider scip-python
+```
+
+Le provider est sélectionnable indépendamment d'un build system Python spécifique ; les limitations exactes sont consultables par `minos providers scip-python`.
 
 ## Import SCIP manuel
+
+L'import manuel reste disponible pour diagnostic/fallback :
 
 ```text
 import-scip <project> --file <index.scip> --provider <id> [options]
@@ -199,6 +210,14 @@ Options :
 --snapshot <id>
 --format <text|json>
 ```
+
+La forme historique suivante reste acceptée avec warning pendant la transition de compatibilité :
+
+```text
+index <project> --scip <index.scip> --provider <id>
+```
+
+Préférer `import-scip`.
 
 ## Recherche contextuelle
 
@@ -230,6 +249,14 @@ get-source <project> <file-id> [--format <text|json>]
 find-usages <project> <symbol-id> [--limit <count>] [--format <text|json>]
 ```
 
+Exemple :
+
+```powershell
+$symbols = minos.cmd find-symbol my-project GreetingService --format json | ConvertFrom-Json
+$symbolId = $symbols.symbols[0].id
+minos.cmd find-usages my-project $symbolId --format json
+```
+
 ## Relations
 
 ```text
@@ -241,85 +268,42 @@ dependents <project> <symbol-id>
 related-tests <project> <symbol-id>
 ```
 
-Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime.
+Une liste vide signifie qu'aucune relation correspondante n'est présente dans le snapshot observé ; elle ne prouve pas une absence runtime. Le profil provider indique séparément si cette famille de faits est `FULL`, `PARTIAL`, `EXPERIMENTAL` ou `UNSUPPORTED`.
 
-## Architecture et visualisation du graphe
+## Architecture et graphe
 
 ```text
 architecture <project> [--module <module>] [--format <text|json|mermaid|dot>]
 ```
 
-MINOS dérive un **graphe orienté de dépendances inter-modules** à partir du snapshot actif. Une arête :
+MINOS dérive un graphe orienté de dépendances inter-modules à partir du snapshot actif.
 
-```text
-module A ──N dépendances──> module B
-```
-
-signifie que le snapshot contient `N` dépendances agrégées depuis des symboles du module A vers des symboles du module B.
-
-Le graphe n'est pas une supposition d'interface utilisateur : les arêtes rendues proviennent directement de `ArchitectureDependencyGraph.dependencies()`.
-
-### Voir les arêtes en JSON
+### JSON
 
 ```powershell
-minos.cmd architecture my-project --format json |
-  ConvertFrom-Json |
-  Select-Object -ExpandProperty moduleDependencies
+$architecture = minos.cmd architecture my-project --format json | ConvertFrom-Json
+$architecture.moduleDependencies
 ```
 
-Chaque arête fournit notamment source, cible, nombre de dépendances, nombres de symboles, échantillons de relations, nature et confiance.
+Chaque arête expose notamment source, cible, nombre de dépendances, nombres de symboles, exemples de relations, nature et confiance.
 
-### Produire un diagramme Mermaid
+### Mermaid
 
 ```powershell
 minos.cmd architecture my-project --format mermaid |
   Set-Content .\architecture.mmd -Encoding utf8
 ```
 
-Exemple de rendu produit :
-
-```mermaid
-flowchart LR
-  m0["application<br/>app"]
-  m1["domain<br/>domain"]
-  m0 -->|"37 deps"| m1
-```
-
-Le contenu peut être placé dans un bloc `mermaid` Markdown ou ouvert dans n'importe quel renderer Mermaid compatible.
-
-### Produire un graphe Graphviz DOT
+### Graphviz DOT
 
 ```powershell
 minos.cmd architecture my-project --format dot |
   Set-Content .\architecture.dot -Encoding utf8
 ```
 
-Avec Graphviz installé :
+Graphviz n'est pas requis par MINOS ; il n'est nécessaire que pour transformer le DOT en image.
 
-```powershell
-dot -Tsvg .\architecture.dot -o .\architecture.svg
-dot -Tpng .\architecture.dot -o .\architecture.png
-```
-
-Graphviz n'est **pas** requis par MINOS : MINOS génère le DOT, et Graphviz ne sert qu'au rendu graphique.
-
-### Se concentrer sur un module
-
-Avec un format graphique, `--module` conserve le module choisi et ses voisins directs entrants/sortants :
-
-```powershell
-minos.cmd architecture my-project `
-  --module packages/api `
-  --format mermaid
-```
-
-Cela évite de produire un diagramme illisible sur un gros projet.
-
-Pour la vue métier compacte d'un module :
-
-```powershell
-minos.cmd architecture my-project --module packages/api --format json
-```
+Avec `--module`, les formats graphiques bornent la vue au module choisi et à ses voisins directs.
 
 ## Impact
 
@@ -327,7 +311,7 @@ minos.cmd architecture my-project --module packages/api --format json
 impact <project> <symbol-id> [--depth <1..32>] [--limit <1..10000>] [--format <text|json>]
 ```
 
-L'impact reste une estimation potentielle fondée sur le graphe observé.
+L'impact reste une estimation potentielle fondée sur le graphe observé et les capacités réelles du provider. Les limitations runtime/provider restent distinctes du résultat d'impact.
 
 ## NEXUS
 
@@ -335,7 +319,7 @@ L'impact reste une estimation potentielle fondée sur le graphe observé.
 nexus-export --root <project-root>
 ```
 
-Le JSON versionné est écrit sur stdout.
+Le JSON versionné est écrit sur stdout. M17 ne change pas le contrat NEXUS.
 
 ## MCP
 
@@ -345,11 +329,18 @@ Le launcher système accepte :
 minos mcp
 ```
 
-Cette commande bloque volontairement sur une session MCP STDIO jusqu'à fermeture par le client.
+La session MCP STDIO reste read-only. Depuis M15, le MCP appelle directement les services applicatifs partagés ; il ne réexécute pas la CLI métier.
 
-Le MCP expose également `minos_architecture_graph`, qui peut demander le graphe en `json`, `mermaid` ou `dot`.
+M17 conserve le catalogue historique de **16 tools**. Les réponses de :
 
-Voir [Serveur MCP](mcp.md) pour les configurations concrètes de clients MCP.
+```text
+minos_project_structure
+minos_index_status
+```
+
+incluent désormais `providerProfiles`, avec les capacités, limitations et diagnostics runtime de la même plateforme que la CLI et l'API Java.
+
+Voir [Serveur MCP](mcp.md).
 
 ## Version
 

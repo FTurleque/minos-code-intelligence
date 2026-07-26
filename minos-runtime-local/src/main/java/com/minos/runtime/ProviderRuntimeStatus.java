@@ -5,15 +5,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Diagnostic actionnable d'un runtime provider installé ou disponible.
- */
+/** Actionable diagnostic for one managed provider runtime. */
 public record ProviderRuntimeStatus(
         String providerId,
         String version,
         State state,
         Optional<Path> executable,
-        List<String> diagnostics
+        List<String> diagnostics,
+        boolean requiredByDefault
 ) {
     public ProviderRuntimeStatus {
         providerId = requireText(providerId, "providerId");
@@ -25,6 +24,17 @@ public record ProviderRuntimeStatus(
         if (diagnostics.stream().anyMatch(value -> value == null || value.isBlank())) {
             throw new IllegalArgumentException("diagnostics must not contain blank values");
         }
+    }
+
+    /** Compatibility constructor: historical managed providers are baseline-required. */
+    public ProviderRuntimeStatus(
+            String providerId,
+            String version,
+            State state,
+            Optional<Path> executable,
+            List<String> diagnostics
+    ) {
+        this(providerId, version, state, executable, diagnostics, true);
     }
 
     public boolean ready() {

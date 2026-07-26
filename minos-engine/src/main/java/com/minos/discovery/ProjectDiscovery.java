@@ -11,7 +11,7 @@ import java.util.Set;
  * Résultat factuel et immuable de la découverte d'un projet local.
  *
  * <p>Ce contrat ne crée volontairement aucun identifiant métier de projet :
- * l'identité persistante sera portée par le registre M1 et ne doit pas être
+ * l'identité persistante est portée par le registre et ne doit pas être
  * déduite du seul chemin local.</p>
  */
 public record ProjectDiscovery(
@@ -43,12 +43,17 @@ public record ProjectDiscovery(
 
     public enum Language {
         JAVA,
-        TYPESCRIPT
+        KOTLIN,
+        TYPESCRIPT,
+        PYTHON
     }
 
     public enum BuildSystem {
         MAVEN,
-        NPM
+        GRADLE,
+        NPM,
+        PNPM,
+        YARN
     }
 
     public enum SourceRootKind {

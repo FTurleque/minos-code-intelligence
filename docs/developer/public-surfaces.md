@@ -14,70 +14,61 @@ classDiagram
       architectureQuery()
       impactQuery()
       workspaceIntelligence()
+      providerRuntimeManager()
     }
-    class MinosCli {
-      <<adapter>>
-      run(args, stdout, stderr)
-    }
-    class MinosApi {
-      <<public interface>>
-      CONTRACT_VERSION = 1
-    }
-    class MinosMcpServer {
-      <<read-only adapter>>
-      STDIO
-    }
-    class NexusExportService {
-      <<integration>>
-      contractVersion = 1
-    }
+    class MinosCli { <<adapter>> }
+    class MinosApi { <<public interface v1>> }
+    class ProviderPlatformApi { <<public provider diagnostics v1>> }
+    class MinosMcpServer { <<read-only adapter>> }
+    class NexusExportService { <<integration contract v1>> }
 
     MinosCli --> MinosApplication
     MinosApi --> MinosApplication
+    ProviderPlatformApi --> MinosApplication
     MinosMcpServer --> MinosApplication
     NexusExportService --> MinosApplication
 ```
 
-## Composition M15
+## Composition M15–M17
 
-`MinosApplication` est la composition locale partagée pour un `MINOS_HOME`. CLI, API et MCP peuvent recevoir la même instance et réutilisent le registry, les stores, le runtime provider et les services applicatifs.
+`MinosApplication` est la composition locale partagée pour un `MINOS_HOME`. CLI, API et MCP peuvent recevoir la même instance et réutilisent registry, stores, runtime provider et services applicatifs.
 
-Le snapshot actif possède une vue de requête immuable et indexée, mise en cache par `(projectId, snapshotId)`. Les transports ne reconstruisent pas eux-mêmes ce cache ou les indexes.
+M17 ajoute deux compositions provider-neutral :
+
+```text
+ProjectDiscoveryService
+  → ProjectDetector / BuildSystemDetector / SourceRootDetector / LanguageDetector
+
+ProviderRuntimeManager
+  → CompositeProviderRuntimeManager
+      → extensions runtime indépendantes
+```
+
+Le snapshot actif possède toujours une vue de requête immuable et indexée, mise en cache par identité de snapshot actif. Les transports ne reconstruisent ni cache ni indexes.
 
 ## CLI
 
-`MinosCli` reste le dispatcher de commandes. Il traduit les arguments et formats de sortie vers les services applicatifs ; il n'est pas une couche métier consommée par les autres transports.
+`MinosCli` reste le dispatcher. Il traduit arguments/formats vers les services applicatifs ; il n'est pas une couche métier consommée par les autres transports.
 
-M14 a ajouté l'administration locale :
+Administration locale :
 
 ```text
 doctor
 tools list / install / verify
+providers [provider-id]
 index <project>
 import-scip <project> ...
 ```
 
+`providers` est la surface M17 de diagnostic : version, langages, systèmes de build, niveau de chaque capability, score de conformance, limitations et état runtime. `tools` conserve la responsabilité d'installation et de vérification.
+
+Les runtimes marqués `requiredByDefault` définissent la baseline `doctor/tools verify`. Un provider optionnel peut donc être visible et installable sans rendre la baseline historique rouge tant qu'il n'est pas sélectionné.
+
 `LocalAutonomousIndexOperations` coordonne discovery, négociation, fingerprints et lifecycle existants ; la CLI ne contient pas elle-même la logique provider.
 
-La surface `architecture` expose le graphe inter-modules réellement dérivé :
+### Bootstrap et codes de sortie
 
-```text
-architecture <project> --format json
-architecture <project> --format mermaid
-architecture <project> --format dot
-architecture <project> --module <module> --format mermaid|dot
-```
-
-### Bootstrap
-
-`MinosLauncher` :
-
-- traite `--version` sans ouvrir de store ;
-- traite `--help` sans créer de home ;
-- expose `mcp` comme sous-commande de lancement ;
-- ouvre une seule `MinosApplication` pour les commandes fonctionnelles.
-
-### Codes de sortie
+`MinosLauncher` traite `--version` sans store, traite `--help` sans home, expose `mcp` et ouvre une seule `MinosApplication` pour les commandes fonctionnelles.
 
 ```text
 0 success
@@ -85,39 +76,28 @@ architecture <project> --module <module> --format mermaid|dot
 2 usage error
 ```
 
-## API Java M11/M12
+## API Java
 
-`MinosApi` reste le contrat public fournisseur-indépendant versionné. Sa surface utilise uniquement les types JDK et les DTOs publics ; elle ne fait pas fuiter SCIP, MCP, les stores, Coursier, npm ou les modèles internes `com.minos.domain`.
+### `MinosApi` v1
 
-Le graphe d'architecture est exposé de manière compatible au contrat v1 par :
+`MinosApi` reste le contrat fournisseur-indépendant M11/M12. Sa surface utilise les types JDK et DTOs publics ; elle ne fait pas fuiter SCIP, MCP, stores, Coursier, npm ou modèles `com.minos.domain`.
+
+Le graphe d'architecture reste exposé de manière compatible au contrat v1 par `getArchitectureGraph(...)`. Les erreurs publiques restent : `INVALID_REQUEST`, `UNAVAILABLE`, `IO_FAILURE`, `EXECUTION_FAILURE`.
+
+### `ProviderPlatformApi` v1
+
+M17 ajoute un contrat **séparé et additif** :
 
 ```java
-ArchitectureGraphDto getArchitectureGraph(String projectIdentifier)
+List<ProviderDto> listProviders()
+ProviderDto getProvider(String providerId)
 ```
 
-La méthode reste `default` afin de préserver la compatibilité des implémentations tierces existantes ; `LocalMinosApi` retourne la vue complète.
-
-### Erreurs publiques
-
-```text
-INVALID_REQUEST
-UNAVAILABLE
-IO_FAILURE
-EXECUTION_FAILURE
-```
-
-`MinosMultiRepositoryApi` étend `MinosApi` et hérite de la vue de graphe du projet individuel. Les bornes publiques existantes sur commits, fichiers, profondeur et relations restent explicites.
+Cette séparation évite d'augmenter silencieusement `MinosApi.CONTRACT_VERSION`. Le DTO provider expose uniquement des types publics : identité/version, langages/build systems, map capability → niveau, score de conformance, limitations et diagnostics runtime.
 
 ## MCP
 
-MCP reste **strictement read-only**. Les tools lisent la connaissance active et ne peuvent pas :
-
-```text
-project add
-tools install
-index
-import-scip
-```
+MCP reste **strictement read-only**. Les tools ne peuvent pas faire `project add`, `tools install`, `index` ou `import-scip`.
 
 Depuis M15-S4, un appel MCP suit directement :
 
@@ -133,34 +113,15 @@ services typés de MinosApplication
 mapping de réponse MCP
 ```
 
-Il n'existe plus de routage métier MCP → CLI. `MinosMcpTools` conserve les schémas, bornes et conversions propres au protocole ; les règles de Code Intelligence restent dans les services partagés.
+M17 conserve volontairement le catalogue historique de **16 tools**. Les réponses de `minos_project_structure` et `minos_index_status` ajoutent `providerProfiles`, qui expose les mêmes niveaux/limitations que CLI/API sans créer un tool administratif.
 
-Le launcher natif fournit `minos mcp`. Le catalogue exact et son nombre de tools sont vérifiés automatiquement dans [`../generated/product-facts.md`](../generated/product-facts.md).
-
-Le setup Windows peut enregistrer ce MCP natif dans Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop et Codex. Cette intégration de clients reste une responsabilité de packaging/runtime et ne modifie pas le cœur métier MCP.
+Le launcher natif fournit `minos mcp`. Le catalogue exact et son nombre sont vérifiés automatiquement dans [`../generated/product-facts.md`](../generated/product-facts.md).
 
 Voir le [guide utilisateur MCP](../user/mcp.md).
 
-## Export NEXUS M13
+## Export NEXUS
 
-`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS.
-
-```mermaid
-sequenceDiagram
-    participant C as NexusExportCommand
-    participant A as MinosApplication
-    participant S as FileSymbolSnapshotStore
-    participant E as NexusExportService
-
-    C->>E: export(project)
-    E->>A: registry / résolution partagés
-    E->>S: loadActiveKnowledge(projectId)
-    S-->>E: snapshot actif en cache si inchangé
-    E->>E: projeter symboles / relations
-    E-->>C: ExportSnapshot v1
-```
-
-M14 change la manière de produire le snapshot (`index <project>` autonome), pas le contrat NEXUS. M15 change la composition et les performances internes, pas ce contrat d'échange.
+`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance et M17 la plateforme provider ; aucun de ces jalons ne change le contrat NEXUS.
 
 ## Runtime natif vs Docker
 
@@ -171,7 +132,19 @@ runtime natif = administration + providers + CLI + MCP local
 Docker MCP    = consommation read-only durcie optionnelle
 ```
 
-Les deux modes ne doivent pas partager aveuglément un registre contenant des racines projet, car les chemins hôte Windows et conteneur diffèrent.
+Les deux modes ne doivent pas partager aveuglément un registre de chemins hôte Windows/conteneur.
+
+## Ajouter un nouvel écosystème M17
+
+1. ajouter les détecteurs SPI nécessaires ;
+2. déclarer un `IndexerProvider` avec un profil **exhaustif** `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED` ;
+3. ajouter un runtime derrière `ProviderRuntimeManager` si installation/exécution locale requise ;
+4. exécuter `ProviderConformanceKit` ;
+5. versionner une fixture représentative ;
+6. qualifier discovery, négociation, runtime, snapshot et requêtes ;
+7. exposer les limitations sans inventer de capacité.
+
+Un build system peut être correctement découvert alors qu'aucun provider d'exécution n'est encore qualifié : **discovery et support runtime sont deux faits distincts**.
 
 ## Ajouter une nouvelle surface
 
@@ -187,8 +160,9 @@ Pour un futur adapter HTTP, IDE ou autre protocole :
 
 ## Qualité et cohérence
 
-- les tests API vérifient la frontière du contrat public ;
-- le MCP conserve ses tests de catalogue/schemas et replay STDIO ;
-- les gates de couverture ciblée sont décrites dans [`quality-gates.md`](quality-gates.md) ;
-- `scripts/docs/product-facts.py --check` empêche les facts mécaniques de diverger du code ;
-- les rapports sous `docs/history/milestones/` restent historiques et ne sont pas réécrits pour refléter le présent.
+- tests API : frontière du contrat public ;
+- tests MCP : catalogue/schemas, profils provider et replay STDIO ;
+- conformance kit : profils exhaustifs et déterministes ;
+- `scripts/docs/product-facts.py --check` : facts mécaniques alignés ;
+- `scripts/m17/run-final.ps1` : replay M14 + Kotlin/Python exact-head ;
+- les rapports historiques ne sont pas réécrits pour refléter le présent.

@@ -120,6 +120,7 @@ class FileProjectFingerprintSnapshotStoreTest {
     private static void createProject(Path project, String source) throws IOException {
         Files.createDirectories(project.resolve("src"));
         Files.writeString(project.resolve("pom.xml"), "<project/>");
+        Files.writeString(project.resolve("pyproject.toml"), "[project]\nname = \"fixture\"\nversion = \"1.0.0\"\n");
         Files.writeString(project.resolve("src/App.java"), source);
     }
 }
