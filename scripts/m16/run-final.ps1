@@ -98,6 +98,46 @@ function Get-ShadedJar {
     return $jar.FullName
 }
 
+function Invoke-McpBenchmark {
+    param(
+        [Parameter(Mandatory = $true)] $Java,
+        [Parameter(Mandatory = $true)][string] $JarPath,
+        [Parameter(Mandatory = $true)][string] $BenchmarkHome,
+        [Parameter(Mandatory = $true)][int] $BenchmarkRepetitions,
+        [Parameter(Mandatory = $true)][string] $OutputJson,
+        [Parameter(Mandatory = $true)][string] $Failure,
+        [string] $LogPath = ''
+    )
+
+    $source = Join-Path $RepoRoot 'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java'
+    $compileRoot = Join-Path ([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($OutputJson))) 'mcp-classes'
+    Remove-Item -LiteralPath $compileRoot -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $compileRoot | Out-Null
+
+    $javac = Join-Path $Java.JavaHome 'bin\javac.exe'
+    if (-not (Test-Path -LiteralPath $javac -PathType Leaf)) {
+        $javac = Join-Path $Java.JavaHome 'bin\javac'
+    }
+    if (-not (Test-Path -LiteralPath $javac -PathType Leaf)) {
+        throw "Java compiler is missing under $($Java.JavaHome)"
+    }
+
+    Invoke-NativeChecked -File $javac -Arguments @(
+        '-cp',$JarPath,
+        '-d',$compileRoot,
+        $source
+    ) -Failure "$Failure compilation failed"
+
+    $classpath = $compileRoot + [System.IO.Path]::PathSeparator + $JarPath
+    Invoke-NativeChecked -File $Java.JavaExecutable -Arguments @(
+        '-cp',$classpath,
+        'com.minos.mcp.M16McpSustainedBenchmark',
+        $BenchmarkHome,
+        [string]$BenchmarkRepetitions,
+        $OutputJson
+    ) -Failure $Failure -LogPath $LogPath
+}
+
 function Assert-Structure {
     $required = @(
         'docs\roadmap\M16_EXECUTION.md',
@@ -198,7 +238,7 @@ try {
     $env:JAVA_HOME = $java.JavaHome
     $env:Path = "$($java.JavaHome)\bin;$env:Path"
 
-    Write-Host '[3/10] Running fast SMOKE compile/source-launcher preflight...'
+    Write-Host '[3/10] Running fast SMOKE compile/MCP preflight...'
     Invoke-NativeChecked -File '.\mvnw.cmd' -Arguments @('-DskipTests','package') `
         -Failure 'M16 preflight Maven package failed'
     $preflightJar = Get-ShadedJar
@@ -209,11 +249,9 @@ try {
     & (Join-Path $RepoRoot 'scripts\m16\run-scale-benchmark.ps1') `
         -JarPath $preflightJar -Home $preflightScaleHome -Profile SMOKE -Repetitions 5 `
         -OutputJson (Join-Path $preflightRoot 'scale.json')
-    Invoke-NativeChecked -File $java.JavaExecutable -Arguments @(
-        '--class-path',$preflightJar,
-        (Join-Path $RepoRoot 'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java'),
-        $preflightScaleHome,'5',(Join-Path $preflightRoot 'mcp.json')
-    ) -Failure 'M16 MCP source-launcher preflight failed'
+    Invoke-McpBenchmark -Java $java -JarPath $preflightJar -BenchmarkHome $preflightScaleHome `
+        -BenchmarkRepetitions 5 -OutputJson (Join-Path $preflightRoot 'mcp.json') `
+        -Failure 'M16 MCP compiled preflight failed'
 
     Write-Host '[4/10] Replaying clean verify + complete M14/providers/Windows qualification...'
     $baselineParams = @{ ExpectedHead = $head }
@@ -260,11 +298,9 @@ try {
         -OutputJson (Join-Path $resultRoot 'scale.json')
 
     Write-Host '[6/10] Running sustained MCP benchmark on one long-lived server...'
-    Invoke-NativeChecked -File $java.JavaExecutable -Arguments @(
-        '--class-path',$installedJar,
-        (Join-Path $RepoRoot 'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java'),
-        $scaleHome,[string]$Repetitions,(Join-Path $resultRoot 'mcp.json')
-    ) -Failure 'M16 MCP sustained benchmark failed' -LogPath (Join-Path $resultRoot 'mcp.log')
+    Invoke-McpBenchmark -Java $java -JarPath $installedJar -BenchmarkHome $scaleHome `
+        -BenchmarkRepetitions $Repetitions -OutputJson (Join-Path $resultRoot 'mcp.json') `
+        -Failure 'M16 MCP sustained benchmark failed' -LogPath (Join-Path $resultRoot 'mcp.log')
 
     Write-Host '[7/10] Running real-provider FULL/NONE indexing benchmark...'
     & (Join-Path $RepoRoot 'scripts\m16\run-indexing-benchmark.ps1') `
