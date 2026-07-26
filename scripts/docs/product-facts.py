@@ -41,6 +41,22 @@ def cli_commands(source: str) -> list[str]:
     return commands
 
 
+def enum_values(source: str, enum_name: str) -> list[str]:
+    body = require(
+        rf"public enum {re.escape(enum_name)}\s*\{{(.*?);",
+        source,
+        f"{enum_name} values",
+        re.S,
+    )
+    values = [
+        value.lower()
+        for value in re.findall(r"\b([A-Z][A-Z0-9_]*)\b", body)
+    ]
+    if not values:
+        raise RuntimeError(f"cannot derive values for {enum_name}")
+    return values
+
+
 def provider_facts(source: str) -> list[tuple[str, str, list[str]]]:
     facts: list[tuple[str, str, list[str]]] = []
     for method in ("scipJava", "scipTypeScript"):
@@ -64,6 +80,8 @@ def render() -> str:
     api = read("minos-api/src/main/java/com/minos/api/MinosApi.java")
     mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
     cli = read("minos-cli/src/main/java/com/minos/cli/MinosCli.java")
+    symbol_formats_source = read("minos-application/src/main/java/com/minos/output/SymbolOutputFormat.java")
+    architecture_formats_source = read("minos-cli/src/main/java/com/minos/cli/ArchitectureOutputFormat.java")
     providers = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/ScipIndexerCatalog.java")
 
     version = require(r"<revision>([^<]+)</revision>", pom, "product version")
@@ -76,6 +94,8 @@ def render() -> str:
 
     commands = cli_commands(cli)
     provider_values = provider_facts(providers)
+    symbol_formats = enum_values(symbol_formats_source, "SymbolOutputFormat")
+    architecture_formats = enum_values(architecture_formats_source, "ArchitectureOutputFormat")
 
     lines = [
         "# MINOS — Facts produit générés",
@@ -105,8 +125,8 @@ def render() -> str:
     lines.extend([
         "## Formats calculables",
         "",
-        "- formats CLI structurants : `text`, `json`",
-        "- graphe d'architecture : `json`, `mermaid`, `dot`",
+        "- formats symboles : " + ", ".join(f"`{value}`" for value in symbol_formats),
+        "- formats architecture : " + ", ".join(f"`{value}`" for value in architecture_formats),
         "",
     ])
     return "\n".join(lines)
