@@ -25,7 +25,81 @@ M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
 M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
 M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
 M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
+M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
 ```
+
+## M17 — Provider & Discovery Platform
+
+M17 transforme la découverte et les providers en plateforme d'extensions explicites sans ajouter de branches d'écosystème dans les orchestrateurs centraux.
+
+Acquis M17 :
+
+```text
+S1   Discovery SPI : project/build/source-root/language detectors      ✅
+S2   Provider SPI + registry d'extensions                              ✅
+S3   capability model FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED           ✅
+S4   Gradle Java/Kotlin discovery, multi-module                        ✅
+S5   npm/pnpm/yarn workspace discovery                                 ✅
+S6   Kotlin/Maven négocié par scip-java                                ✅
+S7   Python géré par scip-python 0.6.6                                 ✅
+S8   provider conformance kit déterministe                             ✅
+S9   installation runtime composée et provider-neutral                 ✅
+```
+
+### Architecture d'extension
+
+```text
+ProjectDiscoveryService
+        ↓
+ProjectDetector / BuildSystemDetector / SourceRootDetector / LanguageDetector
+        ↓
+ProjectDiscovery factuel
+
+IndexerProviderRegistry
+        ↓
+IndexerProvider → descriptor + ProviderCapabilityProfile exhaustif
+        ↓
+IndexerRegistry neutre de négociation
+
+ProviderRuntimeManager
+        ↓
+CompositeProviderRuntimeManager
+        ├── scip-java / scip-typescript
+        └── scip-python
+```
+
+Le modèle de capacités interdit toute absence implicite : chaque capacité reçoit obligatoirement `FULL`, `PARTIAL`, `EXPERIMENTAL` ou `UNSUPPORTED`.
+
+### Écosystèmes
+
+- Maven Java/TypeScript historiques : non-régression M14 obligatoire ;
+- Gradle : découverte Java/Kotlin et modules ; aucun runtime Gradle n'est inventé ;
+- npm/pnpm/yarn : marqueurs workspace et build system hérités aux packages ;
+- Kotlin : discovery + négociation Maven via `scip-java` ;
+- Python : discovery + runtime géré `scip-python` `0.6.6` installé sous `MINOS_HOME/tools`.
+
+### Surfaces
+
+- CLI : `minos providers` expose niveaux, score, limitations et état runtime ;
+- API Java : `ProviderPlatformApi` v1 est additive et laisse `MinosApi` v1 inchangée ;
+- MCP : `minos_project_structure` et `minos_index_status` exposent `providerProfiles` tout en conservant les 16 tools historiques ;
+- doctor/tools : les runtimes optionnels sont visibles/installables sans rendre la baseline historique rouge lorsqu'ils ne sont pas installés.
+
+### Qualification
+
+La porte reproductible M17 est :
+
+```text
+scripts/m17/run-final.ps1
+```
+
+Elle rejoue `clean verify`, JaCoCo, product facts et l'intégralité de M14/Java/TypeScript/STALE/Windows, puis qualifie réellement Kotlin/Maven et Python avec installation provider, indexation, snapshot actif et requêtes symboles/usages. Verdict requis :
+
+```text
+M17 FINAL PROVIDER PLATFORM VALIDATION SUCCESS
+```
+
+La preuve exacte (SHA, tests, runtimes et résultats provider) est enregistrée dans la PR et l'issue M17 afin de ne pas modifier le head après qualification.
 
 ## M16 — Scalabilité et performance à grande échelle
 
@@ -45,94 +119,13 @@ S8   optimisation uniquement sous goulot prouvé                    ✅
 S9   rétention/compaction snapshots + runs                          ✅
 ```
 
-### Campagne STANDARD
+Le gate STANDARD utilise 10 000 fichiers logiques, 100 000 symboles, 500 000 occurrences et 250 000 relations avec seed `16000031`. Les profils `SMOKE`, `EXTENDED` et `STRESS` restent diagnostics. Le backend retenu reste snapshots fichiers versionnés + `SnapshotQueryView` + indexes mémoire reconstruisibles conformément à [ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md).
 
-Le gate obligatoire utilise le profil versionné :
-
-```text
-10 000 fichiers logiques
-100 000 symboles
-500 000 occurrences
-250 000 relations
-seed 16000031
-```
-
-Les profils `SMOKE`, `EXTENDED` et `STRESS` restent disponibles pour développement et diagnostic, mais seul `STANDARD` est requis pour fermer M16 de façon reproductible sur les machines de qualification.
-
-Les mesures comprennent : cold start, publication/chargement snapshot, construction des indexes, p50/p95/p99 des requêtes, peak/retained heap, RSS processus, disque, débit d'indexation et séquences MCP.
-
-### Requêtes couvertes
-
-```text
-find-symbol
-find-usages
-dependencies
-dependents
-related-tests
-search
-architecture
-impact
-```
-
-Le benchmark MCP rejoue les mêmes familles d'opérations sur un serveur STDIO long-lived et vérifie qu'une vue inchangée ne provoque pas de rechargement complet systématique du snapshot.
-
-### Indexation
-
-Le benchmark fournisseur réel utilise les fixtures et runtimes déjà qualifiés par M14 :
-
-- premier passage forcé : `FULL` ;
-- workspace inchangé : `NONE` / `NO_CHANGES` ;
-- source modifiée : plan observé et reporté ;
-- l'incrémental n'est jamais déclaré mesuré si le provider ne publie pas explicitement cette capability.
-
-### Mémoire, disque et décision backend
-
-Le backend M15 reste la référence :
-
-```text
-snapshots fichiers versionnés
-        +
-SnapshotQueryView bornée
-        +
-indexes mémoire reconstruisibles
-```
-
-M16 fournit un comparateur SQLite expérimental par la bibliothèque standard Python, hors runtime et hors Maven. Il sert uniquement à comparer certaines clés d'accès sur les mêmes cardinalités.
-
-[ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md) impose qu'un changement de backend n'est autorisé qu'après échec d'un seuil produit, identification du goulot et comparaison sur le même dataset/seed. Si tous les seuils STANDARD passent, **conserver le backend courant est la décision attendue**.
-
-### Rétention / compaction
-
-La croissance disque est désormais bornée par une politique explicite :
-
-```text
-snapshots : actif toujours conservé + 2 historiques
-runs      : 20 réussis + 10 non réussis
-```
-
-Le `latestRunId` référencé par l'état projet reste protégé même lorsqu'une politique plus agressive est utilisée. La compaction ne modifie jamais le snapshot actif.
-
-### Qualification
-
-La porte reproductible M16 est :
-
-```text
-scripts/m16/run-final.ps1
-```
-
-Elle rejoue d'abord `clean verify` et l'intégralité de la qualification M14/providers/Windows, puis exécute la campagne STANDARD, MCP sustained, indexation réelle, comparaison backend et rétention. Le verdict requis est :
-
-```text
-M16 FINAL SCALABILITY VALIDATION SUCCESS
-```
-
-La preuve exacte (SHA, machine, latences, mémoire, disque, débit, décision backend) est enregistrée dans la PR M16 et l'issue #63 afin de ne pas modifier le head après qualification.
+La croissance disque est bornée : snapshot actif + 2 historiques ; 20 runs réussis + 10 non réussis ; `latestRunId` protégé.
 
 ## M15 — Industrialisation du Core Engine
 
-M15 transforme le socle M14 en plateforme modulaire, réutilisable en processus long et protégée par des gates automatiques, sans changement fonctionnel volontaire des contrats utilisateur.
-
-Acquis M15 :
+M15 transforme le socle M14 en plateforme modulaire, réutilisable en processus long et protégée par des gates automatiques.
 
 ```text
 S1   baseline non-régression et coût initial                  ✅
@@ -148,76 +141,13 @@ S10  CI automatique des pull requests Linux/Windows           ✅
 S11  cohérence documentaire calculable                        ✅
 ```
 
-### Architecture M15
-
-```text
-CLI / API / MCP / NEXUS
-          ↓
-    MinosApplication
-          ↓
- services applicatifs communs
-          ↓
- FileSymbolSnapshotStore
-          ↓
- active.pointer → SnapshotQueryView
-                    ├── snapshot immuable
-                    └── indexes reconstruisibles
-```
-
-La clé logique du cache est `(projectId, snapshotId)`. Le descriptor persistant complet reste comparé afin qu'une republication du même identifiant logique avec un fichier/checksum différent ne serve jamais une vue obsolète.
-
-La correction après promotion ne dépend pas d'un callback d'invalidation : le pointeur actif est relu avant de publier une vue construite. Le cache applique également une borne d'entrées pour rendre le coût mémoire explicite avant M16.
-
-### Persistance
-
-`FileSymbolSnapshotStore` reste la façade compatible. Les responsabilités sont séparées entre :
-
-- `SnapshotRepository` ;
-- `ActiveSnapshotRepository` ;
-- `SnapshotCodecV1` / `SnapshotCodecV2` ;
-- `SnapshotIntegrityService` ;
-- `SnapshotRetentionService`.
-
-Les formats historiques `.symbols`, `.knowledge` et `active.pointer` restent compatibles.
-
-### Requêtes
-
-Les indexes mémoire dérivés couvrent notamment :
-
-- symboles par identifiant, nom normalisé, nom qualifié et fichier ;
-- occurrences par symbole résolu ;
-- relations par source, cible et type.
-
-Le snapshot persisté reste la source de vérité. Les indexes peuvent être détruits et reconstruits sans migration.
-
-### Qualité continue
-
-Le reactor est instrumenté par JaCoCo et publie un rapport agrégé sous :
-
-```text
-target/site/jacoco-aggregate/
-```
-
-Les seuils ciblés et leur justification sont décrits dans [`developer/quality-gates.md`](developer/quality-gates.md).
-
-La CI de PR exécute automatiquement `clean verify` sur Linux et Windows, puis les gates JaCoCo et cohérence documentaire. La publication de release reste un workflow distinct et explicite.
-
-### Documentation calculable
-
-Les facts produit mécaniques sont générés depuis le code par :
-
-```text
-python scripts/docs/product-facts.py
-python scripts/docs/product-facts.py --check
-```
-
-La version, le contrat API, le catalogue MCP, les commandes/formats CLI et les providers qualifiés sont publiés dans [`generated/product-facts.md`](generated/product-facts.md).
+Les snapshots persistés restent la source de vérité ; les indexes mémoire sont reconstruisibles. La CI de PR et les facts calculables restent les gates d'industrialisation.
 
 ## Contrats publics courants
 
-- CLI : stable avec codes de sortie `0/1/2` ;
-- API Java : contrat fournisseur-indépendant ;
-- MCP : STDIO read-only et accès direct aux services applicatifs, sans routage métier via CLI ;
+- CLI : stable avec codes de sortie `0/1/2`, plus diagnostics provider additifs ;
+- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 additive ;
+- MCP : STDIO read-only, 16 tools historiques, profils provider intégrés aux diagnostics ;
 - NEXUS : export JSON local versionné ;
 - installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
 - Docker MCP : mode durci optionnel.
@@ -229,17 +159,17 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 - MINOS reste propriétaire des faits de Code Intelligence ;
 - NEXUS reste propriétaire du ranking, de la sélection et du budget de contexte ;
 - les capacités fournisseur absentes ne sont jamais inventées ;
+- un nouveau langage/build system/provider se branche via SPI/catalogue d'extensions ;
+- discovery et support runtime sont des faits distincts ;
 - l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
 - une relation cross-repository exige une identité exacte et unique ;
-- l'activité Git reste distincte de l'importance architecturale ;
 - CLI, API, MCP et NEXUS consomment le même cœur applicatif ;
-- MCP ne consomme pas la CLI comme couche métier ;
 - les snapshots persistés sont la source de vérité des vues/indexes mémoire ;
 - toute évolution de backend est gouvernée par des mesures reproductibles M16.
 
 ## Suite
 
-M17 — **Provider & Discovery Platform** — est le prochain jalon planifié. Il généralise discovery et providers à de nouveaux écosystèmes tout en conservant les contrats et règles de preuve établis par M15/M16.
+M18 — **Knowledge Graph avancé** — est le prochain jalon planifié.
 
 ## Documentation
 
@@ -247,6 +177,7 @@ M17 — **Provider & Discovery Platform** — est le prochain jalon planifié. I
 - roadmap : [`ROADMAP.md`](ROADMAP.md) ;
 - exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
 - exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
+- exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
