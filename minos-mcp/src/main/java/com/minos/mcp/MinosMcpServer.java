@@ -1,5 +1,6 @@
 package com.minos.mcp;
 
+import com.minos.application.MinosApplication;
 import com.minos.cli.MinosCliRunner;
 import com.minos.runtime.MinosVersion;
 import io.modelcontextprotocol.json.McpJsonDefaults;
@@ -35,16 +36,21 @@ public final class MinosMcpServer {
         }
     }
 
-    /** Lance une session MCP STDIO avec un home déjà résolu par le launcher. */
+    /** Compatibility entry point for a resolved MINOS home. */
     public static void run(Path home) throws Exception {
-        Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
+        run(MinosApplication.open(Objects.requireNonNull(home, "home")));
+    }
+
+    /** Launches one MCP STDIO session on an already-composed application. */
+    public static void run(MinosApplication application) throws Exception {
+        MinosApplication app = Objects.requireNonNull(application, "application");
         StdioServerTransportProvider transport =
                 new StdioServerTransportProvider(McpJsonDefaults.getMapper());
         McpSyncServer server = McpServer.sync(transport)
                 .serverInfo(SERVER_NAME, SERVER_VERSION)
                 .instructions("MINOS exposes read-only local code intelligence. Tool results are bounded JSON produced by the validated MINOS core.")
                 .capabilities(ServerCapabilities.builder().tools(false).build())
-                .tools(new MinosMcpTools(normalizedHome).specifications())
+                .tools(new MinosMcpTools(new MinosApplicationCommandExecutor(app)).specifications())
                 .build();
         try {
             Thread.currentThread().join();
