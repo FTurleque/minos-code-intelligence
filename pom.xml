@@ -14,6 +14,8 @@
     <modules>
         <module>minos-domain</module>
         <module>minos-engine</module>
+        <module>minos-storage-local</module>
+        <module>minos-integration-git</module>
         <module>minos-app</module>
     </modules>
 
