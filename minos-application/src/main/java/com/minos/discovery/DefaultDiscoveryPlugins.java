@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -41,9 +40,9 @@ public final class DefaultDiscoveryPlugins {
                 markerBuildSystem(BuildSystem.MAVEN, "pom.xml"),
                 markerBuildSystem(BuildSystem.GRADLE,
                         "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"),
-                markerBuildSystem(BuildSystem.PNPM, "pnpm-lock.yaml", "pnpm-workspace.yaml"),
-                markerBuildSystem(BuildSystem.YARN, "yarn.lock"),
-                markerBuildSystem(BuildSystem.NPM, "package-lock.json")
+                inheritedWorkspaceBuildSystem(BuildSystem.PNPM, "pnpm-lock.yaml", "pnpm-workspace.yaml"),
+                inheritedWorkspaceBuildSystem(BuildSystem.YARN, "yarn.lock"),
+                inheritedWorkspaceBuildSystem(BuildSystem.NPM, "package-lock.json")
         );
     }
 
@@ -85,6 +84,28 @@ public final class DefaultDiscoveryPlugins {
                 .anyMatch(file -> visibleFile(projectRoot, file, ignorePolicy))
                 ? Optional.of(system)
                 : Optional.empty();
+    }
+
+    private static BuildSystemDetector inheritedWorkspaceBuildSystem(BuildSystem system, String... markers) {
+        List<String> names = List.of(markers);
+        return (projectRoot, moduleRoot, ignorePolicy) -> {
+            Path current = moduleRoot.toAbsolutePath().normalize();
+            Path root = projectRoot.toAbsolutePath().normalize();
+            while (current != null && current.startsWith(root)) {
+                Path directory = current;
+                boolean present = names.stream()
+                        .map(directory::resolve)
+                        .anyMatch(file -> visibleFile(root, file, ignorePolicy));
+                if (present) {
+                    return Optional.of(system);
+                }
+                if (current.equals(root)) {
+                    break;
+                }
+                current = current.getParent();
+            }
+            return Optional.empty();
+        };
     }
 
     private static LanguageDetector extensionLanguage(Language language, String... extensions) {
