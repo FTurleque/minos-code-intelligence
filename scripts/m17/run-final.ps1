@@ -58,9 +58,10 @@ function Invoke-NativeChecked {
     $previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        & $File @Arguments
+        $output = @(& $File @Arguments)
         $exit = $LASTEXITCODE
     } finally { $ErrorActionPreference = $previous }
+    $output | ForEach-Object { Write-Host $_ }
     if ($exit -ne 0) { throw "$Failure (exit=$exit)" }
 }
 
