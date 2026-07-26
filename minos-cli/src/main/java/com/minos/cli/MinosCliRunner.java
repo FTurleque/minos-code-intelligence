@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.MinosHome;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.integration.nexus.NexusExportService;
@@ -21,8 +22,8 @@ import java.util.Set;
  */
 public final class MinosCliRunner {
 
-    public static final String HOME_ENVIRONMENT_VARIABLE = "MINOS_HOME";
-    public static final String HOME_SYSTEM_PROPERTY = "minos.home";
+    public static final String HOME_ENVIRONMENT_VARIABLE = MinosHome.ENVIRONMENT_VARIABLE;
+    public static final String HOME_SYSTEM_PROPERTY = MinosHome.SYSTEM_PROPERTY;
 
     private static final Set<String> STATELESS_HELP_COMMANDS = Set.of(
             ProjectCommand.NAME,
@@ -125,23 +126,7 @@ public final class MinosCliRunner {
     }
 
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
-        Objects.requireNonNull(environment, "environment");
-        Objects.requireNonNull(properties, "properties");
-
-        String property = properties.getProperty(HOME_SYSTEM_PROPERTY);
-        if (property != null && !property.isBlank()) {
-            return Path.of(property);
-        }
-        String environmentValue = environment.get(HOME_ENVIRONMENT_VARIABLE);
-        if (environmentValue != null && !environmentValue.isBlank()) {
-            return Path.of(environmentValue);
-        }
-        String userHome = properties.getProperty("user.home");
-        if (userHome == null || userHome.isBlank()) {
-            throw new IllegalStateException(
-                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory");
-        }
-        return Path.of(userHome).resolve(".minos");
+        return MinosHome.resolve(environment, properties);
     }
 
     private static MinosCli statelessHelpCli() {
