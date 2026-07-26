@@ -21,25 +21,30 @@ import com.minos.store.InMemoryCodeKnowledgeStore;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Application-level read service over the active Code Intelligence snapshot of a project.
  *
  * <p>Transport adapters must use this service instead of rebuilding snapshot/query plumbing.
- * Project reference resolution intentionally remains local here until M15-S5 introduces the
- * shared {@code ProjectResolver}.</p>
+ * Project references are resolved exclusively through the shared {@link ProjectResolver}.</p>
  */
 public final class ProjectQueryService {
 
-    private final LocalProjectRegistry projectRegistry;
+    private final ProjectResolver projectResolver;
     private final FileSymbolSnapshotStore snapshotStore;
 
     public ProjectQueryService(
             LocalProjectRegistry projectRegistry,
             FileSymbolSnapshotStore snapshotStore
     ) {
-        this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
+        this(new ProjectResolver(projectRegistry), snapshotStore);
+    }
+
+    public ProjectQueryService(
+            ProjectResolver projectResolver,
+            FileSymbolSnapshotStore snapshotStore
+    ) {
+        this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
     }
 
@@ -47,7 +52,7 @@ public final class ProjectQueryService {
             String projectIdentifier,
             SymbolSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return loadQueryService(project).findSymbolResults(
                 project.id().toString(),
                 Objects.requireNonNull(criteria, "criteria")
@@ -59,7 +64,7 @@ public final class ProjectQueryService {
             String fileId,
             int limit
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return loadQueryService(project).getFileSymbolResults(
                 project.id().toString(),
                 fileId,
@@ -72,7 +77,7 @@ public final class ProjectQueryService {
             String symbolId,
             int limit
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return new SymbolQueryService(loadQueryStore(project)).findUsageResults(
                 project.id().toString(),
                 symbolId,
@@ -84,7 +89,7 @@ public final class ProjectQueryService {
             String projectIdentifier,
             RelationshipSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return new RelationshipQueryService(loadQueryStore(project)).findRelationshipResults(
                 project.id().toString(),
                 Objects.requireNonNull(criteria, "criteria")
@@ -95,7 +100,7 @@ public final class ProjectQueryService {
             String projectIdentifier,
             CodeSearchCriteria criteria
     ) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return new CodeSearchService(
                 loadQueryStore(project),
                 new LocalSourceReader(project.rootPath())
@@ -103,7 +108,7 @@ public final class ProjectQueryService {
     }
 
     public SourceExcerpt getSource(String projectIdentifier, String fileId) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         return new LocalSourceReader(project.rootPath()).readFull(fileId);
     }
 
@@ -122,40 +127,5 @@ public final class ProjectQueryService {
         queryStore.putOccurrences(snapshot.occurrences());
         queryStore.putRelationships(snapshot.relationships());
         return queryStore;
-    }
-
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        if (identifier == null || identifier.isBlank()) {
-            throw new IllegalArgumentException("project identifier must not be blank");
-        }
-
-        UUID projectId = parseUuid(identifier);
-        if (projectId != null) {
-            return projectRegistry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "unknown project: " + identifier
-                    ));
-        }
-
-        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException(
-                    "ambiguous project name, use its UUID: " + identifier
-            );
-        }
-        return matches.getFirst();
-    }
-
-    private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 }

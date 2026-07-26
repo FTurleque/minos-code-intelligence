@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public final class ProjectInspectionService {
 
     private final LocalProjectRegistry registry;
+    private final ProjectResolver projectResolver;
     private final FileSymbolSnapshotStore snapshotStore;
     private final FileIndexStateStore stateStore;
     private final ProjectDiscoveryService discoveryService;
@@ -45,8 +46,29 @@ public final class ProjectInspectionService {
             ProjectDiscoveryService discoveryService,
             List<IndexerDescriptor> indexerDescriptors
     ) {
+        this(
+                home,
+                registry,
+                new ProjectResolver(registry),
+                snapshotStore,
+                stateStore,
+                discoveryService,
+                indexerDescriptors
+        );
+    }
+
+    public ProjectInspectionService(
+            Path home,
+            LocalProjectRegistry registry,
+            ProjectResolver projectResolver,
+            FileSymbolSnapshotStore snapshotStore,
+            FileIndexStateStore stateStore,
+            ProjectDiscoveryService discoveryService,
+            List<IndexerDescriptor> indexerDescriptors
+    ) {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.registry = Objects.requireNonNull(registry, "registry");
+        this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
@@ -64,7 +86,7 @@ public final class ProjectInspectionService {
     }
 
     public ProjectView inspectProject(String projectIdentifier) throws IOException {
-        return view(resolveProject(projectIdentifier));
+        return view(projectResolver.resolve(projectIdentifier));
     }
 
     public ProjectView view(RegisteredProject project) throws IOException {
@@ -146,25 +168,6 @@ public final class ProjectInspectionService {
                 .collect(Collectors.joining(","));
     }
 
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        requireText(identifier, "project identifier");
-        UUID projectId = parseUuid(identifier);
-        if (projectId != null) {
-            return registry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException("unknown project: " + identifier));
-        }
-        List<RegisteredProject> matches = registry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
-        }
-        return matches.getFirst();
-    }
-
     private Optional<IndexHistory> readHistory(UUID projectId) throws IOException {
         Path file = historyDirectory.resolve(projectId + ".properties");
         if (!Files.isRegularFile(file)) {
@@ -180,14 +183,6 @@ public final class ProjectInspectionService {
                 blankToNull(properties.getProperty("providerVersion")),
                 Instant.parse(required(properties, "completedAt", file))
         ));
-    }
-
-    private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 
     private static String required(Properties properties, String key, Path file) {

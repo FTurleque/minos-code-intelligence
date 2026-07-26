@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.IncrementalIndexingPlan;
@@ -22,7 +23,6 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.registry.LocalProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -42,7 +42,7 @@ import java.util.UUID;
 public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
 
     private final MinosApplication application;
-    private final LocalProjectRegistry projectRegistry;
+    private final ProjectResolver projectResolver;
     private final FileSymbolSnapshotStore snapshotStore;
     private final FileIndexStateStore stateStore;
     private final FileProjectFingerprintSnapshotStore fingerprintStore;
@@ -59,7 +59,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
 
     public LocalAutonomousIndexOperations(MinosApplication application) {
         this.application = Objects.requireNonNull(application, "application");
-        this.projectRegistry = application.projectRegistry();
+        this.projectResolver = new ProjectResolver(application.projectRegistry());
         this.snapshotStore = application.snapshotStore();
         this.stateStore = application.indexStateStore();
         this.fingerprintStore = application.fingerprintStore();
@@ -136,7 +136,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     }
 
     private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
         ProjectIndexState indexState = alignedIndexState(project.id());
@@ -196,33 +196,6 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, Instant.now()));
         stateStore.saveProjectState(aligned);
         return aligned;
-    }
-
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        if (identifier == null || identifier.isBlank()) {
-            throw new IllegalArgumentException("project identifier must not be blank");
-        }
-        UUID parsed = null;
-        try {
-            parsed = UUID.fromString(identifier);
-        } catch (IllegalArgumentException ignored) {
-            // display name path below; centralized resolution is M15-S5.
-        }
-        if (parsed != null) {
-            UUID id = parsed;
-            return projectRegistry.findProject(id)
-                    .orElseThrow(() -> new IllegalArgumentException("unknown project: " + identifier));
-        }
-        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException("ambiguous project name, use its UUID: " + identifier);
-        }
-        return matches.getFirst();
     }
 
     private static ProviderView view(ProviderRuntimeStatus status) {

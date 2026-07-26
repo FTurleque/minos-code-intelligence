@@ -1,5 +1,6 @@
 package com.minos.architecture;
 
+import com.minos.application.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.registry.LocalProjectRegistry;
@@ -8,16 +9,14 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
- * Bootstrap local M6 : registre projet + découverte factuelle + snapshot actif.
+ * Bootstrap local M6 : résolution projet + découverte factuelle + snapshot actif.
  */
 public final class LocalProjectArchitectureQuery implements ProjectArchitectureQuery {
 
-    private final LocalProjectRegistry projectRegistry;
+    private final ProjectResolver projectResolver;
     private final FileSymbolSnapshotStore snapshotStore;
     private final ProjectDiscoveryService discoveryService;
     private final ArchitectureTopologyService topologyService;
@@ -32,7 +31,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             FileSymbolSnapshotStore snapshotStore
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
                 snapshotStore,
                 new ProjectDiscoveryService(),
                 new ArchitectureTopologyService(),
@@ -50,7 +49,25 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ProjectDiscoveryService discoveryService
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
+                snapshotStore,
+                discoveryService,
+                new ArchitectureTopologyService(),
+                new ArchitectureDependencyService(),
+                new ArchitectureConcentrationService(),
+                new ArchitectureCentralityService(),
+                new ArchitectureTechnologyService()
+        );
+    }
+
+    /** Composition constructor used when a shared application resolver is available. */
+    public LocalProjectArchitectureQuery(
+            ProjectResolver projectResolver,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService
+    ) {
+        this(
+                projectResolver,
                 snapshotStore,
                 discoveryService,
                 new ArchitectureTopologyService(),
@@ -68,7 +85,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureTopologyService topologyService
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
                 snapshotStore,
                 discoveryService,
                 topologyService,
@@ -87,7 +104,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureDependencyService dependencyService
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
                 snapshotStore,
                 discoveryService,
                 topologyService,
@@ -107,7 +124,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureConcentrationService concentrationService
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
                 snapshotStore,
                 discoveryService,
                 topologyService,
@@ -128,7 +145,7 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureCentralityService centralityService
     ) {
         this(
-                projectRegistry,
+                new ProjectResolver(projectRegistry),
                 snapshotStore,
                 discoveryService,
                 topologyService,
@@ -149,7 +166,29 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
             ArchitectureCentralityService centralityService,
             ArchitectureTechnologyService technologyService
     ) {
-        this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
+        this(
+                new ProjectResolver(projectRegistry),
+                snapshotStore,
+                discoveryService,
+                topologyService,
+                dependencyService,
+                concentrationService,
+                centralityService,
+                technologyService
+        );
+    }
+
+    private LocalProjectArchitectureQuery(
+            ProjectResolver projectResolver,
+            FileSymbolSnapshotStore snapshotStore,
+            ProjectDiscoveryService discoveryService,
+            ArchitectureTopologyService topologyService,
+            ArchitectureDependencyService dependencyService,
+            ArchitectureConcentrationService concentrationService,
+            ArchitectureCentralityService centralityService,
+            ArchitectureTechnologyService technologyService
+    ) {
+        this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.topologyService = Objects.requireNonNull(topologyService, "topologyService");
@@ -220,48 +259,13 @@ public final class LocalProjectArchitectureQuery implements ProjectArchitectureQ
     }
 
     private ProjectContext loadContext(String projectIdentifier) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException(
                         "project has no active code knowledge snapshot: " + project.id()
                 ));
         ProjectDiscovery discovery = discoveryService.discover(project.rootPath());
         return new ProjectContext(discovery, snapshot);
-    }
-
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        if (identifier == null || identifier.isBlank()) {
-            throw new IllegalArgumentException("project identifier must not be blank");
-        }
-
-        UUID projectId = parseUuid(identifier);
-        if (projectId != null) {
-            return projectRegistry.findProject(projectId)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "unknown project: " + identifier
-                    ));
-        }
-
-        List<RegisteredProject> matches = projectRegistry.listProjects().stream()
-                .filter(project -> identifier.equals(project.displayName()))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException(
-                    "ambiguous project name, use its UUID: " + identifier
-            );
-        }
-        return matches.getFirst();
-    }
-
-    private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 
     private record ProjectContext(ProjectDiscovery discovery, CodeKnowledgeSnapshot snapshot) {
