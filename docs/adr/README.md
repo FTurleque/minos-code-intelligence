@@ -38,6 +38,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0021](0021-native-runtime-autonomous-indexing.md) | Utiliser un runtime MINOS natif pour l’indexation autonome et conserver Docker MCP comme mode durci optionnel | Accepted | M14 |
 | [0022](0022-maven-reactor-and-module-boundaries.md) | Imposer les frontières MINOS par un reactor Maven progressif | Accepted | M15-S2 |
 | [0023](0023-decomposed-local-snapshot-persistence.md) | Décomposer la persistance locale des snapshots sans changer le format disque | Accepted | M15-S6 |
+| [0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
 
 ## Règle de rédaction
 
@@ -48,4 +49,4 @@ Un ADR doit capturer :
 3. ses conséquences et limites ;
 4. un lien vers les preuves historiques lorsqu’elles existent.
 
-Un ADR ne doit pas devenir un journal de build ou de PR. Les nombres de tests, replays détaillés, benchmarks et états intermédiaires appartiennent à `history/milestones/`.
+Un ADR ne doit pas devenir un journal de build ou de PR. Les nombres de tests, replays détaillés, benchmarks et états intermédiaires appartiennent aux preuves de qualification.
