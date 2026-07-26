@@ -24,7 +24,109 @@ M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
 M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
 M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
 M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
+M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
 ```
+
+## M16 — Scalabilité et performance à grande échelle
+
+M16 ajoute une campagne de performance reproductible sans changer les contrats publics MINOS ni présélectionner un backend plus complexe.
+
+Acquis M16 :
+
+```text
+S1   harness benchmark exact-head + machine/JVM                    ✅
+S2   datasets synthétiques déterministes et fixtures réelles       ✅
+S3   query benchmark p50/p95/p99                                   ✅
+S4   MCP sustained load sur serveur STDIO long-lived               ✅
+S5   indexation réelle FULL/NONE + débit/RSS                        ✅
+S6   profil heap/RSS/disque/indexes                                 ✅
+S7   décision backend gouvernée par mesures                         ✅
+S8   optimisation uniquement sous goulot prouvé                    ✅
+S9   rétention/compaction snapshots + runs                          ✅
+```
+
+### Campagne STANDARD
+
+Le gate obligatoire utilise le profil versionné :
+
+```text
+10 000 fichiers logiques
+100 000 symboles
+500 000 occurrences
+250 000 relations
+seed 16000031
+```
+
+Les profils `SMOKE`, `EXTENDED` et `STRESS` restent disponibles pour développement et diagnostic, mais seul `STANDARD` est requis pour fermer M16 de façon reproductible sur les machines de qualification.
+
+Les mesures comprennent : cold start, publication/chargement snapshot, construction des indexes, p50/p95/p99 des requêtes, peak/retained heap, RSS processus, disque, débit d'indexation et séquences MCP.
+
+### Requêtes couvertes
+
+```text
+find-symbol
+find-usages
+dependencies
+dependents
+related-tests
+search
+architecture
+impact
+```
+
+Le benchmark MCP rejoue les mêmes familles d'opérations sur un serveur STDIO long-lived et vérifie qu'une vue inchangée ne provoque pas de rechargement complet systématique du snapshot.
+
+### Indexation
+
+Le benchmark fournisseur réel utilise les fixtures et runtimes déjà qualifiés par M14 :
+
+- premier passage forcé : `FULL` ;
+- workspace inchangé : `NONE` / `NO_CHANGES` ;
+- source modifiée : plan observé et reporté ;
+- l'incrémental n'est jamais déclaré mesuré si le provider ne publie pas explicitement cette capability.
+
+### Mémoire, disque et décision backend
+
+Le backend M15 reste la référence :
+
+```text
+snapshots fichiers versionnés
+        +
+SnapshotQueryView bornée
+        +
+indexes mémoire reconstruisibles
+```
+
+M16 fournit un comparateur SQLite expérimental par la bibliothèque standard Python, hors runtime et hors Maven. Il sert uniquement à comparer certaines clés d'accès sur les mêmes cardinalités.
+
+[ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md) impose qu'un changement de backend n'est autorisé qu'après échec d'un seuil produit, identification du goulot et comparaison sur le même dataset/seed. Si tous les seuils STANDARD passent, **conserver le backend courant est la décision attendue**.
+
+### Rétention / compaction
+
+La croissance disque est désormais bornée par une politique explicite :
+
+```text
+snapshots : actif toujours conservé + 2 historiques
+runs      : 20 réussis + 10 non réussis
+```
+
+Le `latestRunId` référencé par l'état projet reste protégé même lorsqu'une politique plus agressive est utilisée. La compaction ne modifie jamais le snapshot actif.
+
+### Qualification
+
+La porte reproductible M16 est :
+
+```text
+scripts/m16/run-final.ps1
+```
+
+Elle rejoue d'abord `clean verify` et l'intégralité de la qualification M14/providers/Windows, puis exécute la campagne STANDARD, MCP sustained, indexation réelle, comparaison backend et rétention. Le verdict requis est :
+
+```text
+M16 FINAL SCALABILITY VALIDATION SUCCESS
+```
+
+La preuve exacte (SHA, machine, latences, mémoire, disque, débit, décision backend) est enregistrée dans la PR M16 et l'issue #63 afin de ne pas modifier le head après qualification.
 
 ## M15 — Industrialisation du Core Engine
 
@@ -111,28 +213,6 @@ python scripts/docs/product-facts.py --check
 
 La version, le contrat API, le catalogue MCP, les commandes/formats CLI et les providers qualifiés sont publiés dans [`generated/product-facts.md`](generated/product-facts.md).
 
-## Porte de qualification M15
-
-La qualification finale est attachée au head exact de la PR #62 et enregistrée dans l'issue #55. Le runner reproductible est :
-
-```text
-scripts/m15/run-final.ps1
-```
-
-Il couvre :
-
-- Java 24 / Maven Wrapper ;
-- reactor 13 projets ;
-- `clean verify` ;
-- replays M14, providers Java/TypeScript et STALE recovery ;
-- distribution/installation/doctor/MCP natifs Windows ;
-- JaCoCo ciblé ;
-- facts documentaires ;
-- cache actif et indexes ;
-- comparaison du nombre de chargements complets avec la baseline S1.
-
-La PR n'est intégrée à `main` que si ce head final passe ses gates.
-
 ## Contrats publics courants
 
 - CLI : stable avec codes de sortie `0/1/2` ;
@@ -155,17 +235,18 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 - CLI, API, MCP et NEXUS consomment le même cœur applicatif ;
 - MCP ne consomme pas la CLI comme couche métier ;
 - les snapshots persistés sont la source de vérité des vues/indexes mémoire ;
-- un nouveau backend n'est adopté qu'après mesures M16.
+- toute évolution de backend est gouvernée par des mesures reproductibles M16.
 
 ## Suite
 
-M16 — **Scalabilité et performance à grande échelle** — est le prochain jalon planifié. Il doit mesurer grands codebases, latences p50/p95/p99, mémoire/disque, charge MCP, coût d'indexation et politique de rétention avant toute décision de backend plus complexe.
+M17 — **Provider & Discovery Platform** — est le prochain jalon planifié. Il généralise discovery et providers à de nouveaux écosystèmes tout en conservant les contrats et règles de preuve établis par M15/M16.
 
 ## Documentation
 
 - portail : [`README.md`](README.md) ;
 - roadmap : [`ROADMAP.md`](ROADMAP.md) ;
 - exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
+- exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
