@@ -59,6 +59,20 @@ Les dépendances suivantes doivent devenir impossibles ou explicitement détect�
 - architecture/impact → couches d'exposition ;
 - API publique → backend local concret lorsqu'un port stable peut être utilisé.
 
+### Frontières ratifiées pendant S2
+
+Le premier checkpoint qualifié ratifie `minos-domain` comme artefact sans dépendance externe : il possède `com.minos.domain` et `minos-app` ne compile plus ces classes directement.
+
+Le checkpoint suivant ratifie `minos-engine` autour du noyau de requête provider/backend-independent :
+
+```text
+minos-engine
+├── com.minos.query.*
+└── com.minos.store.CodeKnowledgeStore   # port moteur, pas implémentation locale
+```
+
+`CodeKnowledgeStore` appartient à la frontière moteur car son contrat est défini par les besoins MINOS et ne reflète aucun backend particulier. Les implémentations mémoire/fichier restent hors de `minos-engine` et dépendent de ce port. À ce checkpoint, `minos-engine` dépend uniquement de `minos-domain`.
+
 ## Migration séquentielle
 
 S2 suit une migration en plusieurs commits qualifiables :
@@ -70,10 +84,12 @@ S2 suit une migration en plusieurs commits qualifiables :
 5. extraire persistance, provider SCIP et intégration Git ;
 6. extraire API/CLI/MCP/NEXUS ;
 7. réduire `minos-app` au bootstrap/composition ;
-8. supprimer toute compatibilité transitoire de source layout ;
+8. relocaliser physiquement les sources dans leurs modules et supprimer toute compatibilité transitoire de source layout ;
 9. qualifier le reactor complet et les distributions M14.
 
-Le premier incrément utilise donc volontairement `minos-app` avec `sourceDirectory`/`testSourceDirectory` pointant vers les répertoires historiques de la racine. **Cette configuration est transitoire et doit disparaître avant la fermeture de M15-S2.** Elle permet de prouver d'abord le changement de reactor sans déplacer simultanément 182 sources principales et 92 sources de tests.
+Les checkpoints 3 et 4 utilisent volontairement une phase d'**ownership Maven avant relocation physique** : les sources restent temporairement dans l'arbre historique, mais chaque module cible les compile explicitement et `minos-app` les exclut. Les runners S2 inspectent ensuite les JARs et `target/classes` pour prouver que l'ownership est réellement imposé par Maven.
+
+Cette configuration est transitoire et doit disparaître avant la fermeture de M15-S2. La relocation physique devient alors une opération mécanique effectuée après stabilisation des frontières, plutôt qu'un mélange de décisions architecturales et de mouvements de fichiers.
 
 ## Coordonnée et packaging utilisateur
 
@@ -121,7 +137,8 @@ Chaque étape S2 doit conserver :
 - la période de migration contient temporairement un module `minos-app` plus large que sa responsabilité finale ;
 - les scripts de build/release doivent raisonner sur le reactor et non sur un POM mono-module ;
 - chaque extraction doit déplacer les tests pertinents avec le code ou conserver une justification explicite ;
-- aucun module cible ne peut être déclaré terminé sans compilation et replays sur un SHA exact.
+- aucun module cible ne peut être déclaré terminé sans compilation et replays sur un SHA exact ;
+- la phase d'ownership Maven par source roots externes doit être supprimée avant la gate finale S2.
 
 ## Alternatives rejetées
 
