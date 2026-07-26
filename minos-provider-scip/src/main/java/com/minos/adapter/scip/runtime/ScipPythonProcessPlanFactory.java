@@ -9,15 +9,25 @@ import com.minos.runtime.IndexerProcessPlanFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /** Process plan for the managed scip-python provider. */
 public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFactory {
-    private final Path executable;
+    private final List<String> launcher;
 
     public ScipPythonProcessPlanFactory(Path executable) {
-        this.executable = Objects.requireNonNull(executable, "executable").toAbsolutePath().normalize();
+        this(CommandLocator.invocation(Objects.requireNonNull(executable, "executable").toAbsolutePath().normalize()));
+    }
+
+    ScipPythonProcessPlanFactory(List<String> launcher) {
+        Objects.requireNonNull(launcher, "launcher");
+        if (launcher.isEmpty() || launcher.stream().anyMatch(value -> value == null || value.isBlank())) {
+            throw new IllegalArgumentException("launcher must contain non-blank arguments");
+        }
+        this.launcher = List.copyOf(launcher);
     }
 
     @Override
@@ -26,25 +36,23 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
         if (!containsPythonSource(root)) {
             throw new IllegalArgumentException("scip-python requires at least one .py source: " + root);
         }
-        if (!Files.isRegularFile(executable)) {
-            throw new IllegalStateException("scip-python executable is missing: " + executable);
-        }
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-python incremental execution is not qualified by MINOS M17");
         }
         Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
         Files.createDirectories(output.getParent());
         String projectName = root.getFileName() == null ? "minos-python-project" : root.getFileName().toString();
+        List<String> command = new ArrayList<>(launcher);
+        command.addAll(List.of(
+                "index",
+                "--cwd", root.toString(),
+                "--output", output.toString(),
+                "--project-name", projectName,
+                "--project-version", "_",
+                "--quiet"
+        ));
         return new IndexerProcessPlan(
-                CommandLocator.invocation(
-                        executable,
-                        "index",
-                        "--cwd", root.toString(),
-                        "--output", output.toString(),
-                        "--project-name", projectName,
-                        "--project-version", "_",
-                        "--quiet"
-                ),
+                command,
                 root,
                 Map.of(),
                 output,
