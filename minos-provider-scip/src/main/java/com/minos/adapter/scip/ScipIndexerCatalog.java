@@ -122,6 +122,7 @@ public final class ScipIndexerCatalog {
                 List.of(
                         "managed runtime requires Node.js and npm plus Python 3.10+ in PATH",
                         "environment/package resolution follows scip-python and may use pip metadata",
+                        "Windows execution applies the upstream #211 regexp compatibility workaround required by scip-python 0.6.6",
                         "implementation, call and incremental relations are not claimed by MINOS M17",
                         "multi-root Python workspace semantics are not claimed"
                 )
