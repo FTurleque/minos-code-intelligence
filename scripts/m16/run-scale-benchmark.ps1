@@ -30,9 +30,21 @@ function Quote-Arg([string] $Value) {
 
 $arguments = @('--class-path', $jar, $source, $homePath, $Profile, [string]$Repetitions, $output)
 $encoded = ($arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $java.JavaExecutable
+$startInfo.Arguments = $encoded
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+$process = New-Object System.Diagnostics.Process
+$process.StartInfo = $startInfo
 $watch = [System.Diagnostics.Stopwatch]::StartNew()
-$process = Start-Process -FilePath $java.JavaExecutable -ArgumentList $encoded -PassThru -NoNewWindow `
-    -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+if (-not $process.Start()) {
+    throw 'Unable to start M16 scale benchmark process.'
+}
+$stdoutTask = $process.StandardOutput.ReadToEndAsync()
+$stderrTask = $process.StandardError.ReadToEndAsync()
 [long] $peakRss = 0
 while (-not $process.HasExited) {
     try {
@@ -42,12 +54,16 @@ while (-not $process.HasExited) {
     Start-Sleep -Milliseconds 100
     $process.Refresh()
 }
-$watch.Stop()
 $process.WaitForExit()
-if ($process.ExitCode -ne 0) {
-    $err = if (Test-Path $stderr) { Get-Content -LiteralPath $stderr -Raw } else { '' }
-    $out = if (Test-Path $stdout) { Get-Content -LiteralPath $stdout -Raw } else { '' }
-    throw "M16 scale benchmark process failed (exit=$($process.ExitCode)).`n$err`n$out"
+$watch.Stop()
+$stdoutText = $stdoutTask.Result
+$stderrText = $stderrTask.Result
+$exitCode = $process.ExitCode
+[System.IO.File]::WriteAllText($stdout, $stdoutText)
+[System.IO.File]::WriteAllText($stderr, $stderrText)
+$process.Dispose()
+if ($exitCode -ne 0) {
+    throw "M16 scale benchmark process failed (exit=$exitCode).`n$stderrText`n$stdoutText"
 }
 if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
     throw "M16 scale benchmark did not produce $output"
