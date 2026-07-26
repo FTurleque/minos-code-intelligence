@@ -3,10 +3,12 @@ package com.minos.adapter.scip.runtime;
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.CommandLocator;
+import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +16,10 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -47,8 +52,11 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         if (CommandLocator.find("npm").isEmpty()) {
             diagnostics.add("npm is required to install scip-python");
         }
-        if (pythonExecutable().isEmpty()) {
+        Optional<Path> python = pythonExecutable();
+        if (python.isEmpty()) {
             diagnostics.add("Python 3.10+ is required in PATH by scip-python");
+        } else if (pipExecutable(python.orElseThrow()).isEmpty()) {
+            diagnostics.add("pip is required by scip-python and must be available with the selected Python runtime");
         }
         Path executable = executable();
         boolean installed = Files.isRegularFile(executable);
@@ -75,8 +83,11 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                 .orElseThrow(() -> new IllegalStateException("npm is required to install scip-python"));
         CommandLocator.find("node")
                 .orElseThrow(() -> new IllegalStateException("Node.js 16+ is required to run scip-python"));
-        pythonExecutable()
+        Path python = pythonExecutable()
                 .orElseThrow(() -> new IllegalStateException("Python 3.10+ is required in PATH to run scip-python"));
+        pipExecutable(python)
+                .orElseThrow(() -> new IllegalStateException(
+                        "pip is required by scip-python and must be available with the selected Python runtime"));
 
         Files.createDirectories(toolsRoot);
         Path destination = root();
@@ -116,10 +127,15 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             throw new IllegalStateException("provider runtime is not ready: " + providerId + " — "
                     + String.join("; ", status.diagnostics()));
         }
+        Path python = pythonExecutable().orElseThrow();
+        Path pip = pipExecutable(python).orElseThrow();
+        Map<String, String> providerEnvironment = providerEnvironment(python, pip);
+        ScipPythonProcessPlanFactory delegate = new ScipPythonProcessPlanFactory(status.executable().orElseThrow());
         return new ProcessIndexerExecutor(
                 providerId,
                 home,
-                new ScipPythonProcessPlanFactory(status.executable().orElseThrow())
+                (request, runDirectory) -> withEnvironment(
+                        delegate.create(request, runDirectory), providerEnvironment)
         );
     }
 
@@ -138,6 +154,69 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             return python;
         }
         return CommandLocator.find("python3");
+    }
+
+    private static Optional<Path> pipExecutable(Path python) {
+        Optional<Path> pip = CommandLocator.find("pip3");
+        if (pip.isPresent()) {
+            return pip;
+        }
+        pip = CommandLocator.find("pip");
+        if (pip.isPresent()) {
+            return pip;
+        }
+
+        LinkedHashSet<Path> directories = new LinkedHashSet<>();
+        Path pythonDirectory = python.toAbsolutePath().normalize().getParent();
+        if (pythonDirectory != null) {
+            directories.add(pythonDirectory);
+            if (CommandLocator.isWindows()) {
+                directories.add(pythonDirectory.resolve("Scripts"));
+            }
+        }
+        List<String> names = CommandLocator.isWindows()
+                ? List.of("pip3.exe", "pip.exe", "pip3.cmd", "pip.cmd", "pip3", "pip")
+                : List.of("pip3", "pip");
+        for (Path directory : directories) {
+            for (String name : names) {
+                Path candidate = directory.resolve(name).toAbsolutePath().normalize();
+                if (Files.isRegularFile(candidate)) {
+                    return Optional.of(candidate);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Map<String, String> providerEnvironment(Path python, Path pip) {
+        LinkedHashSet<String> directories = new LinkedHashSet<>();
+        if (pip.getParent() != null) {
+            directories.add(pip.getParent().toAbsolutePath().normalize().toString());
+        }
+        if (python.getParent() != null) {
+            directories.add(python.getParent().toAbsolutePath().normalize().toString());
+        }
+        String inheritedPath = System.getenv("PATH");
+        String prefix = String.join(File.pathSeparator, directories);
+        String effectivePath = inheritedPath == null || inheritedPath.isBlank()
+                ? prefix
+                : prefix + File.pathSeparator + inheritedPath;
+        return Map.of("PATH", effectivePath);
+    }
+
+    private static IndexerProcessPlan withEnvironment(
+            IndexerProcessPlan plan,
+            Map<String, String> providerEnvironment
+    ) {
+        Map<String, String> environment = new LinkedHashMap<>(plan.environment());
+        environment.putAll(providerEnvironment);
+        return new IndexerProcessPlan(
+                plan.command(),
+                plan.workingDirectory(),
+                environment,
+                plan.generatedArtifact(),
+                plan.timeout()
+        );
     }
 
     private static void requireProvider(String providerId) {
