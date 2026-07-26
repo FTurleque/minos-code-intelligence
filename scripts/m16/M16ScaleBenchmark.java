@@ -35,29 +35,32 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+/** Deterministic M16 query/memory/disk benchmark executed against the exact shaded JAR under qualification. */
 public final class M16ScaleBenchmark {
 
     private static final Origin ORIGIN = new Origin(
             "m16-synthetic", "synthetic", "1", "m16-benchmark", OriginType.OTHER);
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 4) {
+    public static void main(String[] arguments) throws Exception {
+        if (arguments.length != 4) {
             throw new IllegalArgumentException(
                     "usage: M16ScaleBenchmark <home> <SMOKE|STANDARD|EXTENDED|STRESS> <repetitions> <output-json>");
         }
-        Path home = Path.of(args[0]).toAbsolutePath().normalize();
-        Profile profile = Profile.valueOf(args[1].toUpperCase());
-        int repetitions = Integer.parseInt(args[2]);
+        Path home = Path.of(arguments[0]).toAbsolutePath().normalize();
+        Profile profile = Profile.valueOf(arguments[1].toUpperCase());
+        int repetitions = Integer.parseInt(arguments[2]);
         if (repetitions < 5 || repetitions > 500) {
             throw new IllegalArgumentException("repetitions must be between 5 and 500");
         }
-        Path output = Path.of(args[3]).toAbsolutePath().normalize();
+        Path output = Path.of(arguments[3]).toAbsolutePath().normalize();
         Files.createDirectories(output.getParent());
         deleteRecursively(home);
         Files.createDirectories(home);
@@ -74,8 +77,13 @@ public final class M16ScaleBenchmark {
         Dataset dataset = generate(project.id(), profile);
         FileSymbolSnapshotStore store = application.snapshotStore();
         long publishStarted = System.nanoTime();
-        store.publish(project.id(), "m16-" + profile.name().toLowerCase(),
-                dataset.symbols(), dataset.occurrences(), dataset.relationships());
+        store.publish(
+                project.id(),
+                "m16-" + profile.name().toLowerCase(),
+                dataset.symbols(),
+                dataset.occurrences(),
+                dataset.relationships()
+        );
         double publishMs = elapsedMs(publishStarted);
         dataset = null;
         forceGc();
@@ -88,12 +96,13 @@ public final class M16ScaleBenchmark {
 
         ProjectQueryService queries = application.projectQueryService();
         String projectName = project.displayName();
-        String usageAnchor = symbolId(profile.symbols() / 2 + 3);
-        String dependencyAnchor = symbolId(profile.symbols() / 2 + 2);
-        String dependentAnchor = symbolId(profile.symbols() / 2 + 3);
-        String impactAnchor = symbolId(profile.symbols() / 2 + 1);
-        String relatedTestAnchor = symbolId(profile.symbols() / 2 + 1);
-        String symbolGroup = symbolGroup(profile.symbols() / 2);
+        int middle = profile.symbols() / 2;
+        String symbolGroup = symbolGroup(middle);
+        String usageAnchor = symbolId(middle + 3);
+        String dependencyAnchor = symbolId(middle + 2);
+        String dependentAnchor = symbolId(middle + 3);
+        String impactAnchor = symbolId(middle + 1);
+        String relatedTestAnchor = symbolId((middle / 10) * 10);
 
         Map<String, Stats> queryStats = new LinkedHashMap<>();
         queryStats.put("find-symbol", measure(repetitions, () -> queries.findSymbols(
@@ -104,27 +113,36 @@ public final class M16ScaleBenchmark {
                 projectName,
                 RelationshipSearchCriteria.outgoing(
                         new CodeEntityRef(CodeEntityType.SYMBOL, dependencyAnchor),
-                        Set.of(RelationshipKind.DEPENDS_ON), 20))));
+                        Set.of(RelationshipKind.DEPENDS_ON),
+                        20))));
         queryStats.put("dependents", measure(repetitions, () -> queries.findRelationships(
                 projectName,
                 RelationshipSearchCriteria.incoming(
                         new CodeEntityRef(CodeEntityType.SYMBOL, dependentAnchor),
-                        Set.of(RelationshipKind.DEPENDS_ON), 20))));
+                        Set.of(RelationshipKind.DEPENDS_ON),
+                        20))));
         queryStats.put("related-tests", measure(repetitions, () -> queries.findRelationships(
                 projectName,
                 RelationshipSearchCriteria.any(
                         new CodeEntityRef(CodeEntityType.SYMBOL, relatedTestAnchor),
-                        Set.of(RelationshipKind.RELATED_TEST), 20))));
+                        Set.of(RelationshipKind.RELATED_TEST),
+                        20))));
         queryStats.put("search", measure(repetitions, () -> queries.searchCode(
                 projectName,
                 new CodeSearchCriteria(
                         SymbolSearchCriteria.lexical(symbolGroup, 5),
-                        1, 3, 10, 0, 4_000, false))));
+                        1,
+                        3,
+                        10,
+                        0,
+                        4_000,
+                        false))));
         queryStats.put("architecture", measure(repetitions, () ->
                 application.architectureQuery().getArchitectureIntelligence(projectName)));
         queryStats.put("impact", measure(repetitions, () ->
                 application.impactQuery().analyzeImpact(
-                        projectName, new ImpactAnalysisRequest(impactAnchor, 4, 200))));
+                        projectName,
+                        new ImpactAnalysisRequest(impactAnchor, 4, 200))));
 
         forceGc();
         long retainedHeap = usedHeap();
@@ -150,16 +168,16 @@ public final class M16ScaleBenchmark {
         json.put("max_heap_bytes", maxHeap);
         json.put("snapshot_disk_size_bytes", snapshotDisk);
         json.put("indexes_disk_size_bytes", 0);
-        json.put("index_reference_count", indexMetrics.referenceCount());
+        json.put("index_reference_count", indexMetrics.indexReferences());
         json.put("active_snapshot_full_loads", cache.fullSnapshotLoads());
         json.put("query_view_builds", cache.queryViewBuilds());
         json.put("query_cache_hits", cache.hits());
         json.put("query_cache_misses", cache.misses());
-        Map<String, Object> queryJson = new LinkedHashMap<>();
-        queryStats.forEach((name, stats) -> queryJson.put(name, stats.toMap()));
-        json.put("queries", queryJson);
-
+        Map<String, Object> queriesJson = new LinkedHashMap<>();
+        queryStats.forEach((name, stats) -> queriesJson.put(name, stats.asMap()));
+        json.put("queries", queriesJson);
         Files.writeString(output, DeterministicJson.render(json) + System.lineSeparator(), StandardCharsets.UTF_8);
+
         System.out.printf(
                 "M16 scale benchmark: profile=%s files=%d symbols=%d occurrences=%d relationships=%d load=%.3fms index=%.3fms heap=%d disk=%d loads=%d builds=%d hits=%d%n",
                 profile.name(), profile.files(), profile.symbols(), profile.occurrences(), profile.relationships(),
@@ -173,27 +191,28 @@ public final class M16ScaleBenchmark {
     private static Dataset generate(UUID projectId, Profile profile) {
         String project = projectId.toString();
         SymbolLocation[] locations = new SymbolLocation[profile.files()];
-        for (int i = 0; i < locations.length; i++) {
-            locations[i] = new SymbolLocation(fileId(i), 1, 0, 1, 1, PositionEncoding.UTF16_CODE_UNITS);
+        for (int index = 0; index < locations.length; index++) {
+            locations[index] = new SymbolLocation(
+                    fileId(index), 1, 0, 1, 1, PositionEncoding.UTF16_CODE_UNITS);
         }
 
         List<Symbol> symbols = new ArrayList<>(profile.symbols());
-        for (int i = 0; i < profile.symbols(); i++) {
-            String id = symbolId(i);
+        for (int index = 0; index < profile.symbols(); index++) {
+            String id = symbolId(index);
             symbols.add(new Symbol(
                     id,
                     "m16#" + id,
                     SymbolIdentityQuality.CANONICAL,
                     project,
                     null,
-                    fileId(i % profile.files()),
+                    fileId(index % profile.files()),
                     null,
                     SymbolKind.METHOD,
-                    symbolGroup(i),
+                    symbolGroup(index),
                     "bench." + id,
                     "()",
                     "JAVA",
-                    locations[i % profile.files()],
+                    locations[index % profile.files()],
                     ResolutionStatus.RESOLVED,
                     ORIGIN,
                     false,
@@ -203,13 +222,13 @@ public final class M16ScaleBenchmark {
         }
 
         List<SymbolOccurrence> occurrences = new ArrayList<>(profile.occurrences());
-        for (int i = 0; i < profile.occurrences(); i++) {
-            int target = i % profile.symbols();
+        for (int index = 0; index < profile.occurrences(); index++) {
+            int target = index % profile.symbols();
             occurrences.add(new SymbolOccurrence(
-                    occurrenceId(i),
+                    occurrenceId(index),
                     project,
                     new ResolvedSymbolReference(symbolId(target)),
-                    locations[(i * 31) % profile.files()],
+                    locations[(index * 31) % profile.files()],
                     Set.of(OccurrenceRole.REFERENCE),
                     ResolutionStatus.RESOLVED,
                     ORIGIN,
@@ -218,8 +237,8 @@ public final class M16ScaleBenchmark {
         }
 
         List<Relationship> relationships = new ArrayList<>(profile.relationships());
-        for (int i = 0; i < profile.relationships(); i++) {
-            int sourceIndex = i % profile.symbols();
+        for (int index = 0; index < profile.relationships(); index++) {
+            int sourceIndex = index % profile.symbols();
             int targetIndex = (sourceIndex + 1) % profile.symbols();
             RelationshipKind kind = switch (sourceIndex % 10) {
                 case 0 -> RelationshipKind.RELATED_TEST;
@@ -227,7 +246,7 @@ public final class M16ScaleBenchmark {
                 default -> RelationshipKind.CALLS;
             };
             relationships.add(new Relationship(
-                    relationshipId(i),
+                    relationshipId(index),
                     project,
                     new CodeEntityRef(CodeEntityType.SYMBOL, symbolId(sourceIndex)),
                     new CodeEntityRef(CodeEntityType.SYMBOL, symbolId(targetIndex)),
@@ -248,38 +267,49 @@ public final class M16ScaleBenchmark {
         deleteRecursively(root);
         Path source = root.resolve(Path.of("src", "main", "java", "bench"));
         Files.createDirectories(source);
-        Files.writeString(root.resolve("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>bench</groupId><artifactId>m16-scale</artifactId><version>1</version></project>\n");
-        for (int i = 0; i < count; i++) {
-            Files.writeString(source.resolve("F%06d.java".formatted(i)),
-                    "package bench; final class F%06d {}\n".formatted(i));
+        Files.writeString(
+                root.resolve("pom.xml"),
+                "<project><modelVersion>4.0.0</modelVersion><groupId>bench</groupId><artifactId>m16-scale</artifactId><version>1</version></project>\n",
+                StandardCharsets.UTF_8
+        );
+        for (int index = 0; index < count; index++) {
+            Files.writeString(
+                    source.resolve("F%06d.java".formatted(index)),
+                    "package bench; final class F%06d {}\n".formatted(index),
+                    StandardCharsets.UTF_8
+            );
         }
         return count;
     }
 
     private static Stats measure(int repetitions, ThrowingAction action) throws Exception {
-        for (int i = 0; i < 5; i++) {
-            action.run();
+        for (int index = 0; index < 5; index++) {
+            Objects.requireNonNull(action.run(), "benchmark operation returned null");
         }
         long[] nanos = new long[repetitions];
-        for (int i = 0; i < repetitions; i++) {
+        for (int index = 0; index < repetitions; index++) {
             long started = System.nanoTime();
-            action.run();
-            nanos[i] = System.nanoTime() - started;
+            Objects.requireNonNull(action.run(), "benchmark operation returned null");
+            nanos[index] = System.nanoTime() - started;
         }
         Arrays.sort(nanos);
         return new Stats(
-                nanosToMs(nanos[(int) Math.floor((nanos.length - 1) * 0.50)]),
-                nanosToMs(nanos[(int) Math.floor((nanos.length - 1) * 0.95)]),
-                nanosToMs(nanos[(int) Math.floor((nanos.length - 1) * 0.99)]),
+                nanosToMs(nanos[percentileIndex(nanos.length, 0.50)]),
+                nanosToMs(nanos[percentileIndex(nanos.length, 0.95)]),
+                nanosToMs(nanos[percentileIndex(nanos.length, 0.99)]),
                 nanosToMs(Arrays.stream(nanos).sum() / nanos.length)
         );
+    }
+
+    private static int percentileIndex(int size, double percentile) {
+        return (int) Math.floor((size - 1) * percentile);
     }
 
     private static long peakHeap() {
         return ManagementFactory.getMemoryPoolMXBeans().stream()
                 .filter(bean -> bean.getType() == MemoryType.HEAP)
                 .map(MemoryPoolMXBean::getPeakUsage)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .mapToLong(usage -> usage.getUsed())
                 .sum();
     }
@@ -303,13 +333,16 @@ public final class M16ScaleBenchmark {
             return 0L;
         }
         try (var paths = Files.walk(root)) {
-            return paths.filter(Files::isRegularFile).mapToLong(path -> {
-                try {
-                    return Files.size(path);
-                } catch (IOException exception) {
-                    throw new java.io.UncheckedIOException(exception);
-                }
-            }).sum();
+            return paths
+                    .filter(Files::isRegularFile)
+                    .mapToLong(path -> {
+                        try {
+                            return Files.size(path);
+                        } catch (IOException exception) {
+                            throw new java.io.UncheckedIOException(exception);
+                        }
+                    })
+                    .sum();
         }
     }
 
@@ -318,7 +351,7 @@ public final class M16ScaleBenchmark {
             return;
         }
         try (var paths = Files.walk(root)) {
-            paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
                 try {
                     Files.deleteIfExists(path);
                 } catch (IOException exception) {
@@ -368,13 +401,13 @@ public final class M16ScaleBenchmark {
     }
 
     private record Stats(double p50Ms, double p95Ms, double p99Ms, double averageMs) {
-        Map<String, Object> toMap() {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("p50_ms", round(p50Ms));
-            map.put("p95_ms", round(p95Ms));
-            map.put("p99_ms", round(p99Ms));
-            map.put("average_ms", round(averageMs));
-            return map;
+        Map<String, Object> asMap() {
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put("p50_ms", round(p50Ms));
+            values.put("p95_ms", round(p95Ms));
+            values.put("p99_ms", round(p99Ms));
+            values.put("average_ms", round(averageMs));
+            return values;
         }
     }
 
