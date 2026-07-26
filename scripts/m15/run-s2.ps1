@@ -14,9 +14,7 @@ $Branch = 'm15-s2-maven-multimodule'
 function Invoke-GitChecked {
     param([Parameter(Mandatory = $true)][string[]] $Arguments)
     & git @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed (exit=$LASTEXITCODE)"
-    }
+    if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') failed (exit=$LASTEXITCODE)" }
 }
 
 function Invoke-NativeChecked {
@@ -26,9 +24,7 @@ function Invoke-NativeChecked {
         [Parameter(Mandatory = $true)][string] $Failure
     )
     & $File @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Failure (exit=$LASTEXITCODE)"
-    }
+    if ($LASTEXITCODE -ne 0) { throw "$Failure (exit=$LASTEXITCODE)" }
 }
 
 function Ensure-WindowsPowerShellOnPath {
@@ -81,45 +77,33 @@ function Get-Pom {
 
 function Get-CompilerIncludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
-    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
-        ForEach-Object { $_.InnerText.Trim() }
+    @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
+        ForEach-Object { $_.InnerText.Trim() })
 }
 
 function Get-CompilerExcludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
-    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
-        ForEach-Object { $_.InnerText.Trim() }
+    @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
+        ForEach-Object { $_.InnerText.Trim() })
 }
 
-function Get-ResourceIncludes {
+function Get-DependencyCoordinates {
     param([Parameter(Mandatory = $true)][xml] $Pom)
-    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="resources"]/*[local-name()="resource"]/*[local-name()="includes"]/*[local-name()="include"]') |
-        ForEach-Object { $_.InnerText.Trim() }
+    @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]') |
+        ForEach-Object { "$($_.groupId):$($_.artifactId)" })
 }
 
-function Get-ResourceExcludes {
-    param([Parameter(Mandatory = $true)][xml] $Pom)
-    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="resources"]/*[local-name()="resource"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
-        ForEach-Object { $_.InnerText.Trim() }
-}
-
-function Get-Dependencies {
-    param([Parameter(Mandatory = $true)][xml] $Pom)
-    $Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]')
-}
-
-function Assert-OnlyDependency {
+function Assert-ExactCoordinates {
     param(
-        [Parameter(Mandatory = $true)][xml] $Pom,
-        [Parameter(Mandatory = $true)][string] $GroupId,
-        [Parameter(Mandatory = $true)][string] $ArtifactId,
-        [Parameter(Mandatory = $true)][string] $Message
+        [Parameter(Mandatory = $true)][string[]] $Actual,
+        [Parameter(Mandatory = $true)][string[]] $Expected,
+        [Parameter(Mandatory = $true)][string] $Owner
     )
-    $dependencies = @(Get-Dependencies -Pom $Pom)
-    if ($dependencies.Count -ne 1 -or
-        [string] $dependencies[0].groupId -ne $GroupId -or
-        [string] $dependencies[0].artifactId -ne $ArtifactId) {
-        throw $Message
+    if ($Actual.Count -ne $Expected.Count) {
+        throw "$Owner dependency count mismatch. actual=[$($Actual -join ', ')] expected=[$($Expected -join ', ')]"
+    }
+    foreach ($coordinate in $Expected) {
+        if ($Actual -notcontains $coordinate) { throw "$Owner is missing dependency $coordinate." }
     }
 }
 
@@ -138,25 +122,30 @@ function Assert-ReactorShape {
         'minos-storage-local',
         'minos-provider-scip',
         'minos-integration-git',
+        'minos-application',
+        'minos-nexus',
+        'minos-cli',
+        'minos-api',
+        'minos-mcp',
         'minos-app'
     )
-    foreach ($module in $expectedOrder) {
-        if ($modules -notcontains $module) { throw "Missing reactor module: $module" }
+    if ($modules.Count -ne $expectedOrder.Count) {
+        throw "Unexpected reactor module count/order. actual=[$($modules -join ' -> ')]"
     }
-    for ($i = 0; $i -lt ($expectedOrder.Count - 1); $i++) {
-        if ([Array]::IndexOf($modules, $expectedOrder[$i]) -gt [Array]::IndexOf($modules, $expectedOrder[$i + 1])) {
+    for ($i = 0; $i -lt $expectedOrder.Count; $i++) {
+        if ($modules[$i] -ne $expectedOrder[$i]) {
             throw "Unexpected reactor order. Expected $($expectedOrder -join ' -> ')."
         }
     }
 
     $domainPom = Get-Pom 'minos-domain\pom.xml'
-    if ((@(Get-CompilerIncludes $domainPom)) -notcontains 'com/minos/domain/**/*.java') {
+    if ((Get-CompilerIncludes $domainPom) -notcontains 'com/minos/domain/**/*.java') {
         throw 'minos-domain must own com/minos/domain/**/*.java.'
     }
 
     $enginePom = Get-Pom 'minos-engine\pom.xml'
-    Assert-OnlyDependency $enginePom 'com.minos' 'minos-domain' 'minos-engine must depend only on minos-domain.'
-    $engineIncludes = @(Get-CompilerIncludes $enginePom)
+    Assert-ExactCoordinates (Get-DependencyCoordinates $enginePom) @('com.minos:minos-domain') 'minos-engine'
+    $engineIncludes = Get-CompilerIncludes $enginePom
     foreach ($include in @(
         'com/minos/query/**/*.java',
         'com/minos/store/CodeKnowledgeStore.java',
@@ -168,78 +157,127 @@ function Assert-ReactorShape {
     }
 
     $runtimePom = Get-Pom 'minos-runtime-local\pom.xml'
-    Assert-OnlyDependency $runtimePom 'com.minos' 'minos-engine' 'minos-runtime-local must depend only on minos-engine.'
-    $runtimeIncludes = @(Get-CompilerIncludes $runtimePom)
-    foreach ($include in @(
-        'com/minos/runtime/CommandLocator.java',
-        'com/minos/runtime/ProcessIndexerExecutor.java',
-        'com/minos/runtime/ProviderRuntimeManager.java'
-    )) {
-        if ($runtimeIncludes -notcontains $include) { throw "minos-runtime-local must own $include." }
-    }
+    Assert-ExactCoordinates (Get-DependencyCoordinates $runtimePom) @('com.minos:minos-engine') 'minos-runtime-local'
 
     $storagePom = Get-Pom 'minos-storage-local\pom.xml'
-    Assert-OnlyDependency $storagePom 'com.minos' 'minos-engine' 'minos-storage-local must depend only on minos-engine.'
-    if ((@(Get-CompilerIncludes $storagePom)) -notcontains 'com/minos/store/**/*.java' -or
-        (@(Get-CompilerExcludes $storagePom)) -notcontains 'com/minos/store/CodeKnowledgeStore.java') {
+    Assert-ExactCoordinates (Get-DependencyCoordinates $storagePom) @('com.minos:minos-engine') 'minos-storage-local'
+    if ((Get-CompilerIncludes $storagePom) -notcontains 'com/minos/store/**/*.java' -or
+        (Get-CompilerExcludes $storagePom) -notcontains 'com/minos/store/CodeKnowledgeStore.java') {
         throw 'minos-storage-local ownership is invalid.'
     }
 
     $providerPom = Get-Pom 'minos-provider-scip\pom.xml'
-    $providerIncludes = @(Get-CompilerIncludes $providerPom)
-    if ($providerIncludes -notcontains 'com/minos/adapter/scip/**/*.java') {
-        throw 'minos-provider-scip must own com/minos/adapter/scip/**/*.java.'
-    }
-    if ((@(Get-ResourceIncludes $providerPom)) -notcontains 'com/minos/adapter/scip/runtime/**') {
-        throw 'minos-provider-scip must own its packaged runtime resources.'
-    }
-    $providerDependencies = @(Get-Dependencies $providerPom | ForEach-Object { "$($_.groupId):$($_.artifactId)" })
-    $expectedProviderDependencies = @(
+    Assert-ExactCoordinates (Get-DependencyCoordinates $providerPom) @(
         'com.minos:minos-domain',
         'com.minos:minos-engine',
         'com.minos:minos-storage-local',
         'com.minos:minos-runtime-local',
         'org.scip-code:scip-java-bindings'
-    )
-    if ($providerDependencies.Count -ne $expectedProviderDependencies.Count) {
-        throw "Unexpected minos-provider-scip dependency count: $($providerDependencies -join ', ')."
-    }
-    foreach ($dependency in $expectedProviderDependencies) {
-        if ($providerDependencies -notcontains $dependency) { throw "minos-provider-scip is missing dependency $dependency." }
+    ) 'minos-provider-scip'
+    if ((Get-CompilerIncludes $providerPom) -notcontains 'com/minos/adapter/scip/**/*.java') {
+        throw 'minos-provider-scip must own com/minos/adapter/scip/**/*.java.'
     }
 
     $gitPom = Get-Pom 'minos-integration-git\pom.xml'
-    Assert-OnlyDependency $gitPom 'org.eclipse.jgit' 'org.eclipse.jgit' 'minos-integration-git must directly own JGit.'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $gitPom) @('org.eclipse.jgit:org.eclipse.jgit') 'minos-integration-git'
+
+    $applicationPom = Get-Pom 'minos-application\pom.xml'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $applicationPom) @(
+        'com.minos:minos-domain',
+        'com.minos:minos-engine',
+        'com.minos:minos-storage-local'
+    ) 'minos-application'
+    $applicationIncludes = Get-CompilerIncludes $applicationPom
+    foreach ($include in @(
+        'com/minos/architecture/**/*.java',
+        'com/minos/context/**/*.java',
+        'com/minos/impact/**/*.java',
+        'com/minos/incremental/**/*.java',
+        'com/minos/registry/**/*.java',
+        'com/minos/workspace/**/*.java',
+        'com/minos/runtime/MinosVersion.java'
+    )) {
+        if ($applicationIncludes -notcontains $include) { throw "minos-application must own $include." }
+    }
+    foreach ($exclude in @('com/minos/discovery/ProjectDiscovery.java','com/minos/orchestration/IndexerRegistry.java','com/minos/orchestration/IndexingRuntimePorts.java')) {
+        if ((Get-CompilerExcludes $applicationPom) -notcontains $exclude) { throw "minos-application must exclude engine-owned $exclude." }
+    }
+
+    $nexusPom = Get-Pom 'minos-nexus\pom.xml'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $nexusPom) @(
+        'com.minos:minos-domain',
+        'com.minos:minos-application',
+        'com.minos:minos-storage-local'
+    ) 'minos-nexus'
+    if ((Get-CompilerIncludes $nexusPom) -notcontains 'com/minos/integration/nexus/**/*.java' -or
+        (Get-CompilerExcludes $nexusPom) -notcontains 'com/minos/integration/nexus/NexusExportBridgeMain.java') {
+        throw 'minos-nexus ownership is invalid.'
+    }
+
+    $cliPom = Get-Pom 'minos-cli\pom.xml'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $cliPom) @(
+        'com.minos:minos-domain',
+        'com.minos:minos-engine',
+        'com.minos:minos-application',
+        'com.minos:minos-storage-local',
+        'com.minos:minos-provider-scip',
+        'com.minos:minos-runtime-local',
+        'com.minos:minos-nexus'
+    ) 'minos-cli'
+    if ((Get-CompilerIncludes $cliPom) -notcontains 'com/minos/cli/**/*.java' -or
+        (Get-CompilerExcludes $cliPom) -notcontains 'com/minos/cli/MinosLauncher.java') {
+        throw 'minos-cli must own CLI code except the system launcher.'
+    }
+
+    $apiPom = Get-Pom 'minos-api\pom.xml'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $apiPom) @(
+        'com.minos:minos-domain',
+        'com.minos:minos-engine',
+        'com.minos:minos-application',
+        'com.minos:minos-storage-local',
+        'com.minos:minos-cli',
+        'com.minos:minos-integration-git'
+    ) 'minos-api'
+    if ((Get-CompilerIncludes $apiPom) -notcontains 'com/minos/api/**/*.java') { throw 'minos-api ownership is invalid.' }
+
+    $mcpPom = Get-Pom 'minos-mcp\pom.xml'
+    Assert-ExactCoordinates (Get-DependencyCoordinates $mcpPom) @(
+        'com.minos:minos-application',
+        'com.minos:minos-cli',
+        'io.modelcontextprotocol.sdk:mcp'
+    ) 'minos-mcp'
+    if ((Get-CompilerIncludes $mcpPom) -notcontains 'com/minos/mcp/**/*.java') { throw 'minos-mcp ownership is invalid.' }
+
+    $mcpToolsSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'src\main\java\com\minos\mcp\MinosMcpTools.java') -Raw
+    $mcpServerSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'src\main\java\com\minos\mcp\MinosMcpServer.java') -Raw
+    if ($mcpToolsSource -match 'MinosLauncher' -or $mcpServerSource -match 'MinosLauncher') {
+        throw 'minos-mcp must not depend on the minos-app system launcher.'
+    }
 
     $appPom = Get-Pom 'minos-app\pom.xml'
-    foreach ($dependency in @('minos-domain','minos-engine','minos-runtime-local','minos-storage-local','minos-provider-scip','minos-integration-git')) {
-        $matches = @($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='com.minos'] and *[local-name()='artifactId' and text()='$dependency']]"))
-        if ($matches.Count -ne 1) { throw "minos-app must depend exactly once on com.minos:$dependency." }
-    }
-    if (@($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='org.scip-code']]")).Count -ne 0) {
-        throw 'minos-app must not declare SCIP bindings directly.'
-    }
-    if (@($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='org.eclipse.jgit']]")).Count -ne 0) {
-        throw 'minos-app must not declare JGit directly.'
-    }
-    $appExcludes = @(Get-CompilerExcludes $appPom)
-    foreach ($exclude in @(
-        'com/minos/domain/**/*.java',
-        'com/minos/query/**/*.java',
-        'com/minos/store/**/*.java',
-        'com/minos/git/**/*.java',
-        'com/minos/adapter/scip/**/*.java',
-        'com/minos/discovery/ProjectDiscovery.java',
-        'com/minos/orchestration/IndexerRegistry.java',
-        'com/minos/orchestration/IndexingRuntimePorts.java',
-        'com/minos/runtime/CommandLocator.java',
-        'com/minos/runtime/ProcessIndexerExecutor.java',
-        'com/minos/runtime/ProviderRuntimeManager.java'
-    )) {
-        if ($appExcludes -notcontains $exclude) { throw "minos-app must exclude $exclude." }
-    }
-    if ((@(Get-ResourceExcludes $appPom)) -notcontains 'com/minos/adapter/scip/runtime/**') {
-        throw 'minos-app must not directly package SCIP runtime resources.'
+    $appMinosDependencies = @(Get-DependencyCoordinates $appPom | Where-Object { $_ -like 'com.minos:*' })
+    Assert-ExactCoordinates $appMinosDependencies @(
+        'com.minos:minos-domain',
+        'com.minos:minos-engine',
+        'com.minos:minos-runtime-local',
+        'com.minos:minos-storage-local',
+        'com.minos:minos-provider-scip',
+        'com.minos:minos-integration-git',
+        'com.minos:minos-application',
+        'com.minos:minos-nexus',
+        'com.minos:minos-cli',
+        'com.minos:minos-api',
+        'com.minos:minos-mcp'
+    ) 'minos-app'
+    $appIncludes = Get-CompilerIncludes $appPom
+    Assert-ExactCoordinates @($appIncludes | ForEach-Object { "source:$($_)" }) @(
+        'source:com/minos/cli/MinosLauncher.java',
+        'source:com/minos/integration/nexus/NexusExportBridgeMain.java'
+    ) 'minos-app source ownership'
+    foreach ($externalGroup in @('org.scip-code','org.eclipse.jgit','io.modelcontextprotocol.sdk')) {
+        if (@(Get-DependencyCoordinates $appPom | Where-Object { $_ -like "$externalGroup:*" }).Count -ne 0) {
+            throw "minos-app must not declare $externalGroup directly."
+        }
     }
 }
 
@@ -267,13 +305,29 @@ function Assert-ContainsEntries {
     }
 }
 
-function Assert-CoreOwnershipArtifacts {
+function Assert-NotContainsEntries {
+    param(
+        [Parameter(Mandatory = $true)][string[]] $Entries,
+        [Parameter(Mandatory = $true)][string[]] $Forbidden,
+        [Parameter(Mandatory = $true)][string] $Owner
+    )
+    foreach ($entry in $Forbidden) {
+        if ($Entries -contains $entry) { throw "$Owner unexpectedly owns $entry." }
+    }
+}
+
+function Assert-ModuleOwnershipArtifacts {
     $domainJar = Get-LatestJar 'minos-domain' 'minos-domain-*.jar'
     $engineJar = Get-LatestJar 'minos-engine' 'minos-engine-*.jar'
     $runtimeJar = Get-LatestJar 'minos-runtime-local' 'minos-runtime-local-*.jar'
     $storageJar = Get-LatestJar 'minos-storage-local' 'minos-storage-local-*.jar'
     $providerJar = Get-LatestJar 'minos-provider-scip' 'minos-provider-scip-*.jar'
     $gitJar = Get-LatestJar 'minos-integration-git' 'minos-integration-git-*.jar'
+    $applicationJar = Get-LatestJar 'minos-application' 'minos-application-*.jar'
+    $nexusJar = Get-LatestJar 'minos-nexus' 'minos-nexus-*.jar'
+    $cliJar = Get-LatestJar 'minos-cli' 'minos-cli-*.jar'
+    $apiJar = Get-LatestJar 'minos-api' 'minos-api-*.jar'
+    $mcpJar = Get-LatestJar 'minos-mcp' 'minos-mcp-*.jar'
     $shadedJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'target') -File -Filter 'minos-code-intelligence-*-all.jar' -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
     if ($null -eq $shadedJar) { throw 'Final shaded MINOS JAR is missing.' }
@@ -281,75 +335,76 @@ function Assert-CoreOwnershipArtifacts {
     foreach ($relativePath in @(
         'target\classes\com\minos\domain\Symbol.class',
         'target\classes\com\minos\query\SymbolQueryService.class',
-        'target\classes\com\minos\discovery\ProjectDiscovery.class',
-        'target\classes\com\minos\orchestration\IndexingRuntimePorts.class',
+        'target\classes\com\minos\architecture\ArchitectureDependencyService.class',
         'target\classes\com\minos\runtime\CommandLocator.class',
         'target\classes\com\minos\store\FileSymbolSnapshotStore.class',
         'target\classes\com\minos\adapter\scip\ScipIndexReader.class',
         'target\classes\com\minos\git\GitIntelligenceService.class',
-        'target\classes\com\minos\adapter\scip\runtime\scip-java-windows-runner.ps1',
-        'target\classes\com\minos\adapter\scip\runtime\ScipWriter.java'
+        'target\classes\com\minos\integration\nexus\NexusExportService.class',
+        'target\classes\com\minos\cli\MinosCliRunner.class',
+        'target\classes\com\minos\api\MinosApi.class',
+        'target\classes\com\minos\mcp\MinosMcpServer.class'
     )) {
         $path = Join-Path $RepoRoot $relativePath
         if (Test-Path -LiteralPath $path -PathType Leaf) { throw "minos-app directly owns extracted entry: $path" }
+    }
+    foreach ($relativePath in @(
+        'target\classes\com\minos\cli\MinosLauncher.class',
+        'target\classes\com\minos\integration\nexus\NexusExportBridgeMain.class'
+    )) {
+        $path = Join-Path $RepoRoot $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "minos-app composition entry is missing: $path" }
     }
 
     if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)) { throw 'JAVA_HOME unavailable for JAR inspection.' }
     $jarTool = Join-Path $env:JAVA_HOME 'bin\jar.exe'
     if (-not (Test-Path -LiteralPath $jarTool -PathType Leaf)) { throw "JDK jar.exe is missing: $jarTool" }
 
-    $domainEntries = @(& $jarTool tf $domainJar.FullName)
-    $engineEntries = @(& $jarTool tf $engineJar.FullName)
-    $runtimeEntries = @(& $jarTool tf $runtimeJar.FullName)
-    $storageEntries = @(& $jarTool tf $storageJar.FullName)
-    $providerEntries = @(& $jarTool tf $providerJar.FullName)
-    $gitEntries = @(& $jarTool tf $gitJar.FullName)
-    $shadedEntries = @(& $jarTool tf $shadedJar.FullName)
+    $entriesByOwner = @{
+        Domain = @(& $jarTool tf $domainJar.FullName)
+        Engine = @(& $jarTool tf $engineJar.FullName)
+        Runtime = @(& $jarTool tf $runtimeJar.FullName)
+        Storage = @(& $jarTool tf $storageJar.FullName)
+        Provider = @(& $jarTool tf $providerJar.FullName)
+        Git = @(& $jarTool tf $gitJar.FullName)
+        Application = @(& $jarTool tf $applicationJar.FullName)
+        Nexus = @(& $jarTool tf $nexusJar.FullName)
+        Cli = @(& $jarTool tf $cliJar.FullName)
+        Api = @(& $jarTool tf $apiJar.FullName)
+        Mcp = @(& $jarTool tf $mcpJar.FullName)
+        Shaded = @(& $jarTool tf $shadedJar.FullName)
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect one or more module JARs.' }
 
-    Assert-ContainsEntries $domainEntries @('com/minos/domain/Symbol.class') 'minos-domain'
-    Assert-ContainsEntries $engineEntries @(
-        'com/minos/query/SymbolQueryService.class',
-        'com/minos/store/CodeKnowledgeStore.class',
-        'com/minos/discovery/ProjectDiscovery.class',
-        'com/minos/orchestration/IndexerRegistry.class',
-        'com/minos/orchestration/IndexingRuntimePorts.class'
-    ) 'minos-engine'
-    if ($engineEntries -contains 'com/minos/domain/Symbol.class') { throw 'minos-engine embeds domain classes.' }
+    Assert-ContainsEntries $entriesByOwner.Domain @('com/minos/domain/Symbol.class') 'minos-domain'
+    Assert-ContainsEntries $entriesByOwner.Engine @('com/minos/query/SymbolQueryService.class','com/minos/store/CodeKnowledgeStore.class','com/minos/discovery/ProjectDiscovery.class','com/minos/orchestration/IndexingRuntimePorts.class') 'minos-engine'
+    Assert-ContainsEntries $entriesByOwner.Runtime @('com/minos/runtime/CommandLocator.class','com/minos/runtime/ProcessIndexerExecutor.class') 'minos-runtime-local'
+    Assert-ContainsEntries $entriesByOwner.Storage @('com/minos/store/FileSymbolSnapshotStore.class','com/minos/store/InMemoryCodeKnowledgeStore.class') 'minos-storage-local'
+    Assert-ContainsEntries $entriesByOwner.Provider @('com/minos/adapter/scip/ScipIndexReader.class','com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.class','com/minos/adapter/scip/runtime/scip-java-windows-runner.ps1','com/minos/adapter/scip/runtime/ScipWriter.java') 'minos-provider-scip'
+    Assert-ContainsEntries $entriesByOwner.Git @('com/minos/git/GitIntelligenceService.class') 'minos-integration-git'
+    Assert-ContainsEntries $entriesByOwner.Application @('com/minos/architecture/ArchitectureDependencyService.class','com/minos/registry/LocalProjectRegistry.class','com/minos/runtime/MinosVersion.class') 'minos-application'
+    Assert-ContainsEntries $entriesByOwner.Nexus @('com/minos/integration/nexus/NexusExportContract.class','com/minos/integration/nexus/NexusExportService.class') 'minos-nexus'
+    Assert-NotContainsEntries $entriesByOwner.Nexus @('com/minos/integration/nexus/NexusExportBridgeMain.class') 'minos-nexus'
+    Assert-ContainsEntries $entriesByOwner.Cli @('com/minos/cli/MinosCli.class','com/minos/cli/MinosCliRunner.class','com/minos/cli/LocalProjectOperations.class') 'minos-cli'
+    Assert-NotContainsEntries $entriesByOwner.Cli @('com/minos/cli/MinosLauncher.class') 'minos-cli'
+    Assert-ContainsEntries $entriesByOwner.Api @('com/minos/api/MinosApi.class','com/minos/api/LocalMinosApi.class') 'minos-api'
+    Assert-ContainsEntries $entriesByOwner.Mcp @('com/minos/mcp/MinosMcpServer.class','com/minos/mcp/MinosMcpTools.class') 'minos-mcp'
+    Assert-NotContainsEntries $entriesByOwner.Mcp @('com/minos/cli/MinosLauncher.class') 'minos-mcp'
 
-    Assert-ContainsEntries $runtimeEntries @(
-        'com/minos/runtime/CommandLocator.class',
-        'com/minos/runtime/ProcessIndexerExecutor.class',
-        'com/minos/runtime/ProviderRuntimeManager.class'
-    ) 'minos-runtime-local'
-    Assert-ContainsEntries $storageEntries @(
-        'com/minos/store/FileSymbolSnapshotStore.class',
-        'com/minos/store/InMemoryCodeKnowledgeStore.class'
-    ) 'minos-storage-local'
-    if ($storageEntries -contains 'com/minos/store/CodeKnowledgeStore.class') { throw 'minos-storage-local recompiled the engine store port.' }
-
-    Assert-ContainsEntries $providerEntries @(
-        'com/minos/adapter/scip/ScipIndexReader.class',
-        'com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.class',
-        'com/minos/adapter/scip/runtime/scip-java-windows-runner.ps1',
-        'com/minos/adapter/scip/runtime/ScipWriter.java'
-    ) 'minos-provider-scip'
-    if ($providerEntries -contains 'com/minos/runtime/CommandLocator.class') { throw 'minos-provider-scip embeds generic runtime classes.' }
-
-    Assert-ContainsEntries $gitEntries @('com/minos/git/GitIntelligenceService.class') 'minos-integration-git'
-
-    Assert-ContainsEntries $shadedEntries @(
+    Assert-ContainsEntries $entriesByOwner.Shaded @(
         'com/minos/domain/Symbol.class',
         'com/minos/query/SymbolQueryService.class',
-        'com/minos/discovery/ProjectDiscovery.class',
-        'com/minos/orchestration/IndexingRuntimePorts.class',
+        'com/minos/architecture/ArchitectureDependencyService.class',
         'com/minos/runtime/CommandLocator.class',
         'com/minos/store/FileSymbolSnapshotStore.class',
         'com/minos/adapter/scip/ScipIndexReader.class',
-        'com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.class',
-        'com/minos/adapter/scip/runtime/scip-java-windows-runner.ps1',
-        'com/minos/adapter/scip/runtime/ScipWriter.java',
-        'com/minos/git/GitIntelligenceService.class'
+        'com/minos/git/GitIntelligenceService.class',
+        'com/minos/integration/nexus/NexusExportService.class',
+        'com/minos/integration/nexus/NexusExportBridgeMain.class',
+        'com/minos/cli/MinosCliRunner.class',
+        'com/minos/cli/MinosLauncher.class',
+        'com/minos/api/MinosApi.class',
+        'com/minos/mcp/MinosMcpServer.class'
     ) 'final shaded MINOS JAR'
 
     return [pscustomobject]@{
@@ -359,6 +414,11 @@ function Assert-CoreOwnershipArtifacts {
         StorageJar = $storageJar.FullName
         ProviderJar = $providerJar.FullName
         GitJar = $gitJar.FullName
+        ApplicationJar = $applicationJar.FullName
+        NexusJar = $nexusJar.FullName
+        CliJar = $cliJar.FullName
+        ApiJar = $apiJar.FullName
+        McpJar = $mcpJar.FullName
         ShadedJar = $shadedJar.FullName
     }
 }
@@ -397,11 +457,11 @@ try {
         return
     }
 
-    Write-Host '[4/8] Checking domain/engine/runtime/storage/SCIP/Git ownership shape...'
+    Write-Host '[4/8] Checking 12-project reactor and composition ownership shape...'
     Assert-ReactorShape
 
-    Write-Host '[5/8] Building SCIP provider, Git integration and all upstream boundaries...'
-    Invoke-NativeChecked '.\mvnw.cmd' @('-pl','minos-provider-scip,minos-integration-git','-am','test') 'Focused provider/Git Maven verification failed'
+    Write-Host '[5/8] Building API/MCP surfaces and all upstream modules independently of minos-app...'
+    Invoke-NativeChecked '.\mvnw.cmd' @('-pl','minos-api,minos-mcp','-am','test') 'Focused public-surface Maven verification failed'
 
     Write-Host "[6/8] Replaying full S1/M14 qualification on exact HEAD $head..." -ForegroundColor Cyan
     $parameters = @{ ExpectedHead = $head }
@@ -410,8 +470,8 @@ try {
     if ($ValidateDocker) { $parameters['ValidateDocker'] = $true }
     & (Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1') @parameters
 
-    Write-Host '[7/8] Verifying compiled class/resource ownership...' -ForegroundColor Cyan
-    $artifacts = Assert-CoreOwnershipArtifacts
+    Write-Host '[7/8] Verifying module JARs and two-class minos-app ownership...' -ForegroundColor Cyan
+    $artifacts = Assert-ModuleOwnershipArtifacts
 
     if (-not $SkipM14Replay -and -not $SkipProviderReplays) {
         Write-Host '[8/8] Capturing repeated-query cost baseline...' -ForegroundColor Cyan
@@ -426,14 +486,19 @@ try {
     } else {
         Write-Host 'M15-S2 diagnostic module-boundary validation finished (not sufficient to close S2)' -ForegroundColor Yellow
     }
-    Write-Host "HEAD         : $head"
-    Write-Host "Domain JAR   : $($artifacts.DomainJar)"
-    Write-Host "Engine JAR   : $($artifacts.EngineJar)"
-    Write-Host "Runtime JAR  : $($artifacts.RuntimeJar)"
-    Write-Host "Storage JAR  : $($artifacts.StorageJar)"
-    Write-Host "Provider JAR : $($artifacts.ProviderJar)"
-    Write-Host "Git JAR      : $($artifacts.GitJar)"
-    Write-Host "Shaded JAR   : $($artifacts.ShadedJar)"
+    Write-Host "HEAD            : $head"
+    Write-Host "Domain JAR      : $($artifacts.DomainJar)"
+    Write-Host "Engine JAR      : $($artifacts.EngineJar)"
+    Write-Host "Runtime JAR     : $($artifacts.RuntimeJar)"
+    Write-Host "Storage JAR     : $($artifacts.StorageJar)"
+    Write-Host "Provider JAR    : $($artifacts.ProviderJar)"
+    Write-Host "Git JAR         : $($artifacts.GitJar)"
+    Write-Host "Application JAR : $($artifacts.ApplicationJar)"
+    Write-Host "NEXUS JAR       : $($artifacts.NexusJar)"
+    Write-Host "CLI JAR         : $($artifacts.CliJar)"
+    Write-Host "API JAR         : $($artifacts.ApiJar)"
+    Write-Host "MCP JAR         : $($artifacts.McpJar)"
+    Write-Host "Shaded JAR      : $($artifacts.ShadedJar)"
 }
 finally {
     Pop-Location
