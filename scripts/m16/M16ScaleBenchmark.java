@@ -91,7 +91,7 @@ public final class M16ScaleBenchmark {
         long loadStarted = System.nanoTime();
         SnapshotQueryView view = store.loadActiveQueryView(project.id()).orElseThrow();
         double snapshotLoadMs = elapsedMs(loadStarted);
-        double indexBuildMs = view.indexBuildNanos() / 1_000_000.0;
+        double indexBuildMs = view.buildNanos() / 1_000_000.0;
         InMemoryCodeKnowledgeStore.IndexMetrics indexMetrics = view.queryStore().indexMetrics();
 
         ProjectQueryService queries = application.projectQueryService();
