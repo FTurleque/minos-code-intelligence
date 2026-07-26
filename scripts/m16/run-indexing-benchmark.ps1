@@ -23,21 +23,6 @@ function Quote-Arg([string] $Value) {
     return '"' + ($Value -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
 }
 
-function Invoke-Minos {
-    param([string[]] $Arguments)
-    $previous = $env:MINOS_HOME
-    try {
-        $env:MINOS_HOME = $home
-        $lines = & $java.JavaExecutable -jar $jar @Arguments 2>&1 | ForEach-Object { $_.ToString() }
-        $exit = $LASTEXITCODE
-    } finally {
-        if ($null -eq $previous) { Remove-Item Env:MINOS_HOME -ErrorAction SilentlyContinue }
-        else { $env:MINOS_HOME = $previous }
-    }
-    if ($exit -ne 0) { throw "MINOS command failed: $($Arguments -join ' ')`n$($lines -join "`n")" }
-    return ($lines -join "`n").Trim()
-}
-
 function Invoke-MinosMeasured {
     param([string[]] $Arguments)
     $stdout = Join-Path $workRoot ([Guid]::NewGuid().ToString() + '.out')
@@ -77,6 +62,13 @@ function Invoke-MinosMeasured {
         else { $env:MINOS_HOME = $previous }
         Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Invoke-Minos {
+    param([string[]] $Arguments)
+    # Keep stdout protocol-clean. JVM/SLF4J warnings remain isolated on stderr so JSON callers
+    # can safely pipe the returned text to ConvertFrom-Json.
+    return (Invoke-MinosMeasured $Arguments).Stdout
 }
 
 Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
