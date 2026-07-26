@@ -30,20 +30,23 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
+            <artifactId>minos-runtime-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
             <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-provider-scip</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-integration-git</artifactId>
             <version>${project.version}</version>
-        </dependency>
-
-        <!-- Infrastructure only: imports must remain confined to adapter.scip until provider extraction. -->
-        <dependency>
-            <groupId>org.scip-code</groupId>
-            <artifactId>scip-java-bindings</artifactId>
-            <version>${scip.java.bindings.version}</version>
         </dependency>
 
         <!-- Official MCP Java SDK bundle: core transports + Jackson 3 binding. -->
@@ -63,10 +66,10 @@
     <build>
         <!--
           Transitional S2 bridge: sources still use the historical source layout, but
-          Maven ownership is explicit. Domain, engine, local storage and Git integration
-          are excluded here and supplied through reactor dependencies. Later S2 commits
-          physically relocate sources and remove these external roots. Keeping target at
-          repository root preserves M14 release/install scripts.
+          Maven ownership is explicit. Extracted modules are excluded here and supplied
+          through reactor dependencies. Later S2 commits physically relocate sources and
+          remove these external roots. Keeping target at repository root preserves M14
+          release/install scripts.
         -->
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
         <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
@@ -74,6 +77,9 @@
         <resources>
             <resource>
                 <directory>${maven.multiModuleProjectDirectory}/src/main/resources</directory>
+                <excludes>
+                    <exclude>com/minos/adapter/scip/runtime/**</exclude>
+                </excludes>
             </resource>
         </resources>
         <testResources>
@@ -92,16 +98,27 @@
                         <exclude>com/minos/query/**/*.java</exclude>
                         <exclude>com/minos/store/**/*.java</exclude>
                         <exclude>com/minos/git/**/*.java</exclude>
+                        <exclude>com/minos/adapter/scip/**/*.java</exclude>
+                        <exclude>com/minos/discovery/ProjectDiscovery.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerCapability.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerQualification.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerDescriptor.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingRequirements.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerNegotiationResult.java</exclude>
+                        <exclude>com/minos/orchestration/IndexerRegistry.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingMode.java</exclude>
+                        <exclude>com/minos/orchestration/IndexingRuntimePorts.java</exclude>
+                        <exclude>com/minos/runtime/CommandLocator.java</exclude>
+                        <exclude>com/minos/runtime/IndexerProcessPlan.java</exclude>
+                        <exclude>com/minos/runtime/IndexerProcessPlanFactory.java</exclude>
+                        <exclude>com/minos/runtime/ProcessIndexerExecutor.java</exclude>
+                        <exclude>com/minos/runtime/ProviderRuntimeManager.java</exclude>
+                        <exclude>com/minos/runtime/ProviderRuntimeStatus.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
 
-            <!--
-              Existing tests intentionally use repository-relative fixtures. Maven now
-              executes this module from minos-app/, so preserve the historical root
-              working directory until those fixtures are expressed through an explicit
-              repository-root abstraction in a later refactor.
-            -->
+            <!-- Preserve the historical repository root for fixture-relative tests. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
