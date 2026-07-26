@@ -17,10 +17,15 @@
     <description>Local-first, language-agnostic Code Intelligence Engine.</description>
 
     <dependencies>
-        <!-- First real S2 boundary: domain is compiled and packaged by its own module. -->
+        <!-- S2 boundaries: domain and engine are compiled and packaged independently. -->
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-engine</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -54,11 +59,11 @@
 
     <build>
         <!--
-          Transitional S2 bridge: non-domain sources still use the historical source
-          layout. The domain package is excluded here because minos-domain owns it.
-          Later S2 commits relocate all packages into their owning modules and remove
-          these external source roots. Keeping target at repository root preserves
-          M14 release/install scripts during the structural migration.
+          Transitional S2 bridge: sources still use the historical source layout, but
+          Maven ownership is already explicit. minos-domain owns com.minos.domain;
+          minos-engine owns com.minos.query and the CodeKnowledgeStore port.
+          Later S2 commits physically relocate sources and remove these external roots.
+          Keeping target at repository root preserves M14 release/install scripts.
         -->
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
         <sourceDirectory>${maven.multiModuleProjectDirectory}/src/main/java</sourceDirectory>
@@ -81,6 +86,8 @@
                 <configuration>
                     <excludes>
                         <exclude>com/minos/domain/**/*.java</exclude>
+                        <exclude>com/minos/query/**/*.java</exclude>
+                        <exclude>com/minos/store/CodeKnowledgeStore.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
