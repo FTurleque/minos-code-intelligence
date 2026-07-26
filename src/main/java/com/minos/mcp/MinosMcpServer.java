@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
-import com.minos.cli.MinosLauncher;
+import com.minos.cli.MinosCliRunner;
+import com.minos.runtime.MinosVersion;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpSyncServer;
@@ -16,7 +17,7 @@ import java.util.Properties;
 public final class MinosMcpServer {
 
     public static final String SERVER_NAME = "minos-code-intelligence";
-    public static final String SERVER_VERSION = MinosLauncher.VERSION;
+    public static final String SERVER_VERSION = MinosVersion.current();
 
     private MinosMcpServer() {
     }
@@ -53,22 +54,6 @@ public final class MinosMcpServer {
     }
 
     static Path resolveHome(Map<String, String> environment, Properties properties) {
-        Objects.requireNonNull(environment, "environment");
-        Objects.requireNonNull(properties, "properties");
-
-        String property = properties.getProperty(MinosLauncher.HOME_SYSTEM_PROPERTY);
-        if (property != null && !property.isBlank()) {
-            return Path.of(property);
-        }
-        String environmentValue = environment.get(MinosLauncher.HOME_ENVIRONMENT_VARIABLE);
-        if (environmentValue != null && !environmentValue.isBlank()) {
-            return Path.of(environmentValue);
-        }
-        String userHome = properties.getProperty("user.home");
-        if (userHome == null || userHome.isBlank()) {
-            throw new IllegalStateException(
-                    "neither minos.home, MINOS_HOME nor user.home defines a storage directory");
-        }
-        return Path.of(userHome).resolve(".minos");
+        return MinosCliRunner.resolveHome(environment, properties);
     }
 }
