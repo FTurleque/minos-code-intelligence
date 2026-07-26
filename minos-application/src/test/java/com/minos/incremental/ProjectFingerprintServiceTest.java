@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -77,6 +78,22 @@ class ProjectFingerprintServiceTest {
         assertEquals(List.of("pom.xml", "src/A.java"), changes.modifiedFiles());
         assertEquals(List.of("src/Delete.java"), changes.deletedFiles());
         assertEquals(List.of("src/Keep.java"), changes.unchangedFiles());
+
+        Path gradle = root.resolve("gradle");
+        Files.createDirectories(gradle);
+        Files.writeString(gradle.resolve("build.gradle.kts"), "plugins { java }");
+        ProjectFingerprint gradleBefore = service.capture(gradle);
+        Files.writeString(gradle.resolve("build.gradle.kts"), "plugins { java-library }");
+        assertTrue(service.compare(gradleBefore, service.capture(gradle)).buildDefinitionChanged());
+
+        Path custom = root.resolve("custom");
+        Files.createDirectories(custom);
+        Files.writeString(custom.resolve("custom.build"), "version=1");
+        ProjectFingerprintService customService = new ProjectFingerprintService(
+                new BuildDescriptorPolicy(Set.of("custom.build")));
+        ProjectFingerprint customBefore = customService.capture(custom);
+        Files.writeString(custom.resolve("custom.build"), "version=2");
+        assertTrue(customService.compare(customBefore, customService.capture(custom)).buildDefinitionChanged());
     }
 
     @Test
