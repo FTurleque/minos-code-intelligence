@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+. (Join-Path $RepoRoot 'scripts\windows\MinosWindows.ps1')
 $Branch = 'm16-scalability'
 
 function Invoke-GitChecked {
