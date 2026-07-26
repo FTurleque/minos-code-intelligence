@@ -129,7 +129,8 @@ $mainSourceCount = @(
                 Get-ChildItem -LiteralPath (Join-Path $_.FullName 'src\main\java') -Recurse -File -Filter '*.java' -ErrorAction SilentlyContinue
             }
     ).Count
-'@.TrimEnd()
+'@
+    $new = $new.TrimEnd()
 
     $content = $content.Replace($old, $new)
     [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
@@ -267,8 +268,8 @@ try {
 
     Write-Host ''
     Write-Host 'M15-S2 PRODUCTION SOURCE RELOCATION COMMITTED AND PUSHED' -ForegroundColor Green
-    Write-Host "HEAD    : $head"
-    Write-Host "Sources : $($sources.Count)"
+    Write-Host "HEAD     : $head"
+    Write-Host "Sources  : $($sources.Count)"
     Write-Host "Resources: $($resources.Count)"
 }
 finally {
