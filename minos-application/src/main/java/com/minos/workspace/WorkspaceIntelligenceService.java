@@ -1,5 +1,6 @@
 package com.minos.workspace;
 
+import com.minos.application.ProjectResolver;
 import com.minos.domain.ProviderReference;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
@@ -32,10 +33,20 @@ public final class WorkspaceIntelligenceService {
 
     private final LocalProjectRegistry registry;
     private final FileSymbolSnapshotStore snapshots;
+    private final ProjectResolver projectResolver;
 
     public WorkspaceIntelligenceService(LocalProjectRegistry registry, FileSymbolSnapshotStore snapshots) {
+        this(registry, snapshots, new ProjectResolver(registry));
+    }
+
+    public WorkspaceIntelligenceService(
+            LocalProjectRegistry registry,
+            FileSymbolSnapshotStore snapshots,
+            ProjectResolver projectResolver
+    ) {
         this.registry = Objects.requireNonNull(registry, "registry");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
+        this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
     }
 
     public WorkspaceView createWorkspace(String name) throws IOException {
@@ -51,7 +62,7 @@ public final class WorkspaceIntelligenceService {
     }
 
     public WorkspaceView assignProject(String projectIdentifier, String workspaceIdentifier) throws IOException {
-        RegisteredProject project = resolveProject(projectIdentifier);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
         RegisteredWorkspace workspace = resolveWorkspace(workspaceIdentifier);
         registry.assignProjectToWorkspace(project.id(), workspace.id());
         return workspace(registry.findWorkspace(workspace.id()).orElseThrow());
@@ -171,25 +182,6 @@ public final class WorkspaceIntelligenceService {
             }
         }
         return index;
-    }
-
-    private RegisteredProject resolveProject(String identifier) throws IOException {
-        requireText(identifier, "projectIdentifier");
-        Optional<UUID> uuid = uuid(identifier);
-        if (uuid.isPresent()) {
-            return registry.findProject(uuid.orElseThrow())
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + identifier));
-        }
-        List<RegisteredProject> matches = registry.listProjects().stream()
-                .filter(project -> project.displayName().equals(identifier))
-                .toList();
-        if (matches.isEmpty()) {
-            throw new IllegalArgumentException("Unknown project: " + identifier);
-        }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException("Ambiguous project name: " + identifier);
-        }
-        return matches.getFirst();
     }
 
     private RegisteredWorkspace resolveWorkspace(String identifier) throws IOException {
