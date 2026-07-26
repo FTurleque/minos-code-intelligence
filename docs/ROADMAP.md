@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M14 terminés, validés et livrés ; M15 à M20 planifiés.**
+Statut : **C0 à M14 terminés, validés et livrés ; M15 démarré — 2/11 ; M16 à M20 planifiés.**
 
 L’état courant livré reste résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves détaillées des jalons terminés sont archivées sous [`history/milestones/`](history/milestones/README.md).
 
@@ -252,7 +252,7 @@ La publication reste volontairement explicite : elle est déclenchée manuelleme
 
 # Nouvelle phase — Industrialisation et complétion de MINOS
 
-Les jalons M15 à M20 sont **planifiés mais non acquis**. Le document détaillé [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md) définit leurs sous-incréments, gates et dépendances.
+**M15 est démarré ; M16 à M20 restent planifiés et non acquis.** Le document détaillé [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md) définit leurs sous-incréments, gates et dépendances.
 
 ```text
 M15  Industrialiser le Core Engine
@@ -274,13 +274,18 @@ M18 peut avancer en parallèle de M17 une fois les contrats M15 stabilisés. M19
 
 ## M15 — Industrialisation du Core Engine
 
-**PLANIFIÉ — priorité immédiate.**
+**EN COURS — 2/11 sous-incréments terminés.**
 
 Objectif : transformer le socle M14 en plateforme modulaire et durable sans régression fonctionnelle.
 
-Acquis visés :
+Acquis :
 
-- architecture Maven multi-module fondée sur de vraies frontières de compilation ;
+- **M15-S1 ✅** — baseline de non-régression et coût des requêtes répétées, PR #56 ;
+- **M15-S2 ✅** — reactor Maven multi-module à 12 modules enfants, sources/tests physiquement relocalisés, frontières imposées par compilation, PR #57 / merge `7b064196b31a0676852a5f7effb552beb396cc8a` ;
+- qualification fonctionnelle S2 sur `637402782c29526b926968e0b8b525a2fa6fdc2c` : **238 PASS**, M14 replay, Windows/install/doctor/MCP et ownership PASS.
+
+Acquis encore visés :
+
 - `MinosApplication` comme composition root commun ;
 - suppression du chemin MCP → CLI → moteur ;
 - résolution projet mutualisée ;
@@ -292,6 +297,10 @@ Acquis visés :
 - contrôles de cohérence documentaire.
 
 Porte : **les contrats et replays M14 restent fonctionnellement identiques ; les requêtes répétées ne rechargent plus systématiquement tout le snapshot ; les frontières principales deviennent imposées par le build.**
+
+- roadmap opérationnelle : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md)
+- décision S2 : [ADR-0022](adr/0022-maven-reactor-and-module-boundaries.md)
+- issue : #55
 
 Sous-incréments : M15-S1 à M15-S11 dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md#m15--industrialisation-du-core-engine).
 
