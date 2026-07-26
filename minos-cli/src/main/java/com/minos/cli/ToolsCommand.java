@@ -17,7 +17,7 @@ public final class ToolsCommand {
             Usage: minos tools <list|install|verify> [provider] [--format <text|json>]
 
               list                  List managed providers and runtime state
-              verify                Same as list, returning failure if one provider is blocked
+              verify                Verify baseline-required provider runtimes
               install <provider>    Install or bootstrap a managed provider
             """.stripTrailing();
 
@@ -46,7 +46,9 @@ public final class ToolsCommand {
             List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
             output.append(render(providers, parsed.format())).append('\n');
             if ("verify".equals(parsed.action())
-                    && providers.stream().anyMatch(provider -> !"READY".equals(provider.state()))) {
+                    && providers.stream()
+                    .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
+                    .anyMatch(provider -> !"READY".equals(provider.state()))) {
                 return FindSymbolCommand.EXECUTION_ERROR;
             }
             return FindSymbolCommand.SUCCESS;
@@ -70,6 +72,7 @@ public final class ToolsCommand {
                 value.put("id", provider.id());
                 value.put("version", provider.version());
                 value.put("state", provider.state());
+                value.put("requiredByDefault", provider.requiredByDefault());
                 value.put("executable", provider.executable());
                 value.put("diagnostics", provider.diagnostics());
                 values.add(value);
@@ -78,7 +81,8 @@ public final class ToolsCommand {
         }
         List<String> lines = new ArrayList<>();
         for (var provider : providers) {
-            lines.add(provider.id() + " " + provider.version() + " — " + provider.state());
+            lines.add(provider.id() + " " + provider.version() + " — " + provider.state()
+                    + (provider.requiredByDefault() ? " [required]" : " [optional]"));
             if (provider.executable() != null) {
                 lines.add("  executable: " + provider.executable());
             }
