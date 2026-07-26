@@ -92,8 +92,54 @@ function Restart-UpdatedRunner {
     }
 }
 
+function Get-Pom {
+    param([Parameter(Mandatory = $true)][string] $RelativePath)
+
+    $path = Join-Path $RepoRoot $RelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Required Maven POM is missing: $path"
+    }
+    return [xml] (Get-Content -LiteralPath $path -Raw)
+}
+
+function Get-CompilerIncludes {
+    param([Parameter(Mandatory = $true)][xml] $Pom)
+
+    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
+        ForEach-Object { $_.InnerText.Trim() })
+}
+
+function Get-CompilerExcludes {
+    param([Parameter(Mandatory = $true)][xml] $Pom)
+
+    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
+        ForEach-Object { $_.InnerText.Trim() })
+}
+
+function Get-Dependencies {
+    param([Parameter(Mandatory = $true)][xml] $Pom)
+
+    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
+}
+
+function Assert-SingleDependency {
+    param(
+        [Parameter(Mandatory = $true)][xml] $Pom,
+        [Parameter(Mandatory = $true)][string] $GroupId,
+        [Parameter(Mandatory = $true)][string] $ArtifactId,
+        [Parameter(Mandatory = $true)][string] $Message
+    )
+
+    $dependencies = Get-Dependencies -Pom $Pom
+    if ($dependencies.Count -ne 1 -or
+        [string] $dependencies[0].groupId -ne $GroupId -or
+        [string] $dependencies[0].artifactId -ne $ArtifactId) {
+        throw $Message
+    }
+}
+
 function Assert-ReactorShape {
-    [xml] $rootPom = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
+    $rootPom = Get-Pom -RelativePath 'pom.xml'
     $project = $rootPom.project
 
     if ([string] $project.packaging -ne 'pom') {
@@ -105,74 +151,97 @@ function Assert-ReactorShape {
 
     $modules = @($rootPom.SelectNodes('/*[local-name()="project"]/*[local-name()="modules"]/*[local-name()="module"]') |
         ForEach-Object { $_.InnerText.Trim() })
-    foreach ($requiredModule in @('minos-domain', 'minos-engine', 'minos-app')) {
+    $expectedOrder = @(
+        'minos-domain',
+        'minos-engine',
+        'minos-storage-local',
+        'minos-integration-git',
+        'minos-app'
+    )
+    foreach ($requiredModule in $expectedOrder) {
         if ($modules -notcontains $requiredModule) {
             throw "M15-S2 reactor must contain $requiredModule; modules=$($modules -join ',')."
         }
     }
-    if ([Array]::IndexOf($modules, 'minos-domain') -gt [Array]::IndexOf($modules, 'minos-engine') -or
-        [Array]::IndexOf($modules, 'minos-engine') -gt [Array]::IndexOf($modules, 'minos-app')) {
-        throw 'Expected reactor order: minos-domain -> minos-engine -> minos-app.'
+    for ($index = 0; $index -lt ($expectedOrder.Count - 1); $index++) {
+        if ([Array]::IndexOf($modules, $expectedOrder[$index]) -gt
+            [Array]::IndexOf($modules, $expectedOrder[$index + 1])) {
+            throw "Unexpected reactor order. Expected: $($expectedOrder -join ' -> ')."
+        }
     }
 
-    $domainPomPath = Join-Path $RepoRoot 'minos-domain\pom.xml'
-    if (-not (Test-Path -LiteralPath $domainPomPath -PathType Leaf)) {
-        throw "M15-S2 domain POM is missing: $domainPomPath"
-    }
-    [xml] $domainPom = Get-Content -LiteralPath $domainPomPath -Raw
+    $domainPom = Get-Pom -RelativePath 'minos-domain\pom.xml'
     if ([string] $domainPom.project.artifactId -ne 'minos-domain') {
         throw "Domain artifact coordinate changed unexpectedly: $($domainPom.project.artifactId)"
     }
-    $domainIncludes = @($domainPom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
-        ForEach-Object { $_.InnerText.Trim() })
-    if ($domainIncludes -notcontains 'com/minos/domain/**/*.java') {
-        throw 'minos-domain must exclusively compile the historical com/minos/domain source tree during the S2 bridge.'
+    if ((Get-CompilerIncludes -Pom $domainPom) -notcontains 'com/minos/domain/**/*.java') {
+        throw 'minos-domain must own com/minos/domain/**/*.java during the S2 bridge.'
     }
 
-    $enginePomPath = Join-Path $RepoRoot 'minos-engine\pom.xml'
-    if (-not (Test-Path -LiteralPath $enginePomPath -PathType Leaf)) {
-        throw "M15-S2 engine POM is missing: $enginePomPath"
-    }
-    [xml] $enginePom = Get-Content -LiteralPath $enginePomPath -Raw
+    $enginePom = Get-Pom -RelativePath 'minos-engine\pom.xml'
     if ([string] $enginePom.project.artifactId -ne 'minos-engine') {
         throw "Engine artifact coordinate changed unexpectedly: $($enginePom.project.artifactId)"
     }
-    $engineIncludes = @($enginePom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
-        ForEach-Object { $_.InnerText.Trim() })
+    $engineIncludes = Get-CompilerIncludes -Pom $enginePom
     foreach ($requiredInclude in @('com/minos/query/**/*.java', 'com/minos/store/CodeKnowledgeStore.java')) {
         if ($engineIncludes -notcontains $requiredInclude) {
             throw "minos-engine must own $requiredInclude during the S2 bridge."
         }
     }
-    $engineDependencies = @($enginePom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
-    if ($engineDependencies.Count -ne 1 -or
-        [string] $engineDependencies[0].groupId -ne 'com.minos' -or
-        [string] $engineDependencies[0].artifactId -ne 'minos-domain') {
-        throw 'minos-engine must depend only on com.minos:minos-domain at this checkpoint.'
-    }
+    Assert-SingleDependency -Pom $enginePom -GroupId 'com.minos' -ArtifactId 'minos-domain' `
+        -Message 'minos-engine must depend only on com.minos:minos-domain at this checkpoint.'
 
-    $appPomPath = Join-Path $RepoRoot 'minos-app\pom.xml'
-    if (-not (Test-Path -LiteralPath $appPomPath -PathType Leaf)) {
-        throw "M15-S2 application POM is missing: $appPomPath"
+    $storagePom = Get-Pom -RelativePath 'minos-storage-local\pom.xml'
+    if ([string] $storagePom.project.artifactId -ne 'minos-storage-local') {
+        throw "Storage artifact coordinate changed unexpectedly: $($storagePom.project.artifactId)"
     }
-    [xml] $appPom = Get-Content -LiteralPath $appPomPath -Raw
+    if ((Get-CompilerIncludes -Pom $storagePom) -notcontains 'com/minos/store/**/*.java') {
+        throw 'minos-storage-local must own the historical com/minos/store source tree.'
+    }
+    if ((Get-CompilerExcludes -Pom $storagePom) -notcontains 'com/minos/store/CodeKnowledgeStore.java') {
+        throw 'minos-storage-local must not recompile the CodeKnowledgeStore engine port.'
+    }
+    Assert-SingleDependency -Pom $storagePom -GroupId 'com.minos' -ArtifactId 'minos-engine' `
+        -Message 'minos-storage-local must depend only on com.minos:minos-engine at this checkpoint.'
+
+    $gitPom = Get-Pom -RelativePath 'minos-integration-git\pom.xml'
+    if ([string] $gitPom.project.artifactId -ne 'minos-integration-git') {
+        throw "Git integration artifact coordinate changed unexpectedly: $($gitPom.project.artifactId)"
+    }
+    if ((Get-CompilerIncludes -Pom $gitPom) -notcontains 'com/minos/git/**/*.java') {
+        throw 'minos-integration-git must own com/minos/git/**/*.java.'
+    }
+    Assert-SingleDependency -Pom $gitPom -GroupId 'org.eclipse.jgit' -ArtifactId 'org.eclipse.jgit' `
+        -Message 'minos-integration-git must be the only S2 module directly declaring JGit at this checkpoint.'
+
+    $appPom = Get-Pom -RelativePath 'minos-app\pom.xml'
     if ([string] $appPom.project.artifactId -ne 'minos-code-intelligence') {
         throw "Public artifact coordinate changed unexpectedly: $($appPom.project.artifactId)"
     }
 
-    foreach ($internalDependency in @('minos-domain', 'minos-engine')) {
+    foreach ($internalDependency in @(
+        'minos-domain',
+        'minos-engine',
+        'minos-storage-local',
+        'minos-integration-git'
+    )) {
         $matches = @($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='com.minos'] and *[local-name()='artifactId' and text()='$internalDependency']]"))
         if ($matches.Count -ne 1) {
             throw "minos-app must have exactly one com.minos:$internalDependency dependency; found $($matches.Count)."
         }
     }
 
-    $appExcludes = @($appPom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
-        ForEach-Object { $_.InnerText.Trim() })
+    $directJgit = @($appPom.SelectNodes("/*[local-name()='project']/*[local-name()='dependencies']/*[local-name()='dependency'][*[local-name()='groupId' and text()='org.eclipse.jgit']]"))
+    if ($directJgit.Count -ne 0) {
+        throw 'minos-app must no longer declare JGit directly; JGit belongs to minos-integration-git.'
+    }
+
+    $appExcludes = Get-CompilerExcludes -Pom $appPom
     foreach ($requiredExclude in @(
         'com/minos/domain/**/*.java',
         'com/minos/query/**/*.java',
-        'com/minos/store/CodeKnowledgeStore.java'
+        'com/minos/store/**/*.java',
+        'com/minos/git/**/*.java'
     )) {
         if ($appExcludes -notcontains $requiredExclude) {
             throw "minos-app must exclude $requiredExclude so Maven enforces module ownership."
@@ -180,29 +249,35 @@ function Assert-ReactorShape {
     }
 }
 
-function Assert-CoreOwnershipArtifacts {
-    $domainJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'minos-domain\target') -File `
-        -Filter 'minos-domain-*.jar' -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -notmatch '(sources|javadoc)' } |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
-    if ($null -eq $domainJar) {
-        throw 'minos-domain JAR is missing after reactor verification.'
-    }
+function Get-LatestJar {
+    param(
+        [Parameter(Mandatory = $true)][string] $Module,
+        [Parameter(Mandatory = $true)][string] $Filter
+    )
 
-    $engineJar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'minos-engine\target') -File `
-        -Filter 'minos-engine-*.jar' -ErrorAction SilentlyContinue |
+    $jar = Get-ChildItem -LiteralPath (Join-Path $RepoRoot "$Module\target") -File `
+        -Filter $Filter -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -notmatch '(sources|javadoc)' } |
         Sort-Object LastWriteTimeUtc -Descending |
         Select-Object -First 1
-    if ($null -eq $engineJar) {
-        throw 'minos-engine JAR is missing after reactor verification.'
+    if ($null -eq $jar) {
+        throw "$Module JAR is missing after reactor verification."
     }
+    return $jar
+}
+
+function Assert-CoreOwnershipArtifacts {
+    $domainJar = Get-LatestJar -Module 'minos-domain' -Filter 'minos-domain-*.jar'
+    $engineJar = Get-LatestJar -Module 'minos-engine' -Filter 'minos-engine-*.jar'
+    $storageJar = Get-LatestJar -Module 'minos-storage-local' -Filter 'minos-storage-local-*.jar'
+    $gitJar = Get-LatestJar -Module 'minos-integration-git' -Filter 'minos-integration-git-*.jar'
 
     foreach ($appOwnedClass in @(
         'target\classes\com\minos\domain\Symbol.class',
         'target\classes\com\minos\query\SymbolQueryService.class',
-        'target\classes\com\minos\store\CodeKnowledgeStore.class'
+        'target\classes\com\minos\store\CodeKnowledgeStore.class',
+        'target\classes\com\minos\store\FileSymbolSnapshotStore.class',
+        'target\classes\com\minos\git\GitIntelligenceService.class'
     )) {
         $path = Join-Path $RepoRoot $appOwnedClass
         if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -247,6 +322,27 @@ function Assert-CoreOwnershipArtifacts {
         throw 'minos-engine JAR embeds domain classes instead of depending on minos-domain.'
     }
 
+    $storageEntries = @(& $jarTool tf $storageJar.FullName)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect minos-storage-local JAR.'
+    }
+    foreach ($requiredStorageEntry in @(
+        'com/minos/store/FileSymbolSnapshotStore.class',
+        'com/minos/store/InMemoryCodeKnowledgeStore.class'
+    )) {
+        if ($storageEntries -notcontains $requiredStorageEntry) {
+            throw "minos-storage-local JAR does not own $requiredStorageEntry."
+        }
+    }
+    if ($storageEntries -contains 'com/minos/store/CodeKnowledgeStore.class') {
+        throw 'minos-storage-local recompiled the CodeKnowledgeStore engine port.'
+    }
+
+    $gitEntries = @(& $jarTool tf $gitJar.FullName)
+    if ($LASTEXITCODE -ne 0 -or $gitEntries -notcontains 'com/minos/git/GitIntelligenceService.class') {
+        throw 'minos-integration-git JAR does not own com/minos/git/GitIntelligenceService.class.'
+    }
+
     $shadedEntries = @(& $jarTool tf $shadedJar.FullName)
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to inspect final shaded MINOS JAR.'
@@ -254,7 +350,9 @@ function Assert-CoreOwnershipArtifacts {
     foreach ($requiredShadedEntry in @(
         'com/minos/domain/Symbol.class',
         'com/minos/query/SymbolQueryService.class',
-        'com/minos/store/CodeKnowledgeStore.class'
+        'com/minos/store/CodeKnowledgeStore.class',
+        'com/minos/store/FileSymbolSnapshotStore.class',
+        'com/minos/git/GitIntelligenceService.class'
     )) {
         if ($shadedEntries -notcontains $requiredShadedEntry) {
             throw "Final shaded MINOS JAR no longer contains $requiredShadedEntry."
@@ -264,6 +362,8 @@ function Assert-CoreOwnershipArtifacts {
     return [pscustomobject]@{
         DomainJar = $domainJar.FullName
         EngineJar = $engineJar.FullName
+        StorageJar = $storageJar.FullName
+        GitJar = $gitJar.FullName
         ShadedJar = $shadedJar.FullName
     }
 }
@@ -324,13 +424,14 @@ try {
         return
     }
 
-    Write-Host '[4/8] Checking reactor, minos-domain and minos-engine ownership shape...'
+    Write-Host '[4/8] Checking domain, engine, storage and Git module ownership shape...'
     Assert-ReactorShape
     Ensure-WindowsPowerShellOnPath
 
-    Write-Host '[5/8] Building engine boundary and upstream domain in isolation...'
-    Invoke-NativeChecked -File '.\mvnw.cmd' -Arguments @('-pl', 'minos-engine', '-am', 'test') `
-        -Failure 'Focused minos-engine Maven verification failed'
+    Write-Host '[5/8] Building storage/Git boundaries and upstream modules in isolation...'
+    Invoke-NativeChecked -File '.\mvnw.cmd' `
+        -Arguments @('-pl', 'minos-storage-local,minos-integration-git', '-am', 'test') `
+        -Failure 'Focused storage/Git Maven verification failed'
 
     Write-Host "[6/8] Replaying functional S1/M14 qualification on exact HEAD $head..." -ForegroundColor Cyan
     $captureScript = Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1'
@@ -359,10 +460,12 @@ try {
     else {
         Write-Host 'M15-S2 diagnostic module-boundary validation finished (not sufficient to close S2)' -ForegroundColor Yellow
     }
-    Write-Host "HEAD       : $head"
-    Write-Host "Domain JAR : $($artifacts.DomainJar)"
-    Write-Host "Engine JAR : $($artifacts.EngineJar)"
-    Write-Host "Shaded JAR : $($artifacts.ShadedJar)"
+    Write-Host "HEAD        : $head"
+    Write-Host "Domain JAR  : $($artifacts.DomainJar)"
+    Write-Host "Engine JAR  : $($artifacts.EngineJar)"
+    Write-Host "Storage JAR : $($artifacts.StorageJar)"
+    Write-Host "Git JAR     : $($artifacts.GitJar)"
+    Write-Host "Shaded JAR  : $($artifacts.ShadedJar)"
 }
 finally {
     Pop-Location
