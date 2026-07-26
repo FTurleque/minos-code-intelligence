@@ -127,7 +127,8 @@ function Remove-ExternalProviderResourceBridge {
 
 function Update-BaselineSourceCounting {
     $path = Join-Path $RepoRoot 'scripts\m15\capture-baseline.ps1'
-    $content = Get-Content -LiteralPath $path -Raw
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    $content = [System.IO.File]::ReadAllText($path, $utf8)
     $old = '$mainSourceCount = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot ''src\main\java'') -Recurse -File -Filter ''*.java'' -ErrorAction SilentlyContinue).Count'
     if (-not $content.Contains($old)) {
         if ($content -match 'Get-ChildItem -LiteralPath \$RepoRoot -Directory -Filter ''minos-\*''') {
@@ -147,7 +148,7 @@ $mainSourceCount = @(
     $new = $new.TrimEnd()
 
     $content = $content.Replace($old, $new)
-    [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($path, $content, $utf8)
 }
 
 function Assert-RelocatedLayout {
@@ -281,7 +282,7 @@ try {
             throw 'Relocation produced no staged changes.'
         }
 
-        Invoke-GitChecked @('commit','-m','M15-S2 — relocate production sources into Maven modules')
+        Invoke-GitChecked @('commit','-m','M15-S2 - relocate production sources into Maven modules')
         $head = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
             throw 'Unable to resolve relocation commit HEAD.'
