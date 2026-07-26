@@ -11,9 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Diagnostic d'installation et des runtimes providers. */
+/** Installation and provider-runtime diagnostics. */
 public final class DoctorCommand {
-
     public static final String NAME = "doctor";
     private final Path home;
     private final AutonomousIndexOperations operations;
@@ -34,10 +33,12 @@ public final class DoctorCommand {
         }
         List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
         Map<String, String> commands = new LinkedHashMap<>();
-        for (String command : List.of("java", "javac", "mvn", "node", "npm", "docker")) {
+        for (String command : List.of("java", "javac", "mvn", "node", "npm", "python", "docker")) {
             commands.put(command, CommandLocator.find(command).map(Path::toString).orElse(null));
         }
-        boolean ready = providers.stream().allMatch(provider -> "READY".equals(provider.state()));
+        boolean ready = providers.stream()
+                .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
+                .allMatch(provider -> "READY".equals(provider.state()));
         if (format == SymbolOutputFormat.JSON) {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("minosHome", home.toString());
@@ -50,6 +51,7 @@ public final class DoctorCommand {
                 value.put("id", provider.id());
                 value.put("version", provider.version());
                 value.put("state", provider.state());
+                value.put("requiredByDefault", provider.requiredByDefault());
                 value.put("executable", provider.executable());
                 value.put("diagnostics", provider.diagnostics());
                 values.add(value);
@@ -72,15 +74,9 @@ public final class DoctorCommand {
     }
 
     private static SymbolOutputFormat parse(String[] arguments) {
-        if (arguments.length == 0) {
-            return SymbolOutputFormat.TEXT;
-        }
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
-            return SymbolOutputFormat.TEXT;
-        }
-        if (arguments.length == 2 && "--format".equals(arguments[0])) {
-            return SymbolOutputFormat.parse(arguments[1]);
-        }
+        if (arguments.length == 0) return SymbolOutputFormat.TEXT;
+        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) return SymbolOutputFormat.TEXT;
+        if (arguments.length == 2 && "--format".equals(arguments[0])) return SymbolOutputFormat.parse(arguments[1]);
         throw new IllegalArgumentException("unexpected doctor arguments");
     }
 }
