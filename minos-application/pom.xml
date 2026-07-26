@@ -11,7 +11,7 @@
 
     <artifactId>minos-application</artifactId>
     <name>MINOS Application Services</name>
-    <description>Shared provider-independent/local application services consumed by public surfaces.</description>
+    <description>Shared application services and local composition root consumed by public surfaces.</description>
 
     <dependencies>
         <dependency>
@@ -26,20 +26,34 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
+            <artifactId>minos-runtime-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
             <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-provider-scip</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-integration-git</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
 
     <build>
-
-
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <includes>
+                        <include>com/minos/application/**/*.java</include>
                         <include>com/minos/architecture/**/*.java</include>
                         <include>com/minos/context/**/*.java</include>
                         <include>com/minos/discovery/**/*.java</include>
