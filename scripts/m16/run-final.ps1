@@ -104,7 +104,7 @@ function Assert-Structure {
         'docs\adr\0025-measurement-gated-storage-backend-evolution.md',
         'scripts\m16\datasets.json',
         'scripts\m16\M16ScaleBenchmark.java',
-        'scripts\m16\M16McpSustainedBenchmark.java',
+        'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java',
         'scripts\m16\M16RetentionProbe.java',
         'scripts\m16\run-scale-benchmark.ps1',
         'scripts\m16\run-indexing-benchmark.ps1',
@@ -211,7 +211,7 @@ try {
         -OutputJson (Join-Path $preflightRoot 'scale.json')
     Invoke-NativeChecked -File $java.JavaExecutable -Arguments @(
         '--class-path',$preflightJar,
-        (Join-Path $RepoRoot 'scripts\m16\M16McpSustainedBenchmark.java'),
+        (Join-Path $RepoRoot 'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java'),
         $preflightScaleHome,'5',(Join-Path $preflightRoot 'mcp.json')
     ) -Failure 'M16 MCP source-launcher preflight failed'
 
@@ -262,7 +262,7 @@ try {
     Write-Host '[6/10] Running sustained MCP benchmark on one long-lived server...'
     Invoke-NativeChecked -File $java.JavaExecutable -Arguments @(
         '--class-path',$installedJar,
-        (Join-Path $RepoRoot 'scripts\m16\M16McpSustainedBenchmark.java'),
+        (Join-Path $RepoRoot 'scripts\m16\com\minos\mcp\M16McpSustainedBenchmark.java'),
         $scaleHome,[string]$Repetitions,(Join-Path $resultRoot 'mcp.json')
     ) -Failure 'M16 MCP sustained benchmark failed' -LogPath (Join-Path $resultRoot 'mcp.log')
 
