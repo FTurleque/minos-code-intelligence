@@ -32,7 +32,8 @@ public final class LocalProjectSymbolQuery implements ProjectSymbolQuery {
     }
 
     public LocalProjectSymbolQuery(MinosApplication application) {
-        this(Objects.requireNonNull(application, "application").projectQueryService());
+        Objects.requireNonNull(application, "application");
+        this.service = application.projectQueryService();
     }
 
     private LocalProjectSymbolQuery(ProjectQueryService service) {
