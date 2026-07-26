@@ -49,7 +49,7 @@ public final class ArchitectureResultRenderer {
         map.put("dependencies", dependencies);
         map.put("topIncomingModuleIds", view.centrality().topIncomingModuleIds());
         map.put("topOutgoingModuleIds", view.centrality().topOutgoingModuleIds());
-        map.put("technologies", view.technologies().technologies().stream().map(Enum::name).toList());
+        map.put("technologies", view.technologies().technologies().stream().map(value -> value.name()).toList());
         map.put("modules", view.overview().modules().stream().map(ArchitectureResultRenderer::moduleMap).toList());
         map.put("moduleDependencies", dependencyMaps(view));
         if (format == SymbolOutputFormat.JSON) {
@@ -70,7 +70,7 @@ public final class ArchitectureResultRenderer {
                 "moduleEdges: " + view.dependencies().moduleEdgeCount(),
                 "topIncomingModules: " + view.centrality().topIncomingModuleIds(),
                 "topOutgoingModules: " + view.centrality().topOutgoingModuleIds(),
-                "technologies: " + view.technologies().technologies().stream().map(Enum::name).toList()
+                "technologies: " + view.technologies().technologies().stream().map(value -> value.name()).toList()
         );
     }
 
@@ -88,7 +88,7 @@ public final class ArchitectureResultRenderer {
         map.put("outgoingDependencyCount", context.concentration().outgoingDependencyCount());
         map.put("incomingRank", context.centrality().incomingRank());
         map.put("outgoingRank", context.centrality().outgoingRank());
-        map.put("technologies", context.technologies().stream().map(Enum::name).toList());
+        map.put("technologies", context.technologies().stream().map(value -> value.name()).toList());
         if (format == SymbolOutputFormat.JSON) {
             return DeterministicJson.render(map);
         }
@@ -103,7 +103,7 @@ public final class ArchitectureResultRenderer {
                 "outgoingDependencies: " + context.concentration().outgoingDependencyCount(),
                 "incomingRank: " + context.centrality().incomingRank(),
                 "outgoingRank: " + context.centrality().outgoingRank(),
-                "technologies: " + context.technologies().stream().map(Enum::name).toList()
+                "technologies: " + context.technologies().stream().map(value -> value.name()).toList()
         );
     }
 
