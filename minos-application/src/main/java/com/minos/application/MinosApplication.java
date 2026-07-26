@@ -52,6 +52,7 @@ public final class MinosApplication {
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
     private final GitIntelligenceService gitIntelligence;
+    private final ProjectInspectionService projectInspectionService;
     private final ProjectQueryService projectQueryService;
     private final ProjectArchitectureQuery architectureQuery;
     private final ProjectImpactQuery impactQuery;
@@ -87,6 +88,14 @@ public final class MinosApplication {
         this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
+        this.projectInspectionService = new ProjectInspectionService(
+                this.home,
+                projectRegistry,
+                snapshotStore,
+                indexStateStore,
+                discoveryService,
+                this.indexerDescriptors
+        );
         this.projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
         this.architectureQuery = new LocalProjectArchitectureQuery(projectRegistry, snapshotStore, discoveryService);
         this.impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
@@ -160,6 +169,10 @@ public final class MinosApplication {
 
     public GitIntelligenceService gitIntelligence() {
         return gitIntelligence;
+    }
+
+    public ProjectInspectionService projectInspectionService() {
+        return projectInspectionService;
     }
 
     public ProjectQueryService projectQueryService() {
