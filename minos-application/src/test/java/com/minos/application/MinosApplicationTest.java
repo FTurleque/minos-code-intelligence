@@ -37,9 +37,10 @@ class MinosApplicationTest {
         assertSame(application.snapshotStager(), application.snapshotStager());
         assertSame(application.snapshotPromoter(), application.snapshotPromoter());
         assertSame(application.gitIntelligence(), application.gitIntelligence());
-        assertEquals(2, application.indexerDescriptors().size());
+        assertEquals(3, application.indexerDescriptors().size());
         assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-java".equals(value.id())));
         assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-typescript".equals(value.id())));
+        assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-python".equals(value.id())));
     }
 
     @Test
