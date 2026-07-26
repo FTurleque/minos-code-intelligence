@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string] $JarPath,
-    [Parameter(Mandatory = $true)][string] $Home,
+    [Parameter(Mandatory = $true)][Alias('Home')][string] $BenchmarkHome,
     [ValidateSet('SMOKE','STANDARD','EXTENDED','STRESS')][string] $Profile = 'STANDARD',
     [ValidateRange(5,500)][int] $Repetitions = 30,
     [Parameter(Mandatory = $true)][string] $OutputJson
@@ -14,7 +14,7 @@ $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 . (Join-Path $RepoRoot 'scripts\windows\MinosWindows.ps1')
 $java = Resolve-MinosJava24
 $jar = [System.IO.Path]::GetFullPath($JarPath)
-$homePath = [System.IO.Path]::GetFullPath($Home)
+$homePath = [System.IO.Path]::GetFullPath($BenchmarkHome)
 $output = [System.IO.Path]::GetFullPath($OutputJson)
 $source = Join-Path $RepoRoot 'scripts\m16\M16ScaleBenchmark.java'
 $work = Join-Path ([System.IO.Path]::GetDirectoryName($output)) 'process'
