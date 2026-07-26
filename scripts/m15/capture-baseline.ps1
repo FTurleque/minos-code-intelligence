@@ -95,7 +95,7 @@ function Write-MarkdownReport {
     )
 
     $lines = @(
-        '# M15-S1 â€” Baseline capture',
+        '# M15-S1 - Baseline capture',
         '',
         "- UTC: ``$($Report.timestampUtc)``",
         "- HEAD: ``$($Report.head)``",
