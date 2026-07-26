@@ -10,7 +10,9 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -18,13 +20,17 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * Compatibility facade for local versioned snapshot persistence.
+ * Compatibility facade for local versioned snapshot persistence and active query views.
  *
  * <p>M15-S6 keeps the historical public API and on-disk formats while delegating
  * binary encoding, file publication, active-pointer state, integrity checks and
- * retention to dedicated components.</p>
+ * retention to dedicated components. M15-S7/S8 add a bounded in-process cache of
+ * immutable, indexed query views keyed by {@code (projectId, snapshotId)}.</p>
  */
 public final class FileSymbolSnapshotStore {
+
+    /** Entry-count bound. Snapshot sizes remain measured separately for M16 sizing decisions. */
+    public static final int DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32;
 
     private final Path storageRoot;
     private final SnapshotRepository snapshotRepository;
@@ -33,8 +39,24 @@ public final class FileSymbolSnapshotStore {
     private final SnapshotRetentionService retentionService;
     private final SnapshotCodec codecV1;
     private final SnapshotCodec codecV2;
+    private final int maxQueryCacheEntries;
+    private final Object cacheLock = new Object();
+    private final LinkedHashMap<CacheKey, SnapshotQueryView> queryCache =
+            new LinkedHashMap<>(16, 0.75f, true);
+
+    private long cacheHits;
+    private long cacheMisses;
+    private long fullSnapshotLoads;
+    private long queryViewBuilds;
 
     public FileSymbolSnapshotStore(Path storageRoot) throws IOException {
+        this(storageRoot, DEFAULT_MAX_QUERY_CACHE_ENTRIES);
+    }
+
+    FileSymbolSnapshotStore(Path storageRoot, int maxQueryCacheEntries) throws IOException {
+        if (maxQueryCacheEntries < 1) {
+            throw new IllegalArgumentException("maxQueryCacheEntries must be greater than zero");
+        }
         this.snapshotRepository = new SnapshotRepository(storageRoot);
         this.storageRoot = snapshotRepository.storageRoot();
         this.activeSnapshotRepository = new ActiveSnapshotRepository(snapshotRepository);
@@ -42,6 +64,7 @@ public final class FileSymbolSnapshotStore {
         this.retentionService = new SnapshotRetentionService(snapshotRepository);
         this.codecV1 = new SnapshotCodecV1();
         this.codecV2 = new SnapshotCodecV2();
+        this.maxQueryCacheEntries = maxQueryCacheEntries;
     }
 
     public SymbolSnapshot publish(
@@ -114,24 +137,60 @@ public final class FileSymbolSnapshotStore {
         ));
     }
 
-    /** Loads a complete v2 snapshot or adapts a historical v1 snapshot with empty M3 collections. */
+    /** Loads the active immutable snapshot, reusing the same cached query view when possible. */
     public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException {
+        return loadActiveQueryView(projectId).map(SnapshotQueryView::snapshot);
+    }
+
+    /**
+     * Resolves the active pointer first, then reuses/builds an immutable indexed query view.
+     *
+     * <p>Correctness does not rely on an invalidation callback: after a miss the pointer is
+     * read again before publication of the view. If promotion happened concurrently, the
+     * build is discarded and resolution restarts from the new active descriptor.</p>
+     */
+    public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
-        if (active.isEmpty()) {
-            return Optional.empty();
-        }
+        while (true) {
+            Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
+            if (active.isEmpty()) {
+                return Optional.empty();
+            }
+            SnapshotDescriptor descriptor = active.orElseThrow();
+            CacheKey key = new CacheKey(projectId, descriptor.snapshotId());
 
-        SnapshotDescriptor descriptor = active.orElseThrow();
-        Path snapshotFile = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
-        if (!Files.isRegularFile(snapshotFile)) {
-            throw new IOException("active symbol snapshot file is missing: " + snapshotFile);
-        }
-        integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
+            synchronized (cacheLock) {
+                SnapshotQueryView cached = queryCache.get(key);
+                if (cached != null && cached.descriptor().equals(descriptor)) {
+                    cacheHits++;
+                    return Optional.of(cached);
+                }
 
-        CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
-        integrityService.verifyMetadata(snapshot, projectId, descriptor);
-        return Optional.of(snapshot);
+                cacheMisses++;
+                SnapshotQueryView built = buildQueryView(projectId, descriptor);
+                Optional<SnapshotDescriptor> afterBuild = activeSnapshotRepository.read(projectId);
+                if (afterBuild.isEmpty()) {
+                    return Optional.empty();
+                }
+                if (!descriptor.equals(afterBuild.orElseThrow())) {
+                    continue;
+                }
+
+                SnapshotQueryView raced = queryCache.get(key);
+                if (raced != null && raced.descriptor().equals(descriptor)) {
+                    cacheHits++;
+                    return Optional.of(raced);
+                }
+
+                // Keep only the active view for this project. This is memory hygiene, not a
+                // correctness requirement: descriptor comparison above protects repromotion.
+                queryCache.entrySet().removeIf(entry ->
+                        entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
+                queryCache.put(key, built);
+                trimCache();
+                return Optional.of(built);
+            }
+        }
     }
 
     public Path storageRoot() {
@@ -141,6 +200,38 @@ public final class FileSymbolSnapshotStore {
     /** Explicit retention mechanism; automatic retention policy remains deferred to M16 measurements. */
     public SnapshotRetentionService retentionService() {
         return retentionService;
+    }
+
+    /** Exposes bounded-cache measurements for qualification and M16 sizing. */
+    public CacheStats cacheStats() {
+        synchronized (cacheLock) {
+            return new CacheStats(
+                    cacheHits,
+                    cacheMisses,
+                    fullSnapshotLoads,
+                    queryViewBuilds,
+                    queryCache.size(),
+                    maxQueryCacheEntries
+            );
+        }
+    }
+
+    private SnapshotQueryView buildQueryView(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
+        Path snapshotFile = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
+        if (!Files.isRegularFile(snapshotFile)) {
+            throw new IOException("active symbol snapshot file is missing: " + snapshotFile);
+        }
+        integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
+
+        CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
+        fullSnapshotLoads++;
+        integrityService.verifyMetadata(snapshot, projectId, descriptor);
+
+        long buildStarted = System.nanoTime();
+        InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot);
+        long buildNanos = System.nanoTime() - buildStarted;
+        queryViewBuilds++;
+        return new SnapshotQueryView(descriptor, snapshot, indexedStore, buildNanos);
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot, SnapshotCodec codec) throws IOException {
@@ -165,8 +256,22 @@ public final class FileSymbolSnapshotStore {
                             encoding.relationshipCount()
                     )
             );
+            invalidateProjectCache(snapshot.projectId());
         } finally {
             Files.deleteIfExists(temporarySnapshot);
+        }
+    }
+
+    private void invalidateProjectCache(UUID projectId) {
+        synchronized (cacheLock) {
+            queryCache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(projectId));
+        }
+    }
+
+    private void trimCache() {
+        while (queryCache.size() > maxQueryCacheEntries) {
+            CacheKey eldest = queryCache.keySet().iterator().next();
+            queryCache.remove(eldest);
         }
     }
 
@@ -207,5 +312,22 @@ public final class FileSymbolSnapshotStore {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
+    }
+
+    private record CacheKey(UUID projectId, String snapshotId) {
+        private CacheKey {
+            Objects.requireNonNull(projectId, "projectId");
+            requireText(snapshotId, "snapshotId");
+        }
+    }
+
+    public record CacheStats(
+            long hits,
+            long misses,
+            long fullSnapshotLoads,
+            long queryViewBuilds,
+            int entries,
+            int maximumEntries
+    ) {
     }
 }
