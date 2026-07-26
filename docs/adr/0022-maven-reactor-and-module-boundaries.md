@@ -24,6 +24,7 @@ La cible de travail est :
 minos-parent
 ├── minos-domain
 ├── minos-engine
+├── minos-runtime-local
 ├── minos-storage-local
 ├── minos-provider-scip
 ├── minos-integration-git
@@ -34,7 +35,9 @@ minos-parent
 └── minos-app
 ```
 
-Le nombre final de modules peut être réduit si une frontière ne protège aucun invariant réel. Il est interdit de créer un module uniquement pour reproduire mécaniquement un package existant.
+Le nombre final de modules peut être réduit ou ajusté si une frontière ne protège aucun invariant réel. Il est interdit de créer un module uniquement pour reproduire mécaniquement un package existant.
+
+`minos-runtime-local` est un ajustement explicite de la cible initiale : il protège l'invariant « exécution locale générique des providers ≠ provider SCIP ». Sans cette frontière, la CLI `doctor` devrait dépendre du provider SCIP uniquement pour utiliser `CommandLocator`, ou le moteur devrait absorber de l'infrastructure de processus locale.
 
 ### Direction des dépendances
 
@@ -43,7 +46,9 @@ minos-domain
     ↑
 minos-engine
     ↑
-adapters / storage / integrations
+minos-runtime-local / minos-storage-local
+    ↑
+minos-provider-scip / minos-integration-git
     ↑
 minos-app (composition)
     ↑
@@ -56,6 +61,8 @@ Les dépendances suivantes doivent devenir impossibles ou explicitement détect�
 - domaine → MCP SDK ;
 - moteur → CLI ;
 - moteur → protocole MCP ;
+- moteur → runtime process local concret ;
+- runtime local générique → provider SCIP ;
 - architecture/impact → couches d'exposition ;
 - API publique → backend local concret lorsqu'un port stable peut être utilisé.
 
@@ -71,9 +78,9 @@ minos-engine
 └── com.minos.store.CodeKnowledgeStore   # port moteur, pas implémentation locale
 ```
 
-`CodeKnowledgeStore` appartient à la frontière moteur car son contrat est défini par les besoins MINOS et ne reflète aucun backend particulier. Les implémentations mémoire/fichier restent hors de `minos-engine` et dépendent de ce port. À ce checkpoint, `minos-engine` dépend uniquement de `minos-domain`.
+`CodeKnowledgeStore` appartient à la frontière moteur car son contrat est défini par les besoins MINOS et ne reflète aucun backend particulier. Les implémentations mémoire/fichier restent hors de `minos-engine` et dépendent de ce port.
 
-Le checkpoint suivant fixe deux frontières d'infrastructure supplémentaires :
+Le checkpoint suivant, qualifié localement sur `cbbc0b5f6b7a59a627cfa6af98b24107f3435edb`, fixe deux frontières d'infrastructure supplémentaires :
 
 ```text
 minos-storage-local
@@ -83,9 +90,39 @@ minos-integration-git
 └── com.minos.git.*
 ```
 
-`minos-storage-local` dépend de `minos-engine`, jamais l'inverse : les implémentations mémoire et fichier restent donc derrière le port moteur. `minos-integration-git` est le seul module qui déclare directement `org.eclipse.jgit`; `minos-app` consomme l'intégration via l'artefact MINOS au lieu de porter JGit lui-même.
+`minos-storage-local` dépend de `minos-engine`, jamais l'inverse. `minos-integration-git` est le seul module qui déclare directement `org.eclipse.jgit`; `minos-app` ne porte plus JGit lui-même.
 
-Le runtime SCIP n'est pas encore extrait à ce checkpoint. Il dépend de ports d'orchestration actuellement situés hors du noyau extrait ; ces ports doivent être positionnés explicitement avant la création de `minos-provider-scip`, afin d'éviter une dépendance inversée ou un module artificiel.
+Le checkpoint SCIP positionne ensuite les contrats provider-neutres nécessaires à l'exécution dans `minos-engine` :
+
+```text
+minos-engine
+├── com.minos.discovery.ProjectDiscovery
+├── com.minos.orchestration.IndexerCapability
+├── com.minos.orchestration.IndexerQualification
+├── com.minos.orchestration.IndexerDescriptor
+├── com.minos.orchestration.IndexingRequirements
+├── com.minos.orchestration.IndexerNegotiationResult
+├── com.minos.orchestration.IndexerRegistry
+├── com.minos.orchestration.IndexingMode
+└── com.minos.orchestration.IndexingRuntimePorts
+```
+
+Ces types sont des contrats et règles provider-indépendants, sans dépendance SCIP/MCP/JGit.
+
+`minos-runtime-local` possède l'infrastructure générique d'exécution locale :
+
+```text
+com.minos.runtime.CommandLocator
+com.minos.runtime.IndexerProcessPlan
+com.minos.runtime.IndexerProcessPlanFactory
+com.minos.runtime.ProcessIndexerExecutor
+com.minos.runtime.ProviderRuntimeManager
+com.minos.runtime.ProviderRuntimeStatus
+```
+
+Il dépend uniquement de `minos-engine`. `MinosVersion` reste dans l'application pendant ce checkpoint car il représente la version observable de l'artefact produit et non un runtime de provider.
+
+`minos-provider-scip` possède enfin `com.minos.adapter.scip.*`, déclare directement `scip-java-bindings` et embarque les ressources qualifiées Windows `scip-java-windows-runner.ps1` et `ScipWriter.java`. Le provider dépend des contrats engine, du runtime local et du stockage local, mais aucune de ces couches ne dépend de SCIP.
 
 ## Migration séquentielle
 
@@ -95,13 +132,13 @@ S2 suit une migration en plusieurs commits qualifiables :
 2. créer `minos-app` en conservant temporairement les sources historiques à leur emplacement actuel ;
 3. extraire `minos-domain` ;
 4. extraire les contrats et services du moteur ;
-5. extraire persistance, provider SCIP et intégration Git ;
+5. extraire persistance, runtime local, provider SCIP et intégration Git ;
 6. extraire API/CLI/MCP/NEXUS ;
 7. réduire `minos-app` au bootstrap/composition ;
 8. relocaliser physiquement les sources dans leurs modules et supprimer toute compatibilité transitoire de source layout ;
 9. qualifier le reactor complet et les distributions M14.
 
-Les checkpoints 3 à 5 utilisent volontairement une phase d'**ownership Maven avant relocation physique** : les sources restent temporairement dans l'arbre historique, mais chaque module cible les compile explicitement et `minos-app` les exclut. Les runners S2 inspectent ensuite les JARs et `target/classes` pour prouver que l'ownership est réellement imposé par Maven.
+Les checkpoints 3 à 5 utilisent volontairement une phase d'**ownership Maven avant relocation physique** : les sources restent temporairement dans l'arbre historique, mais chaque module cible les compile explicitement et `minos-app` les exclut. Les runners S2 inspectent ensuite les JARs, les ressources et `target/classes` pour prouver que l'ownership est réellement imposé par Maven.
 
 Cette configuration est transitoire et doit disparaître avant la fermeture de M15-S2. La relocation physique devient alors une opération mécanique effectuée après stabilisation des frontières, plutôt qu'un mélange de décisions architecturales et de mouvements de fichiers.
 
@@ -142,7 +179,8 @@ Chaque étape S2 doit conserver :
 
 - Maven devient un garde-fou d'architecture réel ;
 - IntelliJ peut représenter progressivement les sous-modules du produit ;
-- les dépendances externes seront confinées aux modules qui en ont réellement besoin ;
+- SCIP et JGit sont confinés aux modules qui en ont réellement besoin ;
+- la CLI peut utiliser le runtime local générique sans dépendre du provider SCIP ;
 - S3 à S8 pourront évoluer derrière des contrats compilés plutôt que des conventions de packages ;
 - le packaging utilisateur reste stable pendant la migration.
 
@@ -163,6 +201,14 @@ Rejeté : surface de diff trop grande, diagnostic de régression difficile et im
 ### Conserver un seul module et utiliser uniquement ArchUnit/tests de frontières
 
 Rejeté comme cible M15-S2 : utile en complément, mais insuffisant pour imposer les dépendances au niveau du build.
+
+### Placer le runtime générique dans `minos-provider-scip`
+
+Rejeté : `DoctorCommand` utilise `CommandLocator`; cette solution introduirait une dépendance de la CLI vers SCIP pour une capacité générique de découverte de commandes.
+
+### Placer le runtime process local dans `minos-engine`
+
+Rejeté : l'exécution de processus, la découverte du PATH et la gestion d'outils locaux sont des détails d'infrastructure, pas des responsabilités du moteur provider-indépendant.
 
 ### Créer immédiatement des modules vides
 
