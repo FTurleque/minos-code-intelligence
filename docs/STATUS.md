@@ -169,7 +169,7 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 
 ## Suite
 
-M18 — **Knowledge Graph avancé** — est le prochain jalon planifié.
+M18 — **MINOS for IntelliJ** — est le prochain jalon planifié.
 
 ## Documentation
 
