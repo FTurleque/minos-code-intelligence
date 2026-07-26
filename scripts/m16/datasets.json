@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "seed": 16000031,
+  "syntheticProfiles": {
+    "SMOKE": {
+      "logicalFiles": 1000,
+      "physicalFiles": 1000,
+      "symbols": 10000,
+      "occurrences": 50000,
+      "relationships": 20000
+    },
+    "STANDARD": {
+      "logicalFiles": 10000,
+      "physicalFiles": 10000,
+      "symbols": 100000,
+      "occurrences": 500000,
+      "relationships": 250000
+    },
+    "EXTENDED": {
+      "logicalFiles": 50000,
+      "physicalFiles": 20000,
+      "symbols": 1000000,
+      "occurrences": 5000000,
+      "relationships": 2000000
+    },
+    "STRESS": {
+      "logicalFiles": 100000,
+      "physicalFiles": 20000,
+      "symbols": 1000000,
+      "occurrences": 10000000,
+      "relationships": 4000000
+    }
+  },
+  "realFixtures": [
+    {
+      "id": "java-simple",
+      "path": "fixtures/java/java-simple",
+      "provider": "scip-java",
+      "purpose": "FULL/NONE indexing and provider replay"
+    },
+    {
+      "id": "typescript-simple",
+      "path": "fixtures/typescript/typescript-simple",
+      "provider": "scip-typescript",
+      "purpose": "provider replay"
+    },
+    {
+      "id": "typescript-modules",
+      "path": "fixtures/typescript/typescript-modules",
+      "provider": "prebuilt SCIP fixture",
+      "purpose": "architecture, impact, related tests and multi-module non-regression"
+    }
+  ]
+}
