@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -72,6 +74,36 @@ class SnapshotPersistenceComponentsTest {
         ));
         assertTrue(Files.isRegularFile(active));
         assertFalse(Files.exists(old));
+    }
+
+    @Test
+    void boundedRetentionKeepsActiveAndNewestHistoricalFiles(@TempDir Path root) throws Exception {
+        SnapshotRepository repository = new SnapshotRepository(root);
+        ActiveSnapshotRepository activeRepository = new ActiveSnapshotRepository(repository);
+        UUID projectId = UUID.randomUUID();
+        Path directory = repository.ensureProjectDirectory(projectId);
+        Path oldest = Files.writeString(directory.resolve("snapshot-01.knowledge"), "oldest");
+        Path middle = Files.writeString(directory.resolve("snapshot-02.knowledge"), "middle");
+        Path newest = Files.writeString(directory.resolve("snapshot-03.knowledge"), "newest");
+        Path active = Files.writeString(directory.resolve("snapshot-active.knowledge"), "active");
+        Files.setLastModifiedTime(oldest, FileTime.from(Instant.parse("2026-01-01T00:00:00Z")));
+        Files.setLastModifiedTime(middle, FileTime.from(Instant.parse("2026-01-02T00:00:00Z")));
+        Files.setLastModifiedTime(newest, FileTime.from(Instant.parse("2026-01-03T00:00:00Z")));
+        Files.setLastModifiedTime(active, FileTime.from(Instant.parse("2026-01-04T00:00:00Z")));
+        activeRepository.promote(projectId, new SnapshotDescriptor(
+                2, "active", active.getFileName().toString(), "a".repeat(64), 1, 1, 1));
+
+        SnapshotRetentionService.RetentionResult result = new SnapshotCompactionService(root)
+                .compact(projectId, new SnapshotRetentionPolicy(2));
+
+        assertEquals("snapshot-active.knowledge", result.activeFileName());
+        assertEquals(List.of("snapshot-03.knowledge", "snapshot-02.knowledge"),
+                result.retainedHistoricalFiles());
+        assertEquals(List.of("snapshot-01.knowledge"), result.deletedHistoricalFiles());
+        assertTrue(Files.isRegularFile(active));
+        assertTrue(Files.isRegularFile(newest));
+        assertTrue(Files.isRegularFile(middle));
+        assertFalse(Files.exists(oldest));
     }
 
     @Test
