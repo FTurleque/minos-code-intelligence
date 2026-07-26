@@ -14,6 +14,6 @@ public final class MinosMcpApplicationTools {
 
     public static List<SyncToolSpecification> specifications(MinosApplication application) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        return new MinosMcpTools(new MinosApplicationCommandExecutor(app)).specifications();
+        return new MinosMcpTools(new MinosApplicationMcpBackend(app)).specifications();
     }
 }
