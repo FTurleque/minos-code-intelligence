@@ -15,12 +15,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
-/**
- * Reusable local CLI execution surface, separated from the process/system launcher.
- *
- * <p>M15-S3 centralized local composition in {@link MinosApplication}; M15-S4
- * makes the CLI a transport adapter over those shared application services.</p>
- */
+/** Reusable local CLI execution surface, separated from the process/system launcher. */
 public final class MinosCliRunner {
 
     public static final String HOME_ENVIRONMENT_VARIABLE = MinosHome.ENVIRONMENT_VARIABLE;
@@ -33,6 +28,7 @@ public final class MinosCliRunner {
             IndexCommand.NAME,
             ImportScipCommand.NAME,
             ToolsCommand.NAME,
+            ProviderCommand.NAME,
             SearchCodeCommand.NAME,
             FindSymbolCommand.NAME,
             GetSourceCommand.NAME,
@@ -48,8 +44,7 @@ public final class MinosCliRunner {
             NexusExportCommand.NAME
     );
 
-    private MinosCliRunner() {
-    }
+    private MinosCliRunner() { }
 
     public static int run(Path home, String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(home, "home");
@@ -60,12 +55,7 @@ public final class MinosCliRunner {
         return run(MinosApplication.open(home), arguments, output, error);
     }
 
-    public static int run(
-            MinosApplication application,
-            String[] arguments,
-            Appendable output,
-            Appendable error
-    ) throws IOException {
+    public static int run(MinosApplication application, String[] arguments, Appendable output, Appendable error) throws IOException {
         MinosApplication app = Objects.requireNonNull(application, "application");
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
@@ -102,6 +92,10 @@ public final class MinosCliRunner {
         Objects.requireNonNull(error, "error");
         if (!isStatelessHelpRequest(arguments)) {
             throw new IllegalArgumentException("arguments are not a stateless CLI help request");
+        }
+        if (arguments.length == 2 && ProviderCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(ProviderCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
         }
         return statelessHelpCli().run(arguments, output, error);
     }
