@@ -105,21 +105,24 @@ function Get-Pom {
 function Get-CompilerIncludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
+    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="includes"]/*[local-name()="include"]') |
         ForEach-Object { $_.InnerText.Trim() })
+    Write-Output -NoEnumerate $values
 }
 
 function Get-CompilerExcludes {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
+    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="build"]/*[local-name()="plugins"]/*[local-name()="plugin"]/*[local-name()="configuration"]/*[local-name()="excludes"]/*[local-name()="exclude"]') |
         ForEach-Object { $_.InnerText.Trim() })
+    Write-Output -NoEnumerate $values
 }
 
 function Get-Dependencies {
     param([Parameter(Mandatory = $true)][xml] $Pom)
 
-    return @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
+    $values = @($Pom.SelectNodes('/*[local-name()="project"]/*[local-name()="dependencies"]/*[local-name()="dependency"]'))
+    Write-Output -NoEnumerate $values
 }
 
 function Assert-SingleDependency {
@@ -130,7 +133,8 @@ function Assert-SingleDependency {
         [Parameter(Mandatory = $true)][string] $Message
     )
 
-    $dependencies = Get-Dependencies -Pom $Pom
+    # Force array semantics even when PowerShell receives exactly one XML node.
+    $dependencies = @(Get-Dependencies -Pom $Pom)
     if ($dependencies.Count -ne 1 -or
         [string] $dependencies[0].groupId -ne $GroupId -or
         [string] $dependencies[0].artifactId -ne $ArtifactId) {
@@ -174,7 +178,8 @@ function Assert-ReactorShape {
     if ([string] $domainPom.project.artifactId -ne 'minos-domain') {
         throw "Domain artifact coordinate changed unexpectedly: $($domainPom.project.artifactId)"
     }
-    if ((Get-CompilerIncludes -Pom $domainPom) -notcontains 'com/minos/domain/**/*.java') {
+    $domainIncludes = @(Get-CompilerIncludes -Pom $domainPom)
+    if ($domainIncludes -notcontains 'com/minos/domain/**/*.java') {
         throw 'minos-domain must own com/minos/domain/**/*.java during the S2 bridge.'
     }
 
@@ -182,7 +187,7 @@ function Assert-ReactorShape {
     if ([string] $enginePom.project.artifactId -ne 'minos-engine') {
         throw "Engine artifact coordinate changed unexpectedly: $($enginePom.project.artifactId)"
     }
-    $engineIncludes = Get-CompilerIncludes -Pom $enginePom
+    $engineIncludes = @(Get-CompilerIncludes -Pom $enginePom)
     foreach ($requiredInclude in @('com/minos/query/**/*.java', 'com/minos/store/CodeKnowledgeStore.java')) {
         if ($engineIncludes -notcontains $requiredInclude) {
             throw "minos-engine must own $requiredInclude during the S2 bridge."
@@ -195,10 +200,12 @@ function Assert-ReactorShape {
     if ([string] $storagePom.project.artifactId -ne 'minos-storage-local') {
         throw "Storage artifact coordinate changed unexpectedly: $($storagePom.project.artifactId)"
     }
-    if ((Get-CompilerIncludes -Pom $storagePom) -notcontains 'com/minos/store/**/*.java') {
+    $storageIncludes = @(Get-CompilerIncludes -Pom $storagePom)
+    if ($storageIncludes -notcontains 'com/minos/store/**/*.java') {
         throw 'minos-storage-local must own the historical com/minos/store source tree.'
     }
-    if ((Get-CompilerExcludes -Pom $storagePom) -notcontains 'com/minos/store/CodeKnowledgeStore.java') {
+    $storageExcludes = @(Get-CompilerExcludes -Pom $storagePom)
+    if ($storageExcludes -notcontains 'com/minos/store/CodeKnowledgeStore.java') {
         throw 'minos-storage-local must not recompile the CodeKnowledgeStore engine port.'
     }
     Assert-SingleDependency -Pom $storagePom -GroupId 'com.minos' -ArtifactId 'minos-engine' `
@@ -208,7 +215,8 @@ function Assert-ReactorShape {
     if ([string] $gitPom.project.artifactId -ne 'minos-integration-git') {
         throw "Git integration artifact coordinate changed unexpectedly: $($gitPom.project.artifactId)"
     }
-    if ((Get-CompilerIncludes -Pom $gitPom) -notcontains 'com/minos/git/**/*.java') {
+    $gitIncludes = @(Get-CompilerIncludes -Pom $gitPom)
+    if ($gitIncludes -notcontains 'com/minos/git/**/*.java') {
         throw 'minos-integration-git must own com/minos/git/**/*.java.'
     }
     Assert-SingleDependency -Pom $gitPom -GroupId 'org.eclipse.jgit' -ArtifactId 'org.eclipse.jgit' `
@@ -236,7 +244,7 @@ function Assert-ReactorShape {
         throw 'minos-app must no longer declare JGit directly; JGit belongs to minos-integration-git.'
     }
 
-    $appExcludes = Get-CompilerExcludes -Pom $appPom
+    $appExcludes = @(Get-CompilerExcludes -Pom $appPom)
     foreach ($requiredExclude in @(
         'com/minos/domain/**/*.java',
         'com/minos/query/**/*.java',
