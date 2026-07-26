@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.MinosApplication;
 import com.minos.application.MinosHome;
+import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.integration.nexus.NexusExportService;
@@ -50,24 +51,15 @@ public final class MinosCliRunner {
     private MinosCliRunner() {
     }
 
-    /** Compatibility entry point for callers that only have a MINOS home. */
-    public static int run(
-            Path home,
-            String[] arguments,
-            Appendable output,
-            Appendable error
-    ) throws IOException {
+    public static int run(Path home, String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(home, "home");
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-        if (isStatelessHelpRequest(arguments)) {
-            return runStatelessHelp(arguments, output, error);
-        }
+        if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
         return run(MinosApplication.open(home), arguments, output, error);
     }
 
-    /** Executes the CLI against an already-composed long-lived application. */
     public static int run(
             MinosApplication application,
             String[] arguments,
@@ -78,10 +70,7 @@ public final class MinosCliRunner {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
-
-        if (isStatelessHelpRequest(arguments)) {
-            return runStatelessHelp(arguments, output, error);
-        }
+        if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
@@ -92,29 +81,21 @@ public final class MinosCliRunner {
                 app.impactQuery(),
                 nexusExportCommand,
                 new LocalAutonomousIndexOperations(app),
-                app.home()
+                app.home(),
+                ProviderPlatformService.defaults(app)
         ).run(arguments, output, error);
     }
 
-    /**
-     * Returns true for CLI help shapes whose command implementations short-circuit
-     * before accessing project state or provider runtimes.
-     */
     static boolean isStatelessHelpRequest(String[] arguments) {
         Objects.requireNonNull(arguments, "arguments");
-        if (isHelp(arguments)) {
-            return true;
-        }
-        if (arguments.length == 2 && isHelpToken(arguments[1])) {
-            return STATELESS_HELP_COMMANDS.contains(arguments[0]);
-        }
+        if (isHelp(arguments)) return true;
+        if (arguments.length == 2 && isHelpToken(arguments[1])) return STATELESS_HELP_COMMANDS.contains(arguments[0]);
         return arguments.length == 3
                 && ProjectCommand.NAME.equals(arguments[0])
                 && Set.of("add", "list", "inspect").contains(arguments[1])
                 && isHelpToken(arguments[2]);
     }
 
-    /** Executes a supported help request without opening or creating MINOS_HOME. */
     static int runStatelessHelp(String[] arguments, Appendable output, Appendable error) throws IOException {
         Objects.requireNonNull(arguments, "arguments");
         Objects.requireNonNull(output, "output");
