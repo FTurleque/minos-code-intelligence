@@ -12,7 +12,7 @@ $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 . (Join-Path $RepoRoot 'scripts\windows\MinosWindows.ps1')
 $java = Resolve-MinosJava24
 $jar = [System.IO.Path]::GetFullPath($JarPath)
-$home = [System.IO.Path]::GetFullPath($ValidationHome)
+$validationHomePath = [System.IO.Path]::GetFullPath($ValidationHome)
 $output = [System.IO.Path]::GetFullPath($OutputJson)
 $fixtureSource = Join-Path $RepoRoot 'fixtures\java\java-simple'
 $workRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'minos-m16-indexing'
@@ -31,7 +31,7 @@ function Invoke-MinosMeasured {
     $encoded = ($argList | ForEach-Object { Quote-Arg $_ }) -join ' '
     $previous = $env:MINOS_HOME
     try {
-        $env:MINOS_HOME = $home
+        $env:MINOS_HOME = $validationHomePath
         $watch = [System.Diagnostics.Stopwatch]::StartNew()
         $process = Start-Process -FilePath $java.JavaExecutable -ArgumentList $encoded -PassThru -NoNewWindow `
             -RedirectStandardOutput $stdout -RedirectStandardError $stderr
