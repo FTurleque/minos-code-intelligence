@@ -22,6 +22,7 @@
     <actions>
         <group id="Minos.Editor.Popup" text="MINOS" popup="true">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <action id="Minos.OpenDefinition" class="com.minos.intellij.actions.MinosEditorActions$OpenDefinition" text="Open MINOS definition"/>
             <action id="Minos.FindUsages" class="com.minos.intellij.actions.MinosEditorActions$FindUsages" text="Find MINOS usages"/>
             <action id="Minos.Dependents" class="com.minos.intellij.actions.MinosEditorActions$Dependents" text="Find MINOS dependents"/>
             <action id="Minos.Implementations" class="com.minos.intellij.actions.MinosEditorActions$Implementations" text="Find MINOS implementations"/>
