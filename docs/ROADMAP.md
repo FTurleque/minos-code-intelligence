@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M18 terminés, validés et livrés ; M19 à M20 planifiés.**
+Statut : **C0 à M19 terminés, validés et livrés ; M20 planifié.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -177,7 +177,7 @@ M17  Généraliser discovery + providers         ✅
   ↓
 M18  Intégrer MINOS à IntelliJ                 ✅
   ↓
-M19  Intelligence de programme avancée         planifié
+M19  Intelligence de programme avancée         ✅
   ↓
 M20  Recherche sémantique hybride              planifié
 ```
@@ -316,15 +316,45 @@ Merge final : `faa51f63c5967d874a7a6685b6b513b83bb736b4`.
 
 ## M19 — Advanced Code Intelligence
 
-**PLANIFIÉ — PROCHAIN JALON.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
 
-Objectif : ajouter progressivement les analyses de programme avancées lorsque leur coût, leur provenance et leurs limites peuvent être explicités.
+Objectif fermé : étendre MINOS vers l'intelligence de programme avancée sans confondre faits statiques, dérivations, heuristiques ou comportement runtime.
+
+```text
+M19-S1   Program graph model                       ✅
+M19-S2   Call graph v2                             ✅
+M19-S3   Control Flow Graph                        ✅
+M19-S4   Data Flow / DEF_USE                       ✅
+M19-S5   Interprocedural Flow                      ✅
+M19-S6   CPG composition                           ✅
+M19-S7   Impact v2                                 ✅
+M19-S8   Security primitives                       ✅
+M19-S9   API / MCP exposure                        ✅
+```
+
+Acquis : modèle `ProgramGraph` provider-independent et capability-honest, call graph v2 avec provenance, CFG explicite, data-flow/def-use, propagation interprocédurale bornée avec cycles visibles, composition CPG déterministe, Impact v2 conservant M8 comme baseline, primitives `SOURCE/SINK/SANITIZER`, `AdvancedCodeIntelligenceApi` v1 additive et trois nouveaux tools MCP read-only (`minos_program_graph`, `minos_impact_v2`, `minos_security_paths`) portant le catalogue courant à 19 tools.
+
+Qualification finale Windows exact-head :
+
+```text
+Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
+M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
+Maven Java 24: 13/13 modules SUCCESS
+JaCoCo: all gates PASS
+```
+
+Merge final : `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
+
+- roadmap opérationnelle : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md)
+- décision : [ADR-0028](adr/0028-capability-honest-program-graph-and-bounded-advanced-analysis.md)
+- issue : #69
+- PR finale : #70
 
 ---
 
 ## M20 — Recherche sémantique hybride
 
-**PLANIFIÉ.**
+**PLANIFIÉ — PROCHAIN JALON.**
 
 Objectif : combiner recherche sémantique et faits structurés MINOS sans remplacer les identités, relations et preuves déterministes.
 
@@ -332,4 +362,4 @@ Objectif : combiner recherche sémantique et faits structurés MINOS sans rempla
 
 ## Règle de progression
 
-M19 est le prochain jalon séquentiel. M20 peut être exploré, mais sa promotion produit reste soumise aux garanties de scalabilité, de qualité, d'extensibilité et d'intégration IDE acquises jusqu'à M18.
+M20 est le prochain jalon séquentiel. Sa promotion produit reste soumise aux garanties de scalabilité M16, d'extensibilité M17, d'intégration IDE M18 et d'honnêteté des graphes/analyses avancées acquise en M19.
