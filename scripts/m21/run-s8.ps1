@@ -24,7 +24,8 @@ function Invoke-PythonChecked {
         [Parameter(Mandatory = $true)][string[]] $Arguments,
         [Parameter(Mandatory = $true)][string] $Failure
     )
-    & $Python.File @($Python.Prefix) @Arguments
+    $all = @($Python.Prefix) + $Arguments
+    & $Python.File @all
     if ($LASTEXITCODE -ne 0) { throw "$Failure (exit=$LASTEXITCODE)" }
 }
 
