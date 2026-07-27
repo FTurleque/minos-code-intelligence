@@ -57,6 +57,7 @@ function Assert-M20Structure {
     $required = @(
         'docs\roadmap\M20_EXECUTION.md',
         'docs\adr\0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md',
+        'docs\developer\semantic-hybrid-intelligence.md',
         'minos-domain\src\main\java\com\minos\semantic\SemanticDocument.java',
         'minos-domain\src\main\java\com\minos\semantic\SemanticDocumentKind.java',
         'minos-domain\src\main\java\com\minos\semantic\SemanticVector.java',
@@ -70,6 +71,7 @@ function Assert-M20Structure {
         'minos-application\src\main\java\com\minos\semantic\HybridSearchService.java',
         'minos-application\src\main\java\com\minos\semantic\HybridContextBuilder.java',
         'minos-application\src\main\java\com\minos\semantic\SemanticSearchEvaluator.java',
+        'minos-cli\src\main\java\com\minos\cli\LocalAutonomousIndexOperations.java',
         'minos-api\src\main\java\com\minos\api\SemanticCodeIntelligenceApi.java',
         'minos-api\src\main\java\com\minos\api\LocalSemanticCodeIntelligenceApi.java',
         'minos-nexus\src\main\java\com\minos\integration\nexus\NexusSemanticSignalContract.java',
@@ -103,14 +105,28 @@ function Assert-M20Structure {
 
     $application = Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\main\java\com\minos\application\MinosApplication.java') -Raw
     if ($application -notmatch 'Optional\.ofNullable\(embeddingProvider\)' -or
-        $application -notmatch 'embeddingProvider\(EmbeddingProvider value\)') {
-        throw 'M20 embedding provider must remain explicit/optional in MinosApplication.'
+        $application -notmatch 'embeddingProvider\(EmbeddingProvider value\)' -or
+        $application -notmatch 'MINOS_SEMANTIC_PROVIDER' -or
+        $application -notmatch 'new LocalHashEmbeddingProvider\(\)') {
+        throw 'M20 embedding provider must remain disabled by default and explicitly activatable locally.'
+    }
+
+    $nativeIndex = Get-Content -LiteralPath (Require-File -Relative 'minos-cli\src\main\java\com\minos\cli\LocalAutonomousIndexOperations.java') -Raw
+    if ($nativeIndex -notmatch 'semanticIndexService\(\)\.synchronize' -or
+        $nativeIndex -notmatch 'semantic index refresh failed without invalidating structured snapshot') {
+        throw 'M20 native indexing must refresh configured semantic indexes without invalidating structured success.'
     }
 
     $semantic = Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\main\java\com\minos\semantic\SemanticSearchService.java') -Raw
     if ($semantic -notmatch 'InformationNature\.HEURISTIC' -or
         $semantic -notmatch 'VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT') {
         throw 'M20 semantic results must remain HEURISTIC ranking signals, not structural facts.'
+    }
+
+    $hybrid = Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\main\java\com\minos\semantic\HybridSearchService.java') -Raw
+    if ($hybrid -notmatch 'SEMANTIC_SIGNAL_UNAVAILABLE_STRUCTURED_FALLBACK_USED' -or
+        $hybrid -notmatch 'return clamp01\(score\)') {
+        throw 'M20 hybrid search must keep a structured fallback and avoid artificial neutral semantic bonuses.'
     }
 
     $index = Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\main\java\com\minos\semantic\SemanticIndexService.java') -Raw
