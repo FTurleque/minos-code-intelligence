@@ -20,26 +20,4 @@
             <version>${project.version}</version>
         </dependency>
     </dependencies>
-
-    <build>
-
-
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <includes>
-                        <include>com/minos/runtime/CommandLocator.java</include>
-                        <include>com/minos/runtime/CompositeProviderRuntimeManager.java</include>
-                        <include>com/minos/runtime/IndexerProcessPlan.java</include>
-                        <include>com/minos/runtime/IndexerProcessPlanFactory.java</include>
-                        <include>com/minos/runtime/ProcessIndexerExecutor.java</include>
-                        <include>com/minos/runtime/ProviderRuntimeManager.java</include>
-                        <include>com/minos/runtime/ProviderRuntimeStatus.java</include>
-                    </includes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
