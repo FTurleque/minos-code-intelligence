@@ -43,6 +43,7 @@ def main() -> int:
         user_readme = read("docs/user/README.md")
         cli = read("docs/user/cli.md")
         intellij = read("docs/user/intellij-plugin.md")
+        public_surfaces = read("docs/developer/public-surfaces.md")
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
@@ -121,11 +122,15 @@ def main() -> int:
         ):
             require_text("IdeCommand.java", ide_command, f'"{capability}"')
             require_text("docs/user/intellij-plugin.md", intellij, capability)
+            require_text("docs/developer/public-surfaces.md", public_surfaces, capability)
 
         require_text("docs/user/intellij-plugin.md", intellij, "provider d'embeddings est **désactivé par défaut**")
         require_text("docs/user/intellij-plugin.md", intellij, "pas un language model")
         require_text("docs/user/intellij-plugin.md", intellij, "absence de chemin observé ≠ preuve de sûreté")
         require_text("docs/user/intellij-plugin.md", intellij, "IntelliJ Platform 2026.1")
+        require_text("docs/developer/public-surfaces.md", public_surfaces, "M21-S6 étend le handshake v1 **sans rupture**")
+        require_text("docs/developer/public-surfaces.md", public_surfaces, "Plugin Verifier")
+        forbid_text("docs/developer/public-surfaces.md", public_surfaces, "Une future UX sémantique IDE")
         require_text("scripts/intellij/check-m21-parity.py", parity_gate, "ideBranch=261")
         require_text("scripts/m21/run-s6.ps1", s6_runner, "M21-S6 INTELLIJ PARITY VALIDATION SUCCESS")
 
