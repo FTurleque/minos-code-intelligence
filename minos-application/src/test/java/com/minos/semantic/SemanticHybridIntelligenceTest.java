@@ -15,7 +15,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -31,7 +30,7 @@ class SemanticHybridIntelligenceTest {
     @Test
     void semanticIsOptionalAndHybridFallsBackToStructuredSignals(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
-        MinosApplication baseline = MinosApplication.open(fixture.home());
+        MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
         RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
         baseline.snapshotStore().publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
@@ -49,9 +48,23 @@ class SemanticHybridIntelligenceTest {
     }
 
     @Test
+    void nativeOpenCanExplicitlySelectBundledLocalHashProvider(@TempDir Path temp) throws Exception {
+        String previous = System.getProperty(MinosApplication.SEMANTIC_PROVIDER_PROPERTY);
+        try {
+            System.setProperty(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, "local-hash");
+            MinosApplication application = MinosApplication.open(temp.resolve("native-home"));
+            assertEquals("minos-local-hash",
+                    application.semanticIndexService().embeddingProvider().orElseThrow().id());
+        } finally {
+            if (previous == null) System.clearProperty(MinosApplication.SEMANTIC_PROVIDER_PROPERTY);
+            else System.setProperty(MinosApplication.SEMANTIC_PROVIDER_PROPERTY, previous);
+        }
+    }
+
+    @Test
     void controlledSemanticAndHybridRetrievalMeasureGainAndRespectContextBudget(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
-        MinosApplication baseline = MinosApplication.open(fixture.home());
+        MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
         RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
         baseline.snapshotStore().publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
@@ -104,7 +117,7 @@ class SemanticHybridIntelligenceTest {
     @Test
     void semanticIndexReusesUnchangedDocumentsAndTargetsChangedEmbeddings(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
-        MinosApplication baseline = MinosApplication.open(fixture.home());
+        MinosApplication baseline = MinosApplication.builder(fixture.home()).build();
         RegisteredProject project = baseline.projectRegistry().registerProject(fixture.projectRoot(), "semantic-fixture");
         baseline.snapshotStore().publish(project.id(), "snapshot-1",
                 symbols(project.id(), "()"), List.of(), List.of());
@@ -185,20 +198,9 @@ class SemanticHybridIntelligenceTest {
 
     /** Controlled concept space used only as a ground truth for M20 relevance qualification. */
     private static final class ConceptEmbeddingProvider implements EmbeddingProvider {
-        @Override
-        public String id() {
-            return "fixture-concepts";
-        }
-
-        @Override
-        public String modelId() {
-            return "fixture-concepts-v1";
-        }
-
-        @Override
-        public int dimensions() {
-            return 3;
-        }
+        @Override public String id() { return "fixture-concepts"; }
+        @Override public String modelId() { return "fixture-concepts-v1"; }
+        @Override public int dimensions() { return 3; }
 
         @Override
         public SemanticVector embed(String stableKey, String text) {
