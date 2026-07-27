@@ -76,9 +76,11 @@ flowchart TB
 3. [Indexation, lifecycle et stockage](indexing-and-storage.md)
 4. [Surfaces publiques](public-surfaces.md)
 5. [Intelligence sémantique et hybride M20](semantic-hybrid-intelligence.md)
-6. [Multi-dépôts et Git](multi-repo-git.md)
-7. [Supply-chain et provenance de release](supply-chain.md)
-8. [Tests et contribution](testing.md)
+6. [Provider avancé Program Graph M21-S7](advanced-program-provider.md)
+7. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+8. [Multi-dépôts et Git](multi-repo-git.md)
+9. [Supply-chain et provenance de release](supply-chain.md)
+10. [Tests et contribution](testing.md)
 
 ## Build développeur
 
