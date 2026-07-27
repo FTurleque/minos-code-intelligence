@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 VALIDÉ ; S7 EN COURS ; S8→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 VALIDÉ ; S7 VALIDÉ ; S8 EN COURS ; S9 planifié.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -34,8 +34,8 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 | M21-S4 | Maven module-boundary hardening | **VALIDÉ** sur `0699d06d6138dd77008b8ea31578a334468eec75` |
 | M21-S5 | Supply-chain & release hardening | **VALIDÉ** sur `bcc44ea5e7a5c354c1df25bb7d295ee57347629c` |
 | M21-S6 | IntelliJ parity M19/M20 | **VALIDÉ** sur `8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6` |
-| M21-S7 | Advanced provider productionization | **EN COURS — candidat local à qualifier** |
-| M21-S8 | Semantic scale qualification | planifié |
+| M21-S7 | Advanced provider productionization | **VALIDÉ** sur `57243384286ed623de2d9499c9ae6729f77f6845` |
+| M21-S8 | Semantic scale qualification | **EN COURS — baseline STANDARD à mesurer** |
 | M21-S9 | Final production integrity gate | planifié |
 
 ## M21-S1 — Governance & authoritative consolidation
@@ -214,9 +214,9 @@ Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
 
 ## M21-S7 — Advanced provider productionization
 
-Statut : **EN COURS — candidat Windows local à qualifier.**
+Statut : **VALIDÉ le 27 juillet 2026** sur `57243384286ed623de2d9499c9ae6729f77f6845`.
 
-M19 avait défini `ProgramGraphProvider` et le modèle avancé mais le runtime standard ne disposait pas encore d'un provider de production capable d'injecter des facts CFG/def-use/interproc/security explicites. S7 productionise le sidecar local v1 déjà prévu par l'architecture M19.
+M19 avait défini `ProgramGraphProvider` et le modèle avancé mais le runtime standard ne disposait pas encore d'un provider local capable d'injecter des facts CFG/def-use/interproc/security explicites. S7 productionise le sidecar local v1 prévu par l'architecture M19.
 
 Architecture :
 
@@ -262,45 +262,92 @@ TAINT_FLOW       2
 SOURCE/SANITIZER/SINK présents
 ```
 
-`AdvancedProgramSidecarFixtureTest` mesure précision/rappel parfaits sur chaque famille de flow attendue. `FileProgramGraphProviderTest` couvre snapshot stale, sur-promesse de capability, invalidation du cache et absence de promotion interprocédurale implicite.
-
-Documentation : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md).
-
-Gate local S7 :
-
-```powershell
-.\scripts\m21\run-s7.ps1 -ExpectedHead <sha>
-```
-
-Verdict attendu :
+Qualification :
 
 ```text
-M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=265)
+Maven reactor: 13/13 SUCCESS
+program-graph-analysis: line=0.886667 branch=0.621053 classes=14
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
 M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
 M21-S7 ADVANCED PROVIDER VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: 57243384286ed623de2d9499c9ae6729f77f6845
 ```
+
+Documentation : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md).
 
 Cette étape ne prétend pas que SCIP fournit désormais CFG/def-use/taint. SCIP conserve son profil réel. S7 fournit un contrat opérationnel local pour un analyseur avancé explicite ; M22 reste le jalon d'intégration de providers d'analyse spécialisés supplémentaires.
 
 ## M21-S8 — Semantic scale qualification
 
+Statut : **EN COURS — campagne STANDARD locale à mesurer avant toute optimisation.**
+
 La référence reste la philosophie M16 : **mesurer avant d'industrialiser**.
 
-La campagne doit mesurer au minimum :
+Dataset :
+
+```text
+seed                 16000031
+fichiers logiques       10 000
+symboles               100 000
+occurrences            500 000
+relations              250 000
+semantic documents     210 000
+vector dimensions          384
+```
+
+La campagne mesure au minimum :
 
 ```text
 semantic index build/rebuild
 semantic incremental reuse
+vector-store-load p50/p95/p99
 semantic search p50/p95/p99
 hybrid search p50/p95/p99
 hybrid context p50/p95/p99
-heap/RSS
+peak/retained heap
+process RSS
 vector store disk size
-allocations/boxing dominants
 ```
 
-Le scan linéaire ou le format vectoriel ne seront remplacés que si les mesures démontrent un goulot produit.
+La mutation contrôlée change un symbole et sa ligne source. Exactement trois documents doivent être ré-embeddés (`SYMBOL`, `CHUNK`, `FILE`) ; les autres doivent être réutilisés.
+
+Règle de décision :
+
+```text
+INVALID_MEASUREMENT
+OPTIMIZE_MEASURED_BOTTLENECK
+KEEP_CURRENT_M20_BACKEND
+```
+
+Le scan linéaire ou le format vectoriel ne seront remplacés que si les mesures démontrent un goulot produit. Aucune dépendance vectorielle/backend alternative n'est ajoutée avant cette preuve.
+
+Harness :
+
+```text
+scripts/m21/M21SemanticScaleProbe.java
+scripts/m21/run-s8-benchmark.ps1
+scripts/m21/check-s8-results.py
+scripts/m21/run-s8.ps1
+```
+
+Documentation : [`../developer/semantic-scale-qualification.md`](../developer/semantic-scale-qualification.md).
+
+Gate local S8 :
+
+```powershell
+.\scripts\m21\run-s8.ps1 -ExpectedHead <sha> -Repetitions 5
+```
+
+Verdict de fermeture attendu :
+
+```text
+M21 S8 SEMANTIC SCALE DECISION SUCCESS
+M21-S8 SEMANTIC SCALE VALIDATION SUCCESS
+Validated HEAD: <sha>
+```
 
 ## M21-S9 — Final production integrity gate
 
@@ -349,6 +396,12 @@ Gate S7 :
 .\scripts\m21\run-s7.ps1 -ExpectedHead <sha>
 ```
 
+Gate S8 :
+
+```powershell
+.\scripts\m21\run-s8.ps1 -ExpectedHead <sha> -Repetitions 5
+```
+
 ## Source de vérité
 
 - état livré : [`../STATUS.md`](../STATUS.md) ;
@@ -357,4 +410,5 @@ Gate S7 :
 - supply-chain : [`../developer/supply-chain.md`](../developer/supply-chain.md) ;
 - guide IntelliJ : [`../user/intellij-plugin.md`](../user/intellij-plugin.md) ;
 - advanced provider : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md) ;
+- semantic scale : [`../developer/semantic-scale-qualification.md`](../developer/semantic-scale-qualification.md) ;
 - issue de pilotage : #73.
