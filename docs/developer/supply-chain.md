@@ -4,11 +4,13 @@ M21-S5 durcit la distribution Windows sans modifier les workflows GitHub Actions
 
 ## Preuves générées
 
-Le module final `minos-app` génère pendant `package` un SBOM agrégé :
+Le build de release compile/package d'abord le reactor, puis `build-windows-distribution.ps1` invoque explicitement le goal agrégateur CycloneDX **depuis la racine d'exécution Maven** :
 
 ```text
 target/sbom/minos-cyclonedx.json
 ```
+
+Ce découplage est volontaire. `makeAggregateBom` est un goal aggregator et ne doit pas être attaché au module enfant `minos-app` : CycloneDX 2.9.2 ignore alors l'exécution avec `Skipping CycloneDX on non-execution root`.
 
 Contrat courant :
 
@@ -16,7 +18,7 @@ Contrat courant :
 format        CycloneDX JSON
 specVersion   1.6
 scope test    exclu
-reactor       agrégé
+reactor       agrégé depuis la racine Maven
 provider      org.cyclonedx:cyclonedx-maven-plugin:2.9.2
 ```
 
@@ -98,13 +100,14 @@ Entrée autoritative locale :
 Le runner :
 
 1. rejoue le gate M21/M20 exact-head ;
-2. construit un package de release avec SBOM ;
-3. génère notices et manifest ;
-4. vérifie tous les checksums ;
-5. construit le setup ;
-6. rejoue install/uninstall ZIP + setup via `publish-windows-release.ps1 -ValidateOnly` ;
-7. vérifie le statut Authenticode selon la politique locale ;
-8. confirme HEAD inchangé et worktree propre.
+2. reconstruit le package de release sans répéter les tests déjà passés par le gate core ;
+3. génère le SBOM agrégé depuis la racine Maven ;
+4. génère notices et manifest ;
+5. vérifie tous les checksums ;
+6. construit le setup ;
+7. rejoue install/uninstall ZIP + setup via `publish-windows-release.ps1 -ValidateOnly` ;
+8. vérifie le statut Authenticode selon la politique locale ;
+9. confirme HEAD inchangé et worktree propre.
 
 ## Frontière avec la CI
 
