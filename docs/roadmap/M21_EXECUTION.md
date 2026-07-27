@@ -136,7 +136,7 @@ S5 reste volontairement séparé de la CI en juillet. L'épinglage immuable des 
 
 Livrables S5 :
 
-- CycloneDX Maven Plugin `2.9.2`, SBOM JSON agrégé CycloneDX 1.6 produit sur `package` du dernier module ;
+- CycloneDX Maven Plugin `2.9.2`, SBOM JSON agrégé CycloneDX 1.6 généré explicitement depuis la racine d'exécution Maven après le build du reactor ;
 - scope test exclu du SBOM de distribution ;
 - `scripts/release/generate-third-party-notices.py` avec politique stricte : aucune licence inventée ;
 - `scripts/release/create-release-manifest.py` : version, commit, taille et SHA-256 de chaque fichier de distribution ;
@@ -145,6 +145,8 @@ Livrables S5 :
 - sidecars de release SBOM/notices + `.sha256` publiables avec le setup/ZIP ;
 - `scripts/release/sign-windows-artifact.ps1` pour signature Authenticode explicite lorsqu'un certificat est disponible ;
 - `scripts/m21/run-s5.ps1` rejoue core, packaging, checksums, ZIP install, setup install/uninstall et politique de signature.
+
+Premier candidat `1b4f8cdc7d0821a6af5504a4873b4b4647bdb5c1` : le gate core a entièrement passé (`13/13`, JaCoCo 11 scopes, M20/M21 exact-head), puis la distribution a échoué avant packaging supply-chain. CycloneDX affichait `Skipping CycloneDX on non-execution root` parce que `makeAggregateBom` était attaché à `minos-app`. Le correctif retire cette exécution du module enfant et invoque l'aggregator depuis la racine Maven après le build ; `-SkipVerify` évite aussi de rejouer Surefire après le gate core déjà validé.
 
 La signature n'est pas simulée. Sans certificat, le candidat peut être qualifié non signé ; `MINOS_REQUIRE_SIGNED_RELEASE=1` transforme une signature Authenticode valide en exigence bloquante.
 
