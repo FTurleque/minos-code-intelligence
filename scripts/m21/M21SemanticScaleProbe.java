@@ -55,6 +55,8 @@ public final class M21SemanticScaleProbe {
         long changedPublishStarted = System.nanoTime();
         snapshots.publish(project.id(), snapshotId(profile, 2), changedDataset.symbols(), changedDataset.occurrences(), changedDataset.relationships());
         double changedPublishMs = elapsedMs(changedPublishStarted);
+        initialDataset = null;
+        changedDataset = null;
         forceGc();
 
         long incrementalStarted = System.nanoTime();
