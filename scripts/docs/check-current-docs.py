@@ -42,6 +42,7 @@ def main() -> int:
         readme = read("README.md")
         user_readme = read("docs/user/README.md")
         cli = read("docs/user/cli.md")
+        intellij = read("docs/user/intellij-plugin.md")
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
@@ -49,6 +50,9 @@ def main() -> int:
         root_pom = read("pom.xml")
         app_pom = read("minos-app/pom.xml")
         release_build = read("scripts/release/build-windows-distribution.ps1")
+        ide_command = read("minos-cli/src/main/java/com/minos/cli/IdeCommand.java")
+        parity_gate = read("scripts/intellij/check-m21-parity.py")
+        s6_runner = read("scripts/m21/run-s6.ps1")
 
         require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés.")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
@@ -71,7 +75,11 @@ def main() -> int:
         require_text("docs/STATUS.md", status, "S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026")
         require_text("docs/STATUS.md", status, "S3   quality gates M19/M20                            VALIDÉ")
         require_text("docs/STATUS.md", status, "S4   Maven module-boundary hardening                  VALIDÉ")
-        require_text("docs/STATUS.md", status, "S5   supply-chain + release hardening                 EN COURS")
+        require_text("docs/STATUS.md", status, "S5   supply-chain + release hardening                 VALIDÉ")
+        require_text("docs/STATUS.md", status, "S6   IntelliJ parity M19/M20                          EN COURS")
+        require_text("docs/STATUS.md", status, "M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS")
+        require_text("docs/STATUS.md", status, "program-graph")
+        require_text("docs/STATUS.md", status, "hybrid-context")
         forbid_text("docs/STATUS.md", status, "Aucun M21 n'est actuellement déclaré")
 
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "Issue : **#73")
@@ -79,7 +87,9 @@ def main() -> int:
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S2 EN PAUSE jusqu’en août 2026")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S3 VALIDÉ")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S4 VALIDÉ")
-        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S5 EN COURS")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S5 VALIDÉ")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S6 EN COURS")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "M21 INTELLIJ PARITY CONSISTENCY SUCCESS")
 
         require_text("docs/developer/supply-chain.md", supply_chain, "CycloneDX JSON")
         require_text("docs/developer/supply-chain.md", supply_chain, "racine d'exécution Maven")
@@ -88,7 +98,6 @@ def main() -> int:
 
         require_text("pom.xml", root_pom, "<cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>")
         forbid_text("minos-app/pom.xml", app_pom, "<artifactId>cyclonedx-maven-plugin</artifactId>")
-
         require_text(
             "scripts/release/build-windows-distribution.ps1",
             release_build,
@@ -99,6 +108,26 @@ def main() -> int:
         require_text("scripts/release/build-windows-distribution.ps1", release_build, "'-DincludeTestScope=false'")
         require_text("scripts/release/build-windows-distribution.ps1", release_build, "target\\sbom")
         require_text("scripts/release/build-windows-distribution.ps1", release_build, "minos-cyclonedx.json")
+
+        for capability in (
+            "program-graph",
+            "impact-v2",
+            "security-paths",
+            "semantic-index-status",
+            "semantic-index-sync",
+            "semantic-search",
+            "hybrid-search",
+            "hybrid-context",
+        ):
+            require_text("IdeCommand.java", ide_command, f'"{capability}"')
+            require_text("docs/user/intellij-plugin.md", intellij, capability)
+
+        require_text("docs/user/intellij-plugin.md", intellij, "provider d'embeddings est **désactivé par défaut**")
+        require_text("docs/user/intellij-plugin.md", intellij, "pas un language model")
+        require_text("docs/user/intellij-plugin.md", intellij, "absence de chemin observé ≠ preuve de sûreté")
+        require_text("docs/user/intellij-plugin.md", intellij, "IntelliJ Platform 2026.1")
+        require_text("scripts/intellij/check-m21-parity.py", parity_gate, "ideBranch=261")
+        require_text("scripts/m21/run-s6.ps1", s6_runner, "M21-S6 INTELLIJ PARITY VALIDATION SUCCESS")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
