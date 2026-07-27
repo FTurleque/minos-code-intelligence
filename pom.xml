@@ -39,6 +39,7 @@
         <jgit.version>7.6.0.202603022253-r</jgit.version>
         <junit.version>5.14.4</junit.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>
         <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.5</maven.surefire.plugin.version>
         <maven.enforcer.plugin.version>3.6.2</maven.enforcer.plugin.version>
