@@ -9,6 +9,7 @@ on:
       - 'minos-integration-git/**'
       - 'docs/user/intellij-plugin.md'
       - 'docs/roadmap/M18_EXECUTION.md'
+      - 'scripts/m18/**'
       - '.github/workflows/intellij-plugin.yml'
   workflow_dispatch:
 
@@ -65,6 +66,55 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
           path: |
+            minos-intellij/build/distributions/*.zip
+            minos-intellij/build/reports/**
+            minos-intellij/build/test-results/**
+
+  m18-final-windows:
+    name: M18 final Windows exact-head gate
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/m18-minos-intellij'
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact M18 head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Set up Gradle 9.6.1
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+          cache-provider: basic
+
+      - name: Run complete M18 exact-head qualification
+        shell: powershell
+        run: .\scripts\m18\run-final.ps1 -ExpectedHead '${{ github.sha }}'
+
+      - name: Upload M18 final diagnostics and plugin ZIP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m18-final-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+            target/site/jacoco-aggregate/**
             minos-intellij/build/distributions/*.zip
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**
