@@ -5,6 +5,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.minos.intellij.settings.MinosSettingsState;
 
@@ -25,6 +27,8 @@ public final class MinosCliClient {
 
     public static final String PROTOCOL_ID = "minos-ide";
     public static final String PROTOCOL_VERSION = "1";
+
+    private static final long PROCESS_POLL_MILLIS = 200L;
 
     private final Project project;
     private volatile String verifiedConfiguration;
@@ -204,23 +208,40 @@ public final class MinosCliClient {
             Thread outReader = Thread.ofVirtual().name("minos-stdout").start(() -> read(process, true, stdout, readFailure));
             Thread errReader = Thread.ofVirtual().name("minos-stderr").start(() -> read(process, false, stderr, readFailure));
 
-            boolean completed = process.waitFor(settings.timeoutSeconds, TimeUnit.SECONDS);
+            boolean completed = false;
+            boolean timedOut = false;
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
+            try {
+                while (!(completed = process.waitFor(PROCESS_POLL_MILLIS, TimeUnit.MILLISECONDS))) {
+                    ProgressManager.checkCanceled();
+                    if (System.nanoTime() >= deadline) {
+                        timedOut = true;
+                        break;
+                    }
+                }
+            } catch (ProcessCanceledException canceled) {
+                terminate(process);
+                joinAfterTermination(outReader, errReader);
+                throw canceled;
+            }
+
             if (!completed) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
+                terminate(process);
             }
             outReader.join();
             errReader.join();
             if (readFailure.get() != null) {
                 throw readFailure.get();
             }
-            if (!completed) {
+            if (timedOut) {
                 throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
             }
             return new ProcessResult(
                     process.exitValue(),
                     new String(stdout.get(), StandardCharsets.UTF_8),
                     new String(stderr.get(), StandardCharsets.UTF_8));
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (MinosProtocolException exception) {
             throw exception;
         } catch (InterruptedException exception) {
@@ -229,6 +250,33 @@ public final class MinosCliClient {
         } catch (IOException exception) {
             throw new MinosProtocolException(
                     "Cannot start MINOS executable `" + settings.executable + "`: " + exception.getMessage(), exception);
+        }
+    }
+
+    private static void terminate(Process process) {
+        if (!process.isAlive()) {
+            return;
+        }
+        process.destroy();
+        try {
+            if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                process.waitFor(5, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException interrupted) {
+            process.destroyForcibly();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void joinAfterTermination(Thread... readers) {
+        for (Thread reader : readers) {
+            try {
+                reader.join(5_000L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 
