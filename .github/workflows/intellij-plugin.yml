@@ -62,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: minos-intellij-${{ github.sha }}-${{ github.run_attempt }}
+          name: minos-intellij-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 30
           path: |
@@ -80,7 +80,7 @@ jobs:
       - name: Checkout exact M18 head
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Java 24
@@ -102,13 +102,13 @@ jobs:
 
       - name: Run complete M18 exact-head qualification
         shell: powershell
-        run: .\scripts\m18\run-final.ps1 -ExpectedHead '${{ github.sha }}'
+        run: .\scripts\m18\run-final.ps1 -ExpectedHead '${{ github.event.pull_request.head.sha }}'
 
       - name: Upload M18 final diagnostics and plugin ZIP
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m18-final-${{ github.sha }}-${{ github.run_attempt }}
+          name: m18-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 30
           path: |
