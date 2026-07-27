@@ -1,6 +1,6 @@
 # M19 — Advanced Code Intelligence — exécution
 
-Statut de branche : **0/9 — démarré**.
+Statut de branche : **9/9 implémentés ; qualification exact-head finale en attente**.
 
 Issue : #69.
 
@@ -51,48 +51,54 @@ Le graphe avancé est une **vue reconstruisible** du snapshot actif et de faits 
 
 ## Sous-incréments
 
-### M19-S1 — Program graph model
+### M19-S1 — Program graph model ✅ IMPLÉMENTÉ
 
 Modèle provider-independent de nœuds/arêtes, capacités, nature, confiance, provenance, preuves et limitations. Composition déterministe et rejet des collisions incohérentes.
 
-### M19-S2 — Call graph v2
+### M19-S2 — Call graph v2 ✅ IMPLÉMENTÉ
 
 Projection des relations `CALLS` résolues en arêtes `CALL`, sans perte de provenance/nature. Évaluation précision/rappel sur vérités terrain contrôlées.
 
-### M19-S3 — Control Flow Graph
+### M19-S3 — Control Flow Graph ✅ IMPLÉMENTÉ
 
-Support de `BASIC_BLOCK` et `CONTROL_FLOW` via `ProgramGraphProvider`. Les providers sans CFG exposent explicitement `CONTROL_FLOW_UNAVAILABLE` ; aucune approximation silencieuse.
+Support de `BASIC_BLOCK` et `CONTROL_FLOW` via `ProgramGraphProvider`. Les providers sans CFG exposent explicitement `CONTROL_FLOW_UNAVAILABLE` ; aucune approximation silencieuse. La fixture contrôlée couvre branche, boucle et chemin d'exception.
 
-### M19-S4 — Data Flow
+### M19-S4 — Data Flow ✅ IMPLÉMENTÉ
 
-Support `DEF_USE`, `DATA_FLOW`, `ARGUMENT_FLOW`, `RETURN_FLOW`. Les `READS`/`WRITES` historiques peuvent produire une dérivation locale potentielle seulement avec limitation d'ordre d'exécution explicite.
+Support `DEF_USE`, `DATA_FLOW`, `ARGUMENT_FLOW`, `RETURN_FLOW`. Une vérité terrain `DEF_USE` est mesurée séparément. Les `READS`/`WRITES` historiques ne produisent qu'une dérivation locale potentielle avec `EXECUTION_ORDER_NOT_PROVEN`.
 
-### M19-S5 — Interprocedural Flow
+### M19-S5 — Interprocedural Flow ✅ IMPLÉMENTÉ
 
 Propagation BFS déterministe et bornée sur appels/argument/return/data-flow ; cycles, profondeur atteinte, troncature et absence de capacités sont exposés comme limitations.
 
-### M19-S6 — CPG composition
+### M19-S6 — CPG composition ✅ IMPLÉMENTÉ
 
-Union dédupliquée des vues symbole/call/control/data-flow avec identité stable des nœuds/arêtes. Aucun fait contradictoire n'est écrasé silencieusement.
+Union dédupliquée des vues symbole/call/control/data-flow avec identité stable des nœuds/arêtes. Aucun fait contradictoire n'est écrasé silencieusement ; une collision de stable-id incohérente est rejetée.
 
-### M19-S7 — Impact v2
+### M19-S7 — Impact v2 ✅ IMPLÉMENTÉ
 
-Impact M8 reste baseline. Impact v2 ajoute les chemins du graphe de programme quand ils existent, avec comptage séparé `baseline` / `advancedAdded` et preuve de gain sur fixture contrôlée.
+Impact M8 reste baseline. Impact v2 ajoute les chemins du graphe de programme quand ils existent, avec comptage séparé `baseline` / `advancedAdded` et fixture contrôlée où M19 ajoute un impact absent du graphe M8.
 
-### M19-S8 — Security primitives
+### M19-S8 — Security primitives ✅ IMPLÉMENTÉ
 
 Nœuds `SOURCE`, `SINK`, `SANITIZER` et recherche de chemins taint bornés. Résultat : source, sink, chemin, sanitizers observés, nature, confiance, limitations. Aucune absence de chemin n'est interprétée comme absence de vulnérabilité.
 
-### M19-S9 — API / MCP
+### M19-S9 — API / MCP ✅ IMPLÉMENTÉ
 
-Surface Java additive versionnée `advancedAnalysisVersion=1` et tools MCP bornés : program graph, impact v2, security paths.
+Surface Java additive `AdvancedCodeIntelligenceApi` v1 sans modifier `MinosApi` v1. Le MCP conserve les 16 tools historiques et ajoute `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, soit 19 tools read-only, tous bornés par schéma.
 
-## Qualification
+## Qualification finale
 
 Runner :
 
 ```text
 scripts/m19/run-final.ps1
+```
+
+Workflow :
+
+```text
+.github/workflows/m19-advanced-code-intelligence.yml
 ```
 
 Le runner doit prouver sur un SHA exact :
@@ -115,3 +121,5 @@ Verdict unique :
 ```text
 M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
 ```
+
+La branche ne sera pas marquée qualifiée, Ready ou mergée avant obtention réelle de ce verdict sur son HEAD exact.
