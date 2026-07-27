@@ -94,17 +94,55 @@ if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
 }
 
 # M15-S2 makes the repository POM a real multi-module reactor. Release versions
-# are now supplied through Maven's CI-friendly `revision` property so every
-# module sees one coherent version; do not generate a temporary mono-module POM.
+# are supplied through Maven's CI-friendly `revision` property so every module
+# sees one coherent version; do not generate a temporary mono-module POM.
 Push-Location $RepoRoot
 try {
-    $MavenArgs = @("-Drevision=$Version", 'clean')
+    $MavenArgs = @("-Drevision=$Version")
+    if ($SkipVerify) {
+        # M21-S5 calls this only after the full exact-head core qualification.
+        # Avoid rerunning Surefire while still rebuilding the release binaries.
+        $MavenArgs += '-DskipTests'
+    }
+    $MavenArgs += 'clean'
     $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
     & '.\mvnw.cmd' @MavenArgs
     if ($LASTEXITCODE -ne 0) {
         throw "MINOS Maven build failed with exit code $LASTEXITCODE"
     }
-} finally {
+
+    # makeAggregateBom is an aggregator goal and must execute from the Maven
+    # execution root. Binding it in minos-app caused CycloneDX 2.9.2 to skip it
+    # as a non-execution root. Generate the release SBOM explicitly here, after
+    # the reactor build, so all module artifacts/dependencies are available.
+    $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
+    if ($RootPomContent -notmatch '<cyclonedx\.maven\.plugin\.version>\s*([^<]+)\s*</cyclonedx\.maven\.plugin\.version>') {
+        throw 'Unable to resolve cyclonedx.maven.plugin.version from root pom.xml.'
+    }
+    $CycloneDxVersion = $Matches[1].Trim()
+    $SbomOutputDirectory = Join-Path $RepoRoot 'target\sbom'
+    Remove-Item -LiteralPath $SbomOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $SbomOutputDirectory | Out-Null
+
+    $CycloneDxArgs = @(
+        "-Drevision=$Version",
+        '-DschemaVersion=1.6',
+        '-DoutputFormat=json',
+        '-DoutputName=minos-cyclonedx',
+        "-DoutputDirectory=$SbomOutputDirectory",
+        '-DoutputReactorProjects=false',
+        '-DincludeTestScope=false',
+        '-DincludeLicenseText=false',
+        '-Dcyclonedx.skipAttach=true',
+        '-DprojectType=application',
+        "org.cyclonedx:cyclonedx-maven-plugin:${CycloneDxVersion}:makeAggregateBom"
+    )
+    & '.\mvnw.cmd' @CycloneDxArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "CycloneDX aggregate SBOM generation failed with exit code $LASTEXITCODE"
+    }
+}
+finally {
     Pop-Location
 }
 
@@ -115,7 +153,7 @@ if (-not (Test-Path -LiteralPath $Jar -PathType Leaf)) {
 
 $SbomSource = Join-Path $RepoRoot 'target\sbom\minos-cyclonedx.json'
 if (-not (Test-Path -LiteralPath $SbomSource -PathType Leaf)) {
-    throw "CycloneDX release SBOM not found: $SbomSource. Do not use -SkipVerify for a release candidate that requires supply-chain evidence."
+    throw "CycloneDX release SBOM not found after root aggregation: $SbomSource"
 }
 
 $Stage = Join-Path $OutputRoot '.jpackage-input'
