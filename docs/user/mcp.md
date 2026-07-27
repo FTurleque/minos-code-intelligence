@@ -1,6 +1,6 @@
 # Utiliser MINOS via MCP
 
-MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **16 tools** restent read-only.
+MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **19 tools** restent read-only.
 
 ## Mode recommandé : runtime natif
 
@@ -283,9 +283,33 @@ java -cp .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar `
 | `minos_module_context` | contexte architectural d’un module |
 | `minos_architecture` | vue d’architecture projet + arêtes du graphe en JSON |
 | `minos_architecture_graph` | graphe inter-modules en `json`, `mermaid` ou `dot`, avec filtre module optionnel |
-| `minos_impact` | impact potentiel d’un symbole |
+| `minos_impact` | impact potentiel M8 d’un symbole |
+| `minos_program_graph` | graphe de programme M19 borné, capabilities et limitations explicites |
+| `minos_impact_v2` | impact M8 + ajouts prouvés par appels/flux, comptés séparément |
+| `minos_security_paths` | chemins source→sink observés, sanitizers et limitations explicites |
 
 Le MCP reste **read-only** : `project add`, `tools install` et `index` sont des opérations administratives CLI explicites.
+
+### Analyses avancées M19
+
+Les trois tools M19 ne fabriquent pas de données lorsqu'une capability provider manque.
+
+`minos_program_graph` retourne notamment :
+
+```text
+capabilities
+nodes / edges
+nature
+confidence
+providerId / evidence
+limitations
+```
+
+Les limites de requête sont explicites : jusqu'à 100 000 nœuds et 500 000 arêtes par appel, avec des valeurs par défaut plus basses.
+
+`minos_impact_v2` conserve M8 comme baseline et expose séparément `baselineImpactCount` et `advancedAddedCount`. Un chemin avancé n'efface donc jamais la distinction avec l'analyse historique.
+
+`minos_security_paths` est une recherche bornée de chemins observés. Elle expose source, sink, chemin, sanitizers, confiance et nature ; **l'absence de chemin n'est pas une preuve de sûreté et un chemin observé n'est pas présenté comme une preuve runtime exhaustive de vulnérabilité**.
 
 ### Exemple : demander le graphe à un agent
 
@@ -308,6 +332,15 @@ minos_architecture_graph
 
 La réponse reflète uniquement les arêtes observées dans le snapshot actif ; MINOS n'invente pas de relation pour compléter le dessin.
 
+Pour le graphe de programme M19 :
+
+```text
+minos_program_graph
+  project  = my-project
+  maxNodes = 10000
+  maxEdges = 50000
+```
+
 ## Préparer un projet avant MCP
 
 ```powershell
@@ -316,61 +349,4 @@ minos.cmd project add N:\workspace-dev\my-project --name my-project
 minos.cmd index my-project
 ```
 
-Le client MCP peut ensuite interroger le snapshot actif.
-
-## Mode Docker durci optionnel
-
-Docker n’est pas le chemin PROD principal. Il reste utile lorsque l’on veut isoler la surface MCP :
-
-```text
-network_mode: none
-filesystem: read-only
-projects: read-only
-capabilities: dropped
-STDIO only
-```
-
-Le home Docker est volontairement séparé :
-
-```text
-%LOCALAPPDATA%\MINOS\docker-data
-```
-
-Ne pas partager directement un registre natif avec le conteneur : les chemins projet diffèrent.
-
-### Construire Docker depuis le même JAR de release
-
-Avec le shaded JAR correspondant exactement à la release :
-
-```powershell
-.\docker\scripts\prod-mcp-release.ps1 `
-  -Action Install `
-  -Jar .\minos-code-intelligence-0.2.0-all.jar `
-  -Version 0.2.0 `
-  -Commit <sha> `
-  -ProjectsRoot N:\workspace-dev
-
-.\docker\scripts\prod-mcp-release.ps1 -Action Start
-```
-
-## Contraintes STDIO
-
-Le serveur utilise stdout pour le protocole MCP. Aucun wrapper ne doit écrire de diagnostics arbitraires sur stdout pendant la session.
-
-Les entrées restent bornées par schema : recherche, profondeurs, usages, relations, graphe et impact disposent de limites explicites.
-
-## Erreurs
-
-Pour diagnostiquer une erreur MCP, reproduire d’abord la requête équivalente avec la CLI puis vérifier :
-
-```powershell
-minos.cmd index-status <project> --format json
-minos.cmd architecture <project> --format json
-minos.cmd doctor --format json
-```
-
-Les journaux d'intégration setup sont disponibles sous :
-
-```text
-%LOCALAPPDATA%\MINOS\mcp-clients.log
-```
+Le client MCP peut ensuite interroger le snapshot actif. Les capabilities avancées disponibles dépendent des faits effectivement fournis ou dérivables avec leurs limitations explicites.
