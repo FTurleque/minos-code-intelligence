@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -129,7 +130,8 @@ public final class MinosCliClient {
     }
 
     public JsonObject doctor() throws MinosProtocolException {
-        return executeJson(List.of("doctor", "--format", "json"));
+        ensureHandshake();
+        return runJsonRaw(List.of("doctor", "--format", "json"), Set.of(0, 1));
     }
 
     public JsonObject gitActivity(String projectId) throws MinosProtocolException {
@@ -155,8 +157,12 @@ public final class MinosCliClient {
     }
 
     private JsonObject runJsonRaw(List<String> arguments) throws MinosProtocolException {
+        return runJsonRaw(arguments, Set.of(0));
+    }
+
+    private JsonObject runJsonRaw(List<String> arguments, Set<Integer> acceptedExitCodes) throws MinosProtocolException {
         ProcessResult result = run(arguments);
-        if (result.exitCode() != 0) {
+        if (!acceptedExitCodes.contains(result.exitCode())) {
             String diagnostic = result.stderr().isBlank() ? result.stdout() : result.stderr();
             throw new MinosProtocolException(
                     "MINOS command failed (exit " + result.exitCode() + "): " + diagnostic.trim());
