@@ -90,14 +90,9 @@ public final class MinosToolWindowPanel {
     public void refreshStatus() {
         runBackground("Refresh MINOS status", () -> {
             JsonObject handshake = client.handshake();
+            JsonObject registered;
             try {
-                JsonObject registered = client.resolveProject();
-                JsonObject status = client.indexStatus(registered.get("id").getAsString());
-                JsonObject combined = new JsonObject();
-                combined.add("protocol", handshake);
-                combined.add("project", registered);
-                combined.add("index", status);
-                return combined;
+                registered = client.resolveProject();
             } catch (MinosProtocolException notRegistered) {
                 JsonObject combined = new JsonObject();
                 combined.add("protocol", handshake);
@@ -105,6 +100,12 @@ public final class MinosToolWindowPanel {
                 combined.addProperty("message", notRegistered.getMessage());
                 return combined;
             }
+            JsonObject status = client.indexStatus(registered.get("id").getAsString());
+            JsonObject combined = new JsonObject();
+            combined.add("protocol", handshake);
+            combined.add("project", registered);
+            combined.add("index", status);
+            return combined;
         }, result -> {
             connection.setText(connectionText(result));
             projectStatus.setText(PRETTY.toJson(result));
