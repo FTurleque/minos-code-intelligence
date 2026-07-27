@@ -49,8 +49,8 @@ S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadf
 S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
 S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
 S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
-S7   advanced provider productionization              EN COURS — candidat local à qualifier
-S8   semantic scale qualification                     PLANIFIÉ
+S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
+S8   semantic scale qualification                     EN COURS — baseline STANDARD à mesurer
 S9   final production integrity gate                  PLANIFIÉ
 ```
 
@@ -150,7 +150,7 @@ Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
 
 L'ancien Impact M8 reste disponible comme baseline. Le plugin ne calcule aucun Program Graph, chemin de sécurité, embedding ou ranking : les nouvelles commandes `minos ide … --format json` appellent les services M19/M20 de `MinosApplication`.
 
-### Candidat S7
+### Qualification S7
 
 S7 productionise le sidecar avancé prévu par M19 :
 
@@ -165,7 +165,45 @@ S7 productionise le sidecar avancé prévu par M19 :
 
 Le cache Program Graph utilise l'empreinte SHA-256 du sidecar et `.minos/` est exclu du fingerprint source. Une fixture versionnée mesure CFG, def-use, argument/return flow et taint ; le nouveau provider fait partie du scope JaCoCo `program-graph-analysis`.
 
+```text
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=265)
+Maven reactor: 13/13 SUCCESS
+program-graph-analysis: line=0.886667 branch=0.621053 classes=14
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
+M21-S7 ADVANCED PROVIDER VALIDATION SUCCESS
+Validated HEAD: 57243384286ed623de2d9499c9ae6729f77f6845
+```
+
 Voir [`developer/advanced-program-provider.md`](developer/advanced-program-provider.md).
+
+### M21-S8 — Semantic scale qualification
+
+S8 applique à M20 la règle M16 **mesurer avant d'optimiser**. Le profil obligatoire reprend les cardinalités `STANDARD` :
+
+```text
+seed                 16000031
+fichiers logiques       10 000
+symboles               100 000
+occurrences            500 000
+relations              250 000
+semantic documents     210 000
+vector dimensions          384
+```
+
+Le harness mesure build/rebuild, réutilisation incrémentale, chargement du vector store, recherche sémantique, recherche hybride, contexte hybride, heap, RSS et disque. La mutation contrôlée doit recalculer exactement trois documents (`SYMBOL`, `CHUNK`, `FILE`).
+
+Décisions possibles :
+
+```text
+INVALID_MEASUREMENT
+OPTIMIZE_MEASURED_BOTTLENECK
+KEEP_CURRENT_M20_BACKEND
+```
+
+Aucun backend/vector index alternatif n'est promu tant que le profil STANDARD n'a pas démontré un goulot. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
 
 Toute modification après un SHA qualifié exige une nouvelle qualification exact-head avant promotion.
 
@@ -288,6 +326,7 @@ M22→M27 restent des directions planifiées. Elles ne deviennent des capacités
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
 - supply-chain : [`developer/supply-chain.md`](developer/supply-chain.md) ;
 - advanced provider : [`developer/advanced-program-provider.md`](developer/advanced-program-provider.md) ;
+- semantic scale : [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md) ;
 - facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
 - décisions : [`adr/README.md`](adr/README.md) ;
 - preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
