@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 EN COURS ; S4→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 EN COURS ; S5→S9 planifiés.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -24,32 +24,19 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 - aucune migration de backend n'est autorisée sans mesure reproductible ;
 - la qualification finale reste rattachée à un HEAD exact et à un worktree propre.
 
-## Motivations post-M20
-
-L'audit du `main` post-M20 a identifié plusieurs écarts d'industrialisation :
-
-1. GitHub Actions reste affecté par l'incident historique #5 (`steps=null`, logs indisponibles), mais **aucun travail CI ni déclenchement Actions n'est autorisé avant août 2026** ;
-2. les quality gates JaCoCo restent centrés sur les responsabilités M15 et ne qualifient pas explicitement toutes les zones M19/M20 ;
-3. les frontières Maven utilisent encore des allowlists `<includes>/<excludes>` fragiles ;
-4. README, STATUS et guide utilisateur peuvent diverger malgré les facts générés ;
-5. les capacités M19/M20 ne sont pas encore convergées dans l'UX IntelliJ ;
-6. la composition standard ne fournit pas encore toutes les capacités avancées qu'autorise le SPI Program Graph ;
-7. la recherche sémantique M20 utilise encore un scan vectoriel linéaire et n'a pas été rejouée avec une campagne d'échelle dérivée de M16 ;
-8. la chaîne de release doit encore être durcie sur la supply-chain.
-
 ## Sous-incréments
 
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M21-S1 | Governance & authoritative consolidation | roadmap, issue, docs courantes cohérentes, contrôle automatisé et runner local unique | **VALIDÉ** sur `b4403921bfe0e2a7fe5eef9380a122982f275e0e` |
-| M21-S2 | CI recovery & branch protection readiness | jobs Actions exploitables, checks PR identifiés et incident #5 résolu ou isolé avec preuve | **PAUSE jusqu’en août 2026 — aucun run CI** |
-| M21-S3 | Quality gates M19/M20 | couverture ciblée Program Graph / Impact v2 / security / semantic / hybrid + Sonar aligné | seuils documentés et verts |
-| M21-S4 | Maven module-boundary hardening | suppression progressive des allowlists fragiles et frontières architecturales explicites | build reactor + tests de frontières |
-| M21-S5 | Supply-chain & release hardening | dépendances contrôlées, SBOM/notices/provenance/signature selon faisabilité | release candidate reproductible |
-| M21-S6 | IntelliJ parity M19/M20 | surfaces avancées utiles exposées dans l'IDE sans duplication du métier | tests protocole + Plugin Verifier |
-| M21-S7 | Advanced provider productionization | au moins un provider réel enrichit Program Graph au-delà des relations historiques | fixtures contrôlées + précision/rappel/capabilities |
-| M21-S8 | Semantic scale qualification | M20 mesuré à l'échelle avant toute évolution de backend/vector index | p50/p95/p99 + heap/RSS/disque |
-| M21-S9 | Final production integrity gate | convergence CI/quality/docs/IDE/release/perf sur HEAD exact | verdict final M21 |
+| Étape | Fonction | État / gate |
+|---|---|---|
+| M21-S1 | Governance & authoritative consolidation | **VALIDÉ** sur `b4403921bfe0e2a7fe5eef9380a122982f275e0e` |
+| M21-S2 | CI recovery & branch protection readiness | **PAUSE jusqu’en août 2026 — aucun run CI** |
+| M21-S3 | Quality gates M19/M20 | **VALIDÉ** sur `27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94` |
+| M21-S4 | Maven module-boundary hardening | **EN COURS — candidat local à qualifier** |
+| M21-S5 | Supply-chain & release hardening | planifié |
+| M21-S6 | IntelliJ parity M19/M20 | planifié |
+| M21-S7 | Advanced provider productionization | planifié |
+| M21-S8 | Semantic scale qualification | planifié |
+| M21-S9 | Final production integrity gate | planifié |
 
 ## M21-S1 — Governance & authoritative consolidation
 
@@ -58,20 +45,16 @@ Statut : **VALIDÉ le 27 juillet 2026.**
 Livrables :
 
 - issue #73 et branche `m21-production-integrity` ;
-- présente roadmap opérationnelle ;
-- `docs/ROADMAP.md` déclare M21 et les évolutions suivantes ;
-- `docs/STATUS.md` distingue clairement l'état livré C0→M20 du jalon M21 en cours ;
-- README racine réaligné sur l'état post-M20 ;
-- guide utilisateur réaligné sur le catalogue MCP courant ;
-- `scripts/docs/check-current-docs.py` empêche la réintroduction des divergences documentaires critiques ;
-- `scripts/m21/run-local.ps1` devient l'entrée de validation locale M21.
+- roadmap M21 et trajectoire M22→M27 ;
+- README/STATUS/guide utilisateur réalignés ;
+- `scripts/docs/check-current-docs.py` ;
+- `scripts/m21/run-local.ps1`.
 
-Qualification autoritative Windows :
+Qualification :
 
 ```text
 Maven reactor: 13/13 SUCCESS
 M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
-M15 JACOCO GATE SUCCESS
 M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
 M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
 Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
@@ -79,64 +62,78 @@ Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
 
 ## M21-S2 — CI recovery & branch protection readiness
 
-Statut : **EN PAUSE jusqu’en août 2026 — aucun déclenchement GitHub Actions, aucune modification de workflow dans le cadre de S2 avant cette échéance.**
+Statut : **EN PAUSE jusqu’en août 2026 — aucun déclenchement GitHub Actions, aucune modification de workflow avant reprise explicite.**
 
-L'incident #5 reste documenté. Le HEAD S1 validé localement reproduit encore le symptôme distant historique (`steps=[]`, `logs_url=null`, logs `BlobNotFound`), sans preuve d'échec du code MINOS. Ce diagnostic est conservé uniquement comme état de référence ; il ne déclenche aucune action avant août.
+L'incident #5 reste documenté. Le symptôme distant historique `steps=[]`, `logs_url=null`, `BlobNotFound` n'est pas traité en juillet et ne doit pas être imputé au code MINOS sans preuve exploitable.
 
 À la reprise en août :
 
-- reprendre l'issue #5 sans attribuer au code un échec pré-step ;
-- vérifier politique Actions, quotas/runners, restrictions d'actions et permissions du dépôt privé ;
-- obtenir au moins un workflow PR exposant steps, logs et artifacts ;
-- supprimer les jobs historiques conditionnés par des noms de branches M15/M18/M19/M20 ;
+- vérifier politique Actions, quotas/runners, restrictions et permissions ;
+- obtenir au moins un workflow exposant steps/logs/artifacts ;
+- supprimer les jobs historiques milestone-specific ;
 - converger vers des workflows durables `ci`, `quality`, `intellij`, `release` ;
-- documenter les checks destinés à devenir bloquants avant merge.
+- définir les checks bloquants avant merge.
 
 ## M21-S3 — Quality gates M19/M20
 
-Statut : **EN COURS.**
+Statut : **VALIDÉ le 27 juillet 2026** sur `27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94`.
 
-Priorité : **P0**.
-
-Les seuils M15 existants restent une baseline mais ne suffisent plus. M21 ajoute des scopes explicites couvrant :
+Les cinq scopes historiques M15 sont conservés et six scopes M19/M20 ont été ajoutés :
 
 ```text
-ProgramGraph / composition / traversals
-AdvancedImpactService + SecurityAnalysisService
-FileSemanticVectorStore
-SemanticIndexService + SemanticSearchService
-HybridSearchService + HybridContextBuilder
-API avancées M19/M20
-catalogue MCP M19/M20
+program-graph-analysis
+advanced-impact-security
+semantic-vector-store
+semantic-hybrid-retrieval
+advanced-public-api
+m19-m20-mcp-catalogue
 ```
 
-Les seuils initiaux sont volontairement ciblés et conservateurs. Ils doivent être mesurés sur le rapport JaCoCo réel puis relevés uniquement avec des tests utiles ; une baisse ultérieure nécessite une justification documentée.
+Résultats :
 
-Le résultat attendu n'est pas un pourcentage global arbitraire : les responsabilités critiques doivent être couvertes par des seuils ciblés et des tests fonctionnels séparés.
+```text
+program-graph-analysis      90.46 % lignes / 57.86 % branches
+advanced-impact-security    93.18 % lignes / 57.69 % branches
+semantic-vector-store       94.23 % lignes / 61.54 % branches
+semantic-hybrid-retrieval   89.42 % lignes / 64.69 % branches
+advanced-public-api         70.59 % lignes / 55.26 % branches
+m19-m20-mcp-catalogue       93.49 % lignes / 60.00 % branches
+M21 JACOCO GATE SUCCESS
+```
+
+Les seuils restent des planchers ciblés anti-régression ; ils ne sont pas remontés mécaniquement à la photographie courante afin de conserver une marge pour les branches légitimes non essentielles. Toute baisse future nécessite une justification documentée.
 
 ## M21-S4 — Maven module-boundary hardening
 
-Objectif : remplacer progressivement les allowlists de compilation par des frontières physiques et des règles d'architecture vérifiables.
+Statut : **EN COURS — candidat local à qualifier.**
 
-Ordre attendu :
+L'ADR-0022 indique que M15 a déjà relocalisé physiquement les sources et tests dans leurs modules propriétaires. Les filtres `<includes>/<excludes>` encore présents dans les configurations `maven-compiler-plugin` étaient donc une dette transitoire résiduelle.
+
+Livrables S4 :
+
+1. suppression des allowlists/denylists de compilation dans les 12 modules enfants ;
+2. compilation naturelle de chaque `src/main/java` par Maven ;
+3. conservation des exclusions du `maven-shade-plugin`, qui relèvent du packaging et non de l'ownership ;
+4. ajout de `scripts/architecture/check-module-boundaries.py` ;
+5. intégration de ce gate au runner M21.
+
+Le gate de frontière vérifie :
 
 ```text
-1. inventorier includes/excludes actuels
-2. définir la frontière cible par module
-3. déplacer les sources si nécessaire
-4. compiler les sources naturelles du module
-5. interdire les dépendances invalides par tests/règles
-6. supprimer les listes fragiles devenues inutiles
+aucun maven-compiler-plugin <includes>/<excludes> dans les modules enfants
+aucun sourceDirectory/testSourceDirectory Maven personnalisé
+aucune source Java de production dupliquée entre modules
+package Java cohérent avec le chemin physique
 ```
 
-Aucune refactorisation de frontière ne doit modifier les contrats publics ou la sémantique métier.
+Critère de validation : le gate de frontière doit passer **et** le reactor Maven doit rester `13/13 SUCCESS` via la qualification M20 complète. Si une classe était auparavant cachée par une allowlist, le build doit échouer au lieu de masquer le défaut.
 
 ## M21-S5 — Supply-chain & release hardening
 
 À qualifier selon la faisabilité réelle du dépôt et de la distribution Windows :
 
 - dépendances automatisées et vulnérabilités connues ;
-- GitHub Actions épinglées de manière immuable ;
+- Actions immuables lors de la reprise CI ;
 - SBOM CycloneDX ou SPDX ;
 - notices tierces/licences de redistribution ;
 - provenance de build ;
@@ -145,7 +142,7 @@ Aucune refactorisation de frontière ne doit modifier les contrats publics ou la
 
 ## M21-S6 — IntelliJ parity M19/M20
 
-Cibles fonctionnelles, sous réserve de valeur UX mesurable :
+Cibles fonctionnelles :
 
 ```text
 Program Graph
@@ -156,21 +153,11 @@ Semantic search
 Hybrid search / context
 ```
 
-Le protocole `minos-ide` doit rester versionné. Le plugin ne doit pas embarquer ni réimplémenter le moteur Java 24.
-
-La compatibilité doit évoluer d'un seul IDE `current()` vers une politique de matrice explicitement testée.
+Le protocole `minos-ide` reste versionné. Le plugin ne doit pas embarquer ni réimplémenter le moteur Java 24. La compatibilité doit évoluer vers une matrice IDE explicitement testée.
 
 ## M21-S7 — Advanced provider productionization
 
-M19 a livré le modèle et les SPI avancés. M21 doit distinguer clairement :
-
-```text
-surface supportée par le moteur
-≠
-capacité réellement fournie par le provider courant
-```
-
-Un provider ne peut annoncer `CONTROL_FLOW`, `DEF_USE`, `INTERPROCEDURAL_DATA_FLOW` ou `SECURITY_TAINT` que si des fixtures contrôlées le prouvent.
+La surface supportée par le moteur doit rester distincte de la capacité réellement fournie par le provider courant. Un provider ne peut annoncer `CONTROL_FLOW`, `DEF_USE`, `INTERPROCEDURAL_DATA_FLOW` ou `SECURITY_TAINT` que si des fixtures contrôlées le prouvent.
 
 ## M21-S8 — Semantic scale qualification
 
@@ -189,11 +176,11 @@ vector store disk size
 allocations/boxing dominants
 ```
 
-Le scan linéaire ou le format vectoriel ne seront remplacés que si les mesures démontrent un goulot produit. ANN/HNSW/Lucene/autre backend restent des options, pas des décisions anticipées.
+Le scan linéaire ou le format vectoriel ne seront remplacés que si les mesures démontrent un goulot produit.
 
 ## M21-S9 — Final production integrity gate
 
-Le gate final devra au minimum vérifier :
+Le gate final devra vérifier au minimum :
 
 1. worktree propre et HEAD exact ;
 2. facts documentaires et docs courantes cohérents ;
@@ -212,15 +199,15 @@ M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
 Validated HEAD: <sha>
 ```
 
-## Validation locale S1
+## Validation locale
 
-Qualification exécutée sur Windows :
+Entrée unique :
 
 ```powershell
-.\scripts\m21\run-local.ps1 -ExpectedHead b4403921bfe0e2a7fe5eef9380a122982f275e0e
+.\scripts\m21\run-local.ps1 -ExpectedHead <sha>
 ```
 
-Toute modification postérieure à ce SHA impose une nouvelle qualification exact-head avant promotion.
+Le runner vérifie documentation, frontières Maven, qualification M20 complète, JaCoCo, exact HEAD et worktree propre.
 
 ## Source de vérité
 
