@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 EN COURS ; S5→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 EN COURS ; S6→S9 planifiés.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -31,8 +31,8 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 | M21-S1 | Governance & authoritative consolidation | **VALIDÉ** sur `b4403921bfe0e2a7fe5eef9380a122982f275e0e` |
 | M21-S2 | CI recovery & branch protection readiness | **PAUSE jusqu’en août 2026 — aucun run CI** |
 | M21-S3 | Quality gates M19/M20 | **VALIDÉ** sur `27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94` |
-| M21-S4 | Maven module-boundary hardening | **EN COURS — candidat local à qualifier** |
-| M21-S5 | Supply-chain & release hardening | planifié |
+| M21-S4 | Maven module-boundary hardening | **VALIDÉ** sur `0699d06d6138dd77008b8ea31578a334468eec75` |
+| M21-S5 | Supply-chain & release hardening | **EN COURS — candidat local à qualifier** |
 | M21-S6 | IntelliJ parity M19/M20 | planifié |
 | M21-S7 | Advanced provider productionization | planifié |
 | M21-S8 | Semantic scale qualification | planifié |
@@ -101,44 +101,67 @@ m19-m20-mcp-catalogue       93.49 % lignes / 60.00 % branches
 M21 JACOCO GATE SUCCESS
 ```
 
-Les seuils restent des planchers ciblés anti-régression ; ils ne sont pas remontés mécaniquement à la photographie courante afin de conserver une marge pour les branches légitimes non essentielles. Toute baisse future nécessite une justification documentée.
+Les seuils restent des planchers ciblés anti-régression ; toute baisse future nécessite une justification documentée.
 
 ## M21-S4 — Maven module-boundary hardening
 
-Statut : **EN COURS — candidat local à qualifier.**
+Statut : **VALIDÉ le 27 juillet 2026** sur `0699d06d6138dd77008b8ea31578a334468eec75`.
 
-L'ADR-0022 indique que M15 a déjà relocalisé physiquement les sources et tests dans leurs modules propriétaires. Les filtres `<includes>/<excludes>` encore présents dans les configurations `maven-compiler-plugin` étaient donc une dette transitoire résiduelle.
+L'ADR-0022 indiquait que M15 avait déjà relocalisé physiquement les sources/tests dans leurs modules propriétaires. Les filtres `<includes>/<excludes>` encore présents dans les configurations `maven-compiler-plugin` étaient une dette transitoire résiduelle.
 
-Livrables S4 :
+Livrables :
 
 1. suppression des allowlists/denylists de compilation dans les 12 modules enfants ;
-2. compilation naturelle de chaque `src/main/java` par Maven ;
-3. conservation des exclusions du `maven-shade-plugin`, qui relèvent du packaging et non de l'ownership ;
-4. ajout de `scripts/architecture/check-module-boundaries.py` ;
-5. intégration de ce gate au runner M21.
+2. compilation naturelle de chaque `src/main/java` ;
+3. conservation des exclusions du `maven-shade-plugin`, qui relèvent du packaging ;
+4. `scripts/architecture/check-module-boundaries.py` ;
+5. adaptation des runners M19/M20 pour qu'ils vérifient les invariants métier sans dépendre de l'ancien mécanisme d'ownership.
 
-Le gate de frontière vérifie :
+Qualification :
 
 ```text
-aucun maven-compiler-plugin <includes>/<excludes> dans les modules enfants
-aucun sourceDirectory/testSourceDirectory Maven personnalisé
-aucune source Java de production dupliquée entre modules
-package Java cohérent avec le chemin physique
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=263)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
 ```
-
-Critère de validation : le gate de frontière doit passer **et** le reactor Maven doit rester `13/13 SUCCESS` via la qualification M20 complète. Si une classe était auparavant cachée par une allowlist, le build doit échouer au lieu de masquer le défaut.
 
 ## M21-S5 — Supply-chain & release hardening
 
-À qualifier selon la faisabilité réelle du dépôt et de la distribution Windows :
+Statut : **EN COURS — candidat Windows local à qualifier.**
 
-- dépendances automatisées et vulnérabilités connues ;
-- Actions immuables lors de la reprise CI ;
-- SBOM CycloneDX ou SPDX ;
-- notices tierces/licences de redistribution ;
-- provenance de build ;
-- signature Authenticode du setup lorsque la chaîne de certificat est disponible ;
-- vérification install/update/rollback/uninstall conservée.
+S5 reste volontairement séparé de la CI en juillet. L'épinglage immuable des GitHub Actions reste affecté à S2 lors de sa reprise en août.
+
+Livrables S5 :
+
+- CycloneDX Maven Plugin `2.9.2`, SBOM JSON agrégé CycloneDX 1.6 produit sur `package` du dernier module ;
+- scope test exclu du SBOM de distribution ;
+- `scripts/release/generate-third-party-notices.py` avec politique stricte : aucune licence inventée ;
+- `scripts/release/create-release-manifest.py` : version, commit, taille et SHA-256 de chaque fichier de distribution ;
+- `scripts/release/check-supply-chain.py` : cohérence SBOM/notices/manifest/VERSION ;
+- ZIP et setup embarquent `supply-chain/minos.cdx.json`, `supply-chain/THIRD-PARTY-NOTICES.txt` et `RELEASE-MANIFEST.json` ;
+- sidecars de release SBOM/notices + `.sha256` publiables avec le setup/ZIP ;
+- `scripts/release/sign-windows-artifact.ps1` pour signature Authenticode explicite lorsqu'un certificat est disponible ;
+- `scripts/m21/run-s5.ps1` rejoue core, packaging, checksums, ZIP install, setup install/uninstall et politique de signature.
+
+La signature n'est pas simulée. Sans certificat, le candidat peut être qualifié non signé ; `MINOS_REQUIRE_SIGNED_RELEASE=1` transforme une signature Authenticode valide en exigence bloquante.
+
+Gate local S5 :
+
+```powershell
+.\scripts\m21\run-s5.ps1 -ExpectedHead <sha>
+```
+
+Verdict attendu :
+
+```text
+M21 SUPPLY-CHAIN EVIDENCE SUCCESS
+MINOS Windows release VALIDATION SUCCESS
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+Validated HEAD: <sha>
+```
 
 ## M21-S6 — IntelliJ parity M19/M20
 
@@ -201,17 +224,22 @@ Validated HEAD: <sha>
 
 ## Validation locale
 
-Entrée unique :
+Gate général :
 
 ```powershell
 .\scripts\m21\run-local.ps1 -ExpectedHead <sha>
 ```
 
-Le runner vérifie documentation, frontières Maven, qualification M20 complète, JaCoCo, exact HEAD et worktree propre.
+Gate S5 :
+
+```powershell
+.\scripts\m21\run-s5.ps1 -ExpectedHead <sha>
+```
 
 ## Source de vérité
 
 - état livré : [`../STATUS.md`](../STATUS.md) ;
 - roadmap produit : [`../ROADMAP.md`](../ROADMAP.md) ;
 - facts calculables : [`../generated/product-facts.md`](../generated/product-facts.md) ;
+- supply-chain : [`../developer/supply-chain.md`](../developer/supply-chain.md) ;
 - issue de pilotage : #73.
