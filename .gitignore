@@ -2,6 +2,11 @@
 /target/
 **/target/
 
+# Gradle / IntelliJ Platform plugin
+**/build/
+.gradle/
+.intellijPlatform/
+
 # Node.js / TypeScript fixtures
 **/node_modules/
 fixtures/typescript/**/dist/
