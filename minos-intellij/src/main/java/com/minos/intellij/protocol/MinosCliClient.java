@@ -67,7 +67,7 @@ public final class MinosCliClient {
                 return candidate;
             }
         }
-        throw new MinosProtocolException(
+        throw new MinosProjectNotRegisteredException(
                 "This IntelliJ project is not registered in MINOS. Run `minos project add \"" + basePath + "\"` first.");
     }
 
