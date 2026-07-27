@@ -25,6 +25,12 @@ interface MinosMcpBackend {
 
     String impact(ImpactRequest request) throws Exception;
 
+    String programGraph(ProgramGraphRequest request) throws Exception;
+
+    String impactV2(ImpactRequest request) throws Exception;
+
+    String securityPaths(SecurityRequest request) throws Exception;
+
     record SearchRequest(
             String project,
             String query,
@@ -80,5 +86,11 @@ interface MinosMcpBackend {
     }
 
     record ImpactRequest(String project, String symbolId, int depth, int limit) {
+    }
+
+    record ProgramGraphRequest(String project, int maxNodes, int maxEdges) {
+    }
+
+    record SecurityRequest(String project, String sourceNodeId, int depth, int limit) {
     }
 }
