@@ -211,8 +211,12 @@ public final class M21SemanticScaleProbe {
     private static void mutateFirstPhysicalSymbol(Path root) throws IOException {
         Path file = root.resolve(Path.of("src", "main", "java", "bench", "F000000.java"));
         String text = Files.readString(file, StandardCharsets.UTF_8);
-        if (!text.contains("void SymbolGroup0000() {}")) throw new IOException("cannot locate controlled S8 mutation anchor");
-        Files.writeString(file, text.replace("void SymbolGroup0000() {}", "void SymbolGroup0000Changed() {}"), StandardCharsets.UTF_8);
+        String anchor = "void SymbolGroup0000() {}";
+        int first = text.indexOf(anchor);
+        if (first < 0) throw new IOException("cannot locate controlled S8 mutation anchor");
+        String replacement = "void SymbolGroup0000Changed() {}";
+        String mutated = text.substring(0, first) + replacement + text.substring(first + anchor.length());
+        Files.writeString(file, mutated, StandardCharsets.UTF_8);
     }
 
     private static Stats measure(int repetitions, ThrowingAction action) throws Exception {
