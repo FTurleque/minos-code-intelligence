@@ -6,11 +6,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 
+import java.util.function.Consumer;
+
 @Service(Service.Level.PROJECT)
 public final class MinosUiController {
 
     private final Project project;
-    private volatile MinosToolWindowPanel panel;
+    private MinosToolWindowPanel panel;
+    private Consumer<MinosToolWindowPanel> pendingDelivery;
 
     public MinosUiController(Project project) {
         this.project = project;
@@ -20,38 +23,42 @@ public final class MinosUiController {
         return project.getService(MinosUiController.class);
     }
 
-    public void attach(MinosToolWindowPanel value) {
+    public synchronized void attach(MinosToolWindowPanel value) {
         panel = value;
+        Consumer<MinosToolWindowPanel> pending = pendingDelivery;
+        pendingDelivery = null;
+        if (pending != null) {
+            pending.accept(value);
+        }
     }
 
     public void showResult(String title, JsonObject result) {
-        showToolWindow();
-        MinosToolWindowPanel current = panel;
-        if (current != null) {
-            current.showResult(title, result);
-        }
+        deliver(panel -> panel.showResult(title, result));
     }
 
     public void showArchitecture(JsonObject architecture, String moduleId) {
-        showToolWindow();
-        MinosToolWindowPanel current = panel;
-        if (current != null) {
-            current.showArchitecture(architecture, moduleId);
-        }
+        deliver(panel -> panel.showArchitecture(architecture, moduleId));
     }
 
     public void showError(String title, Throwable failure) {
-        showToolWindow();
-        MinosToolWindowPanel current = panel;
-        if (current != null) {
-            current.showError(title, failure);
-        }
+        deliver(panel -> panel.showError(title, failure));
     }
 
     public void refreshStatus() {
-        MinosToolWindowPanel current = panel;
+        deliver(MinosToolWindowPanel::refreshStatus);
+    }
+
+    private void deliver(Consumer<MinosToolWindowPanel> delivery) {
+        MinosToolWindowPanel current;
+        synchronized (this) {
+            current = panel;
+            if (current == null) {
+                pendingDelivery = delivery;
+            }
+        }
+        showToolWindow();
         if (current != null) {
-            current.refreshStatus();
+            delivery.accept(current);
         }
     }
 
