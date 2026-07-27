@@ -89,10 +89,14 @@ def main() -> int:
         forbid("build.gradle.kts", build, 'implementation("com.minos:')
         require("build.gradle.kts", build, "JavaVersion.VERSION_21")
         require("build.gradle.kts", build, "options.release = 21")
+        require("build.gradle.kts", build, 'sinceBuild = "261"')
+        require("build.gradle.kts", build, "IntelliJPlatformType.IntellijIdea")
+        require("build.gradle.kts", build, "ProductRelease.Channel.RELEASE")
+        require("build.gradle.kts", build, 'untilBuild = "261.*"')
 
         print(
             "M21 INTELLIJ PARITY CONSISTENCY SUCCESS "
-            f"(capabilities={len(CAPABILITIES)}, actions={len(ACTIONS)})"
+            f"(capabilities={len(CAPABILITIES)}, actions={len(ACTIONS)}, ideBranch=261)"
         )
         return 0
     except Exception as exception:
