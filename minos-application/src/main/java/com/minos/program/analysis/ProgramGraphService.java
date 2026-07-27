@@ -12,7 +12,6 @@ import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,7 +32,15 @@ public final class ProgramGraphService {
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
 
     public ProgramGraphService(LocalProjectRegistry registry, FileSymbolSnapshotStore snapshotStore) {
-        this(new ProjectResolver(registry), snapshotStore, List.of(new RelationshipProgramGraphProvider()), DEFAULT_MAX_CACHE_ENTRIES);
+        this(registry, snapshotStore, List.of(new RelationshipProgramGraphProvider()));
+    }
+
+    public ProgramGraphService(
+            LocalProjectRegistry registry,
+            FileSymbolSnapshotStore snapshotStore,
+            List<ProgramGraphProvider> providers
+    ) {
+        this(new ProjectResolver(registry), snapshotStore, providers, DEFAULT_MAX_CACHE_ENTRIES);
     }
 
     public ProgramGraphService(
@@ -105,12 +112,18 @@ public final class ProgramGraphService {
     }
 
     private ProgramGraph withCapabilityLimitations(ProgramGraph graph) {
+        Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>(graph.capabilities());
+        if (capabilities.contains(ProgramGraphCapability.CALL_GRAPH)
+                && capabilities.contains(ProgramGraphCapability.LOCAL_DATA_FLOW)) {
+            capabilities.add(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW);
+        }
         Set<String> limitations = new LinkedHashSet<>(graph.limitations());
-        if (!graph.supports(ProgramGraphCapability.CALL_GRAPH)) limitations.add("CALL_GRAPH_UNAVAILABLE");
-        if (!graph.supports(ProgramGraphCapability.CONTROL_FLOW)) limitations.add("CONTROL_FLOW_UNAVAILABLE");
-        if (!graph.supports(ProgramGraphCapability.LOCAL_DATA_FLOW)) limitations.add("LOCAL_DATA_FLOW_UNAVAILABLE");
-        if (!graph.supports(ProgramGraphCapability.SECURITY_TAINT)) limitations.add("SECURITY_ANNOTATIONS_UNAVAILABLE");
-        return new ProgramGraph(graph.projectId(), graph.snapshotId(), graph.capabilities(), graph.nodes(), graph.edges(),
+        if (!capabilities.contains(ProgramGraphCapability.CALL_GRAPH)) limitations.add("CALL_GRAPH_UNAVAILABLE");
+        if (!capabilities.contains(ProgramGraphCapability.CONTROL_FLOW)) limitations.add("CONTROL_FLOW_UNAVAILABLE");
+        if (!capabilities.contains(ProgramGraphCapability.LOCAL_DATA_FLOW)) limitations.add("LOCAL_DATA_FLOW_UNAVAILABLE");
+        if (!capabilities.contains(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW)) limitations.add("INTERPROCEDURAL_DATA_FLOW_UNAVAILABLE");
+        if (!capabilities.contains(ProgramGraphCapability.SECURITY_TAINT)) limitations.add("SECURITY_ANNOTATIONS_UNAVAILABLE");
+        return new ProgramGraph(graph.projectId(), graph.snapshotId(), capabilities, graph.nodes(), graph.edges(),
                 limitations.stream().sorted().toList());
     }
 
