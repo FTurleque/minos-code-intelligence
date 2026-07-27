@@ -48,6 +48,7 @@ SCOPES = {
             "com/minos/program/analysis/ProgramGraphService",
             "com/minos/program/analysis/ProgramGraphComposer",
             "com/minos/program/analysis/RelationshipProgramGraphProvider",
+            "com/minos/program/analysis/FileProgramGraphProvider",
             "com/minos/program/analysis/ProgramGraphEvaluator",
             "com/minos/program/analysis/InterproceduralFlowService",
         ),
