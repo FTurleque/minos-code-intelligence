@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -176,7 +177,7 @@ public final class MinosToolWindowPanel {
         filterPanel.add(new JBLabel("Module filter:"));
         graphFilter.setColumns(24);
         filterPanel.add(graphFilter);
-        filterPanel.add(new JBLabel("Graph is bounded by Settings > MINOS."));
+        filterPanel.add(new JBLabel("Graph is bounded by Settings > MINOS. Hover nodes for edge details."));
         panel.add(filterPanel, BorderLayout.NORTH);
 
         JBSplitter splitter = new JBSplitter(false, 0.72f);
@@ -274,6 +275,8 @@ public final class MinosToolWindowPanel {
                 indicator.setIndeterminate(true);
                 try {
                     result = operation.call();
+                } catch (ProcessCanceledException canceled) {
+                    throw canceled;
                 } catch (Throwable throwable) {
                     failure = throwable;
                 }
@@ -353,7 +356,7 @@ public final class MinosToolWindowPanel {
                 "Visible nodes: " + visibleNodes + " (bound " + maxNodes + ")",
                 "Relationships: " + integer(architecture, "relationshipCount"),
                 "Edges shown are the moduleDependencies returned by MINOS architecture JSON.",
-                "Select a node for module details."
+                "Select a node for module details; hover a node for incoming/outgoing edge evidence."
         );
     }
 
