@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 implémenté, validation locale en attente ; S2→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 EN COURS ; S4→S9 planifiés.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -28,7 +28,7 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 
 L'audit du `main` post-M20 a identifié plusieurs écarts d'industrialisation :
 
-1. GitHub Actions reste affecté par l'incident historique #5 (`steps=null`, logs indisponibles) ;
+1. GitHub Actions reste affecté par l'incident historique #5 (`steps=null`, logs indisponibles), mais **aucun travail CI ni déclenchement Actions n'est autorisé avant août 2026** ;
 2. les quality gates JaCoCo restent centrés sur les responsabilités M15 et ne qualifient pas explicitement toutes les zones M19/M20 ;
 3. les frontières Maven utilisent encore des allowlists `<includes>/<excludes>` fragiles ;
 4. README, STATUS et guide utilisateur peuvent diverger malgré les facts générés ;
@@ -41,8 +41,8 @@ L'audit du `main` post-M20 a identifié plusieurs écarts d'industrialisation :
 
 | Étape | Fonction | Résultat attendu | Gate |
 |---|---|---|---|
-| M21-S1 | Governance & authoritative consolidation | roadmap, issue, docs courantes cohérentes, contrôle automatisé et runner local unique | `scripts/m21/run-local.ps1` |
-| M21-S2 | CI recovery & branch protection readiness | jobs Actions exploitables, checks PR identifiés et incident #5 résolu ou isolé avec preuve | au moins un run complet avec steps/logs/artifacts |
+| M21-S1 | Governance & authoritative consolidation | roadmap, issue, docs courantes cohérentes, contrôle automatisé et runner local unique | **VALIDÉ** sur `b4403921bfe0e2a7fe5eef9380a122982f275e0e` |
+| M21-S2 | CI recovery & branch protection readiness | jobs Actions exploitables, checks PR identifiés et incident #5 résolu ou isolé avec preuve | **PAUSE jusqu’en août 2026 — aucun run CI** |
 | M21-S3 | Quality gates M19/M20 | couverture ciblée Program Graph / Impact v2 / security / semantic / hybrid + Sonar aligné | seuils documentés et verts |
 | M21-S4 | Maven module-boundary hardening | suppression progressive des allowlists fragiles et frontières architecturales explicites | build reactor + tests de frontières |
 | M21-S5 | Supply-chain & release hardening | dépendances contrôlées, SBOM/notices/provenance/signature selon faisabilité | release candidate reproductible |
@@ -53,7 +53,7 @@ L'audit du `main` post-M20 a identifié plusieurs écarts d'industrialisation :
 
 ## M21-S1 — Governance & authoritative consolidation
 
-Statut : **IMPLÉMENTÉ — validation locale en attente.**
+Statut : **VALIDÉ le 27 juillet 2026.**
 
 Livrables :
 
@@ -64,15 +64,26 @@ Livrables :
 - README racine réaligné sur l'état post-M20 ;
 - guide utilisateur réaligné sur le catalogue MCP courant ;
 - `scripts/docs/check-current-docs.py` empêche la réintroduction des divergences documentaires critiques ;
-- `scripts/m21/run-local.ps1` devient l'entrée de validation locale M21-S1.
+- `scripts/m21/run-local.ps1` devient l'entrée de validation locale M21.
 
-S1 ne sera marqué **VALIDÉ** qu'après exécution réussie du runner sur un checkout propre de la branche.
+Qualification autoritative Windows :
+
+```text
+Maven reactor: 13/13 SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M15 JACOCO GATE SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
+```
 
 ## M21-S2 — CI recovery & branch protection readiness
 
-Priorité : **P0**.
+Statut : **EN PAUSE jusqu’en août 2026 — aucun déclenchement GitHub Actions, aucune modification de workflow dans le cadre de S2 avant cette échéance.**
 
-Objectifs :
+L'incident #5 reste documenté. Le HEAD S1 validé localement reproduit encore le symptôme distant historique (`steps=[]`, `logs_url=null`, logs `BlobNotFound`), sans preuve d'échec du code MINOS. Ce diagnostic est conservé uniquement comme état de référence ; il ne déclenche aucune action avant août.
+
+À la reprise en août :
 
 - reprendre l'issue #5 sans attribuer au code un échec pré-step ;
 - vérifier politique Actions, quotas/runners, restrictions d'actions et permissions du dépôt privé ;
@@ -83,21 +94,23 @@ Objectifs :
 
 ## M21-S3 — Quality gates M19/M20
 
+Statut : **EN COURS.**
+
 Priorité : **P0**.
 
-Les seuils M15 existants restent une baseline mais ne suffisent plus. M21 doit ajouter des scopes explicites couvrant au minimum :
+Les seuils M15 existants restent une baseline mais ne suffisent plus. M21 ajoute des scopes explicites couvrant :
 
 ```text
 ProgramGraph / composition / traversals
-AdvancedImpactService
-SecurityAnalysisService
-SemanticVectorStore
-SemanticIndexService
-SemanticSearchService
-HybridSearchService
-HybridContextBuilder
-API/MCP avancées associées
+AdvancedImpactService + SecurityAnalysisService
+FileSemanticVectorStore
+SemanticIndexService + SemanticSearchService
+HybridSearchService + HybridContextBuilder
+API avancées M19/M20
+catalogue MCP M19/M20
 ```
+
+Les seuils initiaux sont volontairement ciblés et conservateurs. Ils doivent être mesurés sur le rapport JaCoCo réel puis relevés uniquement avec des tests utiles ; une baisse ultérieure nécessite une justification documentée.
 
 Le résultat attendu n'est pas un pourcentage global arbitraire : les responsabilités critiques doivent être couvertes par des seuils ciblés et des tests fonctionnels séparés.
 
@@ -201,13 +214,13 @@ Validated HEAD: <sha>
 
 ## Validation locale S1
 
-Depuis un checkout propre de la branche :
+Qualification exécutée sur Windows :
 
 ```powershell
-.\scripts\m21\run-local.ps1
+.\scripts\m21\run-local.ps1 -ExpectedHead b4403921bfe0e2a7fe5eef9380a122982f275e0e
 ```
 
-Le runner S1 vérifie la cohérence documentaire M21 puis rejoue la porte M20 actuelle (facts, invariants, Maven Java 24, JaCoCo, exact-head). Il sera étendu au fil des sous-incréments jusqu'au gate final M21.
+Toute modification postérieure à ce SHA impose une nouvelle qualification exact-head avant promotion.
 
 ## Source de vérité
 
