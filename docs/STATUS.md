@@ -2,36 +2,67 @@
 
 Dernière mise à jour documentaire : **27 juillet 2026**
 
-Ce fichier résume l'état produit livré. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
+Ce fichier distingue l'état **livré sur `main`** du jalon de consolidation actuellement en cours. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
 ```text
-C0 — Cadrage                         TERMINÉ
-M0 — Faisabilité technique          TERMINÉ ET LIVRÉ
-M1 — Découverte et orchestration    TERMINÉ ET LIVRÉ
-M2 — Intelligence des symboles      TERMINÉ ET LIVRÉ
-M3 — Intelligence des relations     TERMINÉ ET LIVRÉ
-M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
-M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
-M6 — Intelligence d'architecture    TERMINÉ, VALIDÉ ET LIVRÉ
-M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
-M8 — Analyse d'impact               TERMINÉ, VALIDÉ ET LIVRÉ
-M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
-M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
-M11 — API publique                  TERMINÉ, VALIDÉ ET LIVRÉ
-M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
-M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
-M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
-M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
-M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
-M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
-M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
-M19 — Advanced Code Intelligence    TERMINÉ, VALIDÉ ET LIVRÉ
+C0 — Cadrage                          TERMINÉ
+M0 — Faisabilité technique           TERMINÉ ET LIVRÉ
+M1 — Découverte et orchestration     TERMINÉ ET LIVRÉ
+M2 — Intelligence des symboles       TERMINÉ ET LIVRÉ
+M3 — Intelligence des relations      TERMINÉ ET LIVRÉ
+M4 — Recherche et contexte compact   TERMINÉ ET LIVRÉ
+M5 — Tests liés et dérivations       TERMINÉ ET LIVRÉ
+M6 — Intelligence d'architecture     TERMINÉ, VALIDÉ ET LIVRÉ
+M7 — Indexation incrémentale         TERMINÉ, VALIDÉ ET LIVRÉ
+M8 — Analyse d'impact                TERMINÉ, VALIDÉ ET LIVRÉ
+M9 — CLI stabilisée                  TERMINÉ, VALIDÉ ET LIVRÉ
+M10 — Serveur MCP                    TERMINÉ, VALIDÉ ET LIVRÉ
+M11 — API publique                   TERMINÉ, VALIDÉ ET LIVRÉ
+M12 — Multi-dépôts + Git             TERMINÉ, VALIDÉ ET LIVRÉ
+M13 — Intégration NEXUS              TERMINÉ, VALIDÉ ET LIVRÉ
+M14 — Indexation autonome + PROD     TERMINÉ, VALIDÉ ET LIVRÉ
+M15 — Industrialisation Core         TERMINÉ, VALIDÉ ET LIVRÉ
+M16 — Scalabilité et performance     TERMINÉ, VALIDÉ ET LIVRÉ
+M17 — Provider & Discovery Platform  TERMINÉ, VALIDÉ ET LIVRÉ
+M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
+M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
+M21 — Production Integrity           EN COURS — consolidation post-M20
 ```
 
-La phase M15→M20 est clôturée. Aucun M21 n'est actuellement déclaré.
+**État produit livré : C0→M20.** M21 est ouvert sur la branche `m21-production-integrity` et n'est pas encore livré sur `main`.
+
+## M21 — Production Integrity & Surface Convergence
+
+M21 consolide l'industrialisation post-M20 avant toute nouvelle phase fonctionnelle lourde.
+
+Question produit :
+
+> MINOS peut-il devenir un produit continuellement qualifié, cohérent sur toutes ses surfaces et distribuable avec un niveau de confiance production, sans affaiblir ses invariants local-first, capability-honest et measurement-gated ?
+
+État courant M21 :
+
+```text
+S1   governance + docs + runner local                 IMPLÉMENTÉ / validation locale en attente
+S2   CI recovery + readiness branch protection        PLANIFIÉ
+S3   quality gates M19/M20                            PLANIFIÉ
+S4   Maven module-boundary hardening                  PLANIFIÉ
+S5   supply-chain + release hardening                 PLANIFIÉ
+S6   IntelliJ parity M19/M20                          PLANIFIÉ
+S7   advanced provider productionization              PLANIFIÉ
+S8   semantic scale qualification                     PLANIFIÉ
+S9   final production integrity gate                  PLANIFIÉ
+```
+
+Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+
+M21-S1 ne sera marqué validé qu'après exécution locale réussie de :
+
+```powershell
+.\scripts\m21\run-local.ps1
+```
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
@@ -153,7 +184,7 @@ M15 fournit le reactor Maven multi-module, `MinosApplication`, le découplage MC
 - MCP : STDIO read-only, **23 tools** ;
 - NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
 - IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
-- installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
+- installation PROD Windows : setup.exe + ZIP versionnés, runtime Java embarqué, doctor et MCP natif ;
 - Docker MCP : mode durci optionnel.
 
 Les valeurs calculables exactes restent dans [`generated/product-facts.md`](generated/product-facts.md).
@@ -171,17 +202,27 @@ Les valeurs calculables exactes restent dans [`generated/product-facts.md`](gene
 - Impact v2 conserve M8 comme baseline ;
 - les chemins sécurité sont des chemins statiques observés et bornés ;
 - une relation cross-repository exige une identité exacte et unique ;
-- toute évolution de backend reste gouvernée par des mesures reproductibles M16.
+- toute évolution de backend reste gouvernée par des mesures reproductibles M16/M21.
 
 ## Suite
 
-**Aucun prochain jalon n'est encore déclaré.**
+La trajectoire est maintenant déclarée :
 
-La prochaine phase doit être cadrée explicitement avec : question produit, périmètre, critères de sortie mesurables, ADR nécessaires et qualification exact-head.
+```text
+M21  Production Integrity & Surface Convergence   EN COURS
+M22  Advanced Provider Intelligence               PLANIFIÉ
+M23  Semantic Retrieval 2.0                       PLANIFIÉ
+M24  Polyglot Expansion                           PLANIFIÉ
+M25  Remote & Distributed Indexing                PLANIFIÉ
+M26  Runtime & Dynamic Intelligence               PLANIFIÉ
+M27  Team / Hosted Mode                           PLANIFIÉ
+```
+
+M22→M27 restent des directions planifiées. Elles ne deviennent des capacités engagées qu'après création de leur roadmap opérationnelle, critères mesurables et qualification associée.
 
 ## Documentation
 
-- portail : [`README.md`](README.md) ;
+- portail : [`README.md`](../README.md) ;
 - roadmap : [`ROADMAP.md`](ROADMAP.md) ;
 - exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
 - exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
@@ -189,6 +230,7 @@ La prochaine phase doit être cadrée explicitement avec : question produit, pé
 - exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
 - exécution M19 : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md) ;
 - exécution M20 : [`roadmap/M20_EXECUTION.md`](roadmap/M20_EXECUTION.md) ;
+- exécution M21 : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
@@ -198,4 +240,4 @@ La prochaine phase doit être cadrée explicitement avec : question produit, pé
 
 ## Source de vérité
 
-`STATUS.md` décrit l'état livré. `ROADMAP.md` décrit la progression produit. Les ADR décrivent les décisions durables. Les rapports sous `history/milestones/` restent des archives et peuvent contenir des états intermédiaires propres à leur date de validation.
+`STATUS.md` décrit l'état livré et le jalon actif. `ROADMAP.md` décrit la progression produit. Les ADR décrivent les décisions durables. Les facts calculables restent générés depuis le code. Les rapports sous `history/milestones/` restent des archives et peuvent contenir des états intermédiaires propres à leur date de validation.
