@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 EN COURS ; S7→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 VALIDÉ ; S7 EN COURS ; S8→S9 planifiés.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -33,8 +33,8 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 | M21-S3 | Quality gates M19/M20 | **VALIDÉ** sur `27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94` |
 | M21-S4 | Maven module-boundary hardening | **VALIDÉ** sur `0699d06d6138dd77008b8ea31578a334468eec75` |
 | M21-S5 | Supply-chain & release hardening | **VALIDÉ** sur `bcc44ea5e7a5c354c1df25bb7d295ee57347629c` |
-| M21-S6 | IntelliJ parity M19/M20 | **EN COURS — candidat local à qualifier** |
-| M21-S7 | Advanced provider productionization | planifié |
+| M21-S6 | IntelliJ parity M19/M20 | **VALIDÉ** sur `8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6` |
+| M21-S7 | Advanced provider productionization | **EN COURS — candidat local à qualifier** |
 | M21-S8 | Semantic scale qualification | planifié |
 | M21-S9 | Final production integrity gate | planifié |
 
@@ -89,7 +89,7 @@ advanced-public-api
 m19-m20-mcp-catalogue
 ```
 
-Résultats :
+Résultats qualifiés S3 :
 
 ```text
 program-graph-analysis      90.46 % lignes / 57.86 % branches
@@ -101,13 +101,11 @@ m19-m20-mcp-catalogue       93.49 % lignes / 60.00 % branches
 M21 JACOCO GATE SUCCESS
 ```
 
-Les seuils restent des planchers ciblés anti-régression ; toute baisse future nécessite une justification documentée.
+S7 ajoute `FileProgramGraphProvider` au scope `program-graph-analysis` ; les seuils ne sont pas abaissés.
 
 ## M21-S4 — Maven module-boundary hardening
 
 Statut : **VALIDÉ le 27 juillet 2026** sur `0699d06d6138dd77008b8ea31578a334468eec75`.
-
-L'ADR-0022 indiquait que M15 avait déjà relocalisé physiquement les sources/tests dans leurs modules propriétaires. Les filtres `<includes>/<excludes>` encore présents dans les configurations `maven-compiler-plugin` étaient une dette transitoire résiduelle.
 
 Livrables :
 
@@ -134,29 +132,20 @@ Statut : **VALIDÉ le 27 juillet 2026** sur `bcc44ea5e7a5c354c1df25bb7d295ee5734
 
 S5 reste volontairement séparé de la CI en juillet. L'épinglage immuable des GitHub Actions reste affecté à S2 lors de sa reprise en août.
 
-Livrables S5 :
+Livrables :
 
-- CycloneDX Maven Plugin `2.9.2`, SBOM JSON agrégé CycloneDX 1.6 généré explicitement depuis la racine d'exécution Maven après le build du reactor ;
+- CycloneDX Maven Plugin `2.9.2`, SBOM JSON agrégé CycloneDX 1.6 depuis la racine Maven ;
 - scope test exclu du SBOM de distribution ;
-- `scripts/release/generate-third-party-notices.py` avec politique stricte : aucune licence inventée ;
-- `scripts/release/create-release-manifest.py` : version, commit, taille et SHA-256 de chaque fichier de distribution ;
-- `scripts/release/check-supply-chain.py` : cohérence SBOM/notices/manifest/VERSION ;
-- ZIP et setup embarquent `supply-chain/minos.cdx.json`, `supply-chain/THIRD-PARTY-NOTICES.txt` et `RELEASE-MANIFEST.json` ;
-- sidecars de release SBOM/notices + `.sha256` publiables avec le setup/ZIP ;
-- `scripts/release/sign-windows-artifact.ps1` pour signature Authenticode explicite lorsqu'un certificat est disponible ;
-- `scripts/m21/run-s5.ps1` rejoue core, packaging, checksums, ZIP install, setup install/uninstall et politique de signature.
-
-Les deux faux négatifs rencontrés pendant la qualification ont été corrigés sans abaisser le gate : l'agrégateur CycloneDX a été déplacé de `minos-app` vers l'execution root Maven, puis le checker documentaire a été réaligné sur cette architecture.
+- notices tierces strictes : aucune licence inventée ;
+- manifest de release avec version, commit, taille et SHA-256 ;
+- ZIP/setup embarquant les preuves supply-chain ;
+- sidecars publiables avec checksums ;
+- helper Authenticode optionnel ;
+- `scripts/m21/run-s5.ps1`.
 
 Qualification :
 
 ```text
-M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
-M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=263)
-Maven reactor: 13/13 SUCCESS
-M21 JACOCO GATE SUCCESS
-M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
-M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
 CycloneDX 1.6: 31 components
 M21 THIRD-PARTY NOTICES SUCCESS (components=19, unknownLicenses=0)
 M21 RELEASE MANIFEST SUCCESS (files=370)
@@ -173,7 +162,7 @@ La signature n'est pas simulée. Sans certificat, un candidat peut rester non si
 
 ## M21-S6 — IntelliJ parity M19/M20
 
-Statut : **EN COURS — candidat Windows local à qualifier.**
+Statut : **VALIDÉ le 27 juillet 2026** sur `8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6`.
 
 Architecture conservée :
 
@@ -192,9 +181,7 @@ MINOS Java 24 / MinosApplication
         └── HybridContextBuilder
 ```
 
-Le protocole `minos-ide` reste en version `1` : S6 est additif et les nouvelles opérations sont négociées par capabilities. Un runtime plus ancien est refusé explicitement pour l'action concernée ; aucune dégradation silencieuse ni duplication métier n'est autorisée.
-
-Capabilities S6 :
+Le protocole `minos-ide` reste en version `1`. Les huit capabilities additives sont :
 
 ```text
 program-graph
@@ -207,41 +194,94 @@ hybrid-search
 hybrid-context
 ```
 
-Livrables :
+Le client vérifie la capability avant chaque appel et ne réimplémente aucun métier M19/M20. L'ancien Impact M8 reste exposé comme baseline.
 
-- `IdeIntelligenceCommand` : adaptation arguments/JSON uniquement, appels directs aux services M19/M20 de `MinosApplication` ;
-- `MinosM21Client` : client IntelliJ Java 21 capability-aware ;
-- actions natives **Advanced Intelligence** et **Semantic & Hybrid** ;
-- Impact M8 conservé comme **baseline**, Impact v2 ajouté explicitement ;
-- `scripts/intellij/check-m21-parity.py` verrouille les huit capabilities/actions, l'absence de dépendance Maven `com.minos:*` et la cible Java 21 ;
-- Plugin Verifier : cible build `261` et sélectionne la distribution courante plus les releases IntelliJ IDEA 2026.1 stables résolues ;
-- `scripts/m21/run-s6.ps1` rejoue le core M21, le gate de parité et toute la qualification M18 locale.
+Qualification Windows exact-head :
 
-Sémantique et sécurité restent capability-honest :
+```text
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=264)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
+Plugin com.minos.codeintelligence:0.2.0-SNAPSHOT against IU-261.26222.65: Compatible
+Plugin com.minos.codeintelligence:0.2.0-SNAPSHOT against IU-261.22158.277: Compatible
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
+```
 
-- le provider sémantique reste désactivé par défaut ;
-- `local-hash` reste un provider de référence, **pas** un language model ;
-- le score vectoriel reste `HEURISTIC` et le ranking hybride une sélection dérivée ;
-- les security paths sont des chemins statiques observés et bornés ; absence de chemin ≠ preuve de sûreté.
+## M21-S7 — Advanced provider productionization
 
-Gate local S6 :
+Statut : **EN COURS — candidat Windows local à qualifier.**
+
+M19 avait défini `ProgramGraphProvider` et le modèle avancé mais le runtime standard ne disposait pas encore d'un provider de production capable d'injecter des facts CFG/def-use/interproc/security explicites. S7 productionise le sidecar local v1 déjà prévu par l'architecture M19.
+
+Architecture :
+
+```text
+snapshot structuré actif
+    ├── relations CALLS / READS / WRITES
+    │      ↓ RelationshipProgramGraphProvider
+    │
+    └── <project>/.minos/program-graph-v1/
+           ├── metadata.properties
+           ├── nodes.tsv
+           └── edges.tsv
+                   ↓ FileProgramGraphProvider
+
+          ProgramGraphComposer
+                   ↓
+          ProgramGraph capability-honest
+```
+
+Invariants renforcés :
+
+- `snapshotId` du sidecar doit correspondre exactement au snapshot actif ;
+- un sidecar stale contribue zéro capability ;
+- chaque capability déclarée doit être prouvée par les kinds correspondants ;
+- une arête avancée sans capability correspondante est rejetée ;
+- `CPG` reste composé par MINOS et n'est pas déclaré par le sidecar ;
+- `CALL_GRAPH + LOCAL_DATA_FLOW` **ne produit plus implicitement** `INTERPROCEDURAL_DATA_FLOW` ;
+- l'interprocédural exige `ARGUMENT_FLOW` ou `RETURN_FLOW` explicite ;
+- la sécurité exige `TAINT_FLOW` et des nœuds `SOURCE`/`SINK` ;
+- les sidecars sont exclus du fingerprint source via `.minos/` ;
+- le cache du provider inclut le SHA-256 des trois fichiers ;
+- le provider est ajouté au scope JaCoCo `program-graph-analysis`.
+
+Vérité terrain versionnée :
+
+```text
+fixtures/m21/advanced-program-sidecar/project/.minos/program-graph-v1/
+CONTROL_FLOW     2
+DEF_USE          1
+ARGUMENT_FLOW    1
+RETURN_FLOW      1
+TAINT_FLOW       2
+SOURCE/SANITIZER/SINK présents
+```
+
+`AdvancedProgramSidecarFixtureTest` mesure précision/rappel parfaits sur chaque famille de flow attendue. `FileProgramGraphProviderTest` couvre snapshot stale, sur-promesse de capability, invalidation du cache et absence de promotion interprocédurale implicite.
+
+Documentation : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md).
+
+Gate local S7 :
 
 ```powershell
-.\scripts\m21\run-s6.ps1 -ExpectedHead <sha>
+.\scripts\m21\run-s7.ps1 -ExpectedHead <sha>
 ```
 
 Verdict attendu :
 
 ```text
-M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
-M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
-M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21-S7 ADVANCED PROVIDER VALIDATION SUCCESS
 Validated HEAD: <sha>
 ```
 
-## M21-S7 — Advanced provider productionization
-
-La surface supportée par le moteur doit rester distincte de la capacité réellement fournie par le provider courant. Un provider ne peut annoncer `CONTROL_FLOW`, `DEF_USE`, `INTERPROCEDURAL_DATA_FLOW` ou `SECURITY_TAINT` que si des fixtures contrôlées le prouvent.
+Cette étape ne prétend pas que SCIP fournit désormais CFG/def-use/taint. SCIP conserve son profil réel. S7 fournit un contrat opérationnel local pour un analyseur avancé explicite ; M22 reste le jalon d'intégration de providers d'analyse spécialisés supplémentaires.
 
 ## M21-S8 — Semantic scale qualification
 
@@ -303,6 +343,12 @@ Gate S6 :
 .\scripts\m21\run-s6.ps1 -ExpectedHead <sha>
 ```
 
+Gate S7 :
+
+```powershell
+.\scripts\m21\run-s7.ps1 -ExpectedHead <sha>
+```
+
 ## Source de vérité
 
 - état livré : [`../STATUS.md`](../STATUS.md) ;
@@ -310,4 +356,5 @@ Gate S6 :
 - facts calculables : [`../generated/product-facts.md`](../generated/product-facts.md) ;
 - supply-chain : [`../developer/supply-chain.md`](../developer/supply-chain.md) ;
 - guide IntelliJ : [`../user/intellij-plugin.md`](../user/intellij-plugin.md) ;
+- advanced provider : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md) ;
 - issue de pilotage : #73.
