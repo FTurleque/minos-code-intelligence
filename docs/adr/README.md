@@ -42,6 +42,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0025](0025-measurement-gated-storage-backend-evolution.md) | Gouverner l’évolution du backend par des mesures reproductibles | Accepted | M16 |
 | [0026](0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | M17 |
 | [0027](0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
+| [0028](0028-capability-honest-program-graph-and-bounded-advanced-analysis.md) | Composer un program graph capability-honest et borner toutes les analyses avancées | Accepted | M19 |
 
 ## Règle de rédaction
 
