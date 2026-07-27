@@ -6,7 +6,6 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -14,6 +13,8 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
+import com.minos.intellij.navigation.MinosLocation;
+import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.ui.MinosUiController;
@@ -72,7 +73,11 @@ public final class MinosEditorActions {
                     if (failure != null) {
                         MinosUiController.getInstance(project).showError(title(), failure);
                     } else {
-                        present(project, context, symbol, result);
+                        try {
+                            present(project, context, symbol, result);
+                        } catch (Throwable throwable) {
+                            MinosUiController.getInstance(project).showError(title(), throwable);
+                        }
                     }
                 }
             });
@@ -97,6 +102,24 @@ public final class MinosEditorActions {
 
         protected static String symbolId(JsonObject symbol) {
             return required(symbol, "id");
+        }
+    }
+
+    public static final class OpenDefinition extends SymbolAction {
+        @Override protected String title() { return "Open MINOS definition"; }
+
+        @Override
+        protected JsonObject execute(Project project, MinosProjectService.Context context, JsonObject symbol) {
+            return symbol;
+        }
+
+        @Override
+        protected void present(Project project, MinosProjectService.Context context, JsonObject symbol, JsonObject result) {
+            JsonElement element = symbol.get("location");
+            if (element == null || !element.isJsonObject()) {
+                throw new IllegalArgumentException("MINOS symbol has no navigable definition location");
+            }
+            MinosNavigation.open(project, context.root(), MinosLocation.from(element.getAsJsonObject()));
         }
     }
 
