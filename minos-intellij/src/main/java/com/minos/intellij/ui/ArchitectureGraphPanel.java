@@ -29,18 +29,20 @@ public final class ArchitectureGraphPanel extends JPanel {
     private List<Node> nodes = List.of();
     private List<Edge> edges = List.of();
     private String filter = "";
+    private String selectedNodeId;
     private Consumer<JsonObject> selectionListener = ignored -> { };
 
     public ArchitectureGraphPanel() {
         setPreferredSize(new Dimension(720, 520));
+        setToolTipText("");
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent event) {
-                hitBoxes.entrySet().stream()
-                        .filter(entry -> entry.getValue().contains(event.getPoint()))
-                        .findFirst()
-                        .flatMap(entry -> nodes.stream().filter(node -> node.id().equals(entry.getKey())).findFirst())
-                        .ifPresent(node -> selectionListener.accept(node.json()));
+                nodeAt(event).ifPresent(node -> {
+                    selectedNodeId = node.id();
+                    selectionListener.accept(node.json());
+                    repaint();
+                });
             }
         });
     }
@@ -78,11 +80,22 @@ public final class ArchitectureGraphPanel extends JPanel {
             String source = string(edge, "sourceModuleId");
             String target = string(edge, "targetModuleId");
             if (included.containsKey(source) && included.containsKey(target)) {
-                parsedEdges.add(new Edge(source, target, intValue(edge, "dependencyCount")));
+                parsedEdges.add(new Edge(
+                        source,
+                        target,
+                        fallback(string(edge, "sourceModuleName"), included.get(source).name()),
+                        fallback(string(edge, "targetModuleName"), included.get(target).name()),
+                        intValue(edge, "dependencyCount"),
+                        string(edge, "nature"),
+                        doubleValue(edge, "confidence"),
+                        array(edge, "evidence").size(),
+                        array(edge, "sampleDependencyIds").toString()
+                ));
             }
         }
         parsedEdges.sort(Comparator.comparing(Edge::source).thenComparing(Edge::target));
         edges = List.copyOf(parsedEdges);
+        selectedNodeId = null;
         repaint();
     }
 
@@ -93,6 +106,40 @@ public final class ArchitectureGraphPanel extends JPanel {
 
     public int visibleNodeCount() {
         return visibleNodes().size();
+    }
+
+    String edgeSummaryFor(String nodeId) {
+        if (nodeId == null || nodeId.isBlank()) {
+            return "No module selected.";
+        }
+        List<Edge> adjacent = edges.stream()
+                .filter(edge -> nodeId.equals(edge.source()) || nodeId.equals(edge.target()))
+                .toList();
+        if (adjacent.isEmpty()) {
+            return "No module dependency edges in the bounded graph.";
+        }
+        List<String> lines = new ArrayList<>();
+        for (Edge edge : adjacent) {
+            boolean outgoing = nodeId.equals(edge.source());
+            String direction = outgoing ? "OUT" : "IN";
+            String peer = outgoing ? edge.targetName() : edge.sourceName();
+            lines.add(direction + " " + peer
+                    + " — " + edge.count() + " deps"
+                    + " — nature=" + fallback(edge.nature(), "UNKNOWN")
+                    + " — confidence=" + String.format(Locale.ROOT, "%.2f", edge.confidence())
+                    + " — evidence=" + edge.evidenceCount()
+                    + " — samples=" + edge.sampleDependencyIds());
+        }
+        return String.join("\n", lines);
+    }
+
+    @Override
+    public String getToolTipText(MouseEvent event) {
+        return nodeAt(event)
+                .map(node -> "<html><b>" + html(node.name()) + "</b><br>"
+                        + html(edgeSummaryFor(node.id())).replace("\n", "<br>")
+                        + "</html>")
+                .orElse(null);
     }
 
     @Override
@@ -130,18 +177,32 @@ public final class ArchitectureGraphPanel extends JPanel {
                 String label = node.name();
                 int width = Math.max(90, Math.min(220, metrics.stringWidth(label) + 20));
                 int height = 30;
-                Rectangle2D rectangle = new Rectangle2D.Double(point.x() - width / 2.0, point.y() - height / 2.0, width, height);
+                Rectangle2D rectangle = new Rectangle2D.Double(
+                        point.x() - width / 2.0,
+                        point.y() - height / 2.0,
+                        width,
+                        height);
                 hitBoxes.put(node.id(), rectangle);
                 g.setColor(background);
                 g.fill(rectangle);
                 g.setColor(foreground);
+                g.setStroke(new BasicStroke(node.id().equals(selectedNodeId) ? 2.4f : 1.2f));
                 g.draw(rectangle);
                 String clipped = clip(label, metrics, width - 12);
-                g.drawString(clipped, (int) rectangle.getX() + 6, (int) rectangle.getCenterY() + metrics.getAscent() / 2 - 2);
+                g.drawString(clipped,
+                        (int) rectangle.getX() + 6,
+                        (int) rectangle.getCenterY() + metrics.getAscent() / 2 - 2);
             }
         } finally {
             g.dispose();
         }
+    }
+
+    private java.util.Optional<Node> nodeAt(MouseEvent event) {
+        return hitBoxes.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(event.getPoint()))
+                .findFirst()
+                .flatMap(entry -> nodes.stream().filter(node -> node.id().equals(entry.getKey())).findFirst());
     }
 
     private List<Node> visibleNodes() {
@@ -149,7 +210,9 @@ public final class ArchitectureGraphPanel extends JPanel {
             return nodes;
         }
         return nodes.stream()
-                .filter(node -> (node.id() + " " + node.name() + " " + node.path()).toLowerCase(Locale.ROOT).contains(filter))
+                .filter(node -> (node.id() + " " + node.name() + " " + node.path())
+                        .toLowerCase(Locale.ROOT)
+                        .contains(filter))
                 .toList();
     }
 
@@ -198,10 +261,36 @@ public final class ArchitectureGraphPanel extends JPanel {
         return value == null || value.isJsonNull() ? 0 : value.getAsInt();
     }
 
+    private static double doubleValue(JsonObject object, String name) {
+        JsonElement value = object.get(name);
+        return value == null || value.isJsonNull() ? 0.0 : value.getAsDouble();
+    }
+
+    private static String fallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String html(String value) {
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
+    }
+
     private record Node(String id, String name, String path, JsonObject json) {
     }
 
-    private record Edge(String source, String target, int count) {
+    private record Edge(
+            String source,
+            String target,
+            String sourceName,
+            String targetName,
+            int count,
+            String nature,
+            double confidence,
+            int evidenceCount,
+            String sampleDependencyIds
+    ) {
     }
 
     private record Point(int x, int y) {
