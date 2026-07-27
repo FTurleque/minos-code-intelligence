@@ -45,6 +45,9 @@ def main() -> int:
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
+        supply_chain = read("docs/developer/supply-chain.md")
+        root_pom = read("pom.xml")
+        app_pom = read("minos-app/pom.xml")
 
         require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés.")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
@@ -66,14 +69,24 @@ def main() -> int:
         require_text("docs/STATUS.md", status, "S1   governance + docs + runner local                 VALIDÉ")
         require_text("docs/STATUS.md", status, "S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026")
         require_text("docs/STATUS.md", status, "S3   quality gates M19/M20                            VALIDÉ")
-        require_text("docs/STATUS.md", status, "S4   Maven module-boundary hardening                  EN COURS")
+        require_text("docs/STATUS.md", status, "S4   Maven module-boundary hardening                  VALIDÉ")
+        require_text("docs/STATUS.md", status, "S5   supply-chain + release hardening                 EN COURS")
         forbid_text("docs/STATUS.md", status, "Aucun M21 n'est actuellement déclaré")
 
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "Issue : **#73")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S1 VALIDÉ")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S2 EN PAUSE jusqu’en août 2026")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S3 VALIDÉ")
-        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S4 EN COURS")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S4 VALIDÉ")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S5 EN COURS")
+
+        require_text("docs/developer/supply-chain.md", supply_chain, "CycloneDX JSON")
+        require_text("docs/developer/supply-chain.md", supply_chain, "RELEASE-MANIFEST.json")
+        require_text("docs/developer/supply-chain.md", supply_chain, "MINOS_REQUIRE_SIGNED_RELEASE")
+        require_text("pom.xml", root_pom, "<cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>")
+        require_text("minos-app/pom.xml", app_pom, "<goal>makeAggregateBom</goal>")
+        require_text("minos-app/pom.xml", app_pom, "<schemaVersion>1.6</schemaVersion>")
+        require_text("minos-app/pom.xml", app_pom, "<includeTestScope>false</includeTestScope>")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
