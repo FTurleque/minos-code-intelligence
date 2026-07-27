@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>com.minos.intellij</id>
+    <id>com.minos.codeintelligence</id>
     <name>MINOS Code Intelligence</name>
     <vendor>MINOS</vendor>
 
@@ -14,7 +14,7 @@
         <toolWindow id="MINOS"
                     anchor="right"
                     factoryClass="com.minos.intellij.ui.MinosToolWindowFactory"/>
-        <projectConfigurable id="com.minos.intellij.settings"
+        <projectConfigurable id="com.minos.codeintelligence.settings"
                              parentId="tools"
                              nonDefaultProject="true"
                              displayName="MINOS"
