@@ -20,35 +20,4 @@
             <version>${project.version}</version>
         </dependency>
     </dependencies>
-
-    <build>
-
-
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <includes>
-                        <include>com/minos/query/**/*.java</include>
-                        <include>com/minos/store/CodeKnowledgeStore.java</include>
-                        <include>com/minos/discovery/ProjectDiscovery.java</include>
-                        <include>com/minos/orchestration/CapabilitySupportLevel.java</include>
-                        <include>com/minos/orchestration/IndexerCapability.java</include>
-                        <include>com/minos/orchestration/IndexerQualification.java</include>
-                        <include>com/minos/orchestration/IndexerDescriptor.java</include>
-                        <include>com/minos/orchestration/IndexerProvider.java</include>
-                        <include>com/minos/orchestration/IndexerProviderRegistry.java</include>
-                        <include>com/minos/orchestration/IndexingRequirements.java</include>
-                        <include>com/minos/orchestration/IndexerNegotiationResult.java</include>
-                        <include>com/minos/orchestration/IndexerRegistry.java</include>
-                        <include>com/minos/orchestration/IndexingMode.java</include>
-                        <include>com/minos/orchestration/IndexingRuntimePorts.java</include>
-                        <include>com/minos/orchestration/ProviderCapabilityProfile.java</include>
-                        <include>com/minos/orchestration/ProviderConformanceKit.java</include>
-                    </includes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
