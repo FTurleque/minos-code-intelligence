@@ -54,7 +54,7 @@ public final class MinosCliRunner {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
-        if (isIdeHandshake(arguments)) return new IdeCommand().run(slice(arguments, 1), output, error);
+        if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
         return run(MinosApplication.open(home), arguments, output, error);
     }
 
@@ -64,7 +64,7 @@ public final class MinosCliRunner {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
-        if (isIdeHandshake(arguments)) return new IdeCommand().run(slice(arguments, 1), output, error);
+        if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
@@ -109,6 +109,20 @@ public final class MinosCliRunner {
         return statelessHelpCli().run(arguments, output, error);
     }
 
+    static boolean isIdeHandshake(String[] arguments) {
+        Objects.requireNonNull(arguments, "arguments");
+        return arguments.length >= 2
+                && IdeCommand.NAME.equals(arguments[0])
+                && "handshake".equals(arguments[1]);
+    }
+
+    static int runIdeHandshake(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (!isIdeHandshake(arguments)) {
+            throw new IllegalArgumentException("arguments are not an IDE handshake request");
+        }
+        return new IdeCommand().run(slice(arguments, 1), output, error);
+    }
+
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
         return MinosHome.resolve(environment, properties);
     }
@@ -148,12 +162,6 @@ public final class MinosCliRunner {
 
     private static boolean isHelpToken(String argument) {
         return "--help".equals(argument) || "-h".equals(argument);
-    }
-
-    private static boolean isIdeHandshake(String[] arguments) {
-        return arguments.length >= 2
-                && IdeCommand.NAME.equals(arguments[0])
-                && "handshake".equals(arguments[1]);
     }
 
     private static String[] slice(String[] values, int from) {
