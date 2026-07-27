@@ -34,12 +34,98 @@ function Resolve-Python {
     throw 'M18 requires Python in PATH for product-facts verification.'
 }
 
-function Resolve-Gradle {
-    $command = Get-Command 'gradle' -ErrorAction SilentlyContinue
-    if (-not $command) {
-        throw 'M18 plugin qualification requires Gradle 9+ in PATH. CI pins Gradle 9.6.1.'
+function Get-GradleVersion {
+    param([Parameter(Mandatory = $true)][string] $Gradle)
+
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $Gradle --version 2>&1)
+        if ($LASTEXITCODE -ne 0) { return '' }
+    } finally {
+        $ErrorActionPreference = $previous
     }
-    return $command.Source
+    foreach ($line in $output) {
+        if ([string]$line -match '^Gradle\s+([0-9]+(?:\.[0-9]+)+)') {
+            return $Matches[1]
+        }
+    }
+    return ''
+}
+
+function Resolve-Gradle {
+    $requiredVersion = '9.6.1'
+    $requiredSha256 = '9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14'
+
+    $command = Get-Command 'gradle' -ErrorAction SilentlyContinue
+    if ($command) {
+        $version = Get-GradleVersion -Gradle $command.Source
+        if ($version -eq $requiredVersion) {
+            Write-Host "Using Gradle $version from PATH: $($command.Source)"
+            return $command.Source
+        }
+        if (-not [string]::IsNullOrWhiteSpace($version)) {
+            Write-Host "Gradle $version found in PATH; M18 qualification is pinned to $requiredVersion."
+        }
+    }
+
+    $cacheBase = if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        Join-Path $env:LOCALAPPDATA 'MINOS\tool-cache\gradle'
+    } else {
+        Join-Path ([System.IO.Path]::GetTempPath()) 'MINOS\tool-cache\gradle'
+    }
+    $cacheRoot = Join-Path $cacheBase $requiredVersion
+    $gradleHome = Join-Path $cacheRoot "gradle-$requiredVersion"
+    $gradle = if ($env:OS -eq 'Windows_NT') {
+        Join-Path $gradleHome 'bin\gradle.bat'
+    } else {
+        Join-Path $gradleHome 'bin/gradle'
+    }
+
+    if (Test-Path -LiteralPath $gradle -PathType Leaf) {
+        Write-Host "Using cached Gradle $requiredVersion: $gradle"
+        return $gradle
+    }
+
+    New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
+    $archive = Join-Path $cacheRoot "gradle-$requiredVersion-bin.zip"
+    $distributionUrl = "https://services.gradle.org/distributions/gradle-$requiredVersion-bin.zip"
+
+    $needsDownload = $true
+    if (Test-Path -LiteralPath $archive -PathType Leaf) {
+        $cachedHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($cachedHash -eq $requiredSha256) {
+            $needsDownload = $false
+        } else {
+            Remove-Item -LiteralPath $archive -Force
+        }
+    }
+
+    if ($needsDownload) {
+        Write-Host "Downloading Gradle $requiredVersion from the official distribution service..."
+        if ($PSVersionTable.PSVersion.Major -lt 6) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        }
+        Invoke-WebRequest -Uri $distributionUrl -OutFile $archive -UseBasicParsing
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $requiredSha256) {
+        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+        throw "Gradle $requiredVersion SHA-256 mismatch: expected=$requiredSha256 actual=$actualSha256"
+    }
+
+    if (Test-Path -LiteralPath $gradleHome) {
+        Remove-Item -LiteralPath $gradleHome -Recurse -Force
+    }
+    Write-Host "Extracting verified Gradle $requiredVersion to $cacheRoot ..."
+    Expand-Archive -LiteralPath $archive -DestinationPath $cacheRoot -Force
+
+    if (-not (Test-Path -LiteralPath $gradle -PathType Leaf)) {
+        throw "Gradle $requiredVersion bootstrap failed: executable not found at $gradle"
+    }
+    Write-Host "Using bootstrapped Gradle $requiredVersion: $gradle"
+    return $gradle
 }
 
 function Assert-M18Structure {
@@ -54,7 +140,8 @@ function Assert-M18Structure {
         'minos-intellij\src\main\java\com\minos\intellij\protocol\MinosCliClient.java',
         'minos-intellij\src\main\java\com\minos\intellij\navigation\MinosNavigation.java',
         'minos-intellij\src\main\java\com\minos\intellij\ui\MinosToolWindowFactory.java',
-        '.github\workflows\intellij-plugin.yml'
+        '.github\workflows\intellij-plugin.yml',
+        '.github\workflows\intellij-plugin-release.yml'
     )
     foreach ($relative in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $relative) -PathType Leaf)) {
@@ -68,6 +155,9 @@ function Assert-M18Structure {
     }
     if ($pluginBuild -notmatch 'org\.jetbrains\.intellij\.platform.*2\.18\.1') {
         throw 'M18 plugin must use the qualified IntelliJ Platform Gradle Plugin 2.18.1.'
+    }
+    if ($pluginBuild -notmatch 'providers\.gradleProperty\("minosVersion"\)') {
+        throw 'M18 plugin release version must be overridable with -PminosVersion.'
     }
     if ($pluginBuild -notmatch 'sourceCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
         $pluginBuild -notmatch 'targetCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
@@ -121,7 +211,7 @@ try {
     Invoke-NativeChecked -File $maven -Arguments @('-B','-ntp','clean','verify') -Failure 'Maven clean verify failed'
     Invoke-NativeChecked -File $python -Arguments @('scripts/quality/check-jacoco.py') -Failure 'JaCoCo gate failed'
 
-    Write-Host '[4/6] Verifying IntelliJ plugin Java 21 target with Gradle 9+...'
+    Write-Host '[4/6] Verifying IntelliJ plugin Java 21 target with pinned Gradle 9.6.1...'
     $gradle = Resolve-Gradle
     Invoke-NativeChecked -File $gradle -Arguments @(
         '-p','minos-intellij','--no-daemon',
