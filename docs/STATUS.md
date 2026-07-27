@@ -28,265 +28,156 @@ M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
 M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
 M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
 M19 — Advanced Code Intelligence    TERMINÉ, VALIDÉ ET LIVRÉ
+M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
 ```
 
-## M19 — Advanced Code Intelligence
+La phase M15→M20 est clôturée. Aucun M21 n'est actuellement déclaré.
 
-M19 étend MINOS vers un graphe de programme avancé provider-independent sans transformer des approximations statiques en vérités runtime.
+## M20 — Semantic & Hybrid Code Intelligence
 
-Acquis M19 :
+M20 ajoute une couche sémantique **locale et optionnelle** au-dessus des facts structurés MINOS. Les embeddings restent un signal de ranking/rappel et ne deviennent jamais une preuve de relation de code.
+
+Acquis M20 :
 
 ```text
-S1   ProgramGraph provider-independent + capabilities                 ✅
-S2   Call graph v2 avec provenance et mesure précision/rappel         ✅
-S3   CFG explicite : branches, boucles, exceptions                    ✅
-S4   Data Flow / DEF_USE + limitations READS/WRITES                   ✅
-S5   propagation interprocédurale bornée + cycles visibles            ✅
-S6   composition CPG déterministe, collisions incohérentes rejetées   ✅
-S7   Impact v2 avec M8 conservé comme baseline                        ✅
-S8   SOURCE / SINK / SANITIZER + chemins sécurité bornés              ✅
-S9   AdvancedCodeIntelligenceApi v1 + 3 tools MCP                     ✅
+S1   SemanticDocument SYMBOL / FILE / CHUNK + stableKey/checksum       ✅
+S2   EmbeddingProvider SPI optionnel + provider local-hash             ✅
+S3   vector store local versionné, atomique et reconstruisible        ✅
+S4   recherche sémantique bornée, nature HEURISTIC                    ✅
+S5   ranking hybride LEXICAL + GRAPH + SEMANTIC                       ✅
+S6   contexte v2 borné documents/tokens                               ✅
+S7   index sémantique incrémental + réutilisation des vecteurs        ✅
+S8   SemanticCodeIntelligenceApi v1 + 4 tools MCP                     ✅
+S9   NEXUS semantic signals v2, frontière de responsabilité préservée ✅
 ```
 
-### Frontière d'analyse avancée
+### Autorité et optionnalité
 
 ```text
-snapshot actif MINOS
-      ↓
-ProgramGraphProvider(s)
-      ↓
-ProgramGraphComposer
-      ↓
-ProgramGraph capability-honest
-      ├── call/control/data flow
-      ├── interprocedural flow
-      ├── CPG
-      ├── Impact v2
-      └── security paths
+facts structurés MINOS   = autoritatifs
+semantic vector score    = HEURISTIC
+hybrid ranking           = sélection dérivée
+NEXUS global ranking     = responsabilité NEXUS
 ```
 
-Les capacités absentes ne sont jamais inventées. Les relations historiques `READS/WRITES` restent des dérivations potentielles avec `EXECUTION_ORDER_NOT_PROVEN`. L'absence de chemin sécurité n'est jamais interprétée comme preuve d'absence de vulnérabilité.
+`MinosApplication.open(...)` reste utilisable sans embeddings. L'activation native du provider de référence est explicite :
 
-### Surfaces M19
+```text
+MINOS_SEMANTIC_PROVIDER=local-hash
+```
 
-- API Java : `AdvancedCodeIntelligenceApi` v1 additive, `MinosApi` v1 inchangée ;
-- MCP : 19 tools read-only au total, dont `minos_program_graph`, `minos_impact_v2`, `minos_security_paths` ;
-- Impact v2 : baseline M8 conservée, enrichissements M19 comptés séparément ;
-- stockage : aucun nouveau stockage autoritatif, le graphe avancé reste une vue reconstruisible des snapshots et faits provider.
+Lorsque le provider est activé, `minos index` réaligne l'index sémantique après la promotion structurée. Une panne sémantique n'invalide pas un snapshot structuré réussi.
 
-### Qualification
+### Surfaces M20
+
+- API Java : `SemanticCodeIntelligenceApi` v1 additive ;
+- MCP : **23 tools read-only** au total ;
+- nouveaux tools :
+  - `minos_semantic_index_status` ;
+  - `minos_semantic_search` ;
+  - `minos_hybrid_search` ;
+  - `minos_hybrid_context` ;
+- NEXUS : contrat de signaux sémantiques v2 sans transfert du ranking global, de la sélection finale ni du budget multi-source.
+
+### Qualification M20
 
 Porte reproductible :
 
 ```text
-scripts/m19/run-final.ps1
+scripts/m20/run-final.ps1
 ```
 
 Qualification Windows exact-head :
+
+```text
+Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+```
+
+Preuves :
+
+- product facts : PASS ;
+- reactor Maven Java 24 : **13/13 modules SUCCESS** ;
+- `minos-application` : **116 tests**, 0 failure/error/skipped ;
+- `minos-api` : **12 tests**, 0 failure/error/skipped ;
+- `minos-mcp` : **6 tests**, 0 failure/error/skipped ;
+- agrégateur : **50 tests**, 0 failure/error/skipped ;
+- shaded JAR smoke IT : **1/1 PASS** ;
+- JaCoCo : tous les gates ciblés PASS ;
+- exact HEAD et worktree propre : PASS.
+
+PR #72 mergée via `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`. Issue #71 fermée comme `completed`.
+
+## M19 — Advanced Code Intelligence
+
+M19 fournit un `ProgramGraph` provider-independent et capability-honest, call graph v2, CFG, data-flow/def-use, propagation interprocédurale bornée, CPG, Impact v2 et primitives de sécurité.
+
+Qualification :
 
 ```text
 Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
 M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
 ```
 
-Preuves : reactor Maven Java 24 **13/13 SUCCESS**, tests application **112/112**, API **10/10**, MCP **5/5**, agrégateur **50/50**, smoke shaded JAR **1/1**, JaCoCo tous gates PASS, HEAD stable et worktree propre.
-
-PR #70 mergée via le commit `3630ebd0f229e1bc028e92444bfa34c3e7609596`. Issue #69 fermée comme `completed`.
+PR #70 mergée via `3630ebd0f229e1bc028e92444bfa34c3e7609596`. Issue #69 fermée comme `completed`.
 
 ## M18 — MINOS for IntelliJ
 
-M18 livre une intégration IntelliJ native et optionnelle qui consomme MINOS comme client externe sans réimplémenter le moteur ni introduire de dépendance à un LLM.
+M18 livre un plugin IntelliJ autonome Java 21 consommant MINOS Java 24 par protocole local JSON `minos-ide` v1, sans réimplémenter l'intelligence métier.
 
-Acquis M18 :
-
-```text
-S1   protocole IDE minos-ide v1 + handshake stateless             ✅
-S2   plugin IntelliJ autonome Java 21                              ✅
-S3   project/provider/snapshot/index status                        ✅
-S4   navigation symboles + positions UTF-8/16/32                  ✅
-S5   architecture graph borné et filtrable                         ✅
-S6   impact + related tests explicables                             ✅
-S7   index/reindex/doctor via lifecycle MINOS                       ✅
-S8   Git activity factuelle, sans inférence d'importance            ✅
-S9   ZIP plugin + validation/release + Plugin Verifier              ✅
-```
-
-### Frontière IDE
-
-```text
-IntelliJ IDEA / Java 21
-        ↓ processus local JSON
-minos-ide v1
-        ↓
-MINOS CLI / MinosApplication / Java 24
-```
-
-Le plugin ne dépend d'aucun artefact Maven `com.minos:*`, ne charge aucune classe interne du moteur et ne publie jamais directement de snapshot. Le lifecycle MINOS existant reste propriétaire de l'indexation et de la promotion atomique.
-
-### Qualification
-
-La porte reproductible M18 est :
-
-```text
-scripts/m18/run-final.ps1
-```
-
-Qualification Windows exact-head :
+Qualification :
 
 ```text
 Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
 M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
-Plugin Verifier: Compatible with IntelliJ IDEA 2026.1 (IU-261.22158.277)
 ```
 
-PR #68 mergée via le commit `faa51f63c5967d874a7a6685b6b513b83bb736b4`. Issue #67 fermée comme `completed`.
+PR #68 mergée via `faa51f63c5967d874a7a6685b6b513b83bb736b4`. Issue #67 fermée comme `completed`.
 
 ## M17 — Provider & Discovery Platform
 
-M17 transforme la découverte et les providers en plateforme d'extensions explicites sans ajouter de branches d'écosystème dans les orchestrateurs centraux.
+M17 transforme discovery et providers en plateforme d'extensions explicites : SPI discovery/provider, profils de capacité exhaustifs, Gradle, workspaces npm/pnpm/yarn, Kotlin/Maven, Python/scip-python et conformance kit.
 
-Acquis M17 :
+## M16 — Scalabilité et performance
 
-```text
-S1   Discovery SPI : project/build/source-root/language detectors      ✅
-S2   Provider SPI + registry d'extensions                              ✅
-S3   capability model FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED           ✅
-S4   Gradle Java/Kotlin discovery, multi-module                        ✅
-S5   npm/pnpm/yarn workspace discovery                                 ✅
-S6   Kotlin/Maven négocié par scip-java                                ✅
-S7   Python géré par scip-python 0.6.6                                 ✅
-S8   provider conformance kit déterministe                             ✅
-S9   installation runtime composée et provider-neutral                 ✅
-```
-
-### Architecture d'extension
-
-```text
-ProjectDiscoveryService
-        ↓
-ProjectDetector / BuildSystemDetector / SourceRootDetector / LanguageDetector
-        ↓
-ProjectDiscovery factuel
-
-IndexerProviderRegistry
-        ↓
-IndexerProvider → descriptor + ProviderCapabilityProfile exhaustif
-        ↓
-IndexerRegistry neutre de négociation
-
-ProviderRuntimeManager
-        ↓
-CompositeProviderRuntimeManager
-        ├── scip-java / scip-typescript
-        └── scip-python
-```
-
-Le modèle de capacités interdit toute absence implicite : chaque capacité reçoit obligatoirement `FULL`, `PARTIAL`, `EXPERIMENTAL` ou `UNSUPPORTED`.
-
-### Écosystèmes
-
-- Maven Java/TypeScript historiques : non-régression M14 obligatoire ;
-- Gradle : découverte Java/Kotlin et modules ; aucun runtime Gradle n'est inventé ;
-- npm/pnpm/yarn : marqueurs workspace et build system hérités aux packages ;
-- Kotlin : discovery + négociation Maven via `scip-java` ;
-- Python : discovery + runtime géré `scip-python` `0.6.6` installé sous `MINOS_HOME/tools`.
-
-### Surfaces
-
-- CLI : `minos providers` expose niveaux, score, limitations et état runtime ;
-- API Java : `ProviderPlatformApi` v1 est additive et laisse `MinosApi` v1 inchangée ;
-- MCP : `minos_project_structure` et `minos_index_status` exposent `providerProfiles` ; les 16 tools historiques restent présents dans le catalogue M19 de 19 tools ;
-- doctor/tools : les runtimes optionnels sont visibles/installables sans rendre la baseline historique rouge lorsqu'ils ne sont pas installés.
-
-### Qualification
-
-La porte reproductible M17 est :
-
-```text
-scripts/m17/run-final.ps1
-```
-
-Elle rejoue `clean verify`, JaCoCo, product facts et l'intégralité de M14/Java/TypeScript/STALE/Windows, puis qualifie réellement Kotlin/Maven et Python avec installation provider, indexation, snapshot actif et requêtes symboles/usages. Verdict requis :
-
-```text
-M17 FINAL PROVIDER PLATFORM VALIDATION SUCCESS
-```
-
-La preuve exacte (SHA, tests, runtimes et résultats provider) est enregistrée dans la PR et l'issue M17 afin de ne pas modifier le head après qualification.
-
-## M16 — Scalabilité et performance à grande échelle
-
-M16 ajoute une campagne de performance reproductible sans changer les contrats publics MINOS ni présélectionner un backend plus complexe.
-
-Acquis M16 :
-
-```text
-S1   harness benchmark exact-head + machine/JVM                    ✅
-S2   datasets synthétiques déterministes et fixtures réelles       ✅
-S3   query benchmark p50/p95/p99                                   ✅
-S4   MCP sustained load sur serveur STDIO long-lived               ✅
-S5   indexation réelle FULL/NONE + débit/RSS                        ✅
-S6   profil heap/RSS/disque/indexes                                 ✅
-S7   décision backend gouvernée par mesures                         ✅
-S8   optimisation uniquement sous goulot prouvé                    ✅
-S9   rétention/compaction snapshots + runs                          ✅
-```
-
-Le gate STANDARD utilise 10 000 fichiers logiques, 100 000 symboles, 500 000 occurrences et 250 000 relations avec seed `16000031`. Les profils `SMOKE`, `EXTENDED` et `STRESS` restent diagnostics. Le backend retenu reste snapshots fichiers versionnés + `SnapshotQueryView` + indexes mémoire reconstruisibles conformément à [ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md).
-
-La croissance disque est bornée : snapshot actif + 2 historiques ; 20 runs réussis + 10 non réussis ; `latestRunId` protégé.
+M16 impose une campagne reproductible de performance et gouverne le backend par mesures. Le backend retenu reste snapshots fichiers versionnés + vue/indexes reconstruisibles, avec rétention bornée.
 
 ## M15 — Industrialisation du Core Engine
 
-M15 transforme le socle M14 en plateforme modulaire, réutilisable en processus long et protégée par des gates automatiques.
-
-```text
-S1   baseline non-régression et coût initial                  ✅
-S2   reactor Maven multi-module                               ✅
-S3   MinosApplication / composition root partagé              ✅
-S4   MCP découplé de la CLI métier                            ✅
-S5   ProjectResolver commun                                   ✅
-S6   persistance snapshots décomposée                         ✅
-S7   cache borné du snapshot actif                            ✅
-S8   indexes de requête reconstruisibles                      ✅
-S9   JaCoCo + quality gates ciblées                           ✅
-S10  CI automatique des pull requests Linux/Windows           ✅
-S11  cohérence documentaire calculable                        ✅
-```
-
-Les snapshots persistés restent la source de vérité ; les indexes mémoire sont reconstruisibles. La CI de PR et les facts calculables restent les gates d'industrialisation.
+M15 fournit le reactor Maven multi-module, `MinosApplication`, le découplage MCP, la résolution projet commune, la persistance décomposée, les caches/indexes reconstruisibles, JaCoCo/CI et les facts documentaires calculables.
 
 ## Contrats publics courants
 
-- CLI : stable avec codes de sortie `0/1/2`, diagnostics provider additifs et protocole IDE `minos-ide` v1 ;
-- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 + `AdvancedCodeIntelligenceApi` v1 additives ;
-- MCP : STDIO read-only, 19 tools au total, dont les 16 historiques et les 3 tools M19 ;
-- NEXUS : export JSON local versionné ;
-- IntelliJ : plugin optionnel Java 21 consommant MINOS via protocole local JSON versionné ;
+- CLI : stable, codes de sortie `0/1/2`, diagnostics provider et protocole IDE `minos-ide` v1 ;
+- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 + `AdvancedCodeIntelligenceApi` v1 + `SemanticCodeIntelligenceApi` v1 additives ;
+- MCP : STDIO read-only, **23 tools** ;
+- NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
+- IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
 - installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
 - Docker MCP : mode durci optionnel.
 
-Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generated/product-facts.md).
+Les valeurs calculables exactes restent dans [`generated/product-facts.md`](generated/product-facts.md).
 
 ## Frontières architecturales courantes
 
 - MINOS reste propriétaire des faits de Code Intelligence ;
-- NEXUS reste propriétaire du ranking, de la sélection et du budget de contexte ;
-- le plugin IntelliJ reste un client externe et ne duplique pas le métier ;
-- les capacités fournisseur et graphes absents ne sont jamais inventés ;
-- un nouveau langage/build system/provider se branche via SPI/catalogue d'extensions ;
-- discovery et support runtime sont des faits distincts ;
+- les snapshots persistés restent la source de vérité ;
+- les scores sémantiques restent heuristiques ;
+- NEXUS reste propriétaire du ranking global, de la sélection et du budget de contexte multi-source ;
+- le plugin IntelliJ reste un client externe ;
+- les capacités provider et graphes absents ne sont jamais inventés ;
+- discovery et support runtime restent des faits distincts ;
 - l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
-- Impact v2 conserve M8 comme baseline et distingue explicitement les enrichissements du program graph ;
-- les chemins sécurité sont des chemins statiques observés et bornés, jamais une preuve exhaustive de sûreté ou vulnérabilité ;
+- Impact v2 conserve M8 comme baseline ;
+- les chemins sécurité sont des chemins statiques observés et bornés ;
 - une relation cross-repository exige une identité exacte et unique ;
-- CLI, API, MCP, NEXUS et IntelliJ consomment le même cœur applicatif ou ses contrats versionnés ;
-- les snapshots persistés sont la source de vérité des vues/indexes mémoire ;
-- toute évolution de backend est gouvernée par des mesures reproductibles M16.
+- toute évolution de backend reste gouvernée par des mesures reproductibles M16.
 
 ## Suite
 
-M20 — **Recherche sémantique hybride** — est le prochain jalon planifié.
+**Aucun prochain jalon n'est encore déclaré.**
+
+La prochaine phase doit être cadrée explicitement avec : question produit, périmètre, critères de sortie mesurables, ADR nécessaires et qualification exact-head.
 
 ## Documentation
 
@@ -297,6 +188,7 @@ M20 — **Recherche sémantique hybride** — est le prochain jalon planifié.
 - exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
 - exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
 - exécution M19 : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md) ;
+- exécution M20 : [`roadmap/M20_EXECUTION.md`](roadmap/M20_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
