@@ -47,8 +47,8 @@ S1   governance + docs + runner local                 VALIDÉ — b4403921bfe0e2
 S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026 — aucun run CI
 S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
 S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
-S5   supply-chain + release hardening                 EN COURS — candidat local à qualifier
-S6   IntelliJ parity M19/M20                          PLANIFIÉ
+S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
+S6   IntelliJ parity M19/M20                          EN COURS — candidat local à qualifier
 S7   advanced provider productionization              PLANIFIÉ
 S8   semantic scale qualification                     PLANIFIÉ
 S9   final production integrity gate                  PLANIFIÉ
@@ -94,7 +94,45 @@ Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
 
 S4 supprime les allowlists/denylists `maven-compiler-plugin` d'ownership devenues obsolètes après la relocation physique M15. Chaque module compile désormais son arbre `src/main/java` naturel et `scripts/architecture/check-module-boundaries.py` empêche la réintroduction de filtres compiler, sources dupliquées ou packages incohérents.
 
-S5 ajoute un SBOM CycloneDX 1.6 agrégé, des notices tierces dérivées sans deviner les licences, un manifest SHA-256 de distribution, des sidecars de release et un helper Authenticode optionnel. Les workflows GitHub Actions restent hors scope jusqu'en août.
+### Qualification S5
+
+```text
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=263)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+CycloneDX 1.6: 31 components
+M21 THIRD-PARTY NOTICES SUCCESS (components=19, unknownLicenses=0)
+M21 RELEASE MANIFEST SUCCESS (files=370)
+M21 SUPPLY-CHAIN EVIDENCE SUCCESS (components=19, unknownLicenses=0, files=370)
+MINOS Windows distribution SUCCESS
+MINOS Windows setup SUCCESS
+MINOS Windows release VALIDATION SUCCESS
+Authenticode setup status: NotSigned (required=False)
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+Validated HEAD: bcc44ea5e7a5c354c1df25bb7d295ee57347629c
+```
+
+S5 fournit un SBOM CycloneDX 1.6 agrégé depuis la racine Maven, des notices tierces strictes sans licence inventée, un manifest SHA-256 de distribution, des sidecars de release et un helper Authenticode optionnel. Les workflows GitHub Actions restent hors scope jusqu'en août.
+
+### Candidat S6
+
+S6 conserve le plugin comme client externe Java 21 du moteur Java 24. Le protocole `minos-ide` v1 est étendu de façon additive et capability-negotiated avec huit surfaces :
+
+```text
+program-graph
+impact-v2
+security-paths
+semantic-index-status
+semantic-index-sync
+semantic-search
+hybrid-search
+hybrid-context
+```
+
+L'ancien Impact M8 reste disponible comme baseline. Le plugin ne calcule aucun Program Graph, chemin de sécurité, embedding ou ranking : les nouvelles commandes `minos ide … --format json` appellent les services M19/M20 de `MinosApplication`. `scripts/intellij/check-m21-parity.py` verrouille cette frontière, et le Plugin Verifier cible la branche IntelliJ 2026.1 / build 261 sur ses releases stables résolues.
 
 Toute modification après un SHA qualifié exige une nouvelle qualification exact-head avant promotion.
 
@@ -154,7 +192,7 @@ PR #70 mergée via `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
 
 ## M18 — MINOS for IntelliJ
 
-M18 livre un plugin IntelliJ autonome Java 21 consommant MINOS Java 24 par protocole local JSON `minos-ide` v1, sans réimplémenter l'intelligence métier.
+M18 livre un plugin IntelliJ autonome Java 21 consommant MINOS Java 24 par protocole local JSON `minos-ide` v1, sans réimplémenter l'intelligence métier. M21-S6 étend désormais ce même protocole de façon additive vers les surfaces M19/M20.
 
 ```text
 Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
