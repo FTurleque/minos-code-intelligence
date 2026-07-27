@@ -16,7 +16,8 @@ MINOS suit plusieurs règles fortes :
 - l’activité Git ne devient jamais automatiquement une mesure d’importance architecturale ;
 - un score sémantique reste un signal de ranking heuristique, jamais une relation de code ;
 - l’index vectoriel reste reconstruisible depuis les snapshots structurés ;
-- MINOS ne sélectionne pas le contexte final de NEXUS.
+- MINOS ne sélectionne pas le contexte final de NEXUS ;
+- une release distribuée doit conserver une provenance et un inventaire supply-chain vérifiables.
 
 ## Carte des sous-systèmes
 
@@ -76,7 +77,8 @@ flowchart TB
 4. [Surfaces publiques](public-surfaces.md)
 5. [Intelligence sémantique et hybride M20](semantic-hybrid-intelligence.md)
 6. [Multi-dépôts et Git](multi-repo-git.md)
-7. [Tests et contribution](testing.md)
+7. [Supply-chain et provenance de release](supply-chain.md)
+8. [Tests et contribution](testing.md)
 
 ## Build développeur
 
@@ -85,6 +87,8 @@ flowchart TB
 ```
 
 La toolchain est contractualisée par Maven Enforcer : Java 24 et Maven 3.9.x.
+
+Le build du module final produit également le SBOM de distribution dans `target/sbom/minos-cyclonedx.json`.
 
 ## Règle de modification
 
