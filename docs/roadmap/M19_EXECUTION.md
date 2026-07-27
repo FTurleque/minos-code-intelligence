@@ -1,8 +1,10 @@
 # M19 — Advanced Code Intelligence — exécution
 
-Statut de branche : **9/9 implémentés ; qualification exact-head finale en attente**.
+Statut : **TERMINÉ, QUALIFIÉ ET LIVRÉ — 9/9**.
 
-Issue : #69.
+Issue : #69 — **CLOSED / completed**.
+
+PR : #70 — **MERGED**.
 
 ## Question produit
 
@@ -51,39 +53,39 @@ Le graphe avancé est une **vue reconstruisible** du snapshot actif et de faits 
 
 ## Sous-incréments
 
-### M19-S1 — Program graph model ✅ IMPLÉMENTÉ
+### M19-S1 — Program graph model ✅ LIVRÉ
 
 Modèle provider-independent de nœuds/arêtes, capacités, nature, confiance, provenance, preuves et limitations. Composition déterministe et rejet des collisions incohérentes.
 
-### M19-S2 — Call graph v2 ✅ IMPLÉMENTÉ
+### M19-S2 — Call graph v2 ✅ LIVRÉ
 
 Projection des relations `CALLS` résolues en arêtes `CALL`, sans perte de provenance/nature. Évaluation précision/rappel sur vérités terrain contrôlées.
 
-### M19-S3 — Control Flow Graph ✅ IMPLÉMENTÉ
+### M19-S3 — Control Flow Graph ✅ LIVRÉ
 
 Support de `BASIC_BLOCK` et `CONTROL_FLOW` via `ProgramGraphProvider`. Les providers sans CFG exposent explicitement `CONTROL_FLOW_UNAVAILABLE` ; aucune approximation silencieuse. La fixture contrôlée couvre branche, boucle et chemin d'exception.
 
-### M19-S4 — Data Flow ✅ IMPLÉMENTÉ
+### M19-S4 — Data Flow ✅ LIVRÉ
 
 Support `DEF_USE`, `DATA_FLOW`, `ARGUMENT_FLOW`, `RETURN_FLOW`. Une vérité terrain `DEF_USE` est mesurée séparément. Les `READS`/`WRITES` historiques ne produisent qu'une dérivation locale potentielle avec `EXECUTION_ORDER_NOT_PROVEN`.
 
-### M19-S5 — Interprocedural Flow ✅ IMPLÉMENTÉ
+### M19-S5 — Interprocedural Flow ✅ LIVRÉ
 
 Propagation BFS déterministe et bornée sur appels/argument/return/data-flow ; cycles, profondeur atteinte, troncature et absence de capacités sont exposés comme limitations.
 
-### M19-S6 — CPG composition ✅ IMPLÉMENTÉ
+### M19-S6 — CPG composition ✅ LIVRÉ
 
 Union dédupliquée des vues symbole/call/control/data-flow avec identité stable des nœuds/arêtes. Aucun fait contradictoire n'est écrasé silencieusement ; une collision de stable-id incohérente est rejetée.
 
-### M19-S7 — Impact v2 ✅ IMPLÉMENTÉ
+### M19-S7 — Impact v2 ✅ LIVRÉ
 
 Impact M8 reste baseline. Impact v2 ajoute les chemins du graphe de programme quand ils existent, avec comptage séparé `baseline` / `advancedAdded` et fixture contrôlée où M19 ajoute un impact absent du graphe M8.
 
-### M19-S8 — Security primitives ✅ IMPLÉMENTÉ
+### M19-S8 — Security primitives ✅ LIVRÉ
 
 Nœuds `SOURCE`, `SINK`, `SANITIZER` et recherche de chemins taint bornés. Résultat : source, sink, chemin, sanitizers observés, nature, confiance, limitations. Aucune absence de chemin n'est interprétée comme absence de vulnérabilité.
 
-### M19-S9 — API / MCP ✅ IMPLÉMENTÉ
+### M19-S9 — API / MCP ✅ LIVRÉ
 
 Surface Java additive `AdvancedCodeIntelligenceApi` v1 sans modifier `MinosApi` v1. Le MCP conserve les 16 tools historiques et ajoute `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, soit 19 tools read-only, tous bornés par schéma.
 
@@ -101,25 +103,27 @@ Workflow :
 .github/workflows/m19-advanced-code-intelligence.yml
 ```
 
-Le runner doit prouver sur un SHA exact :
-
-1. worktree propre et HEAD stable ;
-2. `clean verify` Java 24 vert ;
-3. JaCoCo + product facts verts ;
-4. modèles/capacités provider-independent ;
-5. call graph précision/rappel mesurés ;
-6. fixtures CFG branches/loops/exceptions ;
-7. vérités terrain def-use/data-flow ;
-8. propagation interprocédurale bornée et cycles explicites ;
-9. CPG sans duplication incohérente ;
-10. Impact v2 améliore la fixture de référence sans modifier M8 ;
-11. security paths explicables et bornés ;
-12. API/MCP schémas versionnés et non-régression des surfaces historiques.
-
-Verdict unique :
+Qualification Windows exact-head autoritative :
 
 ```text
+Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
 M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
 ```
 
-La branche ne sera pas marquée qualifiée, Ready ou mergée avant obtention réelle de ce verdict sur son HEAD exact.
+Preuves principales :
+
+- product facts : PASS ;
+- reactor Maven Java 24 : **13/13 modules SUCCESS** ;
+- tests `minos-application` : **112/112 PASS** ;
+- tests `minos-api` : **10/10 PASS** ;
+- tests `minos-mcp` : **5/5 PASS** ;
+- tests agrégateur `minos-code-intelligence` : **50/50 PASS** ;
+- smoke test shaded JAR : **1/1 PASS** ;
+- JaCoCo : tous les gates PASS ;
+- HEAD stable et worktree propre en fin de qualification.
+
+Le HEAD qualifié n'a reçu aucun commit supplémentaire avant merge.
+
+Merge final : `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
+
+M19 est fermé et livré ; M20 — Recherche sémantique hybride — devient le prochain jalon séquentiel.
