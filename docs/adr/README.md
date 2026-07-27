@@ -43,6 +43,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0026](0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | M17 |
 | [0027](0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
 | [0028](0028-capability-honest-program-graph-and-bounded-advanced-analysis.md) | Composer un program graph capability-honest et borner toutes les analyses avancées | Accepted | M19 |
+| [0029](0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | M20 |
 
 ## Règle de rédaction
 
