@@ -44,7 +44,9 @@ public final class MinosProjectService {
 
     public JsonObject resolveSymbol(Editor editor, PsiFile psiFile) throws MinosProtocolException {
         Context context = context();
-        Candidate candidate = ReadAction.compute(() -> candidate(editor, psiFile, context.root()));
+        Candidate candidate = ReadAction
+                .nonBlocking(() -> candidate(editor, psiFile, context.root()))
+                .executeSynchronously();
         if (candidate.name() == null || candidate.name().isBlank()) {
             throw new MinosProtocolException("Place the caret on a named code element before running a MINOS action");
         }
