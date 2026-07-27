@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M17 terminés, validés et livrés ; M18 à M20 planifiés.**
+Statut : **C0 à M18 terminés, validés et livrés ; M19 à M20 planifiés.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -175,7 +175,7 @@ M16  Prouver la scalabilité                    ✅
   ↓
 M17  Généraliser discovery + providers         ✅
   ↓
-M18  Intégrer MINOS à IntelliJ                 planifié
+M18  Intégrer MINOS à IntelliJ                 ✅
   ↓
 M19  Intelligence de programme avancée         planifié
   ↓
@@ -279,15 +279,44 @@ Porte finale : `scripts/m17/run-final.ps1` rejoue la qualification M14 complète
 
 ## M18 — MINOS for IntelliJ
 
-**PLANIFIÉ.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
 
-Objectif : exploiter les capacités MINOS directement dans IntelliJ sans dépendre d'un agent IA. Le plugin reste un client du moteur et ne duplique pas l'intelligence.
+Objectif fermé : exploiter les capacités MINOS directement dans IntelliJ sans dépendre d'un agent IA, via un plugin autonome Java 21 qui reste client du moteur MINOS Java 24 et ne duplique pas l'intelligence métier.
+
+```text
+M18-S1   Contrat IDE / handshake v1               ✅
+M18-S2   Plugin bootstrap                          ✅
+M18-S3   Project status                            ✅
+M18-S4   Navigation symboles                       ✅
+M18-S5   Architecture graph                        ✅
+M18-S6   Impact + related tests                    ✅
+M18-S7   Index lifecycle                           ✅
+M18-S8   Git intelligence factuelle                ✅
+M18-S9   Packaging / Plugin Verifier               ✅
+```
+
+Acquis : protocole `minos-ide` v1 stateless au handshake, Tool Window et settings projet, navigation définitions/usages/dependents/implementations, conversion UTF-8/16/32 vers offsets IntelliJ, graphe d'architecture borné/filtrable, impact/tests explicables, index/reindex/doctor hors EDT via lifecycle MINOS, activité Git factuelle, ZIP plugin et workflows de validation/release.
+
+Qualification finale Windows exact-head :
+
+```text
+Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+Plugin Verifier: Compatible with IntelliJ IDEA 2026.1 (IU-261.22158.277)
+```
+
+Merge final : `faa51f63c5967d874a7a6685b6b513b83bb736b4`.
+
+- roadmap opérationnelle : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md)
+- décision : [ADR-0027](adr/0027-intellij-external-client-and-versioned-cli-protocol.md)
+- issue : #67
+- PR finale : #68
 
 ---
 
 ## M19 — Advanced Code Intelligence
 
-**PLANIFIÉ.**
+**PLANIFIÉ — PROCHAIN JALON.**
 
 Objectif : ajouter progressivement les analyses de programme avancées lorsque leur coût, leur provenance et leurs limites peuvent être explicités.
 
@@ -303,4 +332,4 @@ Objectif : combiner recherche sémantique et faits structurés MINOS sans rempla
 
 ## Règle de progression
 
-M18 est le prochain jalon séquentiel. M19/M20 peuvent être explorés, mais leur promotion produit reste soumise aux garanties de scalabilité, de qualité et d'extensibilité acquises jusqu'à M17.
+M19 est le prochain jalon séquentiel. M20 peut être exploré, mais sa promotion produit reste soumise aux garanties de scalabilité, de qualité, d'extensibilité et d'intégration IDE acquises jusqu'à M18.
