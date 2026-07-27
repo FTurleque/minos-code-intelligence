@@ -16,16 +16,6 @@ function Resolve-Python {
     throw 'M21-S6 requires Python in PATH.'
 }
 
-function Invoke-ScriptChecked {
-    param(
-        [Parameter(Mandatory = $true)][string] $Script,
-        [Parameter(Mandatory = $true)][string] $Failure,
-        [object[]] $Arguments = @()
-    )
-    & $Script @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$Failure (exit=$LASTEXITCODE)" }
-}
-
 Push-Location $RepoRoot
 try {
     Write-Host '=== MINOS M21-S6 - IntelliJ M19/M20 parity qualification ===' -ForegroundColor Cyan
@@ -42,10 +32,8 @@ try {
     Write-Host "HEAD: $Head"
 
     Write-Host '[1/6] Replaying M21 local/core qualification...'
-    Invoke-ScriptChecked `
-        -Script (Join-Path $RepoRoot 'scripts\m21\run-local.ps1') `
-        -Arguments @('-ExpectedHead', $Head) `
-        -Failure 'M21 local qualification failed'
+    & (Join-Path $RepoRoot 'scripts\m21\run-local.ps1') -ExpectedHead $Head
+    if ($LASTEXITCODE -ne 0) { throw "M21 local qualification failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[2/6] Checking static IntelliJ M19/M20 parity contract...'
     $Python = Resolve-Python
@@ -53,10 +41,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "M21 IntelliJ parity consistency failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[3/6] Replaying authoritative M18 IntelliJ build, tests and Plugin Verifier on the S6 head...'
-    Invoke-ScriptChecked `
-        -Script (Join-Path $RepoRoot 'scripts\m18\run-final.ps1') `
-        -Arguments @('-ExpectedHead', $Head) `
-        -Failure 'M18 IntelliJ qualification replay failed'
+    & (Join-Path $RepoRoot 'scripts\m18\run-final.ps1') -ExpectedHead $Head
+    if ($LASTEXITCODE -ne 0) { throw "M18 IntelliJ qualification replay failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[4/6] Rechecking parity contract after plugin qualification...'
     & $Python 'scripts/intellij/check-m21-parity.py'
