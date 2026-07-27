@@ -27,7 +27,71 @@ M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
 M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
 M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
 M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
+M19 — Advanced Code Intelligence    TERMINÉ, VALIDÉ ET LIVRÉ
 ```
+
+## M19 — Advanced Code Intelligence
+
+M19 étend MINOS vers un graphe de programme avancé provider-independent sans transformer des approximations statiques en vérités runtime.
+
+Acquis M19 :
+
+```text
+S1   ProgramGraph provider-independent + capabilities                 ✅
+S2   Call graph v2 avec provenance et mesure précision/rappel         ✅
+S3   CFG explicite : branches, boucles, exceptions                    ✅
+S4   Data Flow / DEF_USE + limitations READS/WRITES                   ✅
+S5   propagation interprocédurale bornée + cycles visibles            ✅
+S6   composition CPG déterministe, collisions incohérentes rejetées   ✅
+S7   Impact v2 avec M8 conservé comme baseline                        ✅
+S8   SOURCE / SINK / SANITIZER + chemins sécurité bornés              ✅
+S9   AdvancedCodeIntelligenceApi v1 + 3 tools MCP                     ✅
+```
+
+### Frontière d'analyse avancée
+
+```text
+snapshot actif MINOS
+      ↓
+ProgramGraphProvider(s)
+      ↓
+ProgramGraphComposer
+      ↓
+ProgramGraph capability-honest
+      ├── call/control/data flow
+      ├── interprocedural flow
+      ├── CPG
+      ├── Impact v2
+      └── security paths
+```
+
+Les capacités absentes ne sont jamais inventées. Les relations historiques `READS/WRITES` restent des dérivations potentielles avec `EXECUTION_ORDER_NOT_PROVEN`. L'absence de chemin sécurité n'est jamais interprétée comme preuve d'absence de vulnérabilité.
+
+### Surfaces M19
+
+- API Java : `AdvancedCodeIntelligenceApi` v1 additive, `MinosApi` v1 inchangée ;
+- MCP : 19 tools read-only au total, dont `minos_program_graph`, `minos_impact_v2`, `minos_security_paths` ;
+- Impact v2 : baseline M8 conservée, enrichissements M19 comptés séparément ;
+- stockage : aucun nouveau stockage autoritatif, le graphe avancé reste une vue reconstruisible des snapshots et faits provider.
+
+### Qualification
+
+Porte reproductible :
+
+```text
+scripts/m19/run-final.ps1
+```
+
+Qualification Windows exact-head :
+
+```text
+Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
+M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
+```
+
+Preuves : reactor Maven Java 24 **13/13 SUCCESS**, tests application **112/112**, API **10/10**, MCP **5/5**, agrégateur **50/50**, smoke shaded JAR **1/1**, JaCoCo tous gates PASS, HEAD stable et worktree propre.
+
+PR #70 mergée via le commit `3630ebd0f229e1bc028e92444bfa34c3e7609596`. Issue #69 fermée comme `completed`.
 
 ## M18 — MINOS for IntelliJ
 
@@ -131,7 +195,7 @@ Le modèle de capacités interdit toute absence implicite : chaque capacité re�
 
 - CLI : `minos providers` expose niveaux, score, limitations et état runtime ;
 - API Java : `ProviderPlatformApi` v1 est additive et laisse `MinosApi` v1 inchangée ;
-- MCP : `minos_project_structure` et `minos_index_status` exposent `providerProfiles` tout en conservant les 16 tools historiques ;
+- MCP : `minos_project_structure` et `minos_index_status` exposent `providerProfiles` ; les 16 tools historiques restent présents dans le catalogue M19 de 19 tools ;
 - doctor/tools : les runtimes optionnels sont visibles/installables sans rendre la baseline historique rouge lorsqu'ils ne sont pas installés.
 
 ### Qualification
@@ -195,8 +259,8 @@ Les snapshots persistés restent la source de vérité ; les indexes mémoire so
 ## Contrats publics courants
 
 - CLI : stable avec codes de sortie `0/1/2`, diagnostics provider additifs et protocole IDE `minos-ide` v1 ;
-- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 additive ;
-- MCP : STDIO read-only, 16 tools historiques, profils provider intégrés aux diagnostics ;
+- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 + `AdvancedCodeIntelligenceApi` v1 additives ;
+- MCP : STDIO read-only, 19 tools au total, dont les 16 historiques et les 3 tools M19 ;
 - NEXUS : export JSON local versionné ;
 - IntelliJ : plugin optionnel Java 21 consommant MINOS via protocole local JSON versionné ;
 - installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
@@ -209,10 +273,12 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 - MINOS reste propriétaire des faits de Code Intelligence ;
 - NEXUS reste propriétaire du ranking, de la sélection et du budget de contexte ;
 - le plugin IntelliJ reste un client externe et ne duplique pas le métier ;
-- les capacités fournisseur absentes ne sont jamais inventées ;
+- les capacités fournisseur et graphes absents ne sont jamais inventés ;
 - un nouveau langage/build system/provider se branche via SPI/catalogue d'extensions ;
 - discovery et support runtime sont des faits distincts ;
 - l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
+- Impact v2 conserve M8 comme baseline et distingue explicitement les enrichissements du program graph ;
+- les chemins sécurité sont des chemins statiques observés et bornés, jamais une preuve exhaustive de sûreté ou vulnérabilité ;
 - une relation cross-repository exige une identité exacte et unique ;
 - CLI, API, MCP, NEXUS et IntelliJ consomment le même cœur applicatif ou ses contrats versionnés ;
 - les snapshots persistés sont la source de vérité des vues/indexes mémoire ;
@@ -220,7 +286,7 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 
 ## Suite
 
-M19 — **Advanced Code Intelligence** — est le prochain jalon planifié.
+M20 — **Recherche sémantique hybride** — est le prochain jalon planifié.
 
 ## Documentation
 
@@ -230,6 +296,7 @@ M19 — **Advanced Code Intelligence** — est le prochain jalon planifié.
 - exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
 - exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
 - exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
+- exécution M19 : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
