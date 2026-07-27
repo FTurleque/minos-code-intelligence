@@ -48,6 +48,7 @@ def main() -> int:
         supply_chain = read("docs/developer/supply-chain.md")
         root_pom = read("pom.xml")
         app_pom = read("minos-app/pom.xml")
+        release_build = read("scripts/release/build-windows-distribution.ps1")
 
         require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés.")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
@@ -81,12 +82,23 @@ def main() -> int:
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S5 EN COURS")
 
         require_text("docs/developer/supply-chain.md", supply_chain, "CycloneDX JSON")
+        require_text("docs/developer/supply-chain.md", supply_chain, "racine d'exécution Maven")
         require_text("docs/developer/supply-chain.md", supply_chain, "RELEASE-MANIFEST.json")
         require_text("docs/developer/supply-chain.md", supply_chain, "MINOS_REQUIRE_SIGNED_RELEASE")
+
         require_text("pom.xml", root_pom, "<cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>")
-        require_text("minos-app/pom.xml", app_pom, "<goal>makeAggregateBom</goal>")
-        require_text("minos-app/pom.xml", app_pom, "<schemaVersion>1.6</schemaVersion>")
-        require_text("minos-app/pom.xml", app_pom, "<includeTestScope>false</includeTestScope>")
+        forbid_text("minos-app/pom.xml", app_pom, "<artifactId>cyclonedx-maven-plugin</artifactId>")
+
+        require_text(
+            "scripts/release/build-windows-distribution.ps1",
+            release_build,
+            '"org.cyclonedx:cyclonedx-maven-plugin:${CycloneDxVersion}:makeAggregateBom"',
+        )
+        require_text("scripts/release/build-windows-distribution.ps1", release_build, "'-DschemaVersion=1.6'")
+        require_text("scripts/release/build-windows-distribution.ps1", release_build, "'-DoutputFormat=json'")
+        require_text("scripts/release/build-windows-distribution.ps1", release_build, "'-DincludeTestScope=false'")
+        require_text("scripts/release/build-windows-distribution.ps1", release_build, "target\\sbom")
+        require_text("scripts/release/build-windows-distribution.ps1", release_build, "minos-cyclonedx.json")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
