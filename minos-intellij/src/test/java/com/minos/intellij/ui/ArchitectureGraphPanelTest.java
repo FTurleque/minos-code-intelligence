@@ -15,7 +15,7 @@ class ArchitectureGraphPanelTest {
         for (int index = 0; index < 25; index++) {
             JsonObject module = new JsonObject();
             module.addProperty("id", "module-" + index);
-            module.addProperty("name", index == 7 ? "billing-domain" : "module " + index);
+            module.addProperty("name", index == 0 ? "billing-domain" : "module " + index);
             module.addProperty("relativePath", "modules/m" + index);
             modules.add(module);
         }
