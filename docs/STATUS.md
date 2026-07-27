@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **26 juillet 2026**
+Dernière mise à jour documentaire : **27 juillet 2026**
 
 Ce fichier résume l'état produit livré. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
 
@@ -26,7 +26,56 @@ M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
 M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
 M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
 M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
+M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
 ```
+
+## M18 — MINOS for IntelliJ
+
+M18 livre une intégration IntelliJ native et optionnelle qui consomme MINOS comme client externe sans réimplémenter le moteur ni introduire de dépendance à un LLM.
+
+Acquis M18 :
+
+```text
+S1   protocole IDE minos-ide v1 + handshake stateless             ✅
+S2   plugin IntelliJ autonome Java 21                              ✅
+S3   project/provider/snapshot/index status                        ✅
+S4   navigation symboles + positions UTF-8/16/32                  ✅
+S5   architecture graph borné et filtrable                         ✅
+S6   impact + related tests explicables                             ✅
+S7   index/reindex/doctor via lifecycle MINOS                       ✅
+S8   Git activity factuelle, sans inférence d'importance            ✅
+S9   ZIP plugin + validation/release + Plugin Verifier              ✅
+```
+
+### Frontière IDE
+
+```text
+IntelliJ IDEA / Java 21
+        ↓ processus local JSON
+minos-ide v1
+        ↓
+MINOS CLI / MinosApplication / Java 24
+```
+
+Le plugin ne dépend d'aucun artefact Maven `com.minos:*`, ne charge aucune classe interne du moteur et ne publie jamais directement de snapshot. Le lifecycle MINOS existant reste propriétaire de l'indexation et de la promotion atomique.
+
+### Qualification
+
+La porte reproductible M18 est :
+
+```text
+scripts/m18/run-final.ps1
+```
+
+Qualification Windows exact-head :
+
+```text
+Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+Plugin Verifier: Compatible with IntelliJ IDEA 2026.1 (IU-261.22158.277)
+```
+
+PR #68 mergée via le commit `faa51f63c5967d874a7a6685b6b513b83bb736b4`. Issue #67 fermée comme `completed`.
 
 ## M17 — Provider & Discovery Platform
 
@@ -145,10 +194,11 @@ Les snapshots persistés restent la source de vérité ; les indexes mémoire so
 
 ## Contrats publics courants
 
-- CLI : stable avec codes de sortie `0/1/2`, plus diagnostics provider additifs ;
+- CLI : stable avec codes de sortie `0/1/2`, diagnostics provider additifs et protocole IDE `minos-ide` v1 ;
 - API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 additive ;
 - MCP : STDIO read-only, 16 tools historiques, profils provider intégrés aux diagnostics ;
 - NEXUS : export JSON local versionné ;
+- IntelliJ : plugin optionnel Java 21 consommant MINOS via protocole local JSON versionné ;
 - installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
 - Docker MCP : mode durci optionnel.
 
@@ -158,18 +208,19 @@ Les valeurs calculables exactes sont dans [`generated/product-facts.md`](generat
 
 - MINOS reste propriétaire des faits de Code Intelligence ;
 - NEXUS reste propriétaire du ranking, de la sélection et du budget de contexte ;
+- le plugin IntelliJ reste un client externe et ne duplique pas le métier ;
 - les capacités fournisseur absentes ne sont jamais inventées ;
 - un nouveau langage/build system/provider se branche via SPI/catalogue d'extensions ;
 - discovery et support runtime sont des faits distincts ;
 - l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
 - une relation cross-repository exige une identité exacte et unique ;
-- CLI, API, MCP et NEXUS consomment le même cœur applicatif ;
+- CLI, API, MCP, NEXUS et IntelliJ consomment le même cœur applicatif ou ses contrats versionnés ;
 - les snapshots persistés sont la source de vérité des vues/indexes mémoire ;
 - toute évolution de backend est gouvernée par des mesures reproductibles M16.
 
 ## Suite
 
-M18 — **MINOS for IntelliJ** — est le prochain jalon planifié.
+M19 — **Advanced Code Intelligence** — est le prochain jalon planifié.
 
 ## Documentation
 
@@ -178,6 +229,7 @@ M18 — **MINOS for IntelliJ** — est le prochain jalon planifié.
 - exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
 - exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
 - exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
+- exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
