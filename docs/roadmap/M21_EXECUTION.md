@@ -239,7 +239,7 @@ snapshot structuré actif
 Invariants renforcés :
 
 - `snapshotId` du sidecar doit correspondre exactement au snapshot actif ;
-- un sidecar stale contribue zéro capability ;
+- un sidecar stale contribue zéro capability et expose `ADVANCED_PROGRAM_SIDECAR_STALE_SNAPSHOT` ;
 - chaque capability déclarée doit être prouvée par les kinds correspondants ;
 - une arête avancée sans capability correspondante est rejetée ;
 - `CPG` reste composé par MINOS et n'est pas déclaré par le sidecar ;
