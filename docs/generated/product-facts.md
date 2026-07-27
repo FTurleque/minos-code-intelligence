@@ -10,7 +10,7 @@
 
 ## Catalogue MCP
 
-Nombre de tools : **16**
+Nombre de tools : **19**
 
 - `minos_project_structure`
 - `minos_index_status`
@@ -28,6 +28,9 @@ Nombre de tools : **16**
 - `minos_architecture`
 - `minos_architecture_graph`
 - `minos_impact`
+- `minos_program_graph`
+- `minos_impact_v2`
+- `minos_security_paths`
 
 ## Commandes CLI
 
