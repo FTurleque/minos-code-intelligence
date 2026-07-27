@@ -1,6 +1,6 @@
 # Utiliser MINOS via MCP
 
-MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **19 tools** restent read-only.
+MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **23 tools** restent read-only.
 
 ## Mode recommandé : runtime natif
 
@@ -28,9 +28,37 @@ La CLI et le MCP lisent ainsi le même registre et le même snapshot actif.
 
 `minos.cmd mcp` reste valide pour un lancement manuel, mais les clients MCP sont configurés avec `app\minos.exe` afin d'éviter les différences de lancement des wrappers `.cmd` sous Windows.
 
+## Activer la couche sémantique M20
+
+La couche sémantique est **désactivée par défaut**. Le fonctionnement historique de MINOS n'a besoin d'aucun modèle d'embeddings.
+
+Le runtime M20 fournit un provider local de référence, sans réseau, activable explicitement :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER = 'local-hash'
+minos.cmd index my-project
+```
+
+Une fois le provider activé, `minos index` synchronise l'index sémantique après le snapshot structuré. Même si le plan structuré est `NONE`, cette commande peut construire ou réaligner un index sémantique manquant/stale.
+
+Pour un client MCP, ajouter la même variable à son environnement :
+
+```json
+{
+  "env": {
+    "MINOS_HOME": "C:\\Users\\<user>\\AppData\\Local\\MINOS\\data",
+    "MINOS_SEMANTIC_PROVIDER": "local-hash"
+  }
+}
+```
+
+`local-hash` est un provider déterministe de référence qui prouve le pipeline local et les contrats. **Il n'est pas présenté comme un modèle de langage.** Un autre provider local peut implémenter le SPI `EmbeddingProvider` sans changer les services de recherche.
+
+Le MCP reste read-only : il peut consulter/rechercher l'index, mais ne déclenche jamais un ré-embedding. La création/synchronisation passe par l'indexation locale ou par l'API Java explicite.
+
 ## Configuration automatique depuis `setup.exe`
 
-Le setup Windows propose désormais des cases à cocher indépendantes :
+Le setup Windows propose des cases à cocher indépendantes :
 
 ```text
 Connecter le MCP natif MINOS à :
@@ -257,6 +285,14 @@ $env:MINOS_HOME = 'N:\minos-data'
 java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar mcp
 ```
 
+Pour activer M20 localement :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER = 'local-hash'
+minos.cmd index my-project
+java -jar .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar mcp
+```
+
 Le point d’entrée historique reste disponible :
 
 ```powershell
@@ -270,7 +306,7 @@ java -cp .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar `
 |---|---|
 | `minos_project_structure` | structure, langages, builds, état et snapshot |
 | `minos_index_status` | état d’index et métadonnées |
-| `minos_search_code` | contexte de code compact |
+| `minos_search_code` | contexte de code compact structuré |
 | `minos_find_symbols` | recherche de symboles |
 | `minos_find_usages` | usages résolus |
 | `minos_find_implementations` | implémentations |
@@ -287,8 +323,12 @@ java -cp .\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar `
 | `minos_program_graph` | graphe de programme M19 borné, capabilities et limitations explicites |
 | `minos_impact_v2` | impact M8 + ajouts prouvés par appels/flux, comptés séparément |
 | `minos_security_paths` | chemins source→sink observés, sanitizers et limitations explicites |
+| `minos_semantic_index_status` | état de l’index sémantique optionnel, modèle, snapshot, taille et limitations |
+| `minos_semantic_search` | recherche vectorielle par intention, résultats `HEURISTIC` |
+| `minos_hybrid_search` | ranking lexical + graphe + sémantique avec signaux séparés |
+| `minos_hybrid_context` | contexte hybride borné par documents et tokens |
 
-Le MCP reste **read-only** : `project add`, `tools install` et `index` sont des opérations administratives CLI explicites.
+Le MCP reste **read-only** : `project add`, `tools install`, `index` et la synchronisation explicite de l'index sémantique sont des opérations administratives hors MCP.
 
 ### Analyses avancées M19
 
@@ -310,6 +350,35 @@ Les limites de requête sont explicites : jusqu'à 100 000 nœuds et 500 000 ar�
 `minos_impact_v2` conserve M8 comme baseline et expose séparément `baselineImpactCount` et `advancedAddedCount`. Un chemin avancé n'efface donc jamais la distinction avec l'analyse historique.
 
 `minos_security_paths` est une recherche bornée de chemins observés. Elle expose source, sink, chemin, sanitizers, confiance et nature ; **l'absence de chemin n'est pas une preuve de sûreté et un chemin observé n'est pas présenté comme une preuve runtime exhaustive de vulnérabilité**.
+
+### Recherche sémantique et hybride M20
+
+Les tools M20 distinguent explicitement les trois modes :
+
+```text
+structured  = facts/relations/graphes MINOS historiques
+semantic    = similarité vectorielle HEURISTIC
+hybrid      = combinaison de signaux de ranking, sans promotion en fait structurel
+```
+
+`minos_semantic_index_status` peut répondre `DISABLED`, `MISSING`, `STALE` ou `READY`. Une recherche sémantique exige `READY` et ne construit jamais l'index à la volée.
+
+`minos_semantic_search` expose notamment `score`, `nature=HEURISTIC`, `providerId`, `modelId` et les limitations. La similarité vectorielle sert au rappel/ranking ; elle ne crée aucune relation `CALLS`, `DEPENDS_ON`, `DATA_FLOW` ou autre.
+
+`minos_hybrid_search` expose pour chaque résultat :
+
+```text
+rankingScore
+lexicalScore
+ graphScore
+semanticScore
+rankingMode
+signals[] { type, score, nature }
+```
+
+Sans provider/index sémantique READY, le tool conserve un fallback lexical+graph et annonce `SEMANTIC_SIGNAL_UNAVAILABLE_STRUCTURED_FALLBACK_USED`.
+
+`minos_hybrid_context` applique des bornes strictes au nombre de documents, au budget global et au budget par document. La réponse expose `usedTokens` et `truncated`.
 
 ### Exemple : demander le graphe à un agent
 
@@ -341,7 +410,18 @@ minos_program_graph
   maxEdges = 50000
 ```
 
+Pour M20 :
+
+```text
+minos_hybrid_search
+  project = my-project
+  query   = "où la politique d'authentification est-elle appliquée ?"
+  limit   = 20
+```
+
 ## Préparer un projet avant MCP
+
+Baseline structurée :
 
 ```powershell
 minos.cmd tools install scip-java
@@ -349,4 +429,11 @@ minos.cmd project add N:\workspace-dev\my-project --name my-project
 minos.cmd index my-project
 ```
 
-Le client MCP peut ensuite interroger le snapshot actif. Les capabilities avancées disponibles dépendent des faits effectivement fournis ou dérivables avec leurs limitations explicites.
+Avec M20 activé :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER = 'local-hash'
+minos.cmd index my-project
+```
+
+Le client MCP peut ensuite interroger le snapshot actif. Les capabilities avancées et sémantiques disponibles dépendent des facts/providers réellement configurés et conservent leurs limitations explicites.
