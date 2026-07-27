@@ -159,6 +159,12 @@ function Assert-M18Structure {
     if ($pluginBuild -notmatch 'providers\.gradleProperty\("minosVersion"\)') {
         throw 'M18 plugin release version must be overridable with -PminosVersion.'
     }
+    if ($pluginBuild -notmatch 'testRuntimeOnly\("org\.junit\.platform:junit-platform-launcher:1\.14\.4"\)') {
+        throw 'M18 plugin tests must include the JUnit Platform launcher on the runtime classpath.'
+    }
+    if ($pluginBuild -notmatch 'id\s*=\s*"com\.minos\.codeintelligence"') {
+        throw 'M18 plugin Gradle configuration must use the JetBrains-compliant plugin id com.minos.codeintelligence.'
+    }
     if ($pluginBuild -notmatch 'sourceCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
         $pluginBuild -notmatch 'targetCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
         $pluginBuild -notmatch 'options\.release\s*=\s*21') {
@@ -176,6 +182,9 @@ function Assert-M18Structure {
     }
 
     $pluginXml = Get-Content -LiteralPath (Join-Path $RepoRoot 'minos-intellij\src\main\resources\META-INF\plugin.xml') -Raw
+    if ($pluginXml -notmatch '<id>com\.minos\.codeintelligence</id>') {
+        throw 'M18 plugin.xml must use the JetBrains-compliant plugin id com.minos.codeintelligence.'
+    }
     foreach ($action in @('OpenDefinition','FindUsages','Dependents','Implementations','RelatedTests','Impact','Architecture','CopyIdentity')) {
         if ($pluginXml -notmatch "Minos\.$action") { throw "M18 plugin action missing: $action" }
     }
