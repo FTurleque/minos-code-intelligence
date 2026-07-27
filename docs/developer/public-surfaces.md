@@ -36,7 +36,7 @@ classDiagram
     class NexusSemanticSignalService { <<semantic signals v2>> }
 
     MinosCli --> MinosApplication
-    MinosIdeProtocolV1 --> MinosCli
+    MinosIdeProtocolV1 --> MinosApplication
     MinosIntellijPlugin --> MinosIdeProtocolV1
     MinosApi --> MinosApplication
     ProviderPlatformApi --> MinosApplication
@@ -69,7 +69,7 @@ Le snapshot structuré reste autoritatif. `ProgramGraph` est une vue reconstruct
 
 ## CLI
 
-`MinosCli` reste le dispatcher administratif et utilisateur. Les autres surfaces ne passent pas par la CLI métier, sauf le protocole de processus externe M18 volontairement conçu pour IntelliJ.
+`MinosCli` reste le dispatcher administratif et utilisateur. Le protocole `minos-ide` constitue l'adapter processus externe explicitement réservé aux clients IDE.
 
 Administration :
 
@@ -86,6 +86,14 @@ Intégration IDE :
 
 ```text
 ide handshake
+ide program-graph
+ide impact-v2
+ide security-paths
+ide semantic-index-status
+ide semantic-index-sync
+ide semantic-search
+ide hybrid-search
+ide hybrid-context
 git-activity <project>
 ```
 
@@ -111,25 +119,80 @@ Activation locale explicite du provider de référence :
 MINOS_SEMANTIC_PROVIDER=local-hash
 ```
 
-Avec ce provider activé, `minos index` synchronise l'index sémantique après la promotion structurée. Une erreur de refresh sémantique est diagnostiquée mais n'annule pas un snapshot structuré déjà publié avec succès.
+`local-hash` est un provider local de référence, pas un language model. Avec ce provider activé, `minos index` peut synchroniser l'index sémantique après la promotion structurée. Une erreur de refresh sémantique n'annule pas un snapshot structuré déjà publié avec succès.
 
-## IntelliJ — protocole M18
+## IntelliJ — protocole `minos-ide` v1
 
 Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 24. Il n'embarque aucune classe métier `com.minos:*`.
 
 ```text
-IntelliJ plugin
+IntelliJ plugin Java 21
    ↓ processus local JSON
 minos-ide v1
    ↓
-Minos CLI / MinosApplication
+MinosApplication Java 24
 ```
 
-Le plugin consomme les identités, relations, architecture, impact, tests liés et faits Git existants. Le PSI sert uniquement à identifier le contexte sous le caret ; les facts finaux viennent du snapshot MINOS.
+Le PSI sert uniquement à identifier le contexte sous le caret ; les facts finaux viennent du snapshot/services MINOS. Les positions suivent le contrat ligne base 1, colonne base 0 et encodage explicite UTF-8/16/32/UNKNOWN.
 
-Les positions suivent le contrat : ligne base 1, colonne base 0, encodage explicite UTF-8/16/32/UNKNOWN.
+M21-S6 étend le handshake v1 **sans rupture**. Les nouvelles opérations sont négociées par capabilities :
 
-M20 n'introduit pas implicitement de ranking vectoriel dans les actions IntelliJ M18. Une future UX sémantique IDE devra consommer les contrats M20, pas réimplémenter les embeddings dans le plugin.
+```text
+program-graph
+impact-v2
+security-paths
+semantic-index-status
+semantic-index-sync
+semantic-search
+hybrid-search
+hybrid-context
+```
+
+Le serveur IDE (`IdeIntelligenceCommand`) ne contient que parsing, bornes et projection JSON. Il délègue directement à :
+
+```text
+ProgramGraphService
+AdvancedImpactService
+SecurityAnalysisService
+SemanticIndexService
+SemanticSearchService
+HybridSearchService
+HybridContextBuilder
+```
+
+Le client IntelliJ vérifie la capability avant chaque nouvelle action. Un runtime plus ancien ne reçoit donc pas une réponse reconstituée ou approximative : l'action est refusée explicitement.
+
+### Surfaces natives S6
+
+```text
+Advanced Intelligence
+  Program Graph
+  Impact v2
+  Security paths
+
+Semantic & Hybrid
+  Semantic index status
+  Semantic index sync
+  Semantic search
+  Hybrid search
+  Hybrid context
+```
+
+L'Impact M8 historique reste exposé comme **baseline**. Impact v2 est additif.
+
+Invariants UX :
+
+- le plugin ne produit aucune arête de Program Graph ;
+- les security paths restent des chemins statiques observés et bornés ; absence de chemin ≠ preuve de sûreté ;
+- le score sémantique reste `HEURISTIC` ;
+- les signaux lexical/graph restent `DERIVED` ;
+- le ranking hybride est une décision de sélection, pas un fact structurel ;
+- si le sémantique est indisponible, le fallback structuré est explicite ;
+- un document sémantique sans colonne exacte ne reçoit pas de colonne inventée par le plugin.
+
+### Compatibilité IntelliJ
+
+Le plugin reste Java 21 et annonce `sinceBuild=261`, correspondant à IntelliJ Platform 2026.1. La qualification S6 demande au Plugin Verifier de tester la distribution courante et les releases stables de la branche `261` résolues par le plugin Gradle JetBrains. Aucun support 2025.x n'est revendiqué sans qualification dédiée.
 
 ## API Java
 
@@ -167,19 +230,15 @@ HybridContextDto buildHybridContext(String project, ContextQuery query)
 
 La synchronisation d'index est explicite sur l'API administrative Java. Les recherches ne déclenchent pas de mutation cachée.
 
-Les DTOs distinguent :
-
 ```text
-semantic score → HEURISTIC
-lexical/graph signal → DERIVED
-hybrid score → décision de ranking, pas fact structurel
+semantic score        → HEURISTIC
+lexical/graph signal  → DERIVED
+hybrid score          → décision de ranking, pas fact structurel
 ```
-
-Les limites publiques sont alignées sur les services : résultats, documents, tokens globaux et tokens par document.
 
 ## MCP
 
-MCP reste **strictement read-only**. Il n'expose pas `project add`, `tools install`, `index`, `import-scip` ni une synchronisation vectorielle mutante.
+MCP reste **strictement read-only**. Il n'expose pas `project add`, `tools install`, `index`, `import-scip` ni la synchronisation vectorielle mutante.
 
 Chemin d'appel :
 
@@ -195,7 +254,7 @@ renderer JSON déterministe
 
 Catalogue courant : **23 tools**.
 
-M19 a ajouté :
+M19 :
 
 ```text
 minos_program_graph
@@ -203,7 +262,7 @@ minos_impact_v2
 minos_security_paths
 ```
 
-M20 ajoute :
+M20 :
 
 ```text
 minos_semantic_index_status
@@ -212,15 +271,13 @@ minos_hybrid_search
 minos_hybrid_context
 ```
 
-`minos_semantic_index_status` expose notamment `DISABLED/MISSING/STALE/READY`, snapshot, provider/modèle, dimensions, nombre de documents, taille disque et limitations.
+`minos_semantic_index_status` expose `DISABLED/MISSING/STALE/READY`, snapshot, provider/modèle, dimensions, nombre de documents, taille disque et limitations.
 
 `minos_semantic_search` retourne des hits `HEURISTIC` et la limitation contractuelle `VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT`.
 
 `minos_hybrid_search` retourne chaque composante du ranking. Sans index sémantique READY, le fallback lexical+graph reste utilisable et l'absence du signal est explicite.
 
 `minos_hybrid_context` respecte les mêmes bornes de documents/tokens que `HybridContextBuilder` et expose les troncatures.
-
-Le catalogue exact reste vérifié par [`../generated/product-facts.md`](../generated/product-facts.md).
 
 ## NEXUS
 
@@ -230,7 +287,7 @@ Le catalogue exact reste vérifié par [`../generated/product-facts.md`](../gene
 
 ### Signaux sémantiques v2
 
-`NexusSemanticSignalService` fournit un contrat additif de candidats **code-local** :
+`NexusSemanticSignalService` fournit des candidats **code-local** :
 
 ```text
 stableKey
@@ -313,8 +370,9 @@ Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVect
 - tests MCP : 23 tools, schemas/bornes, mappings, erreurs récupérables ;
 - tests M19 : ground truths graphes/flux/sécurité ;
 - tests M20 : optionnalité, vector store, Recall@K/MRR/nDCG, gain hybride, budgets, invalidation incrémentale, NEXUS v2 ;
+- IntelliJ S6 : `scripts/intellij/check-m21-parity.py` + replay du gate M18 et Plugin Verifier branche 261 ;
 - facts générés : `scripts/docs/product-facts.py --check` ;
 - qualité : `scripts/quality/check-jacoco.py` ;
-- qualification finale M20 : `scripts/m20/run-final.ps1`.
+- qualification courante M21 : `scripts/m21/run-local.ps1` / `run-s6.ps1`.
 
-Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md) et [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
+Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md), [Plugin IntelliJ](../user/intellij-plugin.md) et [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
