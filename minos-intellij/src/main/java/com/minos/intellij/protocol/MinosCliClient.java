@@ -37,22 +37,8 @@ public final class MinosCliClient {
     }
 
     public JsonObject handshake() throws MinosProtocolException {
-        JsonObject result = runJsonRaw(List.of("ide", "handshake", "--format", "json"));
-        String protocol = string(result, "protocol");
-        String version = string(result, "protocolVersion");
-        if (!PROTOCOL_ID.equals(protocol)) {
-            throw new MinosProtocolException("Unexpected MINOS IDE protocol: " + protocol);
-        }
-        if (!PROTOCOL_VERSION.equals(version)) {
-            throw new MinosProtocolException(
-                    "Incompatible MINOS IDE protocol: expected " + PROTOCOL_VERSION + ", received " + version);
-        }
-        JsonArray capabilities = result.has("capabilities") && result.get("capabilities").isJsonArray()
-                ? result.getAsJsonArray("capabilities")
-                : new JsonArray();
-        if (capabilities.isEmpty()) {
-            throw new MinosProtocolException("MINOS IDE handshake returned no capabilities");
-        }
+        JsonObject result = MinosProtocolHandshake.validate(
+                runJsonRaw(List.of("ide", "handshake", "--format", "json")));
         verifiedConfiguration = configurationKey();
         return result;
     }
@@ -191,8 +177,15 @@ public final class MinosCliClient {
         List<String> command = MinosCommandLine.build(settings.executable, arguments, System.getProperty("os.name", ""));
         ProcessBuilder builder = new ProcessBuilder(command);
         String basePath = project.getBasePath();
-        if (basePath != null && Files.isDirectory(Path.of(basePath))) {
-            builder.directory(Path.of(basePath).toFile());
+        if (basePath != null) {
+            try {
+                Path directory = Path.of(basePath);
+                if (Files.isDirectory(directory)) {
+                    builder.directory(directory.toFile());
+                }
+            } catch (RuntimeException ignored) {
+                // ProcessBuilder will use the IDE working directory if the project path cannot be represented locally.
+            }
         }
         if (!settings.minosHome.isBlank()) {
             builder.environment().put("MINOS_HOME", settings.minosHome);
@@ -251,14 +244,6 @@ public final class MinosCliClient {
         return settings.executable + "\n" + settings.minosHome;
     }
 
-    private static String string(JsonObject object, String name) throws MinosProtocolException {
-        String value = nullableString(object, name);
-        if (value == null) {
-            throw new MinosProtocolException("MINOS IDE handshake is missing `" + name + "`");
-        }
-        return value;
-    }
-
     private static String nullableString(JsonObject object, String name) {
         JsonElement element = object.get(name);
         return element == null || element.isJsonNull() ? null : element.getAsString();
@@ -272,7 +257,7 @@ public final class MinosCliClient {
             }
             return path.toString();
         } catch (IOException | RuntimeException ignored) {
-            return Path.of(value).toAbsolutePath().normalize().toString();
+            return value.replace('\\', '/');
         }
     }
 
