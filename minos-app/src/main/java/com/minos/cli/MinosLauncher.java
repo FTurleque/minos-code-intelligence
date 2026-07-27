@@ -30,6 +30,8 @@ public final class MinosLauncher {
                 exitCode = FindSymbolCommand.SUCCESS;
             } else if (MinosCliRunner.isStatelessHelpRequest(arguments)) {
                 exitCode = MinosCliRunner.runStatelessHelp(arguments, System.out, System.err);
+            } else if (MinosCliRunner.isIdeHandshake(arguments)) {
+                exitCode = MinosCliRunner.runIdeHandshake(arguments, System.out, System.err);
             } else {
                 Path home = resolveHome(System.getenv(), System.getProperties());
                 MinosApplication application = MinosApplication.open(home);
