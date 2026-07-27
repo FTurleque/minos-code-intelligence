@@ -4,23 +4,26 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.JBSplitter;
 import com.intellij.ui.components.JBLabel;
+import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
+import com.minos.intellij.navigation.MinosLocation;
+import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
 import com.minos.intellij.protocol.MinosProtocolException;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -29,7 +32,10 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
-import java.time.Instant;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 public final class MinosToolWindowPanel {
@@ -43,6 +49,8 @@ public final class MinosToolWindowPanel {
     private final JBLabel connection = new JBLabel("MINOS: checking…");
     private final JBTextArea projectStatus = textArea();
     private final JBTextArea resultArea = textArea();
+    private final DefaultListModel<LocationEntry> resultLocations = new DefaultListModel<>();
+    private final JBList<LocationEntry> resultLocationList = new JBList<>(resultLocations);
     private final JBTextArea graphDetails = textArea();
     private final JBTextArea gitArea = textArea();
     private final ArchitectureGraphPanel graph = new ArchitectureGraphPanel();
@@ -55,7 +63,7 @@ public final class MinosToolWindowPanel {
         root.add(toolbar(), BorderLayout.NORTH);
         tabs.addTab("Project", projectPanel());
         tabs.addTab("Architecture", architecturePanel());
-        tabs.addTab("Results", new JBScrollPane(resultArea));
+        tabs.addTab("Results", resultsPanel());
         tabs.addTab("Git Activity", new JBScrollPane(gitArea));
         root.add(tabs, BorderLayout.CENTER);
 
@@ -64,6 +72,14 @@ public final class MinosToolWindowPanel {
             @Override public void insertUpdate(DocumentEvent event) { updateFilter(); }
             @Override public void removeUpdate(DocumentEvent event) { updateFilter(); }
             @Override public void changedUpdate(DocumentEvent event) { updateFilter(); }
+        });
+        resultLocationList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getClickCount() == 2) {
+                    openSelectedLocation();
+                }
+            }
         });
     }
 
@@ -100,6 +116,8 @@ public final class MinosToolWindowPanel {
     public void showResult(String title, JsonObject result) {
         resultArea.setText(title + "\n\n" + PRETTY.toJson(result));
         resultArea.setCaretPosition(0);
+        resultLocations.clear();
+        collectLocations(result, "$", resultLocations);
         tabs.setSelectedIndex(2);
     }
 
@@ -119,6 +137,7 @@ public final class MinosToolWindowPanel {
 
     public void showError(String title, Throwable failure) {
         String message = failure == null || failure.getMessage() == null ? "Unknown failure" : failure.getMessage();
+        resultLocations.clear();
         resultArea.setText(title + "\n\nERROR: " + message);
         resultArea.setCaretPosition(0);
         tabs.setSelectedIndex(2);
@@ -166,6 +185,16 @@ public final class MinosToolWindowPanel {
         return panel;
     }
 
+    private JComponent resultsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(new JBLabel("Double-click a MINOS location to open the exact file/position."), BorderLayout.NORTH);
+        JBSplitter splitter = new JBSplitter(true, 0.25f);
+        splitter.setFirstComponent(new JBScrollPane(resultLocationList));
+        splitter.setSecondComponent(new JBScrollPane(resultArea));
+        panel.add(splitter, BorderLayout.CENTER);
+        return panel;
+    }
+
     private void registerProject() {
         runBackground("Register project in MINOS", client::registerProject, result -> {
             showResult("Project registered", result);
@@ -199,6 +228,23 @@ public final class MinosToolWindowPanel {
             gitArea.setCaretPosition(0);
             tabs.setSelectedIndex(3);
         });
+    }
+
+    private void openSelectedLocation() {
+        LocationEntry selected = resultLocationList.getSelectedValue();
+        if (selected == null) {
+            return;
+        }
+        String basePath = project.getBasePath();
+        if (basePath == null || basePath.isBlank()) {
+            showError("Navigate MINOS result", new IllegalStateException("IntelliJ project has no base path"));
+            return;
+        }
+        try {
+            MinosNavigation.open(project, Path.of(basePath), selected.location());
+        } catch (RuntimeException failure) {
+            showError("Navigate MINOS result", failure);
+        }
     }
 
     private void updateFilter() {
@@ -241,6 +287,33 @@ public final class MinosToolWindowPanel {
                 }
             }
         });
+    }
+
+    private static void collectLocations(JsonElement element, String path, DefaultListModel<LocationEntry> target) {
+        if (element == null || element.isJsonNull()) {
+            return;
+        }
+        if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            if (isLocation(object)) {
+                try {
+                    target.addElement(new LocationEntry(path, MinosLocation.from(object)));
+                } catch (RuntimeException ignored) {
+                    // Keep malformed optional evidence from breaking the complete result view.
+                }
+            }
+            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                collectLocations(entry.getValue(), path + "." + entry.getKey(), target);
+            }
+        } else if (element.isJsonArray()) {
+            for (int index = 0; index < element.getAsJsonArray().size(); index++) {
+                collectLocations(element.getAsJsonArray().get(index), path + "[" + index + "]", target);
+            }
+        }
+    }
+
+    private static boolean isLocation(JsonObject object) {
+        return object.has("fileId") && object.has("startLine") && object.has("startColumn");
     }
 
     private static JButton button(String text, Runnable action) {
@@ -314,5 +387,13 @@ public final class MinosToolWindowPanel {
     @FunctionalInterface
     private interface ContextOperation {
         JsonObject execute(MinosProjectService.Context context) throws Exception;
+    }
+
+    private record LocationEntry(String sourcePath, MinosLocation location) {
+        @Override
+        public String toString() {
+            return location.fileId() + ":" + location.startLine() + ":" + location.startColumn()
+                    + " — " + sourcePath;
+        }
     }
 }
