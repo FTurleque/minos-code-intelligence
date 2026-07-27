@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArchitectureGraphPanelTest {
 
     @Test
-    void boundsVisibleModulesAndFiltersByModuleText() {
+    void boundsVisibleModulesAndFiltersAcrossEntireArchitecture() {
         JsonObject architecture = new JsonObject();
         JsonArray modules = new JsonArray();
         for (int index = 0; index < 25; index++) {
             JsonObject module = new JsonObject();
             module.addProperty("id", "module-" + index);
-            module.addProperty("name", index == 0 ? "billing-domain" : "module " + index);
+            module.addProperty("name", index == 24 ? "billing-domain" : "module " + index);
             module.addProperty("relativePath", "modules/m" + index);
             modules.add(module);
         }
