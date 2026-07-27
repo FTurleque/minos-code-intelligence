@@ -19,7 +19,7 @@ import com.intellij.ui.components.JBTextField;
 import com.minos.intellij.navigation.MinosLocation;
 import com.minos.intellij.navigation.MinosNavigation;
 import com.minos.intellij.protocol.MinosCliClient;
-import com.minos.intellij.protocol.MinosProtocolException;
+import com.minos.intellij.protocol.MinosProjectNotRegisteredException;
 import com.minos.intellij.service.MinosProjectService;
 import com.minos.intellij.settings.MinosSettingsState;
 import org.jetbrains.annotations.NotNull;
@@ -94,7 +94,7 @@ public final class MinosToolWindowPanel {
             JsonObject registered;
             try {
                 registered = client.resolveProject();
-            } catch (MinosProtocolException notRegistered) {
+            } catch (MinosProjectNotRegisteredException notRegistered) {
                 JsonObject combined = new JsonObject();
                 combined.add("protocol", handshake);
                 combined.addProperty("projectRegistration", "MISSING");
