@@ -113,32 +113,6 @@
             </plugin>
 
             <plugin>
-                <groupId>org.cyclonedx</groupId>
-                <artifactId>cyclonedx-maven-plugin</artifactId>
-                <version>${cyclonedx.maven.plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>cyclonedx-aggregate-sbom</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>makeAggregateBom</goal>
-                        </goals>
-                        <configuration>
-                            <schemaVersion>1.6</schemaVersion>
-                            <outputFormat>json</outputFormat>
-                            <outputDirectory>${maven.multiModuleProjectDirectory}/target/sbom</outputDirectory>
-                            <outputName>minos-cyclonedx</outputName>
-                            <outputReactorProjects>false</outputReactorProjects>
-                            <includeTestScope>false</includeTestScope>
-                            <includeLicenseText>false</includeLicenseText>
-                            <skipAttach>true</skipAttach>
-                            <projectType>application</projectType>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
