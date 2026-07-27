@@ -13,6 +13,7 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.impact.ImpactAnalysisRequest;
+import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
@@ -20,6 +21,7 @@ import com.minos.output.DeterministicJson;
 import com.minos.output.ImpactResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
+import com.minos.program.analysis.SecurityAnalysisService;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +41,10 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_MAX_TOKENS = 4_000;
     private static final int DEFAULT_IMPACT_DEPTH = 4;
     private static final int DEFAULT_IMPACT_LIMIT = 200;
+    private static final int DEFAULT_PROGRAM_GRAPH_NODES = 10_000;
+    private static final int DEFAULT_PROGRAM_GRAPH_EDGES = 50_000;
+    private static final int DEFAULT_SECURITY_DEPTH = 8;
+    private static final int DEFAULT_SECURITY_LIMIT = 100;
 
     private final MinosApplication application;
     private final ProjectInspectionService projects;
@@ -176,6 +182,27 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                 SymbolOutputFormat.JSON);
     }
 
+    @Override
+    public String programGraph(ProgramGraphRequest request) throws Exception {
+        return AdvancedAnalysisResultRenderer.renderProgramGraph(
+                application.programGraphService().getGraph(request.project(), request.maxNodes(), request.maxEdges()));
+    }
+
+    @Override
+    public String impactV2(ImpactRequest request) throws Exception {
+        return AdvancedAnalysisResultRenderer.renderAdvancedImpact(
+                application.advancedImpactService().analyze(
+                        request.project(), new ImpactAnalysisRequest(request.symbolId(), request.depth(), request.limit())));
+    }
+
+    @Override
+    public String securityPaths(SecurityRequest request) throws Exception {
+        return AdvancedAnalysisResultRenderer.renderSecurity(
+                application.securityAnalysisService().analyze(
+                        request.project(),
+                        new SecurityAnalysisService.SecurityRequest(request.sourceNodeId(), request.depth(), request.limit())));
+    }
+
     private List<Map<String, Object>> providerProfiles() {
         return providerPlatform.listProviders().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -248,5 +275,20 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         return new ImpactRequest(project, symbolId,
                 depth == null ? DEFAULT_IMPACT_DEPTH : depth,
                 limit == null ? DEFAULT_IMPACT_LIMIT : limit);
+    }
+
+    static ProgramGraphRequest programGraphDefaults(String project, Integer maxNodes, Integer maxEdges) {
+        return new ProgramGraphRequest(
+                project,
+                maxNodes == null ? DEFAULT_PROGRAM_GRAPH_NODES : maxNodes,
+                maxEdges == null ? DEFAULT_PROGRAM_GRAPH_EDGES : maxEdges);
+    }
+
+    static SecurityRequest securityDefaults(String project, String sourceNodeId, Integer depth, Integer limit) {
+        return new SecurityRequest(
+                project,
+                sourceNodeId,
+                depth == null ? DEFAULT_SECURITY_DEPTH : depth,
+                limit == null ? DEFAULT_SECURITY_LIMIT : limit);
     }
 }
