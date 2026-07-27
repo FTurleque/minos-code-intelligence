@@ -3,6 +3,7 @@ package com.minos.intellij.service;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
@@ -16,6 +17,7 @@ import com.minos.intellij.protocol.MinosProtocolException;
 
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.stream.StreamSupport;
 
 @Service(Service.Level.PROJECT)
 public final class MinosProjectService {
@@ -42,31 +44,38 @@ public final class MinosProjectService {
 
     public JsonObject resolveSymbol(Editor editor, PsiFile psiFile) throws MinosProtocolException {
         Context context = context();
+        Candidate candidate = ReadAction.compute(() -> candidate(editor, psiFile, context.root()));
+        if (candidate.name() == null || candidate.name().isBlank()) {
+            throw new MinosProtocolException("Place the caret on a named code element before running a MINOS action");
+        }
+
+        JsonObject result = MinosCliClient.getInstance(project).findSymbols(context.projectId(), candidate.name(), 100);
+        JsonArray symbols = result.has("symbols") ? result.getAsJsonArray("symbols") : new JsonArray();
+        if (symbols.size() == 0) {
+            throw new MinosProtocolException(
+                    "MINOS found no symbol named `" + candidate.name() + "` in the active snapshot");
+        }
+
+        return StreamSupport.stream(symbols.spliterator(), false)
+                .filter(JsonElement::isJsonObject)
+                .map(JsonElement::getAsJsonObject)
+                .min(Comparator.comparingInt(symbol -> score(symbol, candidate.relativeFile(), candidate.caretLine())))
+                .orElseThrow(() -> new MinosProtocolException("MINOS returned no usable symbol result"));
+    }
+
+    private static Candidate candidate(Editor editor, PsiFile psiFile, Path projectRoot) {
         int offset = editor.getCaretModel().getOffset();
-        PsiElement element = psiFile.findElementAt(Math.max(0, Math.min(offset, Math.max(0, psiFile.getTextLength() - 1))));
+        int safeOffset = Math.max(0, Math.min(offset, Math.max(0, psiFile.getTextLength() - 1)));
+        PsiElement element = psiFile.getTextLength() == 0 ? null : psiFile.findElementAt(safeOffset);
         String name = symbolName(element);
         if (name == null || name.isBlank()) {
             String selected = editor.getSelectionModel().getSelectedText();
             name = selected == null ? null : selected.trim();
         }
-        if (name == null || name.isBlank()) {
-            throw new MinosProtocolException("Place the caret on a named code element before running a MINOS action");
-        }
-
-        JsonObject result = MinosCliClient.getInstance(project).findSymbols(context.projectId(), name, 100);
-        JsonArray symbols = result.has("symbols") ? result.getAsJsonArray("symbols") : new JsonArray();
-        if (symbols.isEmpty()) {
-            throw new MinosProtocolException("MINOS found no symbol named `" + name + "` in the active snapshot");
-        }
         VirtualFile virtualFile = psiFile.getVirtualFile();
-        String relative = virtualFile == null ? null : relative(context.root(), Path.of(virtualFile.getPath()));
-        int caretLine = editor.getDocument().getLineNumber(offset) + 1;
-
-        return symbols.asList().stream()
-                .filter(JsonElement::isJsonObject)
-                .map(JsonElement::getAsJsonObject)
-                .min(Comparator.comparingInt(symbol -> score(symbol, relative, caretLine)))
-                .orElseThrow(() -> new MinosProtocolException("MINOS returned no usable symbol result"));
+        String relative = virtualFile == null ? null : relative(projectRoot, Path.of(virtualFile.getPath()));
+        int caretLine = editor.getDocument().getLineNumber(Math.min(offset, editor.getDocument().getTextLength())) + 1;
+        return new Candidate(name, relative, caretLine);
     }
 
     private static int score(JsonObject symbol, String relativeFile, int caretLine) {
@@ -126,6 +135,9 @@ public final class MinosProjectService {
     private static String nullableString(JsonObject object, String name) {
         JsonElement value = object.get(name);
         return value == null || value.isJsonNull() ? null : value.getAsString();
+    }
+
+    private record Candidate(String name, String relativeFile, int caretLine) {
     }
 
     public record Context(String projectId, String projectName, Path root, JsonObject project) {
