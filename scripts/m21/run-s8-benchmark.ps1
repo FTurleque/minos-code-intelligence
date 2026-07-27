@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string] $JarPath,
     [Parameter(Mandatory = $true)][string] $BenchmarkHome,
-    [ValidateSet('SMOKE','STANDARD')][string] $Profile = 'STANDARD',
+    [ValidateSet('SMOKE','STANDARD')][string] $BenchmarkProfile = 'STANDARD',
     [ValidateRange(5,50)][int] $Repetitions = 5,
     [Parameter(Mandatory = $true)][string] $OutputJson
 )
@@ -53,7 +53,7 @@ function Get-JavaVersionLine {
     }
 }
 
-$arguments = @('--class-path', $jar, $source, $homePath, $Profile, [string]$Repetitions, $output)
+$arguments = @('--class-path', $jar, $source, $homePath, $BenchmarkProfile, [string]$Repetitions, $output)
 $encoded = ($arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
 $startInfo = New-Object System.Diagnostics.ProcessStartInfo
 $startInfo.FileName = $java.JavaExecutable
@@ -108,7 +108,7 @@ $machine = [ordered]@{
     total_physical_memory_bytes = $totalMemory
     java_home = $java.JavaHome
     java_version = Get-JavaVersionLine -JavaExecutable $java.JavaExecutable
-    profile = $Profile
+    profile = $BenchmarkProfile
     repetitions = $Repetitions
 }
 $data | Add-Member -NotePropertyName machine -NotePropertyValue $machine -Force
