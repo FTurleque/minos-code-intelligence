@@ -119,7 +119,7 @@
                 <executions>
                     <execution>
                         <id>cyclonedx-aggregate-sbom</id>
-                        <phase>verify</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>makeAggregateBom</goal>
                         </goals>
