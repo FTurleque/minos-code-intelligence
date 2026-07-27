@@ -41,6 +41,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
 | [0025](0025-measurement-gated-storage-backend-evolution.md) | Gouverner l’évolution du backend par des mesures reproductibles | Accepted | M16 |
 | [0026](0026-discovery-provider-spi-and-explicit-capability-profiles.md) | Étendre discovery/providers par SPI et interdire les capacités implicites | Accepted | M17 |
+| [0027](0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
 
 ## Règle de rédaction
 
