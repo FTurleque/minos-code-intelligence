@@ -41,6 +41,7 @@ def main() -> int:
 
         readme = read("README.md")
         user_readme = read("docs/user/README.md")
+        cli = read("docs/user/cli.md")
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
@@ -53,12 +54,17 @@ def main() -> int:
         require_text("docs/user/README.md", user_readme, f"Le MCP expose **{tool_count} tools read-only**")
         forbid_text("docs/user/README.md", user_readme, "Le MCP expose **16 tools read-only**")
 
+        require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
+        forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
+
         require_text("docs/ROADMAP.md", roadmap, "M21 — Production Integrity & Surface Convergence")
+        forbid_text("docs/ROADMAP.md", roadmap, "Aucun M21 n'est déclaré")
         for milestone in range(22, 28):
             require_text("docs/ROADMAP.md", roadmap, f"M{milestone} —")
 
         require_text("docs/STATUS.md", status, "M21 — Production Integrity")
         require_text("docs/STATUS.md", status, "EN COURS")
+        forbid_text("docs/STATUS.md", status, "Aucun M21 n'est actuellement déclaré")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "Issue : **#73")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
