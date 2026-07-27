@@ -36,7 +36,11 @@ intellijPlatform {
         }
         ideaVersion {
             sinceBuild = "261"
-            untilBuild = "261.*"
+        }
+    }
+    pluginVerification {
+        ides {
+            current()
         }
     }
 }
