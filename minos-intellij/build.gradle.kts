@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.minos"
-version = "0.2.0-SNAPSHOT"
+version = providers.gradleProperty("minosVersion").orElse("0.2.0-SNAPSHOT").get()
 
 repositories {
     mavenCentral()
