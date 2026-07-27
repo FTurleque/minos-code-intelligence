@@ -81,8 +81,9 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             }
         }
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
+            String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
-                    prepared.indexState().activeSnapshotId().orElse(null), true, null);
+                    prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
         }
         var executors = prepared.negotiation().selections().stream()
                 .map(selection -> runtimeManager.executor(selection.indexer().id())).toList();
@@ -107,6 +108,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         } else {
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
+        diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
     }
@@ -116,6 +118,26 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     }
 
     @Override public ProviderView installProvider(String providerId) throws Exception { return view(runtimeManager.install(providerId)); }
+
+    private String synchronizeSemanticIfConfigured(UUID projectId) {
+        if (application.semanticIndexService().embeddingProvider().isEmpty()) return null;
+        try {
+            var report = application.semanticIndexService().synchronize(projectId);
+            return report.state() == com.minos.semantic.SemanticIndexService.State.READY
+                    ? null
+                    : "semantic index state after structured indexing: " + report.state();
+        } catch (Exception exception) {
+            String message = exception.getMessage();
+            return "semantic index refresh failed without invalidating structured snapshot: "
+                    + (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message);
+        }
+    }
+
+    private static String combineDiagnostics(String first, String second) {
+        if (first == null || first.isBlank()) return second;
+        if (second == null || second.isBlank()) return first;
+        return first + "; " + second;
+    }
 
     private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
