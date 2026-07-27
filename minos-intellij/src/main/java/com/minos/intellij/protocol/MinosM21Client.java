@@ -89,13 +89,12 @@ public final class MinosM21Client {
     }
 
     private JsonObject execute(String capability, List<String> arguments) throws MinosProtocolException {
-        requireCapability(capability);
+        requireCapability(client.handshake(), capability);
         return client.executeJson(arguments);
     }
 
-    private void requireCapability(String capability) throws MinosProtocolException {
-        JsonObject handshake = client.handshake();
-        JsonArray capabilities = handshake.has("capabilities") && handshake.get("capabilities").isJsonArray()
+    static void requireCapability(JsonObject handshake, String capability) throws MinosProtocolException {
+        JsonArray capabilities = handshake != null && handshake.has("capabilities") && handshake.get("capabilities").isJsonArray()
                 ? handshake.getAsJsonArray("capabilities")
                 : new JsonArray();
         List<String> available = new ArrayList<>();
