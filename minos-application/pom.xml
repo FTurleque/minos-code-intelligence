@@ -62,6 +62,7 @@
                         <include>com/minos/orchestration/**/*.java</include>
                         <include>com/minos/output/**/*.java</include>
                         <include>com/minos/program/**/*.java</include>
+                        <include>com/minos/semantic/**/*.java</include>
                         <include>com/minos/registry/**/*.java</include>
                         <include>com/minos/workspace/**/*.java</include>
                         <include>com/minos/runtime/MinosVersion.java</include>
