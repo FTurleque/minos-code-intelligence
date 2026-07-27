@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.ide.CopyPasteManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
@@ -63,6 +64,8 @@ public final class MinosEditorActions {
                         context = service.context();
                         symbol = service.resolveSymbol(editor, file);
                         result = execute(project, context, symbol);
+                    } catch (ProcessCanceledException canceled) {
+                        throw canceled;
                     } catch (Throwable throwable) {
                         failure = throwable;
                     }
@@ -75,6 +78,8 @@ public final class MinosEditorActions {
                     } else {
                         try {
                             present(project, context, symbol, result);
+                        } catch (ProcessCanceledException canceled) {
+                            throw canceled;
                         } catch (Throwable throwable) {
                             MinosUiController.getInstance(project).showError(title(), throwable);
                         }
