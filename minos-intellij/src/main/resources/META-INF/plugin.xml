@@ -15,6 +15,8 @@
                     anchor="right"
                     factoryClass="com.minos.intellij.ui.MinosToolWindowFactory"/>
         <projectConfigurable id="com.minos.intellij.settings"
+                             parentId="tools"
+                             nonDefaultProject="true"
                              displayName="MINOS"
                              instance="com.minos.intellij.settings.MinosSettingsConfigurable"/>
     </extensions>
