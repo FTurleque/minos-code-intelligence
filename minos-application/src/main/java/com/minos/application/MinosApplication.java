@@ -19,6 +19,11 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
+import com.minos.program.analysis.AdvancedImpactService;
+import com.minos.program.analysis.ProgramGraphProvider;
+import com.minos.program.analysis.ProgramGraphService;
+import com.minos.program.analysis.RelationshipProgramGraphProvider;
+import com.minos.program.analysis.SecurityAnalysisService;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -58,6 +63,9 @@ public final class MinosApplication {
     private final ProjectQueryService projectQueryService;
     private final ProjectArchitectureQuery architectureQuery;
     private final ProjectImpactQuery impactQuery;
+    private final ProgramGraphService programGraphService;
+    private final AdvancedImpactService advancedImpactService;
+    private final SecurityAnalysisService securityAnalysisService;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     private MinosApplication(
@@ -74,7 +82,8 @@ public final class MinosApplication {
             List<IndexerDescriptor> indexerDescriptors,
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
-            GitIntelligenceService gitIntelligence
+            GitIntelligenceService gitIntelligence,
+            List<ProgramGraphProvider> programGraphProviders
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
@@ -90,6 +99,10 @@ public final class MinosApplication {
         this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
+        List<ProgramGraphProvider> graphProviders = List.copyOf(Objects.requireNonNull(programGraphProviders, "programGraphProviders"));
+        if (graphProviders.isEmpty()) {
+            throw new IllegalArgumentException("programGraphProviders must not be empty");
+        }
         this.projectInspectionService = new ProjectInspectionService(
                 this.home,
                 projectRegistry,
@@ -101,6 +114,9 @@ public final class MinosApplication {
         this.projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
         this.architectureQuery = new LocalProjectArchitectureQuery(projectRegistry, snapshotStore, discoveryService);
         this.impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
+        this.programGraphService = new ProgramGraphService(projectRegistry, snapshotStore, graphProviders);
+        this.advancedImpactService = new AdvancedImpactService(this.impactQuery, this.programGraphService);
+        this.securityAnalysisService = new SecurityAnalysisService(this.programGraphService);
         this.workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
     }
 
@@ -189,6 +205,18 @@ public final class MinosApplication {
         return impactQuery;
     }
 
+    public ProgramGraphService programGraphService() {
+        return programGraphService;
+    }
+
+    public AdvancedImpactService advancedImpactService() {
+        return advancedImpactService;
+    }
+
+    public SecurityAnalysisService securityAnalysisService() {
+        return securityAnalysisService;
+    }
+
     public WorkspaceIntelligenceService workspaceIntelligence() {
         return workspaceIntelligence;
     }
@@ -224,6 +252,7 @@ public final class MinosApplication {
         private SnapshotStager snapshotStager;
         private SnapshotPromoter snapshotPromoter;
         private GitIntelligenceService gitIntelligence;
+        private List<ProgramGraphProvider> programGraphProviders;
 
         private Builder(Path home) {
             this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
@@ -290,6 +319,14 @@ public final class MinosApplication {
             return this;
         }
 
+        public Builder programGraphProviders(List<ProgramGraphProvider> value) {
+            this.programGraphProviders = List.copyOf(Objects.requireNonNull(value, "programGraphProviders"));
+            if (this.programGraphProviders.isEmpty()) {
+                throw new IllegalArgumentException("programGraphProviders must not be empty");
+            }
+            return this;
+        }
+
         public MinosApplication build() throws IOException {
             LocalProjectRegistry effectiveRegistry = projectRegistry != null
                     ? projectRegistry
@@ -340,6 +377,9 @@ public final class MinosApplication {
             GitIntelligenceService effectiveGit = gitIntelligence != null
                     ? gitIntelligence
                     : new GitIntelligenceService();
+            List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
+                    ? programGraphProviders
+                    : List.of(new RelationshipProgramGraphProvider());
 
             return new MinosApplication(
                     home,
@@ -355,7 +395,8 @@ public final class MinosApplication {
                     effectiveDescriptors,
                     effectiveStager,
                     effectivePromoter,
-                    effectiveGit
+                    effectiveGit,
+                    effectiveProgramGraphProviders
             );
         }
     }
