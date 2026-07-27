@@ -69,8 +69,10 @@ function Assert-M18Structure {
     if ($pluginBuild -notmatch 'org\.jetbrains\.intellij\.platform.*2\.18\.1') {
         throw 'M18 plugin must use the qualified IntelliJ Platform Gradle Plugin 2.18.1.'
     }
-    if ($pluginBuild -notmatch 'languageVersion\s*=\s*JavaLanguageVersion\.of\(21\)') {
-        throw 'M18 plugin must compile with Java 21.'
+    if ($pluginBuild -notmatch 'sourceCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
+        $pluginBuild -notmatch 'targetCompatibility\s*=\s*JavaVersion\.VERSION_21' -or
+        $pluginBuild -notmatch 'options\.release\s*=\s*21') {
+        throw 'M18 plugin must target Java 21 source/target/release compatibility.'
     }
 
     $protocol = Get-Content -LiteralPath (Join-Path $RepoRoot 'minos-cli\src\main\java\com\minos\cli\IdeCommand.java') -Raw
@@ -119,7 +121,7 @@ try {
     Invoke-NativeChecked -File $maven -Arguments @('-B','-ntp','clean','verify') -Failure 'Maven clean verify failed'
     Invoke-NativeChecked -File $python -Arguments @('scripts/quality/check-jacoco.py') -Failure 'JaCoCo gate failed'
 
-    Write-Host '[4/6] Verifying IntelliJ plugin with Java 21/Gradle 9+...'
+    Write-Host '[4/6] Verifying IntelliJ plugin Java 21 target with Gradle 9+...'
     $gradle = Resolve-Gradle
     Invoke-NativeChecked -File $gradle -Arguments @(
         '-p','minos-intellij','--no-daemon',
