@@ -22,6 +22,14 @@ class IdeCommandTest {
         assertTrue(output.toString().contains("\"protocolVersion\":\"1\""));
         assertTrue(output.toString().contains("\"transport\":\"cli-json-process\""));
         assertTrue(output.toString().contains("\"git-activity\""));
+        assertTrue(output.toString().contains("\"program-graph\""));
+        assertTrue(output.toString().contains("\"impact-v2\""));
+        assertTrue(output.toString().contains("\"security-paths\""));
+        assertTrue(output.toString().contains("\"semantic-index-status\""));
+        assertTrue(output.toString().contains("\"semantic-index-sync\""));
+        assertTrue(output.toString().contains("\"semantic-search\""));
+        assertTrue(output.toString().contains("\"hybrid-search\""));
+        assertTrue(output.toString().contains("\"hybrid-context\""));
     }
 
     @Test
@@ -32,5 +40,19 @@ class IdeCommandTest {
 
         assertEquals(0, exit);
         assertTrue(output.toString().startsWith("{\"protocol\":\"minos-ide\""));
+    }
+
+    @Test
+    void statelessIdeHelpDocumentsAdvancedOperations() throws IOException {
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+
+        int exit = MinosCliRunner.runStatelessHelp(new String[]{"ide", "--help"}, output, error);
+
+        assertEquals(0, exit);
+        assertEquals("", error.toString());
+        assertTrue(output.toString().contains("program-graph"));
+        assertTrue(output.toString().contains("semantic-search"));
+        assertTrue(output.toString().contains("hybrid-context"));
     }
 }
