@@ -1,5 +1,3 @@
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-
 plugins {
     java
     id("org.jetbrains.intellij.platform") version "2.18.1"
@@ -21,7 +19,6 @@ dependencies {
 
     intellijPlatform {
         intellijIdea("2026.1")
-        testFramework(TestFrameworkType.Platform)
     }
 }
 
