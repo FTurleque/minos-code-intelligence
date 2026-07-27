@@ -1,0 +1,39 @@
+<idea-plugin>
+    <id>com.minos.codeintelligence</id>
+    <name>MINOS Code Intelligence</name>
+    <vendor>MINOS</vendor>
+
+    <description><![CDATA[
+    Native IntelliJ client for local-first MINOS Code Intelligence: project/index status,
+    symbol navigation, architecture, impact, related tests and factual Git activity.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="MINOS"
+                    anchor="right"
+                    factoryClass="com.minos.intellij.ui.MinosToolWindowFactory"/>
+        <projectConfigurable id="com.minos.codeintelligence.settings"
+                             parentId="tools"
+                             nonDefaultProject="true"
+                             displayName="MINOS"
+                             instance="com.minos.intellij.settings.MinosSettingsConfigurable"/>
+    </extensions>
+
+    <actions>
+        <group id="Minos.Editor.Popup" text="MINOS" popup="true">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <action id="Minos.OpenDefinition" class="com.minos.intellij.actions.MinosEditorActions$OpenDefinition" text="Open MINOS definition"/>
+            <action id="Minos.FindUsages" class="com.minos.intellij.actions.MinosEditorActions$FindUsages" text="Find MINOS usages"/>
+            <action id="Minos.Dependents" class="com.minos.intellij.actions.MinosEditorActions$Dependents" text="Find MINOS dependents"/>
+            <action id="Minos.Implementations" class="com.minos.intellij.actions.MinosEditorActions$Implementations" text="Find MINOS implementations"/>
+            <separator/>
+            <action id="Minos.RelatedTests" class="com.minos.intellij.actions.MinosEditorActions$RelatedTests" text="MINOS related tests"/>
+            <action id="Minos.Impact" class="com.minos.intellij.actions.MinosEditorActions$Impact" text="Analyze MINOS impact"/>
+            <action id="Minos.Architecture" class="com.minos.intellij.actions.MinosEditorActions$ShowArchitecture" text="Show in MINOS architecture"/>
+            <separator/>
+            <action id="Minos.CopyIdentity" class="com.minos.intellij.actions.MinosEditorActions$CopyIdentity" text="Copy MINOS symbol identity"/>
+        </group>
+    </actions>
+</idea-plugin>

@@ -1,0 +1,79 @@
+name: Publish IntelliJ Plugin
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intellij-plugin-release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish-plugin:
+    name: Build and attach IntelliJ plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle 9.6.1
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+          cache-provider: basic
+
+      - name: Resolve plugin version from release tag
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="$(printf '%s' "$TAG" | sed -E 's/^[^0-9]*//')"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$TAG" ] && ! printf '%s' "$VERSION" | grep -Eq '^[0-9]'; then
+            echo "Cannot derive a numeric plugin version from release tag: $TAG" >&2
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and verify plugin
+        working-directory: minos-intellij
+        run: >-
+          gradle --no-daemon
+          -PminosVersion='${{ steps.version.outputs.value }}'
+          test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin
+
+      - name: Create SHA-256 checksum
+        id: artifact
+        shell: bash
+        run: |
+          ZIP="$(find minos-intellij/build/distributions -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [ -z "$ZIP" ]; then
+            echo 'IntelliJ plugin ZIP was not produced.' >&2
+            exit 1
+          fi
+          sha256sum "$ZIP" > "$ZIP.sha256"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "checksum=$ZIP.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Attach plugin to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          ZIP: ${{ steps.artifact.outputs.zip }}
+          CHECKSUM: ${{ steps.artifact.outputs.checksum }}
+        run: gh release upload "$TAG" "$ZIP" "$CHECKSUM" --clobber

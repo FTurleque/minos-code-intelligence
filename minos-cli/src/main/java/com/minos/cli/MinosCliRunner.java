@@ -41,6 +41,8 @@ public final class MinosCliRunner {
             "related-tests",
             ArchitectureCommand.NAME,
             ImpactCommand.NAME,
+            IdeCommand.NAME,
+            GitActivityCommand.NAME,
             NexusExportCommand.NAME
     );
 
@@ -52,6 +54,7 @@ public final class MinosCliRunner {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
+        if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
         return run(MinosApplication.open(home), arguments, output, error);
     }
 
@@ -61,6 +64,7 @@ public final class MinosCliRunner {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
+        if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
@@ -72,7 +76,8 @@ public final class MinosCliRunner {
                 nexusExportCommand,
                 new LocalAutonomousIndexOperations(app),
                 app.home(),
-                ProviderPlatformService.defaults(app)
+                ProviderPlatformService.defaults(app),
+                app.gitIntelligence()
         ).run(arguments, output, error);
     }
 
@@ -97,7 +102,25 @@ public final class MinosCliRunner {
             output.append(ProviderCommand.usage()).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
+        if (arguments.length == 2 && GitActivityCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(GitActivityCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         return statelessHelpCli().run(arguments, output, error);
+    }
+
+    static boolean isIdeHandshake(String[] arguments) {
+        Objects.requireNonNull(arguments, "arguments");
+        return arguments.length >= 2
+                && IdeCommand.NAME.equals(arguments[0])
+                && "handshake".equals(arguments[1]);
+    }
+
+    static int runIdeHandshake(String[] arguments, Appendable output, Appendable error) throws IOException {
+        if (!isIdeHandshake(arguments)) {
+            throw new IllegalArgumentException("arguments are not an IDE handshake request");
+        }
+        return new IdeCommand().run(slice(arguments, 1), output, error);
     }
 
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
@@ -139,5 +162,9 @@ public final class MinosCliRunner {
 
     private static boolean isHelpToken(String argument) {
         return "--help".equals(argument) || "-h".equals(argument);
+    }
+
+    private static String[] slice(String[] values, int from) {
+        return java.util.Arrays.copyOfRange(values, from, values.length);
     }
 }

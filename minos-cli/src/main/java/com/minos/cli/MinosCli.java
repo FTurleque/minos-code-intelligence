@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.git.GitIntelligenceService;
 import com.minos.impact.ProjectImpactQuery;
 
 import java.io.IOException;
@@ -46,6 +47,8 @@ public final class MinosCli {
               impact             Analyze potential impact from a symbol
 
             Integration:
+              ide handshake      Negotiate the versioned external IDE protocol
+              git-activity       Show factual Git file/zone activity for a project
               nexus-export       Export the active normalized snapshot as NEXUS contract JSON
 
             Exit codes:
@@ -69,6 +72,8 @@ public final class MinosCli {
     private final ProviderCommand providerCommand;
     private final ArchitectureCommand architectureCommand;
     private final ImpactCommand impactCommand;
+    private final IdeCommand ideCommand;
+    private final GitActivityCommand gitActivityCommand;
     private final NexusExportCommand nexusExportCommand;
 
     public MinosCli(ProjectSymbolQuery symbolQuery) {
@@ -117,6 +122,21 @@ public final class MinosCli {
             Path home,
             ProviderPlatformService providerPlatformService
     ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService
+    ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
@@ -135,6 +155,10 @@ public final class MinosCli {
         this.providerCommand = providerPlatformService == null ? null : new ProviderCommand(providerPlatformService);
         this.architectureCommand = architectureQuery == null ? null : new ArchitectureCommand(architectureQuery);
         this.impactCommand = impactQuery == null ? null : new ImpactCommand(impactQuery);
+        this.ideCommand = new IdeCommand();
+        this.gitActivityCommand = projectOperations == null || gitIntelligenceService == null
+                ? null
+                : new GitActivityCommand(projectOperations, gitIntelligenceService);
         this.nexusExportCommand = nexusExportCommand;
     }
 
@@ -152,6 +176,9 @@ public final class MinosCli {
         }
         String command = arguments[0];
         String[] commandArguments = Arrays.copyOfRange(arguments, 1, arguments.length);
+        if (IdeCommand.NAME.equals(command)) {
+            return ideCommand.run(commandArguments, output, error);
+        }
         if (ProjectCommand.NAME.equals(command)) {
             return projectCommand == null ? unavailable(command, error) : projectCommand.run(commandArguments, output, error);
         }
@@ -181,6 +208,9 @@ public final class MinosCli {
         }
         if (ImpactCommand.NAME.equals(command)) {
             return impactCommand == null ? unavailable(command, error) : impactCommand.run(commandArguments, output, error);
+        }
+        if (GitActivityCommand.NAME.equals(command)) {
+            return gitActivityCommand == null ? unavailable(command, error) : gitActivityCommand.run(commandArguments, output, error);
         }
         if (NexusExportCommand.NAME.equals(command)) {
             return nexusExportCommand == null ? unavailable(command, error) : nexusExportCommand.run(commandArguments, output, error);

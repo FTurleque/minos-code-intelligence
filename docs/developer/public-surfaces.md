@@ -1,4 +1,4 @@
-# Surfaces publiques : CLI, API Java, MCP et NEXUS
+# Surfaces publiques : CLI, API Java, MCP, IntelliJ et NEXUS
 
 MINOS expose le même cœur métier par plusieurs adapters. Une fonctionnalité ne doit pas être réimplémentée différemment dans chaque transport.
 
@@ -15,21 +15,26 @@ classDiagram
       impactQuery()
       workspaceIntelligence()
       providerRuntimeManager()
+      gitIntelligence()
     }
     class MinosCli { <<adapter>> }
+    class MinosIdeProtocolV1 { <<external JSON protocol>> }
+    class MinosIntellijPlugin { <<Java 21 client>> }
     class MinosApi { <<public interface v1>> }
     class ProviderPlatformApi { <<public provider diagnostics v1>> }
     class MinosMcpServer { <<read-only adapter>> }
     class NexusExportService { <<integration contract v1>> }
 
     MinosCli --> MinosApplication
+    MinosIdeProtocolV1 --> MinosCli
+    MinosIntellijPlugin --> MinosIdeProtocolV1
     MinosApi --> MinosApplication
     ProviderPlatformApi --> MinosApplication
     MinosMcpServer --> MinosApplication
     NexusExportService --> MinosApplication
 ```
 
-## Composition M15–M17
+## Composition M15–M18
 
 `MinosApplication` est la composition locale partagée pour un `MINOS_HOME`. CLI, API et MCP peuvent recevoir la même instance et réutilisent registry, stores, runtime provider et services applicatifs.
 
@@ -44,11 +49,21 @@ ProviderRuntimeManager
       → extensions runtime indépendantes
 ```
 
+M18 n'ajoute pas un second moteur dans IntelliJ. Le plugin est volontairement un **client externe Java 21** du runtime MINOS Java 24 :
+
+```text
+IntelliJ plugin
+  ↓ processus local + JSON
+minos ide handshake / commandes CLI JSON
+  ↓
+MinosApplication
+```
+
 Le snapshot actif possède toujours une vue de requête immuable et indexée, mise en cache par identité de snapshot actif. Les transports ne reconstruisent ni cache ni indexes.
 
 ## CLI
 
-`MinosCli` reste le dispatcher. Il traduit arguments/formats vers les services applicatifs ; il n'est pas une couche métier consommée par les autres transports.
+`MinosCli` reste le dispatcher. Il traduit arguments/formats vers les services applicatifs ; il n'est pas une couche métier consommée par les autres transports, à l'exception du **contrat de processus externe M18** qui réutilise volontairement ses commandes JSON stables.
 
 Administration locale :
 
@@ -60,6 +75,15 @@ index <project>
 import-scip <project> ...
 ```
 
+Intégration M18 :
+
+```text
+ide handshake
+git-activity <project>
+```
+
+`ide handshake` négocie le protocole externe `minos-ide` v1 avant toute requête métier du plugin. `git-activity` expose l'activité factuelle déjà calculée par `GitIntelligenceService` et transporte explicitement `importanceInference=false`.
+
 `providers` est la surface M17 de diagnostic : version, langages, systèmes de build, niveau de chaque capability, score de conformance, limitations et état runtime. `tools` conserve la responsabilité d'installation et de vérification.
 
 Les runtimes marqués `requiredByDefault` définissent la baseline `doctor/tools verify`. Un provider optionnel peut donc être visible et installable sans rendre la baseline historique rouge tant qu'il n'est pas sélectionné.
@@ -68,13 +92,50 @@ Les runtimes marqués `requiredByDefault` définissent la baseline `doctor/tools
 
 ### Bootstrap et codes de sortie
 
-`MinosLauncher` traite `--version` sans store, traite `--help` sans home, expose `mcp` et ouvre une seule `MinosApplication` pour les commandes fonctionnelles.
+`MinosLauncher` traite `--version` sans store, traite `--help` et le handshake IDE sans dépendre d'un projet actif, expose `mcp` et ouvre une seule `MinosApplication` pour les commandes fonctionnelles.
 
 ```text
 0 success
 1 execution failure / diagnostic action required
 2 usage error
 ```
+
+## IntelliJ — protocole et plugin M18
+
+ADR-0027 fixe la frontière : le module Gradle `minos-intellij/` ne déclare aucune dépendance `com.minos:*`. Il communique avec le launcher MINOS installé localement et refuse une version de protocole différente de `1`.
+
+Surfaces natives :
+
+```text
+Tool Window MINOS
+  project/index/provider/snapshot
+  architecture graph
+  impact / related tests / relations
+  factual Git activity
+  index / reindex / dry-run / doctor
+
+Editor popup MINOS
+  open definition
+  usages
+  dependents
+  implementations
+  related tests
+  impact
+  architecture
+  copy symbol identity
+```
+
+Les actions éditeur utilisent le PSI uniquement pour identifier le contexte sous le caret. L'identité et les relations finales restent celles du snapshot MINOS.
+
+Les positions MINOS sont interprétées selon leur contrat : ligne base 1, colonne base 0 et encodage explicite `UTF8_CODE_UNITS`, `UTF16_CODE_UNITS`, `UTF32_CODE_UNITS` ou `UNKNOWN`. Le plugin convertit la colonne en offset UTF-16 IntelliJ et refuse une destination qui sort de la racine projet enregistrée.
+
+L'indexation depuis l'IDE invoque `minos index`; le plugin n'écrit jamais directement le staging, les snapshots ou le pointeur actif. La promotion atomique M1/M7/M14 reste donc la seule voie de publication.
+
+Le graphe IntelliJ consomme `minos architecture --format json`, en particulier `modules` et `moduleDependencies`. Il borne et filtre l'affichage mais ne crée aucune arête supplémentaire.
+
+Impact et tests liés conservent les champs explicatifs MINOS (`nature`, `confidence`, `limitations`, chemins/preuves). L'activité Git reste factuelle et n'est jamais transformée en score d'importance.
+
+Voir le [guide utilisateur IntelliJ](../user/intellij-plugin.md).
 
 ## API Java
 
@@ -117,24 +178,26 @@ M17 conserve volontairement le catalogue historique de **16 tools**. Les répons
 
 Le launcher natif fournit `minos mcp`. Le catalogue exact et son nombre sont vérifiés automatiquement dans [`../generated/product-facts.md`](../generated/product-facts.md).
 
+Le plugin IntelliJ M18 et le MCP peuvent coexister : le premier fournit une UX native et des actions administratives locales ; le second reste une surface read-only destinée aux agents.
+
 Voir le [guide utilisateur MCP](../user/mcp.md).
 
 ## Export NEXUS
 
-`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance et M17 la plateforme provider ; aucun de ces jalons ne change le contrat NEXUS.
+`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance, M17 la plateforme provider et M18 ajoute un client IDE ; aucun de ces jalons ne change le contrat NEXUS.
 
 ## Runtime natif vs Docker
 
 ADR-0021 sépare :
 
 ```text
-runtime natif = administration + providers + CLI + MCP local
+runtime natif = administration + providers + CLI + MCP local + protocole IDE
 Docker MCP    = consommation read-only durcie optionnelle
 ```
 
 Les deux modes ne doivent pas partager aveuglément un registre de chemins hôte Windows/conteneur.
 
-## Ajouter un nouvel écosystème M17
+## Ajouter un nouvel écosystème M17+
 
 1. ajouter les détecteurs SPI nécessaires ;
 2. déclarer un `IndexerProvider` avec un profil **exhaustif** `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED` ;
@@ -148,7 +211,7 @@ Un build system peut être correctement découvert alors qu'aucun provider d'ex�
 
 ## Ajouter une nouvelle surface
 
-Pour un futur adapter HTTP, IDE ou autre protocole :
+Pour un futur adapter HTTP ou autre protocole :
 
 1. réutiliser `MinosApplication` et les services existants ;
 2. définir des DTOs/serialisations propres au contrat externe ;
@@ -156,13 +219,16 @@ Pour un futur adapter HTTP, IDE ou autre protocole :
 4. conserver limitations et provenance ;
 5. ne pas déplacer la logique métier vers le transport ;
 6. décider explicitement si la surface est read-only ou administrative ;
-7. ajouter des tests de frontière empêchant les fuites de types internes.
+7. ajouter des tests de frontière empêchant les fuites de types internes ;
+8. lorsqu'une différence de JVM ou de cycle de release le justifie, préférer un contrat externe versionné à une dépendance sur les classes internes.
 
 ## Qualité et cohérence
 
 - tests API : frontière du contrat public ;
 - tests MCP : catalogue/schemas, profils provider et replay STDIO ;
+- tests IDE : handshake incompatible, invocation process, positions UTF-8/16/32, graphe borné ;
+- Plugin Verifier : compatibilité IntelliJ ciblée ;
 - conformance kit : profils exhaustifs et déterministes ;
 - `scripts/docs/product-facts.py --check` : facts mécaniques alignés ;
-- `scripts/m17/run-final.ps1` : replay M14 + Kotlin/Python exact-head ;
+- `scripts/m18/run-final.ps1` : Maven Java 24 + gates plugin IntelliJ + exact-head ;
 - les rapports historiques ne sont pas réécrits pour refléter le présent.

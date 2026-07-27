@@ -55,6 +55,8 @@ Nombre de tools : **16**
 - `related-tests`
 - `architecture`
 - `impact`
+- `ide handshake`
+- `git-activity`
 - `nexus-export`
 
 ## Providers qualifiés
