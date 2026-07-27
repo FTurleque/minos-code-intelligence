@@ -26,8 +26,9 @@ import java.util.function.Consumer;
 public final class ArchitectureGraphPanel extends JPanel {
 
     private final Map<String, Rectangle2D> hitBoxes = new LinkedHashMap<>();
-    private List<Node> nodes = List.of();
-    private List<Edge> edges = List.of();
+    private List<Node> allNodes = List.of();
+    private List<Edge> allEdges = List.of();
+    private int maxNodes = 120;
     private String filter = "";
     private String selectedNodeId;
     private Consumer<JsonObject> selectionListener = ignored -> { };
@@ -66,10 +67,11 @@ public final class ArchitectureGraphPanel extends JPanel {
                     module));
         }
         parsed.sort(Comparator.comparing(Node::path).thenComparing(Node::name).thenComparing(Node::id));
-        int limit = Math.max(10, Math.min(maxNodes, 500));
-        nodes = List.copyOf(parsed.subList(0, Math.min(parsed.size(), limit)));
-        Map<String, Node> included = new LinkedHashMap<>();
-        nodes.forEach(node -> included.put(node.id(), node));
+        allNodes = List.copyOf(parsed);
+        this.maxNodes = Math.max(10, Math.min(maxNodes, 500));
+
+        Map<String, Node> knownNodes = new LinkedHashMap<>();
+        allNodes.forEach(node -> knownNodes.put(node.id(), node));
 
         List<Edge> parsedEdges = new ArrayList<>();
         for (JsonElement element : array(architecture, "moduleDependencies")) {
@@ -79,12 +81,12 @@ public final class ArchitectureGraphPanel extends JPanel {
             JsonObject edge = element.getAsJsonObject();
             String source = string(edge, "sourceModuleId");
             String target = string(edge, "targetModuleId");
-            if (included.containsKey(source) && included.containsKey(target)) {
+            if (knownNodes.containsKey(source) && knownNodes.containsKey(target)) {
                 parsedEdges.add(new Edge(
                         source,
                         target,
-                        fallback(string(edge, "sourceModuleName"), included.get(source).name()),
-                        fallback(string(edge, "targetModuleName"), included.get(target).name()),
+                        fallback(string(edge, "sourceModuleName"), knownNodes.get(source).name()),
+                        fallback(string(edge, "targetModuleName"), knownNodes.get(target).name()),
                         intValue(edge, "dependencyCount"),
                         string(edge, "nature"),
                         doubleValue(edge, "confidence"),
@@ -94,7 +96,7 @@ public final class ArchitectureGraphPanel extends JPanel {
             }
         }
         parsedEdges.sort(Comparator.comparing(Edge::source).thenComparing(Edge::target));
-        edges = List.copyOf(parsedEdges);
+        allEdges = List.copyOf(parsedEdges);
         selectedNodeId = null;
         repaint();
     }
@@ -112,11 +114,11 @@ public final class ArchitectureGraphPanel extends JPanel {
         if (nodeId == null || nodeId.isBlank()) {
             return "No module selected.";
         }
-        List<Edge> adjacent = edges.stream()
+        List<Edge> adjacent = allEdges.stream()
                 .filter(edge -> nodeId.equals(edge.source()) || nodeId.equals(edge.target()))
                 .toList();
         if (adjacent.isEmpty()) {
-            return "No module dependency edges in the bounded graph.";
+            return "No module dependency edges.";
         }
         List<String> lines = new ArrayList<>();
         for (Edge edge : adjacent) {
@@ -150,6 +152,7 @@ public final class ArchitectureGraphPanel extends JPanel {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             List<Node> visible = visibleNodes();
             if (visible.isEmpty()) {
+                hitBoxes.clear();
                 g.drawString("No architecture modules match the current filter.", 20, 30);
                 return;
             }
@@ -158,7 +161,7 @@ public final class ArchitectureGraphPanel extends JPanel {
             Color background = getBackground();
             g.setStroke(new BasicStroke(1.2f));
             g.setColor(new Color(foreground.getRed(), foreground.getGreen(), foreground.getBlue(), 110));
-            for (Edge edge : edges) {
+            for (Edge edge : allEdges) {
                 Point source = points.get(edge.source());
                 Point target = points.get(edge.target());
                 if (source == null || target == null) {
@@ -202,17 +205,15 @@ public final class ArchitectureGraphPanel extends JPanel {
         return hitBoxes.entrySet().stream()
                 .filter(entry -> entry.getValue().contains(event.getPoint()))
                 .findFirst()
-                .flatMap(entry -> nodes.stream().filter(node -> node.id().equals(entry.getKey())).findFirst());
+                .flatMap(entry -> allNodes.stream().filter(node -> node.id().equals(entry.getKey())).findFirst());
     }
 
     private List<Node> visibleNodes() {
-        if (filter.isBlank()) {
-            return nodes;
-        }
-        return nodes.stream()
-                .filter(node -> (node.id() + " " + node.name() + " " + node.path())
+        return allNodes.stream()
+                .filter(node -> filter.isBlank() || (node.id() + " " + node.name() + " " + node.path())
                         .toLowerCase(Locale.ROOT)
                         .contains(filter))
+                .limit(maxNodes)
                 .toList();
     }
 
