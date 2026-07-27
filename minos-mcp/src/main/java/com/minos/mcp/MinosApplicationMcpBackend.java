@@ -19,9 +19,13 @@ import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
 import com.minos.output.ImpactResultRenderer;
+import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
 import com.minos.program.analysis.SecurityAnalysisService;
+import com.minos.semantic.HybridContextBuilder;
+import com.minos.semantic.HybridSearchService;
+import com.minos.semantic.SemanticSearchService;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,6 +49,11 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_PROGRAM_GRAPH_EDGES = 50_000;
     private static final int DEFAULT_SECURITY_DEPTH = 8;
     private static final int DEFAULT_SECURITY_LIMIT = 100;
+    private static final int DEFAULT_SEMANTIC_LIMIT = 20;
+    private static final int DEFAULT_HYBRID_LIMIT = 20;
+    private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENTS = 10;
+    private static final int DEFAULT_HYBRID_CONTEXT_TOKENS = 4_000;
+    private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS = 800;
 
     private final MinosApplication application;
     private final ProjectInspectionService projects;
@@ -203,6 +212,32 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                         new SecurityAnalysisService.SecurityRequest(request.sourceNodeId(), request.depth(), request.limit())));
     }
 
+    @Override
+    public String semanticIndexStatus(String project) throws Exception {
+        return SemanticAnalysisResultRenderer.renderIndexStatus(application.semanticIndexService().status(project));
+    }
+
+    @Override
+    public String semanticSearch(SemanticSearchRequest request) throws Exception {
+        return SemanticAnalysisResultRenderer.renderSemantic(application.semanticSearchService().search(
+                request.project(), new SemanticSearchService.SearchRequest(
+                        request.query(), request.limit(), request.minimumScore())));
+    }
+
+    @Override
+    public String hybridSearch(HybridSearchRequest request) throws Exception {
+        return SemanticAnalysisResultRenderer.renderHybrid(application.hybridSearchService().search(
+                request.project(), new HybridSearchService.HybridRequest(
+                        request.query(), request.limit(), request.minimumScore())));
+    }
+
+    @Override
+    public String hybridContext(HybridContextRequest request) throws Exception {
+        return SemanticAnalysisResultRenderer.renderContext(application.hybridContextBuilder().build(
+                request.project(), new HybridContextBuilder.ContextRequest(
+                        request.query(), request.maxDocuments(), request.maxTokens(), request.maxTokensPerDocument())));
+    }
+
     private List<Map<String, Object>> providerProfiles() {
         return providerPlatform.listProviders().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -286,9 +321,32 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
 
     static SecurityRequest securityDefaults(String project, String sourceNodeId, Integer depth, Integer limit) {
         return new SecurityRequest(
-                project,
-                sourceNodeId,
+                project, sourceNodeId,
                 depth == null ? DEFAULT_SECURITY_DEPTH : depth,
                 limit == null ? DEFAULT_SECURITY_LIMIT : limit);
+    }
+
+    static SemanticSearchRequest semanticDefaults(String project, String query, Integer limit, Double minimumScore) {
+        return new SemanticSearchRequest(
+                project, query,
+                limit == null ? DEFAULT_SEMANTIC_LIMIT : limit,
+                minimumScore == null ? 0.0 : minimumScore);
+    }
+
+    static HybridSearchRequest hybridDefaults(String project, String query, Integer limit, Double minimumScore) {
+        return new HybridSearchRequest(
+                project, query,
+                limit == null ? DEFAULT_HYBRID_LIMIT : limit,
+                minimumScore == null ? 0.0 : minimumScore);
+    }
+
+    static HybridContextRequest hybridContextDefaults(
+            String project, String query, Integer maxDocuments, Integer maxTokens, Integer maxTokensPerDocument
+    ) {
+        return new HybridContextRequest(
+                project, query,
+                maxDocuments == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENTS : maxDocuments,
+                maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens,
+                maxTokensPerDocument == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS : maxTokensPerDocument);
     }
 }

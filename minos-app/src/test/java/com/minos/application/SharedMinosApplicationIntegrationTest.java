@@ -45,14 +45,18 @@ class SharedMinosApplicationIntegrationTest {
         assertEquals("shared-project", multiRepositoryApi.listProjects().getFirst().name());
 
         var mcpTools = MinosMcpApplicationTools.specifications(application);
-        assertEquals(19, mcpTools.size());
+        assertEquals(23, mcpTools.size());
         Set<String> toolNames = mcpTools.stream()
                 .map(spec -> spec.tool().name())
                 .collect(Collectors.toSet());
         assertTrue(toolNames.containsAll(Set.of(
                 "minos_program_graph",
                 "minos_impact_v2",
-                "minos_security_paths"
+                "minos_security_paths",
+                "minos_semantic_index_status",
+                "minos_semantic_search",
+                "minos_hybrid_search",
+                "minos_hybrid_context"
         )));
 
         var projectStructure = mcpTools.stream()
@@ -66,5 +70,17 @@ class SharedMinosApplicationIntegrationTest {
         String mcpJson = ((TextContent) mcpResult.content().getFirst()).text();
         assertTrue(mcpJson.contains("\"name\":\"shared-project\""));
         assertTrue(mcpJson.contains("\"indexState\":\"NEVER_INDEXED\""));
+
+        var semanticStatus = mcpTools.stream()
+                .filter(spec -> "minos_semantic_index_status".equals(spec.tool().name()))
+                .findFirst().orElseThrow();
+        var semanticResult = semanticStatus.callHandler().apply(null,
+                CallToolRequest.builder("minos_semantic_index_status")
+                        .arguments(Map.of("project", "shared-project"))
+                        .build());
+        assertFalse(Boolean.TRUE.equals(semanticResult.isError()));
+        String semanticJson = ((TextContent) semanticResult.content().getFirst()).text();
+        assertTrue(semanticJson.contains("\"state\":\"DISABLED\""));
+        assertTrue(semanticJson.contains("SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE"));
     }
 }

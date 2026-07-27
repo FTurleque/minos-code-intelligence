@@ -27,29 +27,36 @@ import com.minos.program.analysis.SecurityAnalysisService;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
+import com.minos.semantic.EmbeddingProvider;
+import com.minos.semantic.HybridContextBuilder;
+import com.minos.semantic.HybridSearchService;
+import com.minos.semantic.LocalHashEmbeddingProvider;
+import com.minos.semantic.SemanticIndexService;
+import com.minos.semantic.SemanticSearchService;
+import com.minos.semantic.SemanticVectorStore;
+import com.minos.store.FileSemanticVectorStore;
 import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
-/**
- * Long-lived local composition root for one MINOS home.
- *
- * <p>The public surfaces receive this object instead of rebuilding their own
- * registry, stores, provider runtime and query services. Provider-specific
- * implementations are confined to the default local factory; consumers only
- * see provider-neutral runtime ports and descriptors.</p>
- */
+/** Long-lived local composition root for one MINOS home. */
 public final class MinosApplication {
+
+    public static final String SEMANTIC_PROVIDER_ENV = "MINOS_SEMANTIC_PROVIDER";
+    public static final String SEMANTIC_PROVIDER_PROPERTY = "minos.semantic.provider";
 
     private final Path home;
     private final LocalProjectRegistry projectRegistry;
     private final FileSymbolSnapshotStore snapshotStore;
     private final FileIndexStateStore indexStateStore;
     private final FileProjectFingerprintSnapshotStore fingerprintStore;
+    private final SemanticVectorStore semanticVectorStore;
     private final ProjectDiscoveryService discoveryService;
     private final ProjectFingerprintService fingerprintService;
     private final ProjectInvalidationService invalidationService;
@@ -66,6 +73,10 @@ public final class MinosApplication {
     private final ProgramGraphService programGraphService;
     private final AdvancedImpactService advancedImpactService;
     private final SecurityAnalysisService securityAnalysisService;
+    private final SemanticIndexService semanticIndexService;
+    private final SemanticSearchService semanticSearchService;
+    private final HybridSearchService hybridSearchService;
+    private final HybridContextBuilder hybridContextBuilder;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     private MinosApplication(
@@ -74,6 +85,7 @@ public final class MinosApplication {
             FileSymbolSnapshotStore snapshotStore,
             FileIndexStateStore indexStateStore,
             FileProjectFingerprintSnapshotStore fingerprintStore,
+            SemanticVectorStore semanticVectorStore,
             ProjectDiscoveryService discoveryService,
             ProjectFingerprintService fingerprintService,
             ProjectInvalidationService invalidationService,
@@ -83,13 +95,15 @@ public final class MinosApplication {
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
             GitIntelligenceService gitIntelligence,
-            List<ProgramGraphProvider> programGraphProviders
+            List<ProgramGraphProvider> programGraphProviders,
+            Optional<EmbeddingProvider> embeddingProvider
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.indexStateStore = Objects.requireNonNull(indexStateStore, "indexStateStore");
         this.fingerprintStore = Objects.requireNonNull(fingerprintStore, "fingerprintStore");
+        this.semanticVectorStore = Objects.requireNonNull(semanticVectorStore, "semanticVectorStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.fingerprintService = Objects.requireNonNull(fingerprintService, "fingerprintService");
         this.invalidationService = Objects.requireNonNull(invalidationService, "invalidationService");
@@ -100,128 +114,75 @@ public final class MinosApplication {
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
         List<ProgramGraphProvider> graphProviders = List.copyOf(Objects.requireNonNull(programGraphProviders, "programGraphProviders"));
-        if (graphProviders.isEmpty()) {
-            throw new IllegalArgumentException("programGraphProviders must not be empty");
-        }
+        if (graphProviders.isEmpty()) throw new IllegalArgumentException("programGraphProviders must not be empty");
+        Optional<EmbeddingProvider> semanticProvider = Objects.requireNonNull(embeddingProvider, "embeddingProvider");
         this.projectInspectionService = new ProjectInspectionService(
-                this.home,
-                projectRegistry,
-                snapshotStore,
-                indexStateStore,
-                discoveryService,
-                this.indexerDescriptors
-        );
+                this.home, projectRegistry, snapshotStore, indexStateStore, discoveryService, this.indexerDescriptors);
         this.projectQueryService = new ProjectQueryService(projectRegistry, snapshotStore);
         this.architectureQuery = new LocalProjectArchitectureQuery(projectRegistry, snapshotStore, discoveryService);
         this.impactQuery = new LocalProjectImpactQuery(projectRegistry, snapshotStore);
         this.programGraphService = new ProgramGraphService(projectRegistry, snapshotStore, graphProviders);
         this.advancedImpactService = new AdvancedImpactService(this.impactQuery, this.programGraphService);
         this.securityAnalysisService = new SecurityAnalysisService(this.programGraphService);
+        ProjectResolver resolver = new ProjectResolver(projectRegistry);
+        this.semanticIndexService = new SemanticIndexService(resolver, snapshotStore, semanticVectorStore, semanticProvider);
+        this.semanticSearchService = new SemanticSearchService(this.semanticIndexService);
+        this.hybridSearchService = new HybridSearchService(resolver, snapshotStore, this.semanticIndexService, this.semanticSearchService);
+        this.hybridContextBuilder = new HybridContextBuilder(this.hybridSearchService);
         this.workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
     }
 
-    /** Opens the qualified local MINOS composition for one storage home. */
-    public static MinosApplication open(Path home) throws IOException {
-        return builder(home).build();
-    }
-
     /**
-     * Builder used by production and tests. Tests may replace stores/provider ports
-     * without requiring a different application surface.
+     * Opens MINOS with semantic embeddings disabled by default.
+     *
+     * <p>Native deployments may explicitly opt into the bundled local reference provider with
+     * {@code MINOS_SEMANTIC_PROVIDER=local-hash} or {@code -Dminos.semantic.provider=local-hash}.
+     * Unknown provider names fail fast instead of silently changing retrieval semantics.</p>
      */
-    public static Builder builder(Path home) {
-        return new Builder(home);
+    public static MinosApplication open(Path home) throws IOException {
+        Builder builder = builder(home);
+        String configured = System.getProperty(SEMANTIC_PROVIDER_PROPERTY);
+        if (configured == null || configured.isBlank()) configured = System.getenv(SEMANTIC_PROVIDER_ENV);
+        if (configured == null || configured.isBlank() || "disabled".equalsIgnoreCase(configured)) {
+            return builder.build();
+        }
+        String provider = configured.trim().toLowerCase(Locale.ROOT);
+        if ("local-hash".equals(provider)) {
+            return builder.embeddingProvider(new LocalHashEmbeddingProvider()).build();
+        }
+        throw new IllegalArgumentException("unsupported semantic provider: " + configured);
     }
 
-    public Path home() {
-        return home;
-    }
+    public static Builder builder(Path home) { return new Builder(home); }
 
-    public LocalProjectRegistry projectRegistry() {
-        return projectRegistry;
-    }
+    public Path home() { return home; }
+    public LocalProjectRegistry projectRegistry() { return projectRegistry; }
+    public FileSymbolSnapshotStore snapshotStore() { return snapshotStore; }
+    public FileIndexStateStore indexStateStore() { return indexStateStore; }
+    public FileProjectFingerprintSnapshotStore fingerprintStore() { return fingerprintStore; }
+    public SemanticVectorStore semanticVectorStore() { return semanticVectorStore; }
+    public ProjectDiscoveryService discoveryService() { return discoveryService; }
+    public ProjectFingerprintService fingerprintService() { return fingerprintService; }
+    public ProjectInvalidationService invalidationService() { return invalidationService; }
+    public IncrementalIndexingPlanner incrementalIndexingPlanner() { return incrementalIndexingPlanner; }
+    public ProviderRuntimeManager providerRuntimeManager() { return providerRuntimeManager; }
+    public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
+    public SnapshotStager snapshotStager() { return snapshotStager; }
+    public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
+    public GitIntelligenceService gitIntelligence() { return gitIntelligence; }
+    public ProjectInspectionService projectInspectionService() { return projectInspectionService; }
+    public ProjectQueryService projectQueryService() { return projectQueryService; }
+    public ProjectArchitectureQuery architectureQuery() { return architectureQuery; }
+    public ProjectImpactQuery impactQuery() { return impactQuery; }
+    public ProgramGraphService programGraphService() { return programGraphService; }
+    public AdvancedImpactService advancedImpactService() { return advancedImpactService; }
+    public SecurityAnalysisService securityAnalysisService() { return securityAnalysisService; }
+    public SemanticIndexService semanticIndexService() { return semanticIndexService; }
+    public SemanticSearchService semanticSearchService() { return semanticSearchService; }
+    public HybridSearchService hybridSearchService() { return hybridSearchService; }
+    public HybridContextBuilder hybridContextBuilder() { return hybridContextBuilder; }
+    public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
 
-    public FileSymbolSnapshotStore snapshotStore() {
-        return snapshotStore;
-    }
-
-    public FileIndexStateStore indexStateStore() {
-        return indexStateStore;
-    }
-
-    public FileProjectFingerprintSnapshotStore fingerprintStore() {
-        return fingerprintStore;
-    }
-
-    public ProjectDiscoveryService discoveryService() {
-        return discoveryService;
-    }
-
-    public ProjectFingerprintService fingerprintService() {
-        return fingerprintService;
-    }
-
-    public ProjectInvalidationService invalidationService() {
-        return invalidationService;
-    }
-
-    public IncrementalIndexingPlanner incrementalIndexingPlanner() {
-        return incrementalIndexingPlanner;
-    }
-
-    public ProviderRuntimeManager providerRuntimeManager() {
-        return providerRuntimeManager;
-    }
-
-    public List<IndexerDescriptor> indexerDescriptors() {
-        return indexerDescriptors;
-    }
-
-    public SnapshotStager snapshotStager() {
-        return snapshotStager;
-    }
-
-    public SnapshotPromoter snapshotPromoter() {
-        return snapshotPromoter;
-    }
-
-    public GitIntelligenceService gitIntelligence() {
-        return gitIntelligence;
-    }
-
-    public ProjectInspectionService projectInspectionService() {
-        return projectInspectionService;
-    }
-
-    public ProjectQueryService projectQueryService() {
-        return projectQueryService;
-    }
-
-    public ProjectArchitectureQuery architectureQuery() {
-        return architectureQuery;
-    }
-
-    public ProjectImpactQuery impactQuery() {
-        return impactQuery;
-    }
-
-    public ProgramGraphService programGraphService() {
-        return programGraphService;
-    }
-
-    public AdvancedImpactService advancedImpactService() {
-        return advancedImpactService;
-    }
-
-    public SecurityAnalysisService securityAnalysisService() {
-        return securityAnalysisService;
-    }
-
-    public WorkspaceIntelligenceService workspaceIntelligence() {
-        return workspaceIntelligence;
-    }
-
-    /** Creates a fresh negotiation registry over the application's qualified descriptors. */
     public IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
         if (providerOverride == null || providerOverride.isBlank()) {
@@ -231,8 +192,7 @@ public final class MinosApplication {
         IndexerDescriptor descriptor = indexerDescriptors.stream()
                 .filter(candidate -> providerOverride.equals(candidate.id()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "unknown provider override: " + providerOverride));
+                .orElseThrow(() -> new IllegalArgumentException("unknown provider override: " + providerOverride));
         registry.register(descriptor);
         return registry;
     }
@@ -243,6 +203,7 @@ public final class MinosApplication {
         private FileSymbolSnapshotStore snapshotStore;
         private FileIndexStateStore indexStateStore;
         private FileProjectFingerprintSnapshotStore fingerprintStore;
+        private SemanticVectorStore semanticVectorStore;
         private ProjectDiscoveryService discoveryService;
         private ProjectFingerprintService fingerprintService;
         private ProjectInvalidationService invalidationService;
@@ -253,114 +214,49 @@ public final class MinosApplication {
         private SnapshotPromoter snapshotPromoter;
         private GitIntelligenceService gitIntelligence;
         private List<ProgramGraphProvider> programGraphProviders;
+        private EmbeddingProvider embeddingProvider;
 
         private Builder(Path home) {
             this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         }
 
-        public Builder projectRegistry(LocalProjectRegistry value) {
-            this.projectRegistry = Objects.requireNonNull(value, "projectRegistry");
-            return this;
-        }
-
-        public Builder snapshotStore(FileSymbolSnapshotStore value) {
-            this.snapshotStore = Objects.requireNonNull(value, "snapshotStore");
-            return this;
-        }
-
-        public Builder indexStateStore(FileIndexStateStore value) {
-            this.indexStateStore = Objects.requireNonNull(value, "indexStateStore");
-            return this;
-        }
-
-        public Builder fingerprintStore(FileProjectFingerprintSnapshotStore value) {
-            this.fingerprintStore = Objects.requireNonNull(value, "fingerprintStore");
-            return this;
-        }
-
-        public Builder discoveryService(ProjectDiscoveryService value) {
-            this.discoveryService = Objects.requireNonNull(value, "discoveryService");
-            return this;
-        }
-
-        public Builder fingerprintService(ProjectFingerprintService value) {
-            this.fingerprintService = Objects.requireNonNull(value, "fingerprintService");
-            return this;
-        }
-
-        public Builder invalidationService(ProjectInvalidationService value) {
-            this.invalidationService = Objects.requireNonNull(value, "invalidationService");
-            return this;
-        }
-
-        public Builder incrementalIndexingPlanner(IncrementalIndexingPlanner value) {
-            this.incrementalIndexingPlanner = Objects.requireNonNull(value, "incrementalIndexingPlanner");
-            return this;
-        }
-
-        public Builder providerRuntimeManager(ProviderRuntimeManager value) {
-            this.providerRuntimeManager = Objects.requireNonNull(value, "providerRuntimeManager");
-            return this;
-        }
-
-        public Builder indexerDescriptors(List<IndexerDescriptor> value) {
-            this.indexerDescriptors = List.copyOf(Objects.requireNonNull(value, "indexerDescriptors"));
-            return this;
-        }
-
+        public Builder projectRegistry(LocalProjectRegistry value) { this.projectRegistry = Objects.requireNonNull(value); return this; }
+        public Builder snapshotStore(FileSymbolSnapshotStore value) { this.snapshotStore = Objects.requireNonNull(value); return this; }
+        public Builder indexStateStore(FileIndexStateStore value) { this.indexStateStore = Objects.requireNonNull(value); return this; }
+        public Builder fingerprintStore(FileProjectFingerprintSnapshotStore value) { this.fingerprintStore = Objects.requireNonNull(value); return this; }
+        public Builder semanticVectorStore(SemanticVectorStore value) { this.semanticVectorStore = Objects.requireNonNull(value); return this; }
+        /** Opts this application instance into semantic embeddings. Default is disabled. */
+        public Builder embeddingProvider(EmbeddingProvider value) { this.embeddingProvider = Objects.requireNonNull(value); return this; }
+        public Builder discoveryService(ProjectDiscoveryService value) { this.discoveryService = Objects.requireNonNull(value); return this; }
+        public Builder fingerprintService(ProjectFingerprintService value) { this.fingerprintService = Objects.requireNonNull(value); return this; }
+        public Builder invalidationService(ProjectInvalidationService value) { this.invalidationService = Objects.requireNonNull(value); return this; }
+        public Builder incrementalIndexingPlanner(IncrementalIndexingPlanner value) { this.incrementalIndexingPlanner = Objects.requireNonNull(value); return this; }
+        public Builder providerRuntimeManager(ProviderRuntimeManager value) { this.providerRuntimeManager = Objects.requireNonNull(value); return this; }
+        public Builder indexerDescriptors(List<IndexerDescriptor> value) { this.indexerDescriptors = List.copyOf(Objects.requireNonNull(value)); return this; }
         public Builder snapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {
-            this.snapshotStager = Objects.requireNonNull(stager, "snapshotStager");
-            this.snapshotPromoter = Objects.requireNonNull(promoter, "snapshotPromoter");
-            return this;
+            this.snapshotStager = Objects.requireNonNull(stager); this.snapshotPromoter = Objects.requireNonNull(promoter); return this;
         }
-
-        public Builder gitIntelligence(GitIntelligenceService value) {
-            this.gitIntelligence = Objects.requireNonNull(value, "gitIntelligence");
-            return this;
-        }
-
+        public Builder gitIntelligence(GitIntelligenceService value) { this.gitIntelligence = Objects.requireNonNull(value); return this; }
         public Builder programGraphProviders(List<ProgramGraphProvider> value) {
-            this.programGraphProviders = List.copyOf(Objects.requireNonNull(value, "programGraphProviders"));
-            if (this.programGraphProviders.isEmpty()) {
-                throw new IllegalArgumentException("programGraphProviders must not be empty");
-            }
+            this.programGraphProviders = List.copyOf(Objects.requireNonNull(value));
+            if (this.programGraphProviders.isEmpty()) throw new IllegalArgumentException("programGraphProviders must not be empty");
             return this;
         }
 
         public MinosApplication build() throws IOException {
-            LocalProjectRegistry effectiveRegistry = projectRegistry != null
-                    ? projectRegistry
-                    : new LocalProjectRegistry(home.resolve("registry"));
-            FileSymbolSnapshotStore effectiveSnapshots = snapshotStore != null
-                    ? snapshotStore
-                    : new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
-            FileIndexStateStore effectiveIndexState = indexStateStore != null
-                    ? indexStateStore
-                    : new FileIndexStateStore(home.resolve("index-state"));
-            FileProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null
-                    ? fingerprintStore
-                    : new FileProjectFingerprintSnapshotStore(home.resolve("fingerprint-snapshots"));
-            ProjectDiscoveryService effectiveDiscovery = discoveryService != null
-                    ? discoveryService
-                    : new ProjectDiscoveryService();
-            ProjectFingerprintService effectiveFingerprintService = fingerprintService != null
-                    ? fingerprintService
-                    : new ProjectFingerprintService();
-            ProjectInvalidationService effectiveInvalidation = invalidationService != null
-                    ? invalidationService
-                    : new ProjectInvalidationService();
-            IncrementalIndexingPlanner effectivePlanner = incrementalIndexingPlanner != null
-                    ? incrementalIndexingPlanner
-                    : new IncrementalIndexingPlanner();
-            List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null
-                    ? indexerDescriptors
-                    : List.copyOf(ScipIndexerCatalog.qualifiedM17Descriptors());
+            LocalProjectRegistry effectiveRegistry = projectRegistry != null ? projectRegistry : new LocalProjectRegistry(home.resolve("registry"));
+            FileSymbolSnapshotStore effectiveSnapshots = snapshotStore != null ? snapshotStore : new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
+            FileIndexStateStore effectiveIndexState = indexStateStore != null ? indexStateStore : new FileIndexStateStore(home.resolve("index-state"));
+            FileProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null ? fingerprintStore : new FileProjectFingerprintSnapshotStore(home.resolve("fingerprint-snapshots"));
+            SemanticVectorStore effectiveSemanticStore = semanticVectorStore != null ? semanticVectorStore : new FileSemanticVectorStore(home.resolve("semantic-index"));
+            ProjectDiscoveryService effectiveDiscovery = discoveryService != null ? discoveryService : new ProjectDiscoveryService();
+            ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
+            ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
+            IncrementalIndexingPlanner effectivePlanner = incrementalIndexingPlanner != null ? incrementalIndexingPlanner : new IncrementalIndexingPlanner();
+            List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null ? indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM17Descriptors());
             ProviderRuntimeManager effectiveProviderRuntime = providerRuntimeManager != null
                     ? providerRuntimeManager
-                    : new CompositeProviderRuntimeManager(List.of(
-                            new ManagedScipProviderRuntimeManager(home),
-                            new ManagedScipPythonRuntimeManager(home)
-                    ));
+                    : new CompositeProviderRuntimeManager(List.of(new ManagedScipProviderRuntimeManager(home), new ManagedScipPythonRuntimeManager(home)));
 
             SnapshotStager effectiveStager = snapshotStager;
             SnapshotPromoter effectivePromoter = snapshotPromoter;
@@ -368,36 +264,20 @@ public final class MinosApplication {
                 throw new IllegalStateException("snapshot stager and promoter must be configured together");
             }
             if (effectiveStager == null) {
-                ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(
-                        home, effectiveSnapshots, effectiveDescriptors);
+                ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, effectiveSnapshots, effectiveDescriptors);
                 effectiveStager = lifecycle;
                 effectivePromoter = lifecycle;
             }
 
-            GitIntelligenceService effectiveGit = gitIntelligence != null
-                    ? gitIntelligence
-                    : new GitIntelligenceService();
+            GitIntelligenceService effectiveGit = gitIntelligence != null ? gitIntelligence : new GitIntelligenceService();
             List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
-                    ? programGraphProviders
-                    : List.of(new RelationshipProgramGraphProvider());
+                    ? programGraphProviders : List.of(new RelationshipProgramGraphProvider());
 
             return new MinosApplication(
-                    home,
-                    effectiveRegistry,
-                    effectiveSnapshots,
-                    effectiveIndexState,
-                    effectiveFingerprints,
-                    effectiveDiscovery,
-                    effectiveFingerprintService,
-                    effectiveInvalidation,
-                    effectivePlanner,
-                    effectiveProviderRuntime,
-                    effectiveDescriptors,
-                    effectiveStager,
-                    effectivePromoter,
-                    effectiveGit,
-                    effectiveProgramGraphProviders
-            );
+                    home, effectiveRegistry, effectiveSnapshots, effectiveIndexState, effectiveFingerprints,
+                    effectiveSemanticStore, effectiveDiscovery, effectiveFingerprintService, effectiveInvalidation,
+                    effectivePlanner, effectiveProviderRuntime, effectiveDescriptors, effectiveStager, effectivePromoter,
+                    effectiveGit, effectiveProgramGraphProviders, Optional.ofNullable(embeddingProvider));
         }
     }
 }

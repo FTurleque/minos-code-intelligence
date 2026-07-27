@@ -1,10 +1,10 @@
 # Surfaces publiques : CLI, API Java, MCP, IntelliJ et NEXUS
 
-MINOS expose le même cœur métier par plusieurs adapters. Une fonctionnalité ne doit pas être réimplémentée différemment dans chaque transport.
+MINOS expose un même cœur métier par plusieurs adapters. Une capacité n'est jamais réimplémentée différemment pour chaque transport.
 
-Les faits mécaniquement calculables (versions, catalogue MCP, commandes CLI, formats et providers) sont générés depuis le code dans [`../generated/product-facts.md`](../generated/product-facts.md). La présente page reste narrative et architecturale.
+Les facts mécaniquement calculables — version, catalogue MCP, commandes CLI, formats et providers — sont générés depuis le code dans [`../generated/product-facts.md`](../generated/product-facts.md). Cette page décrit les responsabilités et invariants.
 
-## Relations entre surfaces
+## Composition partagée
 
 ```mermaid
 classDiagram
@@ -16,6 +16,10 @@ classDiagram
       programGraphService()
       advancedImpactService()
       securityAnalysisService()
+      semanticIndexService()
+      semanticSearchService()
+      hybridSearchService()
+      hybridContextBuilder()
       workspaceIntelligence()
       providerRuntimeManager()
       gitIntelligence()
@@ -26,8 +30,10 @@ classDiagram
     class MinosApi { <<public interface v1>> }
     class ProviderPlatformApi { <<public provider diagnostics v1>> }
     class AdvancedCodeIntelligenceApi { <<public advanced analysis v1>> }
+    class SemanticCodeIntelligenceApi { <<public semantic/hybrid v1>> }
     class MinosMcpServer { <<read-only adapter>> }
-    class NexusExportService { <<integration contract v1>> }
+    class NexusExportService { <<structured contract v1>> }
+    class NexusSemanticSignalService { <<semantic signals v2>> }
 
     MinosCli --> MinosApplication
     MinosIdeProtocolV1 --> MinosCli
@@ -35,87 +41,55 @@ classDiagram
     MinosApi --> MinosApplication
     ProviderPlatformApi --> MinosApplication
     AdvancedCodeIntelligenceApi --> MinosApplication
+    SemanticCodeIntelligenceApi --> MinosApplication
     MinosMcpServer --> MinosApplication
     NexusExportService --> MinosApplication
+    NexusSemanticSignalService --> MinosApplication
 ```
 
-## Composition M15–M19
+`MinosApplication` est la composition locale partagée d'un `MINOS_HOME`. Les stores, caches, runtimes provider et services ne doivent pas être reconstruits par les transports.
 
-`MinosApplication` est la composition locale partagée pour un `MINOS_HOME`. CLI, API et MCP peuvent recevoir la même instance et réutilisent registry, stores, runtime provider et services applicatifs.
-
-M17 ajoute deux compositions provider-neutral :
+## Couches d'intelligence
 
 ```text
-ProjectDiscoveryService
-  → ProjectDetector / BuildSystemDetector / SourceRootDetector / LanguageDetector
-
-ProviderRuntimeManager
-  → CompositeProviderRuntimeManager
-      → extensions runtime indépendantes
+snapshot structuré MINOS
+   ├── symboles / relations / architecture / Git
+   ├── ProgramGraph M19
+   │      ├── Impact v2
+   │      └── Security paths
+   └── SemanticDocument M20
+          ↓ EmbeddingProvider optionnel
+      SemanticVectorStore reconstruisible
+          ├── SemanticSearch
+          ├── HybridSearch
+          └── HybridContext
 ```
 
-M18 n'ajoute pas un second moteur dans IntelliJ. Le plugin est volontairement un **client externe Java 21** du runtime MINOS Java 24 :
-
-```text
-IntelliJ plugin
-  ↓ processus local + JSON
-minos ide handshake / commandes CLI JSON
-  ↓
-MinosApplication
-```
-
-M19 ajoute une vue de graphe avancé reconstruisible et capability-honest :
-
-```text
-snapshot actif
-   ↓
-ProgramGraphProvider[]
-   ├── projection CALLS / READS / WRITES historique
-   └── providers avancés explicites (CFG / def-use / taint)
-   ↓
-ProgramGraphComposer
-   ↓
-ProgramGraphService
-   ├── AdvancedImpactService
-   └── SecurityAnalysisService
-```
-
-Le `ProgramGraph` n'est pas un second stockage autoritatif. Les snapshots persistés restent la source de vérité ; les fragments avancés sont composés de manière déterministe, les collisions incohérentes sont rejetées et toute capability absente reste explicitement indisponible conformément à ADR-0028.
-
-Le snapshot actif possède toujours une vue de requête immuable et indexée, mise en cache par identité de snapshot actif. Les transports ne reconstruisent ni cache ni indexes.
+Le snapshot structuré reste autoritatif. `ProgramGraph` est une vue reconstructible capability-honest. L'index vectoriel M20 est également reconstructible et ne devient jamais une seconde base de facts.
 
 ## CLI
 
-`MinosCli` reste le dispatcher. Il traduit arguments/formats vers les services applicatifs ; il n'est pas une couche métier consommée par les autres transports, à l'exception du **contrat de processus externe M18** qui réutilise volontairement ses commandes JSON stables.
+`MinosCli` reste le dispatcher administratif et utilisateur. Les autres surfaces ne passent pas par la CLI métier, sauf le protocole de processus externe M18 volontairement conçu pour IntelliJ.
 
-Administration locale :
+Administration :
 
 ```text
 doctor
 tools list / install / verify
 providers [provider-id]
+project add / list / inspect
 index <project>
 import-scip <project> ...
 ```
 
-Intégration M18 :
+Intégration IDE :
 
 ```text
 ide handshake
 git-activity <project>
 ```
 
-`ide handshake` négocie le protocole externe `minos-ide` v1 avant toute requête métier du plugin. `git-activity` expose l'activité factuelle déjà calculée par `GitIntelligenceService` et transporte explicitement `importanceInference=false`.
-
-`providers` est la surface M17 de diagnostic : version, langages, systèmes de build, niveau de chaque capability, score de conformance, limitations et état runtime. `tools` conserve la responsabilité d'installation et de vérification.
-
-Les runtimes marqués `requiredByDefault` définissent la baseline `doctor/tools verify`. Un provider optionnel peut donc être visible et installable sans rendre la baseline historique rouge tant qu'il n'est pas sélectionné.
-
-`LocalAutonomousIndexOperations` coordonne discovery, négociation, fingerprints et lifecycle existants ; la CLI ne contient pas elle-même la logique provider.
-
-### Bootstrap et codes de sortie
-
-`MinosLauncher` traite `--version` sans store, traite `--help` et le handshake IDE sans dépendre d'un projet actif, expose `mcp` et ouvre une seule `MinosApplication` pour les commandes fonctionnelles.
+Codes de sortie stables :
 
 ```text
 0 success
@@ -123,93 +97,105 @@ Les runtimes marqués `requiredByDefault` définissent la baseline `doctor/tools
 2 usage error
 ```
 
-## IntelliJ — protocole et plugin M18
+### Activation sémantique native M20
 
-ADR-0027 fixe la frontière : le module Gradle `minos-intellij/` ne déclare aucune dépendance `com.minos:*`. Il communique avec le launcher MINOS installé localement et refuse une version de protocole différente de `1`.
-
-Surfaces natives :
+La baseline reste désactivée :
 
 ```text
-Tool Window MINOS
-  project/index/provider/snapshot
-  architecture graph
-  impact / related tests / relations
-  factual Git activity
-  index / reindex / dry-run / doctor
-
-Editor popup MINOS
-  open definition
-  usages
-  dependents
-  implementations
-  related tests
-  impact
-  architecture
-  copy symbol identity
+MINOS_SEMANTIC_PROVIDER absent → structured/hybrid fallback uniquement
 ```
 
-Les actions éditeur utilisent le PSI uniquement pour identifier le contexte sous le caret. L'identité et les relations finales restent celles du snapshot MINOS.
+Activation locale explicite du provider de référence :
 
-Les positions MINOS sont interprétées selon leur contrat : ligne base 1, colonne base 0 et encodage explicite `UTF8_CODE_UNITS`, `UTF16_CODE_UNITS`, `UTF32_CODE_UNITS` ou `UNKNOWN`. Le plugin convertit la colonne en offset UTF-16 IntelliJ et refuse une destination qui sort de la racine projet enregistrée.
+```text
+MINOS_SEMANTIC_PROVIDER=local-hash
+```
 
-L'indexation depuis l'IDE invoque `minos index`; le plugin n'écrit jamais directement le staging, les snapshots ou le pointeur actif. La promotion atomique M1/M7/M14 reste donc la seule voie de publication.
+Avec ce provider activé, `minos index` synchronise l'index sémantique après la promotion structurée. Une erreur de refresh sémantique est diagnostiquée mais n'annule pas un snapshot structuré déjà publié avec succès.
 
-Le graphe IntelliJ consomme `minos architecture --format json`, en particulier `modules` et `moduleDependencies`. Il borne et filtre l'affichage mais ne crée aucune arête supplémentaire.
+## IntelliJ — protocole M18
 
-Impact et tests liés conservent les champs explicatifs MINOS (`nature`, `confidence`, `limitations`, chemins/preuves). L'activité Git reste factuelle et n'est jamais transformée en score d'importance.
+Le plugin `minos-intellij/` reste un client Java 21 externe du runtime MINOS Java 24. Il n'embarque aucune classe métier `com.minos:*`.
 
-Voir le [guide utilisateur IntelliJ](../user/intellij-plugin.md).
+```text
+IntelliJ plugin
+   ↓ processus local JSON
+minos-ide v1
+   ↓
+Minos CLI / MinosApplication
+```
+
+Le plugin consomme les identités, relations, architecture, impact, tests liés et faits Git existants. Le PSI sert uniquement à identifier le contexte sous le caret ; les facts finaux viennent du snapshot MINOS.
+
+Les positions suivent le contrat : ligne base 1, colonne base 0, encodage explicite UTF-8/16/32/UNKNOWN.
+
+M20 n'introduit pas implicitement de ranking vectoriel dans les actions IntelliJ M18. Une future UX sémantique IDE devra consommer les contrats M20, pas réimplémenter les embeddings dans le plugin.
 
 ## API Java
 
 ### `MinosApi` v1
 
-`MinosApi` reste le contrat fournisseur-indépendant M11/M12. Sa surface utilise les types JDK et DTOs publics ; elle ne fait pas fuiter SCIP, MCP, stores, Coursier, npm ou modèles `com.minos.domain`.
-
-Le graphe d'architecture reste exposé de manière compatible au contrat v1 par `getArchitectureGraph(...)`. Les erreurs publiques restent : `INVALID_REQUEST`, `UNAVAILABLE`, `IO_FAILURE`, `EXECUTION_FAILURE`.
+Contrat historique fournisseur-indépendant M11/M12. Il reste en version `1` et n'expose ni SCIP, ni les stores, ni MCP.
 
 ### `ProviderPlatformApi` v1
 
-M17 ajoute un contrat **séparé et additif** :
-
-```java
-List<ProviderDto> listProviders()
-ProviderDto getProvider(String providerId)
-```
-
-Cette séparation évite d'augmenter silencieusement `MinosApi.CONTRACT_VERSION`. Le DTO provider expose uniquement des types publics : identité/version, langages/build systems, map capability → niveau, score de conformance, limitations et diagnostics runtime.
+Contrat additif M17 : providers, versions, écosystèmes, profils de capabilities, conformance et diagnostics runtime.
 
 ### `AdvancedCodeIntelligenceApi` v1
 
-M19 ajoute un troisième contrat public additif sans modifier `MinosApi` v1 :
+Contrat additif M19 :
 
 ```java
-ProgramGraphDto getProgramGraph(String project, ProgramGraphQuery query)
-AdvancedImpactDto analyzeImpactV2(String project, AdvancedImpactQuery query)
-SecurityReportDto analyzeSecurityPaths(String project, SecurityQuery query)
+ProgramGraphDto getProgramGraph(...)
+AdvancedImpactDto analyzeImpactV2(...)
+SecurityReportDto analyzeSecurityPaths(...)
 ```
 
-Le contrat reste provider-independent et n'expose que des DTOs/JDK. Les réponses conservent capabilities, `nature`, confiance, provenance et limitations. Les requêtes sont bornées : graphe, profondeur d'impact et chemins sécurité ne peuvent pas devenir des traversées illimitées.
+Les capabilities, natures, confiances, preuves et limitations restent explicites et les traversées sont bornées.
+
+### `SemanticCodeIntelligenceApi` v1
+
+Contrat additif M20 :
+
+```java
+SemanticIndexStatusDto getSemanticIndexStatus(String project)
+SemanticIndexUpdateDto synchronizeSemanticIndex(String project)
+SemanticSearchDto semanticSearch(String project, SemanticQuery query)
+HybridSearchDto hybridSearch(String project, HybridQuery query)
+HybridContextDto buildHybridContext(String project, ContextQuery query)
+```
+
+La synchronisation d'index est explicite sur l'API administrative Java. Les recherches ne déclenchent pas de mutation cachée.
+
+Les DTOs distinguent :
+
+```text
+semantic score → HEURISTIC
+lexical/graph signal → DERIVED
+hybrid score → décision de ranking, pas fact structurel
+```
+
+Les limites publiques sont alignées sur les services : résultats, documents, tokens globaux et tokens par document.
 
 ## MCP
 
-MCP reste **strictement read-only**. Les tools ne peuvent pas faire `project add`, `tools install`, `index` ou `import-scip`.
+MCP reste **strictement read-only**. Il n'expose pas `project add`, `tools install`, `index`, `import-scip` ni une synchronisation vectorielle mutante.
 
-Depuis M15-S4, un appel MCP suit directement :
+Chemin d'appel :
 
 ```text
 MCP tool
-  ↓
-validation / mapping de requête
-  ↓
+  ↓ validation/schema
 MinosApplicationMcpBackend
   ↓
-services typés de MinosApplication
+service typé MinosApplication
   ↓
-mapping de réponse MCP
+renderer JSON déterministe
 ```
 
-M19 conserve les **16 tools historiques** et ajoute trois tools read-only, soit **19 tools** au total :
+Catalogue courant : **23 tools**.
+
+M19 a ajouté :
 
 ```text
 minos_program_graph
@@ -217,76 +203,118 @@ minos_impact_v2
 minos_security_paths
 ```
 
-`minos_program_graph` expose les capabilities réellement disponibles et les limitations. `minos_impact_v2` distingue le compte baseline M8 des symboles ajoutés par les chemins avancés. `minos_security_paths` retourne uniquement les chemins source→sink observés et les sanitizers rencontrés ; l'absence de chemin n'est jamais présentée comme une preuve de sûreté.
+M20 ajoute :
 
-Les réponses de `minos_project_structure` et `minos_index_status` continuent d'ajouter `providerProfiles`, qui expose les mêmes niveaux/limitations que CLI/API sans créer un tool administratif.
+```text
+minos_semantic_index_status
+minos_semantic_search
+minos_hybrid_search
+minos_hybrid_context
+```
 
-Le launcher natif fournit `minos mcp`. Le catalogue exact et son nombre sont vérifiés automatiquement dans [`../generated/product-facts.md`](../generated/product-facts.md).
+`minos_semantic_index_status` expose notamment `DISABLED/MISSING/STALE/READY`, snapshot, provider/modèle, dimensions, nombre de documents, taille disque et limitations.
 
-Le plugin IntelliJ M18 et le MCP peuvent coexister : le premier fournit une UX native et des actions administratives locales ; le second reste une surface read-only destinée aux agents.
+`minos_semantic_search` retourne des hits `HEURISTIC` et la limitation contractuelle `VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT`.
 
-Voir le [guide utilisateur MCP](../user/mcp.md).
+`minos_hybrid_search` retourne chaque composante du ranking. Sans index sémantique READY, le fallback lexical+graph reste utilisable et l'absence du signal est explicite.
 
-## Export NEXUS
+`minos_hybrid_context` respecte les mêmes bornes de documents/tokens que `HybridContextBuilder` et expose les troncatures.
 
-`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance, M17 la plateforme provider et M18 ajoute un client IDE. M19 ajoute des surfaces avancées séparées et ne modifie pas implicitement le contrat NEXUS v1.
+Le catalogue exact reste vérifié par [`../generated/product-facts.md`](../generated/product-facts.md).
+
+## NEXUS
+
+### Contrat structuré v1
+
+`NexusExportService` projette le snapshot actif vers le contrat JSON historique M13. M20 ne modifie pas ce contrat implicitement.
+
+### Signaux sémantiques v2
+
+`NexusSemanticSignalService` fournit un contrat additif de candidats **code-local** :
+
+```text
+stableKey
+kind / source / location
+localRankingScore
+rankingMode
+signals[] { type, score, nature }
+limitations
+```
+
+Frontière de responsabilité :
+
+```text
+MINOS → facts de code + retrieval/ranking local au code
+NEXUS → ranking global multi-source + sélection finale + budget global de contexte
+```
+
+Les limitations `NEXUS_GLOBAL_RANKING_NOT_PERFORMED_BY_MINOS` et `NEXUS_MULTI_SOURCE_CONTEXT_BUDGET_NOT_OWNED_BY_MINOS` empêchent l'ambiguïté contractuelle.
 
 ## Runtime natif vs Docker
 
-ADR-0021 sépare :
+ADR-0021 reste valable :
 
 ```text
-runtime natif = administration + providers + CLI + MCP local + protocole IDE
+runtime natif = administration + providers + CLI + MCP local + IDE + sémantique opt-in
 Docker MCP    = consommation read-only durcie optionnelle
 ```
 
-Les deux modes ne doivent pas partager aveuglément un registre de chemins hôte Windows/conteneur.
+Un backend sémantique ne doit pas casser la séparation des chemins hôte/conteneur ni rendre Docker obligatoire.
 
 ## Ajouter un nouvel écosystème M17+
 
 1. ajouter les détecteurs SPI nécessaires ;
-2. déclarer un `IndexerProvider` avec un profil **exhaustif** `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED` ;
-3. ajouter un runtime derrière `ProviderRuntimeManager` si installation/exécution locale requise ;
+2. déclarer un `IndexerProvider` avec profil exhaustif ;
+3. ajouter le runtime derrière `ProviderRuntimeManager` si nécessaire ;
 4. exécuter `ProviderConformanceKit` ;
-5. versionner une fixture représentative ;
-6. qualifier discovery, négociation, runtime, snapshot et requêtes ;
+5. versionner une fixture ;
+6. qualifier discovery, runtime, snapshot et requêtes ;
 7. exposer les limitations sans inventer de capacité.
 
-Un build system peut être correctement découvert alors qu'aucun provider d'exécution n'est encore qualifié : **discovery et support runtime sont deux faits distincts**.
+Discovery et support runtime restent deux facts distincts.
 
 ## Ajouter une capability de graphe M19+
 
 1. implémenter `ProgramGraphProvider` ;
-2. déclarer uniquement les `ProgramGraphCapability` réellement prouvées ;
-3. fournir nœuds/arêtes avec identités stables, nature, provenance et preuves nécessaires ;
-4. ajouter une vérité terrain contrôlée et mesurer précision/rappel ;
-5. conserver une limitation explicite pour les dimensions dynamiques non prouvées ;
-6. laisser `ProgramGraphComposer` rejeter toute collision incohérente.
+2. déclarer uniquement les capabilities prouvées ;
+3. fournir identités/nature/provenance/preuves ;
+4. ajouter une vérité terrain et des métriques ;
+5. garder les limitations dynamiques explicites ;
+6. laisser le composer rejeter les collisions incohérentes.
 
-Un provider qui ne sait pas produire de CFG, de def-use ou d'annotations taint ne reçoit aucune de ces capabilities par convention.
+## Ajouter un provider d'embeddings M20+
+
+1. implémenter `EmbeddingProvider` ;
+2. donner un `id`, `modelId` et nombre de dimensions stables ;
+3. rester local-first ou documenter explicitement toute frontière externe avant intégration ;
+4. ne jamais promouvoir le score en fact structurel ;
+5. qualifier Recall@K/MRR/nDCG@K sur un ground truth ;
+6. mesurer latence, coût de rebuild et taille ;
+7. vérifier le rebuild lors d'un changement de modèle ;
+8. conserver le produit fonctionnel si le provider est absent.
+
+## Ajouter un backend vectoriel M20+
+
+Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVectorStore`, conserver snapshot/provider/model/dimensions et rester intégralement reconstruisible. Un ANN ou moteur externe n'est justifié que par des mesures reproductibles, conformément à ADR-0025.
 
 ## Ajouter une nouvelle surface
 
-Pour un futur adapter HTTP ou autre protocole :
-
-1. réutiliser `MinosApplication` et les services existants ;
-2. définir des DTOs/serialisations propres au contrat externe ;
+1. réutiliser `MinosApplication` ;
+2. définir des DTOs/serialisations externes propres ;
 3. imposer les mêmes bornes ;
-4. conserver limitations et provenance ;
-5. ne pas déplacer la logique métier vers le transport ;
-6. décider explicitement si la surface est read-only ou administrative ;
-7. ajouter des tests de frontière empêchant les fuites de types internes ;
-8. lorsqu'une différence de JVM ou de cycle de release le justifie, préférer un contrat externe versionné à une dépendance sur les classes internes.
+4. conserver nature/provenance/limitations ;
+5. ne pas déplacer le métier vers le transport ;
+6. choisir explicitement read-only vs administratif ;
+7. tester l'absence de fuite des types internes.
 
 ## Qualité et cohérence
 
-- tests API : frontière des contrats publics historiques et avancés ;
-- tests MCP : catalogue/schemas, profils provider et replay STDIO ;
-- tests M19 : précision/rappel call graph et def-use, CFG branches/loops/exceptions, cycles interprocéduraux, collision CPG, gain Impact v2 et security paths/sanitizers ;
-- tests IDE : handshake incompatible, invocation process, positions UTF-8/16/32, graphe borné ;
-- Plugin Verifier : compatibilité IntelliJ ciblée ;
-- conformance kit : profils exhaustifs et déterministes ;
-- `scripts/docs/product-facts.py --check` : facts mécaniques alignés ;
-- `scripts/m18/run-final.ps1` : Maven Java 24 + gates plugin IntelliJ + exact-head ;
-- `scripts/m19/run-final.ps1` : Maven/JaCoCo/product-facts + invariants avancés + exact-head ;
-- les rapports historiques ne sont pas réécrits pour refléter le présent.
+- tests API : contrats historiques + M19 + M20 ;
+- tests MCP : 23 tools, schemas/bornes, mappings, erreurs récupérables ;
+- tests M19 : ground truths graphes/flux/sécurité ;
+- tests M20 : optionnalité, vector store, Recall@K/MRR/nDCG, gain hybride, budgets, invalidation incrémentale, NEXUS v2 ;
+- facts générés : `scripts/docs/product-facts.py --check` ;
+- qualité : `scripts/quality/check-jacoco.py` ;
+- qualification finale M20 : `scripts/m20/run-final.ps1`.
+
+Voir aussi [Intelligence sémantique et hybride — M20](semantic-hybrid-intelligence.md) et [ADR-0029](../adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md).
