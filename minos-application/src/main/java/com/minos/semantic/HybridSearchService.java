@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,11 +92,14 @@ public final class HybridSearchService {
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
-        return documentFactory.build(project, snapshot).stream()
-                .map(document -> new HybridHit(document, lexicalScore(query, document.content()),
-                        lexicalScore(query, document.content()), 0.0, 0.0, "LEXICAL",
-                        List.of(new RankingSignal("LEXICAL", lexicalScore(query, document.content()), InformationNature.DERIVED))))
-                .filter(hit -> hit.score() > 0.0)
+        List<HybridHit> hits = new ArrayList<>();
+        for (SemanticDocument document : documentFactory.build(project, snapshot)) {
+            double lexical = lexicalScore(query, document.content());
+            if (lexical <= 0.0) continue;
+            hits.add(new HybridHit(document, lexical, lexical, 0.0, 0.0, "LEXICAL",
+                    List.of(new RankingSignal("LEXICAL", lexical, InformationNature.DERIVED))));
+        }
+        return hits.stream()
                 .sorted(Comparator.comparingDouble(HybridHit::score).reversed()
                         .thenComparing(hit -> hit.document().stableKey()))
                 .limit(limit)
@@ -106,7 +108,8 @@ public final class HybridSearchService {
 
     private Map<String, Double> semanticScores(String projectReference, HybridRequest request, int documentCount) throws IOException {
         if (semanticIndex.status(projectReference).state() != SemanticIndexService.State.READY) return Map.of();
-        int probe = Math.min(SemanticSearchService.MAX_RESULTS, Math.max(request.limit() * 10, Math.min(documentCount, 200)));
+        int probe = Math.min(SemanticSearchService.MAX_RESULTS,
+                Math.max(request.limit() * 10, Math.min(documentCount, 200)));
         SemanticSearchService.SearchResponse semantic = semanticSearch.search(projectReference,
                 new SemanticSearchService.SearchRequest(request.query(), Math.max(1, probe), -1.0));
         Map<String, Double> scores = new HashMap<>();
@@ -156,7 +159,8 @@ public final class HybridSearchService {
     }
 
     private static double normalizedSemantic(double score) {
-        return clamp01((score + 1.0) / 2.0);
+        // Cosine zero means no semantic support; negative similarities do not become a positive bonus.
+        return clamp01(score);
     }
 
     private static double clamp01(double value) {
