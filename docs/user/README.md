@@ -9,6 +9,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Je veux... | Ouvrir directement |
 |---|---|
 | Installer / mettre à jour / désinstaller MINOS | **[Installation PROD Windows](production-installation.md)** |
+| Utiliser MINOS directement dans IntelliJ | **[Plugin IntelliJ](intellij-plugin.md)** |
 | **Voir le graphe d'architecture** | **[Visualiser le graphe d'architecture](architecture-graph.md)** |
 | Comprendre `--format text/json/mermaid/dot` | [Référence CLI](cli.md) |
 | Connecter Copilot, Claude ou Codex au MCP natif | [Serveur MCP](mcp.md) |
@@ -20,7 +21,10 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 
 ### Je veux juste voir mon graphe maintenant
 
-MINOS **ne possède pas de fenêtre graphique intégrée**. Il calcule le graphe puis l'exporte en JSON, Mermaid ou Graphviz DOT.
+MINOS propose deux façons complémentaires de visualiser l'architecture :
+
+- **dans IntelliJ**, via la Tool Window du [plugin MINOS](intellij-plugin.md) ;
+- **hors IDE**, en exportant le graphe en JSON, Mermaid ou Graphviz DOT.
 
 ```powershell
 # Données du graphe
@@ -53,6 +57,7 @@ installation Windows
    ├── CLI
    ├── MCP natif
    ├── PATH utilisateur optionnel
+   ├── plugin IntelliJ optionnel (ZIP M18)
    ├── intégrations MCP natives optionnelles
    │    ├── Copilot JetBrains / IntelliJ
    │    ├── Copilot CLI
@@ -69,12 +74,12 @@ minos project add <path> --name <name>
    ↓
 minos index <name>
    ↓
-search / architecture / graphe / impact / MCP
+CLI / IntelliJ / search / architecture / impact / MCP
 ```
 
-Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
+Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**. Le plugin IntelliJ est, lui, distribué sous forme de ZIP installable depuis l'IDE.
 
-L'utilisateur normal ne prépare plus `index.scip` manuellement. `minos index <project>` découvre le projet, sélectionne le provider qualifié, calcule la portée d'indexation, exécute le provider puis promeut le nouveau snapshot de manière atomique.
+L'utilisateur normal ne prépare plus `index.scip` manuellement. `minos index <project>` découvre le projet, sélectionne le provider qualifié, calcule la portée d'indexation, exécute le provider puis promeut le nouveau snapshot de manière atomique. Le plugin IntelliJ réutilise exactement ce lifecycle lorsqu'il déclenche une indexation ou un reindex.
 
 ---
 
@@ -105,6 +110,8 @@ Le guide couvre :
 
 Le parcours `git clone` / Maven est volontairement séparé dans [Installation depuis les sources](installation.md).
 
+Pour installer l'intégration IDE native après MINOS : **[Plugin IntelliJ — installation et configuration](intellij-plugin.md)**.
+
 ---
 
 ## 2. Démarrage rapide après installation
@@ -115,6 +122,7 @@ Dans un nouveau PowerShell :
 minos.cmd --version
 minos.cmd doctor
 minos.cmd tools list
+minos.cmd ide handshake --format json
 ```
 
 Pour un projet Java :
@@ -146,11 +154,13 @@ minos.cmd architecture my-project --format dot
 
 **Guide dédié : [Visualiser le graphe d'architecture](architecture-graph.md).**
 
+Dans IntelliJ, la Tool Window **MINOS** fournit le statut projet/provider/snapshot, le graphe, l'impact, les tests liés, l'activité Git factuelle et les actions d'indexation. Voir [Plugin IntelliJ](intellij-plugin.md).
+
 ---
 
 ## 3. MCP natif et MCP Docker
 
-Le MCP natif est installé avec MINOS et reste le mode recommandé pour les clients :
+Le MCP natif est installé avec MINOS et reste le mode recommandé pour les clients agents :
 
 ```text
 command = <installation>\app\minos.exe
@@ -176,6 +186,8 @@ MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pe
 
 Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le graphe en JSON, Mermaid ou DOT.
 
+Le plugin IntelliJ M18 est distinct du MCP : il fonctionne sans LLM et ajoute une UX native, de la navigation et des actions locales d'administration. Les deux intégrations peuvent être installées simultanément.
+
 ---
 
 ## 4. Fonctionnalités principales
@@ -183,21 +195,24 @@ Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le gr
 | Besoin | Commande / surface |
 |---|---|
 | Diagnostiquer l'installation | `doctor` |
+| Négocier la compatibilité IDE | `ide handshake` |
 | Gérer les providers | `tools list/install/verify` |
-| Enregistrer un projet | `project add` |
+| Enregistrer un projet | `project add` ou bouton **Register** IntelliJ |
 | Voir les projets | `project list` |
-| Inspecter l'état | `inspect`, `index-status` |
-| Indexer automatiquement | `index` |
+| Inspecter l'état | `inspect`, `index-status`, Tool Window IntelliJ |
+| Indexer automatiquement | `index`, boutons **Index/Reindex Full** IntelliJ |
 | Importer un SCIP explicitement | `import-scip` |
 | Rechercher du contexte | `search` |
 | Trouver un symbole | `find-symbol` |
 | Lire un fichier source | `get-source` |
-| Trouver les usages | `find-usages` |
-| Implémentations/appels/dépendances | commandes relationnelles |
-| Trouver les tests liés | `related-tests` |
+| Trouver les usages | `find-usages` ou menu contextuel IntelliJ |
+| Implémentations/appels/dépendances | commandes relationnelles / actions IntelliJ |
+| Trouver les tests liés | `related-tests` / action IntelliJ |
 | Lire l'architecture | `architecture` |
+| Voir l'architecture dans l'IDE | [Plugin IntelliJ](intellij-plugin.md) |
 | **Voir/exporter le graphe** | `architecture --format json|mermaid|dot` — [guide](architecture-graph.md) |
-| Estimer un impact | `impact` |
+| Estimer un impact | `impact` / action IntelliJ |
+| Lire l'activité Git factuelle | `git-activity` / onglet Git Activity IntelliJ |
 | Consommer depuis Java | `MinosApi`, `MinosMultiRepositoryApi` |
 | Lire le graphe depuis Java | `MinosApi.getArchitectureGraph` |
 | Exposer MINOS à un agent | `minos mcp` |
@@ -231,6 +246,8 @@ intégrations MCP : %LOCALAPPDATA%\MINOS\mcp-client-integrations.json
 Docker           : %LOCALAPPDATA%\MINOS\docker + docker-data
 ```
 
+Les réglages du plugin IntelliJ sont stockés dans la configuration du projet IDE ; ils référencent le launcher MINOS et éventuellement `MINOS_HOME`, mais le plugin ne possède pas de copie des snapshots.
+
 La séparation est volontaire : mettre à jour ou désinstaller le programme ne doit pas supprimer automatiquement les données persistantes.
 
 ---
@@ -242,6 +259,7 @@ Commencer par :
 ```powershell
 minos.cmd --version
 minos.cmd doctor --format json
+minos.cmd ide handshake --format json
 minos.cmd project list --format json
 ```
 
@@ -253,6 +271,8 @@ minos.cmd architecture my-project --format json
 ```
 
 Puis consulter **[Visualiser le graphe — diagnostic rapide](architecture-graph.md#le-graphe-est-vide--diagnostic-rapide)**.
+
+Pour le plugin IntelliJ, consulter **[Plugin IntelliJ — Dépannage](intellij-plugin.md#dépannage)**.
 
 Pour les intégrations MCP du setup :
 
