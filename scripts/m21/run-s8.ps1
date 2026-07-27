@@ -78,10 +78,10 @@ try {
     $outDir = Join-Path $RepoRoot 'target\m21-s8'
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
     $result = Join-Path $outDir 'standard.json'
-    $home = Join-Path $outDir 'home'
+    $benchmarkHome = Join-Path $outDir 'home'
     $jar = Get-ShadedJar
     & (Join-Path $RepoRoot 'scripts\m21\run-s8-benchmark.ps1') `
-        -JarPath $jar -BenchmarkHome $home -Profile STANDARD -Repetitions $Repetitions -OutputJson $result
+        -JarPath $jar -BenchmarkHome $benchmarkHome -Profile STANDARD -Repetitions $Repetitions -OutputJson $result
     if ($LASTEXITCODE -ne 0) { throw "M21-S8 STANDARD benchmark failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[4/6] Applying semantic scale decision gate...'
