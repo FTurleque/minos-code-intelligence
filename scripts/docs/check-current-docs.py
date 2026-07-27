@@ -65,13 +65,15 @@ def main() -> int:
         require_text("docs/STATUS.md", status, "M21 — Production Integrity")
         require_text("docs/STATUS.md", status, "S1   governance + docs + runner local                 VALIDÉ")
         require_text("docs/STATUS.md", status, "S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026")
-        require_text("docs/STATUS.md", status, "S3   quality gates M19/M20                            EN COURS")
+        require_text("docs/STATUS.md", status, "S3   quality gates M19/M20                            VALIDÉ")
+        require_text("docs/STATUS.md", status, "S4   Maven module-boundary hardening                  EN COURS")
         forbid_text("docs/STATUS.md", status, "Aucun M21 n'est actuellement déclaré")
 
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "Issue : **#73")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S1 VALIDÉ")
         require_text("docs/roadmap/M21_EXECUTION.md", execution, "S2 EN PAUSE jusqu’en août 2026")
-        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S3 EN COURS")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S3 VALIDÉ")
+        require_text("docs/roadmap/M21_EXECUTION.md", execution, "S4 EN COURS")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
