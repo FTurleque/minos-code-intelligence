@@ -83,7 +83,7 @@ function Resolve-Gradle {
     }
 
     if (Test-Path -LiteralPath $gradle -PathType Leaf) {
-        Write-Host "Using cached Gradle $requiredVersion: $gradle"
+        Write-Host "Using cached Gradle ${requiredVersion}: $gradle"
         return $gradle
     }
 
@@ -124,7 +124,7 @@ function Resolve-Gradle {
     if (-not (Test-Path -LiteralPath $gradle -PathType Leaf)) {
         throw "Gradle $requiredVersion bootstrap failed: executable not found at $gradle"
     }
-    Write-Host "Using bootstrapped Gradle $requiredVersion: $gradle"
+    Write-Host "Using bootstrapped Gradle ${requiredVersion}: $gradle"
     return $gradle
 }
 
