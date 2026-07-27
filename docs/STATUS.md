@@ -48,8 +48,8 @@ S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 
 S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
 S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
 S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
-S6   IntelliJ parity M19/M20                          EN COURS — candidat local à qualifier
-S7   advanced provider productionization              PLANIFIÉ
+S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
+S7   advanced provider productionization              EN COURS — candidat local à qualifier
 S8   semantic scale qualification                     PLANIFIÉ
 S9   final production integrity gate                  PLANIFIÉ
 ```
@@ -117,7 +117,7 @@ Validated HEAD: bcc44ea5e7a5c354c1df25bb7d295ee57347629c
 
 S5 fournit un SBOM CycloneDX 1.6 agrégé depuis la racine Maven, des notices tierces strictes sans licence inventée, un manifest SHA-256 de distribution, des sidecars de release et un helper Authenticode optionnel. Les workflows GitHub Actions restent hors scope jusqu'en août.
 
-### Candidat S6
+### Qualification S6
 
 S6 conserve le plugin comme client externe Java 21 du moteur Java 24. Le protocole `minos-ide` v1 est étendu de façon additive et capability-negotiated avec huit surfaces :
 
@@ -132,7 +132,40 @@ hybrid-search
 hybrid-context
 ```
 
-L'ancien Impact M8 reste disponible comme baseline. Le plugin ne calcule aucun Program Graph, chemin de sécurité, embedding ou ranking : les nouvelles commandes `minos ide … --format json` appellent les services M19/M20 de `MinosApplication`. `scripts/intellij/check-m21-parity.py` verrouille cette frontière, et le Plugin Verifier cible la branche IntelliJ 2026.1 / build 261 sur ses releases stables résolues.
+Qualification Windows exact-head :
+
+```text
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=264)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
+Plugin com.minos.codeintelligence:0.2.0-SNAPSHOT against IU-261.26222.65: Compatible
+Plugin com.minos.codeintelligence:0.2.0-SNAPSHOT against IU-261.22158.277: Compatible
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
+```
+
+L'ancien Impact M8 reste disponible comme baseline. Le plugin ne calcule aucun Program Graph, chemin de sécurité, embedding ou ranking : les nouvelles commandes `minos ide … --format json` appellent les services M19/M20 de `MinosApplication`.
+
+### Candidat S7
+
+S7 productionise le sidecar avancé prévu par M19 :
+
+```text
+<project>/.minos/program-graph-v1/
+├── metadata.properties
+├── nodes.tsv
+└── edges.tsv
+```
+
+`FileProgramGraphProvider` charge uniquement des facts explicitement affirmés par le provider et alignés sur le `snapshotId` actif. Les déclarations de capabilities sont vérifiées contre les arêtes réellement présentes. `CALL_GRAPH + LOCAL_DATA_FLOW` n'est plus promu implicitement en `INTERPROCEDURAL_DATA_FLOW` : cette capacité exige désormais un `ARGUMENT_FLOW` ou `RETURN_FLOW` explicite.
+
+Le cache Program Graph utilise l'empreinte SHA-256 du sidecar et `.minos/` est exclu du fingerprint source. Une fixture versionnée mesure CFG, def-use, argument/return flow et taint ; le nouveau provider fait partie du scope JaCoCo `program-graph-analysis`.
+
+Voir [`developer/advanced-program-provider.md`](developer/advanced-program-provider.md).
 
 Toute modification après un SHA qualifié exige une nouvelle qualification exact-head avant promotion.
 
@@ -212,6 +245,7 @@ M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
 - MCP : STDIO read-only, **23 tools** ;
 - NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
 - IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
+- Program Graph avancé : sidecar local v1 snapshot-aligned, capability-honest et exclu du fingerprint source ;
 - installation PROD Windows : setup.exe + ZIP versionnés, runtime Java embarqué, doctor, MCP natif et preuves supply-chain embarquées ;
 - Docker MCP : mode durci optionnel.
 
@@ -253,6 +287,7 @@ M22→M27 restent des directions planifiées. Elles ne deviennent des capacités
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
 - supply-chain : [`developer/supply-chain.md`](developer/supply-chain.md) ;
+- advanced provider : [`developer/advanced-program-provider.md`](developer/advanced-program-provider.md) ;
 - facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
 - décisions : [`adr/README.md`](adr/README.md) ;
 - preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
