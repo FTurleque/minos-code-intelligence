@@ -54,6 +54,7 @@ def main() -> int:
         transport = read("minos-cli/src/main/java/com/minos/cli/IdeIntelligenceCommand.java")
         runner = read("minos-cli/src/main/java/com/minos/cli/MinosCliRunner.java")
         client = read("minos-intellij/src/main/java/com/minos/intellij/protocol/MinosM21Client.java")
+        client_test = read("minos-intellij/src/test/java/com/minos/intellij/protocol/MinosM21ClientTest.java")
         actions = read("minos-intellij/src/main/java/com/minos/intellij/actions/MinosM21Actions.java")
         plugin = read("minos-intellij/src/main/resources/META-INF/plugin.xml")
         build = read("minos-intellij/build.gradle.kts")
@@ -76,7 +77,9 @@ def main() -> int:
             require("IdeIntelligenceCommand.java", transport, service)
 
         require("MinosCliRunner.java", runner, "new IdeIntelligenceCommand(app)")
-        require("MinosM21Client.java", client, "client.handshake()")
+        require("MinosM21Client.java", client, "requireCapability(client.handshake(), capability)")
+        require("MinosM21ClientTest.java", client_test, "acceptsAdvertisedCapability")
+        require("MinosM21ClientTest.java", client_test, "rejectsCapabilityMissingFromOlderRuntime")
         require("MinosM21Actions.java", actions, "Task.Backgroundable")
         require("MinosM21Actions.java", actions, "Messages.showInputDialog")
 
