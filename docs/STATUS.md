@@ -45,9 +45,9 @@ Question produit :
 État courant M21 :
 
 ```text
-S1   governance + docs + runner local                 IMPLÉMENTÉ / validation locale en attente
-S2   CI recovery + readiness branch protection        PLANIFIÉ
-S3   quality gates M19/M20                            PLANIFIÉ
+S1   governance + docs + runner local                 VALIDÉ — b4403921bfe0e2a7fe5eef9380a122982f275e0e
+S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026 — aucun run CI
+S3   quality gates M19/M20                            EN COURS
 S4   Maven module-boundary hardening                  PLANIFIÉ
 S5   supply-chain + release hardening                 PLANIFIÉ
 S6   IntelliJ parity M19/M20                          PLANIFIÉ
@@ -58,11 +58,18 @@ S9   final production integrity gate                  PLANIFIÉ
 
 Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
 
-M21-S1 ne sera marqué validé qu'après exécution locale réussie de :
+Qualification S1 autoritative :
 
-```powershell
-.\scripts\m21\run-local.ps1
+```text
+Maven reactor: 13/13 SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M15 JACOCO GATE SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
 ```
+
+Toute modification après ce SHA exige une nouvelle qualification exact-head avant promotion.
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
