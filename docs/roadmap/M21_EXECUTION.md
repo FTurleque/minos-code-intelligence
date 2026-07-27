@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 EN COURS ; S6→S9 planifiés.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 EN COURS ; S7→S9 planifiés.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -32,8 +32,8 @@ M21 est volontairement un jalon de **consolidation post-M20**. Il ne doit pas ma
 | M21-S2 | CI recovery & branch protection readiness | **PAUSE jusqu’en août 2026 — aucun run CI** |
 | M21-S3 | Quality gates M19/M20 | **VALIDÉ** sur `27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94` |
 | M21-S4 | Maven module-boundary hardening | **VALIDÉ** sur `0699d06d6138dd77008b8ea31578a334468eec75` |
-| M21-S5 | Supply-chain & release hardening | **EN COURS — candidat local à qualifier** |
-| M21-S6 | IntelliJ parity M19/M20 | planifié |
+| M21-S5 | Supply-chain & release hardening | **VALIDÉ** sur `bcc44ea5e7a5c354c1df25bb7d295ee57347629c` |
+| M21-S6 | IntelliJ parity M19/M20 | **EN COURS — candidat local à qualifier** |
 | M21-S7 | Advanced provider productionization | planifié |
 | M21-S8 | Semantic scale qualification | planifié |
 | M21-S9 | Final production integrity gate | planifié |
@@ -130,7 +130,7 @@ Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
 
 ## M21-S5 — Supply-chain & release hardening
 
-Statut : **EN COURS — candidat Windows local à qualifier.**
+Statut : **VALIDÉ le 27 juillet 2026** sur `bcc44ea5e7a5c354c1df25bb7d295ee57347629c`.
 
 S5 reste volontairement séparé de la CI en juillet. L'épinglage immuable des GitHub Actions reste affecté à S2 lors de sa reprise en août.
 
@@ -146,39 +146,98 @@ Livrables S5 :
 - `scripts/release/sign-windows-artifact.ps1` pour signature Authenticode explicite lorsqu'un certificat est disponible ;
 - `scripts/m21/run-s5.ps1` rejoue core, packaging, checksums, ZIP install, setup install/uninstall et politique de signature.
 
-Premier candidat `1b4f8cdc7d0821a6af5504a4873b4b4647bdb5c1` : le gate core a entièrement passé (`13/13`, JaCoCo 11 scopes, M20/M21 exact-head), puis la distribution a échoué avant packaging supply-chain. CycloneDX affichait `Skipping CycloneDX on non-execution root` parce que `makeAggregateBom` était attaché à `minos-app`. Le correctif retire cette exécution du module enfant et invoque l'aggregator depuis la racine Maven après le build ; `-SkipVerify` évite aussi de rejouer Surefire après le gate core déjà validé.
+Les deux faux négatifs rencontrés pendant la qualification ont été corrigés sans abaisser le gate : l'agrégateur CycloneDX a été déplacé de `minos-app` vers l'execution root Maven, puis le checker documentaire a été réaligné sur cette architecture.
 
-La signature n'est pas simulée. Sans certificat, le candidat peut être qualifié non signé ; `MINOS_REQUIRE_SIGNED_RELEASE=1` transforme une signature Authenticode valide en exigence bloquante.
+Qualification :
 
-Gate local S5 :
+```text
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=263)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+CycloneDX 1.6: 31 components
+M21 THIRD-PARTY NOTICES SUCCESS (components=19, unknownLicenses=0)
+M21 RELEASE MANIFEST SUCCESS (files=370)
+M21 SUPPLY-CHAIN EVIDENCE SUCCESS (components=19, unknownLicenses=0, files=370)
+MINOS Windows distribution SUCCESS
+MINOS Windows setup SUCCESS
+MINOS Windows release VALIDATION SUCCESS
+Authenticode setup status: NotSigned (required=False)
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+Validated HEAD: bcc44ea5e7a5c354c1df25bb7d295ee57347629c
+```
+
+La signature n'est pas simulée. Sans certificat, un candidat peut rester non signé ; `MINOS_REQUIRE_SIGNED_RELEASE=1` transforme une signature Authenticode valide en exigence bloquante.
+
+## M21-S6 — IntelliJ parity M19/M20
+
+Statut : **EN COURS — candidat Windows local à qualifier.**
+
+Architecture conservée :
+
+```text
+IntelliJ IDEA / Java 21
+        │
+        │ processus local + JSON / minos-ide v1
+        ▼
+MINOS Java 24 / MinosApplication
+        ├── ProgramGraphService
+        ├── AdvancedImpactService
+        ├── SecurityAnalysisService
+        ├── SemanticIndexService
+        ├── SemanticSearchService
+        ├── HybridSearchService
+        └── HybridContextBuilder
+```
+
+Le protocole `minos-ide` reste en version `1` : S6 est additif et les nouvelles opérations sont négociées par capabilities. Un runtime plus ancien est refusé explicitement pour l'action concernée ; aucune dégradation silencieuse ni duplication métier n'est autorisée.
+
+Capabilities S6 :
+
+```text
+program-graph
+impact-v2
+security-paths
+semantic-index-status
+semantic-index-sync
+semantic-search
+hybrid-search
+hybrid-context
+```
+
+Livrables :
+
+- `IdeIntelligenceCommand` : adaptation arguments/JSON uniquement, appels directs aux services M19/M20 de `MinosApplication` ;
+- `MinosM21Client` : client IntelliJ Java 21 capability-aware ;
+- actions natives **Advanced Intelligence** et **Semantic & Hybrid** ;
+- Impact M8 conservé comme **baseline**, Impact v2 ajouté explicitement ;
+- `scripts/intellij/check-m21-parity.py` verrouille les huit capabilities/actions, l'absence de dépendance Maven `com.minos:*` et la cible Java 21 ;
+- Plugin Verifier : cible build `261` et sélectionne la distribution courante plus les releases IntelliJ IDEA 2026.1 stables résolues ;
+- `scripts/m21/run-s6.ps1` rejoue le core M21, le gate de parité et toute la qualification M18 locale.
+
+Sémantique et sécurité restent capability-honest :
+
+- le provider sémantique reste désactivé par défaut ;
+- `local-hash` reste un provider de référence, **pas** un language model ;
+- le score vectoriel reste `HEURISTIC` et le ranking hybride une sélection dérivée ;
+- les security paths sont des chemins statiques observés et bornés ; absence de chemin ≠ preuve de sûreté.
+
+Gate local S6 :
 
 ```powershell
-.\scripts\m21\run-s5.ps1 -ExpectedHead <sha>
+.\scripts\m21\run-s6.ps1 -ExpectedHead <sha>
 ```
 
 Verdict attendu :
 
 ```text
-M21 SUPPLY-CHAIN EVIDENCE SUCCESS
-MINOS Windows release VALIDATION SUCCESS
-M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
 Validated HEAD: <sha>
 ```
-
-## M21-S6 — IntelliJ parity M19/M20
-
-Cibles fonctionnelles :
-
-```text
-Program Graph
-Impact v2
-Security paths
-Semantic index status
-Semantic search
-Hybrid search / context
-```
-
-Le protocole `minos-ide` reste versionné. Le plugin ne doit pas embarquer ni réimplémenter le moteur Java 24. La compatibilité doit évoluer vers une matrice IDE explicitement testée.
 
 ## M21-S7 — Advanced provider productionization
 
@@ -238,10 +297,17 @@ Gate S5 :
 .\scripts\m21\run-s5.ps1 -ExpectedHead <sha>
 ```
 
+Gate S6 :
+
+```powershell
+.\scripts\m21\run-s6.ps1 -ExpectedHead <sha>
+```
+
 ## Source de vérité
 
 - état livré : [`../STATUS.md`](../STATUS.md) ;
 - roadmap produit : [`../ROADMAP.md`](../ROADMAP.md) ;
 - facts calculables : [`../generated/product-facts.md`](../generated/product-facts.md) ;
 - supply-chain : [`../developer/supply-chain.md`](../developer/supply-chain.md) ;
+- guide IntelliJ : [`../user/intellij-plugin.md`](../user/intellij-plugin.md) ;
 - issue de pilotage : #73.
