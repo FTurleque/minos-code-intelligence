@@ -79,6 +79,11 @@ function Assert-M19Structure {
     )
     foreach ($relative in $required) { [void](Require-File -Relative $relative) }
 
+    Require-Pattern 'minos-domain\pom.xml' `
+        '<include>com/minos/program/\*\*/\*\.java</include>' 'M19 domain POM must compile com/minos/program/**/*.java explicitly.'
+    Require-Pattern 'minos-application\pom.xml' `
+        '<include>com/minos/program/\*\*/\*\.java</include>' 'M19 application POM must compile com/minos/program/**/*.java explicitly.'
+
     Require-Pattern 'minos-api\src\main\java\com\minos\api\MinosApi.java' `
         'CONTRACT_VERSION\s*=\s*"1"' 'M19 must not change the historical MinosApi v1 contract version.'
     Require-Pattern 'minos-api\src\main\java\com\minos\api\AdvancedCodeIntelligenceApi.java' `
