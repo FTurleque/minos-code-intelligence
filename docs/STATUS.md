@@ -46,8 +46,8 @@ Question produit :
 S1   governance + docs + runner local                 VALIDÉ — b4403921bfe0e2a7fe5eef9380a122982f275e0e
 S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026 — aucun run CI
 S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
-S4   Maven module-boundary hardening                  EN COURS — candidat local à qualifier
-S5   supply-chain + release hardening                 PLANIFIÉ
+S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
+S5   supply-chain + release hardening                 EN COURS — candidat local à qualifier
 S6   IntelliJ parity M19/M20                          PLANIFIÉ
 S7   advanced provider productionization              PLANIFIÉ
 S8   semantic scale qualification                     PLANIFIÉ
@@ -80,6 +80,21 @@ M21 JACOCO GATE SUCCESS
 M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
 Validated HEAD: 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
 ```
+
+### Qualification S4
+
+```text
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules=12, sources=263)
+Maven reactor: 13/13 SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
+```
+
+S4 supprime les allowlists/denylists `maven-compiler-plugin` d'ownership devenues obsolètes après la relocation physique M15. Chaque module compile désormais son arbre `src/main/java` naturel et `scripts/architecture/check-module-boundaries.py` empêche la réintroduction de filtres compiler, sources dupliquées ou packages incohérents.
+
+S5 ajoute un SBOM CycloneDX 1.6 agrégé, des notices tierces dérivées sans deviner les licences, un manifest SHA-256 de distribution, des sidecars de release et un helper Authenticode optionnel. Les workflows GitHub Actions restent hors scope jusqu'en août.
 
 Toute modification après un SHA qualifié exige une nouvelle qualification exact-head avant promotion.
 
@@ -159,7 +174,7 @@ M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
 - MCP : STDIO read-only, **23 tools** ;
 - NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
 - IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
-- installation PROD Windows : setup.exe + ZIP versionnés, runtime Java embarqué, doctor et MCP natif ;
+- installation PROD Windows : setup.exe + ZIP versionnés, runtime Java embarqué, doctor, MCP natif et preuves supply-chain embarquées ;
 - Docker MCP : mode durci optionnel.
 
 ## Frontières architecturales courantes
@@ -199,6 +214,7 @@ M22→M27 restent des directions planifiées. Elles ne deviennent des capacités
 - utilisateur : [`user/README.md`](user/README.md) ;
 - développeur : [`developer/README.md`](developer/README.md) ;
 - qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
+- supply-chain : [`developer/supply-chain.md`](developer/supply-chain.md) ;
 - facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
 - décisions : [`adr/README.md`](adr/README.md) ;
 - preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
