@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M19 terminés, validés et livrés ; M20 planifié.**
+Statut : **C0 à M20 terminés, validés et livrés. La phase M15→M20 est clôturée ; la prochaine phase reste à cadrer.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -11,10 +11,11 @@ La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](
 - chaque jalon ferme une question produit identifiable ;
 - une capacité n'est acquise qu'avec une preuve reproductible ;
 - un nouveau commit invalide la qualification exacte d'un SHA antérieur ;
-- CLI, API, MCP et NEXUS ne dupliquent pas le métier ;
+- CLI, API, MCP, NEXUS et IntelliJ ne dupliquent pas le métier ;
 - les décisions durables sont formalisées en ADR ;
 - les optimisations et choix de backend sont gouvernés par des mesures ;
 - les capacités provider absentes ne sont jamais inventées ;
+- les faits, dérivations et heuristiques restent explicitement distingués ;
 - les facts documentaires calculables sont dérivés du code quand c'est possible.
 
 ---
@@ -23,18 +24,11 @@ La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](
 
 **TERMINÉ.** Définition du rôle de MINOS, de ses frontières et de sa place dans l'écosystème.
 
----
-
 ## M0 — Faisabilité technique
 
 **TERMINÉ ET LIVRÉ — ADOPTER_AVEC_CONTRAINTES.**
 
 Acquis : qualification SCIP Java/TypeScript, baseline SCIP → MINOS, backend local léger, Glean optionnel et frontière fournisseur.
-
-- historique : [`history/milestones/m0/`](history/milestones/m0/)
-- décisions : ADR-0001 à ADR-0005, ADR-0008
-
----
 
 ## M1 — Découverte des projets et orchestration
 
@@ -42,17 +36,11 @@ Acquis : qualification SCIP Java/TypeScript, baseline SCIP → MINOS, backend lo
 
 Acquis : registre projets/workspaces, découverte langages/builds/modules/racines, ignores, négociation des indexeurs, lifecycle et promotion atomique.
 
----
-
 ## M2 — Intelligence des symboles
 
 **TERMINÉ ET LIVRÉ.**
 
 Acquis : symboles normalisés, identités stables qualifiées, emplacements, externes/non résolus, recherche et snapshots persistants.
-
-- décision : [ADR-0009](adr/0009-normalized-symbol-identity.md)
-
----
 
 ## M3 — Intelligence des relations
 
@@ -60,17 +48,11 @@ Acquis : symboles normalisés, identités stables qualifiées, emplacements, ext
 
 Acquis : références, implémentations, appels lorsqu'ils existent, dépendances dérivées, provenance, preuves, confiance et requêtes directionnelles.
 
-- décision : [ADR-0010](adr/0010-normalized-relationship-semantics.md)
-
----
-
 ## M4 — Recherche et contexte compact
 
 **TERMINÉ ET LIVRÉ.**
 
 Acquis : recherche structurée, sorties compactes, bornes résultats/tokens/profondeur, extraits pertinents et récupération explicite de source complète.
-
----
 
 ## M5 — Tests liés et dérivations explicables
 
@@ -78,15 +60,11 @@ Acquis : recherche structurée, sorties compactes, bornes résultats/tokens/prof
 
 Acquis : `RELATED_TEST`, signaux de nommage/référence/appel/proximité, score, raisons et preuves structurées.
 
----
-
 ## M6 — Intelligence d'architecture
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
 Acquis : topologie modules/namespaces, dépendances inter-modules, concentration, centralité relative, technologies factuelles et contexte de module.
-
----
 
 ## M7 — Indexation incrémentale
 
@@ -94,17 +72,11 @@ Acquis : topologie modules/namespaces, dépendances inter-modules, concentration
 
 Acquis : fingerprints, ChangeSet, snapshots d'empreintes, invalidation conservatrice, plans `NONE/INCREMENTAL/FULL` et fallback complet.
 
-Porte : **incrémental uniquement sous preuve explicite de capacité fournisseur**.
-
----
-
 ## M8 — Analyse d'impact
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
 Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, profondeur/résultats bornés, cycles, tests potentiellement impactés et limitations runtime.
-
----
 
 ## M9 — CLI stabilisée
 
@@ -112,15 +84,11 @@ Acquis : impact direct/indirect, chemins explicatifs, confiance conservatrice, p
 
 Acquis : administration, import SCIP explicite, statut, recherche/symboles/relations/tests liés, architecture, impact, formats structurés et codes de sortie stables.
 
----
-
 ## M10 — Serveur MCP
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
 Acquis : serveur MCP STDIO Java officiel, tools read-only, schémas bornés, erreurs structurées et shaded JAR. Le catalogue courant exact est généré dans [`generated/product-facts.md`](generated/product-facts.md).
-
----
 
 ## M11 — API publique
 
@@ -128,29 +96,23 @@ Acquis : serveur MCP STDIO Java officiel, tools read-only, schémas bornés, err
 
 Contrat public versionné autour de `MinosApi` et `LocalMinosApi`, sans exposition de SCIP, du stockage ou des modèles internes.
 
----
-
 ## M12 — Multi-dépôts et intelligence Git
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
 Acquis : workspaces publics, JGit, activité Git bornée, résolution cross-repository exacte et contrat public additif.
 
----
-
 ## M13 — Intégration NEXUS
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-MINOS Java 24 exporte un contrat JSON v1 local ; NEXUS l'importe explicitement. MINOS reste propriétaire des faits de Code Intelligence et NEXUS du ranking, de la sélection et du budget de contexte.
-
----
+MINOS exporte un contrat JSON local versionné ; NEXUS reste propriétaire du ranking global, de la sélection et du budget de contexte multi-source.
 
 ## M14 — Indexation autonome et installation PROD
 
 **TERMINÉ, VALIDÉ ET LIVRÉ.**
 
-Parcours utilisateur livré :
+Parcours utilisateur :
 
 ```text
 minos doctor
@@ -161,12 +123,9 @@ minos index <project>
 
 Acquis : discovery, négociation provider, diagnostic runtime, fingerprints, exécution, normalisation, staging/promotion, distribution Windows native, runtime Java embarqué, installation CLI/MCP et release explicite.
 
-- roadmap opérationnelle : [`roadmap/M14_EXECUTION.md`](roadmap/M14_EXECUTION.md)
-- décision : [ADR-0021](adr/0021-native-runtime-autonomous-indexing.md)
-
 ---
 
-# Nouvelle phase — Industrialisation et complétion de MINOS
+# Phase M15→M20 — Industrialisation et complétion
 
 ```text
 M15  Industrialiser le Core Engine             ✅
@@ -179,187 +138,108 @@ M18  Intégrer MINOS à IntelliJ                 ✅
   ↓
 M19  Intelligence de programme avancée         ✅
   ↓
-M20  Recherche sémantique hybride              planifié
+M20  Recherche sémantique hybride              ✅
 ```
 
 ## M15 — Industrialisation du Core Engine
 
-**TERMINÉ, VALIDÉ ET LIVRÉ — 11/11 sous-incréments.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 11/11.**
 
-Objectif fermé : transformer le socle M14 en plateforme modulaire et durable sans régression fonctionnelle volontaire.
+Acquis : reactor Maven multi-module, `MinosApplication`, MCP découplé de la CLI métier, résolution projet commune, persistance décomposée, cache snapshot actif, indexes reconstruisibles, JaCoCo/CI et facts calculables.
 
-```text
-M15-S1   baseline de non-régression              ✅ PR #56
-M15-S2   Maven multi-module                      ✅ PR #57
-M15-S3   MinosApplication                        ✅ PR #58
-M15-S4   découplage MCP                          ✅ PR #59
-M15-S5   résolution projet commune               ✅ PR #60
-M15-S6   persistance décomposée                  ✅ PR #61
-M15-S7   cache snapshot actif                    ✅ PR #62
-M15-S8   indexes de requête                      ✅ PR #62
-M15-S9   JaCoCo / qualité continue               ✅ PR #62
-M15-S10  CI automatique de PR                    ✅ PR #62
-M15-S11  cohérence documentaire                  ✅ PR #62
-```
-
-Acquis structurants : reactor Maven multi-module, `MinosApplication`, MCP découplé de la CLI métier, résolution projet commune, persistance décomposée, cache snapshot actif, indexes reconstruisibles, JaCoCo/CI/facts calculables.
-
-- roadmap opérationnelle : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md)
+- roadmap : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md)
 - décisions : ADR-0022 à ADR-0024
 - issue : #55
 - PR finale : #62
 
----
-
 ## M16 — Scalabilité et performance à grande échelle
 
-**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
-
-Objectif fermé : mesurer le backend industrialisé par M15 sur un dataset STANDARD reproductible, protéger les séquences MCP et l'indexation réelle, puis borner la croissance disque sans introduire un backend complexe sans preuve.
-
-```text
-M16-S1   harness benchmark                       ✅
-M16-S2   datasets d'échelle                      ✅
-M16-S3   query benchmark                         ✅
-M16-S4   MCP sustained load                      ✅
-M16-S5   indexing benchmark                      ✅
-M16-S6   memory/disk profile                     ✅
-M16-S7   backend decision                        ✅ ADR-0025
-M16-S8   optimisations mesurées uniquement       ✅
-M16-S9   retention/compaction                    ✅
-```
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9.**
 
 Acquis : profils `SMOKE/STANDARD/EXTENDED/STRESS`, gate STANDARD 10k fichiers/100k symboles/500k occurrences/250k relations, p50/p95/p99, heap/RSS/disque, MCP long-lived, benchmark FULL/NONE, décision backend mesurée et rétention bornée.
 
-- roadmap opérationnelle : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md)
+- roadmap : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md)
 - décision : [ADR-0025](adr/0025-measurement-gated-storage-backend-evolution.md)
 - issue : #63
 - PR finale : #64
 
----
-
 ## M17 — Provider & Discovery Platform
 
-**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9.**
 
-Objectif fermé : rendre discovery, providers et installation runtime extensibles sans branches d'écosystème dans les orchestrateurs centraux, puis qualifier de nouveaux écosystèmes sur les mêmes contrats MINOS.
+Acquis : SPI discovery/provider, profils `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED`, Gradle, npm/pnpm/yarn workspaces, Kotlin/Maven, Python/scip-python, conformance kit et runtime provider extensible.
 
-```text
-M17-S1   Discovery SPI                            ✅
-M17-S2   Provider SPI                             ✅
-M17-S3   Capability model v2                      ✅
-M17-S4   Gradle                                   ✅
-M17-S5   npm/pnpm/yarn workspaces                 ✅
-M17-S6   Kotlin                                   ✅
-M17-S7   Python / scip-python 0.6.6               ✅
-M17-S8   Provider conformance kit                 ✅
-M17-S9   Installation provider extensible         ✅
-```
-
-Acquis :
-
-- `ProjectDetector`, `BuildSystemDetector`, `SourceRootDetector`, `LanguageDetector` composables ;
-- `IndexerProvider` + registre d'extensions ;
-- profils exhaustifs `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED` ;
-- découverte Gradle Java/Kotlin et workspaces npm/pnpm/yarn ;
-- Kotlin/Maven négocié par `scip-java` ;
-- Python géré par `scip-python` `0.6.6`, installé sous `MINOS_HOME/tools` ;
-- `ProviderConformanceKit` déterministe ;
-- `CompositeProviderRuntimeManager` sans logique provider dans CLI/doctor/index ;
-- limitations visibles dans CLI, `ProviderPlatformApi` et diagnostics MCP ;
-- `MinosApi` v1 et le catalogue historique de 16 tools MCP restent stables.
-
-Porte finale : `scripts/m17/run-final.ps1` rejoue la qualification M14 complète, puis exige installation Python READY et indexation/requêtes end-to-end Python et Kotlin sur le SHA exact.
-
-- roadmap opérationnelle : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md)
+- roadmap : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md)
 - décision : [ADR-0026](adr/0026-discovery-provider-spi-and-explicit-capability-profiles.md)
 - issue : #65
 
----
-
 ## M18 — MINOS for IntelliJ
 
-**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9.**
 
-Objectif fermé : exploiter les capacités MINOS directement dans IntelliJ sans dépendre d'un agent IA, via un plugin autonome Java 21 qui reste client du moteur MINOS Java 24 et ne duplique pas l'intelligence métier.
+Acquis : protocole `minos-ide` v1, plugin IntelliJ Java 21 autonome, statut projet/provider/snapshot, navigation symboles, graphe d'architecture, impact/tests liés, lifecycle d'indexation, activité Git factuelle, packaging et Plugin Verifier.
 
-```text
-M18-S1   Contrat IDE / handshake v1               ✅
-M18-S2   Plugin bootstrap                          ✅
-M18-S3   Project status                            ✅
-M18-S4   Navigation symboles                       ✅
-M18-S5   Architecture graph                        ✅
-M18-S6   Impact + related tests                    ✅
-M18-S7   Index lifecycle                           ✅
-M18-S8   Git intelligence factuelle                ✅
-M18-S9   Packaging / Plugin Verifier               ✅
-```
-
-Acquis : protocole `minos-ide` v1 stateless au handshake, Tool Window et settings projet, navigation définitions/usages/dependents/implementations, conversion UTF-8/16/32 vers offsets IntelliJ, graphe d'architecture borné/filtrable, impact/tests explicables, index/reindex/doctor hors EDT via lifecycle MINOS, activité Git factuelle, ZIP plugin et workflows de validation/release.
-
-Qualification finale Windows exact-head :
+Qualification exacte :
 
 ```text
 Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
 M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
-Plugin Verifier: Compatible with IntelliJ IDEA 2026.1 (IU-261.22158.277)
 ```
 
-Merge final : `faa51f63c5967d874a7a6685b6b513b83bb736b4`.
+Merge : `faa51f63c5967d874a7a6685b6b513b83bb736b4`.
 
-- roadmap opérationnelle : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md)
+- roadmap : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md)
 - décision : [ADR-0027](adr/0027-intellij-external-client-and-versioned-cli-protocol.md)
 - issue : #67
 - PR finale : #68
 
----
-
 ## M19 — Advanced Code Intelligence
 
-**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9 sous-incréments.**
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9.**
 
-Objectif fermé : étendre MINOS vers l'intelligence de programme avancée sans confondre faits statiques, dérivations, heuristiques ou comportement runtime.
+Acquis : `ProgramGraph` capability-honest, call graph v2, CFG, data-flow/def-use, propagation interprocédurale bornée, CPG déterministe, Impact v2, primitives sécurité et `AdvancedCodeIntelligenceApi` v1.
 
-```text
-M19-S1   Program graph model                       ✅
-M19-S2   Call graph v2                             ✅
-M19-S3   Control Flow Graph                        ✅
-M19-S4   Data Flow / DEF_USE                       ✅
-M19-S5   Interprocedural Flow                      ✅
-M19-S6   CPG composition                           ✅
-M19-S7   Impact v2                                 ✅
-M19-S8   Security primitives                       ✅
-M19-S9   API / MCP exposure                        ✅
-```
-
-Acquis : modèle `ProgramGraph` provider-independent et capability-honest, call graph v2 avec provenance, CFG explicite, data-flow/def-use, propagation interprocédurale bornée avec cycles visibles, composition CPG déterministe, Impact v2 conservant M8 comme baseline, primitives `SOURCE/SINK/SANITIZER`, `AdvancedCodeIntelligenceApi` v1 additive et trois nouveaux tools MCP read-only (`minos_program_graph`, `minos_impact_v2`, `minos_security_paths`) portant le catalogue courant à 19 tools.
-
-Qualification finale Windows exact-head :
+Qualification exacte :
 
 ```text
 Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
 M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
-Maven Java 24: 13/13 modules SUCCESS
-JaCoCo: all gates PASS
 ```
 
-Merge final : `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
+Merge : `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
 
-- roadmap opérationnelle : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md)
+- roadmap : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md)
 - décision : [ADR-0028](adr/0028-capability-honest-program-graph-and-bounded-advanced-analysis.md)
 - issue : #69
 - PR finale : #70
 
+## M20 — Semantic & Hybrid Code Intelligence
+
+**TERMINÉ, VALIDÉ ET LIVRÉ — 9/9.**
+
+Acquis : documents sémantiques `SYMBOL/FILE/CHUNK`, SPI `EmbeddingProvider`, provider local opt-in `local-hash`, vector store reconstruisible, recherche sémantique `HEURISTIC`, ranking hybride lexical+graph+semantic, Recall@K/MRR/nDCG@K, contexte v2 borné, index sémantique incrémental, API Java v1 additive, 23 tools MCP et signaux NEXUS v2.
+
+Qualification exacte Windows PowerShell :
+
+```text
+Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+Maven Java 24: 13/13 modules SUCCESS
+JaCoCo: all gates PASS
+MCP STDIO: 23 tools
+```
+
+Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
+
+- roadmap : [`roadmap/M20_EXECUTION.md`](roadmap/M20_EXECUTION.md)
+- décision : [ADR-0029](adr/0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md)
+- issue : #71
+- PR finale : #72
+
 ---
 
-## M20 — Recherche sémantique hybride
+## Après M20
 
-**PLANIFIÉ — PROCHAIN JALON.**
+M20 clôt la phase de maturation M15→M20. **Aucun M21 n'est déclaré par cette roadmap.**
 
-Objectif : combiner recherche sémantique et faits structurés MINOS sans remplacer les identités, relations et preuves déterministes.
-
----
-
-## Règle de progression
-
-M20 est le prochain jalon séquentiel. Sa promotion produit reste soumise aux garanties de scalabilité M16, d'extensibilité M17, d'intégration IDE M18 et d'honnêteté des graphes/analyses avancées acquise en M19.
+Les thèmes futurs doivent être cadrés par une nouvelle question produit, des critères de sortie mesurables et une nouvelle roadmap avant promotion. Les pistes historiquement hors engagement incluent notamment : indexation distante GitHub/GitLab, exécution distribuée, service hébergé, collaboration multi-utilisateur, analyse runtime/dynamique et nouveaux langages/providers qualifiés.
