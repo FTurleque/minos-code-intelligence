@@ -51,10 +51,14 @@ public final class ProgramGraphService {
     ) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
-        this.providers = List.copyOf(Objects.requireNonNull(providers, "providers"));
-        if (this.providers.isEmpty()) {
+        List<ProgramGraphProvider> configured = new ArrayList<>(Objects.requireNonNull(providers, "providers"));
+        if (configured.isEmpty()) {
             throw new IllegalArgumentException("at least one program graph provider is required");
         }
+        if (configured.stream().noneMatch(provider -> FileProgramGraphProvider.PROVIDER_ID.equals(provider.id()))) {
+            configured.add(new FileProgramGraphProvider());
+        }
+        this.providers = List.copyOf(configured);
         if (maxCacheEntries < 1) {
             throw new IllegalArgumentException("maxCacheEntries must be greater than zero");
         }
