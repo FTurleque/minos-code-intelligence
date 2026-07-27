@@ -12,6 +12,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,7 +45,16 @@ class SharedMinosApplicationIntegrationTest {
         assertEquals("shared-project", multiRepositoryApi.listProjects().getFirst().name());
 
         var mcpTools = MinosMcpApplicationTools.specifications(application);
-        assertEquals(16, mcpTools.size());
+        assertEquals(19, mcpTools.size());
+        Set<String> toolNames = mcpTools.stream()
+                .map(spec -> spec.tool().name())
+                .collect(Collectors.toSet());
+        assertTrue(toolNames.containsAll(Set.of(
+                "minos_program_graph",
+                "minos_impact_v2",
+                "minos_security_paths"
+        )));
+
         var projectStructure = mcpTools.stream()
                 .filter(spec -> "minos_project_structure".equals(spec.tool().name()))
                 .findFirst().orElseThrow();

@@ -27,6 +27,9 @@ class MinosMcpToolsTest {
                 specs.stream().map(spec -> spec.tool().name()).distinct().count());
         assertTrue(specs.stream().allMatch(spec -> spec.tool().name().startsWith("minos_")));
         assertTrue(specs.stream().anyMatch(spec -> "minos_architecture_graph".equals(spec.tool().name())));
+        assertTrue(specs.stream().anyMatch(spec -> "minos_program_graph".equals(spec.tool().name())));
+        assertTrue(specs.stream().anyMatch(spec -> "minos_impact_v2".equals(spec.tool().name())));
+        assertTrue(specs.stream().anyMatch(spec -> "minos_security_paths".equals(spec.tool().name())));
 
         assertSuccess(call(specs, "minos_project_structure", Map.of("project", "demo")));
         assertSuccess(call(specs, "minos_index_status", Map.of("project", "demo")));
@@ -108,12 +111,20 @@ class MinosMcpToolsTest {
                 backend.architectureGraphRequest);
 
         assertSuccess(call(specs, "minos_impact", Map.of(
-                "project", "demo",
-                "symbolId", "sym-1",
-                "depth", 5,
-                "limit", 250
-        )));
+                "project", "demo", "symbolId", "sym-1", "depth", 5, "limit", 250)));
         assertEquals(new MinosMcpBackend.ImpactRequest("demo", "sym-1", 5, 250), backend.impactRequest);
+
+        assertSuccess(call(specs, "minos_program_graph", Map.of(
+                "project", "demo", "maxNodes", 123, "maxEdges", 456)));
+        assertEquals(new MinosMcpBackend.ProgramGraphRequest("demo", 123, 456), backend.programGraphRequest);
+
+        assertSuccess(call(specs, "minos_impact_v2", Map.of(
+                "project", "demo", "symbolId", "sym-2", "depth", 6, "limit", 300)));
+        assertEquals(new MinosMcpBackend.ImpactRequest("demo", "sym-2", 6, 300), backend.impactV2Request);
+
+        assertSuccess(call(specs, "minos_security_paths", Map.of(
+                "project", "demo", "sourceNodeId", "source:1", "depth", 7, "limit", 50)));
+        assertEquals(new MinosMcpBackend.SecurityRequest("demo", "source:1", 7, 50), backend.securityRequest);
     }
 
     @Test
@@ -123,11 +134,7 @@ class MinosMcpToolsTest {
         SyncToolSpecification graph = spec(tools.specifications(), "minos_architecture_graph");
 
         var result = graph.callHandler().apply(null, CallToolRequest.builder("minos_architecture_graph")
-                .arguments(Map.of(
-                        "project", "demo",
-                        "module", "api",
-                        "format", "mermaid"
-                ))
+                .arguments(Map.of("project", "demo", "module", "api", "format", "mermaid"))
                 .build());
 
         assertFalse(Boolean.TRUE.equals(result.isError()));
@@ -149,6 +156,11 @@ class MinosMcpToolsTest {
         assertTrue(Boolean.TRUE.equals(result.isError()));
         assertTrue(((TextContent) result.content().getFirst()).text().contains("must be between 1 and 1000"));
         assertEquals(null, backend.symbolSearchRequest);
+
+        var graphResult = call(tools.specifications(), "minos_program_graph", Map.of(
+                "project", "demo", "maxNodes", 100001));
+        assertTrue(Boolean.TRUE.equals(graphResult.isError()));
+        assertEquals(null, backend.programGraphRequest);
     }
 
     @Test
@@ -199,6 +211,9 @@ class MinosMcpToolsTest {
         private String architectureProject;
         private ArchitectureGraphRequest architectureGraphRequest;
         private ImpactRequest impactRequest;
+        private ProgramGraphRequest programGraphRequest;
+        private ImpactRequest impactV2Request;
+        private SecurityRequest securityRequest;
         private RuntimeException statusFailure;
 
         @Override
@@ -208,9 +223,7 @@ class MinosMcpToolsTest {
 
         @Override
         public String indexStatus(String project) {
-            if (statusFailure != null) {
-                throw statusFailure;
-            }
+            if (statusFailure != null) throw statusFailure;
             return "{}";
         }
 
@@ -266,6 +279,24 @@ class MinosMcpToolsTest {
         @Override
         public String impact(ImpactRequest request) {
             this.impactRequest = request;
+            return "{}";
+        }
+
+        @Override
+        public String programGraph(ProgramGraphRequest request) {
+            this.programGraphRequest = request;
+            return "{}";
+        }
+
+        @Override
+        public String impactV2(ImpactRequest request) {
+            this.impactV2Request = request;
+            return "{}";
+        }
+
+        @Override
+        public String securityPaths(SecurityRequest request) {
+            this.securityRequest = request;
             return "{}";
         }
     }

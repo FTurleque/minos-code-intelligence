@@ -14,8 +14,6 @@
     <description>Provider-independent code intelligence domain model.</description>
 
     <build>
-
-
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -23,6 +21,7 @@
                 <configuration>
                     <includes>
                         <include>com/minos/domain/**/*.java</include>
+                        <include>com/minos/program/**/*.java</include>
                     </includes>
                 </configuration>
             </plugin>

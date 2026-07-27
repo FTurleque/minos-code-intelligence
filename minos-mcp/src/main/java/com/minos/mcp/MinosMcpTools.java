@@ -17,14 +17,14 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Catalogue M10 des outils MCP MINOS.
+ * Catalogue des outils MCP MINOS.
  *
  * <p>Handlers map protocol arguments directly to typed application requests. No
  * MCP business invocation is translated to CLI commands.</p>
  */
 public final class MinosMcpTools {
 
-    public static final int TOOL_COUNT = 16;
+    public static final int TOOL_COUNT = 19;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
 
     private final MinosMcpBackend backend;
@@ -75,7 +75,13 @@ public final class MinosMcpTools {
                 tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), args ->
                         backend.architectureGraph(architectureGraphRequest(args))),
                 tool("minos_impact", "Estimate direct and indirect potential impact with deterministic explanatory paths and explicit limitations.", impactSchema(), args ->
-                        backend.impact(impactRequest(args)))
+                        backend.impact(impactRequest(args))),
+                tool("minos_program_graph", "Read the bounded M19 program graph with explicit capabilities, nature, provenance and limitations.", programGraphSchema(), args ->
+                        backend.programGraph(programGraphRequest(args))),
+                tool("minos_impact_v2", "Enrich M8 impact with bounded call/data-flow paths while reporting baseline and advanced additions separately.", impactSchema(), args ->
+                        backend.impactV2(impactRequest(args))),
+                tool("minos_security_paths", "Find bounded observed source-to-sink paths and sanitizers; never claims exhaustive vulnerability presence or absence.", securitySchema(), args ->
+                        backend.securityPaths(securityRequest(args)))
         );
     }
 
@@ -176,6 +182,23 @@ public final class MinosMcpTools {
                 required(args, "symbolId"),
                 optionalInteger(args, "depth", 1, 32),
                 optionalInteger(args, "limit", 1, 10000)
+        );
+    }
+
+    private static MinosMcpBackend.ProgramGraphRequest programGraphRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.programGraphDefaults(
+                required(args, "project"),
+                optionalInteger(args, "maxNodes", 1, 100000),
+                optionalInteger(args, "maxEdges", 1, 500000)
+        );
+    }
+
+    private static MinosMcpBackend.SecurityRequest securityRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.securityDefaults(
+                required(args, "project"),
+                optionalString(args, "sourceNodeId"),
+                optionalInteger(args, "depth", 1, 32),
+                optionalInteger(args, "limit", 1, 1000)
         );
     }
 
@@ -328,6 +351,23 @@ public final class MinosMcpTools {
                         "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}",
                 "\"project\",\"symbolId\"");
+    }
+
+    private static String programGraphSchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"maxNodes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100000}," +
+                        "\"maxEdges\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500000}",
+                "\"project\"");
+    }
+
+    private static String securitySchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"sourceNodeId\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
+                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
+                "\"project\"");
     }
 
     private static String commonSymbolProperties() {
