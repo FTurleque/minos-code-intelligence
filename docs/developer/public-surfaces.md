@@ -13,6 +13,9 @@ classDiagram
       projectQueryService()
       architectureQuery()
       impactQuery()
+      programGraphService()
+      advancedImpactService()
+      securityAnalysisService()
       workspaceIntelligence()
       providerRuntimeManager()
       gitIntelligence()
@@ -22,6 +25,7 @@ classDiagram
     class MinosIntellijPlugin { <<Java 21 client>> }
     class MinosApi { <<public interface v1>> }
     class ProviderPlatformApi { <<public provider diagnostics v1>> }
+    class AdvancedCodeIntelligenceApi { <<public advanced analysis v1>> }
     class MinosMcpServer { <<read-only adapter>> }
     class NexusExportService { <<integration contract v1>> }
 
@@ -30,11 +34,12 @@ classDiagram
     MinosIntellijPlugin --> MinosIdeProtocolV1
     MinosApi --> MinosApplication
     ProviderPlatformApi --> MinosApplication
+    AdvancedCodeIntelligenceApi --> MinosApplication
     MinosMcpServer --> MinosApplication
     NexusExportService --> MinosApplication
 ```
 
-## Composition M15–M18
+## Composition M15–M19
 
 `MinosApplication` est la composition locale partagée pour un `MINOS_HOME`. CLI, API et MCP peuvent recevoir la même instance et réutilisent registry, stores, runtime provider et services applicatifs.
 
@@ -58,6 +63,24 @@ minos ide handshake / commandes CLI JSON
   ↓
 MinosApplication
 ```
+
+M19 ajoute une vue de graphe avancé reconstruisible et capability-honest :
+
+```text
+snapshot actif
+   ↓
+ProgramGraphProvider[]
+   ├── projection CALLS / READS / WRITES historique
+   └── providers avancés explicites (CFG / def-use / taint)
+   ↓
+ProgramGraphComposer
+   ↓
+ProgramGraphService
+   ├── AdvancedImpactService
+   └── SecurityAnalysisService
+```
+
+Le `ProgramGraph` n'est pas un second stockage autoritatif. Les snapshots persistés restent la source de vérité ; les fragments avancés sont composés de manière déterministe, les collisions incohérentes sont rejetées et toute capability absente reste explicitement indisponible conformément à ADR-0028.
 
 Le snapshot actif possède toujours une vue de requête immuable et indexée, mise en cache par identité de snapshot actif. Les transports ne reconstruisent ni cache ni indexes.
 
@@ -156,6 +179,18 @@ ProviderDto getProvider(String providerId)
 
 Cette séparation évite d'augmenter silencieusement `MinosApi.CONTRACT_VERSION`. Le DTO provider expose uniquement des types publics : identité/version, langages/build systems, map capability → niveau, score de conformance, limitations et diagnostics runtime.
 
+### `AdvancedCodeIntelligenceApi` v1
+
+M19 ajoute un troisième contrat public additif sans modifier `MinosApi` v1 :
+
+```java
+ProgramGraphDto getProgramGraph(String project, ProgramGraphQuery query)
+AdvancedImpactDto analyzeImpactV2(String project, AdvancedImpactQuery query)
+SecurityReportDto analyzeSecurityPaths(String project, SecurityQuery query)
+```
+
+Le contrat reste provider-independent et n'expose que des DTOs/JDK. Les réponses conservent capabilities, `nature`, confiance, provenance et limitations. Les requêtes sont bornées : graphe, profondeur d'impact et chemins sécurité ne peuvent pas devenir des traversées illimitées.
+
 ## MCP
 
 MCP reste **strictement read-only**. Les tools ne peuvent pas faire `project add`, `tools install`, `index` ou `import-scip`.
@@ -174,7 +209,17 @@ services typés de MinosApplication
 mapping de réponse MCP
 ```
 
-M17 conserve volontairement le catalogue historique de **16 tools**. Les réponses de `minos_project_structure` et `minos_index_status` ajoutent `providerProfiles`, qui expose les mêmes niveaux/limitations que CLI/API sans créer un tool administratif.
+M19 conserve les **16 tools historiques** et ajoute trois tools read-only, soit **19 tools** au total :
+
+```text
+minos_program_graph
+minos_impact_v2
+minos_security_paths
+```
+
+`minos_program_graph` expose les capabilities réellement disponibles et les limitations. `minos_impact_v2` distingue le compte baseline M8 des symboles ajoutés par les chemins avancés. `minos_security_paths` retourne uniquement les chemins source→sink observés et les sanitizers rencontrés ; l'absence de chemin n'est jamais présentée comme une preuve de sûreté.
+
+Les réponses de `minos_project_structure` et `minos_index_status` continuent d'ajouter `providerProfiles`, qui expose les mêmes niveaux/limitations que CLI/API sans créer un tool administratif.
 
 Le launcher natif fournit `minos mcp`. Le catalogue exact et son nombre sont vérifiés automatiquement dans [`../generated/product-facts.md`](../generated/product-facts.md).
 
@@ -184,7 +229,7 @@ Voir le [guide utilisateur MCP](../user/mcp.md).
 
 ## Export NEXUS
 
-`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance, M17 la plateforme provider et M18 ajoute un client IDE ; aucun de ces jalons ne change le contrat NEXUS.
+`NexusExportService` projette le snapshot actif vers un contrat JSON indépendant du modèle Java de NEXUS. M14 change la production du snapshot, M15 sa composition/performance, M17 la plateforme provider et M18 ajoute un client IDE. M19 ajoute des surfaces avancées séparées et ne modifie pas implicitement le contrat NEXUS v1.
 
 ## Runtime natif vs Docker
 
@@ -209,6 +254,17 @@ Les deux modes ne doivent pas partager aveuglément un registre de chemins hôte
 
 Un build system peut être correctement découvert alors qu'aucun provider d'exécution n'est encore qualifié : **discovery et support runtime sont deux faits distincts**.
 
+## Ajouter une capability de graphe M19+
+
+1. implémenter `ProgramGraphProvider` ;
+2. déclarer uniquement les `ProgramGraphCapability` réellement prouvées ;
+3. fournir nœuds/arêtes avec identités stables, nature, provenance et preuves nécessaires ;
+4. ajouter une vérité terrain contrôlée et mesurer précision/rappel ;
+5. conserver une limitation explicite pour les dimensions dynamiques non prouvées ;
+6. laisser `ProgramGraphComposer` rejeter toute collision incohérente.
+
+Un provider qui ne sait pas produire de CFG, de def-use ou d'annotations taint ne reçoit aucune de ces capabilities par convention.
+
 ## Ajouter une nouvelle surface
 
 Pour un futur adapter HTTP ou autre protocole :
@@ -224,11 +280,13 @@ Pour un futur adapter HTTP ou autre protocole :
 
 ## Qualité et cohérence
 
-- tests API : frontière du contrat public ;
+- tests API : frontière des contrats publics historiques et avancés ;
 - tests MCP : catalogue/schemas, profils provider et replay STDIO ;
+- tests M19 : précision/rappel call graph et def-use, CFG branches/loops/exceptions, cycles interprocéduraux, collision CPG, gain Impact v2 et security paths/sanitizers ;
 - tests IDE : handshake incompatible, invocation process, positions UTF-8/16/32, graphe borné ;
 - Plugin Verifier : compatibilité IntelliJ ciblée ;
 - conformance kit : profils exhaustifs et déterministes ;
 - `scripts/docs/product-facts.py --check` : facts mécaniques alignés ;
 - `scripts/m18/run-final.ps1` : Maven Java 24 + gates plugin IntelliJ + exact-head ;
+- `scripts/m19/run-final.ps1` : Maven/JaCoCo/product-facts + invariants avancés + exact-head ;
 - les rapports historiques ne sont pas réécrits pour refléter le présent.
