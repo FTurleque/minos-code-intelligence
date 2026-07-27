@@ -30,7 +30,7 @@ function Resolve-Python {
         $command = Get-Command $name -ErrorAction SilentlyContinue
         if ($command) { return $command.Source }
     }
-    throw 'M21 requires Python in PATH for documentation consistency verification.'
+    throw 'M21 requires Python in PATH for repository consistency verification.'
 }
 
 Push-Location $RepoRoot
@@ -50,20 +50,25 @@ try {
     }
     Write-Host "HEAD: $head"
 
-    Write-Host '[1/4] Checking M21 current documentation consistency...'
     $python = Resolve-Python
+
+    Write-Host '[1/5] Checking M21 current documentation consistency...'
     Invoke-NativeChecked -File $python -Arguments @('scripts/docs/check-current-docs.py') `
         -Failure 'M21 current documentation consistency failed'
 
-    Write-Host '[2/4] Replaying the current authoritative M20 core qualification on the M21 head...'
+    Write-Host '[2/5] Checking physical Maven module boundaries...'
+    Invoke-NativeChecked -File $python -Arguments @('scripts/architecture/check-module-boundaries.py') `
+        -Failure 'M21 Maven module-boundary consistency failed'
+
+    Write-Host '[3/5] Replaying the current authoritative M20 core qualification on the M21 head...'
     & (Join-Path $RepoRoot 'scripts\m20\run-final.ps1') -ExpectedHead $head
     if ($LASTEXITCODE -ne 0) { throw "M20 regression qualification failed (exit=$LASTEXITCODE)" }
 
-    Write-Host '[3/4] Rechecking M21 documentation after generated/build gates...'
+    Write-Host '[4/5] Rechecking M21 documentation after generated/build gates...'
     Invoke-NativeChecked -File $python -Arguments @('scripts/docs/check-current-docs.py') `
         -Failure 'M21 documentation consistency changed during qualification'
 
-    Write-Host '[4/4] Rechecking exact HEAD and clean worktree...'
+    Write-Host '[5/5] Rechecking exact HEAD and clean worktree...'
     $finalHead = ((& git rev-parse HEAD) | Select-Object -First 1).Trim()
     if ($finalHead -ne $head) { throw "HEAD changed during M21 qualification: start=$head end=$finalHead" }
     $finalDirty = @(& git status --porcelain)
