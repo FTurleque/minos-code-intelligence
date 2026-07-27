@@ -1,43 +1,41 @@
 # MINOS — Roadmap d'évolution M15 à M20
 
-Statut : **PLANIFIÉ — aucun jalon M15 à M20 n'est encore acquis**
+Statut : **PHASE TERMINÉE — M15 à M20 sont validés, livrés et intégrés.**
 
-Cette roadmap prolonge les jalons C0 à M14 livrés et transforme MINOS d'un moteur local fonctionnel en une plateforme de Code Intelligence industrialisée, scalable, extensible, intégrée à l'IDE et capable d'analyses avancées puis sémantiques.
+Cette roadmap prolonge les jalons C0 à M14 et documente la phase qui a transformé MINOS d'un moteur local fonctionnel en plateforme de Code Intelligence industrialisée, scalable, extensible, intégrée à l'IDE, capable d'analyses avancées et de retrieval sémantique hybride.
 
-Elle complète [`../ROADMAP.md`](../ROADMAP.md), qui reste la vue produit officielle.
+Elle complète [`../ROADMAP.md`](../ROADMAP.md), qui reste la vue produit officielle. Les détails de qualification sont conservés dans les roadmaps opérationnelles M15→M20 et les PR/issues correspondantes.
 
 ## Principes non négociables
 
-Les évolutions M15 à M20 doivent préserver les invariants déjà établis :
+Les évolutions M15 à M20 ont préservé les invariants suivants :
 
 - MINOS reste **local-first** par défaut ;
 - le cœur reste indépendant d'un LLM et d'un fournisseur d'IA ;
 - les faits, dérivations et heuristiques restent explicitement distingués ;
-- toute information dérivée conserve provenance, confiance et preuves ;
+- toute information dérivée conserve provenance, confiance et preuves lorsque nécessaires ;
 - aucune capacité fournisseur absente n'est inventée ;
 - les contrats publics ne fuient ni SCIP, ni un backend de stockage, ni un protocole d'exposition ;
-- CLI, API, MCP, NEXUS et futures intégrations IDE consomment le même cœur métier ;
+- CLI, API, MCP, NEXUS et IntelliJ consomment le même cœur métier ou ses contrats versionnés ;
 - l'analyse d'impact reste conservatrice tant qu'une preuve runtime exhaustive n'existe pas ;
-- les choix de backend sont gouvernés par des mesures, pas par préférence technologique ;
+- les choix de backend sont gouvernés par des mesures ;
 - un jalon n'est terminé qu'après validation reproductible sur un SHA exact.
 
-## Vue d'ensemble
+## Vue d'ensemble livrée
 
 ```text
-M15  Industrialiser le cœur
+M15  Industrialiser le cœur                       ✅ LIVRÉ
   ↓
-M16  Prouver la scalabilité
+M16  Prouver la scalabilité                      ✅ LIVRÉ
   ↓
-M17  Généraliser discovery + providers
+M17  Généraliser discovery + providers           ✅ LIVRÉ
   ↓
-M18  Intégrer MINOS à IntelliJ
+M18  Intégrer MINOS à IntelliJ                   ✅ LIVRÉ
   ↓
-M19  Ajouter l'intelligence de programme avancée
+M19  Ajouter l'intelligence de programme avancée ✅ LIVRÉ
   ↓
-M20  Ajouter la recherche sémantique hybride
+M20  Ajouter la recherche sémantique hybride     ✅ LIVRÉ
 ```
-
-Les dépendances ne signifient pas que toute exploration doit attendre le jalon précédent. Elles définissent l'ordre de **promotion en capacité produit supportée**.
 
 ---
 
@@ -47,111 +45,29 @@ Les dépendances ne signifient pas que toute exploration doit attendre le jalon 
 
 > MINOS peut-il devenir une plateforme modulaire et durable sans modifier les contrats fonctionnels déjà livrés ?
 
-## Objectif
+## Résultat
 
-Supprimer les limites structurelles apparues après M14 : monolithe Maven, composition dispersée, chemin MCP → CLI → moteur, rechargement répété du snapshot et responsabilités de persistance trop concentrées.
-
-M15 doit améliorer l'architecture interne **sans régression fonctionnelle volontaire**.
-
-## Architecture cible
+**Oui — 11/11 sous-incréments livrés.**
 
 ```text
-                         ┌──────────────────────┐
-                         │   minos-domain       │
-                         └──────────┬───────────┘
-                                    │
-                         ┌──────────▼───────────┐
-                         │   minos-engine       │
-                         └──────────┬───────────┘
-                                    │
-              ┌─────────────────────┼─────────────────────┐
-              │                     │                     │
-    ┌─────────▼────────┐   ┌────────▼─────────┐  ┌────────▼─────────┐
-    │ storage-local    │   │ provider-scip    │  │ integration/git  │
-    └─────────┬────────┘   └────────┬─────────┘  └────────┬─────────┘
-              │                     │                     │
-              └─────────────────────┼─────────────────────┘
-                                    │
-                         ┌──────────▼───────────┐
-                         │  MinosApplication    │
-                         │  composition root    │
-                         └──────┬────┬────┬─────┘
-                                │    │    │
-                              CLI   API  MCP/NEXUS
+M15-S1   baseline de non-régression              ✅
+M15-S2   Maven multi-module                      ✅
+M15-S3   MinosApplication                        ✅
+M15-S4   découplage MCP                          ✅
+M15-S5   résolution projet commune               ✅
+M15-S6   persistance décomposée                  ✅
+M15-S7   cache snapshot actif                    ✅
+M15-S8   indexes de requête                      ✅
+M15-S9   JaCoCo / qualité continue               ✅
+M15-S10  CI automatique de PR                    ✅
+M15-S11  cohérence documentaire                  ✅
 ```
 
-Le découpage Maven exact devra être validé par ADR avant migration. L'objectif est d'imposer des frontières de compilation, pas de multiplier artificiellement les modules.
+Acquis : reactor Maven multi-module, composition root `MinosApplication`, MCP découplé de la CLI métier, résolution projet unique, persistance décomposée, snapshot actif mis en cache, indexes reconstruisibles, JaCoCo et facts calculables.
 
-## Sous-incréments
+Décisions : ADR-0022, ADR-0023, ADR-0024.
 
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M15-S1 | Baseline de non-régression | Capturer contrats, temps et comportements M14 actuels | replay CLI/API/MCP/indexation |
-| M15-S2 | Maven multi-module | Séparer domaine, moteur, adapters, exposition et application | build reactor + tests de frontières |
-| M15-S3 | `MinosApplication` | Introduire un composition root unique et des services applicatifs stables | CLI/API/MCP utilisent le même objet racine |
-| M15-S4 | Découplage MCP | Supprimer le routage métier MCP → CLI → `MinosLauncher` | MCP appelle les services applicatifs directement |
-| M15-S5 | Résolution projet commune | Mutualiser résolution UUID/nom et erreurs d'ambiguïté | 0 implémentation divergente |
-| M15-S6 | Persistance décomposée | Séparer repository, active pointer, codec, intégrité et rétention | compatibilité snapshots historiques |
-| M15-S7 | Cache snapshot actif | Réutiliser une vue chargée par `(projectId, snapshotId)` | invalidation prouvée à la promotion |
-| M15-S8 | Indexes de requête | Indexer symboles, fichiers, occurrences et relations | résultats strictement identiques à la baseline |
-| M15-S9 | Qualité continue | JaCoCo + règles ciblées + vérification des frontières | seuils documentés et verts |
-| M15-S10 | CI PR | Vérification automatique de chaque PR | `clean verify` bloquant avant merge |
-| M15-S11 | Cohérence documentaire | Vérifier/générer les faits calculables de documentation | versions/tools/formats non divergents |
-
-## Indexes minimaux à introduire
-
-```text
-symbolId                    -> Symbol
-normalizedName              -> Symbols
-qualifiedName               -> Symbols
-fileId                      -> Symbols
-resolvedSymbolId            -> Occurrences
-sourceEntity                -> Relationships
-targetEntity                -> Relationships
-relationshipKind            -> Relationships
-```
-
-Ces indexes doivent rester reconstruisibles depuis le snapshot actif.
-
-## Persistance cible
-
-Responsabilités à rendre indépendantes :
-
-```text
-SnapshotRepository
-SnapshotManifestRepository
-ActiveSnapshotRepository
-SnapshotCodec
-  ├── V1
-  ├── V2
-  └── versions futures
-SnapshotIntegrityService
-SnapshotRetentionService
-```
-
-M15 ne doit pas imposer une migration prématurée vers SQLite, Lucene, RocksDB ou un autre backend.
-
-## Portes M15
-
-M15 n'est terminé que si :
-
-- toutes les fonctionnalités M14 continuent de passer leurs replays ;
-- CLI, API et MCP retournent les mêmes résultats fonctionnels avant/après refactor ;
-- le MCP n'exécute plus la CLI comme couche de service ;
-- le domaine ne dépend physiquement d'aucun adapter ou protocole ;
-- un snapshot actif n'est plus désérialisé intégralement à chaque requête répétée ;
-- la promotion d'un snapshot invalide correctement les caches ;
-- les snapshots historiques lisibles restent compatibles ou disposent d'une migration explicite ;
-- les PR disposent d'une CI automatique bloquante ;
-- les seuils de couverture sont définis par criticité et non par pourcentage uniforme arbitraire.
-
-## Hors périmètre
-
-- nouveau langage ;
-- nouveau backend persistant choisi sans benchmark ;
-- plugin IDE ;
-- CPG/data-flow ;
-- embeddings.
+Roadmap opérationnelle : [`M15_EXECUTION.md`](M15_EXECUTION.md).
 
 ---
 
@@ -161,104 +77,29 @@ M15 n'est terminé que si :
 
 > MINOS conserve-t-il des performances et une empreinte acceptables lorsqu'il passe de projets moyens à de grands codebases ?
 
-## Objectif
+## Résultat
 
-Construire une campagne de benchmarks reproductible puis faire évoluer le stockage et les indexes uniquement à partir des résultats mesurés.
-
-## Sous-incréments
-
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M16-S1 | Harness benchmark | Scénarios reproductibles et machine documentée | p50/p95/p99 + mémoire + disque |
-| M16-S2 | Datasets d'échelle | Fixtures synthétiques et dépôts réels gradués | tailles et vérités terrain documentées |
-| M16-S3 | Query benchmark | Mesurer symboles/usages/relations/architecture/impact | seuils p95 définis |
-| M16-S4 | MCP sustained load | Mesurer suites de requêtes répétées | pas de reload complet systématique |
-| M16-S5 | Indexing benchmark | Mesurer FULL/NONE et incrémental lorsque qualifié | débit, CPU, mémoire, I/O |
-| M16-S6 | Memory/disk profile | Identifier les structures dominantes | profil reproductible |
-| M16-S7 | Backend decision | Comparer backend mémoire indexé à des alternatives | ADR fondée sur mesures |
-| M16-S8 | Optimisations retenues | Implémenter uniquement les gains prouvés | seuils d'acceptation atteints |
-| M16-S9 | Retention/compaction | Politique de nettoyage des snapshots et runs | croissance disque bornée |
-
-## Échelles minimales de campagne
-
-La campagne doit couvrir plusieurs ordres de grandeur, par exemple :
+**Oui sous les gates mesurées M16 — 9/9 sous-incréments livrés.**
 
 ```text
-10 000 fichiers
-50 000 fichiers
-100 000 fichiers
-
-100 000 symboles
-1 000 000 symboles
-5 000 000 occurrences
-10 000 000 occurrences
-plusieurs millions de relations
+M16-S1   harness benchmark                       ✅
+M16-S2   datasets d'échelle                      ✅
+M16-S3   query benchmark                         ✅
+M16-S4   MCP sustained load                      ✅
+M16-S5   indexing benchmark                      ✅
+M16-S6   memory/disk profile                     ✅
+M16-S7   backend decision                        ✅
+M16-S8   optimisations mesurées uniquement       ✅
+M16-S9   retention/compaction                    ✅
 ```
 
-Les datasets exacts pourront être adaptés à la réalité des providers et des machines de qualification.
+Le gate STANDARD qualifié couvre 10 000 fichiers, 100 000 symboles, 500 000 occurrences et 250 000 relations. Les mesures p50/p95/p99, heap/RSS/disque, FULL/NONE et MCP long-lived gouvernent les évolutions.
 
-## Mesures obligatoires
+Décision backend : conserver les snapshots fichiers versionnés avec vues/indexes reconstruisibles tant qu'aucune mesure ne justifie un backend plus complexe.
 
-```text
-cold_start_time
-snapshot_load_time
-query_index_build_time
-warm_query_latency p50/p95/p99
-peak_heap
-retained_heap
-process_rss
-snapshot_disk_size
-indexes_disk_size
-FULL_index_duration
-files_per_second
-loc_per_second
-MCP_sequence_latency
-```
+Décision : ADR-0025.
 
-Au minimum pour :
-
-```text
-find-symbol
-find-usages
-dependencies
-dependents
-search
-architecture
-impact
-related-tests
-```
-
-## Stratégie backend
-
-L'ordre de décision doit être :
-
-```text
-1. mesurer le backend mémoire indexé
-2. identifier précisément le goulot
-3. prototyper une alternative adaptée au goulot
-4. mesurer sur les mêmes datasets
-5. décider par ADR
-```
-
-Candidates possibles, non présélectionnés :
-
-- stockage fichier + indexes mémoire ;
-- SQLite ;
-- Lucene pour certaines recherches ;
-- backend clé/valeur embarqué ;
-- backend mixte.
-
-## Portes M16
-
-M16 n'est terminé que si :
-
-- les benchmarks sont reproductibles et versionnés ;
-- les seuils p95/p99 du produit sont explicites ;
-- aucune optimisation ne dégrade la déterminisme ou l'exactitude ;
-- l'utilisation répétée via MCP ne reconstruit pas inutilement toute la connaissance ;
-- le disque est borné par une politique de rétention documentée ;
-- un choix de backend éventuel est justifié par comparaison objective ;
-- les grands datasets ne provoquent pas une explosion mémoire silencieuse.
+Roadmap opérationnelle : [`M16_EXECUTION.md`](M16_EXECUTION.md).
 
 ---
 
@@ -268,82 +109,27 @@ M16 n'est terminé que si :
 
 > MINOS peut-il devenir réellement extensible à de nouveaux langages et systèmes de build sans ajouter de branches spécifiques dans le cœur ?
 
-## Objectif
+## Résultat
 
-Transformer la découverte et l'indexation en plateforme d'extensions explicites, puis élargir le support produit au-delà de Java/Maven et TypeScript/NPM.
-
-## Architecture cible
+**Oui — 9/9 sous-incréments livrés.**
 
 ```text
-ProjectDiscovery
-      │
-      ├── ProjectDetector SPI
-      ├── BuildSystemDetector SPI
-      ├── SourceRootDetector SPI
-      └── LanguageDetector SPI
-
-IndexerRegistry
-      │
-      └── IndexerProvider SPI
-             ├── scip-java
-             ├── scip-typescript
-             └── futurs providers
+M17-S1   Discovery SPI                            ✅
+M17-S2   Provider SPI                             ✅
+M17-S3   Capability model v2                      ✅
+M17-S4   Gradle                                   ✅
+M17-S5   npm/pnpm/yarn workspaces                 ✅
+M17-S6   Kotlin                                   ✅
+M17-S7   Python / scip-python                     ✅
+M17-S8   Provider conformance kit                 ✅
+M17-S9   Installation provider extensible         ✅
 ```
 
-## Sous-incréments
+Acquis : détecteurs composables, `IndexerProvider`, profils exhaustifs `FULL/PARTIAL/EXPERIMENTAL/UNSUPPORTED`, discovery Gradle et workspaces JS, Kotlin/Maven, Python/scip-python, conformance kit et runtime provider extensible.
 
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M17-S1 | Discovery SPI | Détecteurs composables sans `if language` central | tests de plugins |
-| M17-S2 | Provider SPI | Lifecycle runtime/index/normalize uniforme | provider test kit |
-| M17-S3 | Capability model v2 | Capacités plus fines et qualifiées | aucune capacité implicite |
-| M17-S4 | Gradle | Découverte Java/Kotlin Gradle | fixtures mono/multi-module |
-| M17-S5 | JS workspace ecosystems | npm workspaces + pnpm/yarn selon qualification | fixtures monorepo |
-| M17-S6 | Nouveau langage JVM | Kotlin prioritaire si provider viable | symboles/usages/relations qualifiés |
-| M17-S7 | Nouveau langage hors JVM | Python prioritaire si provider viable | mêmes contrats MINOS |
-| M17-S8 | Provider conformance kit | Suite standardisée de qualification | score/profil par provider |
-| M17-S9 | Installation provider | Installation/doctor/tools extensibles | aucune logique hardcodée par commande |
+Décision : ADR-0026.
 
-L'ordre Kotlin/Python peut être révisé par disponibilité réelle des providers et valeur utilisateur ; la plateforme SPI reste la capacité obligatoire.
-
-## Provider conformance kit
-
-Chaque provider supporté devra être qualifié sur :
-
-```text
-symbols
-identity quality
-references
-unresolved references
-implementations / inheritance
-calls
-multi-module / workspace
-test sources
-partial build behavior
-incremental capability
-position encoding
-provider runtime installation
-```
-
-Chaque capacité doit être classée explicitement, par exemple :
-
-```text
-FULL
-PARTIAL
-EXPERIMENTAL
-UNSUPPORTED
-```
-
-## Portes M17
-
-M17 n'est terminé que si :
-
-- ajouter un provider ne nécessite pas de modifier le domaine ;
-- ajouter un build system ne nécessite pas de coder une branche dans un orchestrateur central ;
-- le provider test kit produit un profil reproductible ;
-- les limitations sont exposées à CLI/API/MCP ;
-- au moins un écosystème supplémentaire au périmètre M14 est qualifié de bout en bout ;
-- Java/TypeScript existants passent toujours leur qualification historique.
+Roadmap opérationnelle : [`M17_EXECUTION.md`](M17_EXECUTION.md).
 
 ---
 
@@ -353,74 +139,36 @@ M17 n'est terminé que si :
 
 > Un développeur peut-il exploiter MINOS quotidiennement dans son IDE sans passer en permanence par la CLI ou par un agent IA ?
 
-## Objectif
+## Résultat
 
-Livrer une intégration IntelliJ native centrée sur navigation, architecture, impact et état d'indexation, en consommant les contrats publics MINOS sans réimplémenter le moteur.
-
-## Principes
-
-- le plugin IntelliJ est un **client** de MINOS ;
-- aucun calcul métier majeur ne doit être dupliqué dans le plugin ;
-- le plugin doit fonctionner sans LLM ;
-- les actions peuvent utiliser une API locale/processus MINOS, mais le protocole retenu doit être versionné ;
-- l'IDE ne devient pas une condition pour utiliser MINOS.
-
-## Expérience cible
+**Oui — 9/9 sous-incréments livrés.**
 
 ```text
-MINOS Tool Window
-├── Project
-│   ├── provider
-│   ├── snapshot
-│   ├── READY / STALE / FAILED
-│   └── reindex
-├── Architecture
-│   └── graphe interactif
-├── Symbols
-├── Usages
-├── Dependencies
-├── Related Tests
-├── Impact
-└── Git Activity
+M18-S1   Contrat IDE / handshake v1               ✅
+M18-S2   Plugin bootstrap                          ✅
+M18-S3   Project status                            ✅
+M18-S4   Navigation symboles                       ✅
+M18-S5   Architecture graph                        ✅
+M18-S6   Impact + related tests                    ✅
+M18-S7   Index lifecycle                           ✅
+M18-S8   Git intelligence factuelle                ✅
+M18-S9   Packaging / Plugin Verifier               ✅
 ```
 
-Actions contextuelles :
+Le plugin IntelliJ est un client externe Java 21 du moteur MINOS Java 24, via protocole local JSON `minos-ide` v1. Il ne duplique ni les stores ni les analyses métier.
+
+Qualification exacte :
 
 ```text
-Find MINOS usages
-Find dependents
-Find implementations
-Related tests
-Analyze impact
-Show in architecture
-Copy symbol id / qualified identity
+Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
 ```
 
-## Sous-incréments
+Merge : `faa51f63c5967d874a7a6685b6b513b83bb736b4`.
 
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M18-S1 | Contrat IDE | Définir protocole/version/compatibilité | ADR + fixture client |
-| M18-S2 | Plugin bootstrap | Projet IntelliJ installable | sandbox IDE |
-| M18-S3 | Project status | Afficher état/runtime/snapshot | cohérence avec CLI |
-| M18-S4 | Navigation symboles | Aller aux définitions/usages/implémentations | navigation fichier/ligne fiable |
-| M18-S5 | Architecture graph | Graphe interactif, filtre module, navigation | grands graphes bornés |
-| M18-S6 | Impact + tests | Vues impact et related tests | preuves visibles |
-| M18-S7 | Index lifecycle | Index/reindex/doctor depuis l'IDE | erreurs non destructives |
-| M18-S8 | Git intelligence | Zones/activité factuelle | séparation activité/importance |
-| M18-S9 | Packaging | Distribution/versioning plugin | installation documentée |
+Décision : ADR-0027.
 
-## Portes M18
-
-M18 n'est terminé que si :
-
-- le plugin ne dépend pas des classes internes du moteur ;
-- une version de protocole incompatible est détectée proprement ;
-- la navigation ouvre le bon fichier et la bonne position ;
-- le graphe utilise les mêmes arêtes que CLI/API/MCP ;
-- l'utilisateur peut comprendre pourquoi un impact ou test est proposé ;
-- l'indexation déclenchée depuis l'IDE conserve la sécurité de promotion atomique ;
-- le plugin reste optionnel.
+Roadmap opérationnelle : [`M18_EXECUTION.md`](M18_EXECUTION.md).
 
 ---
 
@@ -430,11 +178,23 @@ M18 n'est terminé que si :
 
 > MINOS peut-il analyser la structure d'exécution et les flux de données sans confondre faits statiques, approximations et comportements runtime ?
 
-## Objectif
+## Résultat
 
-Étendre le graphe de connaissance vers un modèle de programme plus riche : call graph amélioré, control flow, data flow puis Code Property Graph, afin d'améliorer impact, sécurité et compréhension de code.
+**Oui dans les limites statiques explicitement qualifiées — 9/9 sous-incréments livrés.**
 
-## Ordre de construction
+```text
+M19-S1   Program graph model                       ✅
+M19-S2   Call graph v2                             ✅
+M19-S3   Control Flow Graph                        ✅
+M19-S4   Data Flow / DEF_USE                       ✅
+M19-S5   Interprocedural Flow                      ✅
+M19-S6   CPG composition                           ✅
+M19-S7   Impact v2                                 ✅
+M19-S8   Security primitives                       ✅
+M19-S9   API / MCP exposure                        ✅
+```
+
+Ordre livré :
 
 ```text
 Call Graph v2
@@ -448,55 +208,20 @@ Code Property Graph
 Impact v2 / Security Intelligence
 ```
 
-Le CPG n'est pas un objectif décoratif : il n'est promu que si les capacités en aval justifient son coût.
+Le `ProgramGraph` est capability-honest. Une capacité provider absente reste indisponible ; aucun CFG, def-use ou taint n'est inventé. Les chemins sécurité restent observés, bornés et non exhaustifs.
 
-## Sous-incréments
-
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M19-S1 | Program graph model | Modèle générique d'arêtes/nœuds de programme | provider-independent |
-| M19-S2 | Call graph v2 | Appels directs avec provenance/capacité | précision/rappel mesurés |
-| M19-S3 | CFG | Blocs et flux de contrôle | fixtures branches/loops/exceptions |
-| M19-S4 | Data flow | Def-use et propagation locale | vérités terrain |
-| M19-S5 | Interprocedural flow | Propagation bornée entre fonctions | cycles/limites explicites |
-| M19-S6 | CPG composition | Vue unifiée code/property graph | pas de duplication incohérente |
-| M19-S7 | Impact v2 | Impact enrichi par appels/flux | amélioration mesurée |
-| M19-S8 | Security primitives | Sources/sinks/sanitizers et taint borné | aucune vulnérabilité affirmée sans preuve suffisante |
-| M19-S9 | API/MCP exposure | Contrats bornés d'analyse avancée | schemas versionnés |
-
-## Nature de l'information
-
-MINOS doit continuer à exposer explicitement :
+Qualification exacte :
 
 ```text
-FACTUAL
-DERIVED
-HEURISTIC
+Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
+M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
 ```
 
-Un chemin data-flow incomplet ne doit jamais être présenté comme une preuve d'absence de flux.
+Merge : `3630ebd0f229e1bc028e92444bfa34c3e7609596`.
 
-Un résultat de sécurité devra préciser au minimum :
+Décision : ADR-0028.
 
-- source ;
-- sink ;
-- chemin observé ;
-- éventuels sanitizers ;
-- confiance ;
-- limitations provider/langage ;
-- nature factuelle ou dérivée.
-
-## Portes M19
-
-M19 n'est terminé que si :
-
-- les graphes avancés ont des vérités terrain contrôlées ;
-- précision et rappel sont mesurés par capacité ;
-- les limites interprocédurales et dynamiques sont explicites ;
-- Impact v2 démontre un gain réel face à M8 ;
-- les analyses de sécurité sont explicables et bornées ;
-- le stockage/scalabilité M16 supporte les nouveaux volumes ;
-- un provider incapable de produire un type de graphe ne reçoit aucune donnée inventée.
+Roadmap opérationnelle : [`M19_EXECUTION.md`](M19_EXECUTION.md).
 
 ---
 
@@ -506,66 +231,57 @@ M19 n'est terminé que si :
 
 > MINOS peut-il retrouver du code par intention ou concept tout en conservant ses faits déterministes comme source d'autorité ?
 
-## Objectif
+## Résultat
 
-Ajouter une couche sémantique optionnelle et locale permettant la recherche conceptuelle et le retrieval hybride, sans remplacer la recherche structurée existante.
+**Oui — 9/9 sous-incréments livrés et qualifiés exact-head.**
 
-## Architecture cible
+```text
+M20-S1   Semantic document model                   ✅
+M20-S2   Embedding provider SPI                    ✅
+M20-S3   Vector store abstraction                  ✅
+M20-S4   Semantic search                           ✅
+M20-S5   Hybrid ranking                            ✅
+M20-S6   Context builder v2                        ✅
+M20-S7   Incremental semantic index                ✅
+M20-S8   MCP / API                                 ✅
+M20-S9   NEXUS integration v2                      ✅
+```
+
+## Architecture livrée
 
 ```text
                 ┌── Lexical / Symbol search ──┐
                 │                             │
-query ──────────┼── Graph / Architecture ─────┼── Hybrid Ranking ──> bounded context
-                │                             │
-                ├── Git signals ──────────────┤
+query ──────────┼── Graph signals ────────────┼── Hybrid Ranking ──> bounded context
                 │                             │
                 └── Semantic embeddings ──────┘
 ```
 
-Les embeddings sont un signal de ranking/rappel. Ils ne deviennent jamais une preuve de relation de code.
+Les embeddings sont **optionnels** et restent des signaux `HEURISTIC`. Ils ne deviennent jamais une relation ni une preuve structurelle.
 
-## Sous-incréments
+`SemanticDocument` utilise des unités `SYMBOL`, `FILE`, `CHUNK` avec `stableKey + checksum`. `SemanticVectorStore` est local, versionné et reconstruisible. L'index sémantique incrémental réutilise les vecteurs inchangés et ré-embed uniquement les documents ajoutés/modifiés.
 
-| Étape | Fonction | Résultat attendu | Gate |
-|---|---|---|---|
-| M20-S1 | Semantic document model | Définir unités indexables stables | symbols/files/chunks explicites |
-| M20-S2 | Embedding provider SPI | Modèles locaux interchangeables | aucune dépendance cloud obligatoire |
-| M20-S3 | Vector store abstraction | Backend local reconstructible | migration/rebuild documentés |
-| M20-S4 | Semantic search | Recherche par intention | benchmark de pertinence |
-| M20-S5 | Hybrid ranking | Fusion lexical + graph + semantic | gain mesuré vs lexical seul |
-| M20-S6 | Context builder v2 | Contexte hybride borné | budget tokens/tailles respecté |
-| M20-S7 | Incremental semantic index | Ré-embedding ciblé des changements | invalidation sûre |
-| M20-S8 | MCP/API | Recherche sémantique explicite | nature/ranking exposés |
-| M20-S9 | NEXUS integration v2 | MINOS fournit signaux sémantiques sans voler le rôle de NEXUS | responsabilités préservées |
-
-## Évaluation
-
-La qualité ne peut pas être mesurée seulement par latence. Il faut un dataset de requêtes avec pertinence attendue :
+Activation native de référence :
 
 ```text
-"where is authentication enforced"
-"code that validates JWT expiration"
-"persistence boundary for project snapshots"
-"logic responsible for impact propagation"
+MINOS_SEMANTIC_PROVIDER=local-hash
 ```
 
-Mesures possibles :
+Le ranking hybride conserve séparément les signaux lexical, graphe et sémantique. La qualification contrôlée mesure Recall@K, MRR et nDCG@K et exige un gain face à la baseline lexicale.
 
-```text
-Recall@K
-MRR
-nDCG@K
-context precision
-context recall
-Code Exploration Reduction
-latency p50/p95/p99
-index size
-embedding rebuild cost
-```
+Le contexte v2 est borné par nombre de documents, budget global de tokens et budget par document.
+
+Surfaces :
+
+- `SemanticCodeIntelligenceApi` v1 additive ;
+- catalogue MCP porté à **23 tools read-only** ;
+- `minos_semantic_index_status` ;
+- `minos_semantic_search` ;
+- `minos_hybrid_search` ;
+- `minos_hybrid_context` ;
+- NEXUS semantic signals v2.
 
 ## Frontière MINOS / NEXUS
-
-La frontière existante doit être conservée :
 
 ```text
 MINOS
@@ -575,74 +291,60 @@ NEXUS
   possède le ranking contextuel global, la sélection et le budget de contexte multi-source
 ```
 
-M20 peut enrichir ce que MINOS sait fournir à NEXUS, mais ne transforme pas MINOS en moteur général de contexte utilisateur.
+M20 enrichit ce que MINOS fournit à NEXUS sans transformer MINOS en moteur général de contexte utilisateur.
 
-## Portes M20
-
-M20 n'est terminé que si :
-
-- la recherche sémantique est optionnelle ;
-- le produit reste utilisable sans modèle d'embeddings ;
-- aucun résultat vectoriel n'est présenté comme fait structurel ;
-- le ranking hybride apporte un gain mesurable sur une vérité terrain ;
-- le ré-index sémantique incrémental est cohérent avec les snapshots actifs ;
-- les coûts disque, mémoire et temps de reconstruction sont documentés ;
-- API/MCP distinguent clairement recherche structurée et recherche sémantique ;
-- la frontière de responsabilité avec NEXUS reste explicite.
-
----
-
-# Matrice des jalons
-
-| Jalon | Finalité principale | Dépend de | Livrable structurant |
-|---|---|---|---|
-| M15 | Core industrialisé | M14 | modules + `MinosApplication` + cache/index + CI |
-| M16 | Scalabilité prouvée | M15 | benchmark suite + backend decision + retention |
-| M17 | Extensibilité langages/builds | M15, M16 | discovery/provider SPI + conformance kit |
-| M18 | Expérience IntelliJ | M15 | plugin IntelliJ consommant les contrats MINOS |
-| M19 | Intelligence avancée | M16, M17 | call/CFG/data-flow/CPG + impact/security v2 |
-| M20 | Intelligence sémantique | M16 | embeddings optionnels + hybrid retrieval |
-
-M18 peut avancer en parallèle de M17 après stabilisation des contrats M15.
-
-M19 et M20 peuvent avoir des prototypes précoces, mais leur promotion produit exige les garanties de scalabilité de M16.
-
----
-
-# Politique de validation M15-M20
-
-Chaque jalon doit disposer avant implémentation complète de :
-
-1. une issue principale ;
-2. une roadmap opérationnelle de jalon ;
-3. les ADR nécessaires ;
-4. des critères de sortie mesurables ;
-5. des fixtures ou datasets représentatifs ;
-6. une qualification sur le SHA final exact ;
-7. une mise à jour de `docs/STATUS.md` uniquement après livraison.
-
-La validation finale doit conserver au minimum :
+## Qualification finale
 
 ```text
-HEAD exact
-Java / Maven
-OS lorsque pertinent
-nombre de sources main/test
-nombre de tests
-failures/errors/skipped
-BUILD SUCCESS/FAILURE
-benchmarks significatifs
-replays fonctionnels
-limitations restantes
+Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+Maven Java 24: 13/13 modules SUCCESS
+JaCoCo: all gates PASS
+MCP STDIO: 23 tools
 ```
 
-Pour M16, M19 et M20, une simple suite de tests verte ne suffit pas : les performances et/ou la qualité algorithmique font partie de la gate.
+Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
+
+Décision : ADR-0029.
+
+Roadmap opérationnelle : [`M20_EXECUTION.md`](M20_EXECUTION.md).
+
+---
+
+# Matrice finale des jalons M15→M20
+
+| Jalon | Finalité principale | État | Livrable structurant |
+|---|---|---|---|
+| M15 | Core industrialisé | ✅ livré | modules + `MinosApplication` + cache/index + CI |
+| M16 | Scalabilité prouvée | ✅ livré | benchmark suite + backend decision + retention |
+| M17 | Extensibilité langages/builds | ✅ livré | discovery/provider SPI + conformance kit |
+| M18 | Expérience IntelliJ | ✅ livré | plugin IntelliJ consommant les contrats MINOS |
+| M19 | Intelligence avancée | ✅ livré | call/CFG/data-flow/CPG + impact/security v2 |
+| M20 | Intelligence sémantique | ✅ livré | embeddings optionnels + hybrid retrieval |
+
+## Politique de validation appliquée
+
+Chaque jalon de cette phase dispose de :
+
+1. une issue principale ;
+2. une roadmap opérationnelle ;
+3. les ADR nécessaires ;
+4. des critères de sortie mesurables ;
+5. des fixtures/datasets représentatifs ;
+6. une qualification sur le SHA final exact ;
+7. une mise à jour de l'état livré après intégration.
+
+Pour M16, M19 et M20, une simple suite de tests verte ne suffisait pas : performance et/ou qualité algorithmique faisaient partie des gates.
 
 ---
 
 # Après M20
 
-Les thèmes suivants restent volontairement hors engagement M15-M20 tant qu'un besoin produit et des critères de réussite ne sont pas cadrés :
+M20 marque **la fin de cette phase de maturation, pas la fin du produit**.
+
+Aucun M21 n'est défini dans cette roadmap. Toute nouvelle phase doit repartir d'une question produit et de critères de réussite explicites.
+
+Pistes historiquement laissées hors engagement M15→M20 :
 
 - indexation distante directe GitHub/GitLab ;
 - exécution distribuée de l'indexation ;
@@ -650,6 +352,4 @@ Les thèmes suivants restent volontairement hors engagement M15-M20 tant qu'un b
 - collaboration multi-utilisateur ;
 - analyse runtime/dynamique ;
 - support massif de langages sans provider qualifié ;
-- remplacement de NEXUS par MINOS.
-
-M20 doit être considéré comme la fin de cette phase de maturation, pas comme la fin du produit.
+- évolution de la coopération NEXUS/MINOS sans remplacement implicite de NEXUS.
