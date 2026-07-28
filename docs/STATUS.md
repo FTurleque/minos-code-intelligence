@@ -195,10 +195,18 @@ vector dimensions          384
 
 La première campagne STANDARD complète, sur `37cbe22e91993e8aea040621396d2abd7e00da44`, a validé les invariants (`added=0`, `changed=3`, `removed=0`, `reused=209997`) mais a mesuré des goulots réels : peak heap ratio `0.8966`, vector-store-load p95 `2910.409 ms`, semantic-search p95 `8457.386 ms`, hybrid-search p95 `49412.429 ms` et hybrid-context p95 `48520.565 ms`.
 
-Verdict autoritatif :
+Verdict autoritatif de cette baseline :
 
 ```text
 M21 S8 STANDARD MEASUREMENT status=FAIL decision=OPTIMIZE_MEASURED_BOTTLENECK
+```
+
+Contrat de décision conservé pour le replay :
+
+```text
+INVALID_MEASUREMENT
+OPTIMIZE_MEASURED_BOTTLENECK
+KEEP_CURRENT_M20_BACKEND
 ```
 
 S8 reste ouvert pendant l'optimisation ciblée. Les seuils, le dataset, le seed, le cosine exact et la nature HEURISTIC du signal sémantique restent inchangés. Aucun backend ANN/vector database n'est introduit. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
