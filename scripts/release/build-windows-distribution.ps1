@@ -184,6 +184,7 @@ $AppVersion = ($Version -split '[-+]')[0]
     '--input', $Stage,
     '--main-jar', 'minos.jar',
     '--main-class', 'com.minos.cli.MinosLauncher',
+    '--add-modules', 'jdk.compiler',
     '--dest', $AppImages,
     '--win-console'
 )
