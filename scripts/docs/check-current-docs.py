@@ -171,6 +171,7 @@ def main() -> int:
         require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "384 dimensions")
         require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "OPTIMIZE_MEASURED_BOTTLENECK")
         require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "KEEP_CURRENT_M20_BACKEND")
+        require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "benchmark_jar_isolated = true")
         require_text("scripts/m21/M21SemanticScaleProbe.java", s8_probe, "10_000, 100_000, 500_000, 250_000")
         require_text("scripts/m21/M21SemanticScaleProbe.java", s8_probe, "LocalHashEmbeddingProvider.DEFAULT_DIMENSIONS")
         require_text("scripts/m21/M21SemanticScaleProbe.java", s8_probe, '"vector-store-load"')
@@ -179,11 +180,15 @@ def main() -> int:
         require_text("scripts/m21/M21SemanticScaleProbe.java", s8_probe, '"hybrid-context"')
         require_text("scripts/m21/run-s8-benchmark.ps1", s8_benchmark, "process_rss_bytes")
         require_text("scripts/m21/run-s8-benchmark.ps1", s8_benchmark, "WorkingSet64")
+        require_text("scripts/m21/run-s8-benchmark.ps1", s8_benchmark, "GetTempPath")
+        require_text("scripts/m21/run-s8-benchmark.ps1", s8_benchmark, "benchmark_jar_isolated")
         require_text("scripts/m21/check-s8-results.py", s8_gate, '"semantic-search"')
         require_text("scripts/m21/check-s8-results.py", s8_gate, "OPTIMIZE_MEASURED_BOTTLENECK")
         require_text("scripts/m21/check-s8-results.py", s8_gate, "KEEP_CURRENT_M20_BACKEND")
         require_text("scripts/m21/run-s8.ps1", s8_runner, "M21-S8 SEMANTIC SCALE VALIDATION SUCCESS")
         require_text("scripts/m21/run-s8.ps1", s8_runner, "Assert-NoUnratifiedSemanticBackend")
+        require_text("scripts/m21/run-s8.ps1", s8_runner, "Stop-StaleS8BenchmarkProcesses")
+        require_text("scripts/m21/run-s8.ps1", s8_runner, "Assert-TargetArtifactsUnlocked")
 
         print(f"M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
