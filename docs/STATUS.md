@@ -2,7 +2,7 @@
 
 Dernière mise à jour documentaire : **28 juillet 2026**
 
-Ce fichier distingue l'état **livré sur `main`**, les gates de production encore ouverts sur M21 et le jalon fonctionnel actif sur `develop`. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
+Ce fichier distingue l'état **livré sur `main`**, les gates de production encore ouverts sur M21 et les jalons fonctionnels qualifiés sur `develop`. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
@@ -30,10 +30,10 @@ M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
 M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
 M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
-M22 — Advanced Provider Intelligence EN COURS sur develop — Java first
+M22 — Advanced Provider Intelligence VALIDÉ exact-head — intégration PR #77
 ```
 
-**État produit livré sur `main` : C0→M20.** Le tree M21 localement qualifié a été intégré dans `develop` par PR #75 afin de servir de base à M22. M21 reste administrativement ouvert tant que S2/CI n'a pas repris en août 2026.
+**État produit livré sur `main` : C0→M20.** Le tree M21 localement qualifié a été intégré dans `develop` par PR #75 afin de servir de base à M22. M21 reste administrativement ouvert tant que S2/CI n'a pas repris en août 2026. M22 a terminé sa qualification locale exacte ; son intégration vers `develop` est portée par PR #77.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -212,22 +212,22 @@ S2 reste explicitement hors de S9 jusqu'en août 2026 : aucun déclenchement CI 
 
 ## M22 — Advanced Provider Intelligence
 
-Statut : **EN COURS sur `m22-advanced-provider-intelligence`**, base `develop @ 4222706502c54e10f0bf0400a18360fb99e6208c`.
+Statut : **VALIDÉ localement exact-head sur l’implementation tree ; intégration vers `develop` via PR #77.** Base `develop @ 4222706502c54e10f0bf0400a18360fb99e6208c`.
 
 Issue : **#76**. Roadmap opérationnelle : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md). Décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md).
 
 M22 ajoute un provider Java local de référence `minos-java-source-v1`, basé sur l'API AST du compilateur JDK et composé avec les providers M19/M21 existants.
 
 ```text
-S1  roadmap + provider contract                       IMPLÉMENTÉ — qualification finale en attente
-S2  Java discovery + source confinement               IMPLÉMENTÉ — qualification finale en attente
-S3  Java CFG                                          IMPLÉMENTÉ — qualification finale en attente
-S4  Java local def-use                                IMPLÉMENTÉ — qualification finale en attente
-S5  Java interprocedural argument/return              IMPLÉMENTÉ — qualification finale en attente
-S6  Java security source/sink/sanitizer               IMPLÉMENTÉ — qualification finale en attente
-S7  capability/provenance/fallback hardening          IMPLÉMENTÉ — qualification finale en attente
-S8  controlled precision/recall ground truth          IMPLÉMENTÉ — qualification finale en attente
-S9  public surfaces + exact-head final gate           IMPLÉMENTÉ — qualification finale en attente
+S1  roadmap + provider contract                       VALIDÉ
+S2  Java discovery + source confinement               VALIDÉ
+S3  Java CFG                                          VALIDÉ
+S4  Java local def-use                                VALIDÉ
+S5  Java interprocedural argument/return              VALIDÉ
+S6  Java security source/sink/sanitizer               VALIDÉ
+S7  capability/provenance/fallback hardening          VALIDÉ
+S8  controlled precision/recall ground truth          VALIDÉ
+S9  public surfaces + exact-head final gate           VALIDÉ
 ```
 
 Contrat principal :
@@ -244,20 +244,21 @@ Contrat principal :
 
 Guide : [`developer/java-advanced-provider.md`](developer/java-advanced-provider.md).
 
-Runner final :
-
-```powershell
-.\scripts\m22\run-final.ps1 -ExpectedHead <sha>
-```
-
-Verdict attendu :
+Premier replay final complet réussi le **28 juillet 2026** sur `af760cfd61f023113b0e2051e237f73522c8aca6`, avec HEAD inchangé et worktree propre :
 
 ```text
 M22 ADVANCED PROVIDER CONSISTENCY SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
 M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
 M22 FINAL ADVANCED PROVIDER INTELLIGENCE VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: af760cfd61f023113b0e2051e237f73522c8aca6
 ```
+
+Le gate Windows vérifie le runtime réellement livré depuis le ZIP qualifié : `app\runtime\lib\modules` doit exister et `app\runtime\release` doit déclarer `jdk.compiler` dans `MODULES`. Toute modification ultérieure, y compris documentaire, exige un nouveau replay exact-head avant promotion.
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
