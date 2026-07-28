@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M21."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M22."""
 
 from __future__ import annotations
 
@@ -54,6 +54,11 @@ SCOPES = {
         ),
         "line": 0.50,
         "branch": 0.30,
+    },
+    "java-advanced-provider": {
+        "prefixes": ("com/minos/program/analysis/JavaSourceProgramGraphProvider",),
+        "line": 0.45,
+        "branch": 0.25,
     },
     "advanced-impact-security": {
         "prefixes": (
