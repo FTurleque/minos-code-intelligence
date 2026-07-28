@@ -33,7 +33,7 @@ public final class ProjectFingerprintService {
     private final BuildDescriptorPolicy buildDescriptorPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m17Defaults());
+        this(BuildDescriptorPolicy.m24Defaults());
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {
@@ -103,94 +103,74 @@ public final class ProjectFingerprintService {
         List<String> added = new ArrayList<>();
         List<String> modified = new ArrayList<>();
         List<String> deleted = new ArrayList<>();
-        List<String> unchanged = new ArrayList<>();
-
         for (String path : paths) {
-            FileFingerprint oldFile = before.get(path);
-            FileFingerprint newFile = after.get(path);
-            if (oldFile == null) {
+            FileFingerprint left = before.get(path);
+            FileFingerprint right = after.get(path);
+            if (left == null) {
                 added.add(path);
-            } else if (newFile == null) {
+            } else if (right == null) {
                 deleted.add(path);
-            } else if (!oldFile.sha256().equals(newFile.sha256())
-                    || oldFile.sizeBytes() != newFile.sizeBytes()) {
+            } else if (!left.equals(right)) {
                 modified.add(path);
-            } else {
-                unchanged.add(path);
             }
         }
-
-        boolean projectChanged = !added.isEmpty() || !modified.isEmpty() || !deleted.isEmpty();
-        boolean buildChanged = !previous.buildSha256().equals(current.buildSha256());
         return new ProjectChangeSet(
-                previous.projectSha256(),
-                current.projectSha256(),
-                previous.buildSha256(),
-                current.buildSha256(),
-                projectChanged,
-                buildChanged,
-                added,
-                modified,
-                deleted,
-                unchanged
+                !previous.projectHash().equals(current.projectHash()),
+                !previous.buildHash().equals(current.buildHash()),
+                List.copyOf(added),
+                List.copyOf(modified),
+                List.copyOf(deleted)
         );
     }
 
     private static Map<String, FileFingerprint> index(List<FileFingerprint> files) {
-        Map<String, FileFingerprint> result = new LinkedHashMap<>();
+        LinkedHashMap<String, FileFingerprint> values = new LinkedHashMap<>();
         for (FileFingerprint file : files) {
-            if (result.put(file.relativePath(), file) != null) {
-                throw new IllegalArgumentException("duplicate file fingerprint: " + file.relativePath());
-            }
+            values.put(file.relativePath(), file);
         }
-        return result;
+        return Map.copyOf(values);
     }
 
-    private static boolean isRootControlFile(Path relativePath) {
-        return relativePath.getNameCount() == 1
-                && ROOT_CONTROL_FILES.contains(relativePath.getFileName().toString());
+    private static boolean isRootControlFile(Path relative) {
+        return relative.getNameCount() == 1 && ROOT_CONTROL_FILES.contains(relative.getFileName().toString());
+    }
+
+    private static String portable(Path path) {
+        return path.toString().replace('\\', '/');
     }
 
     private static String aggregateHash(List<FileFingerprint> files) {
         MessageDigest digest = sha256();
         for (FileFingerprint file : files) {
             update(digest, file.relativePath());
-            digest.update((byte) 0);
-            update(digest, Long.toString(file.sizeBytes()));
-            digest.update((byte) 0);
+            update(digest, Long.toString(file.size()));
             update(digest, file.sha256());
-            digest.update((byte) '\n');
         }
         return HexFormat.of().formatHex(digest.digest());
     }
 
     private static String hashFile(Path file) throws IOException {
         MessageDigest digest = sha256();
-        byte[] buffer = new byte[8192];
         try (InputStream input = Files.newInputStream(file)) {
+            byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) >= 0) {
-                if (read > 0) {
-                    digest.update(buffer, 0, read);
-                }
+                if (read > 0) digest.update(buffer, 0, read);
             }
         }
         return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void update(MessageDigest digest, String value) {
+        digest.update(value.getBytes(StandardCharsets.UTF_8));
+        digest.update((byte) 0);
     }
 
     private static MessageDigest sha256() {
         try {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
-    }
-
-    private static void update(MessageDigest digest, String value) {
-        digest.update(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String portable(Path path) {
-        return path.toString().replace('\\', '/');
     }
 }
