@@ -41,6 +41,8 @@ def main() -> int:
         adr_path = "docs/adr/0032-evidence-gated-polyglot-scip-providers.md"
         windows_prereq_path = "scripts/m24/check-windows-prerequisites.ps1"
         windows_final_path = "scripts/m24/run-final.ps1"
+        linux_final_path = "scripts/m24/run-final.sh"
+        e2e_path = "scripts/m24/run-provider-e2e.py"
 
         discovery_model = read(discovery_model_path)
         plugins = read(discovery_plugins_path)
@@ -55,6 +57,8 @@ def main() -> int:
         adr = read(adr_path)
         windows_prereq = read(windows_prereq_path)
         windows_final = read(windows_final_path)
+        linux_final = read(linux_final_path)
+        e2e = read(e2e_path)
 
         for token in ("C,", "CPP,", "CSHARP,", "GO,", "RUST"):
             require(discovery_model_path, discovery_model, token)
@@ -106,6 +110,7 @@ def main() -> int:
             '"GOBIN"',
             "MINOS never mutates rustup/toolchains implicitly",
             "RUST_ANALYZER_SCIP_RELEASE",
+            "github.com/scip-code/scip-go/cmd/scip-go@v",
         ):
             require(runtime_path, runtime, token)
         forbid(runtime_path, runtime, "dotnet tool install -g")
@@ -142,10 +147,13 @@ def main() -> int:
         require(adr_path, adr, "Evidence-gated polyglot SCIP providers")
         require(adr_path, adr, "structured snapshots authoritative")
 
-        # Windows qualification must fail before expensive gates if required toolchains are absent.
+        # Windows preflight is support-matrix aware: never force .NET 10 onto an
+        # unsupported Windows 10 host, but keep Go/Rust qualification mandatory.
         for token in (
             "M24 WINDOWS PREREQUISITES SUCCESS",
             "MINOS_SEMANTIC_PROVIDER",
+            "Test-Dotnet10SupportedWindowsHost",
+            "Windows 10 Pro 22H2",
             "dotnet.exe",
             "go.exe",
             "cargo.exe",
@@ -156,12 +164,30 @@ def main() -> int:
         ):
             require(windows_prereq_path, windows_prereq, token)
         require(windows_final_path, windows_final, "check-windows-prerequisites.ps1")
+        require(windows_final_path, windows_final, "--require-e2e 'scip-go,rust-analyzer-scip'")
+
+        # Shared evaluator and Linux runner must fail closed on required provider evidence.
+        for token in (
+            "windows_dotnet10_supported",
+            '"--require-e2e"',
+            "required provider e2e did not pass",
+            "Windows 10 Pro 22H2",
+        ):
+            require(e2e_path, e2e, token)
+        for token in (
+            "scip-clang 0.4.0 is required",
+            ".NET SDK 10+ is required for scip-dotnet 0.2.14",
+            "rust-analyzer must match release 2026-07-27 / commit 12c3381",
+            "--require-e2e 'scip-clang,scip-dotnet,scip-go,rust-analyzer-scip'",
+        ):
+            require(linux_final_path, linux_final, token)
 
         # Final runners/docs are part of S8/S9 and must exist before this gate can pass.
         for required in (
             "scripts/m24/check-windows-prerequisites.ps1",
             "scripts/m24/run-final.ps1",
             "scripts/m24/run-final.sh",
+            "scripts/m24/run-provider-e2e.py",
             "docs/user/polyglot-providers.md",
             "docs/developer/polyglot-providers.md",
         ):
