@@ -156,7 +156,11 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                     Optional.empty(), List.of(), List.of(), List.of());
         }
         IndexerRegistry registry = application.indexerRegistry(providerOverride);
-        IndexerNegotiationResult negotiation = registry.negotiate(discovery, IndexingRequirements.baseline());
+        IndexingRequirements baselineRequirements = IndexingRequirements.baseline();
+        IndexingRequirements requirements = providerOverride == null || providerOverride.isBlank()
+                ? baselineRequirements
+                : new IndexingRequirements(baselineRequirements.requiredCapabilities(), true);
+        IndexerNegotiationResult negotiation = registry.negotiate(discovery, requirements);
         if (!negotiation.complete()) {
             throw new IllegalStateException("no qualified provider covers languages: "
                     + negotiation.uncoveredLanguages().stream().map(Enum::name).sorted().toList());
