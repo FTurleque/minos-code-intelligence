@@ -22,11 +22,11 @@ import java.util.TreeSet;
  * <p>Le service ne promet jamais qu'une indexation partielle est exécutable.
  * Il peut seulement qualifier un ensemble de changements comme
  * {@link ProjectInvalidationScope#PARTIAL_CANDIDATE} lorsque tous les fichiers
- * modifiés sont des sources/tests reconnus par la découverte M1.</p>
+ * modifiés sont des sources/tests reconnus par la découverte.</p>
  */
 public final class ProjectInvalidationService {
 
-    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
+    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
     private static final Set<String> ROOT_IGNORE_FILES = Set.of(
             ".gitignore",
             ".minosignore"
@@ -63,46 +63,22 @@ public final class ProjectInvalidationService {
         Optional<String> baselineIndexId = baselineSnapshot.map(ProjectFingerprintSnapshot::indexSnapshotId);
 
         if (activeIndexId.isEmpty()) {
-            return fullWithoutChangeSet(
-                    indexState,
-                    activeIndexId,
-                    baselineIndexId,
-                    ProjectInvalidationReason.NO_ACTIVE_INDEX
-            );
+            return fullWithoutChangeSet(indexState, activeIndexId, baselineIndexId, ProjectInvalidationReason.NO_ACTIVE_INDEX);
         }
         if (baselineSnapshot.isEmpty()) {
-            return fullWithoutChangeSet(
-                    indexState,
-                    activeIndexId,
-                    baselineIndexId,
-                    ProjectInvalidationReason.MISSING_FINGERPRINT_BASELINE
-            );
+            return fullWithoutChangeSet(indexState, activeIndexId, baselineIndexId, ProjectInvalidationReason.MISSING_FINGERPRINT_BASELINE);
         }
         if (!baselineIndexId.orElseThrow().equals(activeIndexId.orElseThrow())) {
-            return fullWithoutChangeSet(
-                    indexState,
-                    activeIndexId,
-                    baselineIndexId,
-                    ProjectInvalidationReason.BASELINE_INDEX_MISMATCH
-            );
+            return fullWithoutChangeSet(indexState, activeIndexId, baselineIndexId, ProjectInvalidationReason.BASELINE_INDEX_MISMATCH);
         }
 
         ProjectChangeSet changeSet = fingerprintService.compare(
-                baselineSnapshot.orElseThrow().fingerprint(),
-                currentFingerprint
-        );
+                baselineSnapshot.orElseThrow().fingerprint(), currentFingerprint);
         if (!changeSet.projectChanged()) {
             return new ProjectInvalidationAssessment(
-                    indexState.projectId(),
-                    activeIndexId,
-                    baselineIndexId,
-                    ProjectInvalidationScope.NONE,
-                    List.of(),
-                    Optional.of(changeSet),
-                    List.of(),
-                    List.of(),
-                    List.of()
-            );
+                    indexState.projectId(), activeIndexId, baselineIndexId,
+                    ProjectInvalidationScope.NONE, List.of(), Optional.of(changeSet),
+                    List.of(), List.of(), List.of());
         }
 
         List<SourceRootDescriptor> roots = sourceRoots(discovery);
@@ -150,16 +126,9 @@ public final class ProjectInvalidationService {
                 : ProjectInvalidationScope.PARTIAL_CANDIDATE;
 
         return new ProjectInvalidationAssessment(
-                indexState.projectId(),
-                activeIndexId,
-                baselineIndexId,
-                scope,
-                List.copyOf(reasons),
-                Optional.of(changeSet),
-                List.copyOf(sourceFiles),
-                List.copyOf(testFiles),
-                List.copyOf(unqualifiedFiles)
-        );
+                indexState.projectId(), activeIndexId, baselineIndexId, scope,
+                List.copyOf(reasons), Optional.of(changeSet),
+                List.copyOf(sourceFiles), List.copyOf(testFiles), List.copyOf(unqualifiedFiles));
     }
 
     private static ProjectInvalidationAssessment fullWithoutChangeSet(
@@ -169,16 +138,9 @@ public final class ProjectInvalidationService {
             ProjectInvalidationReason reason
     ) {
         return new ProjectInvalidationAssessment(
-                indexState.projectId(),
-                activeIndexId,
-                baselineIndexId,
-                ProjectInvalidationScope.FULL_REQUIRED,
-                List.of(reason),
-                Optional.empty(),
-                List.of(),
-                List.of(),
-                List.of()
-        );
+                indexState.projectId(), activeIndexId, baselineIndexId,
+                ProjectInvalidationScope.FULL_REQUIRED, List.of(reason), Optional.empty(),
+                List.of(), List.of(), List.of());
     }
 
     private static List<String> changedPaths(ProjectChangeSet changeSet) {
@@ -193,11 +155,7 @@ public final class ProjectInvalidationService {
         List<SourceRootDescriptor> roots = new ArrayList<>();
         for (ProjectDiscovery.DiscoveredModule module : discovery.modules()) {
             for (ProjectDiscovery.SourceRoot root : module.sourceRoots()) {
-                roots.add(new SourceRootDescriptor(
-                        portable(root.relativePath()),
-                        root.kind(),
-                        root.language()
-                ));
+                roots.add(new SourceRootDescriptor(portable(root.relativePath()), root.kind(), root.language()));
             }
         }
         roots.sort(Comparator
@@ -223,7 +181,7 @@ public final class ProjectInvalidationService {
     }
 
     private static boolean isInside(String path, String root) {
-        return !root.isEmpty() && path.startsWith(root + "/");
+        return root.isEmpty() || path.equals(root) || path.startsWith(root + "/");
     }
 
     private static boolean matchesLanguageExtension(String path, Language language) {
@@ -232,6 +190,12 @@ public final class ProjectInvalidationService {
             case KOTLIN -> path.endsWith(".kt") || path.endsWith(".kts");
             case TYPESCRIPT -> path.endsWith(".ts") || path.endsWith(".tsx");
             case PYTHON -> path.endsWith(".py");
+            case C -> path.endsWith(".c") || path.endsWith(".h");
+            case CPP -> path.endsWith(".cc") || path.endsWith(".cpp") || path.endsWith(".cxx")
+                    || path.endsWith(".hh") || path.endsWith(".hpp") || path.endsWith(".hxx");
+            case CSHARP -> path.endsWith(".cs");
+            case GO -> path.endsWith(".go");
+            case RUST -> path.endsWith(".rs");
         };
     }
 
@@ -243,10 +207,6 @@ public final class ProjectInvalidationService {
         return path.toString().replace('\\', '/');
     }
 
-    private record SourceRootDescriptor(
-            String relativePath,
-            SourceRootKind kind,
-            Language language
-    ) {
+    private record SourceRootDescriptor(String relativePath, SourceRootKind kind, Language language) {
     }
 }
