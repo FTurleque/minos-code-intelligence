@@ -119,7 +119,9 @@ try {
 
     Write-Host '[5/9] Real M24 provider readiness/install/index/snapshot/identity/provenance evaluation on Windows...'
     Invoke-WithSemanticDisabled {
-        & $Python 'scripts\m24\run-provider-e2e.py' --output 'target/m24/provider-evaluation-windows.json'
+        & $Python 'scripts\m24\run-provider-e2e.py' `
+            --output 'target/m24/provider-evaluation-windows.json' `
+            --require-e2e 'scip-go,rust-analyzer-scip'
         if ($LASTEXITCODE -ne 0) { throw "M24 Windows provider e2e evaluation failed (exit=$LASTEXITCODE)" }
     }
 
