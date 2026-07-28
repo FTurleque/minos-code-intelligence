@@ -29,11 +29,42 @@ function Invoke-Captured {
         [Parameter(Mandatory = $true)][string] $Executable,
         [Parameter(Mandatory = $true)][string[]] $Arguments
     )
-    $Output = @(& $Executable @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $Executable $($Arguments -join ' ')`n$($Output -join "`n")"
+
+    # Windows PowerShell 5.1 can turn a native program's normal stderr output
+    # into NativeCommandError when $ErrorActionPreference='Stop'. java -version
+    # writes its version to stderr, so capture native streams outside the
+    # PowerShell error pipeline and evaluate only the native exit code.
+    $StdoutPath = [System.IO.Path]::GetTempFileName()
+    $StderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $Process = Start-Process `
+            -FilePath $Executable `
+            -ArgumentList $Arguments `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $StdoutPath `
+            -RedirectStandardError $StderrPath
+
+        $OutputParts = @()
+        if (Test-Path $StdoutPath) {
+            $Stdout = (Get-Content -Raw -Path $StdoutPath -ErrorAction SilentlyContinue)
+            if (-not [string]::IsNullOrWhiteSpace($Stdout)) { $OutputParts += $Stdout.TrimEnd() }
+        }
+        if (Test-Path $StderrPath) {
+            $Stderr = (Get-Content -Raw -Path $StderrPath -ErrorAction SilentlyContinue)
+            if (-not [string]::IsNullOrWhiteSpace($Stderr)) { $OutputParts += $Stderr.TrimEnd() }
+        }
+        $Output = ($OutputParts -join "`n").Trim()
+
+        if ($Process.ExitCode -ne 0) {
+            throw "Command failed: $Executable $($Arguments -join ' ') (exit=$($Process.ExitCode))`n$Output"
+        }
+        return $Output
     }
-    return ($Output -join "`n").Trim()
+    finally {
+        Remove-Item -Force -ErrorAction SilentlyContinue $StdoutPath, $StderrPath
+    }
 }
 
 function Require-EnvironmentValue {
