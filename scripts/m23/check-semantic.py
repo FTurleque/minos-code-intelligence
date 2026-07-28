@@ -207,8 +207,18 @@ def main() -> int:
             "$RequiredSemanticProvider = 'ollama'",
             "$RequiredSemanticModel = 'embeddinggemma'",
             "$RequiredSemanticDimensions = '768'",
+            "$RequiredSemanticEndpoint = 'http://127.0.0.1:11434/api/embed'",
+            "$SemanticEnvironmentNames = @(",
+            "Invoke-WithSemanticDisabled",
+            "Remove-Item -Path $Path",
+            "Set-Item -Path $Path -Value $Saved[$Name]",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
         )
+        if runner.count("Invoke-WithSemanticDisabled {") != 3:
+            raise RuntimeError(
+                f"{runner_path}: expected exactly three isolated regression gates, "
+                f"found {runner.count('Invoke-WithSemanticDisabled {')}"
+            )
         forbid(
             runner_path,
             runner,
