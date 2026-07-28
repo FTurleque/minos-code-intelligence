@@ -119,7 +119,7 @@ public final class HybridSearchService {
             RegisteredProject project,
             CodeKnowledgeSnapshot snapshot,
             List<SemanticDocument> indexedDocuments
-    ) {
+    ) throws IOException {
         CachedCorpus cached = corpusCache.get(project.id());
         if (cached != null && cached.snapshotId().equals(snapshot.snapshotId())) return cached;
         List<SemanticDocument> documents = indexedDocuments != null
