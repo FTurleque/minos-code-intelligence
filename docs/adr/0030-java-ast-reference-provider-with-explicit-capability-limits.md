@@ -84,9 +84,9 @@ Rejected because parser availability is not proof of every advanced capability.
 
 Rejected as the only path because M22 needs a useful local-first reference implementation. External providers remain supported through the sidecar contract.
 
-### Run full compiler attribution with an guessed classpath
+### Run full compiler attribution with a guessed-classpath
 
-Rejected for M22 v1 because a guessed or incomplete classpath could turn unresolved semantics into false certainty. A future provider may add attributed analysis only with explicit classpath provenance and qualification.
+Rejected for M22 v1 because a guessed-classpath or incomplete classpath could turn unresolved semantics into false certainty. A future provider may add attributed analysis only with explicit classpath provenance and qualification.
 
 ## Evidence
 
