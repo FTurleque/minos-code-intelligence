@@ -23,11 +23,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Local versioned M20 vector store. Rebuild from active snapshots is always authoritative. */
+/** Local versioned vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private static final int MAGIC = 0x4D53454D; // MSEM
-    private static final int FORMAT_VERSION = 1;
+    private static final int LEGACY_FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
+    private static final String LEGACY_FILE = "index-v1.bin";
+    private static final String CURRENT_FILE = "index-v2.bin";
     private static final int MAX_DOCUMENTS = 2_000_000;
     private static final int MAX_DIMENSIONS = 16_384;
     private static final int MAX_STRING_BYTES = 16 * 1024 * 1024;
@@ -43,8 +46,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         requireText(projectId, "projectId");
-        Path file = indexFile(projectId);
-        if (!Files.isRegularFile(file)) {
+        Path file = readableIndexFile(projectId);
+        if (file == null) {
             cache.remove(projectId);
             return Optional.empty();
         }
@@ -54,7 +57,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
-            if (version != FORMAT_VERSION) throw new IOException("unsupported semantic index version: " + version);
+            if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
+                throw new IOException("unsupported semantic index version: " + version);
+            }
             String storedProject = readString(input);
             String snapshotId = readString(input);
             String providerId = readString(input);
@@ -75,7 +80,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                 int vectorSize = input.readInt();
                 if (vectorSize != dimensions) throw new IOException("semantic vector dimensions mismatch");
                 double[] vector = new double[dimensions];
-                for (int d = 0; d < dimensions; d++) vector[d] = input.readDouble();
+                for (int d = 0; d < dimensions; d++) {
+                    vector[d] = version == LEGACY_FORMAT_VERSION ? input.readDouble() : input.readFloat();
+                }
                 documents.add(new IndexedDocument(document, SemanticVector.fromArray(document.stableKey(), vector)));
             }
             if (input.read() != -1) throw new IOException("unexpected trailing semantic index data");
@@ -95,8 +102,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (snapshot.dimensions() > MAX_DIMENSIONS) throw new IOException("semantic index exceeds dimension limit");
         Path directory = projectDirectory(snapshot.projectId());
         Files.createDirectories(directory);
-        Path target = directory.resolve("index-v1.bin");
-        Path temporary = Files.createTempFile(directory, "index-v1-", ".tmp");
+        Path target = directory.resolve(CURRENT_FILE);
+        Path temporary = Files.createTempFile(directory, "index-v2-", ".tmp");
         List<IndexedDocument> ordered = snapshot.documents().stream()
                 .sorted(Comparator.comparing(value -> value.document().stableKey()))
                 .toList();
@@ -124,11 +131,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     writeString(output, document.checksum());
                     output.writeInt(indexed.vector().dimensions());
                     for (int d = 0; d < indexed.vector().dimensions(); d++) {
-                        output.writeDouble(indexed.vector().valueAt(d));
+                        double value = indexed.vector().valueAt(d);
+                        float compact = (float) value;
+                        if (!Float.isFinite(compact)) throw new IOException("semantic vector cannot be represented as float32");
+                        output.writeFloat(compact);
                     }
                 }
             }
             moveAtomically(temporary, target);
+            Files.deleteIfExists(directory.resolve(LEGACY_FILE));
             IndexSnapshot normalized = new IndexSnapshot(
                     snapshot.projectId(), snapshot.snapshotId(), snapshot.providerId(), snapshot.modelId(),
                     snapshot.dimensions(), snapshot.builtAtEpochMilli(), ordered);
@@ -142,20 +153,36 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     public void delete(String projectId) throws IOException {
         requireText(projectId, "projectId");
         cache.remove(projectId);
-        Files.deleteIfExists(indexFile(projectId));
+        Path directory = projectDirectory(projectId);
+        Files.deleteIfExists(directory.resolve(CURRENT_FILE));
+        Files.deleteIfExists(directory.resolve(LEGACY_FILE));
     }
 
     public long sizeBytes(String projectId) throws IOException {
-        Path file = indexFile(projectId);
-        return Files.isRegularFile(file) ? Files.size(file) : 0L;
+        Path file = readableIndexFile(projectId);
+        return file == null ? 0L : Files.size(file);
+    }
+
+    /** Returns 0 when absent, otherwise the on-disk semantic index format version. */
+    public int formatVersion(String projectId) throws IOException {
+        Path file = readableIndexFile(projectId);
+        if (file == null) return 0;
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
+            return input.readInt();
+        }
     }
 
     public Path root() {
         return root;
     }
 
-    private Path indexFile(String projectId) {
-        return projectDirectory(projectId).resolve("index-v1.bin");
+    private Path readableIndexFile(String projectId) {
+        Path directory = projectDirectory(projectId);
+        Path current = directory.resolve(CURRENT_FILE);
+        if (Files.isRegularFile(current)) return current;
+        Path legacy = directory.resolve(LEGACY_FILE);
+        return Files.isRegularFile(legacy) ? legacy : null;
     }
 
     private Path projectDirectory(String projectId) {
@@ -201,14 +228,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 
-    private record CacheEntry(IndexSnapshot snapshot, long sizeBytes, long lastModifiedMillis) {
+    private record CacheEntry(IndexSnapshot snapshot, Path file, long sizeBytes, long lastModifiedMillis) {
         static CacheEntry capture(Path file, IndexSnapshot snapshot) throws IOException {
-            return new CacheEntry(snapshot, Files.size(file), Files.getLastModifiedTime(file).toMillis());
+            return new CacheEntry(snapshot, file, Files.size(file), Files.getLastModifiedTime(file).toMillis());
         }
 
-        boolean matches(Path file) throws IOException {
-            return sizeBytes == Files.size(file)
-                    && lastModifiedMillis == Files.getLastModifiedTime(file).toMillis();
+        boolean matches(Path candidate) throws IOException {
+            return file.equals(candidate)
+                    && sizeBytes == Files.size(candidate)
+                    && lastModifiedMillis == Files.getLastModifiedTime(candidate).toMillis();
         }
     }
 }
