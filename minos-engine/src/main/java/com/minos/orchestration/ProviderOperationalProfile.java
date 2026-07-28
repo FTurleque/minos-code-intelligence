@@ -13,6 +13,11 @@ import java.util.Set;
  * answers where/how the runtime is qualified and how MINOS preserves identity and
  * provenance. Keeping the two contracts separate avoids turning runtime readiness
  * into a semantic capability claim.</p>
+ *
+ * <p>An explicit experimental provider may legitimately expose an empty set of
+ * qualification platforms until the exact-head platform gates have run. Promotion
+ * gates, not this value object, require qualified providers to name concrete proven
+ * platforms.</p>
  */
 public record ProviderOperationalProfile(
         String providerId,
@@ -38,9 +43,6 @@ public record ProviderOperationalProfile(
         installationBehavior = requireText(installationBehavior, "installationBehavior");
         stableIdentityBehavior = requireText(stableIdentityBehavior, "stableIdentityBehavior");
         provenanceBehavior = requireText(provenanceBehavior, "provenanceBehavior");
-        if (explicit && qualificationPlatforms.isEmpty()) {
-            throw new IllegalArgumentException("explicit operational profile must claim at least one qualification platform");
-        }
     }
 
     /** Compatibility fallback for third-party/legacy providers that predate M24. */
