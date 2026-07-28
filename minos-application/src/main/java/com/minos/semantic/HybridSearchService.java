@@ -248,7 +248,7 @@ public final class HybridSearchService {
     private record LexicalQuery(Set<String> terms, String normalizedQuery) {
         static LexicalQuery compile(String query) {
             String normalized = normalize(query);
-            return new LexicalQuery(Set.copyOf(terms(normalized)), normalized);
+            return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized);
         }
 
         double score(String content) {
