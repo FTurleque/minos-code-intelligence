@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FIXTURE = ROOT / "fixtures" / "m23" / "semantic-quality-v1.json"
@@ -148,7 +148,8 @@ def main() -> int:
         if not documents or not queries or k < 1:
             raise RuntimeError("invalid M23 semantic quality fixture")
 
-        opener = build_opener(NoRedirect())
+        # A loopback-only qualification must not inherit HTTP(S)_PROXY from the machine.
+        opener = build_opener(ProxyHandler({}), NoRedirect())
         started = time.perf_counter()
         document_vectors: dict[str, list[float]] = {}
         for document in documents:
