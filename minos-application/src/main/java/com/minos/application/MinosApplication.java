@@ -1,6 +1,7 @@
 package com.minos.application;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager;
 import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
@@ -300,10 +301,14 @@ public final class MinosApplication {
             ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
             ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
             IncrementalIndexingPlanner effectivePlanner = incrementalIndexingPlanner != null ? incrementalIndexingPlanner : new IncrementalIndexingPlanner();
-            List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null ? indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM17Descriptors());
+            List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null
+                    ? indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM24Descriptors());
             ProviderRuntimeManager effectiveProviderRuntime = providerRuntimeManager != null
                     ? providerRuntimeManager
-                    : new CompositeProviderRuntimeManager(List.of(new ManagedScipProviderRuntimeManager(home), new ManagedScipPythonRuntimeManager(home)));
+                    : new CompositeProviderRuntimeManager(List.of(
+                            new ManagedScipProviderRuntimeManager(home),
+                            new ManagedScipPythonRuntimeManager(home),
+                            new ManagedPolyglotScipRuntimeManager(home)));
 
             SnapshotStager effectiveStager = snapshotStager;
             SnapshotPromoter effectivePromoter = snapshotPromoter;
