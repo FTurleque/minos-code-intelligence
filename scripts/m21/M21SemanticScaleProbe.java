@@ -176,10 +176,10 @@ public final class M21SemanticScaleProbe {
                     "  %s p50=%.3fms p95=%.3fms p99=%.3fms avg=%.3fms%n", name, stats.p50Ms(), stats.p95Ms(), stats.p99Ms(), stats.averageMs()));
             System.out.flush();
             stage(progress, "COMPLETE result=" + output);
-        } catch (Throwable failure) {
+        } catch (Exception failure) {
             try {
                 stage(progress, "FAILED type=" + failure.getClass().getSimpleName() + " message=" + String.valueOf(failure.getMessage()));
-            } catch (Throwable ignored) {
+            } catch (Exception ignored) {
                 // Preserve the original benchmark failure.
             }
             throw failure;
