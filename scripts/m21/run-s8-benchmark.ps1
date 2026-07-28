@@ -13,7 +13,7 @@ Set-StrictMode -Version Latest
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 . (Join-Path $RepoRoot 'scripts\windows\MinosWindows.ps1')
 $java = Resolve-MinosJava24
-$jar = [System.IO.Path]::GetFullPath($JarPath)
+$sourceJar = [System.IO.Path]::GetFullPath($JarPath)
 $homePath = [System.IO.Path]::GetFullPath($BenchmarkHome)
 $output = [System.IO.Path]::GetFullPath($OutputJson)
 $source = Join-Path $RepoRoot 'scripts\m21\M21SemanticScaleProbe.java'
@@ -53,67 +53,87 @@ function Get-JavaVersionLine {
     }
 }
 
-$arguments = @('--class-path', $jar, $source, $homePath, $BenchmarkProfile, [string]$Repetitions, $output)
-$encoded = ($arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
-$startInfo = New-Object System.Diagnostics.ProcessStartInfo
-$startInfo.FileName = $java.JavaExecutable
-$startInfo.Arguments = $encoded
-$startInfo.UseShellExecute = $false
-$startInfo.CreateNoWindow = $true
-$startInfo.RedirectStandardOutput = $true
-$startInfo.RedirectStandardError = $true
-$process = New-Object System.Diagnostics.Process
-$process.StartInfo = $startInfo
-$watch = [System.Diagnostics.Stopwatch]::StartNew()
-if (-not $process.Start()) { throw 'Unable to start M21-S8 semantic scale probe.' }
-$stdoutTask = $process.StandardOutput.ReadToEndAsync()
-$stderrTask = $process.StandardError.ReadToEndAsync()
-[long] $peakRss = 0
-while (-not $process.HasExited) {
-    try {
-        $sample = Get-Process -Id $process.Id -ErrorAction Stop
-        if ($sample.WorkingSet64 -gt $peakRss) { $peakRss = $sample.WorkingSet64 }
-    } catch { }
-    Start-Sleep -Milliseconds 100
-    $process.Refresh()
-}
-$process.WaitForExit()
-$watch.Stop()
-$stdoutText = $stdoutTask.Result
-$stderrText = $stderrTask.Result
-$exitCode = $process.ExitCode
-[System.IO.File]::WriteAllText($stdout, $stdoutText)
-[System.IO.File]::WriteAllText($stderr, $stderrText)
-$process.Dispose()
-if ($exitCode -ne 0) {
-    throw "M21-S8 semantic scale probe failed (exit=$exitCode).`n$stderrText`n$stdoutText"
-}
-if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw "M21-S8 probe did not produce $output" }
+# Never execute the benchmark directly against Maven's root target artifact on Windows.
+# A Java/classpath or scanner handle must not be able to block the next exact-head `clean verify`.
+$shadowRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'minos-m21-s8'
+$shadowDir = Join-Path $shadowRoot ([Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $shadowDir | Out-Null
+$shadowJar = Join-Path $shadowDir ([System.IO.Path]::GetFileName($sourceJar))
+Copy-Item -LiteralPath $sourceJar -Destination $shadowJar -Force
 
-$data = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
-$data | Add-Member -NotePropertyName process_rss_bytes -NotePropertyValue $peakRss -Force
-$data | Add-Member -NotePropertyName process_elapsed_ms -NotePropertyValue ([Math]::Round($watch.Elapsed.TotalMilliseconds,4)) -Force
-$head = ((& git -C $RepoRoot rev-parse HEAD) | Select-Object -First 1).Trim()
-$cpuName = $null
-$totalMemory = $null
+$process = $null
 try {
-    $cpuName = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)
-    $totalMemory = [long](Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty TotalPhysicalMemory)
-} catch { }
-$machine = [ordered]@{
-    head = $head
-    os = [System.Environment]::OSVersion.VersionString
-    processor = $cpuName
-    logical_processors = [System.Environment]::ProcessorCount
-    total_physical_memory_bytes = $totalMemory
-    java_home = $java.JavaHome
-    java_version = Get-JavaVersionLine -JavaExecutable $java.JavaExecutable
-    profile = $BenchmarkProfile
-    repetitions = $Repetitions
-}
-$data | Add-Member -NotePropertyName machine -NotePropertyValue $machine -Force
-$data | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $output -Encoding UTF8
+    $arguments = @('--class-path', $shadowJar, $source, $homePath, $BenchmarkProfile, [string]$Repetitions, $output)
+    $encoded = ($arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $java.JavaExecutable
+    $startInfo.Arguments = $encoded
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    if (-not $process.Start()) { throw 'Unable to start M21-S8 semantic scale probe.' }
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    [long] $peakRss = 0
+    while (-not $process.HasExited) {
+        try {
+            $sample = Get-Process -Id $process.Id -ErrorAction Stop
+            if ($sample.WorkingSet64 -gt $peakRss) { $peakRss = $sample.WorkingSet64 }
+        } catch { }
+        Start-Sleep -Milliseconds 100
+        $process.Refresh()
+    }
+    $process.WaitForExit()
+    $watch.Stop()
+    $stdoutText = $stdoutTask.Result
+    $stderrText = $stderrTask.Result
+    $exitCode = $process.ExitCode
+    [System.IO.File]::WriteAllText($stdout, $stdoutText)
+    [System.IO.File]::WriteAllText($stderr, $stderrText)
+    if ($exitCode -ne 0) {
+        throw "M21-S8 semantic scale probe failed (exit=$exitCode).`n$stderrText`n$stdoutText"
+    }
+    if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw "M21-S8 probe did not produce $output" }
 
-Write-Host 'M21 S8 SEMANTIC SCALE BENCHMARK SUCCESS' -ForegroundColor Green
-Get-Content -LiteralPath $stdout | ForEach-Object { Write-Host $_ }
-Write-Host "process-rss=$peakRss elapsed=$([Math]::Round($watch.Elapsed.TotalMilliseconds,4))ms"
+    $data = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+    $data | Add-Member -NotePropertyName process_rss_bytes -NotePropertyValue $peakRss -Force
+    $data | Add-Member -NotePropertyName process_elapsed_ms -NotePropertyValue ([Math]::Round($watch.Elapsed.TotalMilliseconds,4)) -Force
+    $head = ((& git -C $RepoRoot rev-parse HEAD) | Select-Object -First 1).Trim()
+    $cpuName = $null
+    $totalMemory = $null
+    try {
+        $cpuName = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)
+        $totalMemory = [long](Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty TotalPhysicalMemory)
+    } catch { }
+    $machine = [ordered]@{
+        head = $head
+        os = [System.Environment]::OSVersion.VersionString
+        processor = $cpuName
+        logical_processors = [System.Environment]::ProcessorCount
+        total_physical_memory_bytes = $totalMemory
+        java_home = $java.JavaHome
+        java_version = Get-JavaVersionLine -JavaExecutable $java.JavaExecutable
+        profile = $BenchmarkProfile
+        repetitions = $Repetitions
+        benchmark_jar_isolated = $true
+    }
+    $data | Add-Member -NotePropertyName machine -NotePropertyValue $machine -Force
+    $data | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $output -Encoding UTF8
+
+    Write-Host 'M21 S8 SEMANTIC SCALE BENCHMARK SUCCESS' -ForegroundColor Green
+    Get-Content -LiteralPath $stdout | ForEach-Object { Write-Host $_ }
+    Write-Host "process-rss=$peakRss elapsed=$([Math]::Round($watch.Elapsed.TotalMilliseconds,4))ms"
+}
+finally {
+    if ($null -ne $process) {
+        try {
+            if (-not $process.HasExited) { $process.Kill($true) }
+        } catch { }
+        try { $process.Dispose() } catch { }
+    }
+    Remove-Item -LiteralPath $shadowDir -Recurse -Force -ErrorAction SilentlyContinue
+}
