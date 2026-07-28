@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,6 +116,31 @@ class FileProjectFingerprintSnapshotStoreTest {
 
         assertFalse(store.load(secondProject, "index-1").isPresent());
         assertEquals(List.of(), store.listIndexSnapshotIds(secondProject));
+    }
+
+    @Test
+    void preservesLegacyM17FingerprintSnapshotsWhenM24AddsBuildDescriptors(@TempDir Path root)
+            throws Exception {
+        Path project = root.resolve("project");
+        Files.createDirectories(project);
+        Files.writeString(project.resolve("go.mod"), "module example.com/minos/m24\n");
+        Files.writeString(project.resolve("main.go"), "package main\n");
+
+        ProjectFingerprint legacy = new ProjectFingerprintService(BuildDescriptorPolicy.m17Defaults())
+                .capture(project);
+        ProjectFingerprint current = fingerprintService.capture(project);
+        assertEquals(legacy.projectSha256(), current.projectSha256());
+        assertNotEquals(legacy.buildSha256(), current.buildSha256());
+
+        UUID projectId = UUID.randomUUID();
+        Path storage = root.resolve("storage");
+        FileProjectFingerprintSnapshotStore writer = new FileProjectFingerprintSnapshotStore(storage);
+        writer.publish(projectId, "legacy-index", legacy);
+        writer.promote(projectId, "legacy-index");
+
+        FileProjectFingerprintSnapshotStore reader = new FileProjectFingerprintSnapshotStore(storage);
+        assertEquals(legacy, reader.load(projectId, "legacy-index").orElseThrow().fingerprint());
+        assertEquals(legacy, reader.loadActive(projectId).orElseThrow().fingerprint());
     }
 
     private static void createProject(Path project, String source) throws IOException {
