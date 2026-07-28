@@ -1,6 +1,6 @@
 # M21 — Production Integrity & Surface Convergence — exécution
 
-Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 VALIDÉ ; S7 VALIDÉ ; S8 VALIDÉ ; S9 EN COURS.**
+Statut : **EN COURS — S1 VALIDÉ ; S2 EN PAUSE jusqu’en août 2026 ; S3 VALIDÉ ; S4 VALIDÉ ; S5 VALIDÉ ; S6 VALIDÉ ; S7 VALIDÉ ; S8 VALIDÉ ; S9 VALIDÉ.**
 
 Issue : **#73 — M21 — Production Integrity & Surface Convergence**.
 
@@ -36,7 +36,7 @@ M21 reste un jalon de consolidation post-M20. Il ne transforme pas une dette de 
 | M21-S6 | IntelliJ parity M19/M20 | **VALIDÉ** sur `8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6` |
 | M21-S7 | Advanced provider productionization | **VALIDÉ** sur `57243384286ed623de2d9499c9ae6729f77f6845` |
 | M21-S8 | Semantic scale qualification | **VALIDÉ** sur `a668f0a09da08515396903fbe887ed9e70125201` |
-| M21-S9 | Final production integrity gate | **EN COURS — exact-head local-only** |
+| M21-S9 | Final production integrity gate | **VALIDÉ** localement sur `0ec50bedc8c49e45347309f406830089e8e84941` |
 
 ## M21-S1 — Governance & authoritative consolidation
 
@@ -205,11 +205,11 @@ Documentation : [`../developer/semantic-scale-qualification.md`](../developer/se
 
 ## M21-S9 — Final production integrity gate
 
-Statut : **EN COURS — qualification finale locale sur HEAD exact.**
+Statut : **VALIDÉ localement le 28 juillet 2026** sur `0ec50bedc8c49e45347309f406830089e8e84941`.
 
 `scripts/m21/run-s9.ps1` réutilise volontairement les runners déjà qualifiés plutôt que de créer des variantes raccourcies de leurs contrats. Cette redondance est assumée pour le gate final.
 
-Le replay enchaîne :
+Le replay a enchaîné :
 
 1. `run-s7.ps1` — core M21, advanced provider et fixture ground-truth ;
 2. `run-s8.ps1` — même STANDARD et décision `KEEP_CURRENT_M20_BACKEND` ;
@@ -219,20 +219,19 @@ Le replay enchaîne :
 6. checker documentaire ;
 7. HEAD exact et worktree propre à la fin.
 
-S9 ne lit, ne déclenche et ne modifie aucun workflow CI.
-
-Commande :
-
-```powershell
-.\scripts\m21\run-s9.ps1 -ExpectedHead <sha> -SemanticRepetitions 5
-```
-
-Verdict attendu :
+Preuves :
 
 ```text
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21-S9 retained S8 decision: PASS / KEEP_CURRENT_M20_BACKEND
 M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: 0ec50bedc8c49e45347309f406830089e8e84941
 ```
+
+S9 ne lit, ne déclenche et ne modifie aucun workflow CI. S2 reste le seul sous-incrément ouvert et reprendra explicitement en août 2026 avant toute décision de merge/fermeture M21.
 
 ## Validation locale
 
