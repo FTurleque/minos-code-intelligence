@@ -106,9 +106,14 @@ def main() -> int:
         require(operational_path, operational, "qualificationPlatforms")
         require(operational_path, operational, "runtimeRequirements")
 
+        # Guard semantic command structure rather than formatting a local variable
+        # as if it were a literal argument. installDotnet() resolves `dotnet` to a
+        # Path, then passes tool/install plus a confined --tool-path to the command.
         for token in (
             "upstream publishes no Windows binary",
-            '"dotnet", "tool", "install"',
+            '"tool", "install"',
+            '"--tool-path", partial.toString()',
+            '"scip-dotnet"',
             '"GOBIN"',
             "MINOS never mutates rustup/toolchains implicitly",
             "RUST_ANALYZER_SCIP_RELEASE",
