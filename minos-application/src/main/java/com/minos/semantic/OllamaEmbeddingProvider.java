@@ -128,8 +128,12 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
         if (outer < 0) throw new IOException("Ollama embeddings array is missing");
         int inner = response.indexOf('[', outer + 1);
         if (inner < 0) throw new IOException("Ollama embedding vector is missing");
-        int end = matchingBracket(response, inner);
-        String body = response.substring(inner + 1, end).trim();
+        int innerEnd = matchingBracket(response, inner);
+        int outerEnd = matchingBracket(response, outer);
+        if (!response.substring(innerEnd + 1, outerEnd).trim().isEmpty()) {
+            throw new IOException("Ollama response must contain exactly one embedding vector");
+        }
+        String body = response.substring(inner + 1, innerEnd).trim();
         if (body.isEmpty()) throw new IOException("Ollama embedding vector is empty");
         String[] parts = body.split(",");
         if (parts.length != expectedDimensions) {
