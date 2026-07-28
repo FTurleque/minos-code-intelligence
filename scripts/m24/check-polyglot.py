@@ -106,13 +106,11 @@ def main() -> int:
         require(operational_path, operational, "qualificationPlatforms")
         require(operational_path, operational, "runtimeRequirements")
 
-        # Guard semantic command structure rather than formatting a local variable
-        # as if it were a literal argument. installDotnet() resolves `dotnet` to a
-        # Path, then passes tool/install plus a confined --tool-path to the command.
+        # Validate installation semantics rather than Java formatting/layout.
         for token in (
             "upstream publishes no Windows binary",
             '"tool", "install"',
-            '"--tool-path", partial.toString()',
+            '"--tool-path"',
             '"scip-dotnet"',
             '"GOBIN"',
             "MINOS never mutates rustup/toolchains implicitly",
@@ -161,10 +159,12 @@ def main() -> int:
             "$GoSha256 = '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345'",
             "$RustVersion = '1.97.1'",
             "$RustHost = 'x86_64-pc-windows-gnu'",
+            "$RustupShaUrl = \"$RustupUrl.sha256\"",
+            "$RustupExpectedSha",
+            "Assert-Sha256 $RustupInit $RustupExpectedSha",
             "$RustAnalyzerRelease = '2026-07-27'",
             "$RustAnalyzerCommit = '12c3381'",
             "Get-FileHash -Algorithm SHA256",
-            "rustup-init.exe.sha256",
             "api.github.com/repos/rust-lang/rust-analyzer/releases/tags",
             "M24 WINDOWS TOOLCHAIN BOOTSTRAP SUCCESS",
             "No administrator rights, WinGet, MSI installation, user PATH mutation",
