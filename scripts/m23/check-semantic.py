@@ -71,10 +71,23 @@ def main() -> int:
             'LEGACY_FILE = "index-v1.bin"',
             'CURRENT_FILE = "index-v2.bin"',
             "input.readDouble() : input.readFloat()",
-            "output.writeFloat(compact)",
+            "compact(indexed)",
+            "values[d] = compact",
+            "output.writeFloat",
             "Files.deleteIfExists(directory.resolve(LEGACY_FILE))",
         )
         forbid(store_path, store, "output.writeDouble(indexed.vector()")
+
+        store_test_path = "minos-storage-local/src/test/java/com/minos/store/FileSemanticVectorStoreTest.java"
+        store_test = read(store_test_path)
+        require(
+            store_test_path,
+            store_test,
+            "cachedV2SnapshotUsesExactlyThePersistedFloat32Values",
+            "(double) (float) sourceValue",
+            "assertEquals(cached.documents(), reopened.documents())",
+            "readsLegacyV1AndMigratesOnNextReplace",
+        )
 
         search_path = "minos-application/src/main/java/com/minos/semantic/SemanticSearchService.java"
         search = read(search_path)
