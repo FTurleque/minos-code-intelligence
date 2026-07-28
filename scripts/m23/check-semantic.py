@@ -214,10 +214,10 @@ def main() -> int:
             "Set-Item -Path $Path -Value $Saved[$Name]",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
         )
-        if runner.count("Invoke-WithSemanticDisabled {") != 3:
+        isolated_calls = runner.count("    Invoke-WithSemanticDisabled {")
+        if isolated_calls != 3:
             raise RuntimeError(
-                f"{runner_path}: expected exactly three isolated regression gates, "
-                f"found {runner.count('Invoke-WithSemanticDisabled {')}"
+                f"{runner_path}: expected exactly three isolated regression gate calls, found {isolated_calls}"
             )
         forbid(
             runner_path,
