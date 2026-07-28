@@ -105,20 +105,27 @@ def run(command: list[str], env: dict[str, str], cwd: Path = ROOT, json_output: 
         env=env,
         text=True,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
         timeout=1800,
         check=False,
     )
-    output = completed.stdout or ""
-    print(output, end="" if output.endswith("\n") else "\n", flush=True)
+    stdout = completed.stdout or ""
+    stderr = completed.stderr or ""
+    if stdout:
+        print(stdout, end="" if stdout.endswith("\n") else "\n", flush=True)
+    if stderr:
+        print(stderr, end="" if stderr.endswith("\n") else "\n", file=sys.stderr, flush=True)
     if completed.returncode != 0:
-        raise RuntimeError(f"command failed with exit {completed.returncode}: {' '.join(command)}")
+        diagnostics = stderr.strip() or stdout.strip() or "<no process output>"
+        raise RuntimeError(
+            f"command failed with exit {completed.returncode}: {' '.join(command)}\n{diagnostics}"
+        )
     if json_output:
         try:
-            return json.loads(output)
+            return json.loads(stdout)
         except json.JSONDecodeError as exc:
-            raise RuntimeError(f"invalid JSON from {' '.join(command)}: {exc}") from exc
-    return output
+            raise RuntimeError(f"invalid JSON stdout from {' '.join(command)}: {exc}") from exc
+    return stdout
 
 
 def cli(env: dict[str, str], *args: str, json_output: bool = False) -> object | str:
