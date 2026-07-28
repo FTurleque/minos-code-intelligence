@@ -45,6 +45,10 @@ class OllamaEmbeddingProviderTest {
                 URI.create("http://127.0.0.1.example.com:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("file:///tmp/embed"), "fixture", 384, Duration.ofSeconds(2)));
+        assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://127.0.0.1:11434/api/embed"), "fixture", 31, Duration.ofSeconds(2)));
+        assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://127.0.0.1:11434/api/embed"), "fixture", 384, Duration.ZERO));
     }
 
     @Test
@@ -98,13 +102,21 @@ class OllamaEmbeddingProviderTest {
     }
 
     @Test
-    void parsesOfficialEmbedResponseShapeAndChecksDimensions() throws Exception {
+    void parsesOfficialEmbedResponseShapeAndFailsClosedOnAmbiguity() throws Exception {
         double[] parsed = OllamaEmbeddingProvider.parseEmbeddingResponse(
                 "{\"model\":\"fixture\",\"embeddings\":[[0.25,-0.5,0.75]]}", 3);
         assertArrayEquals(new double[]{0.25, -0.5, 0.75}, parsed);
 
         assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse(
                 "{\"embeddings\":[[0.1,0.2]]}", 3));
+        assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse(
+                "{\"embeddings\":[[0.1,0.2,0.3],[0.4,0.5,0.6]]}", 3));
+        assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse(
+                "{\"embeddings\":[[0.1,broken,0.3]]}", 3));
+        assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse(
+                "{\"embeddings\":[[0.1,NaN,0.3]]}", 3));
+        assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse(
+                "{\"embeddings\":[[0.1,0.2,0.3]}", 3));
         assertThrows(IOException.class, () -> OllamaEmbeddingProvider.parseEmbeddingResponse("{}", 3));
     }
 
