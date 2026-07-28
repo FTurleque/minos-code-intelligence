@@ -29,10 +29,10 @@ M17 — Provider & Discovery Platform  TERMINÉ, VALIDÉ ET LIVRÉ
 M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
 M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
-M21 — Production Integrity           EN COURS — S9 final local en qualification
+M21 — Production Integrity           EN COURS — S2 en pause ; S1/S3→S9 localement validés
 ```
 
-**État produit livré : C0→M20.** M21 reste sur `m21-production-integrity` et n'est pas encore livré sur `main`.
+**État produit livré : C0→M20.** M21 reste sur `m21-production-integrity` et n'est pas encore livré sur `main` tant que S2 n'a pas repris.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -45,7 +45,7 @@ S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c3
 S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
 S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
 S8   semantic scale qualification                     VALIDÉ — a668f0a09da08515396903fbe887ed9e70125201
-S9   final production integrity gate                  EN COURS — local-only, exact-head
+S9   final production integrity gate                  VALIDÉ — 0ec50bedc8c49e45347309f406830089e8e84941
 ```
 
 Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
@@ -188,23 +188,30 @@ Aucun Lucene/HNSW/vector database n'a été nécessaire pour satisfaire le STAND
 
 ### S9 — Final production integrity gate
 
-S9 est **local-only en juillet 2026**. `scripts/m21/run-s9.ps1` rejoue, sur un même HEAD exact :
+S9 a été **VALIDÉ localement le 28 juillet 2026** sur `0ec50bedc8c49e45347309f406830089e8e84941`.
+
+Le gate `scripts/m21/run-s9.ps1` a rejoué sur le même HEAD exact :
 
 1. S7 advanced provider ;
-2. S8 STANDARD avec `KEEP_CURRENT_M20_BACKEND` ;
-3. S5 supply-chain + Windows packaging/install ;
-4. S6 IntelliJ parity + Plugin Verifier ;
-5. docs courantes ;
-6. HEAD/worktree final.
+2. S8 STANDARD avec décision retenue `PASS / KEEP_CURRENT_M20_BACKEND` ;
+3. S5 supply-chain, SBOM, ZIP/setup Windows, checksums et install/uninstall ;
+4. S6 IntelliJ parity, tests, build plugin et Plugin Verifier sur deux builds IU 261 ;
+5. documentation courante ;
+6. HEAD exact et worktree propre.
 
-Verdict attendu :
+Preuves de fermeture :
 
 ```text
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21-S9 retained S8 decision: PASS / KEEP_CURRENT_M20_BACKEND
 M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: 0ec50bedc8c49e45347309f406830089e8e84941
 ```
 
-S2 reste explicitement hors de ce gate jusqu'en août 2026 : aucun déclenchement CI manuel et aucune modification de workflow.
+S2 reste explicitement hors de S9 jusqu'en août 2026 : aucun déclenchement CI manuel et aucune modification de workflow. Le jalon M21 reste donc ouvert tant que S2 n'a pas repris.
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
@@ -218,71 +225,4 @@ recherche sémantique bornée, nature HEURISTIC                           ✅
 ranking hybride LEXICAL + GRAPH + SEMANTIC                              ✅
 contexte v2 borné documents/tokens                                      ✅
 index sémantique incrémental + réutilisation des vecteurs               ✅
-SemanticCodeIntelligenceApi v1 + 4 tools MCP                            ✅
-NEXUS semantic signals v2, frontière de responsabilité préservée        ✅
 ```
-
-Autorité : facts structurés = autoritatifs ; semantic score = `HEURISTIC` ; hybrid ranking = sélection dérivée ; ranking global multi-source = NEXUS.
-
-Surfaces publiques courantes :
-
-- CLI stable et protocole IDE `minos-ide` v1 ;
-- API Java : `MinosApi` v1 + APIs additives Provider/Advanced/Semantic ;
-- MCP STDIO read-only : **23 tools** ;
-- NEXUS : export local versionné + signaux sémantiques v2 ;
-- IntelliJ : plugin externe Java 21 ;
-- installation PROD Windows : ZIP/setup avec runtime et preuves supply-chain.
-
-## M19 → M15
-
-- M19 : Program Graph provider-independent, CFG/data-flow/interproc/security bornés, Impact v2 ;
-- M18 : plugin IntelliJ externe, navigation et surfaces MINOS ;
-- M17 : Provider & Discovery Platform capability-honest ;
-- M16 : mesures reproductibles et gouvernance des décisions de backend ;
-- M15 : reactor Maven multi-module, persistance décomposée, JaCoCo et facts calculables.
-
-## Frontières architecturales courantes
-
-- MINOS possède les faits de Code Intelligence ;
-- snapshots persistés = source de vérité ;
-- scores sémantiques = heuristiques ;
-- NEXUS possède ranking global, sélection et budget multi-source ;
-- IntelliJ reste un client externe ;
-- aucune capability provider absente n'est inventée ;
-- impact potentiel ≠ preuve runtime exhaustive ;
-- chemins sécurité = chemins statiques observés et bornés ;
-- cross-repository exige une identité exacte et unique ;
-- toute évolution backend reste gouvernée par des mesures reproductibles.
-
-## Suite
-
-```text
-M21  Production Integrity & Surface Convergence   EN COURS — S9
-M22  Advanced Provider Intelligence               PLANIFIÉ
-M23  Semantic Retrieval 2.0                       PLANIFIÉ
-M24  Polyglot Expansion                           PLANIFIÉ
-M25  Remote & Distributed Indexing                PLANIFIÉ
-M26  Runtime & Dynamic Intelligence               PLANIFIÉ
-M27  Team / Hosted Mode                           PLANIFIÉ
-```
-
-M22→M27 restent des directions planifiées tant qu'aucune roadmap opérationnelle et qualification associée ne les engage.
-
-## Documentation
-
-- portail : [`README.md`](../README.md) ;
-- roadmap : [`ROADMAP.md`](ROADMAP.md) ;
-- exécution M21 : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md) ;
-- utilisateur : [`user/README.md`](user/README.md) ;
-- développeur : [`developer/README.md`](developer/README.md) ;
-- qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
-- supply-chain : [`developer/supply-chain.md`](developer/supply-chain.md) ;
-- advanced provider : [`developer/advanced-program-provider.md`](developer/advanced-program-provider.md) ;
-- semantic scale : [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md) ;
-- facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
-- décisions : [`adr/README.md`](adr/README.md) ;
-- preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
-
-## Source de vérité
-
-`STATUS.md` décrit l'état livré et le jalon actif. `ROADMAP.md` décrit la progression produit. Les ADR portent les décisions durables. Les facts calculables restent générés depuis le code. Les rapports historiques peuvent conserver des états intermédiaires propres à leur date de validation.
