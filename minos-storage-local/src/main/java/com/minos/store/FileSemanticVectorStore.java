@@ -104,9 +104,12 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Files.createDirectories(directory);
         Path target = directory.resolve(CURRENT_FILE);
         Path temporary = Files.createTempFile(directory, "index-v2-", ".tmp");
-        List<IndexedDocument> ordered = snapshot.documents().stream()
+        List<IndexedDocument> ordered = new ArrayList<>(snapshot.documents().size());
+        for (IndexedDocument indexed : snapshot.documents().stream()
                 .sorted(Comparator.comparing(value -> value.document().stableKey()))
-                .toList();
+                .toList()) {
+            ordered.add(compact(indexed));
+        }
         try {
             try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
                 output.writeInt(MAGIC);
@@ -131,10 +134,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     writeString(output, document.checksum());
                     output.writeInt(indexed.vector().dimensions());
                     for (int d = 0; d < indexed.vector().dimensions(); d++) {
-                        double value = indexed.vector().valueAt(d);
-                        float compact = (float) value;
-                        if (!Float.isFinite(compact)) throw new IOException("semantic vector cannot be represented as float32");
-                        output.writeFloat(compact);
+                        output.writeFloat((float) indexed.vector().valueAt(d));
                     }
                 }
             }
@@ -175,6 +175,16 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     public Path root() {
         return root;
+    }
+
+    private static IndexedDocument compact(IndexedDocument indexed) throws IOException {
+        double[] values = new double[indexed.vector().dimensions()];
+        for (int d = 0; d < values.length; d++) {
+            float compact = (float) indexed.vector().valueAt(d);
+            if (!Float.isFinite(compact)) throw new IOException("semantic vector cannot be represented as float32");
+            values[d] = compact;
+        }
+        return new IndexedDocument(indexed.document(), SemanticVector.fromArray(indexed.document().stableKey(), values));
     }
 
     private Path readableIndexFile(String projectId) {
