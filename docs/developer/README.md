@@ -17,7 +17,8 @@ MINOS suit plusieurs règles fortes :
 - un score sémantique reste un signal de ranking heuristique, jamais une relation de code ;
 - l’index vectoriel reste reconstruisible depuis les snapshots structurés ;
 - MINOS ne sélectionne pas le contexte final de NEXUS ;
-- une release distribuée doit conserver une provenance et un inventaire supply-chain vérifiables.
+- une release distribuée doit conserver une provenance et un inventaire supply-chain vérifiables ;
+- une capability avancée n’est publiée que lorsque le provider courant produit réellement les facts correspondants.
 
 ## Carte des sous-systèmes
 
@@ -31,11 +32,15 @@ flowchart TB
     DOMAIN --> QUERY[query / context]
     QUERY --> ARCH[architecture]
     QUERY --> IMPACT[impact]
+    STORE --> PROG[program graph / providers]
+    QUERY --> PROG
     STORE --> SEM[semantic / hybrid]
     QUERY --> SEM
     STORE --> API[api]
     QUERY --> CLI[cli]
     QUERY --> MCP[mcp]
+    PROG --> API
+    PROG --> MCP
     SEM --> API
     SEM --> MCP
     STORE --> WORK[workspace]
@@ -76,11 +81,12 @@ flowchart TB
 3. [Indexation, lifecycle et stockage](indexing-and-storage.md)
 4. [Surfaces publiques](public-surfaces.md)
 5. [Intelligence sémantique et hybride M20](semantic-hybrid-intelligence.md)
-6. [Provider avancé Program Graph M21-S7](advanced-program-provider.md)
-7. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-8. [Multi-dépôts et Git](multi-repo-git.md)
-9. [Supply-chain et provenance de release](supply-chain.md)
-10. [Tests et contribution](testing.md)
+6. [Provider avancé Program Graph sidecar M21-S7](advanced-program-provider.md)
+7. [Provider Java avancé de référence M22](java-advanced-provider.md)
+8. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+9. [Multi-dépôts et Git](multi-repo-git.md)
+10. [Supply-chain et provenance de release](supply-chain.md)
+11. [Tests et contribution](testing.md)
 
 ## Build développeur
 
@@ -98,6 +104,7 @@ Une évolution doit être placée au niveau architectural le plus bas qui porte 
 
 - un nouveau fournisseur d’index → adaptateur + orchestration, pas CLI ;
 - une nouvelle relation métier → domaine/query, puis exposition ;
+- un nouveau provider Program Graph → `ProgramGraphProvider`, avec capabilities/limitations explicites ;
 - un nouveau provider d'embeddings → `EmbeddingProvider`, sans dépendance cloud dans les services ;
 - un nouveau backend vectoriel → `SemanticVectorStore`, en restant reconstruisible ;
 - un nouveau transport → couche d’exposition, sans dupliquer les services ;
