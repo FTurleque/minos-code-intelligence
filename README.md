@@ -13,6 +13,8 @@ Il répond notamment à des questions comme :
 - quels éléments peuvent être potentiellement impactés par une modification ?
 - quelles relations entre dépôts sont réellement prouvables ?
 - quelles zones ont récemment changé dans Git ?
+- quels chemins de programme avancés sont réellement disponibles selon les capacités du provider ?
+- quels résultats supplémentaires apporte le retrieval sémantique/hybride lorsqu'il est activé ?
 
 MINOS est **local-first**, **agnostique du langage**, indépendant des fournisseurs d’IA et découplé des formats d’indexation externes par une couche de normalisation.
 
@@ -27,25 +29,27 @@ flowchart TB
     MINOS --> CLI[CLI]
     MINOS --> API[API Java]
     MINOS --> MCP[MCP STDIO]
+    MINOS --> IDE[IntelliJ]
     MINOS --> NX[NEXUS export JSON]
     NX --> NEXUS[NEXUS Context Intelligence]
 ```
 
-MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte.
+MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte. La couche sémantique M20 reste optionnelle et ses scores restent `HEURISTIC`.
 
 ## État courant
 
-**C0 à M14 sont terminés et livrés.**
+**C0 à M20 sont terminés, validés et livrés.**
 
-M14 a fermé l’indexation autonome, le runtime provider Windows, la distribution Windows native, le MCP natif et le packaging de release. La PR M14 #43 a été fusionnée dans `main` le 24 juillet 2026.
+M20 a ajouté la couche Semantic & Hybrid Code Intelligence : documents sémantiques, `EmbeddingProvider` optionnel, vector store reconstruisible, recherche sémantique/hybride, contexte borné, API additive, 23 tools MCP et signaux NEXUS v2.
 
-Le packaging Windows fournit un **setup.exe complet** tout en conservant le ZIP portable. Les évolutions post-M14 ajoutent la visualisation du graphe d'architecture et l'intégration optionnelle du MCP natif dans les clients IA locaux.
+**M21 — Production Integrity & Surface Convergence est en cours** sur `m21-production-integrity`. Ce jalon consolide CI, quality gates M19/M20, frontières Maven, documentation, supply-chain, parité IntelliJ et qualification de performance avant toute nouvelle phase fonctionnelle lourde.
 
 Voir :
 
-- [`docs/STATUS.md`](docs/STATUS.md) — état livré sur `main` ;
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit ;
-- [`docs/roadmap/M14_EXECUTION.md`](docs/roadmap/M14_EXECUTION.md) — qualification détaillée M14.
+- [`docs/STATUS.md`](docs/STATUS.md) — état livré et jalon actif ;
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit M0→M27 ;
+- [`docs/roadmap/M21_EXECUTION.md`](docs/roadmap/M21_EXECUTION.md) — consolidation post-M20 ;
+- [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Installer MINOS sous Windows
 
@@ -117,29 +121,17 @@ minos.cmd import-scip my-project `
 
 **Guide utilisateur détaillé : [Visualiser le graphe d'architecture MINOS](docs/user/architecture-graph.md).**
 
-À retenir : MINOS calcule et exporte le graphe mais n'ouvre pas actuellement une fenêtre graphique intégrée. Pour voir un diagramme, utiliser Mermaid ou Graphviz DOT.
-
-MINOS expose les arêtes de dépendances agrégées entre modules dans la sortie JSON :
+MINOS expose le graphe dans IntelliJ et peut aussi l'exporter hors IDE en JSON, Mermaid ou Graphviz DOT.
 
 ```powershell
 minos.cmd architecture my-project --format json
-```
-
-Pour produire directement un diagramme Mermaid :
-
-```powershell
 minos.cmd architecture my-project --format mermaid |
   Set-Content .\architecture.mmd -Encoding utf8
-```
-
-Ou Graphviz DOT :
-
-```powershell
 minos.cmd architecture my-project --format dot |
   Set-Content .\architecture.dot -Encoding utf8
 ```
 
-Avec Graphviz installé, produire puis ouvrir un SVG :
+Avec Graphviz installé :
 
 ```powershell
 dot -Tsvg .\architecture.dot -o .\architecture.svg
@@ -162,12 +154,19 @@ Les rendus utilisent uniquement les arêtes réellement présentes dans le snaps
 Java 24
 Maven 3.9.x via Maven Wrapper
 Git
+Python pour les gates documentaires/qualité
 ```
 
 Sous Windows PowerShell :
 
 ```powershell
 .\mvnw.cmd clean verify
+```
+
+Pour la consolidation M21, la porte locale courante est :
+
+```powershell
+.\scripts\m21\run-local.ps1
 ```
 
 La version de développement est actuellement :
@@ -235,6 +234,7 @@ project inspect / inspect
 index
 import-scip
 index-status
+providers
 ```
 
 ### Code Intelligence
@@ -256,14 +256,17 @@ impact
 
 `architecture` supporte `text`, `json`, `mermaid` et `dot` ; la sortie JSON contient les arêtes inter-modules détaillées.
 
+Le catalogue CLI exact courant est généré dans [`docs/generated/product-facts.md`](docs/generated/product-facts.md).
+
 ### Intégrations
 
 ```text
-API Java M11/M12 + getArchitectureGraph
-MCP STDIO — 16 tools read-only
+API Java v1 + surfaces additives Provider / Advanced / Semantic
+MCP STDIO — 23 tools read-only
 Git Intelligence via JGit
 Workspaces multi-repositories
-nexus-export — contrat JSON M13
+IntelliJ — client externe minos-ide v1
+nexus-export — contrat local versionné + signaux sémantiques v2
 ```
 
 ## MCP
@@ -276,7 +279,7 @@ args    = mcp
 env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 ```
 
-Le tool `minos_architecture_graph` expose le graphe en JSON, Mermaid ou DOT.
+Le catalogue courant contient **23 tools read-only**, incluant les surfaces architecture, Program Graph / Impact v2 / security paths et Semantic / Hybrid Code Intelligence. La liste exacte est générée dans [`docs/generated/product-facts.md`](docs/generated/product-facts.md).
 
 Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Le `setup.exe` peut préparer, démarrer et valider ce mode si Docker Desktop est déjà opérationnel. Docker n’est pas le moteur principal de compilation/indexation des projets et n'est pas requis pour les intégrations MCP natives.
 
@@ -285,6 +288,7 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 ### Utilisateur
 
 - **[Guide utilisateur — commencer ici](docs/user/README.md)**
+- **[Plugin IntelliJ](docs/user/intellij-plugin.md)**
 - **[Visualiser le graphe d'architecture](docs/user/architecture-graph.md)**
 - [Installation PROD Windows](docs/user/production-installation.md)
 - [Indexation autonome](docs/user/autonomous-indexing.md)
@@ -303,19 +307,22 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 - [Indexation, lifecycle et stockage](docs/developer/indexing-and-storage.md)
 - [Surfaces publiques](docs/developer/public-surfaces.md)
 - [Multi-dépôts et Git](docs/developer/multi-repo-git.md)
+- [Semantic & Hybrid Intelligence](docs/developer/semantic-hybrid-intelligence.md)
 - [Tests et contribution](docs/developer/testing.md)
 
-### Architecture et historique
+### Architecture, roadmap et historique
 
 - [ADR](docs/adr/README.md)
 - [Historique](docs/history/README.md)
 - [Roadmap](docs/ROADMAP.md)
+- [M21 — Production Integrity](docs/roadmap/M21_EXECUTION.md)
 
 ## Stack
 
 ```text
 Java             24
 Build            Maven 3.9.x
+Plugin IntelliJ  Java 21 / IntelliJ Platform
 SCIP bindings    0.9.0
 MCP Java SDK     2.0.0
 Git              Eclipse JGit 7.6.0.202603022253-r
@@ -334,6 +341,7 @@ Serveur HTTP     aucun requis dans le cœur
 - l’impact est potentiel, pas une certitude runtime ;
 - une relation cross-repository exige une identité exacte et unique ;
 - l’activité Git n’est pas une mesure automatique d’importance architecturale ;
-- CLI, API, MCP et NEXUS sont des surfaces d’exposition, pas des duplications du métier.
+- le sémantique reste un signal de retrieval/ranking, jamais une relation de code ;
+- CLI, API, MCP, IntelliJ et NEXUS sont des surfaces d’exposition, pas des duplications du métier.
 
 > Règle de développement : **mesurer avant d’industrialiser**.

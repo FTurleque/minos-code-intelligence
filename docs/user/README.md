@@ -57,7 +57,7 @@ installation Windows
    ├── CLI
    ├── MCP natif
    ├── PATH utilisateur optionnel
-   ├── plugin IntelliJ optionnel (ZIP M18)
+   ├── plugin IntelliJ optionnel
    ├── intégrations MCP natives optionnelles
    │    ├── Copilot JetBrains / IntelliJ
    │    ├── Copilot CLI
@@ -74,7 +74,7 @@ minos project add <path> --name <name>
    ↓
 minos index <name>
    ↓
-CLI / IntelliJ / search / architecture / impact / MCP
+CLI / IntelliJ / API Java / MCP / NEXUS
 ```
 
 Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**. Le plugin IntelliJ est, lui, distribué sous forme de ZIP installable depuis l'IDE.
@@ -103,7 +103,7 @@ Le guide couvre :
 - configuration optionnelle du MCP Docker lorsque Docker Desktop est déjà disponible ;
 - emplacement du programme et de `MINOS_HOME` ;
 - premier démarrage ;
-- providers Java et TypeScript ;
+- providers qualifiés Java, TypeScript et Python ;
 - premier projet et visualisation du graphe ;
 - mise à jour, rollback et désinstallation ;
 - publication d'une release pour les mainteneurs.
@@ -156,6 +156,8 @@ minos.cmd architecture my-project --format dot
 
 Dans IntelliJ, la Tool Window **MINOS** fournit le statut projet/provider/snapshot, le graphe, l'impact, les tests liés, l'activité Git factuelle et les actions d'indexation. Voir [Plugin IntelliJ](intellij-plugin.md).
 
+Les surfaces M19/M20 plus avancées — Program Graph, Impact v2, security paths, semantic search et hybrid search/context — sont disponibles via l'API Java et/ou le MCP lorsque leurs capacités sont disponibles. Leur convergence complète dans l'UX IntelliJ fait partie de M21.
+
 ---
 
 ## 3. MCP natif et MCP Docker
@@ -184,9 +186,9 @@ Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP 
 
 MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide.
 
-Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour le graphe en JSON, Mermaid ou DOT.
+Le MCP expose **23 tools read-only**. Le catalogue courant inclut notamment `minos_architecture_graph`, `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, `minos_semantic_search`, `minos_hybrid_search` et `minos_hybrid_context`. La liste exacte est générée dans [`../generated/product-facts.md`](../generated/product-facts.md).
 
-Le plugin IntelliJ M18 est distinct du MCP : il fonctionne sans LLM et ajoute une UX native, de la navigation et des actions locales d'administration. Les deux intégrations peuvent être installées simultanément.
+Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX native, de la navigation et des actions locales d'administration. Les deux intégrations peuvent être installées simultanément.
 
 ---
 
@@ -211,13 +213,15 @@ Le plugin IntelliJ M18 est distinct du MCP : il fonctionne sans LLM et ajoute un
 | Lire l'architecture | `architecture` |
 | Voir l'architecture dans l'IDE | [Plugin IntelliJ](intellij-plugin.md) |
 | **Voir/exporter le graphe** | `architecture --format json|mermaid|dot` — [guide](architecture-graph.md) |
-| Estimer un impact | `impact` / action IntelliJ |
+| Estimer un impact baseline | `impact` / action IntelliJ |
+| Program Graph / Impact v2 / security paths | API Java avancée / MCP |
+| Semantic index / semantic & hybrid retrieval | API Java sémantique / MCP, provider optionnel |
 | Lire l'activité Git factuelle | `git-activity` / onglet Git Activity IntelliJ |
-| Consommer depuis Java | `MinosApi`, `MinosMultiRepositoryApi` |
+| Consommer depuis Java | `MinosApi` + APIs additives Provider/Advanced/Semantic |
 | Lire le graphe depuis Java | `MinosApi.getArchitectureGraph` |
 | Exposer MINOS à un agent | `minos mcp` |
-| Lire le graphe depuis un agent | `minos_architecture_graph` |
-| Exporter vers NEXUS | `nexus-export` |
+| Lire le graphe depuis un agent | `minos_architecture_graph` / `minos_program_graph` |
+| Exporter vers NEXUS | `nexus-export` + signaux sémantiques v2 |
 
 ---
 

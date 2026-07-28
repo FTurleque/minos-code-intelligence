@@ -1,22 +1,23 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés. La phase M15→M20 est clôturée ; la prochaine phase reste à cadrer.**
+Statut : **C0 à M20 terminés, validés et livrés. M21 — Production Integrity & Surface Convergence est EN COURS. M22→M27 sont planifiés comme trajectoire post-consolidation.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md).
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
 
 ## Principes
 
 - chaque jalon ferme une question produit identifiable ;
 - une capacité n'est acquise qu'avec une preuve reproductible ;
-- un nouveau commit invalide la qualification exacte d'un SHA antérieur ;
+- un nouveau commit invalide la qualification exacte d'un SHA antérieur tant qu'une politique plus fine n'a pas été explicitement qualifiée ;
 - CLI, API, MCP, NEXUS et IntelliJ ne dupliquent pas le métier ;
 - les décisions durables sont formalisées en ADR ;
 - les optimisations et choix de backend sont gouvernés par des mesures ;
 - les capacités provider absentes ne sont jamais inventées ;
 - les faits, dérivations et heuristiques restent explicitement distingués ;
-- les facts documentaires calculables sont dérivés du code quand c'est possible.
+- les facts documentaires calculables sont dérivés du code quand c'est possible ;
+- la consolidation et la dette de production sont fermées avant de promouvoir une nouvelle phase fonctionnelle lourde.
 
 ---
 
@@ -238,8 +239,100 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 ---
 
-## Après M20
+# Phase post-M20 — Intégrité production puis évolutions
 
-M20 clôt la phase de maturation M15→M20. **Aucun M21 n'est déclaré par cette roadmap.**
+L'ordre suivant est volontaire : **M21 consolide d'abord le produit livré. Les jalons M22→M27 ne doivent pas servir à contourner une dette M21 non fermée.**
 
-Les thèmes futurs doivent être cadrés par une nouvelle question produit, des critères de sortie mesurables et une nouvelle roadmap avant promotion. Les pistes historiquement hors engagement incluent notamment : indexation distante GitHub/GitLab, exécution distribuée, service hébergé, collaboration multi-utilisateur, analyse runtime/dynamique et nouveaux langages/providers qualifiés.
+```text
+M21  Production Integrity & Surface Convergence   🚧 EN COURS
+  ↓
+M22  Advanced Provider Intelligence               ⏳ PLANIFIÉ
+  ↓
+M23  Semantic Retrieval 2.0                       ⏳ PLANIFIÉ
+  ↓
+M24  Polyglot Expansion                           ⏳ PLANIFIÉ
+  ↓
+M25  Remote & Distributed Indexing                ⏳ PLANIFIÉ
+  ↓
+M26  Runtime & Dynamic Intelligence               ⏳ PLANIFIÉ
+  ↓
+M27  Team / Hosted Mode                           ⏳ PLANIFIÉ
+```
+
+## M21 — Production Integrity & Surface Convergence
+
+**EN COURS — consolidation post-M20.**
+
+Question produit :
+
+> MINOS peut-il devenir un produit continuellement qualifié, cohérent sur toutes ses surfaces et distribuable avec un niveau de confiance production, sans affaiblir ses invariants ?
+
+Axes : CI exploitable, quality gates M19/M20, frontières Maven robustes, documentation single-source-of-truth, supply-chain release, parité IntelliJ M19/M20, providers avancés réellement qualifiés et scalabilité sémantique mesurée.
+
+- roadmap : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md)
+- issue : #73
+- branche : `m21-production-integrity`
+
+## M22 — Advanced Provider Intelligence
+
+**PLANIFIÉ — ne démarre pas avant la fermeture des gates structurants M21.**
+
+Question cible :
+
+> MINOS peut-il alimenter réellement CFG, def-use, flux interprocéduraux et primitives de sécurité avec des providers qualifiés, sans confondre capacité du moteur et fait effectivement prouvé par un provider ?
+
+Cibles : providers avancés Java en premier, fixtures contrôlées, précision/rappel, provenance complète, capacités exhaustives et fallback explicite. TypeScript/Python suivent uniquement lorsque les indexeurs disponibles permettent une qualification équivalente.
+
+## M23 — Semantic Retrieval 2.0
+
+**PLANIFIÉ.**
+
+Question cible :
+
+> MINOS peut-il fournir un retrieval réellement sémantique de qualité production tout en restant local-first, optionnel, mesuré et non autoritatif ?
+
+Cibles : provider local d'embeddings de code réellement appris, qualité Recall@K/MRR/nDCG, format vectoriel compact, caches de vues sémantiques et ANN/vector index seulement si les mesures M21-S8 le justifient.
+
+## M24 — Polyglot Expansion
+
+**PLANIFIÉ.**
+
+Question cible :
+
+> MINOS peut-il étendre sa couverture de langages sans abaisser les exigences de capabilities, stable identity, provenance et conformance ?
+
+Cibles possibles : C/C++, C#, Go, Rust et autres providers uniquement après évaluation de leurs indexeurs et contrats de symboles/relations. Aucun langage n'est déclaré supporté sur la seule présence d'un parseur.
+
+## M25 — Remote & Distributed Indexing
+
+**PLANIFIÉ — opt-in.**
+
+Question cible :
+
+> MINOS peut-il indexer des dépôts distants ou distribuer l'exécution sans abandonner la reproductibilité, la sécurité et l'autorité locale des snapshots ?
+
+Cibles : GitHub/GitLab distants, workers isolés, transport d'artefacts versionné, cache contrôlé, provenance de l'exécution et politique explicite de secrets/réseau.
+
+## M26 — Runtime & Dynamic Intelligence
+
+**PLANIFIÉ.**
+
+Question cible :
+
+> MINOS peut-il rapprocher faits statiques et observations runtime sans transformer une trace partielle en vérité exhaustive ?
+
+Cibles : traces d'appels/exécution, couverture runtime, hot paths observés, rapprochement symbolique statique↔runtime, provenance temporelle et nature explicite des observations.
+
+## M27 — Team / Hosted Mode
+
+**PLANIFIÉ — dépend des exigences de sécurité et gouvernance des données.**
+
+Question cible :
+
+> MINOS peut-il proposer collaboration multi-utilisateur et service hébergé sans perdre ses garanties de confidentialité, d'isolation, de provenance et de reproductibilité ?
+
+Cibles : espaces partagés, isolation tenant, politiques de rétention, authentification/autorisation, audit, chiffrement et mode local toujours disponible. Aucun service hébergé n'est requis pour le cœur MINOS.
+
+## Règle de promotion post-M20
+
+M22→M27 sont des **directions planifiées**, pas des capacités acquises. Pour être promu en jalon actif, chacun doit disposer d'une roadmap opérationnelle, de critères de sortie mesurables, des ADR nécessaires et d'une qualification reproductible sur un SHA exact.

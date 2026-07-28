@@ -51,10 +51,14 @@ public final class ProgramGraphService {
     ) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
-        this.providers = List.copyOf(Objects.requireNonNull(providers, "providers"));
-        if (this.providers.isEmpty()) {
+        List<ProgramGraphProvider> configured = new ArrayList<>(Objects.requireNonNull(providers, "providers"));
+        if (configured.isEmpty()) {
             throw new IllegalArgumentException("at least one program graph provider is required");
         }
+        if (configured.stream().noneMatch(provider -> FileProgramGraphProvider.PROVIDER_ID.equals(provider.id()))) {
+            configured.add(new FileProgramGraphProvider());
+        }
+        this.providers = List.copyOf(configured);
         if (maxCacheEntries < 1) {
             throw new IllegalArgumentException("maxCacheEntries must be greater than zero");
         }
@@ -90,7 +94,7 @@ public final class ProgramGraphService {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()));
-        CacheKey key = new CacheKey(project.id().toString(), snapshot.snapshotId(), providerKey());
+        CacheKey key = new CacheKey(project.id().toString(), snapshot.snapshotId(), providerKey(project, snapshot));
         synchronized (cache) {
             ProgramGraph cached = cache.get(key);
             if (cached != null) {
@@ -113,10 +117,6 @@ public final class ProgramGraphService {
 
     private ProgramGraph withCapabilityLimitations(ProgramGraph graph) {
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>(graph.capabilities());
-        if (capabilities.contains(ProgramGraphCapability.CALL_GRAPH)
-                && capabilities.contains(ProgramGraphCapability.LOCAL_DATA_FLOW)) {
-            capabilities.add(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW);
-        }
         Set<String> limitations = new LinkedHashSet<>(graph.limitations());
         if (!capabilities.contains(ProgramGraphCapability.CALL_GRAPH)) limitations.add("CALL_GRAPH_UNAVAILABLE");
         if (!capabilities.contains(ProgramGraphCapability.CONTROL_FLOW)) limitations.add("CONTROL_FLOW_UNAVAILABLE");
@@ -127,8 +127,16 @@ public final class ProgramGraphService {
                 limitations.stream().sorted().toList());
     }
 
-    private String providerKey() {
-        return providers.stream().map(ProgramGraphProvider::id).sorted().reduce((left, right) -> left + "," + right).orElse("");
+    private String providerKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
+        List<String> keys = new ArrayList<>(providers.size());
+        for (ProgramGraphProvider provider : providers) {
+            String key = provider.cacheKey(project, snapshot);
+            if (key == null || key.isBlank()) {
+                throw new IllegalStateException("program graph provider returned a blank cache key: " + provider.id());
+            }
+            keys.add(provider.id() + "=" + key);
+        }
+        return keys.stream().sorted().reduce((left, right) -> left + "," + right).orElse("");
     }
 
     private static void requireBound(int value, int minimum, int maximum, String name) {

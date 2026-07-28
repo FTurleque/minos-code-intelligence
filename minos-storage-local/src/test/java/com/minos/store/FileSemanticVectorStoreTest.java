@@ -12,12 +12,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FileSemanticVectorStoreTest {
 
     @Test
-    void roundTripsAndAtomicallyReplacesReconstructibleIndex(@TempDir Path temp) throws Exception {
+    void roundTripsCachesAndAtomicallyReplacesReconstructibleIndex(@TempDir Path temp) throws Exception {
         FileSemanticVectorStore store = new FileSemanticVectorStore(temp.resolve("semantic"));
         SemanticVectorStore.IndexSnapshot first = index("project-1", "snapshot-1", "model-v1", "alpha", List.of(1.0, 0.0));
 
@@ -29,7 +30,15 @@ class FileSemanticVectorStoreTest {
         assertEquals(2, loaded.dimensions());
         assertEquals("symbol:alpha", loaded.documents().getFirst().document().stableKey());
         assertEquals(List.of(1.0, 0.0), loaded.documents().getFirst().vector().values());
+        assertEquals(1.0, loaded.documents().getFirst().vector().valueAt(0));
+        assertEquals(1.0, loaded.documents().getFirst().vector().norm());
+        assertSame(loaded, store.load("project-1").orElseThrow());
         assertTrue(store.sizeBytes("project-1") > 0);
+
+        FileSemanticVectorStore reopened = new FileSemanticVectorStore(store.root());
+        SemanticVectorStore.IndexSnapshot reconstructed = reopened.load("project-1").orElseThrow();
+        assertEquals(loaded.snapshotId(), reconstructed.snapshotId());
+        assertEquals(loaded.documents(), reconstructed.documents());
 
         SemanticVectorStore.IndexSnapshot second = index("project-1", "snapshot-2", "model-v1", "beta", List.of(0.0, 1.0));
         store.replace(second);

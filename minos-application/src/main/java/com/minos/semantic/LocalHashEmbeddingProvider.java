@@ -1,8 +1,6 @@
 package com.minos.semantic;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -62,13 +60,10 @@ public final class LocalHashEmbeddingProvider implements EmbeddingProvider {
         double norm = 0.0;
         for (double value : vector) norm += value * value;
         norm = Math.sqrt(norm);
-        List<Double> values = new ArrayList<>(dimensions);
-        if (norm == 0.0) {
-            for (int i = 0; i < dimensions; i++) values.add(0.0);
-        } else {
-            for (double value : vector) values.add(value / norm);
+        if (norm != 0.0) {
+            for (int i = 0; i < vector.length; i++) vector[i] /= norm;
         }
-        return new SemanticVector(stableKey, values);
+        return SemanticVector.fromArray(stableKey, vector);
     }
 
     private void addFeature(double[] vector, String feature, double weight) {

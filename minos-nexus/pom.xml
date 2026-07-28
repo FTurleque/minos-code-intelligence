@@ -30,23 +30,4 @@
             <version>${project.version}</version>
         </dependency>
     </dependencies>
-
-    <build>
-        <!-- The process bridge remains in minos-app because it intentionally invokes the system launcher. -->
-
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <includes>
-                        <include>com/minos/integration/nexus/**/*.java</include>
-                    </includes>
-                    <excludes>
-                        <exclude>com/minos/integration/nexus/NexusExportBridgeMain.java</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>

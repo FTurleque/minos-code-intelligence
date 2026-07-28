@@ -1,201 +1,228 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **27 juillet 2026**
+Dernière mise à jour documentaire : **28 juillet 2026**
 
-Ce fichier résume l'état produit livré. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
+Ce fichier distingue l'état **livré sur `main`** du jalon de consolidation actuellement en cours. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
 ```text
-C0 — Cadrage                         TERMINÉ
-M0 — Faisabilité technique          TERMINÉ ET LIVRÉ
-M1 — Découverte et orchestration    TERMINÉ ET LIVRÉ
-M2 — Intelligence des symboles      TERMINÉ ET LIVRÉ
-M3 — Intelligence des relations     TERMINÉ ET LIVRÉ
-M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
-M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
-M6 — Intelligence d'architecture    TERMINÉ, VALIDÉ ET LIVRÉ
-M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
-M8 — Analyse d'impact               TERMINÉ, VALIDÉ ET LIVRÉ
-M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
-M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
-M11 — API publique                  TERMINÉ, VALIDÉ ET LIVRÉ
-M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
-M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
-M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
-M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
-M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
-M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
-M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
-M19 — Advanced Code Intelligence    TERMINÉ, VALIDÉ ET LIVRÉ
+C0 — Cadrage                          TERMINÉ
+M0 — Faisabilité technique           TERMINÉ ET LIVRÉ
+M1 — Découverte et orchestration     TERMINÉ ET LIVRÉ
+M2 — Intelligence des symboles       TERMINÉ ET LIVRÉ
+M3 — Intelligence des relations      TERMINÉ ET LIVRÉ
+M4 — Recherche et contexte compact   TERMINÉ ET LIVRÉ
+M5 — Tests liés et dérivations       TERMINÉ ET LIVRÉ
+M6 — Intelligence d'architecture     TERMINÉ, VALIDÉ ET LIVRÉ
+M7 — Indexation incrémentale         TERMINÉ, VALIDÉ ET LIVRÉ
+M8 — Analyse d'impact                TERMINÉ, VALIDÉ ET LIVRÉ
+M9 — CLI stabilisée                  TERMINÉ, VALIDÉ ET LIVRÉ
+M10 — Serveur MCP                    TERMINÉ, VALIDÉ ET LIVRÉ
+M11 — API publique                   TERMINÉ, VALIDÉ ET LIVRÉ
+M12 — Multi-dépôts + Git             TERMINÉ, VALIDÉ ET LIVRÉ
+M13 — Intégration NEXUS              TERMINÉ, VALIDÉ ET LIVRÉ
+M14 — Indexation autonome + PROD     TERMINÉ, VALIDÉ ET LIVRÉ
+M15 — Industrialisation Core         TERMINÉ, VALIDÉ ET LIVRÉ
+M16 — Scalabilité et performance     TERMINÉ, VALIDÉ ET LIVRÉ
+M17 — Provider & Discovery Platform  TERMINÉ, VALIDÉ ET LIVRÉ
+M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
+M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
+M21 — Production Integrity           EN COURS — S2 en pause ; S1/S3→S9 localement validés
 ```
 
-La phase M15→M20 est clôturée. Aucun M21 n'est actuellement déclaré.
+**État produit livré : C0→M20.** M21 reste sur `m21-production-integrity` et n'est pas encore livré sur `main` tant que S2 n'a pas repris.
+
+## M21 — Production Integrity & Surface Convergence
+
+```text
+S1   governance + docs + runner local                 VALIDÉ — b4403921bfe0e2a7fe5eef9380a122982f275e0e
+S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026 — aucun run CI
+S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
+S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
+S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
+S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
+S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
+S8   semantic scale qualification                     VALIDÉ — a668f0a09da08515396903fbe887ed9e70125201
+S9   final production integrity gate                  VALIDÉ — 0ec50bedc8c49e45347309f406830089e8e84941
+```
+
+Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+
+### S1 — Governance
+
+```text
+Maven reactor: 13/13 SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
+```
+
+### S3 — Quality gates
+
+Onze scopes JaCoCo sont bloquants : cinq scopes historiques et six scopes M19/M20.
+
+```text
+program-graph-analysis
+advanced-impact-security
+semantic-vector-store
+semantic-hybrid-retrieval
+advanced-public-api
+m19-m20-mcp-catalogue
+M21 JACOCO GATE SUCCESS
+Validated HEAD: 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
+```
+
+### S4 — Maven boundaries
+
+Les 12 modules compilent leur arbre `src/main/java` naturel ; les anciens filtres compiler d'ownership ont été supprimés.
+
+```text
+M21 MODULE BOUNDARY CONSISTENCY SUCCESS
+Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
+```
+
+### S5 — Supply-chain & release
+
+```text
+CycloneDX 1.6
+M21 THIRD-PARTY NOTICES SUCCESS
+M21 RELEASE MANIFEST SUCCESS
+M21 SUPPLY-CHAIN EVIDENCE SUCCESS
+MINOS Windows distribution SUCCESS
+MINOS Windows setup SUCCESS
+MINOS Windows release VALIDATION SUCCESS
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+Validated HEAD: bcc44ea5e7a5c354c1df25bb7d295ee57347629c
+```
+
+La signature Authenticode reste explicite et optionnelle tant qu'aucun certificat n'est configuré ; `MINOS_REQUIRE_SIGNED_RELEASE=1` la rend bloquante.
+
+### S6 — IntelliJ parity
+
+Le plugin reste un client externe Java 21 du moteur Java 24 via `minos-ide` v1. Il ne réimplémente aucune intelligence M19/M20.
+
+```text
+program-graph
+impact-v2
+security-paths
+semantic-index-status
+semantic-index-sync
+semantic-search
+hybrid-search
+hybrid-context
+```
+
+```text
+M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
+```
+
+### S7 — Advanced provider productionization
+
+`FileProgramGraphProvider` charge le sidecar local `.minos/program-graph-v1` uniquement lorsqu'il est aligné au snapshot actif. Un sidecar stale expose `ADVANCED_PROGRAM_SIDECAR_STALE_SNAPSHOT` et ne contribue aucune capability. `CALL_GRAPH + LOCAL_DATA_FLOW` ne prouve jamais implicitement l'interprocédural.
+
+```text
+M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
+M21-S7 ADVANCED PROVIDER VALIDATION SUCCESS
+Validated HEAD: 57243384286ed623de2d9499c9ae6729f77f6845
+```
+
+### S8 — Semantic scale qualification
+
+S8 a appliqué la règle M16 **mesurer avant d'optimiser** sur le STANDARD déterministe :
+
+```text
+seed                 16000031
+fichiers logiques       10 000
+symboles               100 000
+occurrences            500 000
+relations              250 000
+semantic documents     210 000
+vector dimensions          384
+```
+
+La première baseline complète, sur `37cbe22e91993e8aea040621396d2abd7e00da44`, a retourné :
+
+```text
+M21 S8 STANDARD MEASUREMENT status=FAIL decision=OPTIMIZE_MEASURED_BOTTLENECK
+peak heap ratio      0.8966
+vector-load p95      2910.409 ms
+semantic p95         8457.386 ms
+hybrid search p95   49412.429 ms
+hybrid context p95  48520.565 ms
+```
+
+Les optimisations autorisées par cette mesure conservent le format disque v1, le cosine exact, les stable keys, les poids hybrides, `VECTOR_SEARCH_LINEAR_SCAN`, les facts structurés autoritatifs et le signal sémantique `HEURISTIC` : vecteurs primitifs, norm pré-calculée, cache snapshot-scoped du store, top-K exact borné et corpus hybride snapshot-scoped.
+
+Qualification exacte finale S8 sur `a668f0a09da08515396903fbe887ed9e70125201` :
+
+```text
+added=0 changed=3 removed=0 reused=209997 reuse=0.999986
+peak heap ratio      0.3407
+index bytes          717000165
+RSS                  4745732096
+vector-load p95      0.0625 ms
+semantic p95         102.8875 ms
+hybrid search p95    210.487 ms
+hybrid context p95   188.5624 ms
+M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
+M21 S8 SEMANTIC SCALE DECISION SUCCESS
+M21-S8 SEMANTIC SCALE VALIDATION SUCCESS
+Validated HEAD: a668f0a09da08515396903fbe887ed9e70125201
+```
+
+Contrat de décision conservé :
+
+```text
+INVALID_MEASUREMENT
+OPTIMIZE_MEASURED_BOTTLENECK
+KEEP_CURRENT_M20_BACKEND
+```
+
+Aucun Lucene/HNSW/vector database n'a été nécessaire pour satisfaire le STANDARD. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
+
+### S9 — Final production integrity gate
+
+S9 a été **VALIDÉ localement le 28 juillet 2026** sur `0ec50bedc8c49e45347309f406830089e8e84941`.
+
+Le gate `scripts/m21/run-s9.ps1` a rejoué sur le même HEAD exact :
+
+1. S7 advanced provider ;
+2. S8 STANDARD avec décision retenue `PASS / KEEP_CURRENT_M20_BACKEND` ;
+3. S5 supply-chain, SBOM, ZIP/setup Windows, checksums et install/uninstall ;
+4. S6 IntelliJ parity, tests, build plugin et Plugin Verifier sur deux builds IU 261 ;
+5. documentation courante ;
+6. HEAD exact et worktree propre.
+
+Preuves de fermeture :
+
+```text
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
+M21-S9 retained S8 decision: PASS / KEEP_CURRENT_M20_BACKEND
+M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
+Validated HEAD: 0ec50bedc8c49e45347309f406830089e8e84941
+```
+
+S2 reste explicitement hors de S9 jusqu'en août 2026 : aucun déclenchement CI manuel et aucune modification de workflow. Le jalon M21 reste donc ouvert tant que S2 n'a pas repris.
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
-M20 ajoute une couche sémantique **locale et optionnelle** au-dessus des facts structurés MINOS. Les embeddings restent un signal de ranking/rappel et ne deviennent jamais une preuve de relation de code.
-
-Acquis M20 :
+M20 ajoute une couche sémantique locale et optionnelle au-dessus des facts structurés MINOS.
 
 ```text
-S1   SemanticDocument SYMBOL / FILE / CHUNK + stableKey/checksum       ✅
-S2   EmbeddingProvider SPI optionnel + provider local-hash             ✅
-S3   vector store local versionné, atomique et reconstruisible        ✅
-S4   recherche sémantique bornée, nature HEURISTIC                    ✅
-S5   ranking hybride LEXICAL + GRAPH + SEMANTIC                       ✅
-S6   contexte v2 borné documents/tokens                               ✅
-S7   index sémantique incrémental + réutilisation des vecteurs        ✅
-S8   SemanticCodeIntelligenceApi v1 + 4 tools MCP                     ✅
-S9   NEXUS semantic signals v2, frontière de responsabilité préservée ✅
+SemanticDocument SYMBOL / FILE / CHUNK + stableKey/checksum              ✅
+EmbeddingProvider SPI optionnel + provider local-hash                    ✅
+vector store local versionné, atomique et reconstruisible               ✅
+recherche sémantique bornée, nature HEURISTIC                           ✅
+ranking hybride LEXICAL + GRAPH + SEMANTIC                              ✅
+contexte v2 borné documents/tokens                                      ✅
+index sémantique incrémental + réutilisation des vecteurs               ✅
 ```
-
-### Autorité et optionnalité
-
-```text
-facts structurés MINOS   = autoritatifs
-semantic vector score    = HEURISTIC
-hybrid ranking           = sélection dérivée
-NEXUS global ranking     = responsabilité NEXUS
-```
-
-`MinosApplication.open(...)` reste utilisable sans embeddings. L'activation native du provider de référence est explicite :
-
-```text
-MINOS_SEMANTIC_PROVIDER=local-hash
-```
-
-Lorsque le provider est activé, `minos index` réaligne l'index sémantique après la promotion structurée. Une panne sémantique n'invalide pas un snapshot structuré réussi.
-
-### Surfaces M20
-
-- API Java : `SemanticCodeIntelligenceApi` v1 additive ;
-- MCP : **23 tools read-only** au total ;
-- nouveaux tools :
-  - `minos_semantic_index_status` ;
-  - `minos_semantic_search` ;
-  - `minos_hybrid_search` ;
-  - `minos_hybrid_context` ;
-- NEXUS : contrat de signaux sémantiques v2 sans transfert du ranking global, de la sélection finale ni du budget multi-source.
-
-### Qualification M20
-
-Porte reproductible :
-
-```text
-scripts/m20/run-final.ps1
-```
-
-Qualification Windows exact-head :
-
-```text
-Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
-M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
-```
-
-Preuves :
-
-- product facts : PASS ;
-- reactor Maven Java 24 : **13/13 modules SUCCESS** ;
-- `minos-application` : **116 tests**, 0 failure/error/skipped ;
-- `minos-api` : **12 tests**, 0 failure/error/skipped ;
-- `minos-mcp` : **6 tests**, 0 failure/error/skipped ;
-- agrégateur : **50 tests**, 0 failure/error/skipped ;
-- shaded JAR smoke IT : **1/1 PASS** ;
-- JaCoCo : tous les gates ciblés PASS ;
-- exact HEAD et worktree propre : PASS.
-
-PR #72 mergée via `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`. Issue #71 fermée comme `completed`.
-
-## M19 — Advanced Code Intelligence
-
-M19 fournit un `ProgramGraph` provider-independent et capability-honest, call graph v2, CFG, data-flow/def-use, propagation interprocédurale bornée, CPG, Impact v2 et primitives de sécurité.
-
-Qualification :
-
-```text
-Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
-M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
-```
-
-PR #70 mergée via `3630ebd0f229e1bc028e92444bfa34c3e7609596`. Issue #69 fermée comme `completed`.
-
-## M18 — MINOS for IntelliJ
-
-M18 livre un plugin IntelliJ autonome Java 21 consommant MINOS Java 24 par protocole local JSON `minos-ide` v1, sans réimplémenter l'intelligence métier.
-
-Qualification :
-
-```text
-Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
-M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
-```
-
-PR #68 mergée via `faa51f63c5967d874a7a6685b6b513b83bb736b4`. Issue #67 fermée comme `completed`.
-
-## M17 — Provider & Discovery Platform
-
-M17 transforme discovery et providers en plateforme d'extensions explicites : SPI discovery/provider, profils de capacité exhaustifs, Gradle, workspaces npm/pnpm/yarn, Kotlin/Maven, Python/scip-python et conformance kit.
-
-## M16 — Scalabilité et performance
-
-M16 impose une campagne reproductible de performance et gouverne le backend par mesures. Le backend retenu reste snapshots fichiers versionnés + vue/indexes reconstruisibles, avec rétention bornée.
-
-## M15 — Industrialisation du Core Engine
-
-M15 fournit le reactor Maven multi-module, `MinosApplication`, le découplage MCP, la résolution projet commune, la persistance décomposée, les caches/indexes reconstruisibles, JaCoCo/CI et les facts documentaires calculables.
-
-## Contrats publics courants
-
-- CLI : stable, codes de sortie `0/1/2`, diagnostics provider et protocole IDE `minos-ide` v1 ;
-- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 + `AdvancedCodeIntelligenceApi` v1 + `SemanticCodeIntelligenceApi` v1 additives ;
-- MCP : STDIO read-only, **23 tools** ;
-- NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
-- IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
-- installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
-- Docker MCP : mode durci optionnel.
-
-Les valeurs calculables exactes restent dans [`generated/product-facts.md`](generated/product-facts.md).
-
-## Frontières architecturales courantes
-
-- MINOS reste propriétaire des faits de Code Intelligence ;
-- les snapshots persistés restent la source de vérité ;
-- les scores sémantiques restent heuristiques ;
-- NEXUS reste propriétaire du ranking global, de la sélection et du budget de contexte multi-source ;
-- le plugin IntelliJ reste un client externe ;
-- les capacités provider et graphes absents ne sont jamais inventés ;
-- discovery et support runtime restent des faits distincts ;
-- l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
-- Impact v2 conserve M8 comme baseline ;
-- les chemins sécurité sont des chemins statiques observés et bornés ;
-- une relation cross-repository exige une identité exacte et unique ;
-- toute évolution de backend reste gouvernée par des mesures reproductibles M16.
-
-## Suite
-
-**Aucun prochain jalon n'est encore déclaré.**
-
-La prochaine phase doit être cadrée explicitement avec : question produit, périmètre, critères de sortie mesurables, ADR nécessaires et qualification exact-head.
-
-## Documentation
-
-- portail : [`README.md`](README.md) ;
-- roadmap : [`ROADMAP.md`](ROADMAP.md) ;
-- exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
-- exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
-- exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
-- exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
-- exécution M19 : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md) ;
-- exécution M20 : [`roadmap/M20_EXECUTION.md`](roadmap/M20_EXECUTION.md) ;
-- utilisateur : [`user/README.md`](user/README.md) ;
-- développeur : [`developer/README.md`](developer/README.md) ;
-- qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
-- facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
-- décisions : [`adr/README.md`](adr/README.md) ;
-- preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
-
-## Source de vérité
-
-`STATUS.md` décrit l'état livré. `ROADMAP.md` décrit la progression produit. Les ADR décrivent les décisions durables. Les rapports sous `history/milestones/` restent des archives et peuvent contenir des états intermédiaires propres à leur date de validation.

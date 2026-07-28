@@ -212,14 +212,21 @@ $Zip = Join-Path $RepoRoot "target\dist\$DistributionName.zip"
 $ZipChecksum = "$Zip.sha256"
 $Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
 $SetupChecksum = "$Setup.sha256"
+$Sbom = Join-Path $RepoRoot "target\dist\minos-$Version.cdx.json"
+$SbomChecksum = "$Sbom.sha256"
+$Notices = Join-Path $RepoRoot "target\dist\MINOS-$Version-THIRD-PARTY-NOTICES.txt"
+$NoticesChecksum = "$Notices.sha256"
 $RequiredInstalledFiles = @(
     'minos.cmd',
     'minos-mcp.cmd',
     'VERSION',
+    'RELEASE-MANIFEST.json',
     'app\minos.exe',
     'app\runtime\bin\server\jvm.dll',
     'app\runtime\lib\modules',
     'lib\minos.jar',
+    'supply-chain\minos.cdx.json',
+    'supply-chain\THIRD-PARTY-NOTICES.txt',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',
@@ -228,6 +235,8 @@ $RequiredInstalledFiles = @(
 
 $ZipHash = Verify-Sha256 -Artifact $Zip -Checksum $ZipChecksum
 $SetupHash = Verify-Sha256 -Artifact $Setup -Checksum $SetupChecksum
+$SbomHash = Verify-Sha256 -Artifact $Sbom -Checksum $SbomChecksum
+$NoticesHash = Verify-Sha256 -Artifact $Notices -Checksum $NoticesChecksum
 
 # Validate the portable installer actually shipped in the ZIP.
 $ZipSmokeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-release-zip-smoke-" + [Guid]::NewGuid())
@@ -359,6 +368,10 @@ if ($ValidateOnly) {
     Write-Host "Setup SHA-256 : $SetupHash"
     Write-Host "ZIP           : $Zip"
     Write-Host "ZIP SHA-256   : $ZipHash"
+    Write-Host "SBOM          : $Sbom"
+    Write-Host "SBOM SHA-256  : $SbomHash"
+    Write-Host "Notices       : $Notices"
+    Write-Host "Notices SHA   : $NoticesHash"
     return
 }
 
@@ -396,6 +409,10 @@ $ReleaseArguments = @(
     $SetupChecksum,
     $Zip,
     $ZipChecksum,
+    $Sbom,
+    $SbomChecksum,
+    $Notices,
+    $NoticesChecksum,
     '--repo', $Repository,
     '--target', $TargetCommit,
     '--title', "MINOS $Version",
@@ -417,3 +434,7 @@ Write-Host "Setup         : $Setup"
 Write-Host "Setup SHA-256 : $SetupHash"
 Write-Host "ZIP           : $Zip"
 Write-Host "ZIP SHA-256   : $ZipHash"
+Write-Host "SBOM          : $Sbom"
+Write-Host "SBOM SHA-256  : $SbomHash"
+Write-Host "Notices       : $Notices"
+Write-Host "Notices SHA   : $NoticesHash"

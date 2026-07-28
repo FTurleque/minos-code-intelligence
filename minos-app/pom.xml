@@ -84,17 +84,6 @@
         <directory>${maven.multiModuleProjectDirectory}/target</directory>
 
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <includes>
-                        <include>com/minos/cli/MinosLauncher.java</include>
-                        <include>com/minos/integration/nexus/NexusExportBridgeMain.java</include>
-                    </includes>
-                </configuration>
-            </plugin>
-
             <!-- Preserve the historical repository root for fixture-relative tests. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -7,11 +7,17 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.PriorityQueue;
 
 /** Bounded semantic retrieval over the active, snapshot-aligned vector index. */
 public final class SemanticSearchService {
 
     public static final int MAX_RESULTS = 1_000;
+
+    private static final Comparator<SearchHit> BEST_FIRST = Comparator
+            .comparingDouble(SearchHit::score).reversed()
+            .thenComparing(hit -> hit.document().stableKey());
+    private static final Comparator<SearchHit> WORST_FIRST = BEST_FIRST.reversed();
 
     private final SemanticIndexService indexService;
 
@@ -35,18 +41,21 @@ public final class SemanticSearchService {
             throw new IllegalStateException("embedding provider returned unexpected query dimensions");
         }
         var index = indexService.activeIndex(projectReference).orElseThrow();
-        List<SearchHit> hits = index.documents().stream()
-                .map(value -> new SearchHit(
-                        value.document(),
-                        cosine(queryVector, value.vector()),
-                        InformationNature.HEURISTIC,
-                        provider.id(),
-                        provider.modelId()))
-                .filter(hit -> hit.score() >= request.minimumScore())
-                .sorted(Comparator.comparingDouble(SearchHit::score).reversed()
-                        .thenComparing(hit -> hit.document().stableKey()))
-                .limit(request.limit())
-                .toList();
+        PriorityQueue<SearchHit> top = new PriorityQueue<>(request.limit(), WORST_FIRST);
+        for (SemanticVectorStore.IndexedDocument value : index.documents()) {
+            double score = cosine(queryVector, value.vector());
+            if (score < request.minimumScore()) continue;
+            SearchHit candidate = new SearchHit(
+                    value.document(), score, InformationNature.HEURISTIC, provider.id(), provider.modelId());
+            if (top.size() < request.limit()) {
+                top.add(candidate);
+            } else if (BEST_FIRST.compare(candidate, top.peek()) < 0) {
+                top.poll();
+                top.add(candidate);
+            }
+        }
+        List<SearchHit> hits = new ArrayList<>(top);
+        hits.sort(BEST_FIRST);
         List<String> limitations = new ArrayList<>(status.limitations());
         limitations.add("VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT");
         limitations.add("VECTOR_SEARCH_LINEAR_SCAN");
@@ -56,18 +65,13 @@ public final class SemanticSearchService {
 
     private static double cosine(SemanticVector left, SemanticVector right) {
         if (left.dimensions() != right.dimensions()) throw new IllegalArgumentException("vector dimensions mismatch");
+        double denominator = left.norm() * right.norm();
+        if (denominator == 0.0) return 0.0;
         double dot = 0.0;
-        double leftNorm = 0.0;
-        double rightNorm = 0.0;
         for (int i = 0; i < left.dimensions(); i++) {
-            double a = left.values().get(i);
-            double b = right.values().get(i);
-            dot += a * b;
-            leftNorm += a * a;
-            rightNorm += b * b;
+            dot += left.valueAt(i) * right.valueAt(i);
         }
-        if (leftNorm == 0.0 || rightNorm == 0.0) return 0.0;
-        double value = dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+        double value = dot / denominator;
         return Math.max(-1.0, Math.min(1.0, value));
     }
 
