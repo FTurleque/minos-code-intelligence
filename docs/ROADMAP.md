@@ -1,10 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés. M21 — Production Integrity & Surface Convergence est EN COURS. M22→M27 sont planifiés comme trajectoire post-consolidation.**
+Statut : **C0 à M20 terminés, validés et livrés. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 — Advanced Provider Intelligence est EN COURS sur `develop`. M23→M27 restent planifiés.**
 
 L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md) et M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md).
 
 ## Principes
 
@@ -17,7 +17,7 @@ La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](
 - les capacités provider absentes ne sont jamais inventées ;
 - les faits, dérivations et heuristiques restent explicitement distingués ;
 - les facts documentaires calculables sont dérivés du code quand c'est possible ;
-- la consolidation et la dette de production sont fermées avant de promouvoir une nouvelle phase fonctionnelle lourde.
+- les gates locaux structurants d’un jalon doivent être fermés avant la phase fonctionnelle suivante ; une dette CI explicitement gelée reste visible et ne doit jamais être contournée lors de la promotion vers `main`.
 
 ---
 
@@ -241,12 +241,12 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-L'ordre suivant est volontaire : **M21 consolide d'abord le produit livré. Les jalons M22→M27 ne doivent pas servir à contourner une dette M21 non fermée.**
+M21 a fermé ses **gates locaux structurants** avant le démarrage de M22. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer uniquement la promotion finale M21 vers `main`. M22 évolue sur `develop` sans masquer ni modifier cette dette explicite.
 
 ```text
-M21  Production Integrity & Surface Convergence   🚧 EN COURS
+M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
   ↓
-M22  Advanced Provider Intelligence               ⏳ PLANIFIÉ
+M22  Advanced Provider Intelligence               🚧 EN COURS
   ↓
 M23  Semantic Retrieval 2.0                       ⏳ PLANIFIÉ
   ↓
@@ -261,27 +261,33 @@ M27  Team / Hosted Mode                           ⏳ PLANIFIÉ
 
 ## M21 — Production Integrity & Surface Convergence
 
-**EN COURS — consolidation post-M20.**
+**EN COURS ADMINISTRATIF — S1 + S3→S9 VALIDÉS localement ; S2/CI EN PAUSE jusqu’en août 2026.**
 
 Question produit :
 
 > MINOS peut-il devenir un produit continuellement qualifié, cohérent sur toutes ses surfaces et distribuable avec un niveau de confiance production, sans affaiblir ses invariants ?
 
-Axes : CI exploitable, quality gates M19/M20, frontières Maven robustes, documentation single-source-of-truth, supply-chain release, parité IntelliJ M19/M20, providers avancés réellement qualifiés et scalabilité sémantique mesurée.
+Axes locaux validés : quality gates M19/M20, frontières Maven robustes, documentation single-source-of-truth, supply-chain release, parité IntelliJ M19/M20, providers avancés qualifiés et scalabilité sémantique mesurée. Le volet CI/branch-protection reste explicitement différé.
 
 - roadmap : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md)
 - issue : #73
-- branche : `m21-production-integrity`
+- branche de qualification : `m21-production-integrity`
+- intégration locale qualifiée dans `develop` : PR #75 / merge `4222706502c54e10f0bf0400a18360fb99e6208c`
 
 ## M22 — Advanced Provider Intelligence
 
-**PLANIFIÉ — ne démarre pas avant la fermeture des gates structurants M21.**
+**EN COURS sur `m22-advanced-provider-intelligence` depuis `develop`.**
 
 Question cible :
 
 > MINOS peut-il alimenter réellement CFG, def-use, flux interprocéduraux et primitives de sécurité avec des providers qualifiés, sans confondre capacité du moteur et fait effectivement prouvé par un provider ?
 
-Cibles : providers avancés Java en premier, fixtures contrôlées, précision/rappel, provenance complète, capacités exhaustives et fallback explicite. TypeScript/Python suivent uniquement lorsque les indexeurs disponibles permettent une qualification équivalente.
+Cibles : provider avancé Java de référence fondé sur l’AST JDK, fixtures contrôlées, précision/rappel, provenance complète, capabilities exhaustives et fallback explicite. TypeScript/Python suivent uniquement lorsque les indexeurs disponibles permettent une qualification équivalente.
+
+- roadmap : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md)
+- décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md)
+- issue : #76
+- branche : `m22-advanced-provider-intelligence`
 
 ## M23 — Semantic Retrieval 2.0
 
@@ -335,4 +341,4 @@ Cibles : espaces partagés, isolation tenant, politiques de rétention, authenti
 
 ## Règle de promotion post-M20
 
-M22→M27 sont des **directions planifiées**, pas des capacités acquises. Pour être promu en jalon actif, chacun doit disposer d'une roadmap opérationnelle, de critères de sortie mesurables, des ADR nécessaires et d'une qualification reproductible sur un SHA exact.
+M22 est le jalon fonctionnel actif sur `develop`. M23→M27 restent des **directions planifiées**, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables.
