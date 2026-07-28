@@ -1,14 +1,18 @@
 # M22 — Advanced Provider Intelligence — exécution
 
-Statut : **VALIDÉ localement exact-head — 9/9 implémentés ; intégration vers `develop` portée par PR #77.**
+Statut : **TERMINÉ — VALIDÉ exact-head — 9/9 — FUSIONNÉ dans `develop` via PR #77.**
 
-Issue : **#76 — M22 — Advanced Provider Intelligence**.
+Issue : **#76 — M22 — Advanced Provider Intelligence — CLOSED / completed**.
 
 Branche : `m22-advanced-provider-intelligence`.
 
 Base : `develop @ 4222706502c54e10f0bf0400a18360fb99e6208c`.
 
-M21-S2/CI reste en pause jusqu’en août 2026. M22 n’exécute, ne modifie et ne contourne aucun workflow CI.
+Qualified HEAD final : `75d6169be6d46d4e60ca19e781ff61704ca1613c`.
+
+Merge `develop` : `37a3c904fd92c25b343344a26991531c75ebc4b6`.
+
+M21-S2/CI reste en pause jusqu’en août 2026. M22 n’a exécuté, modifié ni contourné aucun workflow CI.
 
 ## Question produit
 
@@ -231,7 +235,7 @@ Le runner vérifie :
 6. parité IntelliJ + Plugin Verifier ;
 7. documentation, HEAD et worktree finaux.
 
-Premier replay final complet réussi le **28 juillet 2026** sur l’implementation tree `af760cfd61f023113b0e2051e237f73522c8aca6` :
+Le premier replay complet a validé l’implementation tree `af760cfd61f023113b0e2051e237f73522c8aca6`. Après la réconciliation documentaire, le **replay de promotion** a validé le HEAD final :
 
 ```text
 M22 ADVANCED PROVIDER CONSISTENCY SUCCESS
@@ -242,11 +246,19 @@ M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
 M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS
 M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
 M22 FINAL ADVANCED PROVIDER INTELLIGENCE VALIDATION SUCCESS
-Validated HEAD: af760cfd61f023113b0e2051e237f73522c8aca6
+Validated HEAD: 75d6169be6d46d4e60ca19e781ff61704ca1613c
 ```
 
 Le runtime Windows qualifié est vérifié depuis le ZIP livré : `app\runtime\lib\modules` doit exister et `app\runtime\release` doit déclarer `jdk.compiler` dans `MODULES`. L’absence de `runtime\bin\java.exe` n’est pas utilisée comme oracle, les commandes natives pouvant être retirées du runtime `jlink` produit par `jpackage`.
 
 ## Promotion
 
-M22 est **fonctionnellement validé**. Toute modification ultérieure, y compris documentaire, invalide le SHA exact précédent jusqu’au replay de `scripts/m22/run-final.ps1` sur le nouveau HEAD. L’intégration s’effectue via la PR #77 dans `develop`. M21-S2 reste indépendant et en pause jusqu’en août 2026 ; aucun travail CI n’est inclus dans la promotion M22.
+M22 a été promu après ce replay exact-head :
+
+```text
+PR #77           MERGED
+Issue #76        CLOSED / completed
+Merge develop    37a3c904fd92c25b343344a26991531c75ebc4b6
+```
+
+M21-S2 reste indépendant et en pause jusqu’en août 2026 ; aucun travail CI n’a été inclus dans la promotion M22.
