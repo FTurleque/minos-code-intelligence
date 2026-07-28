@@ -23,10 +23,10 @@ public final class ProviderPlatformService {
         this.runtimes = Objects.requireNonNull(runtimes, "runtimes");
     }
 
-    /** Default M17 provider platform bound to one already-composed application. */
+    /** Default provider platform bound to one already-composed application. */
     public static ProviderPlatformService defaults(MinosApplication application) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        return new ProviderPlatformService(ScipIndexerCatalog.qualifiedM17Providers(), app.providerRuntimeManager());
+        return new ProviderPlatformService(ScipIndexerCatalog.qualifiedM24Providers(), app.providerRuntimeManager());
     }
 
     public List<ProviderView> listProviders() {
@@ -55,11 +55,19 @@ public final class ProviderPlatformService {
         return new ProviderView(
                 result.providerId(),
                 result.version(),
+                result.qualification(),
                 result.languages(),
                 result.buildSystems(),
                 result.capabilities(),
                 result.scorePercent(),
                 result.limitations(),
+                result.operationalProfileExplicit(),
+                result.qualificationPlatforms(),
+                result.runtimeRequirements(),
+                result.readinessBehavior(),
+                result.installationBehavior(),
+                result.stableIdentityBehavior(),
+                result.provenanceBehavior(),
                 status == null ? "UNMANAGED" : status.state().name(),
                 status == null ? List.of("no runtime manager registered") : status.diagnostics()
         );
@@ -68,21 +76,36 @@ public final class ProviderPlatformService {
     public record ProviderView(
             String id,
             String version,
+            String qualification,
             List<String> languages,
             List<String> buildSystems,
             Map<String, String> capabilities,
             int conformanceScorePercent,
             List<String> limitations,
+            boolean operationalProfileExplicit,
+            List<String> qualificationPlatforms,
+            List<String> runtimeRequirements,
+            String readinessBehavior,
+            String installationBehavior,
+            String stableIdentityBehavior,
+            String provenanceBehavior,
             String runtimeState,
             List<String> runtimeDiagnostics
     ) {
         public ProviderView {
             if (id == null || id.isBlank()) throw new IllegalArgumentException("id must not be blank");
             if (version == null || version.isBlank()) throw new IllegalArgumentException("version must not be blank");
+            if (qualification == null || qualification.isBlank()) throw new IllegalArgumentException("qualification must not be blank");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
             capabilities = Map.copyOf(Objects.requireNonNull(capabilities, "capabilities"));
             limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations"));
+            qualificationPlatforms = List.copyOf(Objects.requireNonNull(qualificationPlatforms, "qualificationPlatforms"));
+            runtimeRequirements = List.copyOf(Objects.requireNonNull(runtimeRequirements, "runtimeRequirements"));
+            if (readinessBehavior == null || readinessBehavior.isBlank()) throw new IllegalArgumentException("readinessBehavior must not be blank");
+            if (installationBehavior == null || installationBehavior.isBlank()) throw new IllegalArgumentException("installationBehavior must not be blank");
+            if (stableIdentityBehavior == null || stableIdentityBehavior.isBlank()) throw new IllegalArgumentException("stableIdentityBehavior must not be blank");
+            if (provenanceBehavior == null || provenanceBehavior.isBlank()) throw new IllegalArgumentException("provenanceBehavior must not be blank");
             if (runtimeState == null || runtimeState.isBlank()) throw new IllegalArgumentException("runtimeState must not be blank");
             runtimeDiagnostics = List.copyOf(Objects.requireNonNull(runtimeDiagnostics, "runtimeDiagnostics"));
         }
