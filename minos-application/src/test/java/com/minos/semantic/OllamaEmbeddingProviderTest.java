@@ -2,9 +2,18 @@ package com.minos.semantic;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +35,56 @@ class OllamaEmbeddingProviderTest {
                 URI.create("https://example.com/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("file:///tmp/embed"), "fixture", 384, Duration.ofSeconds(2)));
+    }
+
+    @Test
+    void callsLoopbackEmbedEndpointAndReturnsValidatedVector() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            Thread responder = Thread.startVirtualThread(() -> {
+                try (Socket socket = server.accept();
+                     BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+                    int contentLength = 0;
+                    String line;
+                    while ((line = reader.readLine()) != null && !line.isEmpty()) {
+                        if (line.toLowerCase().startsWith("content-length:")) {
+                            contentLength = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
+                        }
+                    }
+                    char[] body = new char[contentLength];
+                    int offset = 0;
+                    while (offset < body.length) {
+                        int read = reader.read(body, offset, body.length - offset);
+                        if (read < 0) break;
+                        offset += read;
+                    }
+                    requestBody.set(new String(body, 0, offset));
+                    String vector = IntStream.range(0, 32)
+                            .mapToObj(index -> index == 0 ? "1.0" : "0.0")
+                            .collect(Collectors.joining(","));
+                    byte[] payload = ("{\"model\":\"fixture\",\"embeddings\":[[" + vector + "]]}")
+                            .getBytes(StandardCharsets.UTF_8);
+                    String headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                            + payload.length + "\r\nConnection: close\r\n\r\n";
+                    socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));
+                    socket.getOutputStream().write(payload);
+                    socket.getOutputStream().flush();
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+
+            OllamaEmbeddingProvider provider = new OllamaEmbeddingProvider(
+                    URI.create("http://127.0.0.1:" + server.getLocalPort() + "/api/embed"),
+                    "fixture", 32, Duration.ofSeconds(2));
+            SemanticVector result = provider.embed("query", "find authentication guard");
+            responder.join();
+
+            assertEquals(32, result.dimensions());
+            assertEquals(1.0, result.valueAt(0));
+            assertTrue(requestBody.get().contains("\"model\":\"fixture\""));
+            assertTrue(requestBody.get().contains("find authentication guard"));
+        }
     }
 
     @Test
