@@ -73,7 +73,7 @@ def main() -> int:
         java_provider = read("minos-application/src/main/java/com/minos/program/analysis/JavaSourceProgramGraphProvider.java")
         quality_gate = read("scripts/quality/check-jacoco.py")
 
-        require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés.")
+        require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés sur `main`.")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
         forbid_text("README.md", readme, "C0 à M14 sont terminés et livrés.")
         forbid_text("README.md", readme, "MCP STDIO — 16 tools read-only")
