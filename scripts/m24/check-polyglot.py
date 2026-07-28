@@ -39,6 +39,8 @@ def main() -> int:
         quality_path = "scripts/quality/check-jacoco.py"
         roadmap_path = "docs/roadmap/M24_EXECUTION.md"
         adr_path = "docs/adr/0032-evidence-gated-polyglot-scip-providers.md"
+        windows_prereq_path = "scripts/m24/check-windows-prerequisites.ps1"
+        windows_final_path = "scripts/m24/run-final.ps1"
 
         discovery_model = read(discovery_model_path)
         plugins = read(discovery_plugins_path)
@@ -51,6 +53,8 @@ def main() -> int:
         quality = read(quality_path)
         roadmap = read(roadmap_path)
         adr = read(adr_path)
+        windows_prereq = read(windows_prereq_path)
+        windows_final = read(windows_final_path)
 
         for token in ("C,", "CPP,", "CSHARP,", "GO,", "RUST"):
             require(discovery_model_path, discovery_model, token)
@@ -138,8 +142,24 @@ def main() -> int:
         require(adr_path, adr, "Evidence-gated polyglot SCIP providers")
         require(adr_path, adr, "structured snapshots authoritative")
 
+        # Windows qualification must fail before expensive gates if required toolchains are absent.
+        for token in (
+            "M24 WINDOWS PREREQUISITES SUCCESS",
+            "MINOS_SEMANTIC_PROVIDER",
+            "dotnet.exe",
+            "go.exe",
+            "cargo.exe",
+            "rustc.exe",
+            "rust-analyzer.exe",
+            "2026-07-27",
+            "12c3381",
+        ):
+            require(windows_prereq_path, windows_prereq, token)
+        require(windows_final_path, windows_final, "check-windows-prerequisites.ps1")
+
         # Final runners/docs are part of S8/S9 and must exist before this gate can pass.
         for required in (
+            "scripts/m24/check-windows-prerequisites.ps1",
             "scripts/m24/run-final.ps1",
             "scripts/m24/run-final.sh",
             "docs/user/polyglot-providers.md",
