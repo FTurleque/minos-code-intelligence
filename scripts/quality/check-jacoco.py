@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M23."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M24."""
 
 from __future__ import annotations
 
@@ -104,6 +104,20 @@ SCOPES = {
         "prefixes": ("com/minos/mcp/MinosMcpTools",),
         "line": 0.50,
         "branch": 0.30,
+    },
+    "m24-polyglot-provider-platform": {
+        "prefixes": (
+            "com/minos/orchestration/ProviderConformanceKit",
+            "com/minos/orchestration/ProviderOperationalProfile",
+            "com/minos/adapter/scip/ScipIndexerCatalog",
+            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
+            "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
+        ),
+        "line": 0.30,
+        "branch": 0.15,
     },
 }
 
