@@ -103,6 +103,19 @@ Autres gates :
 
 Les durées de build/rebuild sont reportées mais ne sont pas bloquantes avant la première campagne STANDARD : elles dépendent fortement du CPU et constituent surtout un diagnostic pour une optimisation ciblée.
 
+## Robustesse Windows du harness
+
+Le gate exact-head exécute `clean verify`. Sous Windows, un processus qui conserve un handle sur `target/minos-code-intelligence-*-all.jar` peut empêcher Maven de supprimer le JAR.
+
+S8 impose donc deux protections :
+
+1. `run-s8.ps1` arrête uniquement un ancien processus **M21SemanticScaleProbe** identifiable comme stale, puis teste en accès exclusif tout JAR shaded existant avant Maven ; si un autre processus le verrouille, le runner échoue immédiatement avec PID/commande lorsque Windows permet de l'identifier ;
+2. `run-s8-benchmark.ps1` ne passe jamais le JAR de `target` directement au JVM de benchmark : il crée une **copie temporaire unique hors du dépôt**, exécute le probe avec cette copie comme classpath, puis la détruit en `finally`.
+
+Cette isolation garantit que le benchmark S8 lui-même ne peut pas conserver un handle sur l'artefact Maven racine utilisé par une qualification exacte ultérieure. Elle ne masque pas un processus MINOS externe légitime : un MCP/server ou autre Java qui utilise explicitement le JAR de `target` doit être arrêté avant `clean verify`.
+
+Le JSON de mesure enregistre `machine.benchmark_jar_isolated = true`.
+
 ## Règle de décision
 
 `scripts/m21/check-s8-results.py` produit une décision explicite :
@@ -130,13 +143,14 @@ Aucune dépendance `Lucene`, `HNSW`, `RocksDB`, SQLite JDBC, Qdrant, Milvus ou W
 
 Le runner :
 
-1. rejoue le core M21 ;
-2. vérifie l'absence de backend non ratifié ;
-3. exécute la campagne STANDARD ;
-4. produit `target/m21-s8/standard.json` ;
-5. produit `target/m21-s8/decision.json` ;
-6. applique la décision ;
-7. revérifie documentation, HEAD exact et worktree propre.
+1. vérifie les processus stale S8 et les verrous du JAR Maven ;
+2. rejoue le core M21 ;
+3. vérifie l'absence de backend non ratifié ;
+4. exécute la campagne STANDARD sur une copie temporaire isolée du JAR ;
+5. produit `target/m21-s8/standard.json` ;
+6. produit `target/m21-s8/decision.json` ;
+7. applique la décision ;
+8. revérifie documentation, HEAD exact et worktree propre.
 
 Verdict de fermeture attendu :
 
