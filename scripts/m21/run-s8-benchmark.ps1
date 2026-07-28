@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string] $BenchmarkHome,
     [ValidateSet('SMOKE','STANDARD')][string] $BenchmarkProfile = 'STANDARD',
     [ValidateRange(5,50)][int] $Repetitions = 5,
+    [ValidateRange(5,120)][int] $TimeoutMinutes = 30,
     [Parameter(Mandatory = $true)][string] $OutputJson
 )
 
@@ -19,9 +20,8 @@ $output = [System.IO.Path]::GetFullPath($OutputJson)
 $source = Join-Path $RepoRoot 'scripts\m21\M21SemanticScaleProbe.java'
 $work = Join-Path ([System.IO.Path]::GetDirectoryName($output)) 'process'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
-$stdout = Join-Path $work 'semantic-scale.out.log'
-$stderr = Join-Path $work 'semantic-scale.err.log'
-Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+$progress = Join-Path $work 'semantic-scale.progress.log'
+Remove-Item -LiteralPath $progress -Force -ErrorAction SilentlyContinue
 
 function Quote-Arg([string] $Value) {
     if ($Value -notmatch '[\s"]') { return $Value }
@@ -37,20 +37,26 @@ function Get-JavaVersionLine {
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
+    $versionProcess = New-Object System.Diagnostics.Process
+    $versionProcess.StartInfo = $startInfo
     try {
-        if (-not $process.Start()) { throw 'Unable to start java -version.' }
-        $outTask = $process.StandardOutput.ReadToEndAsync()
-        $errTask = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
-        if ($process.ExitCode -ne 0) { throw 'java -version failed.' }
+        if (-not $versionProcess.Start()) { throw 'Unable to start java -version.' }
+        $outTask = $versionProcess.StandardOutput.ReadToEndAsync()
+        $errTask = $versionProcess.StandardError.ReadToEndAsync()
+        $versionProcess.WaitForExit()
+        if ($versionProcess.ExitCode -ne 0) { throw 'java -version failed.' }
         $lines = @(($errTask.Result + "`n" + $outTask.Result) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         if ($lines.Count -eq 0) { throw 'java -version produced no output.' }
         return $lines[0].Trim()
     } finally {
-        $process.Dispose()
+        $versionProcess.Dispose()
     }
+}
+
+function Get-ProgressTail {
+    param([int] $Lines = 8)
+    if (-not (Test-Path -LiteralPath $progress -PathType Leaf)) { return '<no progress emitted yet>' }
+    return ((Get-Content -LiteralPath $progress -Tail $Lines -ErrorAction SilentlyContinue) -join "`n")
 }
 
 # Never execute the benchmark directly against Maven's root target artifact on Windows.
@@ -69,35 +75,55 @@ try {
     $startInfo.FileName = $java.JavaExecutable
     $startInfo.Arguments = $encoded
     $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $false
+    # Inherit the console: probe progress and Java failures must be visible immediately on Windows PowerShell 5.1.
+    $startInfo.RedirectStandardOutput = $false
+    $startInfo.RedirectStandardError = $false
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $startInfo
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     if (-not $process.Start()) { throw 'Unable to start M21-S8 semantic scale probe.' }
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    Write-Host "M21-S8 benchmark PID=$($process.Id) profile=$BenchmarkProfile repetitions=$Repetitions watchdog=${TimeoutMinutes}m" -ForegroundColor Cyan
     [long] $peakRss = 0
-    while (-not $process.HasExited) {
+    [double] $lastHeartbeatSeconds = -15.0
+
+    while (-not $process.WaitForExit(1000)) {
         try {
             $sample = Get-Process -Id $process.Id -ErrorAction Stop
             if ($sample.WorkingSet64 -gt $peakRss) { $peakRss = $sample.WorkingSet64 }
         } catch { }
-        Start-Sleep -Milliseconds 100
-        $process.Refresh()
+
+        if (($watch.Elapsed.TotalSeconds - $lastHeartbeatSeconds) -ge 15.0) {
+            $lastHeartbeatSeconds = $watch.Elapsed.TotalSeconds
+            $currentStage = if (Test-Path -LiteralPath $progress -PathType Leaf) {
+                (Get-Content -LiteralPath $progress -Tail 1 -ErrorAction SilentlyContinue)
+            } else {
+                '<starting JVM/source launcher>'
+            }
+            Write-Host "M21-S8 heartbeat elapsed=$([Math]::Round($watch.Elapsed.TotalSeconds,1))s rss=$peakRss stage=$currentStage"
+        }
+
+        if ($watch.Elapsed.TotalMinutes -ge $TimeoutMinutes) {
+            try { Stop-Process -Id $process.Id -Force -ErrorAction Stop } catch { }
+            try { $null = $process.WaitForExit(5000) } catch { }
+            throw "M21-S8 benchmark watchdog timeout after $TimeoutMinutes minute(s). Last progress:`n$(Get-ProgressTail)"
+        }
     }
+
     $process.WaitForExit()
     $watch.Stop()
-    $stdoutText = $stdoutTask.Result
-    $stderrText = $stderrTask.Result
+    try {
+        $sample = Get-Process -Id $process.Id -ErrorAction Stop
+        if ($sample.WorkingSet64 -gt $peakRss) { $peakRss = $sample.WorkingSet64 }
+    } catch { }
     $exitCode = $process.ExitCode
-    [System.IO.File]::WriteAllText($stdout, $stdoutText)
-    [System.IO.File]::WriteAllText($stderr, $stderrText)
     if ($exitCode -ne 0) {
-        throw "M21-S8 semantic scale probe failed (exit=$exitCode).`n$stderrText`n$stdoutText"
+        throw "M21-S8 semantic scale probe failed (exit=$exitCode). Last progress:`n$(Get-ProgressTail)"
     }
-    if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw "M21-S8 probe did not produce $output" }
+    if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
+        throw "M21-S8 probe exited successfully but did not produce $output. Last progress:`n$(Get-ProgressTail)"
+    }
 
     $data = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
     $data | Add-Member -NotePropertyName process_rss_bytes -NotePropertyValue $peakRss -Force
@@ -120,18 +146,20 @@ try {
         profile = $BenchmarkProfile
         repetitions = $Repetitions
         benchmark_jar_isolated = $true
+        benchmark_watchdog_minutes = $TimeoutMinutes
     }
     $data | Add-Member -NotePropertyName machine -NotePropertyValue $machine -Force
     $data | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $output -Encoding UTF8
 
     Write-Host 'M21 S8 SEMANTIC SCALE BENCHMARK SUCCESS' -ForegroundColor Green
-    Get-Content -LiteralPath $stdout | ForEach-Object { Write-Host $_ }
     Write-Host "process-rss=$peakRss elapsed=$([Math]::Round($watch.Elapsed.TotalMilliseconds,4))ms"
 }
 finally {
+    # Windows PowerShell 5.1 runs on .NET Framework where Process.Kill(Boolean) is not a reliable API.
+    # Stop-Process is the compatible cleanup path and prevents an interrupted S8 run from leaving java.exe behind.
     if ($null -ne $process) {
         try {
-            if (-not $process.HasExited) { $process.Kill($true) }
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
         } catch { }
         try { $process.Dispose() } catch { }
     }
