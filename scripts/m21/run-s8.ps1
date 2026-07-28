@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string] $ExpectedHead = '',
-    [ValidateRange(5,50)][int] $Repetitions = 5
+    [ValidateRange(5,50)][int] $Repetitions = 5,
+    [ValidateRange(5,120)][int] $BenchmarkTimeoutMinutes = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -136,9 +137,13 @@ try {
     $result = Join-Path $outDir 'standard.json'
     $benchmarkHome = Join-Path $outDir 'home'
     $jar = Get-ShadedJar
-    & (Join-Path $RepoRoot 'scripts\m21\run-s8-benchmark.ps1') `
-        -JarPath $jar -BenchmarkHome $benchmarkHome -BenchmarkProfile STANDARD -Repetitions $Repetitions -OutputJson $result
-    if ($LASTEXITCODE -ne 0) { throw "M21-S8 STANDARD benchmark failed (exit=$LASTEXITCODE)" }
+    try {
+        & (Join-Path $RepoRoot 'scripts\m21\run-s8-benchmark.ps1') `
+            -JarPath $jar -BenchmarkHome $benchmarkHome -BenchmarkProfile STANDARD `
+            -Repetitions $Repetitions -TimeoutMinutes $BenchmarkTimeoutMinutes -OutputJson $result
+    } catch {
+        throw "M21-S8 STANDARD benchmark failed: $($_.Exception.Message)"
+    }
 
     Write-Host '[4/6] Applying semantic scale decision gate...'
     $python = Resolve-Python
