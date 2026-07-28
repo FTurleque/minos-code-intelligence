@@ -2,7 +2,7 @@
 
 Dernière mise à jour documentaire : **28 juillet 2026**
 
-Ce fichier distingue l'état **livré sur `main`** du jalon de consolidation actuellement en cours. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
+Ce fichier distingue l'état **livré sur `main`**, les gates de production encore ouverts sur M21 et le jalon fonctionnel actif sur `develop`. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
@@ -29,10 +29,11 @@ M17 — Provider & Discovery Platform  TERMINÉ, VALIDÉ ET LIVRÉ
 M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
 M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
-M21 — Production Integrity           EN COURS — S2 en pause ; S1/S3→S9 localement validés
+M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
+M22 — Advanced Provider Intelligence EN COURS sur develop — Java first
 ```
 
-**État produit livré : C0→M20.** M21 reste sur `m21-production-integrity` et n'est pas encore livré sur `main` tant que S2 n'a pas repris.
+**État produit livré sur `main` : C0→M20.** Le tree M21 localement qualifié a été intégré dans `develop` par PR #75 afin de servir de base à M22. M21 reste administrativement ouvert tant que S2/CI n'a pas repris en août 2026.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -45,10 +46,18 @@ S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c3
 S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
 S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
 S8   semantic scale qualification                     VALIDÉ — a668f0a09da08515396903fbe887ed9e70125201
-S9   final production integrity gate                  VALIDÉ — 0ec50bedc8c49e45347309f406830089e8e84941
+S9   final production integrity gate                  VALIDÉ exact-head — 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
 ```
 
 Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+
+Le tree qualifié M21 a été intégré dans `develop` via PR #75 :
+
+```text
+M21 qualified tree : 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
+develop merge      : 4222706502c54e10f0bf0400a18360fb99e6208c
+file diff           : 0
+```
 
 ### S1 — Governance
 
@@ -62,7 +71,7 @@ Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
 
 ### S3 — Quality gates
 
-Onze scopes JaCoCo sont bloquants : cinq scopes historiques et six scopes M19/M20.
+Les onze scopes JaCoCo M21 étaient bloquants. M22 ajoute un douzième scope `java-advanced-provider` sans abaisser les seuils existants.
 
 ```text
 program-graph-analysis
@@ -102,7 +111,7 @@ La signature Authenticode reste explicite et optionnelle tant qu'aucun certifica
 
 ### S6 — IntelliJ parity
 
-Le plugin reste un client externe Java 21 du moteur Java 24 via `minos-ide` v1. Il ne réimplémente aucune intelligence M19/M20.
+Le plugin reste un client externe Java 21 du moteur Java 24 via `minos-ide` v1. Il ne réimplémente aucune intelligence M19/M20/M22.
 
 ```text
 program-graph
@@ -188,30 +197,67 @@ Aucun Lucene/HNSW/vector database n'a été nécessaire pour satisfaire le STAND
 
 ### S9 — Final production integrity gate
 
-S9 a été **VALIDÉ localement le 28 juillet 2026** sur `0ec50bedc8c49e45347309f406830089e8e84941`.
-
-Le gate `scripts/m21/run-s9.ps1` a rejoué sur le même HEAD exact :
-
-1. S7 advanced provider ;
-2. S8 STANDARD avec décision retenue `PASS / KEEP_CURRENT_M20_BACKEND` ;
-3. S5 supply-chain, SBOM, ZIP/setup Windows, checksums et install/uninstall ;
-4. S6 IntelliJ parity, tests, build plugin et Plugin Verifier sur deux builds IU 261 ;
-5. documentation courante ;
-6. HEAD exact et worktree propre.
-
-Preuves de fermeture :
+Le replay final exact-head S9 a été **VALIDÉ localement le 28 juillet 2026** sur `60c1aba43e2d005991152cc4f3fe0b0dadef1c2d` avec HEAD inchangé et worktree tracked propre.
 
 ```text
 M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
 M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
 M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
-M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
 M21-S9 retained S8 decision: PASS / KEEP_CURRENT_M20_BACKEND
 M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
-Validated HEAD: 0ec50bedc8c49e45347309f406830089e8e84941
+Validated HEAD: 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
 ```
 
 S2 reste explicitement hors de S9 jusqu'en août 2026 : aucun déclenchement CI manuel et aucune modification de workflow. Le jalon M21 reste donc ouvert tant que S2 n'a pas repris.
+
+## M22 — Advanced Provider Intelligence
+
+Statut : **EN COURS sur `m22-advanced-provider-intelligence`**, base `develop @ 4222706502c54e10f0bf0400a18360fb99e6208c`.
+
+Issue : **#76**. Roadmap opérationnelle : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md). Décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md).
+
+M22 ajoute un provider Java local de référence `minos-java-source-v1`, basé sur l'API AST du compilateur JDK et composé avec les providers M19/M21 existants.
+
+```text
+S1  roadmap + provider contract                       IMPLÉMENTÉ — qualification finale en attente
+S2  Java discovery + source confinement               IMPLÉMENTÉ — qualification finale en attente
+S3  Java CFG                                          IMPLÉMENTÉ — qualification finale en attente
+S4  Java local def-use                                IMPLÉMENTÉ — qualification finale en attente
+S5  Java interprocedural argument/return              IMPLÉMENTÉ — qualification finale en attente
+S6  Java security source/sink/sanitizer               IMPLÉMENTÉ — qualification finale en attente
+S7  capability/provenance/fallback hardening          IMPLÉMENTÉ — qualification finale en attente
+S8  controlled precision/recall ground truth          IMPLÉMENTÉ — qualification finale en attente
+S9  public surfaces + exact-head final gate           IMPLÉMENTÉ — qualification finale en attente
+```
+
+Contrat principal :
+
+- fichiers Java provenant uniquement du snapshot actif ;
+- chemins confinés et analyse projet fail-closed ;
+- AST sans prétendre une attribution de types/classpath complète ;
+- CFG/def-use/interproc/security uniquement lorsque les facts correspondants sont produits ;
+- arêtes avancées `DERIVED` avec confiance, preuve et provenance ;
+- security taxonomy explicitement opt-in ;
+- fixtures indépendantes avec gate `precision=1.0 recall=1.0` ;
+- runtime Windows obligé d'embarquer `jdk.compiler` ;
+- TypeScript/Python non promus par M22 sans qualification équivalente.
+
+Guide : [`developer/java-advanced-provider.md`](developer/java-advanced-provider.md).
+
+Runner final :
+
+```powershell
+.\scripts\m22\run-final.ps1 -ExpectedHead <sha>
+```
+
+Verdict attendu :
+
+```text
+M22 ADVANCED PROVIDER CONSISTENCY SUCCESS
+M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS
+M22 FINAL ADVANCED PROVIDER INTELLIGENCE VALIDATION SUCCESS
+Validated HEAD: <sha>
+```
 
 ## M20 — Semantic & Hybrid Code Intelligence
 
