@@ -38,6 +38,58 @@ function Get-ShadedJar {
     return $jar.FullName
 }
 
+function Get-ProcessesReferencingPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+    $needle = [System.IO.Path]::GetFullPath($Path).ToLowerInvariant()
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $null -ne $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle)
+        } | Select-Object ProcessId, Name, CommandLine)
+    } catch {
+        return @()
+    }
+}
+
+function Stop-StaleS8BenchmarkProcesses {
+    try {
+        $repoNeedle = $RepoRoot.ToLowerInvariant()
+        $stale = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $null -ne $_.CommandLine `
+                -and $_.CommandLine.ToLowerInvariant().Contains('m21semanticscaleprobe.java') `
+                -and $_.CommandLine.ToLowerInvariant().Contains($repoNeedle)
+        })
+        foreach ($process in $stale) {
+            Write-Host "Stopping stale M21-S8 benchmark process PID=$($process.ProcessId) ($($process.Name))..." -ForegroundColor Yellow
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+        }
+        if ($stale.Count -gt 0) { Start-Sleep -Milliseconds 500 }
+    } catch {
+        Write-Warning "Unable to inspect/stop stale M21-S8 benchmark processes: $($_.Exception.Message)"
+    }
+}
+
+function Assert-TargetArtifactsUnlocked {
+    $target = Join-Path $RepoRoot 'target'
+    if (-not (Test-Path -LiteralPath $target -PathType Container)) { return }
+    $artifacts = @(Get-ChildItem -LiteralPath $target -File -Filter 'minos-code-intelligence-*-all.jar' -ErrorAction SilentlyContinue)
+    foreach ($artifact in $artifacts) {
+        $stream = $null
+        try {
+            $stream = [System.IO.File]::Open($artifact.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        } catch [System.IO.IOException] {
+            $holders = @(Get-ProcessesReferencingPath -Path $artifact.FullName)
+            $detail = if ($holders.Count -gt 0) {
+                ($holders | ForEach-Object { "PID=$($_.ProcessId) name=$($_.Name) command=$($_.CommandLine)" }) -join "`n"
+            } else {
+                'No owning process could be identified from Win32_Process; an IDE, antivirus/indexer or another external handle may own the file.'
+            }
+            throw "M21-S8 preflight: Maven target artifact is locked: $($artifact.FullName)`n$detail"
+        } finally {
+            if ($null -ne $stream) { $stream.Dispose() }
+        }
+    }
+}
+
 function Assert-NoUnratifiedSemanticBackend {
     $poms = Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Filter 'pom.xml' |
         Where-Object { $_.FullName -notmatch '[\\/]target[\\/]' }
@@ -62,6 +114,10 @@ try {
         throw "M21-S8 exact-head mismatch: expected=$ExpectedHead actual=$head"
     }
     Write-Host "HEAD: $head"
+
+    Write-Host '[preflight] Checking stale benchmark processes and Maven target locks...'
+    Stop-StaleS8BenchmarkProcesses
+    Assert-TargetArtifactsUnlocked
 
     Write-Host '[1/6] Replaying M21 local/core qualification...'
     & (Join-Path $RepoRoot 'scripts\m21\run-local.ps1') -ExpectedHead $head
