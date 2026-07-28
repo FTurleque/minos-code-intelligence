@@ -43,11 +43,11 @@ assert_java24() {
 
 run_with_semantic_disabled() {
   env \
-    MINOS_SEMANTIC_PROVIDER=disabled \
     -u MINOS_SEMANTIC_MODEL \
     -u MINOS_SEMANTIC_DIMENSIONS \
     -u MINOS_SEMANTIC_ENDPOINT \
     -u MINOS_SEMANTIC_TIMEOUT_SECONDS \
+    MINOS_SEMANTIC_PROVIDER=disabled \
     "$@"
 }
 
