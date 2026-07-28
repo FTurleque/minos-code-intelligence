@@ -2,8 +2,9 @@
 """Cross-platform real-provider evaluator for M24.
 
 The evaluator never promotes a provider. It exercises every provider that can be
-made READY on the current host, and requires e2e success when the provider's
-operational profile already claims the current qualification platform.
+made READY on the current host. Callers can require explicit provider e2e PASS
+with --require-e2e; unsupported Windows hosts may explicitly record scip-dotnet
+as BLOCKED/NOT_RUN instead of requiring an unsupported .NET SDK installation.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ CASES = (
     ProviderCase("go", "scip-go", "0.2.7", "fixtures/m24/go", "Greeter", True),
     ProviderCase("rust", "rust-analyzer-scip", "0.3.2989", "fixtures/m24/rust", "Greeter", False),
 )
+PROVIDER_IDS = {case.provider_id for case in CASES}
 
 
 def qualification_platform() -> str:
@@ -52,6 +54,33 @@ def qualification_platform() -> str:
     if system == "darwin" and machine in {"arm64", "aarch64"}:
         return "MACOS_ARM64"
     return f"UNQUALIFIED_{system.upper()}_{machine.upper()}"
+
+
+def windows_dotnet10_supported() -> tuple[bool, str]:
+    """Return whether the current Windows host is in Microsoft's .NET 10 support matrix."""
+    if platform.system().lower() != "windows":
+        return True, "non-Windows host"
+    try:
+        import winreg  # type: ignore[attr-defined]
+
+        path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
+            product = str(winreg.QueryValueEx(key, "ProductName")[0])
+            edition = str(winreg.QueryValueEx(key, "EditionID")[0])
+            display = str(winreg.QueryValueEx(key, "DisplayVersion")[0])
+            build = int(str(winreg.QueryValueEx(key, "CurrentBuild")[0]))
+    except Exception as exc:
+        return False, f"unable to prove .NET 10 Windows support from registry: {exc}"
+
+    # Current .NET 10 support includes Windows 11 and selected still-supported
+    # Windows 10 Enterprise/IoT/LTSC releases. Windows 10 Pro 22H2 (19045) is
+    # intentionally excluded and must not be used as an M24 scip-dotnet proof.
+    if build >= 22000:
+        return True, f"{product}/{edition}/{display}/build {build}"
+    enterprise_like = any(token in edition.lower() for token in ("enterprise", "iot"))
+    supported_windows10_build = build in {19044, 17763, 14393}
+    supported = enterprise_like and supported_windows10_build
+    return supported, f"{product}/{edition}/{display}/build {build}"
 
 
 def env_for(home: Path) -> dict[str, str]:
@@ -134,7 +163,33 @@ def symbol_snapshot(env: dict[str, str], project_name: str, symbol_name: str, pr
     return symbol
 
 
+def unsupported_dotnet_windows_result(case: ProviderCase, platform_id: str) -> dict[str, object] | None:
+    if case.provider_id != "scip-dotnet" or platform_id != "WINDOWS_X64":
+        return None
+    supported, host = windows_dotnet10_supported()
+    if supported:
+        return None
+    message = {
+        "provider": case.provider_id,
+        "version": case.version,
+        "platform": platform_id,
+        "state": "BLOCKED",
+        "claimedPlatform": False,
+        "e2e": "NOT_RUN",
+        "diagnostics": [
+            f".NET 10 is not supported on this Windows host ({host}); M24 does not require or install an unsupported SDK",
+            "scip-dotnet remains EXPERIMENTAL and requires Linux or a supported Windows host for e2e proof",
+        ],
+    }
+    print("M24 PROVIDER EVALUATION: " + json.dumps(message, sort_keys=True), flush=True)
+    return message
+
+
 def evaluate_case(case: ProviderCase, platform_id: str, base_home: Path) -> dict[str, object]:
+    unsupported = unsupported_dotnet_windows_result(case, platform_id)
+    if unsupported is not None:
+        return unsupported
+
     home = base_home / case.key
     home.mkdir(parents=True, exist_ok=True)
     env = env_for(home)
@@ -245,23 +300,53 @@ def evaluate_case(case: ProviderCase, platform_id: str, base_home: Path) -> dict
         return message
 
 
+def parse_required(raw: str) -> set[str]:
+    required = {value.strip() for value in raw.split(",") if value.strip()}
+    unknown = required - PROVIDER_IDS
+    if unknown:
+        raise RuntimeError(f"unknown provider ids in --require-e2e: {', '.join(sorted(unknown))}")
+    return required
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="target/m24/provider-evaluation.json")
+    parser.add_argument(
+        "--require-e2e",
+        default="",
+        help="comma-separated provider ids that must finish with e2e=PASS on this host",
+    )
     args = parser.parse_args()
     try:
         if not JAR.is_file():
             raise RuntimeError(f"fat JAR not found: {JAR}; run Maven verify first")
+        required = parse_required(args.require_e2e)
         platform_id = qualification_platform()
         with tempfile.TemporaryDirectory(prefix="minos-m24-home-") as raw_home:
             base_home = Path(raw_home)
             results = [evaluate_case(case, platform_id, base_home) for case in CASES]
+
+        by_provider = {str(result.get("provider")): result for result in results}
+        failures = [
+            provider_id
+            for provider_id in sorted(required)
+            if by_provider.get(provider_id, {}).get("e2e") != "PASS"
+        ]
+        if failures:
+            details = "; ".join(
+                f"{provider_id}={by_provider.get(provider_id, {}).get('e2e', 'MISSING')}/"
+                f"{by_provider.get(provider_id, {}).get('state', 'MISSING')}"
+                for provider_id in failures
+            )
+            raise RuntimeError(f"required provider e2e did not pass: {details}")
+
         output = ROOT / args.output
         output.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"platform": platform_id, "providers": results}
+        payload = {"platform": platform_id, "requiredE2E": sorted(required), "providers": results}
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print("M24 PROVIDER END-TO-END EVALUATION SUCCESS")
         print(f"Platform: {platform_id}")
+        print(f"Required E2E: {','.join(sorted(required)) if required else '<none>'}")
         print(f"Evidence: {output}")
         return 0
     except Exception as exc:
