@@ -11,6 +11,8 @@ import java.lang.management.MemoryType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.*;
 
 /** Deterministic M21-S8 semantic/hybrid scale probe derived from M16 STANDARD cardinalities. */
@@ -27,117 +29,161 @@ public final class M21SemanticScaleProbe {
         if (repetitions < 5 || repetitions > 50) throw new IllegalArgumentException("repetitions must be between 5 and 50");
         Path output = Path.of(args[3]).toAbsolutePath().normalize();
         Files.createDirectories(output.getParent());
-        deleteRecursively(home);
-        Files.createDirectories(home);
+        Path progress = output.getParent().resolve("process").resolve("semantic-scale.progress.log");
+        Files.createDirectories(progress.getParent());
+        Files.deleteIfExists(progress);
 
-        resetHeapPeaks();
-        MinosApplication app = MinosApplication.builder(home).embeddingProvider(new LocalHashEmbeddingProvider()).build();
-        Path projectRoot = home.resolve("m21-s8-project");
-        materialize(projectRoot, profile);
-        RegisteredProject project = app.projectRegistry().registerProject(projectRoot, "m21-s8-scale");
-        Dataset initialDataset = generate(project.id(), profile);
-        FileSymbolSnapshotStore snapshots = app.snapshotStore();
+        try {
+            stage(progress, "START profile=" + profile.name() + " repetitions=" + repetitions + " expectedDocuments=" + expectedDocuments(profile));
+            deleteRecursively(home);
+            Files.createDirectories(home);
 
-        long publishStarted = System.nanoTime();
-        snapshots.publish(project.id(), snapshotId(profile, 1), initialDataset.symbols(), initialDataset.occurrences(), initialDataset.relationships());
-        double initialPublishMs = elapsedMs(publishStarted);
-        forceGc();
+            resetHeapPeaks();
+            MinosApplication app = MinosApplication.builder(home).embeddingProvider(new LocalHashEmbeddingProvider()).build();
+            Path projectRoot = home.resolve("m21-s8-project");
 
-        long initialStarted = System.nanoTime();
-        SemanticIndexService.UpdateReport initial = app.semanticIndexService().synchronize(project.id());
-        double initialBuildMs = elapsedMs(initialStarted);
-        require(initial.state() == SemanticIndexService.State.READY, "initial semantic index must be READY");
-        require(initial.documentCount() == expectedDocuments(profile), "unexpected initial semantic document count: " + initial.documentCount());
-        require(initial.embeddedCount() == initial.documentCount() && initial.reused() == 0, "initial build must embed every document exactly once");
+            stage(progress, "MATERIALIZE start files=" + profile.files());
+            materialize(projectRoot, profile);
+            stage(progress, "MATERIALIZE done");
 
-        mutateFirstPhysicalSymbol(projectRoot);
-        Dataset changedDataset = changeFirstSymbol(initialDataset);
-        long changedPublishStarted = System.nanoTime();
-        snapshots.publish(project.id(), snapshotId(profile, 2), changedDataset.symbols(), changedDataset.occurrences(), changedDataset.relationships());
-        double changedPublishMs = elapsedMs(changedPublishStarted);
-        initialDataset = null;
-        changedDataset = null;
-        forceGc();
+            RegisteredProject project = app.projectRegistry().registerProject(projectRoot, "m21-s8-scale");
+            stage(progress, "DATASET generate start symbols=" + profile.symbols() + " occurrences=" + profile.occurrences() + " relationships=" + profile.relationships());
+            Dataset initialDataset = generate(project.id(), profile);
+            stage(progress, "DATASET generate done");
+            FileSymbolSnapshotStore snapshots = app.snapshotStore();
 
-        long incrementalStarted = System.nanoTime();
-        SemanticIndexService.UpdateReport incremental = app.semanticIndexService().synchronize(project.id());
-        double incrementalMs = elapsedMs(incrementalStarted);
-        require(incremental.state() == SemanticIndexService.State.READY, "incremental semantic index must be READY");
-        require(incremental.documentCount() == expectedDocuments(profile), "unexpected incremental semantic document count");
-        require(incremental.embeddedAdded() == 0 && incremental.removed() == 0, "controlled mutation must preserve semantic stable keys");
-        require(incremental.embeddedChanged() == EXPECTED_CHANGED_DOCUMENTS,
-                "single-source mutation must change exactly 3 semantic documents, actual=" + incremental.embeddedChanged());
-        require(incremental.reused() == incremental.documentCount() - EXPECTED_CHANGED_DOCUMENTS,
-                "unexpected semantic reuse count: " + incremental.reused());
+            stage(progress, "SNAPSHOT initial publish start");
+            long publishStarted = System.nanoTime();
+            snapshots.publish(project.id(), snapshotId(profile, 1), initialDataset.symbols(), initialDataset.occurrences(), initialDataset.relationships());
+            double initialPublishMs = elapsedMs(publishStarted);
+            stage(progress, "SNAPSHOT initial publish done elapsedMs=" + round(initialPublishMs));
+            forceGc();
 
-        SemanticIndexService.Status status = app.semanticIndexService().status(project.id());
-        require(status.state() == SemanticIndexService.State.READY, "semantic status must be READY");
-        require(status.documentCount() == expectedDocuments(profile), "semantic status count mismatch");
-        require(status.dimensions() == LocalHashEmbeddingProvider.DEFAULT_DIMENSIONS, "benchmark must use default 384 dimensions");
+            stage(progress, "INDEX initial build start");
+            long initialStarted = System.nanoTime();
+            SemanticIndexService.UpdateReport initial = app.semanticIndexService().synchronize(project.id());
+            double initialBuildMs = elapsedMs(initialStarted);
+            stage(progress, "INDEX initial build done elapsedMs=" + round(initialBuildMs) + " documents=" + initial.documentCount());
+            require(initial.state() == SemanticIndexService.State.READY, "initial semantic index must be READY");
+            require(initial.documentCount() == expectedDocuments(profile), "unexpected initial semantic document count: " + initial.documentCount());
+            require(initial.embeddedCount() == initial.documentCount() && initial.reused() == 0, "initial build must embed every document exactly once");
 
-        String ref = project.id().toString();
-        String query = "SymbolGroup0500";
-        var semanticRequest = new SemanticSearchService.SearchRequest(query, 20, -1.0);
-        var hybridRequest = new HybridSearchService.HybridRequest(query, 20, 0.0);
-        var contextRequest = new HybridContextBuilder.ContextRequest(query, 10, 4_000, 800);
+            stage(progress, "SNAPSHOT controlled mutation start");
+            mutateFirstPhysicalSymbol(projectRoot);
+            Dataset changedDataset = changeFirstSymbol(initialDataset);
+            long changedPublishStarted = System.nanoTime();
+            snapshots.publish(project.id(), snapshotId(profile, 2), changedDataset.symbols(), changedDataset.occurrences(), changedDataset.relationships());
+            double changedPublishMs = elapsedMs(changedPublishStarted);
+            stage(progress, "SNAPSHOT controlled mutation done elapsedMs=" + round(changedPublishMs));
+            initialDataset = null;
+            changedDataset = null;
+            forceGc();
 
-        var semanticProof = app.semanticSearchService().search(ref, semanticRequest);
-        require(!semanticProof.hits().isEmpty(), "semantic probe must return hits");
-        require(semanticProof.limitations().contains("VECTOR_SEARCH_LINEAR_SCAN"), "current M20 linear scan must remain explicitly observable");
-        var hybridProof = app.hybridSearchService().search(ref, hybridRequest);
-        require(hybridProof.semanticAvailable() && !hybridProof.hits().isEmpty(), "hybrid probe must use semantic signal and return hits");
-        var contextProof = app.hybridContextBuilder().build(ref, contextRequest);
-        require(!contextProof.items().isEmpty() && contextProof.usedTokens() <= contextProof.maxTokens(), "hybrid context must remain bounded and non-empty");
+            stage(progress, "INDEX incremental rebuild start");
+            long incrementalStarted = System.nanoTime();
+            SemanticIndexService.UpdateReport incremental = app.semanticIndexService().synchronize(project.id());
+            double incrementalMs = elapsedMs(incrementalStarted);
+            stage(progress, "INDEX incremental rebuild done elapsedMs=" + round(incrementalMs)
+                    + " added=" + incremental.embeddedAdded() + " changed=" + incremental.embeddedChanged()
+                    + " removed=" + incremental.removed() + " reused=" + incremental.reused());
+            require(incremental.state() == SemanticIndexService.State.READY, "incremental semantic index must be READY");
+            require(incremental.documentCount() == expectedDocuments(profile), "unexpected incremental semantic document count");
+            require(incremental.embeddedAdded() == 0 && incremental.removed() == 0, "controlled mutation must preserve semantic stable keys");
+            require(incremental.embeddedChanged() == EXPECTED_CHANGED_DOCUMENTS,
+                    "single-source mutation must change exactly 3 semantic documents, actual=" + incremental.embeddedChanged());
+            require(incremental.reused() == incremental.documentCount() - EXPECTED_CHANGED_DOCUMENTS,
+                    "unexpected semantic reuse count: " + incremental.reused());
 
-        Map<String, Stats> operations = new LinkedHashMap<>();
-        SemanticVectorStore vectorStore = app.semanticVectorStore();
-        operations.put("vector-store-load", measure(repetitions, () -> vectorStore.load(ref).orElseThrow()));
-        operations.put("semantic-search", measure(repetitions, () -> app.semanticSearchService().search(ref, semanticRequest)));
-        operations.put("hybrid-search", measure(repetitions, () -> app.hybridSearchService().search(ref, hybridRequest)));
-        operations.put("hybrid-context", measure(repetitions, () -> app.hybridContextBuilder().build(ref, contextRequest)));
+            stage(progress, "STATUS load start");
+            SemanticIndexService.Status status = app.semanticIndexService().status(project.id());
+            stage(progress, "STATUS load done state=" + status.state() + " documents=" + status.documentCount());
+            require(status.state() == SemanticIndexService.State.READY, "semantic status must be READY");
+            require(status.documentCount() == expectedDocuments(profile), "semantic status count mismatch");
+            require(status.dimensions() == LocalHashEmbeddingProvider.DEFAULT_DIMENSIONS, "benchmark must use default 384 dimensions");
 
-        forceGc();
-        long retainedHeap = usedHeap();
-        long peakHeap = peakHeap();
-        long maxHeap = Runtime.getRuntime().maxMemory();
-        double reuseRatio = incremental.reused() / (double) incremental.documentCount();
+            String ref = project.id().toString();
+            String query = "SymbolGroup0500";
+            var semanticRequest = new SemanticSearchService.SearchRequest(query, 20, -1.0);
+            var hybridRequest = new HybridSearchService.HybridRequest(query, 20, 0.0);
+            var contextRequest = new HybridContextBuilder.ContextRequest(query, 10, 4_000, 800);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("schema_version", 1);
-        result.put("profile", profile.name());
-        result.put("seed", 16000031);
-        result.put("logical_file_count", profile.files());
-        result.put("symbol_count", profile.symbols());
-        result.put("occurrence_count", profile.occurrences());
-        result.put("relationship_count", profile.relationships());
-        result.put("semantic_document_count", status.documentCount());
-        result.put("vector_dimensions", status.dimensions());
-        result.put("embedding_provider", status.providerId());
-        result.put("embedding_model", status.modelId());
-        result.put("initial_snapshot_publish_ms", round(initialPublishMs));
-        result.put("changed_snapshot_publish_ms", round(changedPublishMs));
-        result.put("initial_index_build_ms", round(initialBuildMs));
-        result.put("incremental_index_rebuild_ms", round(incrementalMs));
-        result.put("incremental_embedded_added", incremental.embeddedAdded());
-        result.put("incremental_embedded_changed", incremental.embeddedChanged());
-        result.put("incremental_removed", incremental.removed());
-        result.put("incremental_reused", incremental.reused());
-        result.put("incremental_reuse_ratio", round(reuseRatio));
-        result.put("semantic_index_disk_size_bytes", status.indexSizeBytes());
-        result.put("peak_heap_bytes", peakHeap);
-        result.put("retained_heap_bytes", retainedHeap);
-        result.put("max_heap_bytes", maxHeap);
-        result.put("linear_vector_scan_observed", true);
-        Map<String, Object> operationJson = new LinkedHashMap<>();
-        operations.forEach((name, stats) -> operationJson.put(name, stats.asMap()));
-        result.put("operations", operationJson);
-        Files.writeString(output, DeterministicJson.render(result) + System.lineSeparator(), StandardCharsets.UTF_8);
+            stage(progress, "PROOF semantic-search start");
+            var semanticProof = app.semanticSearchService().search(ref, semanticRequest);
+            stage(progress, "PROOF semantic-search done hits=" + semanticProof.hits().size());
+            require(!semanticProof.hits().isEmpty(), "semantic probe must return hits");
+            require(semanticProof.limitations().contains("VECTOR_SEARCH_LINEAR_SCAN"), "current M20 linear scan must remain explicitly observable");
 
-        System.out.printf(Locale.ROOT,
-                "M21 S8 semantic scale: profile=%s docs=%d dims=%d initial=%.3fms incremental=%.3fms reuse=%.6f heap=%d/%d disk=%d%n",
-                profile.name(), status.documentCount(), status.dimensions(), initialBuildMs, incrementalMs, reuseRatio, peakHeap, maxHeap, status.indexSizeBytes());
-        operations.forEach((name, stats) -> System.out.printf(Locale.ROOT,
-                "  %s p50=%.3fms p95=%.3fms p99=%.3fms avg=%.3fms%n", name, stats.p50Ms(), stats.p95Ms(), stats.p99Ms(), stats.averageMs()));
+            stage(progress, "PROOF hybrid-search start");
+            var hybridProof = app.hybridSearchService().search(ref, hybridRequest);
+            stage(progress, "PROOF hybrid-search done hits=" + hybridProof.hits().size() + " semanticAvailable=" + hybridProof.semanticAvailable());
+            require(hybridProof.semanticAvailable() && !hybridProof.hits().isEmpty(), "hybrid probe must use semantic signal and return hits");
+
+            stage(progress, "PROOF hybrid-context start");
+            var contextProof = app.hybridContextBuilder().build(ref, contextRequest);
+            stage(progress, "PROOF hybrid-context done items=" + contextProof.items().size() + " usedTokens=" + contextProof.usedTokens());
+            require(!contextProof.items().isEmpty() && contextProof.usedTokens() <= contextProof.maxTokens(), "hybrid context must remain bounded and non-empty");
+
+            Map<String, Stats> operations = new LinkedHashMap<>();
+            SemanticVectorStore vectorStore = app.semanticVectorStore();
+            operations.put("vector-store-load", measure(progress, "vector-store-load", repetitions, () -> vectorStore.load(ref).orElseThrow()));
+            operations.put("semantic-search", measure(progress, "semantic-search", repetitions, () -> app.semanticSearchService().search(ref, semanticRequest)));
+            operations.put("hybrid-search", measure(progress, "hybrid-search", repetitions, () -> app.hybridSearchService().search(ref, hybridRequest)));
+            operations.put("hybrid-context", measure(progress, "hybrid-context", repetitions, () -> app.hybridContextBuilder().build(ref, contextRequest)));
+
+            stage(progress, "MEMORY retained/peak measurement start");
+            forceGc();
+            long retainedHeap = usedHeap();
+            long peakHeap = peakHeap();
+            long maxHeap = Runtime.getRuntime().maxMemory();
+            double reuseRatio = incremental.reused() / (double) incremental.documentCount();
+            stage(progress, "MEMORY retained/peak measurement done retained=" + retainedHeap + " peak=" + peakHeap + " max=" + maxHeap);
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("schema_version", 1);
+            result.put("profile", profile.name());
+            result.put("seed", 16000031);
+            result.put("logical_file_count", profile.files());
+            result.put("symbol_count", profile.symbols());
+            result.put("occurrence_count", profile.occurrences());
+            result.put("relationship_count", profile.relationships());
+            result.put("semantic_document_count", status.documentCount());
+            result.put("vector_dimensions", status.dimensions());
+            result.put("embedding_provider", status.providerId());
+            result.put("embedding_model", status.modelId());
+            result.put("initial_snapshot_publish_ms", round(initialPublishMs));
+            result.put("changed_snapshot_publish_ms", round(changedPublishMs));
+            result.put("initial_index_build_ms", round(initialBuildMs));
+            result.put("incremental_index_rebuild_ms", round(incrementalMs));
+            result.put("incremental_embedded_added", incremental.embeddedAdded());
+            result.put("incremental_embedded_changed", incremental.embeddedChanged());
+            result.put("incremental_removed", incremental.removed());
+            result.put("incremental_reused", incremental.reused());
+            result.put("incremental_reuse_ratio", round(reuseRatio));
+            result.put("semantic_index_disk_size_bytes", status.indexSizeBytes());
+            result.put("peak_heap_bytes", peakHeap);
+            result.put("retained_heap_bytes", retainedHeap);
+            result.put("max_heap_bytes", maxHeap);
+            result.put("linear_vector_scan_observed", true);
+            Map<String, Object> operationJson = new LinkedHashMap<>();
+            operations.forEach((name, stats) -> operationJson.put(name, stats.asMap()));
+            result.put("operations", operationJson);
+            Files.writeString(output, DeterministicJson.render(result) + System.lineSeparator(), StandardCharsets.UTF_8);
+
+            System.out.printf(Locale.ROOT,
+                    "M21 S8 semantic scale: profile=%s docs=%d dims=%d initial=%.3fms incremental=%.3fms reuse=%.6f heap=%d/%d disk=%d%n",
+                    profile.name(), status.documentCount(), status.dimensions(), initialBuildMs, incrementalMs, reuseRatio, peakHeap, maxHeap, status.indexSizeBytes());
+            operations.forEach((name, stats) -> System.out.printf(Locale.ROOT,
+                    "  %s p50=%.3fms p95=%.3fms p99=%.3fms avg=%.3fms%n", name, stats.p50Ms(), stats.p95Ms(), stats.p99Ms(), stats.averageMs()));
+            System.out.flush();
+            stage(progress, "COMPLETE result=" + output);
+        } catch (Throwable failure) {
+            try {
+                stage(progress, "FAILED type=" + failure.getClass().getSimpleName() + " message=" + String.valueOf(failure.getMessage()));
+            } catch (Throwable ignored) {
+                // Preserve the original benchmark failure.
+            }
+            throw failure;
+        }
     }
 
     private static Dataset generate(UUID projectId, Profile profile) {
@@ -219,17 +265,31 @@ public final class M21SemanticScaleProbe {
         Files.writeString(file, mutated, StandardCharsets.UTF_8);
     }
 
-    private static Stats measure(int repetitions, ThrowingAction action) throws Exception {
+    private static Stats measure(Path progress, String name, int repetitions, ThrowingAction action) throws Exception {
+        stage(progress, "MEASURE " + name + " warmup start");
         Objects.requireNonNull(action.run(), "warm-up operation returned null");
+        stage(progress, "MEASURE " + name + " warmup done");
         long[] nanos = new long[repetitions];
         for (int i = 0; i < repetitions; i++) {
+            stage(progress, "MEASURE " + name + " sample=" + (i + 1) + "/" + repetitions + " start");
             long started = System.nanoTime();
             Objects.requireNonNull(action.run(), "benchmark operation returned null");
             nanos[i] = System.nanoTime() - started;
+            stage(progress, "MEASURE " + name + " sample=" + (i + 1) + "/" + repetitions + " done elapsedMs=" + round(ms(nanos[i])));
         }
         Arrays.sort(nanos);
-        return new Stats(ms(nanos[pindex(nanos.length, .50)]), ms(nanos[pindex(nanos.length, .95)]),
+        Stats stats = new Stats(ms(nanos[pindex(nanos.length, .50)]), ms(nanos[pindex(nanos.length, .95)]),
                 ms(nanos[pindex(nanos.length, .99)]), ms(Arrays.stream(nanos).sum() / nanos.length));
+        stage(progress, "MEASURE " + name + " complete p95Ms=" + round(stats.p95Ms()) + " p99Ms=" + round(stats.p99Ms()));
+        return stats;
+    }
+
+    private static void stage(Path progress, String message) throws IOException {
+        String line = Instant.now() + " " + message + " heapBytes=" + usedHeap();
+        Files.writeString(progress, line + System.lineSeparator(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        System.out.println("M21-S8 PROGRESS " + line);
+        System.out.flush();
     }
 
     private static int pindex(int size, double percentile) { return (int) Math.floor((size - 1) * percentile); }
