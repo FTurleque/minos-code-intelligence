@@ -156,8 +156,25 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     private static boolean isLoopbackHost(String host) {
         String value = host.toLowerCase(Locale.ROOT);
-        return "localhost".equals(value) || "::1".equals(value)
-                || value.startsWith("127.");
+        if ("localhost".equals(value) || "::1".equals(value) || "[::1]".equals(value)) {
+            return true;
+        }
+        String[] octets = value.split("\\.", -1);
+        if (octets.length != 4) return false;
+        for (String octet : octets) {
+            if (octet.isEmpty() || octet.length() > 3) return false;
+            for (int index = 0; index < octet.length(); index++) {
+                if (!Character.isDigit(octet.charAt(index))) return false;
+            }
+            int numeric;
+            try {
+                numeric = Integer.parseInt(octet);
+            } catch (NumberFormatException exception) {
+                return false;
+            }
+            if (numeric < 0 || numeric > 255) return false;
+        }
+        return Integer.parseInt(octets[0]) == 127;
     }
 
     private static int matchingBracket(String value, int start) throws IOException {
