@@ -102,7 +102,7 @@ function Try-VersionProbe {
         [Parameter(Mandatory = $true)][string] $Label,
         [Parameter(Mandatory = $true)][string] $Executable,
         [Parameter(Mandatory = $true)][string[]] $Arguments,
-        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]] $Problems
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[string]] $Problems
     )
     try {
         return Invoke-Captured $Executable $Arguments
