@@ -1,10 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 — Advanced Provider Intelligence est EN COURS sur `develop`. M23→M27 restent planifiés.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 est validé et fusionné dans `develop`. M23 — Semantic Retrieval 2.0 est EN COURS, 9/9 implémenté et en qualification locale exact-head. M24→M27 restent planifiés.**
 
-L'état courant livré est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
+L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md) et M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md).
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md) et M23 par [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md).
 
 ## Principes
 
@@ -241,14 +241,14 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-M21 a fermé ses **gates locaux structurants** avant le démarrage de M22. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer uniquement la promotion finale M21 vers `main`. M22 évolue sur `develop` sans masquer ni modifier cette dette explicite.
+M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22 a ensuite été qualifié et fusionné dans `develop`. M23 évolue maintenant sur cette base sans masquer ni modifier la dette M21-S2.
 
 ```text
 M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
   ↓
-M22  Advanced Provider Intelligence               🚧 EN COURS
+M22  Advanced Provider Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
-M23  Semantic Retrieval 2.0                       ⏳ PLANIFIÉ
+M23  Semantic Retrieval 2.0                       🚧 EN COURS — 9/9 implémenté
   ↓
 M24  Polyglot Expansion                           ⏳ PLANIFIÉ
   ↓
@@ -276,28 +276,47 @@ Axes locaux validés : quality gates M19/M20, frontières Maven robustes, docume
 
 ## M22 — Advanced Provider Intelligence
 
-**EN COURS sur `m22-advanced-provider-intelligence` depuis `develop`.**
+**TERMINÉ, VALIDÉ EXACT-HEAD ET FUSIONNÉ DANS `develop` — 9/9.**
 
 Question cible :
 
 > MINOS peut-il alimenter réellement CFG, def-use, flux interprocéduraux et primitives de sécurité avec des providers qualifiés, sans confondre capacité du moteur et fait effectivement prouvé par un provider ?
 
-Cibles : provider avancé Java de référence fondé sur l’AST JDK, fixtures contrôlées, précision/rappel, provenance complète, capabilities exhaustives et fallback explicite. TypeScript/Python suivent uniquement lorsque les indexeurs disponibles permettent une qualification équivalente.
+Acquis : provider Java `minos-java-source-v1`, CFG, def-use local, argument/return flow borné, primitives de sécurité explicites, provenance complète, fixtures contrôlées `precision=1.0 recall=1.0`, runtime Windows qualifié avec `jdk.compiler`.
+
+```text
+Qualified HEAD : 75d6169be6d46d4e60ca19e781ff61704ca1613c
+Merge develop  : 37a3c904fd92c25b343344a26991531c75ebc4b6
+Issue          : #76 CLOSED / completed
+PR             : #77 MERGED
+```
 
 - roadmap : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md)
 - décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md)
-- issue : #76
-- branche : `m22-advanced-provider-intelligence`
 
 ## M23 — Semantic Retrieval 2.0
 
-**PLANIFIÉ.**
+**EN COURS sur `m23-semantic-retrieval-2` — 9/9 IMPLÉMENTÉS, qualification locale exact-head en attente.**
 
 Question cible :
 
 > MINOS peut-il fournir un retrieval réellement sémantique de qualité production tout en restant local-first, optionnel, mesuré et non autoritatif ?
 
-Cibles : provider local d'embeddings de code réellement appris, qualité Recall@K/MRR/nDCG, format vectoriel compact, caches de vues sémantiques et ANN/vector index seulement si les mesures M21-S8 le justifient.
+Implémentation M23 :
+
+- provider learned local `minos-local-ollama`, loopback-only et sans téléchargement automatique de modèle ;
+- modèle + dimensions explicites et intégrés à l’identité de l’index ;
+- vector store `index-v2.bin` float32 avec lecture/migration v1 ;
+- cache LRU process-local borné à 256 embeddings de requête ;
+- corpus qualité contrôlé et gate bloquant `Recall@3 >= 0.75`, `MRR >= 0.70`, `nDCG@3 >= 0.72` ;
+- scan cosine exact conservé conformément à `KEEP_CURRENT_M20_BACKEND` ;
+- aucun HNSW/Lucene/vector DB sans nouvelle preuve de bottleneck ;
+- surfaces Java API/MCP/IntelliJ/NEXUS existantes conservées et sémantique toujours `HEURISTIC`.
+
+- roadmap : [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md)
+- décision : [ADR-0031](adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md)
+- issue : #78
+- branche : `m23-semantic-retrieval-2`
 
 ## M24 — Polyglot Expansion
 
@@ -341,4 +360,4 @@ Cibles : espaces partagés, isolation tenant, politiques de rétention, authenti
 
 ## Règle de promotion post-M20
 
-M22 est le jalon fonctionnel actif sur `develop`. M23→M27 restent des **directions planifiées**, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables.
+M23 est le jalon fonctionnel actif sur `develop` via sa branche dédiée. M24→M27 restent des **directions planifiées**, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables.

@@ -2,7 +2,7 @@
 
 Dernière mise à jour documentaire : **28 juillet 2026**
 
-Ce fichier distingue l'état **livré sur `main`**, les gates de production encore ouverts sur M21 et les jalons fonctionnels qualifiés sur `develop`. Les preuves historiques restent dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
+Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
 ## Synthèse
 
@@ -30,246 +30,174 @@ M18 — MINOS for IntelliJ             TERMINÉ, VALIDÉ ET LIVRÉ
 M19 — Advanced Code Intelligence     TERMINÉ, VALIDÉ ET LIVRÉ
 M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
 M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
-M22 — Advanced Provider Intelligence VALIDÉ exact-head — intégration PR #77
+M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
+M23 — Semantic Retrieval 2.0         EN COURS — 9/9 implémenté, qualification exact-head en attente
 ```
 
-**État produit livré sur `main` : C0→M20.** Le tree M21 localement qualifié a été intégré dans `develop` par PR #75 afin de servir de base à M22. M21 reste administrativement ouvert tant que S2/CI n'a pas repris en août 2026. M22 a terminé sa qualification locale exacte ; son intégration vers `develop` est portée par PR #77.
+**État livré sur `main` : C0→M20.**
+
+`develop` contient le tree M21 localement qualifié et M22 validé/mergé. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M23 est le jalon fonctionnel actif sur `m23-semantic-retrieval-2`.
 
 ## M21 — Production Integrity & Surface Convergence
 
+Issue : **#73**. Roadmap : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+
 ```text
-S1   governance + docs + runner local                 VALIDÉ — b4403921bfe0e2a7fe5eef9380a122982f275e0e
-S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026 — aucun run CI
-S3   quality gates M19/M20                            VALIDÉ — 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
-S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd77008b8ea31578a334468eec75
-S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
-S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
-S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
-S8   semantic scale qualification                     VALIDÉ — a668f0a09da08515396903fbe887ed9e70125201
-S9   final production integrity gate                  VALIDÉ exact-head — 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
+S1   governance + docs + runner local                 VALIDÉ
+S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026
+S3   quality gates M19/M20                            VALIDÉ
+S4   Maven module-boundary hardening                  VALIDÉ
+S5   supply-chain + release hardening                 VALIDÉ
+S6   IntelliJ parity M19/M20                          VALIDÉ
+S7   advanced provider productionization              VALIDÉ
+S8   semantic scale qualification                     VALIDÉ
+S9   final production integrity gate                  VALIDÉ exact-head
 ```
 
-Issue : **#73**. Roadmap opérationnelle : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
-
-Le tree qualifié M21 a été intégré dans `develop` via PR #75 :
+Tree qualifié et intégration :
 
 ```text
 M21 qualified tree : 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
 develop merge      : 4222706502c54e10f0bf0400a18360fb99e6208c
-file diff           : 0
+M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
 ```
 
-### S1 — Governance
-
-```text
-Maven reactor: 13/13 SUCCESS
-M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
-M21 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools=23)
-M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
-Validated HEAD: b4403921bfe0e2a7fe5eef9380a122982f275e0e
-```
-
-### S3 — Quality gates
-
-Les onze scopes JaCoCo M21 étaient bloquants. M22 ajoute un douzième scope `java-advanced-provider` sans abaisser les seuils existants.
-
-```text
-program-graph-analysis
-advanced-impact-security
-semantic-vector-store
-semantic-hybrid-retrieval
-advanced-public-api
-m19-m20-mcp-catalogue
-M21 JACOCO GATE SUCCESS
-Validated HEAD: 27b4bafb35eadfdb9827b4d4cfccf7073b1e5e94
-```
-
-### S4 — Maven boundaries
-
-Les 12 modules compilent leur arbre `src/main/java` naturel ; les anciens filtres compiler d'ownership ont été supprimés.
+Gates structurants conservés :
 
 ```text
 M21 MODULE BOUNDARY CONSISTENCY SUCCESS
-Validated HEAD: 0699d06d6138dd77008b8ea31578a334468eec75
-```
-
-### S5 — Supply-chain & release
-
-```text
-CycloneDX 1.6
-M21 THIRD-PARTY NOTICES SUCCESS
-M21 RELEASE MANIFEST SUCCESS
-M21 SUPPLY-CHAIN EVIDENCE SUCCESS
-MINOS Windows distribution SUCCESS
-MINOS Windows setup SUCCESS
-MINOS Windows release VALIDATION SUCCESS
+M21 JACOCO GATE SUCCESS
 M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
-Validated HEAD: bcc44ea5e7a5c354c1df25bb7d295ee57347629c
-```
-
-La signature Authenticode reste explicite et optionnelle tant qu'aucun certificat n'est configuré ; `MINOS_REQUIRE_SIGNED_RELEASE=1` la rend bloquante.
-
-### S6 — IntelliJ parity
-
-Le plugin reste un client externe Java 21 du moteur Java 24 via `minos-ide` v1. Il ne réimplémente aucune intelligence M19/M20/M22.
-
-```text
-program-graph
-impact-v2
-security-paths
-semantic-index-status
-semantic-index-sync
-semantic-search
-hybrid-search
-hybrid-context
-```
-
-```text
-M21 INTELLIJ PARITY CONSISTENCY SUCCESS (capabilities=8, actions=8, ideBranch=261)
-M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
 M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
-Validated HEAD: 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
-```
-
-### S7 — Advanced provider productionization
-
-`FileProgramGraphProvider` charge le sidecar local `.minos/program-graph-v1` uniquement lorsqu'il est aligné au snapshot actif. Un sidecar stale expose `ADVANCED_PROGRAM_SIDECAR_STALE_SNAPSHOT` et ne contribue aucune capability. `CALL_GRAPH + LOCAL_DATA_FLOW` ne prouve jamais implicitement l'interprocédural.
-
-```text
-M21 ADVANCED PROVIDER CONSISTENCY SUCCESS (capabilities=4, nodes=12, edges=7)
 M21-S7 ADVANCED PROVIDER VALIDATION SUCCESS
-Validated HEAD: 57243384286ed623de2d9499c9ae6729f77f6845
-```
-
-### S8 — Semantic scale qualification
-
-S8 a appliqué la règle M16 **mesurer avant d'optimiser** sur le STANDARD déterministe :
-
-```text
-seed                 16000031
-fichiers logiques       10 000
-symboles               100 000
-occurrences            500 000
-relations              250 000
-semantic documents     210 000
-vector dimensions          384
-```
-
-La première baseline complète, sur `37cbe22e91993e8aea040621396d2abd7e00da44`, a retourné :
-
-```text
-M21 S8 STANDARD MEASUREMENT status=FAIL decision=OPTIMIZE_MEASURED_BOTTLENECK
-peak heap ratio      0.8966
-vector-load p95      2910.409 ms
-semantic p95         8457.386 ms
-hybrid search p95   49412.429 ms
-hybrid context p95  48520.565 ms
-```
-
-Les optimisations autorisées par cette mesure conservent le format disque v1, le cosine exact, les stable keys, les poids hybrides, `VECTOR_SEARCH_LINEAR_SCAN`, les facts structurés autoritatifs et le signal sémantique `HEURISTIC` : vecteurs primitifs, norm pré-calculée, cache snapshot-scoped du store, top-K exact borné et corpus hybride snapshot-scoped.
-
-Qualification exacte finale S8 sur `a668f0a09da08515396903fbe887ed9e70125201` :
-
-```text
-added=0 changed=3 removed=0 reused=209997 reuse=0.999986
-peak heap ratio      0.3407
-index bytes          717000165
-RSS                  4745732096
-vector-load p95      0.0625 ms
-semantic p95         102.8875 ms
-hybrid search p95    210.487 ms
-hybrid context p95   188.5624 ms
-M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
-M21 S8 SEMANTIC SCALE DECISION SUCCESS
 M21-S8 SEMANTIC SCALE VALIDATION SUCCESS
-Validated HEAD: a668f0a09da08515396903fbe887ed9e70125201
 ```
 
-Contrat de décision conservé :
+M21-S8 a mesuré le backend exact et conclu :
 
 ```text
-INVALID_MEASUREMENT
-OPTIMIZE_MEASURED_BOTTLENECK
-KEEP_CURRENT_M20_BACKEND
+M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
 ```
 
-Aucun Lucene/HNSW/vector database n'a été nécessaire pour satisfaire le STANDARD. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
-
-### S9 — Final production integrity gate
-
-Le replay final exact-head S9 a été **VALIDÉ localement le 28 juillet 2026** sur `60c1aba43e2d005991152cc4f3fe0b0dadef1c2d` avec HEAD inchangé et worktree tracked propre.
-
-```text
-M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
-M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
-M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
-M21-S9 retained S8 decision: PASS / KEEP_CURRENT_M20_BACKEND
-M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS
-Validated HEAD: 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
-```
-
-S2 reste explicitement hors de S9 jusqu'en août 2026 : aucun déclenchement CI manuel et aucune modification de workflow. Le jalon M21 reste donc ouvert tant que S2 n'a pas repris.
+Aucun Lucene/HNSW/vector database n'était requis. Cette décision reste la base de M23 : un ANN ne peut être introduit qu'après une nouvelle mesure démontrant un bottleneck.
 
 ## M22 — Advanced Provider Intelligence
 
-Statut : **VALIDÉ localement exact-head sur l’implementation tree ; intégration vers `develop` via PR #77.** Base `develop @ 4222706502c54e10f0bf0400a18360fb99e6208c`.
-
-Issue : **#76**. Roadmap opérationnelle : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md). Décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md).
-
-M22 ajoute un provider Java local de référence `minos-java-source-v1`, basé sur l'API AST du compilateur JDK et composé avec les providers M19/M21 existants.
+**TERMINÉ, VALIDÉ exact-head, MERGÉ dans `develop`.**
 
 ```text
-S1  roadmap + provider contract                       VALIDÉ
-S2  Java discovery + source confinement               VALIDÉ
-S3  Java CFG                                          VALIDÉ
-S4  Java local def-use                                VALIDÉ
-S5  Java interprocedural argument/return              VALIDÉ
-S6  Java security source/sink/sanitizer               VALIDÉ
-S7  capability/provenance/fallback hardening          VALIDÉ
-S8  controlled precision/recall ground truth          VALIDÉ
-S9  public surfaces + exact-head final gate           VALIDÉ
+Issue          : #76 CLOSED / completed
+PR             : #77 MERGED
+Qualified HEAD : 75d6169be6d46d4e60ca19e781ff61704ca1613c
+Merge develop  : 37a3c904fd92c25b343344a26991531c75ebc4b6
 ```
 
-Contrat principal :
+Contrat livré :
 
-- fichiers Java provenant uniquement du snapshot actif ;
-- chemins confinés et analyse projet fail-closed ;
-- AST sans prétendre une attribution de types/classpath complète ;
-- CFG/def-use/interproc/security uniquement lorsque les facts correspondants sont produits ;
-- arêtes avancées `DERIVED` avec confiance, preuve et provenance ;
-- security taxonomy explicitement opt-in ;
-- fixtures indépendantes avec gate `precision=1.0 recall=1.0` ;
-- runtime Windows obligé d'embarquer `jdk.compiler` ;
-- TypeScript/Python non promus par M22 sans qualification équivalente.
+- provider Java `minos-java-source-v1` ;
+- source units confinées au snapshot actif ;
+- CFG, def-use local, argument/return flow si cible unique `(simpleName, arity)` ;
+- security taxonomy explicite et taint statique borné ;
+- arêtes `DERIVED` avec preuve, provenance et confiance ;
+- `FACTUAL`, `DERIVED`, `HEURISTIC` restent distincts ;
+- aucun runtime/exhaustiveness claim dérivé d'un chemin statique ;
+- TypeScript/Python non promus sans qualification équivalente ;
+- runtime Windows qualifié avec `jdk.compiler`.
 
-Guide : [`developer/java-advanced-provider.md`](developer/java-advanced-provider.md).
+Ground truth bloquante :
 
-Premier replay final complet réussi le **28 juillet 2026** sur `af760cfd61f023113b0e2051e237f73522c8aca6`, avec HEAD inchangé et worktree propre :
+```text
+CONTROL_FLOW   precision=1.0 recall=1.0
+DEF_USE        precision=1.0 recall=1.0
+ARGUMENT_FLOW  precision=1.0 recall=1.0
+RETURN_FLOW    precision=1.0 recall=1.0
+TAINT_FLOW     precision=1.0 recall=1.0
+```
+
+Verdict final :
 
 ```text
 M22 ADVANCED PROVIDER CONSISTENCY SUCCESS
-M21 JACOCO GATE SUCCESS
-M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
-M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
-M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
 M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS
-M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
 M22 FINAL ADVANCED PROVIDER INTELLIGENCE VALIDATION SUCCESS
-Validated HEAD: af760cfd61f023113b0e2051e237f73522c8aca6
+Validated HEAD: 75d6169be6d46d4e60ca19e781ff61704ca1613c
 ```
 
-Le gate Windows vérifie le runtime réellement livré depuis le ZIP qualifié : `app\runtime\lib\modules` doit exister et `app\runtime\release` doit déclarer `jdk.compiler` dans `MODULES`. Toute modification ultérieure, y compris documentaire, exige un nouveau replay exact-head avant promotion.
+Roadmap : [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md). Décision : [ADR-0030](adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md).
 
-## M20 — Semantic & Hybrid Code Intelligence
+## M23 — Semantic Retrieval 2.0
 
-M20 ajoute une couche sémantique locale et optionnelle au-dessus des facts structurés MINOS.
+**EN COURS — 9/9 IMPLÉMENTÉS ; qualification locale exact-head en attente.**
 
 ```text
-SemanticDocument SYMBOL / FILE / CHUNK + stableKey/checksum              ✅
-EmbeddingProvider SPI optionnel + provider local-hash                    ✅
-vector store local versionné, atomique et reconstruisible               ✅
-recherche sémantique bornée, nature HEURISTIC                           ✅
-ranking hybride LEXICAL + GRAPH + SEMANTIC                              ✅
-contexte v2 borné documents/tokens                                      ✅
-index sémantique incrémental + réutilisation des vecteurs               ✅
+Issue  : #78 OPEN
+Branch : m23-semantic-retrieval-2
+Base   : develop @ 37a3c904fd92c25b343344a26991531c75ebc4b6
 ```
+
+M23 conserve les snapshots structurés comme autorité et ajoute une voie sémantique learned locale :
+
+```text
+EmbeddingProvider
+  ├─ minos-local-hash     référence déterministe, non learned
+  └─ minos-local-ollama   learned, opt-in, loopback-only
+
+SemanticVectorStore
+  ├─ lecture index-v1.bin float64
+  └─ écriture index-v2.bin float32
+
+SemanticSearchService
+  ├─ cosine exact
+  ├─ query-vector LRU <= 256
+  └─ ANN_NOT_ENABLED_M21_S8_KEEP_CURRENT_BACKEND
+```
+
+Le provider learned exige un modèle et des dimensions explicites. MINOS ne télécharge pas de modèle et refuse les endpoints non-loopback.
+
+Qualité learned bloquante sur le corpus contrôlé M23 :
+
+```text
+Recall@3 >= 0.75
+MRR      >= 0.70
+nDCG@3   >= 0.72
+```
+
+Le gate appelle le **modèle local réellement configuré** ; absence de modèle, endpoint inaccessible, dimensions incorrectes ou métriques insuffisantes => FAIL.
+
+Diagnostics importants :
+
+```text
+LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL
+LOCAL_LEARNED_EMBEDDING_LOOPBACK_ONLY
+LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC
+SEMANTIC_RESULTS_REMAIN_HEURISTIC
+VECTOR_SEARCH_LINEAR_SCAN
+ANN_NOT_ENABLED_M21_S8_KEEP_CURRENT_BACKEND
+SEMANTIC_QUERY_VECTOR_CACHE_BOUNDED_256
+```
+
+Le 13e scope JaCoCo `semantic-learned-provider` s'ajoute sans abaisser les seuils antérieurs.
+
+Roadmap : [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md). Décision : [ADR-0031](adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md). Guide : [`developer/semantic-retrieval-2.md`](developer/semantic-retrieval-2.md).
+
+Runner final :
+
+```powershell
+.\scripts\m23\run-final.ps1 -ExpectedHead <sha>
+```
+
+Verdict final attendu après qualification réelle :
+
+```text
+M23 SEMANTIC RETRIEVAL CONSISTENCY SUCCESS
+M23 LEARNED SEMANTIC QUALITY SUCCESS
+M21 JACOCO GATE SUCCESS
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
+M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS
+Validated HEAD: <sha>
+```
+
+## Gouvernance juillet 2026
+
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

@@ -28,6 +28,9 @@ flowchart TB
     GIT[Git local] --> MINOS
     SRC --> ADV[Providers Program Graph qualifiés]
     ADV --> MINOS
+    SRC --> SEM[Semantic documents]
+    SEM --> EMB[EmbeddingProvider optionnel]
+    EMB --> MINOS
     MINOS --> CLI[CLI]
     MINOS --> API[API Java]
     MINOS --> MCP[MCP STDIO]
@@ -36,7 +39,7 @@ flowchart TB
     NX --> NEXUS[NEXUS Context Intelligence]
 ```
 
-MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte. La couche sémantique M20 reste optionnelle et ses scores restent `HEURISTIC`.
+MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte. La couche sémantique reste optionnelle et ses scores restent `HEURISTIC`.
 
 ## État courant
 
@@ -46,14 +49,17 @@ M20 a ajouté la couche Semantic & Hybrid Code Intelligence : documents sémanti
 
 **M21 a terminé ses gates locaux S1/S3→S9.** Son seul volet encore ouvert est S2/CI, explicitement gelé jusqu’en août 2026. Le tree M21 localement qualifié a été intégré dans `develop` via PR #75.
 
-**M22 — Advanced Provider Intelligence est le jalon fonctionnel actif sur `develop`.** Il introduit d’abord un provider Java AST local et capability-honest pour produire réellement CFG, def-use, argument/return flow et primitives de sécurité sous limites explicites, avec fixtures et précision/rappel contrôlés.
+**M22 — Advanced Provider Intelligence est terminé, validé exact-head et fusionné dans `develop` via PR #77.** Le provider Java `minos-java-source-v1` fournit CFG, def-use, flux interprocéduraux bornés et primitives de sécurité sous capacités/provenance explicites.
+
+**M23 — Semantic Retrieval 2.0 est le jalon fonctionnel actif.** Les 9 slices sont implémentées sur `m23-semantic-retrieval-2` ; la qualification locale exact-head reste à exécuter contre un modèle learned local réellement configuré. M23 ajoute `minos-local-ollama`, un vector store float32 v2 compatible v1, un cache de requêtes borné et un gate Recall@3/MRR/nDCG@3. Le scan cosine exact reste le backend autorisé conformément à la décision M21-S8 `KEEP_CURRENT_M20_BACKEND`.
 
 Voir :
 
-- [`docs/STATUS.md`](docs/STATUS.md) — état livré, M21 résiduel et jalon fonctionnel actif ;
+- [`docs/STATUS.md`](docs/STATUS.md) — état courant et preuves de promotion ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit M0→M27 ;
 - [`docs/roadmap/M21_EXECUTION.md`](docs/roadmap/M21_EXECUTION.md) — consolidation post-M20 ;
 - [`docs/roadmap/M22_EXECUTION.md`](docs/roadmap/M22_EXECUTION.md) — Advanced Provider Intelligence ;
+- [`docs/roadmap/M23_EXECUTION.md`](docs/roadmap/M23_EXECUTION.md) — Semantic Retrieval 2.0 ;
 - [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Installer MINOS sous Windows
@@ -122,6 +128,23 @@ minos.cmd import-scip my-project `
   --provider external-provider
 ```
 
+## Retrieval sémantique learned local — M23
+
+Le sémantique reste **désactivé par défaut**. `local-hash` reste un provider déterministe de référence, explicitement non learned.
+
+Pour un modèle d'embeddings local servi par Ollama :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER='ollama'
+$env:MINOS_SEMANTIC_MODEL='<model-local>'
+$env:MINOS_SEMANTIC_DIMENSIONS='<dimensions>'
+$env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed' # optionnel
+```
+
+MINOS ne télécharge aucun modèle. Le provider intégré refuse les endpoints non-loopback. Provider, modèle et dimensions font partie de l’identité de l’index ; un changement force un rebuild sûr.
+
+Les résultats sémantiques restent `HEURISTIC` et ne deviennent jamais des relations de code. Voir [`docs/developer/semantic-retrieval-2.md`](docs/developer/semantic-retrieval-2.md).
+
 ## Visualiser le graphe d'architecture
 
 **Guide utilisateur détaillé : [Visualiser le graphe d'architecture MINOS](docs/user/architecture-graph.md).**
@@ -168,13 +191,13 @@ Sous Windows PowerShell :
 .\mvnw.cmd clean verify
 ```
 
-La porte locale finale M22 est :
+La porte locale finale M23 est :
 
 ```powershell
-.\scripts\m22\run-final.ps1 -ExpectedHead <sha>
+.\scripts\m23\run-final.ps1 -ExpectedHead <sha>
 ```
 
-Elle rejoue le core Maven/JaCoCo, la qualification release Windows, la présence de `jdk.compiler` dans le runtime embarqué et la parité IntelliJ, sans déclencher de CI.
+Elle exige un modèle learned local configuré, mesure Recall@3/MRR/nDCG@3, rejoue le core Maven/JaCoCo, la qualification release Windows et la parité IntelliJ, puis revérifie exact HEAD + worktree propre. Elle ne déclenche aucune CI.
 
 La version de développement est actuellement :
 
@@ -226,7 +249,7 @@ Publier depuis un poste Windows avec GitHub CLI authentifié :
 .\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc2
 ```
 
-Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. Le workflow valide aussi le cycle installation/désinstallation des intégrations MCP natives, construit les deux distributions, vérifie les checksums, smoke-teste le ZIP et le `setup.exe`, vérifie la désinstallation, refuse de remplacer une version/tag existant, puis attache les quatre assets à la GitHub Release.
+La publication automatisée reste une opération de release distincte des qualifications locales de juillet 2026.
 
 ## Capacités CLI
 
@@ -315,6 +338,7 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 - [Surfaces publiques](docs/developer/public-surfaces.md)
 - [Provider Java avancé M22](docs/developer/java-advanced-provider.md)
 - [Provider Program Graph sidecar M21](docs/developer/advanced-program-provider.md)
+- [Semantic Retrieval 2.0 — M23](docs/developer/semantic-retrieval-2.md)
 - [Multi-dépôts et Git](docs/developer/multi-repo-git.md)
 - [Semantic & Hybrid Intelligence](docs/developer/semantic-hybrid-intelligence.md)
 - [Tests et contribution](docs/developer/testing.md)
@@ -326,6 +350,7 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 - [Roadmap](docs/ROADMAP.md)
 - [M21 — Production Integrity](docs/roadmap/M21_EXECUTION.md)
 - [M22 — Advanced Provider Intelligence](docs/roadmap/M22_EXECUTION.md)
+- [M23 — Semantic Retrieval 2.0](docs/roadmap/M23_EXECUTION.md)
 
 ## Stack
 
@@ -337,7 +362,7 @@ SCIP bindings    0.9.0
 MCP Java SDK     2.0.0
 Git              Eclipse JGit 7.6.0.202603022253-r
 MCP transport    STDIO
-Serveur HTTP     aucun requis dans le cœur
+Serveur HTTP     aucun requis dans le cœur ; Ollama local optionnel pour embeddings M23
 ```
 
 ## Principes
@@ -353,6 +378,8 @@ Serveur HTTP     aucun requis dans le cœur
 - une relation cross-repository exige une identité exacte et unique ;
 - l’activité Git n’est pas une mesure automatique d’importance architecturale ;
 - le sémantique reste un signal de retrieval/ranking, jamais une relation de code ;
+- un provider learned n'est qualifié que par des métriques mesurées sur le modèle réellement configuré ;
+- un changement de backend vectoriel exige une mesure qui le justifie ;
 - CLI, API, MCP, IntelliJ et NEXUS sont des surfaces d’exposition, pas des duplications du métier.
 
 > Règle de développement : **mesurer avant d’industrialiser**.

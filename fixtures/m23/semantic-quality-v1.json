@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "topK": 3,
+  "thresholds": {
+    "recallAtK": 0.75,
+    "mrr": 0.70,
+    "ndcgAtK": 0.72
+  },
+  "documents": [
+    {
+      "key": "auth-jwt",
+      "text": "Java security guard code that parses a bearer token, verifies the JWT signature and expiration, then authorizes access to a protected request. class JwtGuard { boolean verify(String bearerToken) { ... } }"
+    },
+    {
+      "key": "db-transaction",
+      "text": "Repository method opening a database transaction, persisting an aggregate, committing on success and rolling back on SQLException. void save(Order order) { connection.setAutoCommit(false); ... connection.commit(); }"
+    },
+    {
+      "key": "retry-backoff",
+      "text": "Resilient client retries a transient remote operation with exponential backoff and jitter while respecting a maximum attempt count. Duration delay = base.multipliedBy(1L << attempt);"
+    },
+    {
+      "key": "cache-eviction",
+      "text": "Bounded least-recently-used in-memory cache evicts the eldest entry when capacity is exceeded. LinkedHashMap configured with accessOrder=true and removeEldestEntry."
+    },
+    {
+      "key": "async-queue",
+      "text": "Producer consumer worker uses a blocking queue to hand background jobs to a dedicated thread and applies bounded capacity for backpressure. BlockingQueue<Job> jobs = new ArrayBlockingQueue<>(256);"
+    },
+    {
+      "key": "file-watch",
+      "text": "Filesystem monitoring service registers a WatchService for create, modify and delete events and invalidates source snapshots when files change."
+    },
+    {
+      "key": "json-codec",
+      "text": "Serialization adapter converts domain records to JSON and reconstructs them from a versioned wire representation while rejecting unknown schema versions."
+    },
+    {
+      "key": "rate-limit",
+      "text": "HTTP middleware enforces a token-bucket request quota per client, replenishes permits over time and returns status 429 when the budget is exhausted."
+    },
+    {
+      "key": "schema-migration",
+      "text": "Database migration runner applies ordered schema changes once, stores the migration checksum and rolls the transaction back if a script fails."
+    },
+    {
+      "key": "graph-cycle",
+      "text": "Graph traversal detects dependency cycles using depth-first search with visiting and visited sets and reports the reconstructible cycle path."
+    },
+    {
+      "key": "test-fixture",
+      "text": "JUnit test fixture creates a temporary project directory, publishes a controlled snapshot and asserts deterministic query results without external services."
+    },
+    {
+      "key": "encryption-at-rest",
+      "text": "Storage component encrypts persisted bytes with authenticated encryption, derives a nonce per record and refuses corrupted ciphertext before decoding content."
+    }
+  ],
+  "queries": [
+    {
+      "text": "where is protected API access checked before a request is accepted",
+      "relevant": ["auth-jwt"]
+    },
+    {
+      "text": "which code undoes a failed persistence operation atomically",
+      "relevant": ["db-transaction", "schema-migration"]
+    },
+    {
+      "text": "find the logic that waits longer after repeated transient failures",
+      "relevant": ["retry-backoff"]
+    },
+    {
+      "text": "where do old in-memory entries get discarded when the limit is reached",
+      "relevant": ["cache-eviction"]
+    },
+    {
+      "text": "what component pushes work to another thread without unbounded buffering",
+      "relevant": ["async-queue"]
+    },
+    {
+      "text": "find code reacting when source files are edited on disk",
+      "relevant": ["file-watch"]
+    },
+    {
+      "text": "where are clients throttled after too many web requests",
+      "relevant": ["rate-limit"]
+    },
+    {
+      "text": "which algorithm discovers circular dependencies and explains the loop",
+      "relevant": ["graph-cycle"]
+    },
+    {
+      "text": "where does persisted confidential data reject tampering before use",
+      "relevant": ["encryption-at-rest"]
+    }
+  ]
+}

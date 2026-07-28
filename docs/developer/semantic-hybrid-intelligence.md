@@ -1,6 +1,6 @@
-# Intelligence sémantique et hybride — M20
+# Intelligence sémantique et hybride — M20 / M23
 
-M20 ajoute une couche de retrieval conceptuel **optionnelle** au-dessus des facts structurés MINOS. Cette couche améliore le rappel et le ranking ; elle ne remplace jamais les identités, relations, graphes, preuves ou snapshots.
+M20 a ajouté une couche de retrieval conceptuel **optionnelle** au-dessus des facts structurés MINOS. M23 ajoute une voie d'embeddings learned locale et mesurée, sans changer l'autorité du système. Cette couche améliore le rappel et le ranking ; elle ne remplace jamais les identités, relations, graphes, preuves ou snapshots.
 
 ## Autorité des données
 
@@ -11,6 +11,8 @@ facts structurés MINOS                 autoritatifs
         SemanticDocumentFactory        reconstruisible
                  ↓
         EmbeddingProvider              optionnel
+          ├─ local-hash                référence non learned
+          └─ local-ollama              learned, loopback-only
                  ↓
         SemanticVectorStore            cache reconstruisible
                  ↓
@@ -46,15 +48,30 @@ int dimensions();
 SemanticVector embed(String stableKey, String text);
 ```
 
-Le provider est absent par défaut. Un runtime natif peut activer explicitement le provider local de référence :
+Le provider est absent par défaut.
+
+### Provider de référence M20
 
 ```text
 MINOS_SEMANTIC_PROVIDER=local-hash
 ```
 
-`LocalHashEmbeddingProvider` est déterministe, local et sans réseau. Il sert de provider de référence pour valider le pipeline et **n'est pas un modèle de langage**.
+`LocalHashEmbeddingProvider` est déterministe, local et sans réseau. Il sert de provider de référence pour valider le pipeline et **n'est pas un modèle de langage ni un modèle learned**.
+
+### Provider learned local M23
+
+```text
+MINOS_SEMANTIC_PROVIDER=ollama
+MINOS_SEMANTIC_MODEL=<model-local>
+MINOS_SEMANTIC_DIMENSIONS=<dimensions>
+MINOS_SEMANTIC_ENDPOINT=http://127.0.0.1:11434/api/embed   # optionnel
+```
+
+`OllamaEmbeddingProvider` accepte uniquement un endpoint loopback, ne suit pas les redirects, borne timeout/réponse et vérifie les dimensions retournées. MINOS ne télécharge aucun modèle. La qualité du modèle est validée séparément par Recall@3/MRR/nDCG@3 ; un endpoint fonctionnel ne suffit pas à qualifier un modèle.
 
 Un provider inconnu doit échouer explicitement ; il ne peut pas provoquer un fallback silencieux vers un service distant.
+
+Voir [Semantic Retrieval 2.0 — M23](semantic-retrieval-2.md).
 
 ## Vector store
 
@@ -70,9 +87,9 @@ builtAtEpochMilli
 documents + vectors
 ```
 
-`FileSemanticVectorStore` utilise un format binaire local v1 et des remplacements atomiques. Le store peut être supprimé puis reconstruit depuis le snapshot actif.
+M20 a introduit `index-v1.bin` avec composantes float64. M23 conserve sa lecture et écrit `index-v2.bin` en float32. Le remplacement reste atomique et le cache mémoire utilise exactement la même quantification float32 que le disque, afin qu'un redémarrage ne change pas le ranking à cause d'une divergence cache/persistance.
 
-Un changement de provider, modèle ou dimensions invalide la réutilisation des anciens vecteurs.
+Le store peut être supprimé puis reconstruit depuis le snapshot actif. Un changement de provider, modèle ou dimensions invalide la réutilisation des anciens vecteurs.
 
 ## Synchronisation incrémentale
 
@@ -91,7 +108,7 @@ Lorsqu'un provider est activé dans le runtime natif, `minos index` déclenche c
 
 ## Semantic search
 
-`SemanticSearchService` exige un index `READY` et calcule la similarité cosinus avec des bornes de résultats.
+`SemanticSearchService` exige un index `READY` et calcule la similarité cosinus exacte avec des bornes de résultats.
 
 Chaque hit porte :
 
@@ -103,7 +120,26 @@ modelId
 limitations
 ```
 
-La limitation `VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT` est contractuelle.
+Les limitations contractuelles incluent :
+
+```text
+VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT
+VECTOR_SEARCH_LINEAR_SCAN
+ANN_NOT_ENABLED_M21_S8_KEEP_CURRENT_BACKEND
+```
+
+M23 ajoute un cache LRU process-local de 256 embeddings de requêtes maximum, clé par provider/modèle/dimensions/requête. Ce cache est jetable et n'est jamais autoritatif.
+
+## Pourquoi le scan exact reste actif
+
+M21-S8 a mesuré le STANDARD déterministe et conclu :
+
+```text
+status=PASS
+decision=KEEP_CURRENT_M20_BACKEND
+```
+
+M23 n'introduit donc ni HNSW, ni Lucene, ni vector database. Une nouvelle structure ANN exige d'abord une nouvelle mesure démontrant un bottleneck réel.
 
 ## Hybrid ranking
 
@@ -128,7 +164,15 @@ Avec index READY, le mode devient `LEXICAL_GRAPH_SEMANTIC`. La combinaison reste
 - nDCG@K ;
 - différence hybride vs baseline lexicale.
 
-Les tests M20 imposent un cas où une requête conceptuelle sans correspondance lexicale récupère le document pertinent grâce au signal sémantique et démontre un gain mesurable.
+M20 possède une preuve contrôlée du pipeline. M23 ajoute une preuve bloquante contre le **modèle learned local réellement configuré** :
+
+```text
+Recall@3 >= 0.75
+MRR      >= 0.70
+nDCG@3   >= 0.72
+```
+
+Le corpus est versionné dans `fixtures/m23/semantic-quality-v1.json` et le rapport est écrit dans `target/m23-quality/learned-semantic-quality.json`.
 
 ## Context builder v2
 
@@ -146,7 +190,7 @@ Le contexte n'invente aucun score supplémentaire : il consomme le ranking hybri
 
 API Java additive : `SemanticCodeIntelligenceApi` v1.
 
-Le MCP expose 23 tools au total. M20 ajoute :
+Le MCP expose 23 tools au total. La couche sémantique expose :
 
 ```text
 minos_semantic_index_status
@@ -168,14 +212,20 @@ MINOS : facts de code + candidats/signaux code-local
 NEXUS : ranking global multi-source + sélection finale + budget global
 ```
 
-Cette séparation évite que M20 transforme MINOS en orchestrateur de contexte général.
+Cette séparation évite que la couche sémantique transforme MINOS en orchestrateur de contexte général.
 
 ## Qualification
 
-Le runner final est :
+M20 reste qualifié par :
 
 ```text
 scripts/m20/run-final.ps1
 ```
 
-Il vérifie les invariants structurels, les facts générés, le reactor Java 24 complet, JaCoCo, les métriques contrôlées, l'invalidation ciblée, les 23 tools MCP et la frontière NEXUS avant de produire le verdict exact-head M20.
+M23 ajoute :
+
+```text
+scripts/m23/run-final.ps1
+```
+
+Le runner M23 vérifie le modèle learned local, le corpus Recall/MRR/nDCG, le reactor Java 24 complet, JaCoCo incluant `semantic-learned-provider`, la release Windows, la parité IntelliJ, les invariants M22 et l'exact-head final.

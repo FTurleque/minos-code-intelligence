@@ -14,6 +14,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Comprendre `--format text/json/mermaid/dot` | [Référence CLI](cli.md) |
 | Connecter Copilot, Claude ou Codex au MCP natif | [Serveur MCP](mcp.md) |
 | Comprendre / lancer l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
+| Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
@@ -154,13 +155,51 @@ minos.cmd architecture my-project --format dot
 
 **Guide dédié : [Visualiser le graphe d'architecture](architecture-graph.md).**
 
-Dans IntelliJ, la Tool Window **MINOS** fournit le statut projet/provider/snapshot, le graphe, l'impact, les tests liés, l'activité Git factuelle et les actions d'indexation. Voir [Plugin IntelliJ](intellij-plugin.md).
-
-Les surfaces M19/M20 plus avancées — Program Graph, Impact v2, security paths, semantic search et hybrid search/context — sont disponibles via l'API Java et/ou le MCP lorsque leurs capacités sont disponibles. Leur convergence complète dans l'UX IntelliJ fait partie de M21.
+Dans IntelliJ, la Tool Window **MINOS** fournit le statut projet/provider/snapshot, le graphe, l'impact, les tests liés, l'activité Git factuelle et les actions d'indexation. Les capabilities Program Graph / Impact v2 / security paths / semantic / hybrid sont négociées via le protocole `minos-ide` v1 et restent dépendantes des facts/providers réellement disponibles. Voir [Plugin IntelliJ](intellij-plugin.md).
 
 ---
 
-## 3. MCP natif et MCP Docker
+## 3. Retrieval sémantique learned local — M23
+
+La couche sémantique est **désactivée par défaut**. Sans embeddings, MINOS conserve les facts structurés et le retrieval lexical/graph.
+
+### Référence déterministe
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER='local-hash'
+```
+
+`local-hash` sert à valider le pipeline. Il est local et déterministe mais **n'est pas un modèle learned**.
+
+### Modèle learned local
+
+M23 peut utiliser un modèle d'embeddings déjà installé et servi localement par Ollama :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER='ollama'
+$env:MINOS_SEMANTIC_MODEL='<model-local>'
+$env:MINOS_SEMANTIC_DIMENSIONS='<dimensions>'
+$env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed' # optionnel
+$env:MINOS_SEMANTIC_TIMEOUT_SECONDS='30'                        # optionnel
+```
+
+Règles importantes :
+
+- MINOS **ne télécharge pas** le modèle ;
+- l'endpoint intégré est **loopback-only** ;
+- le modèle et ses dimensions doivent être explicitement cohérents ;
+- changer provider/modèle/dimensions invalide l'ancien index et déclenche un rebuild sûr ;
+- les résultats sémantiques restent `HEURISTIC` ;
+- une similarité vectorielle ne devient jamais une relation de code ;
+- le backend reste un scan cosine exact tant qu'une mesure ne justifie pas un ANN.
+
+Le store M23 écrit `index-v2.bin` en float32 et peut lire/migrer l'ancien `index-v1.bin` M20. Les snapshots structurés ne sont pas modifiés par cette migration.
+
+Pour le contrat détaillé et la qualification Recall@3/MRR/nDCG@3 : [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md).
+
+---
+
+## 4. MCP natif et MCP Docker
 
 Le MCP natif est installé avec MINOS et reste le mode recommandé pour les clients agents :
 
@@ -192,7 +231,7 @@ Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX
 
 ---
 
-## 4. Fonctionnalités principales
+## 5. Fonctionnalités principales
 
 | Besoin | Commande / surface |
 |---|---|
@@ -214,8 +253,8 @@ Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX
 | Voir l'architecture dans l'IDE | [Plugin IntelliJ](intellij-plugin.md) |
 | **Voir/exporter le graphe** | `architecture --format json|mermaid|dot` — [guide](architecture-graph.md) |
 | Estimer un impact baseline | `impact` / action IntelliJ |
-| Program Graph / Impact v2 / security paths | API Java avancée / MCP |
-| Semantic index / semantic & hybrid retrieval | API Java sémantique / MCP, provider optionnel |
+| Program Graph / Impact v2 / security paths | API Java avancée / MCP / IntelliJ selon capability |
+| Semantic index / semantic & hybrid retrieval | API Java sémantique / MCP / IntelliJ, provider optionnel |
 | Lire l'activité Git factuelle | `git-activity` / onglet Git Activity IntelliJ |
 | Consommer depuis Java | `MinosApi` + APIs additives Provider/Advanced/Semantic |
 | Lire le graphe depuis Java | `MinosApi.getArchitectureGraph` |
@@ -225,7 +264,7 @@ Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX
 
 ---
 
-## 5. Import SCIP manuel
+## 6. Import SCIP manuel
 
 Le chemin manuel est conservé pour le diagnostic ou pour un provider non piloté par MINOS :
 
@@ -239,7 +278,7 @@ minos.cmd import-scip my-project `
 
 ---
 
-## 6. Où MINOS stocke ses données
+## 7. Où MINOS stocke ses données
 
 Par défaut :
 
@@ -256,7 +295,7 @@ La séparation est volontaire : mettre à jour ou désinstaller le programme ne 
 
 ---
 
-## 7. En cas de problème
+## 8. En cas de problème
 
 Commencer par :
 
@@ -274,14 +313,19 @@ minos.cmd index-status my-project --format json
 minos.cmd architecture my-project --format json
 ```
 
-Puis consulter **[Visualiser le graphe — diagnostic rapide](architecture-graph.md#le-graphe-est-vide--diagnostic-rapide)**.
+Pour un problème sémantique M23, vérifier en plus :
 
-Pour le plugin IntelliJ, consulter **[Plugin IntelliJ — Dépannage](intellij-plugin.md#dépannage)**.
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER
+$env:MINOS_SEMANTIC_MODEL
+$env:MINOS_SEMANTIC_DIMENSIONS
+$env:MINOS_SEMANTIC_ENDPOINT
+```
+
+Puis consulter **[Visualiser le graphe — diagnostic rapide](architecture-graph.md#le-graphe-est-vide--diagnostic-rapide)**, **[Plugin IntelliJ — Dépannage](intellij-plugin.md#dépannage)** ou [Dépannage](troubleshooting.md).
 
 Pour les intégrations MCP du setup :
 
 ```powershell
 Get-Content "$env:LOCALAPPDATA\MINOS\mcp-clients.log" -Tail 200
 ```
-
-Puis consulter [Dépannage](troubleshooting.md).

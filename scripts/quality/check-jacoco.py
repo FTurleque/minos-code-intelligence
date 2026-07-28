@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M22."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M23."""
 
 from __future__ import annotations
 
@@ -72,6 +72,11 @@ SCOPES = {
         "prefixes": ("com/minos/store/FileSemanticVectorStore",),
         "line": 0.45,
         "branch": 0.20,
+    },
+    "semantic-learned-provider": {
+        "prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",),
+        "line": 0.50,
+        "branch": 0.30,
     },
     "semantic-hybrid-retrieval": {
         "prefixes": (
