@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **27 juillet 2026**
+Dernière mise à jour documentaire : **28 juillet 2026**
 
 Ce fichier distingue l'état **livré sur `main`** du jalon de consolidation actuellement en cours. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
 
@@ -50,7 +50,7 @@ S4   Maven module-boundary hardening                  VALIDÉ — 0699d06d6138dd
 S5   supply-chain + release hardening                 VALIDÉ — bcc44ea5e7a5c354c1df25bb7d295ee57347629c
 S6   IntelliJ parity M19/M20                          VALIDÉ — 8dff78af7cfbdab1c1d056e3b46b0fd9e5c75ee6
 S7   advanced provider productionization              VALIDÉ — 57243384286ed623de2d9499c9ae6729f77f6845
-S8   semantic scale qualification                     EN COURS — baseline STANDARD à mesurer
+S8   semantic scale qualification                     EN COURS — baseline mesurée, optimisation ciblée à requalifier
 S9   final production integrity gate                  PLANIFIÉ
 ```
 
@@ -193,17 +193,15 @@ semantic documents     210 000
 vector dimensions          384
 ```
 
-Le harness mesure build/rebuild, réutilisation incrémentale, chargement du vector store, recherche sémantique, recherche hybride, contexte hybride, heap, RSS et disque. La mutation contrôlée doit recalculer exactement trois documents (`SYMBOL`, `CHUNK`, `FILE`).
+La première campagne STANDARD complète, sur `37cbe22e91993e8aea040621396d2abd7e00da44`, a validé les invariants (`added=0`, `changed=3`, `removed=0`, `reused=209997`) mais a mesuré des goulots réels : peak heap ratio `0.8966`, vector-store-load p95 `2910.409 ms`, semantic-search p95 `8457.386 ms`, hybrid-search p95 `49412.429 ms` et hybrid-context p95 `48520.565 ms`.
 
-Décisions possibles :
+Verdict autoritatif :
 
 ```text
-INVALID_MEASUREMENT
-OPTIMIZE_MEASURED_BOTTLENECK
-KEEP_CURRENT_M20_BACKEND
+M21 S8 STANDARD MEASUREMENT status=FAIL decision=OPTIMIZE_MEASURED_BOTTLENECK
 ```
 
-Aucun backend/vector index alternatif n'est promu tant que le profil STANDARD n'a pas démontré un goulot. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
+S8 reste ouvert pendant l'optimisation ciblée. Les seuils, le dataset, le seed, le cosine exact et la nature HEURISTIC du signal sémantique restent inchangés. Aucun backend ANN/vector database n'est introduit. Voir [`developer/semantic-scale-qualification.md`](developer/semantic-scale-qualification.md).
 
 Toute modification après un SHA qualifié exige une nouvelle qualification exact-head avant promotion.
 
@@ -248,7 +246,7 @@ Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
 M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
 ```
 
-PR #72 mergée via `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`. Issue #71 fermée comme `completed`.
+PR #72 mergée via `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 ## M19 — Advanced Code Intelligence
 
