@@ -1,6 +1,6 @@
 # M22 — Advanced Provider Intelligence — exécution
 
-Statut : **EN COURS — 9 sous-incréments cadrés ; implémentation Java first en qualification locale.**
+Statut : **VALIDÉ localement exact-head — 9/9 implémentés ; intégration vers `develop` portée par PR #77.**
 
 Issue : **#76 — M22 — Advanced Provider Intelligence**.
 
@@ -221,22 +221,32 @@ Runner :
 .\scripts\m22\run-final.ps1 -ExpectedHead <sha>
 ```
 
-Le runner doit :
+Le runner vérifie :
 
-1. vérifier HEAD exact + worktree tracked propre ;
-2. rejouer le gate local M21/M20, modules et JaCoCo ;
-3. exécuter les tests Java provider / vérité terrain ;
-4. vérifier le contrat M22 statiquement ;
-5. vérifier la documentation ;
-6. revérifier HEAD/worktree ;
-7. produire :
+1. HEAD exact + worktree tracked propre ;
+2. gate local M21/M20, modules et JaCoCo ;
+3. tests Java provider / vérité terrain ;
+4. contrat M22 statique ;
+5. distribution Windows et runtime réellement livré ;
+6. parité IntelliJ + Plugin Verifier ;
+7. documentation, HEAD et worktree finaux.
+
+Premier replay final complet réussi le **28 juillet 2026** sur l’implementation tree `af760cfd61f023113b0e2051e237f73522c8aca6` :
 
 ```text
 M22 ADVANCED PROVIDER CONSISTENCY SUCCESS
+M21 JACOCO GATE SUCCESS
+M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+M21 LOCAL CONSOLIDATION VALIDATION SUCCESS
+M21-S5 SUPPLY-CHAIN RELEASE VALIDATION SUCCESS
+M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS
+M21-S6 INTELLIJ PARITY VALIDATION SUCCESS
 M22 FINAL ADVANCED PROVIDER INTELLIGENCE VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: af760cfd61f023113b0e2051e237f73522c8aca6
 ```
+
+Le runtime Windows qualifié est vérifié depuis le ZIP livré : `app\runtime\lib\modules` doit exister et `app\runtime\release` doit déclarer `jdk.compiler` dans `MODULES`. L’absence de `runtime\bin\java.exe` n’est pas utilisée comme oracle, les commandes natives pouvant être retirées du runtime `jlink` produit par `jpackage`.
 
 ## Promotion
 
-M22 sera déclaré **VALIDÉ** uniquement après succès du runner sur le HEAD exact final. L’intégration se fait dans `develop`. M21-S2 reste indépendant et ne bloque pas le travail fonctionnel M22 sur `develop`, mais continue de bloquer la promotion M21 vers `main` jusqu’à sa reprise en août 2026.
+M22 est **fonctionnellement validé**. Toute modification ultérieure, y compris documentaire, invalide le SHA exact précédent jusqu’au replay de `scripts/m22/run-final.ps1` sur le nouveau HEAD. L’intégration s’effectue via la PR #77 dans `develop`. M21-S2 reste indépendant et en pause jusqu’en août 2026 ; aucun travail CI n’est inclus dans la promotion M22.
