@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -16,14 +17,25 @@ def read(relative: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def normalize_presentation(value: str) -> str:
+    value = value.replace("\u00a0", " ")
+    value = re.sub(r"[`*]+", "", value)
+    return re.sub(r"\s+", " ", value).strip().casefold()
+
+
 def require(relative: str, text: str, expected: str) -> None:
-    if expected not in text:
+    if normalize_presentation(expected) not in normalize_presentation(text):
         raise RuntimeError(f"{relative}: missing expected text: {expected}")
 
 
 def forbid(relative: str, text: str, forbidden: str) -> None:
-    if forbidden in text:
+    if normalize_presentation(forbidden) in normalize_presentation(text):
         raise RuntimeError(f"{relative}: forbidden text present: {forbidden}")
+
+
+def require_pattern(relative: str, text: str, pattern: str, label: str) -> None:
+    if not re.search(pattern, text):
+        raise RuntimeError(f"{relative}: missing expected fact: {label}")
 
 
 def main() -> int:
@@ -104,7 +116,6 @@ def main() -> int:
         require(quality_path, quality, "JavaSourceProgramGraphProvider")
 
         for expected in (
-            "M22 — Advanced Provider Intelligence",
             "M22-S1",
             "M22-S2",
             "M22-S3",
@@ -118,6 +129,12 @@ def main() -> int:
             "M21-S2/CI reste en pause jusqu’en août 2026",
         ):
             require(roadmap_path, roadmap, expected)
+        require_pattern(roadmap_path, roadmap, r"(?im)^#{1,6}\s*M22\b[^\n]*Advanced Provider Intelligence", "M22 execution section")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b", "M22 9/9 completion")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*Issue\b[^\n#]*#\s*76\b[^\n]*\bCLOSED\b[^\n]*\bcompleted\b", "issue #76 closed/completed")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*PR\b[^\n#]*#\s*77\b[^\n]*\bMERGED\b", "PR #77 merged")
+        require(roadmap_path, roadmap, "75d6169be6d46d4e60ca19e781ff61704ca1613c")
+        require(roadmap_path, roadmap, "37a3c904fd92c25b343344a26991531c75ebc4b6")
 
         require(provider_doc_path, provider_doc, "minos-java-source-v1")
         require(provider_doc_path, provider_doc, "JAVA_AST_PARSE_ONLY_TYPE_ATTRIBUTION_NOT_PROVEN")

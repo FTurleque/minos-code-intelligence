@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,16 +18,29 @@ def read(relative: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def normalize_presentation(value: str) -> str:
+    value = value.replace("\u00a0", " ")
+    value = re.sub(r"[`*]+", "", value)
+    return re.sub(r"\s+", " ", value).strip().casefold()
+
+
 def require(relative: str, text: str, *needles: str) -> None:
+    normalized = normalize_presentation(text)
     for needle in needles:
-        if needle not in text:
+        if normalize_presentation(needle) not in normalized:
             raise RuntimeError(f"{relative}: missing required contract text: {needle}")
 
 
 def forbid(relative: str, text: str, *needles: str) -> None:
+    normalized = normalize_presentation(text)
     for needle in needles:
-        if needle in text:
+        if normalize_presentation(needle) in normalized:
             raise RuntimeError(f"{relative}: forbidden M23 regression text: {needle}")
+
+
+def require_pattern(relative: str, text: str, pattern: str, label: str) -> None:
+    if not re.search(pattern, text):
+        raise RuntimeError(f"{relative}: missing required contract fact: {label}")
 
 
 def main() -> int:
@@ -155,17 +169,21 @@ def main() -> int:
 
         roadmap_path = "docs/roadmap/M23_EXECUTION.md"
         roadmap = read(roadmap_path)
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b", "M23 9/9 completion")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*Issue\b[^\n#]*#\s*78\b[^\n]*\bCLOSED\b[^\n]*\bcompleted\b", "issue #78 closed/completed")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*PR\b[^\n#]*#\s*79\b[^\n]*\bMERGED\b", "PR #79 merged")
+        require_pattern(roadmap_path, roadmap, r"(?im)^\s*-\s*le transport learned[^\n]*contourne[^\n]*proxies système", "learned transport bypasses system proxies")
         require(
             roadmap_path,
             roadmap,
-            "9/9 IMPLÉMENTÉS",
+            "7a5fe2b96480a21e063b8ffa537009e5bdf99bc0",
+            "ffe12d95ac46c25026661dca51949fb0d39626b4",
             "ADR-0031",
             "Recall@3 >= 0.75",
             "KEEP_CURRENT_M20_BACKEND",
             "model      embeddinggemma",
             "dimensions 768",
             "Proxy.NO_PROXY",
-            "ProxyHandler({})",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
             "M21-S2/CI reste en pause jusqu’en août 2026",
         )
@@ -214,10 +232,12 @@ def main() -> int:
             "Set-Item -Path $Path -Value $Saved[$Name]",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
         )
-        isolated_calls = runner.count("    Invoke-WithSemanticDisabled {")
-        if isolated_calls != 3:
-            raise RuntimeError(
-                f"{runner_path}: expected exactly three isolated regression gate calls, found {isolated_calls}"
+        for isolated_script in ("run-local.ps1", "run-s5.ps1", "run-s6.ps1"):
+            require_pattern(
+                runner_path,
+                runner,
+                rf"(?s)Invoke-WithSemanticDisabled\s*\{{\s*&\s*\(Join-Path\s+\$RepoRoot\s+['\"]scripts\\m21\\{re.escape(isolated_script)}['\"]\)",
+                f"{isolated_script} executes with semantic opt-in isolated",
             )
         forbid(
             runner_path,
