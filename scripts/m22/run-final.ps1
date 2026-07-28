@@ -37,6 +37,32 @@ function Assert-CleanWorktree([string] $Stage) {
     }
 }
 
+function Assert-PackagedRuntimeContainsModule {
+    param(
+        [Parameter(Mandatory = $true)][string] $RuntimeRoot,
+        [Parameter(Mandatory = $true)][string] $ModuleName,
+        [Parameter(Mandatory = $true)][string] $Context
+    )
+
+    $ReleaseFile = Join-Path $RuntimeRoot 'release'
+    $ModulesImage = Join-Path $RuntimeRoot 'lib\modules'
+    if (-not (Test-Path -LiteralPath $ReleaseFile -PathType Leaf)) {
+        throw "$Context runtime release metadata not found: $ReleaseFile"
+    }
+    if (-not (Test-Path -LiteralPath $ModulesImage -PathType Leaf)) {
+        throw "$Context runtime module image not found: $ModulesImage"
+    }
+
+    $ReleaseContent = Get-Content -LiteralPath $ReleaseFile -Raw
+    if ($ReleaseContent -notmatch '(?m)^MODULES="([^"]*)"\s*$') {
+        throw "$Context runtime release metadata does not expose MODULES: $ReleaseFile"
+    }
+    $RuntimeModules = @($Matches[1] -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($RuntimeModules -notcontains $ModuleName) {
+        throw "$Context runtime does not contain $ModuleName; Java Advanced Provider would be unavailable in production."
+    }
+}
+
 Push-Location $RepoRoot
 try {
     Write-Host '=== MINOS M22 - FINAL Advanced Provider Intelligence exact-head qualification ===' -ForegroundColor Cyan
@@ -64,25 +90,24 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "M22 Windows release qualification failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[4/7] Proving the packaged Windows runtime contains jdk.compiler for the Java provider...'
-    $Distribution = Join-Path $RepoRoot "target\dist\minos-$Version-windows-x64"
-    $RuntimeJava = Join-Path $Distribution 'app\runtime\bin\java.exe'
-    if (-not (Test-Path -LiteralPath $RuntimeJava -PathType Leaf)) {
-        throw "Packaged runtime java.exe not found: $RuntimeJava"
+    $DistributionName = "minos-$Version-windows-x64"
+    $Zip = Join-Path $RepoRoot "target\dist\$DistributionName.zip"
+    if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) {
+        throw "Qualified Windows ZIP not found: $Zip"
     }
-    $PreviousErrorActionPreference = $ErrorActionPreference
+
+    $RuntimeProbeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-m22-runtime-probe-" + [Guid]::NewGuid())
     try {
-        $ErrorActionPreference = 'Continue'
-        $Modules = ((& $RuntimeJava --list-modules 2>&1) | Out-String)
-        $ModulesExit = $LASTEXITCODE
+        New-Item -ItemType Directory -Force -Path $RuntimeProbeRoot | Out-Null
+        Expand-Archive -LiteralPath $Zip -DestinationPath $RuntimeProbeRoot -Force
+        $PackagedRuntime = Join-Path $RuntimeProbeRoot "$DistributionName\app\runtime"
+        Assert-PackagedRuntimeContainsModule `
+            -RuntimeRoot $PackagedRuntime `
+            -ModuleName 'jdk.compiler' `
+            -Context 'Qualified Windows ZIP'
     }
     finally {
-        $ErrorActionPreference = $PreviousErrorActionPreference
-    }
-    if ($ModulesExit -ne 0) {
-        throw "Packaged runtime --list-modules failed (exit=$ModulesExit): $Modules"
-    }
-    if ($Modules -notmatch '(?m)^jdk\.compiler(?:@|$)') {
-        throw 'Packaged MINOS runtime does not contain jdk.compiler; Java Advanced Provider would be unavailable in production.'
+        Remove-Item -LiteralPath $RuntimeProbeRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host 'M22 PACKAGED JDK.COMPILER RUNTIME SUCCESS' -ForegroundColor Green
 
