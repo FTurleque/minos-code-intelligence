@@ -32,7 +32,9 @@ public final class ProgramGraphService {
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
 
     public ProgramGraphService(LocalProjectRegistry registry, FileSymbolSnapshotStore snapshotStore) {
-        this(registry, snapshotStore, List.of(new RelationshipProgramGraphProvider()));
+        this(registry, snapshotStore, List.of(
+                new RelationshipProgramGraphProvider(),
+                new JavaSourceProgramGraphProvider()));
     }
 
     public ProgramGraphService(
