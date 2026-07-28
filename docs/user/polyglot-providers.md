@@ -11,7 +11,7 @@ Tant que la qualification exacte Windows + Linux n'a pas été exécutée sur le
 | Langage | Provider | Version M24 | Installation MINOS | Plateforme/runtime visé |
 |---|---|---:|---|---|
 | C / C++ | `scip-clang` | `0.4.0` | non ; binaire opérateur | qualification runtime Linux x86_64 ; Windows explicitement non supporté par le runtime M24 |
-| C# | `scip-dotnet` | `0.2.14` | oui, locale sous `MINOS_HOME/tools` | Windows + Linux avec .NET SDK 10+ |
+| C# | `scip-dotnet` | `0.2.14` | oui, locale sous `MINOS_HOME/tools` | Linux + Windows **uniquement lorsque l'hôte Windows est supporté par .NET 10** ; Windows 10 Pro 22H2 n'est pas une plateforme de preuve M24 |
 | Go | `scip-go` | `0.2.7` | oui, locale sous `MINOS_HOME/tools` | Windows + Linux avec toolchain Go |
 | Rust | `rust-analyzer scip` | `0.3.2989` / release `2026-07-27` | non ; toolchain opérateur | Windows + Linux si `cargo`, `rustc` et le rust-analyzer épinglé sont présents |
 
@@ -80,13 +80,15 @@ Sous Windows, `scip-clang` M24 est signalé `BLOCKED` : la discovery C/C++ conti
 
 ### C#
 
-Prérequis :
+Prérequis lorsque la plateforme est supportée :
 
 ```text
 .NET SDK 10+
 ```
 
-Installation locale :
+En juillet 2026, la matrice officielle .NET 10 ne prend pas en charge Windows 10 Pro 22H2. Sur cet hôte, M24 **n'impose pas** l'installation d'un SDK non supporté : `scip-dotnet` reste `BLOCKED/NOT_RUN` côté Windows et sa preuve e2e est portée par Linux ou par un Windows officiellement supporté.
+
+Installation locale sur une plateforme supportée :
 
 ```powershell
 minos.cmd tools install scip-dotnet
@@ -188,4 +190,4 @@ minos.cmd tools list --format json
 minos.cmd doctor --format json
 ```
 
-Puis vérifier les prérequis du provider, sa version exacte et les limitations affichées. Un état `BLOCKED`, `NOT_INSTALLED` ou `INVALID` doit être corrigé ; il n'est jamais contourné par une promotion de snapshot.
+Puis vérifier les prérequis du provider, sa version exacte et les limitations affichées. Un état `BLOCKED`, `NOT_INSTALLED` ou `INVALID` n'est jamais contourné par une promotion de snapshot ; `BLOCKED` peut être une disposition attendue lorsque la plateforme elle-même n'est pas supportée par le provider ou son runtime.
