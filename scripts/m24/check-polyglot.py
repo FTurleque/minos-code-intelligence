@@ -39,6 +39,7 @@ def main() -> int:
         quality_path = "scripts/quality/check-jacoco.py"
         roadmap_path = "docs/roadmap/M24_EXECUTION.md"
         adr_path = "docs/adr/0032-evidence-gated-polyglot-scip-providers.md"
+        bootstrap_path = "scripts/m24/bootstrap-windows-toolchains.ps1"
         windows_prereq_path = "scripts/m24/check-windows-prerequisites.ps1"
         windows_final_path = "scripts/m24/run-final.ps1"
         linux_final_path = "scripts/m24/run-final.sh"
@@ -55,6 +56,7 @@ def main() -> int:
         quality = read(quality_path)
         roadmap = read(roadmap_path)
         adr = read(adr_path)
+        bootstrap = read(bootstrap_path)
         windows_prereq = read(windows_prereq_path)
         windows_final = read(windows_final_path)
         linux_final = read(linux_final_path)
@@ -147,6 +149,25 @@ def main() -> int:
         require(adr_path, adr, "Evidence-gated polyglot SCIP providers")
         require(adr_path, adr, "structured snapshots authoritative")
 
+        # Reproducible Windows bootstrap: no package manager/admin assumption and
+        # no persistent PATH mutation. Downloads are pinned/verified upstream.
+        for token in (
+            "$GoVersion = '1.26.4'",
+            "$GoSha256 = '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345'",
+            "$RustVersion = '1.97.1'",
+            "$RustHost = 'x86_64-pc-windows-gnu'",
+            "$RustAnalyzerRelease = '2026-07-27'",
+            "$RustAnalyzerCommit = '12c3381'",
+            "Get-FileHash -Algorithm SHA256",
+            "rustup-init.exe.sha256",
+            "api.github.com/repos/rust-lang/rust-analyzer/releases/tags",
+            "M24 WINDOWS TOOLCHAIN BOOTSTRAP SUCCESS",
+            "No administrator rights, WinGet, MSI installation, user PATH mutation",
+        ):
+            require(bootstrap_path, bootstrap, token)
+        forbid(bootstrap_path, bootstrap.lower(), "winget install")
+        forbid(bootstrap_path, bootstrap.lower(), "setx path")
+
         # Windows preflight is support-matrix aware: never force .NET 10 onto an
         # unsupported Windows 10 host, but keep Go/Rust qualification mandatory.
         for token in (
@@ -184,6 +205,7 @@ def main() -> int:
 
         # Final runners/docs are part of S8/S9 and must exist before this gate can pass.
         for required in (
+            "scripts/m24/bootstrap-windows-toolchains.ps1",
             "scripts/m24/check-windows-prerequisites.ps1",
             "scripts/m24/run-final.ps1",
             "scripts/m24/run-final.sh",
