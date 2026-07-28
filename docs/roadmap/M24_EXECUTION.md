@@ -1,10 +1,10 @@
 # M24 — Polyglot Expansion — exécution
 
-Statut : **EN COURS — cadrage M24-S1 ouvert ; aucune promotion avant double qualification exact-head Windows + Linux.**
+Statut : **EN COURS — S1 cadré ; S2→S8 implémentation/qualification en cours ; aucune promotion avant double qualification exact-head Windows + Linux.**
 
 ```text
 Issue   : #81 — OPEN
-PR      : à créer en Draft
+PR      : #82 — DRAFT
 Branche : m24-polyglot-expansion
 Base    : develop @ 8dbe34cb9e524acb62becda4faa263d74b90b9a9
 Date    : 28 juillet 2026
@@ -16,7 +16,7 @@ M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**. M2
 
 > MINOS peut-il étendre sa couverture de langages sans abaisser les exigences de capabilities, stable identity, provenance et conformance ?
 
-## Réponse architecturale visée
+## Architecture retenue
 
 M24 réutilise les frontières M17 et le pipeline SCIP existant :
 
@@ -31,7 +31,7 @@ ProjectDiscoveryService
 
 IndexerProviderRegistry
         │
-        └─ providers SCIP qualifiés
+        └─ providers SCIP évalués
               ├─ scip-clang       C / C++
               ├─ scip-dotnet      C#
               ├─ scip-go          Go
@@ -50,37 +50,47 @@ ScipSymbolSnapshotImporter
 
 Aucun `switch` de langage n’est ajouté dans `ProjectDiscoveryService`, CLI, MCP, IntelliJ ou NEXUS. Les surfaces consomment les contrats provider/discovery existants.
 
-## Audit initial du tree
+## Audit du tree
 
 Le tree de base prouve déjà :
 
-- `ProjectDiscovery.Language` = Java, Kotlin, TypeScript, Python ;
-- `ProjectDiscovery.BuildSystem` = Maven, Gradle, npm, pnpm, yarn ;
+- `ProjectDiscovery.Language` historique = Java, Kotlin, TypeScript, Python ;
+- `ProjectDiscovery.BuildSystem` historique = Maven, Gradle, npm, pnpm, yarn ;
 - `DefaultDiscoveryPlugins` branche les marqueurs/langages derrière les SPI ;
 - `IndexerCapability` possède un profil exhaustif de 13 capacités d’indexation ;
-- `ProviderConformanceKit` vérifie actuellement identité/version/langages/builds/capabilities/limitations mais pas encore explicitement les exigences runtime ni les comportements stable identity/provenance ;
 - `CompositeProviderRuntimeManager` compose les extensions sans branchement public sur les ids ;
-- `ManagedScipProviderRuntimeManager` et `ManagedScipPythonRuntimeManager` confinent les installations sous `MINOS_HOME/tools` ;
-- `ScipSymbolNormalizer` conserve provenance SCIP et références provider, mais utilise encore une identité structurelle/fallback qui doit être requalifiée pour chaque nouveau langage ;
+- les installations gérées sont confinées sous `MINOS_HOME/tools` ;
+- `ScipSymbolNormalizer` conserve provenance SCIP et raw provider symbol dans `ProviderReference` ;
 - M22 advanced intelligence reste un provider Java séparé : aucune capacité CFG/data-flow/security n’est déduite d’un simple index SCIP ;
 - M23 garde le snapshot structuré autoritatif et les résultats sémantiques `HEURISTIC`.
 
-## Évaluation upstream figée pour l’implémentation
+M24 a ajouté sans changer ce modèle :
+
+- `C`, `CPP`, `CSHARP`, `GO`, `RUST` ;
+- `CMAKE`, `DOTNET`, `GO_MODULE`, `CARGO` ;
+- `ProviderOperationalProfile` : plateformes qualifiées, runtime requirements, readiness/install, stable identity et provenance ;
+- conformance croisée descriptor/capability/operational profile ;
+- runtime polyglotte derrière `ProviderRuntimeManager` ;
+- fixtures déterministes sous `fixtures/m24/` ;
+- fingerprints build M24, avec lecture compatible des snapshots FORMAT_VERSION=1 calculés sous la politique M17 ;
+- opt-in explicite `--provider <id>` pour exercer un provider `EXPERIMENTAL`, sans le rendre éligible à la négociation automatique.
+
+## Évaluation upstream et pins M24
 
 Les versions suivantes sont **pinnées pour M24** ; leur présence ne constitue pas une qualification MINOS.
 
-| Écosystème | Provider/indexeur | Version M24 | Licence | Runtime / plateforme upstream | Disposition de départ |
+| Écosystème | Provider/indexeur | Version M24 | Licence | Runtime / plateforme upstream | Disposition avant gates |
 |---|---|---:|---|---|---|
-| C / C++ | `sourcegraph/scip-clang` | `0.4.0` | Apache-2.0 | binaires upstream : Linux x86_64 glibc>=2.16 et macOS arm64 ; compilation database requise | `QUALIFIED_WITH_CONSTRAINTS` candidat Linux uniquement ; Windows runtime non supporté par M24 |
-| C# | `sourcegraph/scip-dotnet` | `0.2.14` | Apache-2.0 | outil .NET ; release 0.2.14 construite avec SDK .NET 10 | `QUALIFIED_WITH_CONSTRAINTS` candidat Windows + Linux |
-| Go | `scip-code/scip-go` | `0.2.7` | Apache-2.0 | `go install` ; projet `go.mod` canonique | `QUALIFIED_WITH_CONSTRAINTS` candidat Windows + Linux |
-| Rust | `rust-lang/rust-analyzer scip` | `2026-05-25 / v0.3.2913` | Apache-2.0 / MIT | `cargo`, `rustc`, `rust-analyzer`; wrapper `scip-rust` 0.0.6 ne rajoute pas de sémantique | `EXPERIMENTAL` jusqu’à preuve stable identity + Windows/Linux |
+| C / C++ | `sourcegraph/scip-clang` | `0.4.0` | Apache-2.0 | binaires upstream Linux x86_64 et macOS arm64 ; compilation database requise | `EXPERIMENTAL`, cible de qualification runtime Linux x86_64 ; Windows runtime explicitement bloqué |
+| C# | `sourcegraph/scip-dotnet` | `0.2.14` | Apache-2.0 | outil .NET ; release 0.2.14 construite avec SDK .NET 10 | `EXPERIMENTAL`, candidat Windows + Linux |
+| Go | `scip-code/scip-go` | `0.2.7` | Apache-2.0 | `go install`; projet `go.mod` canonique | `EXPERIMENTAL`, candidat Windows + Linux |
+| Rust | `rust-lang/rust-analyzer scip` | `2026-07-27 / v0.3.2989`, commit `12c3381` | Apache-2.0 / MIT | `cargo`, `rustc`, `rust-analyzer`; le wrapper `scip-rust` n'est pas un moteur distinct | `EXPERIMENTAL` jusqu’à preuve stable identity + plateforme |
 
-Sources upstream de cadrage : dépôts et releases officielles GitHub de `scip-clang`, `scip-dotnet`, `scip-go`, `scip-rust` et `rust-analyzer`. Les résultats empiriques M24 priment sur la documentation upstream pour toute promotion.
+Les résultats empiriques M24 priment sur la documentation upstream pour toute promotion.
 
 ## Matrice de capacité M24
 
-La matrice finale doit distinguer au minimum :
+La qualification distingue explicitement :
 
 ```text
 discovery
@@ -104,101 +114,45 @@ Règles :
 
 - `symbols/references/usages/relationships` ne sont promus que sur fixtures réelles ;
 - `architecture/impact` sont des dérivations MINOS et exigent les faits source nécessaires ;
-- `CFG/def-use/data-flow/security` restent `UNSUPPORTED` pour les nouveaux providers M24 tant qu’aucun provider avancé spécifique ne les prouve ;
-- `semantic documents` décrivent uniquement la capacité du snapshot à alimenter la couche M20/M23 ; les résultats restent `HEURISTIC` et opt-in ;
+- `CFG/def-use/data-flow/security` restent non revendiqués pour les nouveaux providers M24 tant qu’aucun provider avancé spécifique ne les prouve ;
+- `semantic documents` passent uniquement par le chemin M20/M23 existant ; les résultats restent `HEURISTIC` et opt-in ;
 - aucune absence de fait upstream n’est remplacée par une relation inventée.
 
 ## Sous-incréments
 
-### M24-S1 — Cadrage, audit provider, ADR, matrice de qualification 🚧
+### M24-S1 — Cadrage, audit provider, ADR, matrice de qualification ✅ IMPLÉMENTÉ
 
-Sortie :
+Preuves de structure : issue #81, branche unique, Draft PR #82, ADR-0032, audit tree/upstream, versions et contraintes pinnées.
 
-- issue #81 ;
-- branche unique `m24-polyglot-expansion` depuis le HEAD exact de `develop` ;
-- audit tree + upstream ;
-- ADR-0032 ;
-- versions et contraintes de plateforme pinnées ;
-- Draft PR vers `develop`.
+### M24-S2 — Infrastructure polyglot + conformance renforcée 🚧 IMPLÉMENTÉ / TEST NON ENCORE EXÉCUTÉ
 
-### M24-S2 — Infrastructure polyglot + conformance renforcée ⏳
+Vocabulaires language/build étendus ; discovery derrière les SPI ; `ProviderOperationalProfile` additif ; conformance durcie ; sept providers exposés, dont quatre M24 `EXPERIMENTAL` ; CLI provider enrichie.
 
-Sortie :
+### M24-S3 — Stable identities, provenance et normalisation cross-language 🚧 IMPLÉMENTÉ / TEST NON ENCORE EXÉCUTÉ
 
-- extensions de `Language` / `BuildSystem` strictement nécessaires ;
-- discovery derrière les SPI existants ;
-- métadonnées opérationnelles provider exhaustives : exigences runtime, plateformes, installation/readiness, stable identity, provenance ;
-- `ProviderConformanceKit` durci sans casser son contrat historique ;
-- aucune capability absente du profil.
+Tests de répétabilité/non-collision ; raw provider symbol conservé ; `Origin` provider/version/run conservé ; externes provider-scoped ; aucune relation fabriquée.
 
-### M24-S3 — Stable identities, provenance et normalisation cross-language ⏳
+### M24-S4 — C / C++ / scip-clang 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
 
-Sortie :
+Discovery C/C++ + CMake ; provider 0.4.0 ; process plan `--compdb-path=...` ; Linux x86_64 cible runtime ; Windows `BLOCKED` ; fixture mixte C/C++ ; installation operator-managed.
 
-- tests de répétabilité sur deux indexations identiques ;
-- absence de collisions triviales entre namespaces/packages/modules/symboles homonymes ;
-- raw provider symbol conservé dans `ProviderReference` ;
-- `Origin` provider/version/run conservé ;
-- externes/non résolus explicitement représentés ;
-- aucune relation fabriquée.
+### M24-S5 — C# / scip-dotnet 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
 
-### M24-S4 — C / C++ / scip-clang ⏳
+Discovery `.cs/.csproj/.sln` ; provider 0.2.14 ; installation locale `dotnet tool --tool-path` ; readiness .NET SDK 10+ ; fixture namespace/interface/implémentation/usages.
 
-Sortie :
+### M24-S6 — Go / scip-go 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
 
-- discovery C/C++ + CMake/compilation database ;
-- provider `scip-clang` 0.4.0 ;
-- runtime fail-closed : Linux x86_64 seulement pour l’installation/exécution M24 ;
-- fixture CMake avec `compile_commands.json` reproductible ;
-- indexation + snapshot + symbol/usages/relations/provenance/stable identity ;
-- Windows expose explicitement la limitation au lieu de simuler un PASS.
+Discovery `.go/go.mod/go.work` ; provider 0.2.7 ; installation via `GOBIN` local ; fixture module/package/interface/usages ; `go.work` discovery-only tant que le multi-workspace n'est pas mesuré.
 
-### M24-S5 — C# / scip-dotnet ⏳
+### M24-S7 — Rust / rust-analyzer SCIP 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
 
-Sortie :
+Discovery `.rs/Cargo.toml` ; rust-analyzer 2026-07-27 / v0.3.2989 commit `12c3381` ; readiness cargo/rustc/rust-analyzer ; aucun `rustup` implicite ; fixture crate/module/trait/impl/usages.
 
-- discovery `.cs`, `.csproj`, `.sln` ;
-- provider `scip-dotnet` 0.2.14 ;
-- installation locale sous `MINOS_HOME/tools`, jamais globale ;
-- .NET SDK requis diagnostiqué ;
-- fixture namespace + classe + interface + appels/références ;
-- e2e Windows + Linux si les gates runtime passent.
+### M24-S8 — Surfaces publiques, documentation, packaging/runtime 🚧
 
-### M24-S6 — Go / scip-go ⏳
-
-Sortie :
-
-- discovery `.go`, `go.mod`, `go.work` visible sans prétention multi-workspace non prouvée ;
-- provider `scip-go` 0.2.7 ;
-- installation pinnée sous `MINOS_HOME/tools` via `GOBIN` ;
-- fixture package/module ;
-- e2e Windows + Linux.
-
-### M24-S7 — Rust / rust-analyzer SCIP ⏳
-
-Sortie :
-
-- discovery `.rs`, `Cargo.toml` ;
-- provider SCIP basé sur `rust-analyzer` 2026-05-25 / v0.3.2913 ;
-- readiness exige `cargo`, `rustc` et la version rust-analyzer qualifiée ;
-- aucun téléchargement opaque ni toolchain implicite ;
-- fixture crate/module/trait ;
-- promotion au plus haut niveau réellement prouvé Windows + Linux, sinon `EXPERIMENTAL` explicite.
-
-### M24-S8 — Surfaces publiques, documentation, packaging/runtime ⏳
-
-Sortie :
-
-- CLI/API/MCP/IntelliJ/NEXUS réutilisent les profils core ;
-- aucune liste de langages divergente codée en dur dans les surfaces ;
-- documentation utilisateur : support, prérequis, installation, diagnostic, limitations, plateformes ;
-- documentation développeur : extension provider + preuve ;
-- packaging/supply-chain et Plugin Verifier rejoués si impactés ;
-- variables M23 neutralisées dans les replays historiques sans opt-in.
+Implémenté : composition M24, CLI provider, guides user/developer, gate statique `scripts/m24/check-polyglot.py`, scope JaCoCo M24 sans baisse historique, isolation sémantique M23. Packaging/release et IntelliJ restent à prouver par logs.
 
 ### M24-S9 — Qualification finale exact-head Windows + Linux ⏳
-
-Runners de référence :
 
 ```powershell
 .\scripts\m24\run-final.ps1 -ExpectedHead <sha>
@@ -208,40 +162,35 @@ Runners de référence :
 ./scripts/m24/run-final.sh <sha>
 ```
 
-Les runners sont fail-closed et vérifient au minimum :
+Le helper partagé `scripts/m24/run-provider-e2e.py` copie les fixtures en temporaire, inspecte/installe les runtimes gérés lorsque possible, exécute deux indexations FULL, compare stable identity, vérifie provenance provider/version/run et exerce usages/relations sans salir le checkout.
 
-1. SHA exact au démarrage ;
-2. worktree tracked propre ;
-3. cohérence docs/ADR/provider matrix ;
-4. conformance M24 exhaustive ;
-5. discovery + runtimes + fixtures e2e applicables ;
-6. stable identity + provenance cross-language ;
-7. Maven Java 24 complet + JaCoCo sans baisse de seuil ;
-8. régressions M17/M20/M21-local/M22/M23 pertinentes ;
-9. supply-chain/release Windows M21-S5 applicable ;
-10. IntelliJ parity + Plugin Verifier M21-S6 applicable ;
-11. absence de changement `.github/workflows` ;
-12. HEAD et worktree revérifiés à la fin.
+Les runners vérifient : SHA/worktree propres au début et à la fin, zéro changement `.github/workflows` depuis la base M24, docs/ADR, conformance, fixtures e2e applicables, stable identity/provenance, Maven Java 24 + JaCoCo, régressions M17/M20/M21-local/M22/M23, release Windows M21-S5 et IntelliJ/Plugin Verifier M21-S6 sur Windows.
 
-Marqueurs finaux attendus :
+Marqueurs :
 
 ```text
 M24 FINAL POLYGLOT EXPANSION VALIDATION SUCCESS
 Validated HEAD: <sha>
 ```
 
-et sous Linux :
-
 ```text
 M24 LINUX POLYGLOT EXPANSION VALIDATION SUCCESS
 Validated HEAD: <sha>
 ```
 
+## Politique de disposition
+
+Un provider reste `EXPERIMENTAL` tant que sa plateforme n'est pas enregistrée comme preuve qualifiée. L'évaluateur tente néanmoins l'e2e lorsqu'il peut rendre le runtime `READY`.
+
+Après réception des logs Windows + Linux : un provider réellement prouvé est promu au niveau justifié et reçoit uniquement les plateformes prouvées ; un provider non prêt garde `EXPERIMENTAL` avec diagnostics visibles. Toute promotion modifie le HEAD et impose un replay exact-head final.
+
 ## Promotion
 
-Ordre impératif :
-
 ```text
+évaluation provider Windows + Linux
+      ↓
+finalisation dispositions + docs
+      ↓
 dernier commit M24
       ↓
 SHA candidat exact
@@ -252,7 +201,7 @@ Linux exact-head PASS
       ↓
 même SHA + worktree propre
       ↓
-PR Ready
+PR #82 Ready
       ↓
 merge develop avec expected_head_sha
       ↓
