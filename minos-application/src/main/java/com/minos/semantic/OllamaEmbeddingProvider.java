@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -71,7 +72,7 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
         requireText(stableKey, "stableKey");
         Objects.requireNonNull(text, "text");
 
-        HttpURLConnection connection = (HttpURLConnection) endpoint.toURL().openConnection();
+        HttpURLConnection connection = (HttpURLConnection) endpoint.toURL().openConnection(Proxy.NO_PROXY);
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(timeoutMillis);
         connection.setReadTimeout(timeoutMillis);
