@@ -239,11 +239,14 @@ if (-not $RustAnalyzerReady) {
 }
 
 # Activate only this PowerShell process. The user's machine/user PATH is not modified.
+# rustup places a rust-analyzer proxy in CARGO_HOME\bin even when the component is
+# not installed for the selected toolchain. Put the verified standalone binary
+# before CARGO_HOME\bin so Get-Command resolves the pinned M24 rust-analyzer.
 $env:GOROOT = $GoRoot
 $RequiredPathEntries = @(
     (Join-Path $GoRoot 'bin'),
-    (Join-Path $CargoHome 'bin'),
-    $RustAnalyzerRoot
+    $RustAnalyzerRoot,
+    (Join-Path $CargoHome 'bin')
 )
 $ExistingPathEntries = @($env:PATH -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $env:PATH = (($RequiredPathEntries + $ExistingPathEntries) | Select-Object -Unique) -join ';'
