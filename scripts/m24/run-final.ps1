@@ -90,6 +90,10 @@ try {
     Write-Host "HEAD: $Head"
     Write-Host "Release candidate version: $Version"
 
+    Write-Host '[preflight] Windows M24 toolchains and canonical semantic profile...'
+    & (Join-Path $RepoRoot 'scripts\m24\check-windows-prerequisites.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "M24 Windows prerequisite gate failed (exit=$LASTEXITCODE)" }
+
     Write-Host '[1/9] M24 static provider/discovery/documentation contract...'
     Invoke-PythonGate $Python 'scripts\m24\check-polyglot.py' 'M24 polyglot consistency gate failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
