@@ -212,9 +212,8 @@ else {
     $RustAnalyzerVersion = Try-VersionProbe 'rust-analyzer' $RustAnalyzer @('--version') $Problems
     if ($RustAnalyzerVersion) {
         if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerVersion) -or
-            $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease) -or
             $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerCommit)) {
-            $Problems.Add("rust-analyzer must match v$RequiredRustAnalyzerVersion / release $RequiredRustAnalyzerRelease / commit $RequiredRustAnalyzerCommit; got $RustAnalyzerVersion")
+            $Problems.Add("rust-analyzer must match v$RequiredRustAnalyzerVersion / commit $RequiredRustAnalyzerCommit from release $RequiredRustAnalyzerRelease; got $RustAnalyzerVersion")
         }
         else {
             Write-Host "PASS rust-analyzer: $RustAnalyzerVersion"

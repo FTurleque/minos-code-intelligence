@@ -266,9 +266,11 @@ def main() -> int:
         require_pattern(
             bootstrap_path,
             bootstrap,
-            r"(?s)\$RustAnalyzerReady\s*=.*?\$RustAnalyzerVersion.*?-and.*?\$RustAnalyzerRelease.*?-and.*?\$RustAnalyzerCommit",
-            "existing rust-analyzer requires version, release and commit",
+            r"(?s)\$RustAnalyzerReady\s*=.*?\$RustAnalyzerVersion.*?-and.*?\$RustAnalyzerCommit.*?-and.*?ExistingMetadata\.release.*?\$RustAnalyzerRelease.*?-and.*?ExistingMetadata\.sha256",
+            "existing rust-analyzer requires binary identity and release metadata",
         )
+        require_pattern(bootstrap_path, bootstrap, r"\$RustAnalyzerMetadata\s*=.*?\.minos-release\.json", "persisted rust-analyzer release metadata")
+        require_pattern(bootstrap_path, bootstrap, r"sha256\s*=\s*\$Digest\.Substring\(7\)\.ToLowerInvariant\(\)", "persisted verified rust-analyzer asset digest")
         for token in ("M24 WINDOWS TOOLCHAIN BOOTSTRAP SUCCESS", "No administrator rights, WinGet, MSI installation, user PATH mutation"):
             require(bootstrap_path, bootstrap, token)
         forbid_pattern(bootstrap_path, bootstrap, r"(?i)\bwinget(?:\.exe)?\s+install\b", "WinGet installation")
@@ -298,8 +300,8 @@ def main() -> int:
         require_pattern(
             windows_prereq_path,
             windows_prereq,
-            r"(?s)\$RustAnalyzerVersion\s+-notmatch.*?\$RequiredRustAnalyzerVersion.*?-or.*?\$RequiredRustAnalyzerRelease.*?-or.*?\$RequiredRustAnalyzerCommit",
-            "Windows rust-analyzer requires version, release and commit",
+            r"(?s)\$RustAnalyzerVersion\s+-notmatch.*?\$RequiredRustAnalyzerVersion.*?-or.*?\$RequiredRustAnalyzerCommit",
+            "Windows rust-analyzer requires version and commit identity",
         )
         require(windows_final_path, windows_final, "check-windows-prerequisites.ps1")
         require_e2e_set(windows_final_path, windows_final, {"scip-go", "rust-analyzer-scip"})
@@ -328,8 +330,8 @@ def main() -> int:
         require_pattern(
             linux_final_path,
             linux_final,
-            r"(?s)\[\[\s*\"\$rust_analyzer_version\".*?\$RUST_ANALYZER_VERSION.*?&&.*?\$RUST_ANALYZER_RELEASE.*?&&.*?\$RUST_ANALYZER_COMMIT.*?\]\]",
-            "Linux rust-analyzer requires version, release and commit",
+            r"(?s)\[\[\s*\"\$rust_analyzer_version\".*?\$RUST_ANALYZER_VERSION.*?&&.*?\$RUST_ANALYZER_COMMIT.*?\]\]",
+            "Linux rust-analyzer requires version and commit identity",
         )
         require_e2e_set(linux_final_path, linux_final, {"scip-clang", "scip-dotnet", "scip-go", "rust-analyzer-scip"})
 

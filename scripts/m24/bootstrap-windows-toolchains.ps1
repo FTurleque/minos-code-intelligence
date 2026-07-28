@@ -101,6 +101,7 @@ $RustRoot = Join-Path $InstallRoot 'rust'
 $CargoHome = Join-Path $RustRoot 'cargo'
 $RustupHome = Join-Path $RustRoot 'rustup'
 $RustAnalyzerRoot = Join-Path $InstallRoot "rust-analyzer\$RustAnalyzerRelease"
+$RustAnalyzerMetadata = Join-Path $RustAnalyzerRoot '.minos-release.json'
 
 New-Item -ItemType Directory -Force -Path $InstallRoot, $DownloadRoot | Out-Null
 
@@ -191,12 +192,17 @@ Write-Host "PASS cargo installed: $CargoVersion"
 # published SHA-256 digest before extracting the executable.
 $RustAnalyzerExe = Join-Path $RustAnalyzerRoot 'rust-analyzer.exe'
 $RustAnalyzerReady = $false
-if (Test-Path $RustAnalyzerExe) {
+if ((Test-Path $RustAnalyzerExe) -and (Test-Path $RustAnalyzerMetadata)) {
     try {
         $ExistingAnalyzer = Invoke-NativeChecked $RustAnalyzerExe @('--version')
+        $ExistingMetadata = Get-Content -Raw -Path $RustAnalyzerMetadata | ConvertFrom-Json
         $RustAnalyzerReady = $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerVersion) -and
-            $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerRelease) -and
-            $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerCommit)
+            $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerCommit) -and
+            [string]$ExistingMetadata.release -eq $RustAnalyzerRelease -and
+            [string]$ExistingMetadata.version -eq $RustAnalyzerVersion -and
+            [string]$ExistingMetadata.commit -eq $RustAnalyzerCommit -and
+            [string]$ExistingMetadata.asset -eq $RustAnalyzerAssetName -and
+            [string]$ExistingMetadata.sha256 -match '^[0-9a-fA-F]{64}$'
         if ($RustAnalyzerReady) { Write-Host "PASS existing rust-analyzer: $ExistingAnalyzer" }
     }
     catch { $RustAnalyzerReady = $false }
@@ -231,11 +237,17 @@ if (-not $RustAnalyzerReady) {
     Remove-DirectoryIfPresent $RustAnalyzerRoot
     New-Item -ItemType Directory -Force -Path $RustAnalyzerRoot | Out-Null
     Copy-Item -Force -Path $ExtractedAnalyzer.FullName -Destination $RustAnalyzerExe
+    @{
+        release = $RustAnalyzerRelease
+        version = $RustAnalyzerVersion
+        commit = $RustAnalyzerCommit
+        asset = $RustAnalyzerAssetName
+        sha256 = $Digest.Substring(7).ToLowerInvariant()
+    } | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $RustAnalyzerMetadata
     Remove-DirectoryIfPresent $AnalyzerStage
 
     $InstalledAnalyzer = Invoke-NativeChecked $RustAnalyzerExe @('--version')
     if ($InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerVersion) -or
-        $InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerRelease) -or
         $InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerCommit)) {
         throw "rust-analyzer pin verification failed: $InstalledAnalyzer"
     }

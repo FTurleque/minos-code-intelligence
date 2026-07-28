@@ -80,9 +80,8 @@ assert_provider_prerequisites() {
   echo "rustc: $rustc_version"
   echo "rust-analyzer: $rust_analyzer_version"
   [[ "$rust_analyzer_version" == *"$RUST_ANALYZER_VERSION"* \
-    && "$rust_analyzer_version" == *"$RUST_ANALYZER_RELEASE"* \
     && "$rust_analyzer_version" == *"$RUST_ANALYZER_COMMIT"* ]] \
-    || fail "rust-analyzer must match v$RUST_ANALYZER_VERSION / release $RUST_ANALYZER_RELEASE / commit $RUST_ANALYZER_COMMIT"
+    || fail "rust-analyzer must match v$RUST_ANALYZER_VERSION / commit $RUST_ANALYZER_COMMIT from release $RUST_ANALYZER_RELEASE"
 }
 
 run_with_semantic_disabled() {
