@@ -7,6 +7,7 @@ import com.minos.orchestration.IndexerCapability;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.ProviderConformanceKit;
+import com.minos.orchestration.ProviderPlatform;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,13 +52,12 @@ class M24PolyglotProviderTest {
     }
 
     @Test
-    void keepsNewProvidersExperimentalUntilPlatformEvidencePromotesThem() {
+    void exposesFinalConstrainedQualificationsAndOnlyMeasuredPlatforms() {
         Map<String, IndexerProvider> providers = ScipIndexerCatalog.qualifiedM24Providers().stream()
                 .collect(Collectors.toMap(provider -> provider.descriptor().id(), Function.identity()));
         for (String id : NEW_PROVIDER_IDS) {
             IndexerProvider provider = providers.get(id);
-            assertEquals(IndexerQualification.EXPERIMENTAL, provider.descriptor().qualification());
-            assertTrue(provider.operationalProfile().qualificationPlatforms().isEmpty());
+            assertEquals(IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, provider.descriptor().qualification());
             assertEquals(CapabilitySupportLevel.PARTIAL,
                     provider.capabilityProfile().supportOf(IndexerCapability.STABLE_SYMBOL_IDENTITY));
             assertEquals(CapabilitySupportLevel.UNSUPPORTED,
@@ -65,6 +65,19 @@ class M24PolyglotProviderTest {
             assertEquals(CapabilitySupportLevel.UNSUPPORTED,
                     provider.capabilityProfile().supportOf(IndexerCapability.INCREMENTAL_INDEXING));
         }
+        assertEquals(Set.of(ProviderPlatform.LINUX_X64),
+                providers.get(ScipIndexerCatalog.SCIP_CLANG_ID).operationalProfile().qualificationPlatforms());
+        assertEquals(Set.of(ProviderPlatform.LINUX_X64),
+                providers.get(ScipIndexerCatalog.SCIP_DOTNET_ID).operationalProfile().qualificationPlatforms());
+        assertEquals(Set.of(
+                        ProviderPlatform.WINDOWS_X64,
+                        ProviderPlatform.LINUX_X64),
+                providers.get(ScipIndexerCatalog.SCIP_GO_ID).operationalProfile().qualificationPlatforms());
+        assertEquals(Set.of(
+                        ProviderPlatform.WINDOWS_X64,
+                        ProviderPlatform.LINUX_X64),
+                providers.get(ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID)
+                        .operationalProfile().qualificationPlatforms());
     }
 
     @Test
@@ -96,7 +109,8 @@ class M24PolyglotProviderTest {
 
         ProviderPlatformService.ProviderView rust = platform.inspect(ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID);
         assertEquals(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION, rust.version());
-        assertEquals("EXPERIMENTAL", rust.qualification());
+        assertEquals("QUALIFIED_WITH_CONSTRAINTS", rust.qualification());
+        assertEquals(List.of("LINUX_X64", "WINDOWS_X64"), rust.qualificationPlatforms());
         assertTrue(rust.operationalProfileExplicit());
     }
 

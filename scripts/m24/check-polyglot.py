@@ -60,7 +60,7 @@ def require_enum_members(relative: str, text: str, enum_name: str, expected: set
         raise RuntimeError(f"{relative}: enum {enum_name} is missing: {', '.join(sorted(missing))}")
 
 
-def require_java_method_contains(relative: str, text: str, method_name: str, pattern: str, label: str) -> None:
+def java_method_body(relative: str, text: str, method_name: str) -> str:
     signature = re.search(rf"\b{re.escape(method_name)}\s*\([^)]*\)\s*(?:throws\s+[^{{]+)?\{{", text)
     if not signature:
         raise RuntimeError(f"{relative}: cannot find Java method {method_name}")
@@ -74,7 +74,11 @@ def require_java_method_contains(relative: str, text: str, method_name: str, pat
         cursor += 1
     if depth:
         raise RuntimeError(f"{relative}: cannot parse Java method {method_name}")
-    require_pattern(relative, text[signature.end():cursor - 1], pattern, label, re.DOTALL)
+    return text[signature.end():cursor - 1]
+
+
+def require_java_method_contains(relative: str, text: str, method_name: str, pattern: str, label: str) -> None:
+    require_pattern(relative, java_method_body(relative, text, method_name), pattern, label, re.DOTALL)
 
 
 def require_e2e_set(relative: str, text: str, expected: set[str]) -> None:
@@ -165,9 +169,22 @@ def main() -> int:
                 catalog_path,
                 catalog,
                 method,
-                r"IndexerQualification\.EXPERIMENTAL",
-                f"{method} remains EXPERIMENTAL",
+                r"IndexerQualification\.QUALIFIED_WITH_CONSTRAINTS",
+                f"{method} has its final evidence-constrained disposition",
             )
+        for method, platforms in (
+            ("scipClangOperationalProfile", {"LINUX_X64"}),
+            ("scipDotnetOperationalProfile", {"LINUX_X64"}),
+            ("scipGoOperationalProfile", {"WINDOWS_X64", "LINUX_X64"}),
+            ("rustAnalyzerScipOperationalProfile", {"WINDOWS_X64", "LINUX_X64"}),
+        ):
+            body = java_method_body(catalog_path, catalog, method)
+            actual = set(re.findall(r"ProviderPlatform\.([A-Z0-9_]+)", body))
+            if actual != platforms:
+                raise RuntimeError(
+                    f"{catalog_path}: {method} qualification platforms: "
+                    f"expected {sorted(platforms)}, got {sorted(actual)}"
+                )
         require_pattern(
             catalog_path,
             catalog,

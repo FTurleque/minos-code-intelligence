@@ -59,10 +59,7 @@ public final class ScipIndexerCatalog {
         return qualifiedM17Providers().stream().map(IndexerProvider::descriptor).toList();
     }
 
-    /**
-     * M24 catalog. Polyglot entries remain EXPERIMENTAL until exact-head platform
-     * gates promote only the facts and platforms actually observed.
-     */
+    /** M24 catalog with final dispositions derived from exact-head platform evidence. */
     public static List<IndexerProvider> qualifiedM24Providers() {
         List<IndexerProvider> providers = new ArrayList<>(qualifiedM17Providers());
         providers.add(provider(scipClang(), scipClangProfile(), scipClangOperationalProfile()));
@@ -152,9 +149,9 @@ public final class ScipIndexerCatalog {
                         IndexerCapability.STRUCTURAL_RELATIONS,
                         IndexerCapability.TEST_SOURCES,
                         IndexerCapability.PARTIAL_INDEX_ON_BUILD_FAILURE),
-                IndexerQualification.EXPERIMENTAL, 85,
+                IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, 85,
                 List.of(
-                        "M24 runtime qualification target is Linux x86_64; upstream 0.4.0 publishes no Windows binary",
+                        "M24 qualifies the runtime on Linux x86_64 only; upstream 0.4.0 publishes no Windows binary",
                         "a JSON compilation database is required and must represent the fixture build accurately",
                         "stable MINOS identities use measured structural fallback, not canonical cross-provider identity",
                         "structural and implementation relationship completeness is provider-dependent",
@@ -176,9 +173,9 @@ public final class ScipIndexerCatalog {
                         IndexerCapability.MULTI_MODULE,
                         IndexerCapability.TEST_SOURCES,
                         IndexerCapability.RUNTIME_INSTALLATION),
-                IndexerQualification.EXPERIMENTAL, 90,
+                IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, 90,
                 List.of(
-                        "M24 pins scip-dotnet 0.2.14 and requires a compatible local .NET SDK",
+                        "M24 qualifies scip-dotnet 0.2.14 on Linux x86_64 with a compatible local .NET SDK 10+",
                         "managed installation must use a MINOS_HOME/tools tool path and never a global dotnet tool install",
                         "stable MINOS identities use measured structural fallback, not canonical cross-provider identity",
                         "relationship completeness follows Roslyn/scip-dotnet output and is not extrapolated",
@@ -199,9 +196,9 @@ public final class ScipIndexerCatalog {
                         IndexerCapability.STRUCTURAL_RELATIONS,
                         IndexerCapability.TEST_SOURCES,
                         IndexerCapability.RUNTIME_INSTALLATION),
-                IndexerQualification.EXPERIMENTAL, 90,
+                IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, 90,
                 List.of(
-                        "M24 pins scip-go 0.2.7 and requires a Go toolchain in PATH",
+                        "M24 qualifies scip-go 0.2.7 on Windows x86_64 and Linux x86_64 with a Go toolchain in PATH",
                         "canonical qualification uses go.mod projects; go.work is discovery-only until measured",
                         "managed installation is confined with GOBIN under MINOS_HOME/tools",
                         "stable MINOS identities use measured structural fallback, not canonical cross-provider identity",
@@ -221,9 +218,9 @@ public final class ScipIndexerCatalog {
                         IndexerCapability.IMPLEMENTATION_RELATIONS,
                         IndexerCapability.STRUCTURAL_RELATIONS,
                         IndexerCapability.TEST_SOURCES),
-                IndexerQualification.EXPERIMENTAL, 80,
+                IndexerQualification.QUALIFIED_WITH_CONSTRAINTS, 80,
                 List.of(
-                        "M24 targets rust-analyzer release 2026-07-27 / v0.3.2989 (commit 12c3381) and requires cargo/rustc",
+                        "M24 qualifies rust-analyzer release 2026-07-27 / v0.3.2989 (commit 12c3381) on Windows x86_64 and Linux x86_64 with cargo/rustc",
                         "MINOS does not mutate rustup or install a compiler toolchain implicitly",
                         "the scip-rust wrapper is not treated as a separate semantic engine",
                         "stable MINOS identities use measured structural fallback, not canonical cross-provider identity",
@@ -356,8 +353,8 @@ public final class ScipIndexerCatalog {
 
     private static ProviderOperationalProfile scipClangOperationalProfile() {
         return operational(
-                scipClang(), Set.of(),
-                List.of("scip-clang 0.4.0", "Linux x86_64 for M24 runtime qualification", "JSON compilation database"),
+                scipClang(), Set.of(ProviderPlatform.LINUX_X64),
+                List.of("scip-clang 0.4.0", "qualified Linux x86_64 runtime", "JSON compilation database"),
                 "READY requires the exact scip-clang version and a supported host; Windows is reported unsupported",
                 "M24 does not auto-install scip-clang; operator-managed pinned binary is inspected explicitly",
                 "repeated fixture indexing must prove deterministic structural MINOS ids without namespace/type collisions",
@@ -366,7 +363,7 @@ public final class ScipIndexerCatalog {
 
     private static ProviderOperationalProfile scipDotnetOperationalProfile() {
         return operational(
-                scipDotnet(), Set.of(), List.of(".NET SDK 10", "scip-dotnet 0.2.14"),
+                scipDotnet(), Set.of(ProviderPlatform.LINUX_X64), List.of(".NET SDK 10+", "scip-dotnet 0.2.14"),
                 "READY requires the pinned local tool and a compatible dotnet host",
                 "dotnet tool installation uses --tool-path under MINOS_HOME/tools and never global installation",
                 "repeated fixture indexing must prove deterministic structural MINOS ids across namespace/type/method symbols",
@@ -375,7 +372,8 @@ public final class ScipIndexerCatalog {
 
     private static ProviderOperationalProfile scipGoOperationalProfile() {
         return operational(
-                scipGo(), Set.of(), List.of("Go toolchain", "scip-go 0.2.7", "canonical go.mod project for promotion fixture"),
+                scipGo(), Set.of(ProviderPlatform.WINDOWS_X64, ProviderPlatform.LINUX_X64),
+                List.of("Go toolchain", "scip-go 0.2.7", "canonical go.mod project for promotion fixture"),
                 "READY requires the pinned local scip-go executable and a Go toolchain",
                 "go install is executed with GOBIN confined under MINOS_HOME/tools",
                 "repeated fixture indexing must prove deterministic structural MINOS ids across modules/packages/symbols",
@@ -384,7 +382,7 @@ public final class ScipIndexerCatalog {
 
     private static ProviderOperationalProfile rustAnalyzerScipOperationalProfile() {
         return operational(
-                rustAnalyzerScip(), Set.of(),
+                rustAnalyzerScip(), Set.of(ProviderPlatform.WINDOWS_X64, ProviderPlatform.LINUX_X64),
                 List.of("cargo", "rustc", "rust-analyzer " + RUST_ANALYZER_SCIP_RELEASE + " / v" + RUST_ANALYZER_SCIP_VERSION),
                 "READY requires cargo/rustc plus the pinned rust-analyzer build exposing the scip subcommand",
                 "M24 does not mutate rustup or install a Rust compiler toolchain implicitly",
