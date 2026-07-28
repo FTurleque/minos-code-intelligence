@@ -11,6 +11,7 @@ import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OllamaEmbeddingProviderTest {
 
     @Test
-    void requiresLoopbackEndpointAndExplicitModelIdentity() {
+    void requiresNumericLoopbackOrLocalhostAndExplicitModelIdentity() {
         OllamaEmbeddingProvider provider = new OllamaEmbeddingProvider(
                 URI.create("http://localhost:11434/api/embed"), "fixture-code-model", 384, Duration.ofSeconds(2));
         assertEquals("minos-local-ollama", provider.id());
@@ -31,8 +32,17 @@ class OllamaEmbeddingProviderTest {
         assertEquals(384, provider.dimensions());
         assertEquals("localhost", provider.endpoint().getHost());
 
+        new OllamaEmbeddingProvider(
+                URI.create("http://127.255.0.1:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2));
+        new OllamaEmbeddingProvider(
+                URI.create("http://[::1]:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2));
+
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("https://example.com/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
+        assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://127.example.com:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
+        assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://127.0.0.1.example.com:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("file:///tmp/embed"), "fixture", 384, Duration.ofSeconds(2)));
     }
@@ -47,7 +57,7 @@ class OllamaEmbeddingProviderTest {
                     int contentLength = 0;
                     String line;
                     while ((line = reader.readLine()) != null && !line.isEmpty()) {
-                        if (line.toLowerCase().startsWith("content-length:")) {
+                        if (line.toLowerCase(Locale.ROOT).startsWith("content-length:")) {
                             contentLength = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
                         }
                     }
