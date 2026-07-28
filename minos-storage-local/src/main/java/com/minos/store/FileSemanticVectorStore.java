@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Local versioned M20 vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
@@ -32,6 +33,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private static final int MAX_STRING_BYTES = 16 * 1024 * 1024;
 
     private final Path root;
+    private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public FileSemanticVectorStore(Path root) throws IOException {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
@@ -42,7 +44,13 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         requireText(projectId, "projectId");
         Path file = indexFile(projectId);
-        if (!Files.isRegularFile(file)) return Optional.empty();
+        if (!Files.isRegularFile(file)) {
+            cache.remove(projectId);
+            return Optional.empty();
+        }
+        CacheEntry cached = cache.get(projectId);
+        if (cached != null && cached.matches(file)) return Optional.of(cached.snapshot());
+
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
@@ -66,13 +74,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                         readString(input), readString(input));
                 int vectorSize = input.readInt();
                 if (vectorSize != dimensions) throw new IOException("semantic vector dimensions mismatch");
-                List<Double> vector = new ArrayList<>(dimensions);
-                for (int d = 0; d < dimensions; d++) vector.add(input.readDouble());
-                documents.add(new IndexedDocument(document, new SemanticVector(document.stableKey(), vector)));
+                double[] vector = new double[dimensions];
+                for (int d = 0; d < dimensions; d++) vector[d] = input.readDouble();
+                documents.add(new IndexedDocument(document, SemanticVector.fromArray(document.stableKey(), vector)));
             }
             if (input.read() != -1) throw new IOException("unexpected trailing semantic index data");
-            return Optional.of(new IndexSnapshot(storedProject, snapshotId, providerId, modelId,
-                    dimensions, builtAt, documents));
+            IndexSnapshot snapshot = new IndexSnapshot(storedProject, snapshotId, providerId, modelId,
+                    dimensions, builtAt, documents);
+            cache.put(projectId, CacheEntry.capture(file, snapshot));
+            return Optional.of(snapshot);
         } catch (EOFException exception) {
             throw new IOException("truncated semantic index: " + file, exception);
         }
@@ -87,10 +97,10 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Files.createDirectories(directory);
         Path target = directory.resolve("index-v1.bin");
         Path temporary = Files.createTempFile(directory, "index-v1-", ".tmp");
+        List<IndexedDocument> ordered = snapshot.documents().stream()
+                .sorted(Comparator.comparing(value -> value.document().stableKey()))
+                .toList();
         try {
-            List<IndexedDocument> ordered = snapshot.documents().stream()
-                    .sorted(Comparator.comparing(value -> value.document().stableKey()))
-                    .toList();
             try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
                 output.writeInt(MAGIC);
                 output.writeInt(FORMAT_VERSION);
@@ -113,10 +123,16 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     writeString(output, document.content());
                     writeString(output, document.checksum());
                     output.writeInt(indexed.vector().dimensions());
-                    for (double value : indexed.vector().values()) output.writeDouble(value);
+                    for (int d = 0; d < indexed.vector().dimensions(); d++) {
+                        output.writeDouble(indexed.vector().valueAt(d));
+                    }
                 }
             }
             moveAtomically(temporary, target);
+            IndexSnapshot normalized = new IndexSnapshot(
+                    snapshot.projectId(), snapshot.snapshotId(), snapshot.providerId(), snapshot.modelId(),
+                    snapshot.dimensions(), snapshot.builtAtEpochMilli(), ordered);
+            cache.put(snapshot.projectId(), CacheEntry.capture(target, normalized));
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -125,6 +141,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     @Override
     public void delete(String projectId) throws IOException {
         requireText(projectId, "projectId");
+        cache.remove(projectId);
         Files.deleteIfExists(indexFile(projectId));
     }
 
@@ -182,5 +199,16 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+    }
+
+    private record CacheEntry(IndexSnapshot snapshot, long sizeBytes, long lastModifiedMillis) {
+        static CacheEntry capture(Path file, IndexSnapshot snapshot) throws IOException {
+            return new CacheEntry(snapshot, Files.size(file), Files.getLastModifiedTime(file).toMillis());
+        }
+
+        boolean matches(Path file) throws IOException {
+            return sizeBytes == Files.size(file)
+                    && lastModifiedMillis == Files.getLastModifiedTime(file).toMillis();
+        }
     }
 }
