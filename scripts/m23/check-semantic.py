@@ -162,6 +162,10 @@ def main() -> int:
             "ADR-0031",
             "Recall@3 >= 0.75",
             "KEEP_CURRENT_M20_BACKEND",
+            "model      embeddinggemma",
+            "dimensions 768",
+            "Proxy.NO_PROXY",
+            "ProxyHandler({})",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
             "M21-S2/CI reste en pause jusqu’en août 2026",
         )
@@ -200,6 +204,9 @@ def main() -> int:
             "run-s5.ps1",
             "0.2.0-m23",
             "run-s6.ps1",
+            "$RequiredSemanticProvider = 'ollama'",
+            "$RequiredSemanticModel = 'embeddinggemma'",
+            "$RequiredSemanticDimensions = '768'",
             "M23 FINAL SEMANTIC RETRIEVAL 2.0 VALIDATION SUCCESS",
         )
         forbid(
