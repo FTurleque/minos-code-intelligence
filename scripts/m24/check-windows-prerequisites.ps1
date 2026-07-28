@@ -15,13 +15,11 @@ if ($env:OS -ne 'Windows_NT') {
     throw 'M24 Windows prerequisite gate must run on Windows.'
 }
 
-function Resolve-Command {
+function Find-Command {
     param([Parameter(Mandatory = $true)][string] $Name)
     $Command = Get-Command $Name -ErrorAction SilentlyContinue
-    if (-not $Command) {
-        throw "Missing required command in PATH: $Name"
-    }
-    return $Command.Source
+    if ($Command) { return $Command.Source }
+    return $null
 }
 
 function Invoke-Captured {
@@ -48,11 +46,11 @@ function Invoke-Captured {
 
         $OutputParts = @()
         if (Test-Path $StdoutPath) {
-            $Stdout = (Get-Content -Raw -Path $StdoutPath -ErrorAction SilentlyContinue)
+            $Stdout = Get-Content -Raw -Path $StdoutPath -ErrorAction SilentlyContinue
             if (-not [string]::IsNullOrWhiteSpace($Stdout)) { $OutputParts += $Stdout.TrimEnd() }
         }
         if (Test-Path $StderrPath) {
-            $Stderr = (Get-Content -Raw -Path $StderrPath -ErrorAction SilentlyContinue)
+            $Stderr = Get-Content -Raw -Path $StderrPath -ErrorAction SilentlyContinue
             if (-not [string]::IsNullOrWhiteSpace($Stderr)) { $OutputParts += $Stderr.TrimEnd() }
         }
         $Output = ($OutputParts -join "`n").Trim()
@@ -99,6 +97,22 @@ function Test-Dotnet10SupportedWindowsHost {
     return [pscustomobject]@{ Supported = $Supported; ProductName = $ProductName; Edition = $Edition; DisplayVersion = $DisplayVersion; Build = $Build }
 }
 
+function Try-VersionProbe {
+    param(
+        [Parameter(Mandatory = $true)][string] $Label,
+        [Parameter(Mandatory = $true)][string] $Executable,
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.List[string]] $Problems
+    )
+    try {
+        return Invoke-Captured $Executable $Arguments
+    }
+    catch {
+        $Problems.Add("$Label probe failed: $($_.Exception.Message)")
+        return $null
+    }
+}
+
 Write-Host '=== MINOS M24 - Windows polyglot prerequisite gate ===' -ForegroundColor Cyan
 
 Require-EnvironmentValue 'MINOS_SEMANTIC_PROVIDER' $RequiredSemanticProvider
@@ -106,63 +120,115 @@ Require-EnvironmentValue 'MINOS_SEMANTIC_MODEL' $RequiredSemanticModel
 Require-EnvironmentValue 'MINOS_SEMANTIC_DIMENSIONS' $RequiredSemanticDimensions
 Require-EnvironmentValue 'MINOS_SEMANTIC_ENDPOINT' $RequiredSemanticEndpoint
 
-$Java = Resolve-Command 'java.exe'
-$JavaVersion = Invoke-Captured $Java @('-version')
-if ($JavaVersion -notmatch 'version\s+"24(?:\.|"|\s)') {
-    throw "M24 requires Java 24; java -version returned:`n$JavaVersion"
+$Problems = [System.Collections.Generic.List[string]]::new()
+
+$Java = Find-Command 'java.exe'
+if (-not $Java) {
+    $Problems.Add('Java 24: java.exe is missing from PATH')
 }
-Write-Host "PASS Java 24: $($JavaVersion.Split("`n")[0])"
+else {
+    $JavaVersion = Try-VersionProbe 'Java' $Java @('-version') $Problems
+    if ($JavaVersion) {
+        if ($JavaVersion -notmatch 'version\s+"24(?:\.|"|\s)') {
+            $Problems.Add("Java 24 required; java -version returned: $($JavaVersion -replace "`r?`n", ' | ')")
+        }
+        else {
+            Write-Host "PASS Java 24: $($JavaVersion.Split("`n")[0])"
+        }
+    }
+}
 
 $Python = $null
 foreach ($Candidate in @('python.exe', 'python', 'python3.exe', 'python3')) {
-    $Resolved = Get-Command $Candidate -ErrorAction SilentlyContinue
-    if ($Resolved) {
-        $Python = $Resolved.Source
-        break
-    }
+    $Python = Find-Command $Candidate
+    if ($Python) { break }
 }
 if (-not $Python) {
-    throw 'M24 requires Python in PATH.'
+    $Problems.Add('Python: no python/python3 command found in PATH')
 }
-$PythonVersion = Invoke-Captured $Python @('--version')
-Write-Host "PASS Python: $PythonVersion"
+else {
+    $PythonVersion = Try-VersionProbe 'Python' $Python @('--version') $Problems
+    if ($PythonVersion) { Write-Host "PASS Python: $PythonVersion" }
+}
 
 $WindowsSupport = Test-Dotnet10SupportedWindowsHost
 Write-Host "INFO Windows host: $($WindowsSupport.ProductName) / $($WindowsSupport.Edition) / $($WindowsSupport.DisplayVersion) / build $($WindowsSupport.Build)"
 if ($WindowsSupport.Supported) {
-    $Dotnet = Resolve-Command 'dotnet.exe'
-    $DotnetVersion = Invoke-Captured $Dotnet @('--version')
-    $DotnetMajorText = ($DotnetVersion -split '\.')[0]
-    $DotnetMajor = 0
-    if (-not [int]::TryParse($DotnetMajorText, [ref] $DotnetMajor) -or $DotnetMajor -lt 10) {
-        throw "M24 scip-dotnet 0.2.14 requires .NET SDK 10+ on this supported Windows host; dotnet --version=$DotnetVersion"
+    $Dotnet = Find-Command 'dotnet.exe'
+    if (-not $Dotnet) {
+        $Problems.Add('.NET SDK 10+: dotnet.exe is missing from PATH on a Windows host supported by .NET 10')
     }
-    Write-Host "PASS .NET SDK: $DotnetVersion"
+    else {
+        $DotnetVersion = Try-VersionProbe '.NET SDK' $Dotnet @('--version') $Problems
+        if ($DotnetVersion) {
+            $DotnetMajorText = ($DotnetVersion -split '\.')[0]
+            $DotnetMajor = 0
+            if (-not [int]::TryParse($DotnetMajorText, [ref]$DotnetMajor) -or $DotnetMajor -lt 10) {
+                $Problems.Add(".NET SDK 10+ required for scip-dotnet 0.2.14; dotnet --version=$DotnetVersion")
+            }
+            else {
+                Write-Host "PASS .NET SDK: $DotnetVersion"
+            }
+        }
+    }
 }
 else {
     Write-Host 'INFO scip-dotnet: .NET 10 is not supported on this Windows host; Windows C# e2e is intentionally BLOCKED/NOT_RUN and no unsupported SDK installation is required.'
 }
 
-$Go = Resolve-Command 'go.exe'
-$GoVersion = Invoke-Captured $Go @('version')
-Write-Host "PASS Go: $GoVersion"
-
-$Cargo = Resolve-Command 'cargo.exe'
-$CargoVersion = Invoke-Captured $Cargo @('--version')
-Write-Host "PASS cargo: $CargoVersion"
-
-$Rustc = Resolve-Command 'rustc.exe'
-$RustcVersion = Invoke-Captured $Rustc @('--version')
-Write-Host "PASS rustc: $RustcVersion"
-
-$RustAnalyzer = Resolve-Command 'rust-analyzer.exe'
-$RustAnalyzerVersion = Invoke-Captured $RustAnalyzer @('--version')
-if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease) -and
-    $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerCommit)) {
-    throw "M24 requires rust-analyzer release $RequiredRustAnalyzerRelease / commit $RequiredRustAnalyzerCommit; rust-analyzer --version=$RustAnalyzerVersion"
+$Go = Find-Command 'go.exe'
+if (-not $Go) {
+    $Problems.Add('Go: go.exe is missing from PATH')
 }
-Write-Host "PASS rust-analyzer: $RustAnalyzerVersion"
+else {
+    $GoVersion = Try-VersionProbe 'Go' $Go @('version') $Problems
+    if ($GoVersion) { Write-Host "PASS Go: $GoVersion" }
+}
+
+$Cargo = Find-Command 'cargo.exe'
+if (-not $Cargo) {
+    $Problems.Add('Rust: cargo.exe is missing from PATH')
+}
+else {
+    $CargoVersion = Try-VersionProbe 'cargo' $Cargo @('--version') $Problems
+    if ($CargoVersion) { Write-Host "PASS cargo: $CargoVersion" }
+}
+
+$Rustc = Find-Command 'rustc.exe'
+if (-not $Rustc) {
+    $Problems.Add('Rust: rustc.exe is missing from PATH')
+}
+else {
+    $RustcVersion = Try-VersionProbe 'rustc' $Rustc @('--version') $Problems
+    if ($RustcVersion) { Write-Host "PASS rustc: $RustcVersion" }
+}
+
+$RustAnalyzer = Find-Command 'rust-analyzer.exe'
+if (-not $RustAnalyzer) {
+    $Problems.Add('Rust: rust-analyzer.exe is missing from PATH')
+}
+else {
+    $RustAnalyzerVersion = Try-VersionProbe 'rust-analyzer' $RustAnalyzer @('--version') $Problems
+    if ($RustAnalyzerVersion) {
+        if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease) -and
+            $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerCommit)) {
+            $Problems.Add("rust-analyzer must match release $RequiredRustAnalyzerRelease / commit $RequiredRustAnalyzerCommit; got $RustAnalyzerVersion")
+        }
+        else {
+            Write-Host "PASS rust-analyzer: $RustAnalyzerVersion"
+        }
+    }
+}
 
 Write-Host 'INFO scip-clang: Windows runtime intentionally not required; upstream 0.4.0 has no qualified Windows binary path in M24.'
 Write-Host 'INFO scip-go executable is managed under MINOS_HOME/tools by the M24 provider runtime during e2e evaluation.'
+
+if ($Problems.Count -gt 0) {
+    Write-Host 'M24 WINDOWS PREREQUISITES FAILED' -ForegroundColor Red
+    foreach ($Problem in $Problems) {
+        Write-Host " - $Problem" -ForegroundColor Red
+    }
+    throw "M24 Windows prerequisite gate found $($Problems.Count) problem(s)."
+}
+
 Write-Host 'M24 WINDOWS PREREQUISITES SUCCESS' -ForegroundColor Green
