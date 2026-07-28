@@ -15,7 +15,7 @@ The evaluated ecosystems expose viable SCIP paths, but with materially different
 - `scip-clang` 0.4.0 indexes C/C++ precisely from a JSON compilation database, but its upstream binary releases are limited to Linux x86_64 and macOS arm64;
 - `scip-dotnet` 0.2.14 indexes C#/VB through Roslyn and is distributed as a .NET tool; the release moved its SDK to .NET 10;
 - `scip-go` 0.2.7 indexes canonical Go module projects and can be installed reproducibly with `go install` at a pinned version;
-- Rust SCIP is emitted by `rust-analyzer scip`; M24 pins the qualified rust-analyzer release to `2026-05-25` / `v0.3.2913`. The `scip-rust` 0.0.6 project is only a thin wrapper around the same command and is not a distinct semantic engine.
+- Rust SCIP is emitted by `rust-analyzer scip`; M24 pins the qualified rust-analyzer release candidate to `2026-07-27` / `v0.3.2989`, commit `12c3381`. The `scip-rust` project is only a thin wrapper around the same command and is not a distinct semantic engine.
 
 ## Decision
 
