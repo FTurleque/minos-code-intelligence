@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string] $ExpectedHead = '',
+    [Parameter(Mandatory = $true)][string] $ExpectedHead,
     [string] $Version = '0.2.0-m23'
 )
 
@@ -11,6 +11,12 @@ $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'M23 final qualification must run on Windows because it includes the qualified Windows release gate.'
+}
+if ([string]::IsNullOrWhiteSpace($ExpectedHead)) {
+    throw 'M23 final qualification requires an explicit -ExpectedHead SHA.'
+}
+if ($Version -ne '0.2.0-m23') {
+    throw "M23 final qualification requires release candidate version 0.2.0-m23, got: $Version"
 }
 
 function Resolve-Python {
@@ -53,7 +59,7 @@ try {
 
     Assert-CleanWorktree 'preflight'
     $Head = Get-Head
-    if (-not [string]::IsNullOrWhiteSpace($ExpectedHead) -and $Head -ne $ExpectedHead) {
+    if ($Head -ne $ExpectedHead) {
         throw "M23 exact-head mismatch: expected=$ExpectedHead actual=$Head"
     }
     Write-Host "HEAD: $Head"
