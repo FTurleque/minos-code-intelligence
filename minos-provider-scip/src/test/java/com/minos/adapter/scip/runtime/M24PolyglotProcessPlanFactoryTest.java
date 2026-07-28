@@ -1,5 +1,8 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import org.junit.jupiter.api.Test;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,8 +70,7 @@ class M24PolyglotProcessPlanFactoryTest {
         Files.writeString(project.resolve("fixture.csproj"), "<Project />");
         Files.writeString(project.resolve("go.mod"), "module example.com/test\ngo 1.22\n");
         Files.writeString(project.resolve("Cargo.toml"), "[package]\nname='fixture'\nversion='0.1.0'\n");
-        IndexingExecutionRequest incremental = new IndexingExecutionRequest(
-                "project", project, IndexingMode.INCREMENTAL, List.of("src/main.txt"));
+        IndexingExecutionRequest incremental = request(project, IndexingMode.INCREMENTAL, List.of("src/main.txt"));
         assertThrows(IllegalStateException.class,
                 () -> new ScipClangProcessPlanFactory(executable).create(incremental, temp.resolve("run")));
         assertThrows(IllegalStateException.class,
@@ -79,6 +82,16 @@ class M24PolyglotProcessPlanFactoryTest {
     }
 
     private static IndexingExecutionRequest request(Path project) {
-        return new IndexingExecutionRequest("project", project, IndexingMode.FULL, List.of());
+        return request(project, IndexingMode.FULL, List.of());
+    }
+
+    private static IndexingExecutionRequest request(Path project, IndexingMode mode, List<String> changedFiles) {
+        return new IndexingExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                project,
+                new IndexerSelection(Language.GO, ScipIndexerCatalog.scipGo()),
+                mode,
+                changedFiles);
     }
 }
