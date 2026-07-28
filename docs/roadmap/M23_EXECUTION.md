@@ -51,9 +51,11 @@ Les scores sémantiques restent `HEURISTIC`. Aucun voisinage vectoriel n’est p
 - aucun provider sémantique n’est activé par défaut ;
 - aucun téléchargement de modèle n’est effectué par MINOS ;
 - le provider learned intégré refuse tout endpoint non-loopback et les redirects ;
+- le transport learned loopback contourne explicitement les proxies système ;
 - modèle + dimensions sont explicites et font partie de l’identité d’index ;
 - changement provider/modèle/dimensions => rebuild sûr ;
 - qualité learned mesurée sur le modèle réellement configuré ;
+- le profil de **promotion M23** est figé sur `embeddinggemma`, 768 dimensions ;
 - absence de modèle ou endpoint indisponible => gate M23 FAIL ;
 - format v2 est reconstruisible et lecture v1 conservée ;
 - cache de requêtes borné, process-local et jetable ;
@@ -78,9 +80,12 @@ Les scores sémantiques restent `HEURISTIC`. Aucun voisinage vectoriel n’est p
 - provider id : `minos-local-ollama` ;
 - endpoint par défaut : `http://127.0.0.1:11434/api/embed` ;
 - `localhost`, IPv4 loopback et IPv6 loopback uniquement ;
+- faux hostnames loopback (`127.example.com`) refusés ;
+- `Proxy.NO_PROXY` impose un chemin direct vers le loopback ;
 - aucun redirect ;
 - timeout borné ;
 - réponse bornée ;
+- exactement un vecteur accepté pour une entrée ;
 - dimensions vérifiées sur chaque embedding ;
 - modèle explicite ;
 - aucun `pull` ou téléchargement automatique.
@@ -107,6 +112,7 @@ Les propriétés JVM `minos.semantic.provider/model/dimensions/endpoint/timeoutS
 - écrit toujours atomiquement ;
 - conserve provider/model/dimensions/snapshot dans les métadonnées ;
 - cache disque invalidé par chemin + taille + mtime ;
+- cache mémoire quantifié exactement comme le float32 persisté ;
 - les valeurs non représentables en float32 sont refusées.
 
 L’index est une vue reconstruisible. Supprimer v1/v2 ne détruit aucun fact structuré.
@@ -145,7 +151,18 @@ MRR      >= 0.70
 nDCG@3   >= 0.72
 ```
 
-Le gate calcule aussi une baseline lexicale à titre de diagnostic. Il appelle le modèle learned local réellement configuré. Aucun provider synthétique ne peut produire le PASS final M23.
+Le gate calcule aussi une baseline lexicale à titre de diagnostic. Il appelle le modèle learned local réellement configuré. Les proxies système sont explicitement désactivés (`ProxyHandler({})`) afin que la preuve loopback ne puisse pas transiter par un proxy. Aucun provider synthétique ne peut produire le PASS final M23.
+
+Le **profil canonique de promotion** est :
+
+```text
+provider   ollama
+model      embeddinggemma
+dimensions 768
+endpoint   http://127.0.0.1:11434/api/embed
+```
+
+Le produit reste capable d’utiliser d’autres modèles explicitement configurés ; seul le verdict de promotion M23 est figé sur ce profil pour rendre la preuve reproductible.
 
 ### M23-S6 — Backend retrieval decision hardening ✅
 
@@ -189,6 +206,7 @@ SEMANTIC_RESULTS_REMAIN_HEURISTIC
 - configuration learned locale ;
 - modèle non téléchargé par MINOS ;
 - qualité spécifique au modèle ;
+- profil canonique de qualification ;
 - migration v1→v2 ;
 - cache borné ;
 - exact scan retained ;
@@ -204,24 +222,28 @@ Runner Windows :
 .\scripts\m23\run-final.ps1 -ExpectedHead <sha>
 ```
 
-Variables requises pour le gate learned :
+Variables obligatoires pour le replay de promotion :
 
 ```powershell
-$env:MINOS_SEMANTIC_MODEL='<model-local>'
-$env:MINOS_SEMANTIC_DIMENSIONS='<dimensions>'
-# optionnel : $env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
+$env:MINOS_SEMANTIC_PROVIDER='ollama'
+$env:MINOS_SEMANTIC_MODEL='embeddinggemma'
+$env:MINOS_SEMANTIC_DIMENSIONS='768'
+$env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
 ```
+
+Le runner refuse un autre provider/modèle/dimension pour le **verdict de promotion M23**. L’endpoint reste contrôlé séparément par le gate loopback.
 
 Le runner doit :
 
 1. vérifier exact HEAD + worktree propre ;
 2. vérifier le contrat M23 statiquement ;
-3. exécuter le gate learned réel Recall/MRR/nDCG ;
+3. exécuter le gate learned réel Recall/MRR/nDCG sur le profil canonique ;
 4. rejouer le core M21/M20 + Maven + JaCoCo incluant le scope `semantic-learned-provider` ;
-5. rejouer la release Windows supply-chain sous version `0.2.0-m23` ;
-6. rejouer la parité IntelliJ ;
-7. revérifier docs, exact HEAD et worktree ;
-8. produire :
+5. rejouer la régression M22 ;
+6. rejouer la release Windows supply-chain sous version `0.2.0-m23` ;
+7. rejouer la parité IntelliJ + Plugin Verifier ;
+8. revérifier learned quality, docs, exact HEAD et worktree ;
+9. produire :
 
 ```text
 M23 SEMANTIC RETRIEVAL CONSISTENCY SUCCESS
