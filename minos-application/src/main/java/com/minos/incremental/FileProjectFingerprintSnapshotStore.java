@@ -42,7 +42,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final int MAX_FILES = 10_000_000;
     private static final int MAX_STRING_BYTES = 8 * 1024 * 1024;
     private static final String ACTIVE_FILE = "active.pointer";
-    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
+    private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
+    private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final HexFormat HEX = HexFormat.of();
 
     private final Path storageRoot;
@@ -203,10 +204,23 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         }
         String projectHash = aggregateHash(fingerprint.files());
         if (!projectHash.equals(fingerprint.projectHash())) throw new IOException("fingerprint project hash mismatch");
-        String buildHash = aggregateHash(fingerprint.files().stream()
-                .filter(file -> BUILD_DESCRIPTOR_POLICY.isBuildDescriptor(Path.of(file.relativePath())))
+        String currentBuildHash = buildHash(fingerprint.files(), CURRENT_BUILD_DESCRIPTOR_POLICY);
+        if (currentBuildHash.equals(fingerprint.buildHash())) {
+            return;
+        }
+        // FORMAT_VERSION=1 snapshots created before M24 used the M17 descriptor set.
+        // Accept that exact legacy hash so additive build markers never make a historical
+        // immutable snapshot unreadable. New captures always use m24Defaults().
+        String legacyBuildHash = buildHash(fingerprint.files(), LEGACY_BUILD_DESCRIPTOR_POLICY);
+        if (!legacyBuildHash.equals(fingerprint.buildHash())) {
+            throw new IOException("fingerprint build hash mismatch");
+        }
+    }
+
+    private static String buildHash(List<FileFingerprint> files, BuildDescriptorPolicy policy) {
+        return aggregateHash(files.stream()
+                .filter(file -> policy.isBuildDescriptor(Path.of(file.relativePath())))
                 .toList());
-        if (!buildHash.equals(fingerprint.buildHash())) throw new IOException("fingerprint build hash mismatch");
     }
 
     private Path projectDirectory(UUID projectId) {
