@@ -31,6 +31,7 @@ import com.minos.semantic.EmbeddingProvider;
 import com.minos.semantic.HybridContextBuilder;
 import com.minos.semantic.HybridSearchService;
 import com.minos.semantic.LocalHashEmbeddingProvider;
+import com.minos.semantic.OllamaEmbeddingProvider;
 import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 import com.minos.semantic.SemanticVectorStore;
@@ -39,7 +40,9 @@ import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -50,6 +53,14 @@ public final class MinosApplication {
 
     public static final String SEMANTIC_PROVIDER_ENV = "MINOS_SEMANTIC_PROVIDER";
     public static final String SEMANTIC_PROVIDER_PROPERTY = "minos.semantic.provider";
+    public static final String SEMANTIC_MODEL_ENV = "MINOS_SEMANTIC_MODEL";
+    public static final String SEMANTIC_MODEL_PROPERTY = "minos.semantic.model";
+    public static final String SEMANTIC_DIMENSIONS_ENV = "MINOS_SEMANTIC_DIMENSIONS";
+    public static final String SEMANTIC_DIMENSIONS_PROPERTY = "minos.semantic.dimensions";
+    public static final String SEMANTIC_ENDPOINT_ENV = "MINOS_SEMANTIC_ENDPOINT";
+    public static final String SEMANTIC_ENDPOINT_PROPERTY = "minos.semantic.endpoint";
+    public static final String SEMANTIC_TIMEOUT_SECONDS_ENV = "MINOS_SEMANTIC_TIMEOUT_SECONDS";
+    public static final String SEMANTIC_TIMEOUT_SECONDS_PROPERTY = "minos.semantic.timeoutSeconds";
 
     private final Path home;
     private final LocalProjectRegistry projectRegistry;
@@ -135,14 +146,13 @@ public final class MinosApplication {
     /**
      * Opens MINOS with semantic embeddings disabled by default.
      *
-     * <p>Native deployments may explicitly opt into the bundled local reference provider with
-     * {@code MINOS_SEMANTIC_PROVIDER=local-hash} or {@code -Dminos.semantic.provider=local-hash}.
-     * Unknown provider names fail fast instead of silently changing retrieval semantics.</p>
+     * <p>{@code local-hash} remains a deterministic reference provider. M23 additionally supports
+     * {@code ollama}, which requires an explicitly configured local learned model and dimensions.
+     * The Ollama provider rejects non-loopback endpoints and MINOS never downloads models.</p>
      */
     public static MinosApplication open(Path home) throws IOException {
         Builder builder = builder(home);
-        String configured = System.getProperty(SEMANTIC_PROVIDER_PROPERTY);
-        if (configured == null || configured.isBlank()) configured = System.getenv(SEMANTIC_PROVIDER_ENV);
+        String configured = setting(SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
         if (configured == null || configured.isBlank() || "disabled".equalsIgnoreCase(configured)) {
             return builder.build();
         }
@@ -150,7 +160,44 @@ public final class MinosApplication {
         if ("local-hash".equals(provider)) {
             return builder.embeddingProvider(new LocalHashEmbeddingProvider()).build();
         }
+        if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
+            String model = requiredSetting(SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
+            int dimensions = parsePositiveInt(
+                    requiredSetting(SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV),
+                    "semantic dimensions");
+            String endpointValue = setting(SEMANTIC_ENDPOINT_PROPERTY, SEMANTIC_ENDPOINT_ENV);
+            URI endpoint = endpointValue == null || endpointValue.isBlank()
+                    ? OllamaEmbeddingProvider.DEFAULT_ENDPOINT : URI.create(endpointValue.trim());
+            String timeoutValue = setting(SEMANTIC_TIMEOUT_SECONDS_PROPERTY, SEMANTIC_TIMEOUT_SECONDS_ENV);
+            Duration timeout = timeoutValue == null || timeoutValue.isBlank()
+                    ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
+                    : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
+            return builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout)).build();
+        }
         throw new IllegalArgumentException("unsupported semantic provider: " + configured);
+    }
+
+    private static String setting(String property, String environment) {
+        String value = System.getProperty(property);
+        return value == null || value.isBlank() ? System.getenv(environment) : value;
+    }
+
+    private static String requiredSetting(String property, String environment) {
+        String value = setting(property, environment);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("missing required semantic setting: " + property + " / " + environment);
+        }
+        return value.trim();
+    }
+
+    private static int parsePositiveInt(String value, String label) {
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            if (parsed < 1) throw new NumberFormatException("not positive");
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(label + " must be a positive integer", exception);
+        }
     }
 
     public static Builder builder(Path home) { return new Builder(home); }
