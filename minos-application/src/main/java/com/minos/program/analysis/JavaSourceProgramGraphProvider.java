@@ -20,6 +20,7 @@ import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.CatchTree;
+import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.ConditionalExpressionTree;
@@ -31,6 +32,7 @@ import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.IfTree;
 import com.sun.source.tree.LabeledStatementTree;
+import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
@@ -47,7 +49,7 @@ import com.sun.source.tree.VariableTree;
 import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SourcePositions;
-import com.sun.source.util.TreePathScanner;
+import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 
 import javax.tools.Diagnostic;
@@ -76,18 +78,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
 /**
- * M22 reference provider for conservative Java advanced-program facts derived from the JDK compiler AST.
+ * Conservative M22 reference provider for Java advanced-program facts derived from the public JDK compiler AST.
  *
- * <p>The provider is intentionally fail-closed. It only reads Java files that are represented by the
- * active structured snapshot, confines every path to the registered project root, refuses partial
- * project analysis when a required source is missing or syntactically invalid, and never performs
- * implicit type attribution. Local def-use is name-based inside one method and interprocedural flow
- * is emitted only when a simple method name + arity resolves uniquely inside the analyzed project.
- * Every such restriction is exposed as an explicit limitation.</p>
+ * <p>The provider is fail-closed at project/snapshot level: every Java source represented by the active
+ * snapshot must be confined to the registered project root, present, bounded and syntactically parseable.
+ * M22 v1 deliberately does not perform guessed-classpath type attribution. Def-use is name-based inside one
+ * method and interprocedural argument/return flow is emitted only when simple name + arity resolves uniquely
+ * among parsed project methods. Every restriction is exposed as a limitation instead of being hidden.</p>
  */
 public final class JavaSourceProgramGraphProvider implements ProgramGraphProvider {
 
@@ -98,6 +100,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
     private static final int MAX_SOURCE_FILES = 2_000;
     private static final long MAX_SOURCE_BYTES = 4L * 1024L * 1024L;
     private static final long MAX_TOTAL_SOURCE_BYTES = 64L * 1024L * 1024L;
+    private static final long MAX_SECURITY_CONFIG_BYTES = 1024L * 1024L;
 
     @Override
     public String id() {
@@ -109,10 +112,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
         Objects.requireNonNull(project, "project");
         Objects.requireNonNull(snapshot, "snapshot");
         Discovery discovery = discover(project, snapshot);
-        if (!discovery.usable()) {
-            return PROVIDER_ID + ":" + snapshot.snapshotId() + ":" + discovery.limitation();
-        }
-        return PROVIDER_ID + ":" + fingerprint(project, snapshot, discovery.sources());
+        return PROVIDER_ID + ":" + stateFingerprint(project, snapshot, discovery);
     }
 
     @Override
@@ -133,7 +133,8 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         List<ParsedUnit> parsed = new ArrayList<>();
         SourcePositions positions;
-        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, Locale.ROOT, StandardCharsets.UTF_8)) {
+        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(
+                diagnostics, Locale.ROOT, StandardCharsets.UTF_8)) {
             Iterable<? extends JavaFileObject> javaFiles = fileManager.getJavaFileObjectsFromPaths(
                     discovery.sources().stream().map(SourceFile::path).toList());
             JavacTask task = (JavacTask) compiler.getTask(
@@ -144,14 +145,14 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                     null,
                     javaFiles);
             Iterable<? extends CompilationUnitTree> units = task.parse();
-            Map<Path, String> fileIds = new HashMap<>();
+            Map<Path, String> fileIdsByPath = new HashMap<>();
             for (SourceFile source : discovery.sources()) {
-                fileIds.put(source.path().toRealPath(), source.fileId());
+                fileIdsByPath.put(source.path().toRealPath(), source.fileId());
             }
             for (CompilationUnitTree unit : units) {
                 URI uri = unit.getSourceFile().toUri();
-                Path path = Path.of(uri).toRealPath();
-                String fileId = fileIds.get(path);
+                Path real = Path.of(uri).toRealPath();
+                String fileId = fileIdsByPath.get(real);
                 if (fileId == null) {
                     return empty(projectId, snapshot.snapshotId(), "JAVA_ADVANCED_PROVIDER_SOURCE_MAPPING_FAILED");
                 }
@@ -166,14 +167,15 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             return empty(projectId, snapshot.snapshotId(), "JAVA_ADVANCED_PROVIDER_PARSE_FAILED");
         }
 
-        String runId = snapshot.snapshotId() + ":" + fingerprint(project, snapshot, discovery.sources()).substring(0, 16);
+        String state = stateFingerprint(project, snapshot, discovery);
+        String runId = snapshot.snapshotId() + ":" + state.substring(0, 16);
         SecurityRules rules = SecurityRules.load(project.rootPath());
         return new Analyzer(projectId, snapshot.snapshotId(), positions, parsed, runId, rules).analyze();
     }
 
     private static Discovery discover(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         Path root = project.rootPath().toRealPath();
-        Set<String> fileIds = new LinkedHashSet<>();
+        Set<String> requested = new LinkedHashSet<>();
         for (Symbol symbol : snapshot.symbols()) {
             if (!"java".equalsIgnoreCase(symbol.language())) continue;
             String fileId = symbol.fileId();
@@ -181,69 +183,68 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 fileId = symbol.location().fileId();
             }
             if (fileId != null && fileId.toLowerCase(Locale.ROOT).endsWith(".java")) {
-                fileIds.add(fileId.replace('\\', '/'));
+                requested.add(fileId.replace('\\', '/'));
             }
         }
-        if (fileIds.isEmpty()) {
-            return Discovery.failed("JAVA_ADVANCED_PROVIDER_NOT_APPLICABLE");
+        List<String> requestedFileIds = requested.stream().sorted().toList();
+        if (requestedFileIds.isEmpty()) {
+            return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_NOT_APPLICABLE");
         }
-        if (fileIds.size() > MAX_SOURCE_FILES) {
-            return Discovery.failed("JAVA_ADVANCED_PROVIDER_SOURCE_FILE_LIMIT_EXCEEDED");
+        if (requestedFileIds.size() > MAX_SOURCE_FILES) {
+            return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_SOURCE_FILE_LIMIT_EXCEEDED");
         }
 
         List<SourceFile> sources = new ArrayList<>();
-        long totalBytes = 0L;
-        for (String fileId : fileIds.stream().sorted().toList()) {
+        long total = 0L;
+        for (String fileId : requestedFileIds) {
             Path relative;
             try {
                 relative = Path.of(fileId.replace('/', java.io.File.separatorChar)).normalize();
             } catch (InvalidPathException exception) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_INVALID_FILE_ID");
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_INVALID_FILE_ID");
             }
             if (relative.isAbsolute() || relative.getNameCount() == 0 || relative.startsWith("..")) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_INVALID_FILE_ID");
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_INVALID_FILE_ID");
             }
             Path candidate = root.resolve(relative).normalize();
             if (!candidate.startsWith(root) || !Files.isRegularFile(candidate)) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_SOURCE_MISSING");
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_SOURCE_MISSING");
             }
             Path real = candidate.toRealPath();
             if (!real.startsWith(root)) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_SOURCE_ESCAPE");
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_SOURCE_ESCAPE");
             }
-            long size = Files.size(real);
-            if (size > MAX_SOURCE_BYTES) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_SOURCE_TOO_LARGE");
+            long bytes = Files.size(real);
+            if (bytes > MAX_SOURCE_BYTES) {
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_SOURCE_TOO_LARGE");
             }
-            totalBytes += size;
-            if (totalBytes > MAX_TOTAL_SOURCE_BYTES) {
-                return Discovery.failed("JAVA_ADVANCED_PROVIDER_TOTAL_SOURCE_LIMIT_EXCEEDED");
+            total += bytes;
+            if (total > MAX_TOTAL_SOURCE_BYTES) {
+                return Discovery.failed(requestedFileIds, "JAVA_ADVANCED_PROVIDER_TOTAL_SOURCE_LIMIT_EXCEEDED");
             }
             sources.add(new SourceFile(fileId, real));
         }
-        return Discovery.usable(List.copyOf(sources));
+        return Discovery.usable(requestedFileIds, List.copyOf(sources));
     }
 
-    private static String fingerprint(
+    private static String stateFingerprint(
             RegisteredProject project,
             CodeKnowledgeSnapshot snapshot,
-            List<SourceFile> sources
+            Discovery discovery
     ) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update(snapshot.snapshotId().getBytes(StandardCharsets.UTF_8));
-            for (SourceFile source : sources) {
-                digest.update((byte) 0);
-                digest.update(source.fileId().getBytes(StandardCharsets.UTF_8));
-                digest.update((byte) 0);
+            update(digest, snapshot.snapshotId());
+            update(digest, discovery.limitation() == null ? "USABLE" : discovery.limitation());
+            for (String fileId : discovery.requestedFileIds()) update(digest, fileId);
+            for (SourceFile source : discovery.sources()) {
+                update(digest, source.fileId());
                 digest.update(Files.readAllBytes(source.path()));
             }
-            Path config = project.rootPath().resolve(SECURITY_CONFIG).normalize();
-            if (Files.isRegularFile(config)) {
-                digest.update((byte) 0);
-                digest.update(SECURITY_CONFIG.getBytes(StandardCharsets.UTF_8));
-                digest.update((byte) 0);
-                digest.update(Files.readAllBytes(config));
+            Optional<Path> config = securityConfig(project.rootPath());
+            if (config.isPresent()) {
+                update(digest, SECURITY_CONFIG);
+                digest.update(Files.readAllBytes(config.orElseThrow()));
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
@@ -251,17 +252,44 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
         }
     }
 
+    private static Optional<Path> securityConfig(Path projectRoot) throws IOException {
+        Path root = projectRoot.toRealPath();
+        Path candidate = root.resolve(SECURITY_CONFIG).normalize();
+        if (!candidate.startsWith(root) || !Files.exists(candidate)) return Optional.empty();
+        if (!Files.isRegularFile(candidate)) {
+            throw new IOException("Java advanced provider security config is not a regular file");
+        }
+        Path real = candidate.toRealPath();
+        if (!real.startsWith(root)) {
+            throw new IOException("Java advanced provider security config escapes project root");
+        }
+        if (Files.size(real) > MAX_SECURITY_CONFIG_BYTES) {
+            throw new IOException("Java advanced provider security config exceeds 1 MiB");
+        }
+        return Optional.of(real);
+    }
+
+    private static void update(MessageDigest digest, String value) {
+        digest.update((byte) 0);
+        digest.update(value.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static ProgramGraph empty(String projectId, String snapshotId, String limitation) {
         return new ProgramGraph(projectId, snapshotId, Set.of(), List.of(), List.of(), List.of(limitation));
     }
 
-    private record Discovery(boolean usable, List<SourceFile> sources, String limitation) {
-        static Discovery usable(List<SourceFile> sources) {
-            return new Discovery(true, sources, null);
+    private record Discovery(
+            boolean usable,
+            List<String> requestedFileIds,
+            List<SourceFile> sources,
+            String limitation
+    ) {
+        static Discovery usable(List<String> requestedFileIds, List<SourceFile> sources) {
+            return new Discovery(true, requestedFileIds, sources, null);
         }
 
-        static Discovery failed(String limitation) {
-            return new Discovery(false, List.of(), limitation);
+        static Discovery failed(List<String> requestedFileIds, String limitation) {
+            return new Discovery(false, requestedFileIds, List.of(), limitation);
         }
     }
 
@@ -273,12 +301,12 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
     private record SecurityRules(boolean configured, Set<String> sources, Set<String> sinks, Set<String> sanitizers) {
         static SecurityRules load(Path root) throws IOException {
-            Path config = root.resolve(SECURITY_CONFIG).normalize();
-            if (!Files.isRegularFile(config)) {
+            Optional<Path> config = securityConfig(root);
+            if (config.isEmpty()) {
                 return new SecurityRules(false, Set.of(), Set.of(), Set.of());
             }
             Properties properties = new Properties();
-            try (Reader reader = Files.newBufferedReader(config, StandardCharsets.UTF_8)) {
+            try (Reader reader = Files.newBufferedReader(config.orElseThrow(), StandardCharsets.UTF_8)) {
                 properties.load(reader);
             }
             return new SecurityRules(
@@ -310,9 +338,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
         }
 
         private static boolean matches(Set<String> rules, MethodInvocationTree tree) {
-            String full = tree.getMethodSelect().toString();
-            String simple = invocationName(tree);
-            return rules.contains(full) || rules.contains(simple);
+            return rules.contains(tree.getMethodSelect().toString()) || rules.contains(invocationName(tree));
         }
     }
 
@@ -350,7 +376,8 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             this.units = units;
             this.securityRules = securityRules;
             this.astOrigin = new Origin(PROVIDER_ID, "JAVA_COMPILER_AST", PROVIDER_VERSION, runId, OriginType.AST);
-            this.derivedOrigin = new Origin(PROVIDER_ID, "JAVA_COMPILER_AST", PROVIDER_VERSION, runId, OriginType.DERIVED_BY_MINOS);
+            this.derivedOrigin = new Origin(
+                    PROVIDER_ID, "JAVA_COMPILER_AST", PROVIDER_VERSION, runId, OriginType.DERIVED_BY_MINOS);
         }
 
         ProgramGraph analyze() {
@@ -358,8 +385,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             limitations.add("JAVA_AST_PARSE_ONLY_TYPE_ATTRIBUTION_NOT_PROVEN");
             collectMethods();
             for (MethodInfo method : methods) {
-                if (method.tree().getBody() == null) continue;
-                analyzeMethod(method);
+                if (method.tree().getBody() != null) analyzeMethod(method);
             }
             resolveInterproceduralFlows();
             analyzeSecurity();
@@ -378,15 +404,13 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 capabilities.add(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW);
                 limitations.add("JAVA_INTERPROCEDURAL_UNIQUE_NAME_ARITY_ONLY");
             }
-            boolean hasSource = nodes.values().stream().anyMatch(node -> node.kind() == ProgramNodeKind.SOURCE);
-            boolean hasSink = nodes.values().stream().anyMatch(node -> node.kind() == ProgramNodeKind.SINK);
-            if (kinds.contains(ProgramEdgeKind.TAINT_FLOW) && hasSource && hasSink) {
+            boolean source = nodes.values().stream().anyMatch(node -> node.kind() == ProgramNodeKind.SOURCE);
+            boolean sink = nodes.values().stream().anyMatch(node -> node.kind() == ProgramNodeKind.SINK);
+            if (kinds.contains(ProgramEdgeKind.TAINT_FLOW) && source && sink) {
                 capabilities.add(ProgramGraphCapability.SECURITY_TAINT);
                 limitations.add("JAVA_SECURITY_FLOW_INTRAPROCEDURAL_CONFIGURED_RULES_ONLY");
             }
-            if (!securityRules.configured()) {
-                limitations.add("JAVA_SECURITY_RULES_NOT_CONFIGURED");
-            }
+            if (!securityRules.configured()) limitations.add("JAVA_SECURITY_RULES_NOT_CONFIGURED");
 
             return new ProgramGraph(
                     projectId,
@@ -399,15 +423,15 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
         private void collectMethods() {
             for (ParsedUnit unit : units) {
-                new TreePathScanner<Void, Void>() {
+                new TreeScanner<Void, Void>() {
                     @Override
                     public Void visitMethod(MethodTree tree, Void unused) {
-                        MethodInfo info = new MethodInfo(unit, tree, new ArrayList<>(), new ArrayList<>());
-                        methods.add(info);
+                        MethodInfo method = new MethodInfo(unit, tree, new ArrayList<>(), new ArrayList<>());
+                        methods.add(method);
                         String name = tree.getName().toString();
                         if (!"<init>".equals(name)) {
-                            methodIndex.computeIfAbsent(new MethodKey(name, tree.getParameters().size()), ignored -> new ArrayList<>())
-                                    .add(info);
+                            methodIndex.computeIfAbsent(
+                                    new MethodKey(name, tree.getParameters().size()), ignored -> new ArrayList<>()).add(method);
                         }
                         return super.visitMethod(tree, unused);
                     }
@@ -417,26 +441,19 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
         private void analyzeMethod(MethodInfo method) {
             Map<String, Set<String>> definitions = new LinkedHashMap<>();
-            int parameterIndex = 0;
+            int index = 0;
             for (VariableTree parameter : method.tree().getParameters()) {
                 String name = parameter.getName().toString();
-                String id = id("param", method.unit(), parameter, method.tree().getName() + ":" + parameterIndex + ":" + name);
-                addNode(new ProgramGraphNode(
+                String id = id("param", method.unit(), parameter, method.tree().getName() + ":" + index + ":" + name);
+                addNode(factualNode(
                         id,
-                        projectId,
-                        null,
                         ProgramNodeKind.PARAMETER,
-                        label("parameter " + method.tree().getName() + "[" + parameterIndex + "] " + name, method.unit(), parameter),
-                        location(method.unit(), parameter),
-                        InformationNature.FACTUAL,
-                        null,
-                        astOrigin,
-                        List.of()));
+                        label("parameter " + method.tree().getName() + "[" + index + "] " + name, method.unit(), parameter),
+                        location(method.unit(), parameter)));
                 method.parameterNodeIds().add(id);
                 definitions.put(name, Set.of(id));
-                parameterIndex++;
+                index++;
             }
-
             new DefUseScanner(method, definitions).scan(method.tree().getBody(), null);
             new CfgBuilder(method.unit()).build(method.tree().getBody());
         }
@@ -462,31 +479,36 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                             "argument mapped to the unique project method with matching simple name and arity",
                             invocation.location());
                 }
-                for (String returnNodeId : target.returnNodeIds()) {
-                    addDerivedEdge(
-                            "return-flow",
-                            returnNodeId,
-                            invocation.resultNodeId(),
-                            ProgramEdgeKind.RETURN_FLOW,
-                            INTERPROCEDURAL_CONFIDENCE,
-                            "return mapped from the unique project method with matching simple name and arity",
-                            invocation.location());
+                if (!target.returnNodeIds().isEmpty()) {
+                    String resultId = id("call-result", invocation.unit(), invocation.tree(), invocation.name());
+                    addNode(factualNode(
+                            resultId,
+                            ProgramNodeKind.RETURN_VALUE,
+                            label("call-result " + invocation.name(), invocation.unit(), invocation.tree()),
+                            invocation.location()));
+                    for (String returnNode : target.returnNodeIds()) {
+                        addDerivedEdge(
+                                "return-flow",
+                                returnNode,
+                                resultId,
+                                ProgramEdgeKind.RETURN_FLOW,
+                                INTERPROCEDURAL_CONFIDENCE,
+                                "return mapped from the unique project method with matching simple name and arity",
+                                invocation.location());
+                    }
                 }
             }
-            if (unresolved) {
-                limitations.add("JAVA_INTERPROCEDURAL_EXTERNAL_OR_AMBIGUOUS_CALLS_SKIPPED");
-            }
+            if (unresolved) limitations.add("JAVA_INTERPROCEDURAL_EXTERNAL_OR_AMBIGUOUS_CALLS_SKIPPED");
         }
 
         private void analyzeSecurity() {
             if (!securityRules.configured()) return;
             for (MethodInfo method : methods) {
-                if (method.tree().getBody() == null) continue;
-                new SecurityScanner(method.unit()).scan(method.tree().getBody(), null);
+                if (method.tree().getBody() != null) new SecurityScanner(method.unit()).scan(method.tree().getBody(), null);
             }
         }
 
-        private final class DefUseScanner extends TreePathScanner<Void, Void> {
+        private final class DefUseScanner extends TreeScanner<Void, Void> {
             private final MethodInfo method;
             private final Map<String, Set<String>> definitions;
 
@@ -499,8 +521,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             public Void visitVariable(VariableTree tree, Void unused) {
                 if (tree.getInitializer() != null) scan(tree.getInitializer(), null);
                 String name = tree.getName().toString();
-                String id = definitionNode(method.unit(), tree, name);
-                definitions.put(name, Set.of(id));
+                definitions.put(name, Set.of(definitionNode(method.unit(), tree, name)));
                 return null;
             }
 
@@ -509,8 +530,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 scan(tree.getExpression(), null);
                 if (tree.getVariable() instanceof IdentifierTree identifier) {
                     String name = identifier.getName().toString();
-                    String id = definitionNode(method.unit(), tree.getVariable(), name);
-                    definitions.put(name, Set.of(id));
+                    definitions.put(name, Set.of(definitionNode(method.unit(), tree.getVariable(), name)));
                 } else {
                     limitations.add("JAVA_LOCAL_DATA_FLOW_FIELDS_NOT_MODELED");
                     scan(tree.getVariable(), null);
@@ -524,8 +544,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 scan(tree.getExpression(), null);
                 if (tree.getVariable() instanceof IdentifierTree identifier) {
                     String name = identifier.getName().toString();
-                    String id = definitionNode(method.unit(), tree.getVariable(), name);
-                    definitions.put(name, Set.of(id));
+                    definitions.put(name, Set.of(definitionNode(method.unit(), tree.getVariable(), name)));
                 } else {
                     limitations.add("JAVA_LOCAL_DATA_FLOW_FIELDS_NOT_MODELED");
                 }
@@ -539,8 +558,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                     case PREFIX_INCREMENT, PREFIX_DECREMENT, POSTFIX_INCREMENT, POSTFIX_DECREMENT -> {
                         if (tree.getExpression() instanceof IdentifierTree identifier) {
                             String name = identifier.getName().toString();
-                            String id = definitionNode(method.unit(), tree.getExpression(), name);
-                            definitions.put(name, Set.of(id));
+                            definitions.put(name, Set.of(definitionNode(method.unit(), tree.getExpression(), name)));
                         }
                     }
                     default -> {
@@ -555,17 +573,11 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 Set<String> sources = definitions.get(name);
                 if (sources == null || sources.isEmpty()) return null;
                 String useId = id("use", method.unit(), tree, name);
-                addNode(new ProgramGraphNode(
+                addNode(factualNode(
                         useId,
-                        projectId,
-                        null,
                         ProgramNodeKind.VARIABLE,
                         label("use " + name, method.unit(), tree),
-                        location(method.unit(), tree),
-                        InformationNature.FACTUAL,
-                        null,
-                        astOrigin,
-                        List.of()));
+                        location(method.unit(), tree)));
                 for (String source : sources) {
                     addDerivedEdge(
                             "def-use",
@@ -586,17 +598,11 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 int index = 0;
                 for (ExpressionTree argument : tree.getArguments()) {
                     String argumentId = id("arg", method.unit(), argument, name + ":" + index);
-                    addNode(new ProgramGraphNode(
+                    addNode(factualNode(
                             argumentId,
-                            projectId,
-                            null,
                             ProgramNodeKind.PARAMETER,
                             label("argument " + name + "[" + index + "]", method.unit(), argument),
-                            location(method.unit(), argument),
-                            InformationNature.FACTUAL,
-                            null,
-                            astOrigin,
-                            List.of()));
+                            location(method.unit(), argument)));
                     argumentIds.add(argumentId);
                     scan(argument, null);
                     index++;
@@ -604,19 +610,8 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 if (tree.getMethodSelect() instanceof MemberSelectTree memberSelect) {
                     scan(memberSelect.getExpression(), null);
                 }
-                String resultId = id("call-result", method.unit(), tree, name);
-                addNode(new ProgramGraphNode(
-                        resultId,
-                        projectId,
-                        null,
-                        ProgramNodeKind.RETURN_VALUE,
-                        label("call-result " + name, method.unit(), tree),
-                        location(method.unit(), tree),
-                        InformationNature.FACTUAL,
-                        null,
-                        astOrigin,
-                        List.of()));
-                invocations.add(new InvocationInfo(name, List.copyOf(argumentIds), resultId, location(method.unit(), tree)));
+                invocations.add(new InvocationInfo(
+                        method.unit(), tree, name, List.copyOf(argumentIds), location(method.unit(), tree)));
                 return null;
             }
 
@@ -624,17 +619,11 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             public Void visitReturn(ReturnTree tree, Void unused) {
                 if (tree.getExpression() != null) scan(tree.getExpression(), null);
                 String id = id("return", method.unit(), tree, method.tree().getName().toString());
-                addNode(new ProgramGraphNode(
+                addNode(factualNode(
                         id,
-                        projectId,
-                        null,
                         ProgramNodeKind.RETURN_VALUE,
                         label("return " + method.tree().getName(), method.unit(), tree),
-                        location(method.unit(), tree),
-                        InformationNature.FACTUAL,
-                        null,
-                        astOrigin,
-                        List.of()));
+                        location(method.unit(), tree)));
                 method.returnNodeIds().add(id);
                 return null;
             }
@@ -642,28 +631,28 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             @Override
             public Void visitIf(IfTree tree, Void unused) {
                 scan(tree.getCondition(), null);
-                Map<String, Set<String>> before = copyDefinitions(definitions);
+                Map<String, Set<String>> before = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(copyDefinitions(before));
+                definitions.putAll(copyState(before));
                 scan(tree.getThenStatement(), null);
-                Map<String, Set<String>> afterThen = copyDefinitions(definitions);
+                Map<String, Set<String>> thenState = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(copyDefinitions(before));
+                definitions.putAll(copyState(before));
                 if (tree.getElseStatement() != null) scan(tree.getElseStatement(), null);
-                Map<String, Set<String>> afterElse = copyDefinitions(definitions);
+                Map<String, Set<String>> elseState = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(mergeDefinitions(afterThen, afterElse));
+                definitions.putAll(mergeStates(thenState, elseState));
                 return null;
             }
 
             @Override
             public Void visitWhileLoop(WhileLoopTree tree, Void unused) {
                 scan(tree.getCondition(), null);
-                Map<String, Set<String>> before = copyDefinitions(definitions);
+                Map<String, Set<String>> before = copyState(definitions);
                 scan(tree.getStatement(), null);
-                Map<String, Set<String>> afterBody = copyDefinitions(definitions);
+                Map<String, Set<String>> afterBody = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(mergeDefinitions(before, afterBody));
+                definitions.putAll(mergeStates(before, afterBody));
                 limitations.add("JAVA_LOCAL_DATA_FLOW_LOOP_FIXPOINT_CONSERVATIVE");
                 return null;
             }
@@ -672,12 +661,12 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             public Void visitForLoop(ForLoopTree tree, Void unused) {
                 for (StatementTree initializer : tree.getInitializer()) scan(initializer, null);
                 if (tree.getCondition() != null) scan(tree.getCondition(), null);
-                Map<String, Set<String>> before = copyDefinitions(definitions);
+                Map<String, Set<String>> before = copyState(definitions);
                 scan(tree.getStatement(), null);
                 for (ExpressionStatementTree update : tree.getUpdate()) scan(update, null);
-                Map<String, Set<String>> afterBody = copyDefinitions(definitions);
+                Map<String, Set<String>> afterBody = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(mergeDefinitions(before, afterBody));
+                definitions.putAll(mergeStates(before, afterBody));
                 limitations.add("JAVA_LOCAL_DATA_FLOW_LOOP_FIXPOINT_CONSERVATIVE");
                 return null;
             }
@@ -685,14 +674,38 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             @Override
             public Void visitEnhancedForLoop(EnhancedForLoopTree tree, Void unused) {
                 scan(tree.getExpression(), null);
+                Map<String, Set<String>> before = copyState(definitions);
                 String name = tree.getVariable().getName().toString();
-                String id = definitionNode(method.unit(), tree.getVariable(), name);
-                Map<String, Set<String>> before = copyDefinitions(definitions);
-                definitions.put(name, Set.of(id));
+                definitions.put(name, Set.of(definitionNode(method.unit(), tree.getVariable(), name)));
                 scan(tree.getStatement(), null);
+                Map<String, Set<String>> afterBody = copyState(definitions);
                 definitions.clear();
-                definitions.putAll(mergeDefinitions(before, definitions));
+                definitions.putAll(mergeStates(before, afterBody));
                 limitations.add("JAVA_LOCAL_DATA_FLOW_ENHANCED_FOR_ELEMENT_BINDING_NOT_PROVEN");
+                return null;
+            }
+
+            @Override
+            public Void visitDoWhileLoop(DoWhileLoopTree tree, Void unused) {
+                Map<String, Set<String>> before = copyState(definitions);
+                scan(tree.getStatement(), null);
+                scan(tree.getCondition(), null);
+                Map<String, Set<String>> afterBody = copyState(definitions);
+                definitions.clear();
+                definitions.putAll(mergeStates(before, afterBody));
+                limitations.add("JAVA_LOCAL_DATA_FLOW_LOOP_FIXPOINT_CONSERVATIVE");
+                return null;
+            }
+
+            @Override
+            public Void visitLambdaExpression(LambdaExpressionTree tree, Void unused) {
+                limitations.add("JAVA_LOCAL_DATA_FLOW_NESTED_LAMBDA_NOT_MODELED");
+                return null;
+            }
+
+            @Override
+            public Void visitClass(ClassTree tree, Void unused) {
+                limitations.add("JAVA_LOCAL_DATA_FLOW_LOCAL_CLASS_NOT_MODELED");
                 return null;
             }
         }
@@ -750,8 +763,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 if (thenFlow.entry() != null) cfgEdge(decision, thenFlow.entry(), tree.getThenStatement());
                 FlowFragment elseFlow = tree.getElseStatement() == null ? FlowFragment.empty() : build(tree.getElseStatement());
                 if (elseFlow.entry() != null) cfgEdge(decision, elseFlow.entry(), tree.getElseStatement());
-                Set<String> exits = new LinkedHashSet<>();
-                exits.addAll(thenFlow.exits());
+                Set<String> exits = new LinkedHashSet<>(thenFlow.exits());
                 if (tree.getElseStatement() == null) exits.add(decision);
                 else exits.addAll(elseFlow.exits());
                 return new FlowFragment(decision, Set.copyOf(exits));
@@ -830,21 +842,15 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
             private String basicBlock(Tree tree) {
                 String id = id("bb", unit, tree, tree.getKind().name());
-                addNode(new ProgramGraphNode(
+                addNode(factualNode(
                         id,
-                        projectId,
-                        null,
                         ProgramNodeKind.BASIC_BLOCK,
                         label("cfg " + tree.getKind().name(), unit, tree),
-                        location(unit, tree),
-                        InformationNature.FACTUAL,
-                        null,
-                        astOrigin,
-                        List.of()));
+                        location(unit, tree)));
                 return id;
             }
 
-            private void cfgEdge(String source, String target, Tree evidenceTree) {
+            private void cfgEdge(String source, String target, Tree tree) {
                 addDerivedEdge(
                         "cfg",
                         source,
@@ -852,11 +858,11 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                         ProgramEdgeKind.CONTROL_FLOW,
                         CFG_CONFIDENCE,
                         "control-flow edge derived from Java statement semantics",
-                        location(unit, evidenceTree));
+                        location(unit, tree));
             }
         }
 
-        private final class SecurityScanner extends TreePathScanner<Set<String>, Void> {
+        private final class SecurityScanner extends TreeScanner<Set<String>, Void> {
             private final ParsedUnit unit;
             private final Map<String, Set<String>> taint = new LinkedHashMap<>();
 
@@ -866,8 +872,8 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
             @Override
             public Set<String> visitVariable(VariableTree tree, Void unused) {
-                Set<String> value = tree.getInitializer() == null ? Set.of() : scan(tree.getInitializer(), null);
-                taint.put(tree.getName().toString(), safe(value));
+                Set<String> value = tree.getInitializer() == null ? Set.of() : safe(scan(tree.getInitializer(), null));
+                taint.put(tree.getName().toString(), value);
                 return Set.of();
             }
 
@@ -888,13 +894,10 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             @Override
             public Set<String> visitMethodInvocation(MethodInvocationTree tree, Void unused) {
                 Set<String> incoming = new LinkedHashSet<>();
-                for (ExpressionTree argument : tree.getArguments()) {
-                    incoming.addAll(safe(scan(argument, null)));
-                }
+                for (ExpressionTree argument : tree.getArguments()) incoming.addAll(safe(scan(argument, null)));
                 String name = invocationName(tree);
                 if (securityRules.source(tree)) {
-                    String source = securityNode("source", ProgramNodeKind.SOURCE, name, tree);
-                    return Set.of(source);
+                    return Set.of(securityNode("source", ProgramNodeKind.SOURCE, name, tree));
                 }
                 if (securityRules.sanitizer(tree)) {
                     String sanitizer = securityNode("sanitizer", ProgramNodeKind.SANITIZER, name, tree);
@@ -910,9 +913,7 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                     }
                     return Set.of();
                 }
-                if (!incoming.isEmpty()) {
-                    limitations.add("JAVA_SECURITY_UNKNOWN_CALL_STOPS_FLOW");
-                }
+                if (!incoming.isEmpty()) limitations.add("JAVA_SECURITY_UNKNOWN_CALL_STOPS_FLOW");
                 return Set.of();
             }
 
@@ -928,44 +929,96 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
             @Override
             public Set<String> visitConditionalExpression(ConditionalExpressionTree tree, Void unused) {
-                Set<String> result = new LinkedHashSet<>();
-                result.addAll(safe(scan(tree.getTrueExpression(), null)));
-                result.addAll(safe(scan(tree.getFalseExpression(), null)));
-                return Set.copyOf(result);
+                return union(scan(tree.getTrueExpression(), null), scan(tree.getFalseExpression(), null));
             }
 
             @Override
             public Set<String> visitBinary(BinaryTree tree, Void unused) {
-                Set<String> result = new LinkedHashSet<>();
-                result.addAll(safe(scan(tree.getLeftOperand(), null)));
-                result.addAll(safe(scan(tree.getRightOperand(), null)));
-                return Set.copyOf(result);
+                return union(scan(tree.getLeftOperand(), null), scan(tree.getRightOperand(), null));
             }
 
             @Override
             public Set<String> visitIf(IfTree tree, Void unused) {
                 scan(tree.getCondition(), null);
-                Map<String, Set<String>> before = copyDefinitions(taint);
+                Map<String, Set<String>> before = copyState(taint);
                 taint.clear();
-                taint.putAll(copyDefinitions(before));
+                taint.putAll(copyState(before));
                 scan(tree.getThenStatement(), null);
-                Map<String, Set<String>> thenState = copyDefinitions(taint);
+                Map<String, Set<String>> thenState = copyState(taint);
                 taint.clear();
-                taint.putAll(copyDefinitions(before));
+                taint.putAll(copyState(before));
                 if (tree.getElseStatement() != null) scan(tree.getElseStatement(), null);
-                Map<String, Set<String>> elseState = copyDefinitions(taint);
+                Map<String, Set<String>> elseState = copyState(taint);
                 taint.clear();
-                taint.putAll(mergeDefinitions(thenState, elseState));
+                taint.putAll(mergeStates(thenState, elseState));
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitWhileLoop(WhileLoopTree tree, Void unused) {
+                scan(tree.getCondition(), null);
+                Map<String, Set<String>> before = copyState(taint);
+                scan(tree.getStatement(), null);
+                Map<String, Set<String>> after = copyState(taint);
+                taint.clear();
+                taint.putAll(mergeStates(before, after));
+                limitations.add("JAVA_SECURITY_LOOP_FLOW_CONSERVATIVE");
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitForLoop(ForLoopTree tree, Void unused) {
+                for (StatementTree initializer : tree.getInitializer()) scan(initializer, null);
+                if (tree.getCondition() != null) scan(tree.getCondition(), null);
+                Map<String, Set<String>> before = copyState(taint);
+                scan(tree.getStatement(), null);
+                for (ExpressionStatementTree update : tree.getUpdate()) scan(update, null);
+                Map<String, Set<String>> after = copyState(taint);
+                taint.clear();
+                taint.putAll(mergeStates(before, after));
+                limitations.add("JAVA_SECURITY_LOOP_FLOW_CONSERVATIVE");
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitEnhancedForLoop(EnhancedForLoopTree tree, Void unused) {
+                scan(tree.getExpression(), null);
+                Map<String, Set<String>> before = copyState(taint);
+                scan(tree.getStatement(), null);
+                Map<String, Set<String>> after = copyState(taint);
+                taint.clear();
+                taint.putAll(mergeStates(before, after));
+                limitations.add("JAVA_SECURITY_LOOP_FLOW_CONSERVATIVE");
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitDoWhileLoop(DoWhileLoopTree tree, Void unused) {
+                Map<String, Set<String>> before = copyState(taint);
+                scan(tree.getStatement(), null);
+                scan(tree.getCondition(), null);
+                Map<String, Set<String>> after = copyState(taint);
+                taint.clear();
+                taint.putAll(mergeStates(before, after));
+                limitations.add("JAVA_SECURITY_LOOP_FLOW_CONSERVATIVE");
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitLambdaExpression(LambdaExpressionTree tree, Void unused) {
+                limitations.add("JAVA_SECURITY_LAMBDA_FLOW_NOT_MODELED");
+                return Set.of();
+            }
+
+            @Override
+            public Set<String> visitClass(ClassTree tree, Void unused) {
+                limitations.add("JAVA_SECURITY_LOCAL_CLASS_FLOW_NOT_MODELED");
                 return Set.of();
             }
 
             @Override
             public Set<String> reduce(Set<String> left, Set<String> right) {
-                if (left == null) return safe(right);
-                if (right == null) return safe(left);
-                Set<String> result = new LinkedHashSet<>(left);
-                result.addAll(right);
-                return Set.copyOf(result);
+                return union(left, right);
             }
 
             private String securityNode(String prefix, ProgramNodeKind kind, String name, Tree tree) {
@@ -1004,19 +1057,23 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             }
         }
 
+        private ProgramGraphNode factualNode(
+                String id,
+                ProgramNodeKind kind,
+                String label,
+                SymbolLocation location
+        ) {
+            return new ProgramGraphNode(
+                    id, projectId, null, kind, label, location, InformationNature.FACTUAL, null, astOrigin, List.of());
+        }
+
         private String definitionNode(ParsedUnit unit, Tree tree, String name) {
             String id = id("def", unit, tree, name);
-            addNode(new ProgramGraphNode(
+            addNode(factualNode(
                     id,
-                    projectId,
-                    null,
                     ProgramNodeKind.VARIABLE,
                     label("definition " + name, unit, tree),
-                    location(unit, tree),
-                    InformationNature.FACTUAL,
-                    null,
-                    astOrigin,
-                    List.of()));
+                    location(unit, tree)));
             return id;
         }
 
@@ -1037,7 +1094,8 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
                 SymbolLocation location
         ) {
             String edgeId = "java:" + prefix + ":" + source + "->" + target;
-            Evidence evidence = new Evidence(EvidenceType.DERIVATION_PATH, description, null, null, location, confidence);
+            Evidence evidence = new Evidence(
+                    EvidenceType.DERIVATION_PATH, description, null, null, location, confidence);
             ProgramGraphEdge edge = new ProgramGraphEdge(
                     edgeId,
                     projectId,
@@ -1094,20 +1152,20 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
             return value.replaceAll("[^A-Za-z0-9_.-]", "_");
         }
 
-        private static Map<String, Set<String>> copyDefinitions(Map<String, Set<String>> source) {
+        private static Map<String, Set<String>> copyState(Map<String, Set<String>> source) {
             Map<String, Set<String>> copy = new LinkedHashMap<>();
             source.forEach((key, value) -> copy.put(key, Set.copyOf(value)));
             return copy;
         }
 
-        private static Map<String, Set<String>> mergeDefinitions(
+        private static Map<String, Set<String>> mergeStates(
                 Map<String, Set<String>> left,
                 Map<String, Set<String>> right
         ) {
-            Map<String, Set<String>> result = copyDefinitions(left);
-            right.forEach((name, definitions) -> {
+            Map<String, Set<String>> result = copyState(left);
+            right.forEach((name, values) -> {
                 Set<String> merged = new LinkedHashSet<>(result.getOrDefault(name, Set.of()));
-                merged.addAll(definitions);
+                merged.addAll(values);
                 result.put(name, Set.copyOf(merged));
             });
             return result;
@@ -1115,6 +1173,12 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
 
         private static Set<String> safe(Set<String> values) {
             return values == null ? Set.of() : values;
+        }
+
+        private static Set<String> union(Set<String> left, Set<String> right) {
+            Set<String> result = new LinkedHashSet<>(safe(left));
+            result.addAll(safe(right));
+            return Set.copyOf(result);
         }
     }
 
@@ -1137,9 +1201,10 @@ public final class JavaSourceProgramGraphProvider implements ProgramGraphProvide
     }
 
     private record InvocationInfo(
+            ParsedUnit unit,
+            MethodInvocationTree tree,
             String name,
             List<String> argumentNodeIds,
-            String resultNodeId,
             SymbolLocation location
     ) {
     }
