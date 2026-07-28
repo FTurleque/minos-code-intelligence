@@ -1,6 +1,6 @@
 # M21-S8 — Qualification de scalabilité sémantique et hybride
 
-Statut : **EN COURS — baseline STANDARD à mesurer avant toute optimisation**.
+Statut : **EN COURS — première baseline STANDARD mesurée ; optimisation ciblée puis replay obligatoire**.
 
 M21-S7 est validé sur `57243384286ed623de2d9499c9ae6729f77f6845`. S8 applique à M20 la règle durable M16 : **mesurer le backend courant avant de modifier le format vectoriel, l'algorithme de recherche ou le backend de stockage**.
 
@@ -102,6 +102,46 @@ Autres gates :
 - SHA machine identique au HEAD exact qualifié.
 
 Les durées de build/rebuild sont reportées mais ne sont pas bloquantes avant la première campagne STANDARD : elles dépendent fortement du CPU et constituent surtout un diagnostic pour une optimisation ciblée.
+
+## Première campagne STANDARD — preuve de goulot
+
+La première campagne complète a été obtenue sur le HEAD exact `37cbe22e91993e8aea040621396d2abd7e00da44`. Les invariants de mesure sont valides : `210000` documents, `384` dimensions, `added=0`, `changed=3`, `removed=0`, `reused=209997`, ratio de réutilisation `0.999986`, index disque `717000165` octets.
+
+```text
+initial_index_build_ms        47298.293
+incremental_index_rebuild_ms  43600.689
+peak_heap_bytes               11530141696
+max_heap_bytes                12859736064
+peak_heap_ratio               0.8966
+process_rss_bytes             11839127552
+
+vector-store-load  p95= 2910.409 ms  p99= 2910.409 ms
+semantic-search    p95= 8457.386 ms  p99= 8457.386 ms
+hybrid-search      p95=49412.429 ms  p99=49412.429 ms
+hybrid-context     p95=48520.565 ms  p99=48520.565 ms
+```
+
+Verdict :
+
+```text
+M21 S8 STANDARD MEASUREMENT status=FAIL decision=OPTIMIZE_MEASURED_BOTTLENECK
+```
+
+Cette mesure justifie une optimisation ciblée du runtime M20 courant. Elle **ne justifie pas** l'introduction spéculative d'un backend ANN/vector database.
+
+### Optimisations autorisées par la mesure
+
+Le profil montre quatre coûts corrélés du même chemin exact : représentation boxed des vecteurs, rechargements répétés du même index, tri complet avant `limit`, et reconstruction/re-tokenisation du corpus hybride à chaque requête.
+
+Le correctif S8 conserve le format disque v1, les scores cosine, le scan exact linéaire, les stable keys, les poids de ranking et les limitations M20. Il cible uniquement :
+
+1. représentation mémoire primitive des vecteurs derrière le contrat public `List<Double>` existant ;
+2. cache du `FileSemanticVectorStore` invalidé par métadonnées de l'artefact et par `replace/delete` ;
+3. top-K exact borné dans `SemanticSearchService`, avec le même ordre score-descendant / stableKey-ascendant ;
+4. réutilisation des `SemanticDocument` déjà alignés à l'index READY et cache du degré de graphe par `snapshotId` ;
+5. compilation de la requête lexicale une seule fois et token matching sans reconstruire un `Set` complet pour chaque document.
+
+Le même dataset, le même seed, les mêmes requêtes et les mêmes seuils doivent être rejoués après ces changements. S8 reste ouvert tant que ce replay ne retourne pas `KEEP_CURRENT_M20_BACKEND`.
 
 ## Robustesse Windows et supervision du harness
 
