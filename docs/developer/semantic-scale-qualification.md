@@ -103,18 +103,28 @@ Autres gates :
 
 Les durées de build/rebuild sont reportées mais ne sont pas bloquantes avant la première campagne STANDARD : elles dépendent fortement du CPU et constituent surtout un diagnostic pour une optimisation ciblée.
 
-## Robustesse Windows du harness
+## Robustesse Windows et supervision du harness
 
 Le gate exact-head exécute `clean verify`. Sous Windows, un processus qui conserve un handle sur `target/minos-code-intelligence-*-all.jar` peut empêcher Maven de supprimer le JAR.
 
-S8 impose donc deux protections :
+S8 impose donc les protections suivantes :
 
 1. `run-s8.ps1` arrête uniquement un ancien processus **M21SemanticScaleProbe** identifiable comme stale, puis teste en accès exclusif tout JAR shaded existant avant Maven ; si un autre processus le verrouille, le runner échoue immédiatement avec PID/commande lorsque Windows permet de l'identifier ;
-2. `run-s8-benchmark.ps1` ne passe jamais le JAR de `target` directement au JVM de benchmark : il crée une **copie temporaire unique hors du dépôt**, exécute le probe avec cette copie comme classpath, puis la détruit en `finally`.
+2. `run-s8-benchmark.ps1` ne passe jamais le JAR de `target` directement au JVM de benchmark : il crée une **copie temporaire unique hors du dépôt**, exécute le probe avec cette copie comme classpath, puis la détruit en `finally` ;
+3. le JVM hérite désormais de la console : les étapes `M21-S8 PROGRESS` et les erreurs Java sont visibles immédiatement au lieu d'être retenues jusqu'à la fin ;
+4. le probe persiste la progression dans `target/m21-s8/process/semantic-scale.progress.log` avec les phases materialize, génération dataset, publication snapshots, build/rebuild, proofs et chaque échantillon de mesure ;
+5. le wrapper suit le PID via `WaitForExit(1000)`, échantillonne `WorkingSet64` et affiche un heartbeat toutes les 15 secondes avec elapsed/RSS/dernière étape ;
+6. un watchdog de harness, **30 minutes par défaut**, empêche un processus bloqué de rester indéfiniment. Ce watchdog ne constitue pas un seuil de performance S8 : s'il expire, la mesure est incomplète et S8 reste ouvert ;
+7. le cleanup est compatible **Windows PowerShell 5.1** : `Stop-Process -Force` est utilisé au lieu de `Process.Kill(Boolean)`, surcharge non fiable sous le .NET Framework de Windows PowerShell.
 
 Cette isolation garantit que le benchmark S8 lui-même ne peut pas conserver un handle sur l'artefact Maven racine utilisé par une qualification exacte ultérieure. Elle ne masque pas un processus MINOS externe légitime : un MCP/server ou autre Java qui utilise explicitement le JAR de `target` doit être arrêté avant `clean verify`.
 
-Le JSON de mesure enregistre `machine.benchmark_jar_isolated = true`.
+Le JSON de mesure enregistre :
+
+```text
+machine.benchmark_jar_isolated = true
+machine.benchmark_watchdog_minutes = 30
+```
 
 ## Règle de décision
 
@@ -141,12 +151,18 @@ Aucune dépendance `Lucene`, `HNSW`, `RocksDB`, SQLite JDBC, Qdrant, Milvus ou W
 .\scripts\m21\run-s8.ps1 -ExpectedHead <sha> -Repetitions 5
 ```
 
+Le watchdog peut être surchargé uniquement pour diagnostiquer le harness :
+
+```powershell
+.\scripts\m21\run-s8.ps1 -ExpectedHead <sha> -Repetitions 5 -BenchmarkTimeoutMinutes 30
+```
+
 Le runner :
 
 1. vérifie les processus stale S8 et les verrous du JAR Maven ;
 2. rejoue le core M21 ;
 3. vérifie l'absence de backend non ratifié ;
-4. exécute la campagne STANDARD sur une copie temporaire isolée du JAR ;
+4. exécute la campagne STANDARD sur une copie temporaire isolée du JAR, avec progression live, heartbeat et watchdog ;
 5. produit `target/m21-s8/standard.json` ;
 6. produit `target/m21-s8/decision.json` ;
 7. applique la décision ;
