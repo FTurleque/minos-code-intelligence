@@ -59,6 +59,22 @@ class FileSemanticVectorStoreTest {
     }
 
     @Test
+    void cachedV2SnapshotUsesExactlyThePersistedFloat32Values(@TempDir Path temp) throws Exception {
+        FileSemanticVectorStore store = new FileSemanticVectorStore(temp.resolve("semantic"));
+        double sourceValue = 1.0 / 3.0;
+        store.replace(index("project-1", "snapshot-1", "model-v1", "quantized", List.of(sourceValue, 0.2)));
+
+        SemanticVectorStore.IndexSnapshot cached = store.load("project-1").orElseThrow();
+        double persistedValue = (double) (float) sourceValue;
+        assertEquals(persistedValue, cached.documents().getFirst().vector().valueAt(0));
+
+        SemanticVectorStore.IndexSnapshot reopened = new FileSemanticVectorStore(store.root())
+                .load("project-1").orElseThrow();
+        assertEquals(cached.documents(), reopened.documents());
+        assertEquals(cached.documents().getFirst().vector().norm(), reopened.documents().getFirst().vector().norm());
+    }
+
+    @Test
     void readsLegacyV1AndMigratesOnNextReplace(@TempDir Path temp) throws Exception {
         Path root = temp.resolve("semantic");
         Files.createDirectories(root.resolve("project-1"));
