@@ -8,6 +8,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$RequiredSemanticProvider = 'ollama'
+$RequiredSemanticModel = 'embeddinggemma'
+$RequiredSemanticDimensions = '768'
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'M23 final qualification must run on Windows because it includes the qualified Windows release gate.'
@@ -17,6 +20,15 @@ if ([string]::IsNullOrWhiteSpace($ExpectedHead)) {
 }
 if ($Version -ne '0.2.0-m23') {
     throw "M23 final qualification requires release candidate version 0.2.0-m23, got: $Version"
+}
+if ($env:MINOS_SEMANTIC_PROVIDER -ne $RequiredSemanticProvider) {
+    throw "M23 final qualification requires MINOS_SEMANTIC_PROVIDER=$RequiredSemanticProvider."
+}
+if ($env:MINOS_SEMANTIC_MODEL -ne $RequiredSemanticModel) {
+    throw "M23 final qualification requires canonical model $RequiredSemanticModel."
+}
+if ($env:MINOS_SEMANTIC_DIMENSIONS -ne $RequiredSemanticDimensions) {
+    throw "M23 final qualification requires MINOS_SEMANTIC_DIMENSIONS=$RequiredSemanticDimensions."
 }
 
 function Resolve-Python {
@@ -64,6 +76,7 @@ try {
     }
     Write-Host "HEAD: $Head"
     Write-Host "Release candidate version: $Version"
+    Write-Host "Learned qualification profile: provider=$RequiredSemanticProvider model=$RequiredSemanticModel dimensions=$RequiredSemanticDimensions"
 
     $Python = Resolve-Python
 
@@ -73,7 +86,7 @@ try {
     Invoke-PythonGate -Python $Python -Script 'scripts\docs\check-current-docs.py' `
         -Failure 'Current documentation consistency failed before M23 qualification'
 
-    Write-Host '[2/7] Measuring the configured local learned embedding model...'
+    Write-Host '[2/7] Measuring the canonical local learned embedding model...'
     Invoke-PythonGate -Python $Python -Script 'scripts\m23\evaluate-learned-quality.py' `
         -Failure 'M23 learned semantic quality gate failed'
 
