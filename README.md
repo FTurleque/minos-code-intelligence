@@ -26,6 +26,8 @@ flowchart TB
     DISC --> IDX[Indexeurs qualifiés / SCIP]
     IDX --> MINOS[MINOS Code Intelligence]
     GIT[Git local] --> MINOS
+    SRC --> ADV[Providers Program Graph qualifiés]
+    ADV --> MINOS
     MINOS --> CLI[CLI]
     MINOS --> API[API Java]
     MINOS --> MCP[MCP STDIO]
@@ -38,17 +40,20 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 ## État courant
 
-**C0 à M20 sont terminés, validés et livrés.**
+**C0 à M20 sont terminés, validés et livrés sur `main`.**
 
 M20 a ajouté la couche Semantic & Hybrid Code Intelligence : documents sémantiques, `EmbeddingProvider` optionnel, vector store reconstruisible, recherche sémantique/hybride, contexte borné, API additive, 23 tools MCP et signaux NEXUS v2.
 
-**M21 — Production Integrity & Surface Convergence est en cours** sur `m21-production-integrity`. Ce jalon consolide CI, quality gates M19/M20, frontières Maven, documentation, supply-chain, parité IntelliJ et qualification de performance avant toute nouvelle phase fonctionnelle lourde.
+**M21 a terminé ses gates locaux S1/S3→S9.** Son seul volet encore ouvert est S2/CI, explicitement gelé jusqu’en août 2026. Le tree M21 localement qualifié a été intégré dans `develop` via PR #75.
+
+**M22 — Advanced Provider Intelligence est le jalon fonctionnel actif sur `develop`.** Il introduit d’abord un provider Java AST local et capability-honest pour produire réellement CFG, def-use, argument/return flow et primitives de sécurité sous limites explicites, avec fixtures et précision/rappel contrôlés.
 
 Voir :
 
-- [`docs/STATUS.md`](docs/STATUS.md) — état livré et jalon actif ;
+- [`docs/STATUS.md`](docs/STATUS.md) — état livré, M21 résiduel et jalon fonctionnel actif ;
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit M0→M27 ;
 - [`docs/roadmap/M21_EXECUTION.md`](docs/roadmap/M21_EXECUTION.md) — consolidation post-M20 ;
+- [`docs/roadmap/M22_EXECUTION.md`](docs/roadmap/M22_EXECUTION.md) — Advanced Provider Intelligence ;
 - [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Installer MINOS sous Windows
@@ -163,11 +168,13 @@ Sous Windows PowerShell :
 .\mvnw.cmd clean verify
 ```
 
-Pour la consolidation M21, la porte locale courante est :
+La porte locale finale M22 est :
 
 ```powershell
-.\scripts\m21\run-local.ps1
+.\scripts\m22\run-final.ps1 -ExpectedHead <sha>
 ```
+
+Elle rejoue le core Maven/JaCoCo, la qualification release Windows, la présence de `jdk.compiler` dans le runtime embarqué et la parité IntelliJ, sans déclencher de CI.
 
 La version de développement est actuellement :
 
@@ -306,6 +313,8 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 - [Modèle de domaine](docs/developer/domain-model.md)
 - [Indexation, lifecycle et stockage](docs/developer/indexing-and-storage.md)
 - [Surfaces publiques](docs/developer/public-surfaces.md)
+- [Provider Java avancé M22](docs/developer/java-advanced-provider.md)
+- [Provider Program Graph sidecar M21](docs/developer/advanced-program-provider.md)
 - [Multi-dépôts et Git](docs/developer/multi-repo-git.md)
 - [Semantic & Hybrid Intelligence](docs/developer/semantic-hybrid-intelligence.md)
 - [Tests et contribution](docs/developer/testing.md)
@@ -316,6 +325,7 @@ Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only 
 - [Historique](docs/history/README.md)
 - [Roadmap](docs/ROADMAP.md)
 - [M21 — Production Integrity](docs/roadmap/M21_EXECUTION.md)
+- [M22 — Advanced Provider Intelligence](docs/roadmap/M22_EXECUTION.md)
 
 ## Stack
 
@@ -336,6 +346,7 @@ Serveur HTTP     aucun requis dans le cœur
 - faits, dérivations et heuristiques restent distincts ;
 - provenance et preuves sont conservées ;
 - les limitations fournisseur ne deviennent jamais des garanties ;
+- une capability Program Graph n’est exposée que si le provider produit réellement les facts correspondants ;
 - les snapshots sont promus de façon cohérente ;
 - l’incrémental n’est activé que lorsqu’un provider le prouve ;
 - l’impact est potentiel, pas une certitude runtime ;
