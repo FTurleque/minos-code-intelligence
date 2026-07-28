@@ -79,6 +79,26 @@ function Require-EnvironmentValue {
     Write-Host "PASS env $Name=$Expected"
 }
 
+function Test-Dotnet10SupportedWindowsHost {
+    $CurrentVersion = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+    $Build = 0
+    [void][int]::TryParse([string]$CurrentVersion.CurrentBuild, [ref]$Build)
+    $Edition = [string]$CurrentVersion.EditionID
+    $DisplayVersion = [string]$CurrentVersion.DisplayVersion
+    $ProductName = [string]$CurrentVersion.ProductName
+
+    # .NET 10 support in 2026 excludes Windows 10 Pro 22H2. Supported Windows 10
+    # clients are the still-supported Enterprise/IoT/LTSC lines (21H2/1809/1607).
+    if ($Build -ge 22000) {
+        return [pscustomobject]@{ Supported = $true; ProductName = $ProductName; Edition = $Edition; DisplayVersion = $DisplayVersion; Build = $Build }
+    }
+
+    $EnterpriseLike = $Edition -match 'Enterprise|IoT|EnterpriseS'
+    $SupportedWindows10Build = $Build -in @(19044, 17763, 14393)
+    $Supported = $EnterpriseLike -and $SupportedWindows10Build
+    return [pscustomobject]@{ Supported = $Supported; ProductName = $ProductName; Edition = $Edition; DisplayVersion = $DisplayVersion; Build = $Build }
+}
+
 Write-Host '=== MINOS M24 - Windows polyglot prerequisite gate ===' -ForegroundColor Cyan
 
 Require-EnvironmentValue 'MINOS_SEMANTIC_PROVIDER' $RequiredSemanticProvider
@@ -107,14 +127,21 @@ if (-not $Python) {
 $PythonVersion = Invoke-Captured $Python @('--version')
 Write-Host "PASS Python: $PythonVersion"
 
-$Dotnet = Resolve-Command 'dotnet.exe'
-$DotnetVersion = Invoke-Captured $Dotnet @('--version')
-$DotnetMajorText = ($DotnetVersion -split '\.')[0]
-$DotnetMajor = 0
-if (-not [int]::TryParse($DotnetMajorText, [ref] $DotnetMajor) -or $DotnetMajor -lt 10) {
-    throw "M24 scip-dotnet 0.2.14 requires .NET SDK 10+; dotnet --version=$DotnetVersion"
+$WindowsSupport = Test-Dotnet10SupportedWindowsHost
+Write-Host "INFO Windows host: $($WindowsSupport.ProductName) / $($WindowsSupport.Edition) / $($WindowsSupport.DisplayVersion) / build $($WindowsSupport.Build)"
+if ($WindowsSupport.Supported) {
+    $Dotnet = Resolve-Command 'dotnet.exe'
+    $DotnetVersion = Invoke-Captured $Dotnet @('--version')
+    $DotnetMajorText = ($DotnetVersion -split '\.')[0]
+    $DotnetMajor = 0
+    if (-not [int]::TryParse($DotnetMajorText, [ref] $DotnetMajor) -or $DotnetMajor -lt 10) {
+        throw "M24 scip-dotnet 0.2.14 requires .NET SDK 10+ on this supported Windows host; dotnet --version=$DotnetVersion"
+    }
+    Write-Host "PASS .NET SDK: $DotnetVersion"
 }
-Write-Host "PASS .NET SDK: $DotnetVersion"
+else {
+    Write-Host 'INFO scip-dotnet: .NET 10 is not supported on this Windows host; Windows C# e2e is intentionally BLOCKED/NOT_RUN and no unsupported SDK installation is required.'
+}
 
 $Go = Resolve-Command 'go.exe'
 $GoVersion = Invoke-Captured $Go @('version')
@@ -137,5 +164,5 @@ if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease)
 Write-Host "PASS rust-analyzer: $RustAnalyzerVersion"
 
 Write-Host 'INFO scip-clang: Windows runtime intentionally not required; upstream 0.4.0 has no qualified Windows binary path in M24.'
-Write-Host 'INFO scip-dotnet and scip-go executables are managed under MINOS_HOME/tools by the M24 provider runtime during e2e evaluation.'
+Write-Host 'INFO scip-go executable is managed under MINOS_HOME/tools by the M24 provider runtime during e2e evaluation.'
 Write-Host 'M24 WINDOWS PREREQUISITES SUCCESS' -ForegroundColor Green
