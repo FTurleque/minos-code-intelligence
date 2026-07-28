@@ -3,6 +3,9 @@ set -euo pipefail
 
 EXPECTED_HEAD="${1:-}"
 M24_BASE="8dbe34cb9e524acb62becda4faa263d74b90b9a9"
+RUST_ANALYZER_VERSION="0.3.2989"
+RUST_ANALYZER_RELEASE="2026-07-27"
+RUST_ANALYZER_COMMIT="12c3381"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 fail() {
@@ -76,8 +79,10 @@ assert_provider_prerequisites() {
   echo "cargo: $cargo_version"
   echo "rustc: $rustc_version"
   echo "rust-analyzer: $rust_analyzer_version"
-  [[ "$rust_analyzer_version" == *"2026-07-27"* || "$rust_analyzer_version" == *"12c3381"* ]] \
-    || fail "rust-analyzer must match release 2026-07-27 / commit 12c3381"
+  [[ "$rust_analyzer_version" == *"$RUST_ANALYZER_VERSION"* \
+    && "$rust_analyzer_version" == *"$RUST_ANALYZER_RELEASE"* \
+    && "$rust_analyzer_version" == *"$RUST_ANALYZER_COMMIT"* ]] \
+    || fail "rust-analyzer must match v$RUST_ANALYZER_VERSION / release $RUST_ANALYZER_RELEASE / commit $RUST_ANALYZER_COMMIT"
 }
 
 run_with_semantic_disabled() {

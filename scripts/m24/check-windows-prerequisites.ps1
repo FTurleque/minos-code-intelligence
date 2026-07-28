@@ -9,6 +9,7 @@ $RequiredSemanticModel = 'embeddinggemma'
 $RequiredSemanticDimensions = '768'
 $RequiredSemanticEndpoint = 'http://127.0.0.1:11434/api/embed'
 $RequiredRustAnalyzerRelease = '2026-07-27'
+$RequiredRustAnalyzerVersion = '0.3.2989'
 $RequiredRustAnalyzerCommit = '12c3381'
 
 if ($env:OS -ne 'Windows_NT') {
@@ -210,9 +211,10 @@ if (-not $RustAnalyzer) {
 else {
     $RustAnalyzerVersion = Try-VersionProbe 'rust-analyzer' $RustAnalyzer @('--version') $Problems
     if ($RustAnalyzerVersion) {
-        if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease) -and
+        if ($RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerVersion) -or
+            $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerRelease) -or
             $RustAnalyzerVersion -notmatch [regex]::Escape($RequiredRustAnalyzerCommit)) {
-            $Problems.Add("rust-analyzer must match release $RequiredRustAnalyzerRelease / commit $RequiredRustAnalyzerCommit; got $RustAnalyzerVersion")
+            $Problems.Add("rust-analyzer must match v$RequiredRustAnalyzerVersion / release $RequiredRustAnalyzerRelease / commit $RequiredRustAnalyzerCommit; got $RustAnalyzerVersion")
         }
         else {
             Write-Host "PASS rust-analyzer: $RustAnalyzerVersion"

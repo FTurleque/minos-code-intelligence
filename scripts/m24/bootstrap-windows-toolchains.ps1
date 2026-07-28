@@ -19,6 +19,7 @@ $RustupUrl = "https://static.rust-lang.org/rustup/dist/$RustHost/rustup-init.exe
 $RustupShaUrl = "$RustupUrl.sha256"
 
 $RustAnalyzerRelease = '2026-07-27'
+$RustAnalyzerVersion = '0.3.2989'
 $RustAnalyzerCommit = '12c3381'
 $RustAnalyzerAssetName = 'rust-analyzer-x86_64-pc-windows-msvc.zip'
 $RustAnalyzerApiUrl = "https://api.github.com/repos/rust-lang/rust-analyzer/releases/tags/$RustAnalyzerRelease"
@@ -193,7 +194,9 @@ $RustAnalyzerReady = $false
 if (Test-Path $RustAnalyzerExe) {
     try {
         $ExistingAnalyzer = Invoke-NativeChecked $RustAnalyzerExe @('--version')
-        $RustAnalyzerReady = $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerRelease) -or $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerCommit)
+        $RustAnalyzerReady = $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerVersion) -and
+            $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerRelease) -and
+            $ExistingAnalyzer -match [regex]::Escape($RustAnalyzerCommit)
         if ($RustAnalyzerReady) { Write-Host "PASS existing rust-analyzer: $ExistingAnalyzer" }
     }
     catch { $RustAnalyzerReady = $false }
@@ -231,7 +234,8 @@ if (-not $RustAnalyzerReady) {
     Remove-DirectoryIfPresent $AnalyzerStage
 
     $InstalledAnalyzer = Invoke-NativeChecked $RustAnalyzerExe @('--version')
-    if ($InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerRelease) -and
+    if ($InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerVersion) -or
+        $InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerRelease) -or
         $InstalledAnalyzer -notmatch [regex]::Escape($RustAnalyzerCommit)) {
         throw "rust-analyzer pin verification failed: $InstalledAnalyzer"
     }
