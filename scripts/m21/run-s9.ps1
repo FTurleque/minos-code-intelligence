@@ -73,6 +73,19 @@ try {
         -BenchmarkTimeoutMinutes $BenchmarkTimeoutMinutes
     if ($LASTEXITCODE -ne 0) { throw "M21-S8 replay failed (exit=$LASTEXITCODE)" }
 
+    $DecisionPath = Join-Path $RepoRoot 'target\m21-s8\decision.json'
+    if (-not (Test-Path -LiteralPath $DecisionPath -PathType Leaf)) {
+        throw 'M21-S9 requires the S8 decision evidence produced on this exact HEAD.'
+    }
+    $S8Decision = Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json
+    if ($S8Decision.head -ne $Head) {
+        throw "M21-S9 S8 evidence head mismatch: expected=$Head actual=$($S8Decision.head)"
+    }
+    if ($S8Decision.status -ne 'PASS' -or $S8Decision.decision -ne 'KEEP_CURRENT_M20_BACKEND') {
+        throw "M21-S9 requires PASS/KEEP_CURRENT_M20_BACKEND, actual=$($S8Decision.status)/$($S8Decision.decision)"
+    }
+    Write-Host 'M21-S9 captured S8 evidence: PASS / KEEP_CURRENT_M20_BACKEND'
+
     Write-Host '[3/7] Replaying supply-chain and Windows release qualification...'
     & (Join-Path $RepoRoot 'scripts\m21\run-s5.ps1') -ExpectedHead $Head -Version $Version
     if ($LASTEXITCODE -ne 0) { throw "M21-S5 replay failed (exit=$LASTEXITCODE)" }
@@ -90,16 +103,11 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { throw "M21 current documentation consistency failed (exit=$LASTEXITCODE)" }
 
-    Write-Host '[6/7] Verifying final retained S8 decision evidence...'
-    $Decision = Join-Path $RepoRoot 'target\m21-s8\decision.json'
-    if (-not (Test-Path -LiteralPath $Decision -PathType Leaf)) {
-        throw 'M21-S9 requires the S8 decision evidence produced on this exact HEAD.'
+    Write-Host '[6/7] Verifying retained S8 decision captured before downstream clean builds...'
+    if ($S8Decision.head -ne $Head -or $S8Decision.status -ne 'PASS' -or $S8Decision.decision -ne 'KEEP_CURRENT_M20_BACKEND') {
+        throw 'M21-S9 retained S8 evidence changed unexpectedly in memory.'
     }
-    $DecisionJson = Get-Content -LiteralPath $Decision -Raw | ConvertFrom-Json
-    if ($DecisionJson.decision -ne 'KEEP_CURRENT_M20_BACKEND') {
-        throw "M21-S9 requires KEEP_CURRENT_M20_BACKEND, actual=$($DecisionJson.decision)"
-    }
-    Write-Host 'M21-S9 retained S8 decision: KEEP_CURRENT_M20_BACKEND'
+    Write-Host "M21-S9 retained S8 decision: $($S8Decision.status) / $($S8Decision.decision) / head=$($S8Decision.head)"
 
     Write-Host '[7/7] Rechecking exact HEAD and clean tracked worktree...'
     Assert-ExactHeadAndClean -Head $Head -AllowIntellijBuildOutputs
