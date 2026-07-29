@@ -31,6 +31,9 @@ class LocalMinosTeamApiTest {
         assertEquals(1, api.listWorkspaces(token).size());
         assertEquals("TENANT_SCOPED", api.tenant(token).isolation());
         assertFalse(api.audit(token, 20).isEmpty());
+        MinosApi.MinosApiException denied = assertThrows(MinosApi.MinosApiException.class,
+                () -> api.tenant("invalid-token"));
+        assertEquals(MinosApi.ErrorCode.ACCESS_DENIED, denied.code());
     }
 
     @Test

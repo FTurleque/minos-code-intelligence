@@ -21,6 +21,7 @@ MINOS suit plusieurs règles fortes :
 - MINOS ne sélectionne pas le contexte final de NEXUS ;
 - une release distribuée doit conserver une provenance et un inventaire supply-chain vérifiables ;
 - une capability avancée n’est publiée que lorsque le provider courant produit réellement les facts correspondants.
+- le contrôle tenant reste opt-in, chiffré par clés externes et séparé des snapshots autoritatifs.
 
 ## Carte des sous-systèmes
 
@@ -78,6 +79,7 @@ flowchart TB
 | `com.minos.workspace` | intelligence cross-repository |
 | `com.minos.integration.nexus` | projections versionnées vers NEXUS |
 | `com.minos.output` | rendus texte/JSON |
+| `com.minos.hosted` | identité, RBAC, espaces partagés, audit et rétention M27 |
 
 ## Parcours de lecture conseillé
 
@@ -92,10 +94,11 @@ flowchart TB
 9. [Providers polyglottes M24](polyglot-providers.md)
 10. [Remote & Distributed Indexing M25](remote-distributed-indexing.md)
 11. [Runtime & Dynamic Intelligence M26](runtime-dynamic-intelligence.md)
-12. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-13. [Multi-dépôts et Git](multi-repo-git.md)
-14. [Supply-chain et provenance de release](supply-chain.md)
-15. [Tests et contribution](testing.md)
+12. [Team / Hosted Mode M27](team-hosted-mode.md)
+13. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+14. [Multi-dépôts et Git](multi-repo-git.md)
+15. [Supply-chain et provenance de release](supply-chain.md)
+16. [Tests et contribution](testing.md)
 
 ## Build développeur
 

@@ -342,7 +342,7 @@ minos mcp
 
 La session MCP STDIO reste read-only. Depuis M15, le MCP appelle directement les services applicatifs partagés ; il ne réexécute pas la CLI métier.
 
-Le catalogue courant contient **26 tools read-only**. Il inclut les 16 tools historiques ainsi que :
+Le catalogue courant contient **31 tools read-only**. Il inclut les 16 tools historiques ainsi que :
 
 ```text
 minos_program_graph
@@ -355,6 +355,11 @@ minos_hybrid_context
 minos_runtime_sessions
 minos_runtime_report
 minos_runtime_symbol
+minos_team_tenant
+minos_team_workspaces
+minos_team_workspace
+minos_team_members
+minos_team_audit
 ```
 
 Les réponses des tools historiques de structure/statut restent enrichies par les profils provider lorsque cela s'applique. Les surfaces M19/M20 restent bornées et exposent leurs limitations ; un score sémantique reste un signal `HEURISTIC`, jamais un fait structurel.

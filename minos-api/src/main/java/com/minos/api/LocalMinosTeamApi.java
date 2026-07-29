@@ -143,7 +143,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     private static <T> T execute(Call<T> call) throws MinosApi.MinosApiException {
         try { return call.run(); }
-        catch (SecurityException exception) { throw failure(MinosApi.ErrorCode.UNAVAILABLE, exception); }
+        catch (SecurityException exception) { throw failure(MinosApi.ErrorCode.ACCESS_DENIED, exception); }
         catch (IllegalArgumentException exception) { throw failure(MinosApi.ErrorCode.INVALID_REQUEST, exception); }
         catch (IllegalStateException exception) { throw failure(MinosApi.ErrorCode.UNAVAILABLE, exception); }
         catch (IOException exception) { throw failure(MinosApi.ErrorCode.IO_FAILURE, exception); }

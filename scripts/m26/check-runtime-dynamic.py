@@ -98,7 +98,9 @@ def main() -> int:
                       "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS", "--limit")
         require_facts("MinosApplication.java", app,
                       "runtime-observations", "RuntimeObservationStore", "RuntimeIntelligenceService")
-        require_pattern("MinosMcpTools.java", mcp, r"TOOL_COUNT\s*=\s*26", "26-tool MCP catalogue")
+        tool_count_match = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)
+        if not tool_count_match or int(tool_count_match.group(1)) < 26:
+            raise RuntimeError("MinosMcpTools.java: M26 requires its 26-tool catalogue or an additive superset")
         require_facts("MinosMcpTools.java", mcp,
                       "minos_runtime_sessions", "minos_runtime_report", "minos_runtime_symbol",
                       "sessionId", "additionalProperties")

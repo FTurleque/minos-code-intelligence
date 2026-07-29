@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check current MINOS documentation against authoritative facts through merged M26."""
+"""Check current MINOS documentation through the active M27 qualification candidate."""
 
 from __future__ import annotations
 
@@ -94,6 +94,8 @@ def main() -> int:
         remote_developer = read("docs/developer/remote-distributed-indexing.md")
         runtime_user = read("docs/user/runtime-intelligence.md")
         runtime_developer = read("docs/developer/runtime-dynamic-intelligence.md")
+        hosted_user = read("docs/user/team-hosted-mode.md")
+        hosted_developer = read("docs/developer/team-hosted-mode.md")
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
@@ -102,11 +104,13 @@ def main() -> int:
         m24_execution = read("docs/roadmap/M24_EXECUTION.md")
         m25_execution = read("docs/roadmap/M25_EXECUTION.md")
         m26_execution = read("docs/roadmap/M26_EXECUTION.md")
+        m27_execution = read("docs/roadmap/M27_EXECUTION.md")
         m22_adr = read("docs/adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md")
         m23_adr = read("docs/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md")
         m24_adr = read("docs/adr/0032-evidence-gated-polyglot-scip-providers.md")
         m25_adr = read("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
         m26_adr = read("docs/adr/0034-partial-runtime-observations-with-explicit-static-correlation.md")
+        m27_adr = read("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md")
         adr_index = read("docs/adr/README.md")
         supply_chain = read("docs/developer/supply-chain.md")
         root_pom = read("pom.xml")
@@ -139,6 +143,10 @@ def main() -> int:
         m26_e2e = read("scripts/m26/run-runtime-e2e.py")
         m26_windows = read("scripts/m26/run-final.ps1")
         m26_linux = read("scripts/m26/run-final.sh")
+        m27_gate = read("scripts/m27/check-hosted.py")
+        m27_e2e = read("scripts/m27/run-hosted-e2e.py")
+        m27_windows = read("scripts/m27/run-final.ps1")
+        m27_linux = read("scripts/m27/run-final.sh")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         java_provider = read("minos-application/src/main/java/com/minos/program/analysis/JavaSourceProgramGraphProvider.java")
         ollama_provider = read("minos-application/src/main/java/com/minos/semantic/OllamaEmbeddingProvider.java")
@@ -160,15 +168,17 @@ def main() -> int:
         require_text("README.md", readme, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("README.md", readme, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
         require_text("README.md", readme, "QUALIFIED_WITH_CONSTRAINTS")
-        require_pattern("README.md", readme, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*prochain jalon", "M27 next milestone")
+        require_pattern("README.md", readme, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*(?:jalon actif|actif)[^\n]*(?:PR\s*#\s*91|draft)[^\n]*candidat", "M27 active qualification candidate")
         require_text("README.md", readme, "MINOS_SEMANTIC_PROVIDER='ollama'")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
         require_text("README.md", readme, "docs/roadmap/M24_EXECUTION.md")
         require_text("README.md", readme, "docs/roadmap/M25_EXECUTION.md")
         require_text("README.md", readme, "docs/roadmap/M26_EXECUTION.md")
+        require_text("README.md", readme, "docs/roadmap/M27_EXECUTION.md")
         require_text("README.md", readme, "docs/user/polyglot-providers.md")
         require_text("README.md", readme, "docs/user/remote-indexing.md")
         require_text("README.md", readme, "docs/user/runtime-intelligence.md")
+        require_text("README.md", readme, "docs/user/team-hosted-mode.md")
         forbid_text("README.md", readme, "M23 — Semantic Retrieval 2.0 est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M22 — Advanced Provider Intelligence est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M24 — Polyglot Expansion est en cours")
@@ -182,7 +192,7 @@ def main() -> int:
         require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
         forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
 
-        # Roadmap/status authority: M26 is exact-head qualified and merged; M27 is next.
+        # Roadmap/status authority: M26 is merged; M27 is the active qualification candidate.
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M22\s+Advanced Provider Intelligence[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M22 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M23\s+Semantic Retrieval 2\.0[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M23 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M24 qualified and merged into develop")
@@ -203,11 +213,13 @@ def main() -> int:
         require_pr_state("docs/ROADMAP.md", roadmap, 88, "MERGED")
         require_text("docs/ROADMAP.md", roadmap, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("docs/ROADMAP.md", roadmap, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
-        require_pattern("docs/ROADMAP.md", roadmap, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*prochain jalon", "M27 next milestone")
+        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M27\s+Team\s*/\s*Hosted Mode[^\n]*ACTIF[^\n]*CANDIDAT", "M27 active candidate")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M25_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0033")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M26_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0034")
+        require_text("docs/ROADMAP.md", roadmap, "roadmap/M27_EXECUTION.md")
+        require_text("docs/ROADMAP.md", roadmap, "ADR-0035")
         forbid_text("docs/ROADMAP.md", roadmap, "M23  Semantic Retrieval 2.0                       🚧 EN COURS")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           ⏳ PLANIFIÉ")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           🚧 EN COURS")
@@ -246,7 +258,7 @@ def main() -> int:
         require_pr_state("docs/STATUS.md", status, 88, "MERGED")
         require_text("docs/STATUS.md", status, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("docs/STATUS.md", status, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
-        require_pattern("docs/STATUS.md", status, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*prochain jalon", "M27 next milestone status")
+        require_pattern("docs/STATUS.md", status, r"(?im)^M27\s+—\s+Team\s*/\s*Hosted Mode[^\n]*ACTIF[^\n]*CANDIDAT", "M27 active candidate status")
 
         # M21 retained integrity facts.
         require_pattern("docs/roadmap/M21_EXECUTION.md", execution, r"(?im)^\s*Issue\b[^\n#]*#\s*73\b", "issue #73")
@@ -501,6 +513,49 @@ def main() -> int:
         forbid_text("scripts/m26/run-final.sh", m26_linux, "gh workflow")
         forbid_text("scripts/m26/run-final.sh", m26_linux, "gh run")
 
+        # M27 active candidate facts; final SHAs remain pending until double exact-head qualification.
+        require_issue_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 90, "OPEN")
+        require_pr_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 91, "OPEN")
+        require_pattern("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                        r"(?im)^\s*Statut\b[^\n]*CANDIDATE[^\n]*8\s*/\s*9\b",
+                        "M27 8/9 qualification candidate")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "5db06f2a778b60b318ae6d83ad76928c24672810")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Qualified HEAD : PENDING")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Merge develop  : PENDING")
+        for slice_name in range(1, 10):
+            require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, f"M27-S{slice_name}")
+        for fact in ("opt-in", "RBAC", "AES-256-GCM", "HMAC-SHA-256", "snapshot actif exact",
+                     "rétention", "31 tools", "read-only"):
+            require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, fact)
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
+        require_text("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
+                     "Status: **Accepted**")
+        require_text("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
+                     "MINOS_TEAM_TOKEN")
+        require_text("docs/adr/README.md", adr_index,
+                     "0035-opt-in-tenant-control-plane-with-external-keys.md")
+        require_text("docs/user/README.md", user_readme, "team-hosted-mode.md")
+        require_text("docs/developer/README.md", developer_readme, "team-hosted-mode.md")
+        for relative, document in (("docs/user/team-hosted-mode.md", hosted_user),
+                                   ("docs/developer/team-hosted-mode.md", hosted_developer)):
+            require_text(relative, document, "opt-in")
+            require_text(relative, document, "tenant")
+            require_text(relative, document, "AES-256-GCM")
+            require_text(relative, document, "audit")
+            require_text(relative, document, "snapshot")
+        require_text("scripts/m27/check-hosted.py", m27_gate, "M27 TEAM HOSTED CONSISTENCY SUCCESS")
+        require_text("scripts/m27/run-hosted-e2e.py", m27_e2e, "M27 TEAM HOSTED END-TO-END SUCCESS")
+        require_text("scripts/m27/run-final.ps1", m27_windows,
+                     "M27 FINAL TEAM HOSTED MODE VALIDATION SUCCESS")
+        require_text("scripts/m27/run-final.sh", m27_linux,
+                     "M27 LINUX TEAM HOSTED MODE VALIDATION SUCCESS")
+        forbid_text("scripts/m27/run-final.ps1", m27_windows, "gh workflow")
+        forbid_text("scripts/m27/run-final.ps1", m27_windows, "gh run")
+        forbid_text("scripts/m27/run-final.sh", m27_linux, "gh workflow")
+        forbid_text("scripts/m27/run-final.sh", m27_linux, "gh run")
+
         # Existing public surfaces and production gates remain aligned.
         require_text("docs/developer/supply-chain.md", supply_chain, "CycloneDX JSON")
         require_text("docs/developer/supply-chain.md", supply_chain, "RELEASE-MANIFEST.json")
@@ -540,6 +595,7 @@ def main() -> int:
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"m24-polyglot-provider-platform"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"m25-remote-distributed-indexing"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"m26-runtime-dynamic-intelligence"')
+        require_text("scripts/quality/check-jacoco.py", quality_gate, '"m27-team-hosted-control-plane"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, "OllamaEmbeddingProvider")
 
         require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "KEEP_CURRENT_M20_BACKEND")
@@ -549,10 +605,10 @@ def main() -> int:
         require_text("scripts/m21/run-s8.ps1", s8_runner, "M21-S8 SEMANTIC SCALE VALIDATION SUCCESS")
         require_text("scripts/m21/run-s9.ps1", s9_runner, "M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS")
 
-        print(f"M26 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
+        print(f"M27 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
     except Exception as exception:
-        print(f"M26 CURRENT DOCUMENTATION CONSISTENCY FAILED: {exception}", file=sys.stderr)
+        print(f"M27 CURRENT DOCUMENTATION CONSISTENCY FAILED: {exception}", file=sys.stderr)
         return 1
 
 

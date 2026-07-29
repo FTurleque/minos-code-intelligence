@@ -10,7 +10,7 @@
 
 ## Catalogue MCP
 
-Nombre de tools : **26**
+Nombre de tools : **31**
 
 - `minos_project_structure`
 - `minos_index_status`
@@ -38,6 +38,11 @@ Nombre de tools : **26**
 - `minos_runtime_sessions`
 - `minos_runtime_report`
 - `minos_runtime_symbol`
+- `minos_team_tenant`
+- `minos_team_workspaces`
+- `minos_team_workspace`
+- `minos_team_members`
+- `minos_team_audit`
 
 ## Commandes CLI
 
@@ -70,6 +75,7 @@ Nombre de tools : **26**
 - `ide handshake`
 - `git-activity`
 - `nexus-export`
+- `team`
 
 ## Providers qualifiés
 

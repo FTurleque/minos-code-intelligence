@@ -77,6 +77,7 @@ public interface MinosApi {
 
     enum ErrorCode {
         INVALID_REQUEST,
+        ACCESS_DENIED,
         UNAVAILABLE,
         IO_FAILURE,
         EXECUTION_FAILURE

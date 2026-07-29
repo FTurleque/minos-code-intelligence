@@ -59,7 +59,9 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS.
 
-**M26 — Runtime & Dynamic Intelligence est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #88 ; l’issue #87 est closed/completed.** Le HEAD qualifié est `bf702990125a485646b9b31817c7787086a1dbb3` et le merge commit est `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`. Le format strict `minos-runtime-observation-v1`, la corrélation au snapshot statique exact, le store local, la CLI et les trois outils MCP sont `QUALIFIED_WITH_CONSTRAINTS` : seules des observations `PARTIAL` sont admises et leur absence ne prouve jamais la non-exécution. **M27 — Team / Hosted Mode est le prochain jalon.**
+**M26 — Runtime & Dynamic Intelligence est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #88 ; l’issue #87 est closed/completed.** Le HEAD qualifié est `bf702990125a485646b9b31817c7787086a1dbb3` et le merge commit est `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`. Le format strict `minos-runtime-observation-v1`, la corrélation au snapshot statique exact, le store local, la CLI et les trois outils MCP sont `QUALIFIED_WITH_CONSTRAINTS` : seules des observations `PARTIAL` sont admises et leur absence ne prouve jamais la non-exécution.
+
+**M27 — Team / Hosted Mode est le jalon actif, implémenté sur la draft PR #91 liée à l’issue #90, candidat à la double qualification locale exact-head Windows + Linux.** Il ajoute un contrôle tenant opt-in, RBAC, shared workspaces liés au snapshot actif exact, état AES-256-GCM, clés externes/rotation, audit chaîné, rétention explicite, CLI/API et cinq outils MCP read-only. Local mode reste le défaut ; aucun service SaaS opéré n’est revendiqué.
 
 Voir :
 
@@ -71,9 +73,11 @@ Voir :
 - [`docs/roadmap/M24_EXECUTION.md`](docs/roadmap/M24_EXECUTION.md) — Polyglot Expansion ;
 - [`docs/roadmap/M25_EXECUTION.md`](docs/roadmap/M25_EXECUTION.md) — Remote & Distributed Indexing ;
 - [`docs/roadmap/M26_EXECUTION.md`](docs/roadmap/M26_EXECUTION.md) — Runtime & Dynamic Intelligence ;
+- [`docs/roadmap/M27_EXECUTION.md`](docs/roadmap/M27_EXECUTION.md) — Team / Hosted Mode ;
 - [`docs/user/polyglot-providers.md`](docs/user/polyglot-providers.md) — prérequis, installation et limitations des providers polyglottes ;
 - [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md) — source distante immuable, worker et évidences ;
 - [`docs/user/runtime-intelligence.md`](docs/user/runtime-intelligence.md) — import et lecture d’observations runtime partielles ;
+- [`docs/user/team-hosted-mode.md`](docs/user/team-hosted-mode.md) — tenants, RBAC, espaces partagés, audit et rétention ;
 - [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Providers polyglottes — M24
@@ -192,19 +196,19 @@ Sous Windows :
 .\mvnw.cmd clean verify
 ```
 
-La porte locale finale M26 est :
+La porte locale finale M27 est :
 
 ```powershell
-.\scripts\m26\run-final.ps1 -ExpectedHead <sha>
+.\scripts\m27\run-final.ps1 -ExpectedHead <sha>
 ```
 
 Sous Linux :
 
 ```bash
-./scripts/m26/run-final.sh <sha>
+./scripts/m27/run-final.sh <sha>
 ```
 
-La qualification M26 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce le JAR ombré de l’import à la corrélation et aux requêtes runtime, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
+La qualification M27 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce le JAR ombré sur deux tenants, RBAC, bindings exact-snapshot, chiffrement, audit, rétention et rotation, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
 
 ## Runtime & Dynamic Intelligence — M26
 
@@ -228,6 +232,22 @@ Le runner final M26 est local et exact-head. Windows et Linux ont validé le mê
 ```bash
 ./scripts/m26/run-final.sh <sha>
 ```
+
+## Team / Hosted Mode — M27
+
+Le contrôle d’équipe est désactivé par défaut. L’opérateur l’active explicitement et injecte une master key base64 de 32 octets ; les tokens ne sont jamais acceptés comme arguments :
+
+```powershell
+$env:MINOS_HOSTED_MODE='enabled'
+$env:MINOS_TEAM_KEY_KEY_A='<base64-32-bytes>'
+minos.cmd team bootstrap --tenant <uuid> --name Team --key-id key-a `
+  --owner alice --owner-name Alice --request-id bootstrap-1
+$env:MINOS_TEAM_TOKEN='<token-retourné-une-seule-fois>'
+minos.cmd team workspace-create --name Platform --request-id workspace-1
+minos.cmd team audit --limit 100
+```
+
+Le store tenant est AES-256-GCM, l’audit est chaîné HMAC-SHA-256, la rotation et l’application de la rétention sont explicites. L’opérateur reste responsable de l’IdP/KMS externe, du transport/TLS, de l’isolation processus, des backups et de la disponibilité. Voir [`docs/user/team-hosted-mode.md`](docs/user/team-hosted-mode.md).
 
 La version de développement est :
 
@@ -256,7 +276,7 @@ Le serveur natif est lancé avec :
 minos.cmd mcp
 ```
 
-**MCP STDIO — 26 tools read-only.** Les trois tools M26 `minos_runtime_sessions`, `minos_runtime_report` et `minos_runtime_symbol` restent strictement en lecture ; l’import demeure une opération CLI explicite. Les tools avancés restent capability-honest et la couche sémantique n'est jamais présentée comme une relation structurale.
+**MCP STDIO — 31 tools read-only.** Les cinq vues M27 `minos_team_tenant`, `minos_team_workspaces`, `minos_team_workspace`, `minos_team_members` et `minos_team_audit` restent strictement en lecture et prennent leur identité uniquement depuis `MINOS_TEAM_TOKEN`. Les tools avancés restent capability-honest et la couche sémantique n'est jamais présentée comme une relation structurale.
 
 ## Documentation
 
@@ -265,6 +285,7 @@ minos.cmd mcp
 - [Providers polyglottes](docs/user/polyglot-providers.md)
 - [Remote & Distributed Indexing](docs/user/remote-indexing.md)
 - [Runtime & Dynamic Intelligence](docs/user/runtime-intelligence.md)
+- [Team / Hosted Mode](docs/user/team-hosted-mode.md)
 - [Plugin IntelliJ](docs/user/intellij-plugin.md)
 - [API Java](docs/user/java-api.md)
 - [MCP](docs/user/mcp.md)

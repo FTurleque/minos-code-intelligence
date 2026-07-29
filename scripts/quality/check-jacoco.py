@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M26."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M27."""
 
 from __future__ import annotations
 
@@ -143,6 +143,18 @@ SCOPES = {
         ),
         "line": 0.55,
         "branch": 0.35,
+    },
+    "m27-team-hosted-control-plane": {
+        "prefixes": (
+            "com/minos/hosted/",
+            "com/minos/store/FileHostedControlPlaneStore",
+            "com/minos/store/EnvironmentHostedTenantKeyProvider",
+            "com/minos/cli/TeamCommand",
+            "com/minos/api/LocalMinosTeamApi",
+            "com/minos/output/HostedControlPlaneRenderer",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
     },
 }
 
