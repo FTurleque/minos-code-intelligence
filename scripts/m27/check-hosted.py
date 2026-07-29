@@ -106,6 +106,7 @@ def main() -> int:
             "TeamCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/TeamCommandTest.java"),
             "LocalMinosTeamApiTest.java": read("minos-api/src/test/java/com/minos/api/LocalMinosTeamApiTest.java"),
             "MinosApplicationMcpBackendM27Test.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosApplicationMcpBackendM27Test.java"),
+            "SharedMinosApplicationIntegrationTest.java": read("minos-app/src/test/java/com/minos/application/SharedMinosApplicationIntegrationTest.java"),
         }
         require("FileHostedControlPlaneStoreTest.java", tests["FileHostedControlPlaneStoreTest.java"],
                 "persistsOnlyCiphertextAndRoundTripsTenantState", "rejectsTamperingBeforePlaintextDeserialization",
@@ -119,6 +120,10 @@ def main() -> int:
         require("LocalMinosTeamApiTest.java", tests["LocalMinosTeamApiTest.java"], "JdkOnlyDtos", "FailClosed")
         require("MinosApplicationMcpBackendM27Test.java", tests["MinosApplicationMcpBackendM27Test.java"],
                 "CredentialsOnlyFromSupplier")
+        require("SharedMinosApplicationIntegrationTest.java", tests["SharedMinosApplicationIntegrationTest.java"],
+                "MinosMcpTools.TOOL_COUNT", "minos_team_tenant", "minos_team_audit")
+        forbid("SharedMinosApplicationIntegrationTest.java", tests["SharedMinosApplicationIntegrationTest.java"],
+               "assertEquals(26, mcpTools.size())")
 
         e2e = read("scripts/m27/run-hosted-e2e.py")
         windows = read("scripts/m27/run-final.ps1")
