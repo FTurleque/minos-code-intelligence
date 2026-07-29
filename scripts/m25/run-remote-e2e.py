@@ -22,7 +22,12 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def run(command: list[str], env: dict[str, str], json_output: bool = False) -> object | str:
-    print("+ " + " ".join(command), flush=True)
+    printable = list(command)
+    if "--credential-env" in printable:
+        credential_index = printable.index("--credential-env") + 1
+        if credential_index < len(printable):
+            printable[credential_index] = "<redacted-env-reference>"
+    print("+ " + " ".join(printable), flush=True)
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -62,6 +67,29 @@ def require(value: object, expected: object, label: str) -> None:
         raise RuntimeError(f"{label}: expected={expected!r} actual={value!r}")
 
 
+def github_credential_environment(env: dict[str, str], repository: str) -> str | None:
+    if "github.com" not in repository.lower():
+        return None
+    name = "MINOS_M25_E2E_GITHUB_TOKEN"
+    if env.get(name):
+        return name
+    completed = subprocess.run(
+        ["gh", "auth", "token"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=30,
+        check=False,
+    )
+    token = (completed.stdout or "").strip()
+    if completed.returncode != 0 or not token:
+        raise RuntimeError("the private GitHub e2e requires an authenticated gh session or injected credential")
+    env[name] = token
+    return name
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-head", required=True)
@@ -89,18 +117,25 @@ def main() -> int:
                 "MINOS_SEMANTIC_ENDPOINT", "MINOS_SEMANTIC_TIMEOUT_SECONDS",
             ):
                 env.pop(name, None)
+            credential_environment = github_credential_environment(env, arguments.repository)
 
             provider = cli(env, "providers", "scip-go", "--format", "json")
+            if provider.get("runtimeState") != "READY":
+                cli(env, "tools", "install", "scip-go", "--format", "json")
+                provider = cli(env, "providers", "scip-go", "--format", "json")
             require(provider.get("version"), "0.2.7", "scip-go version")
             require(provider.get("runtimeState"), "READY", "scip-go runtime readiness")
 
-            common = (
+            common_values = [
                 arguments.repository,
                 "--ref", arguments.reference,
                 "--commit", expected_head,
                 "--subdir", "fixtures/m24/go",
-                "--format", "json",
-            )
+            ]
+            if credential_environment is not None:
+                common_values.extend(("--credential-env", credential_environment))
+            common_values.extend(("--format", "json"))
+            common = tuple(common_values)
             first = cli(env, "remote", "materialize", *common)
             second = cli(env, "remote", "materialize", *common)
             require(first.get("cacheHit"), False, "first remote materialization cache state")

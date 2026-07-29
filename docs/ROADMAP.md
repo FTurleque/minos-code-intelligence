@@ -376,6 +376,7 @@ Cibles implémentées : GitHub.com/GitLab.com HTTPS épinglés par ref + SHA com
 - roadmap : [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md)
 - décision : [ADR-0033](adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md)
 - issue : #84 OPEN / in progress
+- PR : #85 OPEN / DRAFT
 
 ## M26 — Runtime & Dynamic Intelligence
 

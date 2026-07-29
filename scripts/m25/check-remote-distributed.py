@@ -161,7 +161,7 @@ def main() -> int:
             require_facts(relative, document, "github.com", "gitlab.com", "SHA", "DENY", "fail-closed",
                           "minos-distributed-artifact-v1", "provenance", "borné")
         require_facts("docs/roadmap/M25_EXECUTION.md", execution,
-                      "#84", "b17631de59871848351a4139b12be6e0354989bc", "M25-S9",
+                      "#84", "#85", "DRAFT", "b17631de59871848351a4139b12be6e0354989bc", "M25-S9",
                       "M21-S2 / GitHub Actions reste strictement en pause jusqu’en août 2026")
         require_facts("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
                       "Status: Accepted", "PROCESS_EPHEMERAL_WORKSPACE", "ScipSymbolSnapshotImporter")

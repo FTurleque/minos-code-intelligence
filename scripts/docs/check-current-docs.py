@@ -205,6 +205,8 @@ def main() -> int:
         require_text("docs/STATUS.md", status, "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381")
         require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  ACTIF")
         require_issue_state("docs/STATUS.md", status, 84, "OPEN", "in progress")
+        require_pr_state("docs/STATUS.md", status, 85, "OPEN")
+        require_text("docs/STATUS.md", status, "DRAFT")
         require_text("docs/STATUS.md", status, "b17631de59871848351a4139b12be6e0354989bc")
         require_text("docs/STATUS.md", status, "ADR-0033")
 
@@ -327,6 +329,8 @@ def main() -> int:
 
         # M25 active remote/distributed contract; S9 remains pending until exact-head proof.
         require_issue_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 84, "OPEN", "in progress")
+        require_pr_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 85, "OPEN")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "DRAFT")
         require_pattern("docs/roadmap/M25_EXECUTION.md", m25_execution,
                         r"(?im)^\s*Statut\b[^\n]*S1\s*→\s*S8[^\n]*S9[^\n]*attente",
                         "M25 S1-S8 implemented and S9 pending")

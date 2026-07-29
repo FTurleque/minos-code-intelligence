@@ -4,7 +4,7 @@ Statut : **EN COURS — S1→S8 implémentés et couverts localement ; S9 / qual
 
 ```text
 Issue          : #84 — OPEN / in progress
-PR             : à ouvrir en Draft
+PR             : #85 — OPEN / DRAFT
 Branche        : m25-remote-distributed-indexing
 Base           : develop @ b17631de59871848351a4139b12be6e0354989bc
 Qualified HEAD : en attente

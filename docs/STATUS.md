@@ -227,6 +227,7 @@ Roadmap : [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md). Décision : [A
 Base           : develop @ b17631de59871848351a4139b12be6e0354989bc
 Branch         : m25-remote-distributed-indexing
 Issue          : #84 OPEN / in progress
+PR             : #85 OPEN / DRAFT
 Qualified HEAD : en attente
 Merge develop  : en attente
 ADR            : ADR-0033

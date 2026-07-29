@@ -72,14 +72,14 @@ try {
     Assert-NoWorkflowChanges
     $Python = Resolve-Python
 
-    $ScipGo = Get-Command 'scip-go' -ErrorAction SilentlyContinue
-    if (-not $ScipGo) { throw 'M25 Windows e2e requires scip-go 0.2.7 in the current process PATH.' }
-    $ScipGoVersion = (& $ScipGo.Source --version 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $ScipGoVersion -notmatch '0\.2\.7') {
-        throw "M25 requires scip-go 0.2.7; got: $ScipGoVersion"
+    $Go = Get-Command 'go' -ErrorAction SilentlyContinue
+    if (-not $Go) { throw 'M25 Windows e2e requires Go in the current process PATH.' }
+    $GoVersion = (& $Go.Source version 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "M25 requires a usable Go toolchain; got: $GoVersion"
     }
     Write-Host "HEAD: $Head"
-    Write-Host "scip-go: $ScipGoVersion"
+    Write-Host "Go: $GoVersion"
 
     Write-Host '[1/7] M25 static, documentation and M24 regression contracts...'
     Invoke-PythonGate $Python 'scripts\m25\check-remote-distributed.py' 'M25 consistency gate failed'

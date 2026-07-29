@@ -41,15 +41,14 @@ assert_no_workflow_changes
 PYTHON="$(resolve_python)"
 require_command java
 require_command git
-require_command scip-go
+require_command go
 JAVA_VERSION="$(java -version 2>&1 | head -n 1)"
-SCIP_GO_VERSION="$(scip-go --version 2>&1)"
+GO_VERSION="$(go version 2>&1)"
 [[ "$JAVA_VERSION" =~ \"24([\.\"]|$) ]] || fail "Java 24 is required; got $JAVA_VERSION"
-[[ "$SCIP_GO_VERSION" == *"0.2.7"* ]] || fail "scip-go 0.2.7 is required; got $SCIP_GO_VERSION"
 [[ -x ./mvnw ]] || fail "./mvnw is required and must be executable"
 echo "HEAD: $HEAD_SHA"
 echo "Java: $JAVA_VERSION"
-echo "scip-go: $SCIP_GO_VERSION"
+echo "Go: $GO_VERSION"
 
 echo '[1/7] M25 static, documentation and M24 regression contracts...'
 "$PYTHON" scripts/m25/check-remote-distributed.py
