@@ -185,7 +185,7 @@ def unsupported_dotnet_windows_result(case: ProviderCase, platform_id: str) -> d
         "e2e": "NOT_RUN",
         "diagnostics": [
             f".NET 10 is not supported on this Windows host ({host}); M24 does not require or install an unsupported SDK",
-            "scip-dotnet remains EXPERIMENTAL and requires Linux or a supported Windows host for e2e proof",
+            "scip-dotnet is qualified on Linux x86_64; this Windows host is outside its M24 qualification platforms",
         ],
     }
     print("M24 PROVIDER EVALUATION: " + json.dumps(message, sort_keys=True), flush=True)

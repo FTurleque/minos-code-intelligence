@@ -233,7 +233,7 @@ def main() -> int:
         forbid_pattern(runtime_path, runtime, r"CommandLocator\.find\(\s*\"rustup\"", "implicit rustup execution")
         forbid_pattern(runtime_path, runtime, r"(?s)CommandLocator\.invocation\([^)]*\"(?:-g|--global)\"", "global tool installation")
 
-        # Explicit provider override is the only M24 path allowed to exercise EXPERIMENTAL providers.
+        # Explicit overrides retain the generic opt-in path for any provider that remains experimental.
         require_pattern(indexing_path, indexing, r"IndexingRequirements\s+baselineRequirements\s*=\s*IndexingRequirements\.baseline\s*\(\s*\)", "baseline indexing requirements")
         require_pattern(indexing_path, indexing, r"new\s+IndexingRequirements\s*\(\s*baselineRequirements\.requiredCapabilities\s*\(\s*\)\s*,\s*true\s*\)", "explicit override allows EXPERIMENTAL provider negotiation")
 
@@ -322,6 +322,18 @@ def main() -> int:
         )
         require(windows_final_path, windows_final, "check-windows-prerequisites.ps1")
         require_e2e_set(windows_final_path, windows_final, {"scip-go", "rust-analyzer-scip"})
+        require_pattern(
+            e2e_path,
+            e2e,
+            r"scip-dotnet is qualified on Linux x86_64; this Windows host is outside its M24 qualification platforms",
+            "Windows scip-dotnet diagnostic matches its final Linux-only qualification",
+        )
+        forbid_pattern(
+            e2e_path,
+            e2e,
+            r"scip-dotnet remains EXPERIMENTAL",
+            "obsolete pre-promotion scip-dotnet disposition",
+        )
 
         # Shared evaluator and Linux runner must fail closed on required provider evidence.
         for token in (
