@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MinosApplicationTest {
 
@@ -41,6 +43,7 @@ class MinosApplicationTest {
         assertSame(application.snapshotStager(), application.snapshotStager());
         assertSame(application.snapshotPromoter(), application.snapshotPromoter());
         assertSame(application.gitIntelligence(), application.gitIntelligence());
+        assertFalse(application.hostedControlPlaneService().isPresent());
         Set<String> providerIds = application.indexerDescriptors().stream()
                 .map(value -> value.id())
                 .collect(Collectors.toUnmodifiableSet());
@@ -53,6 +56,18 @@ class MinosApplicationTest {
                 "scip-go",
                 "rust-analyzer-scip"
         ), providerIds);
+    }
+
+    @Test
+    void hostedModeIsExplicitAndRejectsUnknownConfiguration(@TempDir Path root) {
+        String previous = System.getProperty(MinosApplication.HOSTED_MODE_PROPERTY);
+        try {
+            System.setProperty(MinosApplication.HOSTED_MODE_PROPERTY, "surprise");
+            assertThrows(IllegalArgumentException.class, () -> MinosApplication.open(root.resolve("invalid")));
+        } finally {
+            if (previous == null) System.clearProperty(MinosApplication.HOSTED_MODE_PROPERTY);
+            else System.setProperty(MinosApplication.HOSTED_MODE_PROPERTY, previous);
+        }
     }
 
     @Test

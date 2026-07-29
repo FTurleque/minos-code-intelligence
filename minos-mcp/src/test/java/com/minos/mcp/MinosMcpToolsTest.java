@@ -24,7 +24,7 @@ class MinosMcpToolsTest {
         MinosMcpTools tools = new MinosMcpTools(backend);
 
         List<SyncToolSpecification> specs = tools.specifications();
-        assertEquals(26, MinosMcpTools.TOOL_COUNT);
+        assertEquals(31, MinosMcpTools.TOOL_COUNT);
         assertEquals(MinosMcpTools.TOOL_COUNT, specs.size());
         assertEquals(MinosMcpTools.TOOL_COUNT,
                 specs.stream().map(spec -> spec.tool().name()).distinct().count());
@@ -41,7 +41,12 @@ class MinosMcpToolsTest {
                 "minos_hybrid_context",
                 "minos_runtime_sessions",
                 "minos_runtime_report",
-                "minos_runtime_symbol")));
+                "minos_runtime_symbol",
+                "minos_team_tenant",
+                "minos_team_workspaces",
+                "minos_team_workspace",
+                "minos_team_members",
+                "minos_team_audit")));
 
         assertSuccess(call(specs, "minos_project_structure", Map.of("project", "demo")));
         assertSuccess(call(specs, "minos_index_status", Map.of("project", "demo")));
@@ -139,6 +144,16 @@ class MinosMcpToolsTest {
                 "project", "demo", "symbolId", "sym-1", "sessionId", "run-1", "limit", 14)));
         assertEquals(new MinosMcpBackend.RuntimeSymbolRequest("demo", "sym-1", "run-1", 14),
                 backend.runtimeSymbolRequest);
+        assertSuccess(call(specs, "minos_team_tenant", Map.of()));
+        assertSuccess(call(specs, "minos_team_workspaces", Map.of()));
+        assertSuccess(call(specs, "minos_team_workspace", Map.of(
+                "workspaceId", "10000000-0000-0000-0000-000000000001")));
+        assertEquals("10000000-0000-0000-0000-000000000001", backend.teamWorkspaceId);
+        assertSuccess(call(specs, "minos_team_members", Map.of()));
+        assertSuccess(call(specs, "minos_team_audit", Map.of("limit", 17)));
+        assertEquals(17, backend.teamAuditLimit);
+        assertTrue(spec(specs, "minos_team_tenant").tool().inputSchema().toString().contains("additionalProperties=false")
+                || !spec(specs, "minos_team_tenant").tool().inputSchema().toString().toLowerCase().contains("token"));
     }
 
     @Test
@@ -267,6 +282,8 @@ class MinosMcpToolsTest {
         private RuntimeSessionsRequest runtimeSessionsRequest;
         private RuntimeReportRequest runtimeReportRequest;
         private RuntimeSymbolRequest runtimeSymbolRequest;
+        private String teamWorkspaceId;
+        private int teamAuditLimit;
         private RuntimeException statusFailure;
 
         @Override public String projectStructure(String project) { return "{}"; }
@@ -290,5 +307,10 @@ class MinosMcpToolsTest {
         @Override public String runtimeSessions(RuntimeSessionsRequest request) { runtimeSessionsRequest = request; return "{}"; }
         @Override public String runtimeReport(RuntimeReportRequest request) { runtimeReportRequest = request; return "{}"; }
         @Override public String runtimeSymbol(RuntimeSymbolRequest request) { runtimeSymbolRequest = request; return "{}"; }
+        @Override public String teamTenant() { return "{}"; }
+        @Override public String teamWorkspaces() { return "{}"; }
+        @Override public String teamWorkspace(String workspaceId) { teamWorkspaceId = workspaceId; return "{}"; }
+        @Override public String teamMembers() { return "{}"; }
+        @Override public String teamAudit(int limit) { teamAuditLimit = limit; return "{}"; }
     }
 }

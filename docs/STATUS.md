@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **29 juillet 2026 — M26 Runtime & Dynamic Intelligence terminé, validé exact-head et fusionné dans `develop`**
+Dernière mise à jour documentaire : **29 juillet 2026 — M27 Team / Hosted Mode implémenté, PR #91 draft, qualification exact-head en attente**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -35,12 +35,12 @@ M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
 M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
 M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
 M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
-M27 — Team / Hosted Mode             PROCHAIN JALON
+M27 — Team / Hosted Mode             ACTIF, CANDIDAT QUALIFICATION
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24, M25 et M26 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M27 — Team / Hosted Mode est le prochain jalon.
+`develop` contient le tree M21 localement qualifié ainsi que M22 à M26 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M27 est implémenté sur `m27-team-hosted-mode` / draft PR #91 ; il n’est pas encore qualifié ni fusionné.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -285,10 +285,28 @@ Validated HEAD: bf702990125a485646b9b31817c7787086a1dbb3
 
 Roadmap : [`roadmap/M26_EXECUTION.md`](roadmap/M26_EXECUTION.md). Décision : [ADR-0034](adr/0034-partial-runtime-observations-with-explicit-static-correlation.md). Guides : [`user/runtime-intelligence.md`](user/runtime-intelligence.md) et [`developer/runtime-dynamic-intelligence.md`](developer/runtime-dynamic-intelligence.md).
 
+## M27 — Team / Hosted Mode
+
+**ACTIF — IMPLÉMENTATION CANDIDATE ; QUALIFICATION EXACT-HEAD WINDOWS + LINUX EN ATTENTE — 8/9.**
+
+```text
+Base           : develop @ 5db06f2a778b60b318ae6d83ad76928c24672810
+Branch         : m27-team-hosted-mode
+Issue          : #90 OPEN
+PR             : #91 OPEN / DRAFT
+Qualified HEAD : PENDING
+Merge develop  : PENDING
+ADR            : ADR-0035
+```
+
+Le contrôle tenant est opt-in et local mode reste le défaut. Le candidat implémente identité HMAC de référence, RBAC, shared workspaces liés au snapshot actif exact, store AES-256-GCM alimenté par clés externes, rotation, audit HMAC chaîné, rétention explicite, CLI/API et cinq tools MCP read-only. Il ne revendique ni SaaS opéré, ni IdP/KMS, ni transport réseau/TLS.
+
+Roadmap : [`roadmap/M27_EXECUTION.md`](roadmap/M27_EXECUTION.md). Décision : [ADR-0035](adr/0035-opt-in-tenant-control-plane-with-external-keys.md). Guides : [`user/team-hosted-mode.md`](user/team-hosted-mode.md) et [`developer/team-hosted-mode.md`](developer/team-hosted-mode.md).
+
 ## Prochaine étape
 
-M27 — Team / Hosted Mode est le prochain jalon.
+M27 doit encore obtenir un double PASS exact-head local, puis être promu selon la gouvernance de la PR #91. Aucun M28 n’est défini dans la roadmap courante.
 
 ## Gouvernance juillet 2026
 
-M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25/M26 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22 à M27 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

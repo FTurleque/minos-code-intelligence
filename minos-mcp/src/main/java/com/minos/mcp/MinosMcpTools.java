@@ -19,7 +19,7 @@ import java.util.Set;
 /** MCP catalogue mapping protocol arguments directly to shared application services. */
 public final class MinosMcpTools {
 
-    public static final int TOOL_COUNT = 26;
+    public static final int TOOL_COUNT = 31;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
 
     private final MinosMcpBackend backend;
@@ -90,7 +90,17 @@ public final class MinosMcpTools {
                 tool("minos_runtime_report", "Read observed runtime coverage ratios, hot paths and calls; absence never proves non-execution.", runtimeReportSchema(), args ->
                         backend.runtimeReport(runtimeReportRequest(args))),
                 tool("minos_runtime_symbol", "Read partial runtime observations for one static symbol without claiming exhaustive execution.", runtimeSymbolSchema(), args ->
-                        backend.runtimeSymbol(runtimeSymbolRequest(args)))
+                        backend.runtimeSymbol(runtimeSymbolRequest(args))),
+                tool("minos_team_tenant", "Read the authenticated tenant summary. Authentication comes only from MINOS_TEAM_TOKEN.", emptySchema(), args ->
+                        backend.teamTenant()),
+                tool("minos_team_workspaces", "List tenant-isolated shared workspaces without exposing credentials.", emptySchema(), args ->
+                        backend.teamWorkspaces()),
+                tool("minos_team_workspace", "Read one workspace and its exact project/snapshot bindings in the authenticated tenant.", teamWorkspaceSchema(), args ->
+                        backend.teamWorkspace(required(args, "workspaceId"))),
+                tool("minos_team_members", "List tenant members, roles and permissions for the authenticated tenant.", emptySchema(), args ->
+                        backend.teamMembers()),
+                tool("minos_team_audit", "Read a bounded newest-first view of the authenticated tenant audit chain.", teamAuditSchema(), args ->
+                        backend.teamAudit(teamAuditLimit(args)))
         );
     }
 
@@ -412,6 +422,23 @@ public final class MinosMcpTools {
                 "\"project\",\"symbolId\"");
     }
 
+    private static int teamAuditLimit(Map<String, Object> args) {
+        Integer value = optionalInteger(args, "limit", 1, 10_000);
+        return value == null ? 200 : value;
+    }
+
+    private static String emptySchema() {
+        return objectSchema("", "");
+    }
+
+    private static String teamWorkspaceSchema() {
+        return objectSchema("\"workspaceId\":{\"type\":\"string\",\"format\":\"uuid\"}", "\"workspaceId\"");
+    }
+
+    private static String teamAuditSchema() {
+        return objectSchema("\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}", "");
+    }
+
     private static String commonSymbolProperties() {
         return "\"qualifiedName\":{\"type\":\"string\",\"minLength\":1}," +
                 "\"kind\":{\"type\":\"string\",\"minLength\":1}," +
@@ -421,7 +448,8 @@ public final class MinosMcpTools {
     private static String objectSchema(String properties, String required) {
         return "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"," +
                 "\"type\":\"object\",\"properties\":{" + properties + "}," +
-                "\"required\":[" + required + "],\"additionalProperties\":false}";
+                (required.isEmpty() ? "" : "\"required\":[" + required + "],") +
+                "\"additionalProperties\":false}";
     }
 
     @FunctionalInterface

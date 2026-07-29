@@ -4,6 +4,7 @@ import com.minos.api.LocalMinosApi;
 import com.minos.api.LocalMinosMultiRepositoryApi;
 import com.minos.cli.MinosCliRunner;
 import com.minos.mcp.MinosMcpApplicationTools;
+import com.minos.mcp.MinosMcpTools;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,7 @@ class SharedMinosApplicationIntegrationTest {
         assertEquals("shared-project", multiRepositoryApi.listProjects().getFirst().name());
 
         var mcpTools = MinosMcpApplicationTools.specifications(application);
-        assertEquals(26, mcpTools.size());
+        assertEquals(MinosMcpTools.TOOL_COUNT, mcpTools.size());
         Set<String> toolNames = mcpTools.stream()
                 .map(spec -> spec.tool().name())
                 .collect(Collectors.toSet());
@@ -56,7 +57,12 @@ class SharedMinosApplicationIntegrationTest {
                 "minos_semantic_index_status",
                 "minos_semantic_search",
                 "minos_hybrid_search",
-                "minos_hybrid_context"
+                "minos_hybrid_context",
+                "minos_team_tenant",
+                "minos_team_workspaces",
+                "minos_team_workspace",
+                "minos_team_members",
+                "minos_team_audit"
         )));
 
         var projectStructure = mcpTools.stream()

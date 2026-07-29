@@ -1,10 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23, M24, M25 et M26 sont validés exact-head et fusionnés dans `develop`. M27 — Team / Hosted Mode est le prochain jalon.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 à M26 sont validés exact-head et fusionnés dans `develop`. M27 — Team / Hosted Mode est actif sur la draft PR #91 et candidat à la qualification exacte Windows + Linux.**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md), M23 par [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md), M24 par [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md), M25 par [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md) et M26 par [`roadmap/M26_EXECUTION.md`](roadmap/M26_EXECUTION.md).
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), puis par les roadmaps M22 à M27, dont [`roadmap/M27_EXECUTION.md`](roadmap/M27_EXECUTION.md) pour le jalon actif.
 
 ## Principes
 
@@ -256,7 +256,7 @@ M25  Remote & Distributed Indexing                ✅ VALIDÉ / MERGÉ develop
   ↓
 M26  Runtime & Dynamic Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
-M27  Team / Hosted Mode                           ⏭ PROCHAIN JALON PLANIFIÉ
+M27  Team / Hosted Mode                           🔄 ACTIF — CANDIDAT QUALIFICATION
 ```
 
 ## M21 — Production Integrity & Surface Convergence
@@ -401,14 +401,19 @@ Cibles qualifiées avec contraintes : format strict `minos-runtime-observation-v
 
 ## M27 — Team / Hosted Mode
 
-**PROCHAIN JALON PLANIFIÉ — dépend des exigences de sécurité et gouvernance des données.**
+**ACTIF — IMPLÉMENTATION CANDIDATE SUR PR #91 ; DOUBLE QUALIFICATION EXACT-HEAD REQUISE.**
 
 Question cible :
 
 > MINOS peut-il proposer collaboration multi-utilisateur et service hébergé sans perdre ses garanties de confidentialité, d'isolation, de provenance et de reproductibilité ?
 
-Cibles : espaces partagés, isolation tenant, politiques de rétention, authentification/autorisation, audit, chiffrement et mode local toujours disponible. Aucun service hébergé n'est requis pour le cœur MINOS.
+Cibles implémentées : espaces partagés, isolation tenant, rétention plan/apply, authentification/autorisation, audit HMAC chaîné, état AES-256-GCM, clés externes/rotation et mode local toujours disponible. Aucun service hébergé n'est requis pour le cœur MINOS.
+
+- roadmap : [`roadmap/M27_EXECUTION.md`](roadmap/M27_EXECUTION.md)
+- décision : [ADR-0035](adr/0035-opt-in-tenant-control-plane-with-external-keys.md)
+- issue : #90 OPEN
+- PR : #91 OPEN / DRAFT
 
 ## Règle de promotion post-M20
 
-M26 est validé exact-head Windows + Linux et intégré dans `develop`. M27 — Team / Hosted Mode est le **prochain jalon**. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026.
+M26 est validé exact-head Windows + Linux et intégré dans `develop`. M27 — Team / Hosted Mode est le **jalon actif** ; aucune promotion n’est permise avant double PASS local sur le même SHA. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026.

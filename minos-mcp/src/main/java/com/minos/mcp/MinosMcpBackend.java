@@ -25,6 +25,12 @@ interface MinosMcpBackend {
     String runtimeReport(RuntimeReportRequest request) throws Exception;
     String runtimeSymbol(RuntimeSymbolRequest request) throws Exception;
 
+    default String teamTenant() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamWorkspaces() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamWorkspace(String workspaceId) throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamMembers() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamAudit(int limit) throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+
     record SearchRequest(
             String project, String query, String qualifiedName, String kind, String module,
             int limit, int depth, int usages, int relationships, int contextLines,
