@@ -59,7 +59,7 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS.
 
-**M26 — Runtime & Dynamic Intelligence est le jalon actif sur l’issue #87 et la draft PR #88.** Le format strict `minos-runtime-observation-v1` importe uniquement des sessions `PARTIAL`, les corrèle au snapshot statique actif exact et expose couverture observée, hot paths et appels sans jamais faire de l’absence une preuve de non-exécution. **M27 — Team / Hosted Mode est le prochain jalon planifié.**
+**M26 — Runtime & Dynamic Intelligence est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #88 ; l’issue #87 est closed/completed.** Le HEAD qualifié est `bf702990125a485646b9b31817c7787086a1dbb3` et le merge commit est `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`. Le format strict `minos-runtime-observation-v1`, la corrélation au snapshot statique exact, le store local, la CLI et les trois outils MCP sont `QUALIFIED_WITH_CONSTRAINTS` : seules des observations `PARTIAL` sont admises et leur absence ne prouve jamais la non-exécution. **M27 — Team / Hosted Mode est le prochain jalon.**
 
 Voir :
 
@@ -192,19 +192,19 @@ Sous Windows :
 .\mvnw.cmd clean verify
 ```
 
-La porte locale finale M25 est :
+La porte locale finale M26 est :
 
 ```powershell
-.\scripts\m25\run-final.ps1 -ExpectedHead <sha>
+.\scripts\m26\run-final.ps1 -ExpectedHead <sha>
 ```
 
 Sous Linux :
 
 ```bash
-./scripts/m25/run-final.sh <sha>
+./scripts/m26/run-final.sh <sha>
 ```
 
-La qualification M25 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce une révision distante réelle et le transport worker jusqu’au snapshot actif, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
+La qualification M26 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce le JAR ombré de l’import à la corrélation et aux requêtes runtime, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
 
 ## Runtime & Dynamic Intelligence — M26
 
@@ -219,7 +219,7 @@ minos.cmd runtime symbol my-project --symbol <static-symbol-id> --format json
 
 Chaque résultat déclare `nature: OBSERVED_PARTIAL` et `exhaustive: false`. Le ratio de symboles observés n’est pas une couverture exhaustive ; une trace absente ne prouve jamais la non-exécution. Le snapshot statique structuré reste autoritatif et n’est pas muté par l’import runtime.
 
-Le runner candidat M26 est local et exact-head :
+Le runner final M26 est local et exact-head. Windows et Linux ont validé le même HEAD `bf702990125a485646b9b31817c7787086a1dbb3` :
 
 ```powershell
 .\scripts\m26\run-final.ps1 -ExpectedHead <sha>

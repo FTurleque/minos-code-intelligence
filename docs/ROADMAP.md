@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23, M24 et M25 sont validés et fusionnés dans `develop`. M26 est actif sur l’issue #87 et la draft PR #88 ; M27 est le prochain jalon planifié.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23, M24, M25 et M26 sont validés exact-head et fusionnés dans `develop`. M27 — Team / Hosted Mode est le prochain jalon.**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -241,7 +241,7 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23, M24 puis M25 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. Les preuves M25 sont exclusivement locales Windows + Linux ; aucun résultat GitHub Actions ne sert de preuve en juillet.
+M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23, M24, M25 puis M26 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. Les preuves M26 sont exclusivement locales Windows + Linux ; aucun résultat GitHub Actions ne sert de preuve en juillet.
 
 ```text
 M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
@@ -254,7 +254,7 @@ M24  Polyglot Expansion                           ✅ VALIDÉ / MERGÉ develop
   ↓
 M25  Remote & Distributed Indexing                ✅ VALIDÉ / MERGÉ develop
   ↓
-M26  Runtime & Dynamic Intelligence               🚧 ACTIF — 8/9, qualification locale en attente
+M26  Runtime & Dynamic Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
 M27  Team / Hosted Mode                           ⏭ PROCHAIN JALON PLANIFIÉ
 ```
@@ -383,20 +383,21 @@ Cibles qualifiées : GitHub.com privé et GitLab.com public en HTTPS, épinglés
 
 ## M26 — Runtime & Dynamic Intelligence
 
-**ACTIF — implémentation et tests terminés, qualification exact-head Windows + Linux en attente — 8/9.**
+**TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS `develop` — 9/9.**
 
 Question cible :
 
 > MINOS peut-il rapprocher faits statiques et observations runtime sans transformer une trace partielle en vérité exhaustive ?
 
-Cibles implémentées : format strict `minos-runtime-observation-v1` `PARTIAL`, traces d'appels/exécution, couverture et hot paths observés, rapprochement symbolique statique↔runtime au snapshot exact, provenance temporelle/collector/environnement/source, store local immuable borné, CLI et trois tools MCP read-only. L’absence n’est jamais une preuve de non-exécution et aucune capability statique n’est promue.
+Cibles qualifiées avec contraintes : format strict `minos-runtime-observation-v1` `PARTIAL`, traces d'appels/exécution, couverture et hot paths observés, rapprochement symbolique statique↔runtime au snapshot exact, provenance temporelle/collector/environnement/source, store local immuable borné, CLI et trois tools MCP read-only. L’absence n’est jamais une preuve de non-exécution et aucune capability statique n’est promue.
 
 - roadmap : [`roadmap/M26_EXECUTION.md`](roadmap/M26_EXECUTION.md)
 - décision : [ADR-0034](adr/0034-partial-runtime-observations-with-explicit-static-correlation.md)
 - base : `develop @ e37cf39fcf4f7e417c618fa0b16590100c1e0b91`
-- issue : #87 OPEN
-- draft PR : #88 OPEN / DRAFT
-- qualification : PENDING
+- qualified HEAD : `bf702990125a485646b9b31817c7787086a1dbb3`
+- merge `develop` : `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`
+- issue : #87 CLOSED / completed
+- PR : #88 MERGED
 
 ## M27 — Team / Hosted Mode
 
@@ -410,4 +411,4 @@ Cibles : espaces partagés, isolation tenant, politiques de rétention, authenti
 
 ## Règle de promotion post-M20
 
-M25 est validé exact-head Windows + Linux et intégré dans `develop`. M26 est le **jalon actif** ; M27 est le prochain jalon planifié. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026.
+M26 est validé exact-head Windows + Linux et intégré dans `develop`. M27 — Team / Hosted Mode est le **prochain jalon**. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026.
