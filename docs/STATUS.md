@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **29 juillet 2026 — M26 Runtime & Dynamic Intelligence actif, implémentation 8/9**
+Dernière mise à jour documentaire : **29 juillet 2026 — M26 Runtime & Dynamic Intelligence terminé, validé exact-head et fusionné dans `develop`**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -34,13 +34,13 @@ M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
 M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
 M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
-M26 — Runtime & Dynamic Intelligence ACTIF — 8/9, qualification locale en attente
-M27 — Team / Hosted Mode             PROCHAIN JALON PLANIFIÉ
+M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
+M27 — Team / Hosted Mode             PROCHAIN JALON
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24 et M25 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M26 — Runtime & Dynamic Intelligence est actif sur l’issue #87 et la draft PR #88 ; M27 est le prochain jalon planifié.
+`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24, M25 et M26 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M27 — Team / Hosted Mode est le prochain jalon.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -257,28 +257,38 @@ Roadmap : [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md). Décision : [A
 
 ## M26 — Runtime & Dynamic Intelligence
 
-**ACTIF — implémentation et tests terminés, qualification finale exact-head Windows + Linux en attente — 8/9.**
+**TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS `develop` — 9/9.**
 
 ```text
 Base           : develop @ e37cf39fcf4f7e417c618fa0b16590100c1e0b91
 Branch         : m26-runtime-dynamic-intelligence
-Issue          : #87 OPEN
-Draft PR       : #88 OPEN / DRAFT
-Qualified HEAD : PENDING
-Merge develop  : PENDING
+Issue          : #87 CLOSED / completed
+PR             : #88 MERGED
+Qualified HEAD : bf702990125a485646b9b31817c7787086a1dbb3
+Merge develop  : 9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef
 ADR            : ADR-0034
 ```
 
-Contrat candidat : import strict `minos-runtime-observation-v1`, `PARTIAL` seulement, alignement UUID projet + snapshot actif exact, corrélation statique `RESOLVED/AMBIGUOUS/UNRESOLVED`, store local immuable/atomique/checksum-vérifié/borné, couverture et hot paths observés, CLI d’import explicite et trois tools MCP read-only.
+Disposition finale : import strict, corrélation statique↔runtime, couverture/hot paths observés, store local runtime, CLI runtime et MCP runtime sont `QUALIFIED_WITH_CONSTRAINTS`. Le contrat reste `minos-runtime-observation-v1`, `PARTIAL` seulement, avec alignement UUID projet + snapshot actif exact, corrélation `RESOLVED/AMBIGUOUS/UNRESOLVED`, store immuable/atomique/checksum-vérifié/borné, import CLI explicite et trois tools MCP read-only.
 
 Tous les résultats externes portent `OBSERVED_PARTIAL` et `exhaustive: false`. L’absence d’une observation ne prouve jamais la non-exécution ; les traces ne mutent pas le snapshot structuré et ne promeuvent aucune capability provider.
+
+Les runners ont produit sur le même HEAD :
+
+```text
+M26 FINAL RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS
+Validated HEAD: bf702990125a485646b9b31817c7787086a1dbb3
+
+M26 LINUX RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS
+Validated HEAD: bf702990125a485646b9b31817c7787086a1dbb3
+```
 
 Roadmap : [`roadmap/M26_EXECUTION.md`](roadmap/M26_EXECUTION.md). Décision : [ADR-0034](adr/0034-partial-runtime-observations-with-explicit-static-correlation.md). Guides : [`user/runtime-intelligence.md`](user/runtime-intelligence.md) et [`developer/runtime-dynamic-intelligence.md`](developer/runtime-dynamic-intelligence.md).
 
 ## Prochaine étape
 
-M26 — Runtime & Dynamic Intelligence est le jalon actif. M27 — Team / Hosted Mode est le prochain jalon planifié.
+M27 — Team / Hosted Mode est le prochain jalon.
 
 ## Gouvernance juillet 2026
 
-M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25 et la qualification candidate M26 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25/M26 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

@@ -1,14 +1,14 @@
 # M26 — Runtime & Dynamic Intelligence — exécution
 
-Statut : **ACTIF — implémentation et tests terminés, qualification finale exact-head Windows + Linux en attente — 8/9.**
+Statut : **TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS `develop` — 9/9.**
 
 ```text
-Issue          : #87 — OPEN
-Draft PR       : #88 — OPEN / DRAFT
+Issue          : #87 — CLOSED / completed
+PR             : #88 — MERGED
 Branche        : m26-runtime-dynamic-intelligence
 Base           : develop @ e37cf39fcf4f7e417c618fa0b16590100c1e0b91
-Qualified HEAD : PENDING
-Merge develop  : PENDING
+Qualified HEAD : bf702990125a485646b9b31817c7787086a1dbb3
+Merge develop  : 9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef
 Date           : 29 juillet 2026
 ```
 
@@ -64,20 +64,34 @@ Les rapports agrègent symboles/lignes/appels observés, hits, durées, corréla
 
 Tests modèle/codec/service/store/CLI/MCP couvrent corrélation résolue/ambiguë/non résolue, snapshot stale, tampering, symlink, limites, idempotence et mutation. Le JAR ombré est exercé par `run-runtime-e2e.py` et le scope JaCoCo M26 dépasse ses seuils.
 
-### M26-S9 — Qualification et promotion exact-head ⏳ EN ATTENTE
+### M26-S9 — Qualification et promotion exact-head ✅ VALIDÉ ET FUSIONNÉ
 
-Le candidat doit passer `run-final.ps1` et `run-final.sh` sur le même SHA, worktrees propres et diff `.github/workflows` vide. La PR ne devient Ready et n’est fusionnée dans `develop` qu’après ces deux preuves et la résolution des reviews actionnables.
+Le SHA `bf702990125a485646b9b31817c7787086a1dbb3` a passé `run-final.ps1` sous Windows x86_64 et `run-final.sh` sous Linux x86_64 dans un clone ext4 propre. Les deux runners ont contrôlé le SHA exact, le worktree propre et le diff `.github/workflows` vide. La PR #88 ne contenait aucun review humain ni thread actionable ; elle a été passée Ready puis fusionnée dans `develop` avec `expected_head_sha`. L’issue #87 a ensuite été fermée `completed`.
 
-## Dispositions candidates
+## Dispositions finales
 
-| Surface | Disposition candidate | Limite explicite |
+| Surface | Disposition finale | Limite explicite |
 |---|---|---|
-| `minos-runtime-observation-v1` | `CANDIDATE_FOR_QUALIFICATION` | `PARTIAL` seulement ; collector externe |
-| corrélation statique↔runtime | `CANDIDATE_FOR_QUALIFICATION` | snapshot actif exact ; ambiguïtés conservées |
-| couverture et hot paths observés | `CANDIDATE_FOR_QUALIFICATION` | ratios non exhaustifs ; absence non probante |
-| store local runtime | `CANDIDATE_FOR_QUALIFICATION` | 128 sessions / 1 GiB par projet par défaut ; aucune éviction implicite |
-| CLI runtime | `CANDIDATE_FOR_QUALIFICATION` | import opérateur explicite puis lectures bornées |
-| MCP runtime | `CANDIDATE_FOR_QUALIFICATION` | trois tools read-only ; aucun import |
+| `minos-runtime-observation-v1` | `QUALIFIED_WITH_CONSTRAINTS` | `PARTIAL` seulement ; collector externe |
+| corrélation statique↔runtime | `QUALIFIED_WITH_CONSTRAINTS` | snapshot actif exact ; ambiguïtés conservées |
+| couverture et hot paths observés | `QUALIFIED_WITH_CONSTRAINTS` | ratios non exhaustifs ; absence non probante |
+| store local runtime | `QUALIFIED_WITH_CONSTRAINTS` | 128 sessions / 1 GiB par projet par défaut ; aucune éviction implicite |
+| CLI runtime | `QUALIFIED_WITH_CONSTRAINTS` | import opérateur explicite puis lectures bornées |
+| MCP runtime | `QUALIFIED_WITH_CONSTRAINTS` | trois tools read-only ; aucun import |
+
+## Preuves finales exact-head
+
+Windows x86_64 et Linux x86_64 ont produit, sur le même commit :
+
+```text
+M26 FINAL RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS
+Validated HEAD: bf702990125a485646b9b31817c7787086a1dbb3
+
+M26 LINUX RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS
+Validated HEAD: bf702990125a485646b9b31817c7787086a1dbb3
+```
+
+L’évidence JSON détaillée est `status: PASS` sur chaque plateforme : format `minos-runtime-observation-v1`, nature `OBSERVED_PARTIAL`, `exhaustive: false`, session `PARTIAL` alignée au snapshot actif, corrélations `4 RESOLVED / 1 AMBIGUOUS / 1 UNRESOLVED`, et rejets fail-closed d’un claim `COMPLETE` comme d’une mutation d’identité de session. Le scope JaCoCo `m26-runtime-dynamic-intelligence` a validé 31 classes avec `line=0.848178` et `branch=0.660245`, sans réduction de seuil.
 
 ## Critères de sortie
 

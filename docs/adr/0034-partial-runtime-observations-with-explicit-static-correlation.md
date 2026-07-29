@@ -1,6 +1,6 @@
 # ADR-0034 — Partial runtime observations with explicit static correlation
 
-Status: **Accepted for the M26 implementation; final exact-head qualification disposition pending.**
+Status: **Accepted — final M26 dispositions recorded from exact-head Windows + Linux evidence.**
 
 Date: 2026-07-29
 
@@ -39,6 +39,8 @@ M26 doit rendre les observations runtime utiles pour la couverture observée, le
 
 ## Qualification disposition
 
-La disposition finale doit être enregistrée après les gates locales exact-head Windows x86_64 et Linux x86_64 sur le même commit, avec preuves JSON `status: PASS`. Jusqu’alors le format, le store, les corrélations et les surfaces sont implémentés et testés, mais ne sont pas déclarés finalisés.
+Le format, la corrélation statique↔runtime, la couverture/hot paths observés, le store local, la CLI runtime et les trois tools MCP read-only sont `QUALIFIED_WITH_CONSTRAINTS`. Les limites de cette décision restent constitutives du produit : `PARTIAL` uniquement, collector externe, snapshot actif exact, ambiguïtés visibles, ratios non exhaustifs, aucune éviction implicite et aucun import MCP.
+
+Windows x86_64 et Linux x86_64 ont validé le même HEAD `bf702990125a485646b9b31817c7787086a1dbb3` avec preuves JSON `status: PASS`. La PR #88 a été fusionnée dans `develop` par le commit `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef` et l’issue #87 est `CLOSED / completed`.
 
 Voir [`../roadmap/M26_EXECUTION.md`](../roadmap/M26_EXECUTION.md).
