@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check current MINOS documentation against authoritative source facts through active M25."""
+"""Check current MINOS documentation against authoritative facts through completed M25."""
 
 from __future__ import annotations
 
@@ -145,8 +145,10 @@ def main() -> int:
         require_pattern("README.md", readme, r"(?i)M24\b[^\n]*Polyglot Expansion[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*82[^\n]*issue\s*#\s*81[^\n]*(?:close|closed)[^\n]*completed", "M24 completed/qualified/merged via PR #82 and issue #81")
         require_text("README.md", readme, "927f57768a79af162e2cdc765d0f54d274cbe02e")
         require_text("README.md", readme, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
-        require_pattern("README.md", readme, r"(?i)M25\b[^\n]*Remote & Distributed Indexing[^\n]*actif[^\n]*issue\s*#\s*84", "M25 active on issue #84")
-        require_text("README.md", readme, "S1→S8 sont implémentés")
+        require_pattern("README.md", readme, r"(?i)M25\b[^\n]*Remote & Distributed Indexing[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*85[^\n]*issue\s*#\s*84[^\n]*(?:close|closed)[^\n]*completed", "M25 completed/qualified/merged via PR #85 and issue #84")
+        require_text("README.md", readme, "fc395d189cf7fc5a0e06130210a3dc763fc48637")
+        require_text("README.md", readme, "1a82f18115184606cbc13a9070b7cc78643ebb35")
+        require_pattern("README.md", readme, r"(?i)M26\b[^\n]*Runtime & Dynamic Intelligence[^\n]*prochain jalon", "M26 next milestone")
         require_text("README.md", readme, "MINOS_SEMANTIC_PROVIDER='ollama'")
         require_text("README.md", readme, "MCP STDIO — 23 tools read-only")
         require_text("README.md", readme, "docs/roadmap/M24_EXECUTION.md")
@@ -157,6 +159,7 @@ def main() -> int:
         forbid_text("README.md", readme, "M22 — Advanced Provider Intelligence est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M24 — Polyglot Expansion est en cours")
         forbid_text("README.md", readme, "M25 — Remote & Distributed Indexing est le prochain jalon planifié")
+        forbid_text("README.md", readme, "M25 — Remote & Distributed Indexing est actif")
         forbid_text("README.md", readme, "C0 à M14 sont terminés et livrés.")
 
         require_text("docs/user/README.md", user_readme, f"Le MCP expose **{tool_count} tools read-only**")
@@ -164,7 +167,7 @@ def main() -> int:
         require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
         forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
 
-        # Roadmap/status authority: M24 is merged and M25 is the active exact-head milestone.
+        # Roadmap/status authority: M25 is merged and M26 is next.
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M22\s+Advanced Provider Intelligence[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M22 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M23\s+Semantic Retrieval 2\.0[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M23 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M24 qualified and merged into develop")
@@ -172,17 +175,22 @@ def main() -> int:
         require_pr_state("docs/ROADMAP.md", roadmap, 82, "MERGED")
         require_text("docs/ROADMAP.md", roadmap, "927f57768a79af162e2cdc765d0f54d274cbe02e")
         require_text("docs/ROADMAP.md", roadmap, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
-        require_text("docs/ROADMAP.md", roadmap, "M25 est le **jalon actif**")
+        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M25\s+Remote & Distributed Indexing[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M25 qualified and merged into develop")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M24_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0032")
         require_text("docs/ROADMAP.md", roadmap, "issue : #81")
-        require_text("docs/ROADMAP.md", roadmap, "issue : #84 OPEN / in progress")
+        require_issue_state("docs/ROADMAP.md", roadmap, 84, "CLOSED", "completed")
+        require_pr_state("docs/ROADMAP.md", roadmap, 85, "MERGED")
+        require_text("docs/ROADMAP.md", roadmap, "fc395d189cf7fc5a0e06130210a3dc763fc48637")
+        require_text("docs/ROADMAP.md", roadmap, "1a82f18115184606cbc13a9070b7cc78643ebb35")
+        require_pattern("docs/ROADMAP.md", roadmap, r"(?i)M26\b[^\n]*Runtime & Dynamic Intelligence[^\n]*prochain jalon", "M26 next milestone")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M25_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0033")
         forbid_text("docs/ROADMAP.md", roadmap, "M23  Semantic Retrieval 2.0                       🚧 EN COURS")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           ⏳ PLANIFIÉ")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           🚧 EN COURS")
         forbid_text("docs/ROADMAP.md", roadmap, "M25  Remote & Distributed Indexing                ⏭ PROCHAIN JALON PLANIFIÉ")
+        forbid_text("docs/ROADMAP.md", roadmap, "M25 est le **jalon actif**")
         for milestone in range(24, 28):
             require_pattern("docs/ROADMAP.md", roadmap, rf"(?m)^#{{1,6}}\s*M{milestone}\b", f"M{milestone} roadmap section")
 
@@ -203,12 +211,14 @@ def main() -> int:
         require_issue_state("docs/STATUS.md", status, 81, "CLOSED", "completed")
         require_pr_state("docs/STATUS.md", status, 82, "MERGED")
         require_text("docs/STATUS.md", status, "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381")
-        require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  ACTIF")
-        require_issue_state("docs/STATUS.md", status, 84, "OPEN", "in progress")
-        require_pr_state("docs/STATUS.md", status, 85, "OPEN")
-        require_text("docs/STATUS.md", status, "DRAFT")
+        require_pattern("docs/STATUS.md", status, r"(?im)^M25\s+—\s+Remote & Distributed Indexing\s+TERMINÉ,\s*VALIDÉ,\s*MERGÉ\s+develop", "M25 completed/qualified/merged status")
+        require_issue_state("docs/STATUS.md", status, 84, "CLOSED", "completed")
+        require_pr_state("docs/STATUS.md", status, 85, "MERGED")
         require_text("docs/STATUS.md", status, "b17631de59871848351a4139b12be6e0354989bc")
+        require_text("docs/STATUS.md", status, "fc395d189cf7fc5a0e06130210a3dc763fc48637")
+        require_text("docs/STATUS.md", status, "1a82f18115184606cbc13a9070b7cc78643ebb35")
         require_text("docs/STATUS.md", status, "ADR-0033")
+        require_pattern("docs/STATUS.md", status, r"(?i)M26\b[^\n]*Runtime & Dynamic Intelligence[^\n]*prochain jalon", "M26 next milestone status")
 
         # M21 retained integrity facts.
         require_pattern("docs/roadmap/M21_EXECUTION.md", execution, r"(?im)^\s*Issue\b[^\n#]*#\s*73\b", "issue #73")
@@ -327,14 +337,15 @@ def main() -> int:
         forbid_text("scripts/m24/run-final.sh", m24_linux, "gh workflow")
         forbid_text("scripts/m24/run-final.sh", m24_linux, "gh run")
 
-        # M25 active remote/distributed contract; S9 remains pending until exact-head proof.
-        require_issue_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 84, "OPEN", "in progress")
-        require_pr_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 85, "OPEN")
-        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "DRAFT")
+        # M25 final remote/distributed contract and exact-head evidence.
+        require_issue_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 84, "CLOSED", "completed")
+        require_pr_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 85, "MERGED")
         require_pattern("docs/roadmap/M25_EXECUTION.md", m25_execution,
-                        r"(?im)^\s*Statut\b[^\n]*S1\s*→\s*S8[^\n]*S9[^\n]*attente",
-                        "M25 S1-S8 implemented and S9 pending")
+                        r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b",
+                        "M25 9/9 completion")
         require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "b17631de59871848351a4139b12be6e0354989bc")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "fc395d189cf7fc5a0e06130210a3dc763fc48637")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "1a82f18115184606cbc13a9070b7cc78643ebb35")
         for slice_name in range(1, 10):
             require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, f"M25-S{slice_name}")
         for fact in (
@@ -345,12 +356,24 @@ def main() -> int:
             require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, fact)
         require_text("docs/roadmap/M25_EXECUTION.md", m25_execution,
                      "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                     "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                     "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
+        require_table_row("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                          "GitHub.com HTTPS", "QUALIFIED_WITH_CONSTRAINTS", "Windows x86_64", "Linux x86_64")
+        require_table_row("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                          "GitLab.com HTTPS", "QUALIFIED_WITH_CONSTRAINTS", "Windows x86_64", "Linux x86_64", "pas de preuve live privée")
+        require_table_row("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                          "worker natif local", "QUALIFIED_WITH_CONSTRAINTS", "ALLOW", "DENY", "BLOCKED/NOT_RUN")
         require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
-                     "Status: **Accepted**")
+                     "Status: **Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.**")
         require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
                      "Immutable remote revisions and verified worker artifacts")
         require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
                      "PROCESS_EPHEMERAL_WORKSPACE")
+        require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
+                     "fc395d189cf7fc5a0e06130210a3dc763fc48637")
         require_text("docs/adr/README.md", adr_index,
                      "0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
         require_text("docs/user/README.md", user_readme, "remote-indexing.md")

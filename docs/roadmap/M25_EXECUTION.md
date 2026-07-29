@@ -1,14 +1,14 @@
 # M25 — Remote & Distributed Indexing — exécution
 
-Statut : **EN COURS — S1→S8 implémentés et couverts localement ; S9 / qualification exact-head Windows + Linux en attente.**
+Statut : **TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS develop — 9/9.**
 
 ```text
-Issue          : #84 — OPEN / in progress
-PR             : #85 — OPEN / DRAFT
+Issue          : #84 — CLOSED / completed
+PR             : #85 — MERGED
 Branche        : m25-remote-distributed-indexing
 Base           : develop @ b17631de59871848351a4139b12be6e0354989bc
-Qualified HEAD : en attente
-Merge develop  : en attente
+Qualified HEAD : fc395d189cf7fc5a0e06130210a3dc763fc48637
+Merge develop  : 1a82f18115184606cbc13a9070b7cc78643ebb35
 Date           : 29 juillet 2026
 ```
 
@@ -94,23 +94,37 @@ Le coordinateur compare toutes les dimensions du manifest à la requête exacte 
 
 Tests des URL/ref/subdir, credentials, cache source, worktree sale, commit inattendu, traversal/entrée inconnue/tampering/oversize, cache artefact, provenance malveillante, réseau fail-closed et parcours complet jusqu’au snapshot actif.
 
-### M25-S9 — Qualification finale exact-head Windows + Linux ⏳ EN ATTENTE
+### M25-S9 — Qualification finale exact-head Windows + Linux ✅ VALIDÉ
 
-Les runners doivent produire sur le même SHA :
+Les runners ont produit sur le même SHA exact et des worktrees propres :
 
 ```text
 M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: fc395d189cf7fc5a0e06130210a3dc763fc48637
 
 M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: fc395d189cf7fc5a0e06130210a3dc763fc48637
 ```
 
-Ils doivent en outre vérifier worktree propre, HEAD stable, zéro modification `.github/workflows`, cache-hit déterministe, commit exact, bundle/provenance vérifiés et snapshot actif promu.
+Les JSON d’évidence Windows et Linux enregistrent `status: PASS`, le commit exact, `scip-go@0.2.7`, le cache source `MISS→HIT→HIT`, le bundle/provenance vérifié et le snapshot actif promu. Les HEAD locaux/distants concordaient, les worktrees étaient propres et le diff `.github/workflows` était vide.
+
+## Dispositions finales
+
+| Surface | Disposition | Preuve / limite |
+|---|---|---|
+| GitHub.com HTTPS | `QUALIFIED_WITH_CONSTRAINTS` | dépôt privé, ref + SHA exacts, cache MISS→HIT et indexation jusqu’au snapshot actif sous Windows x86_64 et Linux x86_64 |
+| GitLab.com HTTPS | `QUALIFIED_WITH_CONSTRAINTS` | dépôt public, ref + SHA exacts, cache MISS→HIT et indexation jusqu’au snapshot actif sous Windows x86_64 et Linux x86_64 ; credential privé contract-tested, pas de preuve live privée |
+| worker natif local | `QUALIFIED_WITH_CONSTRAINTS` | `PROCESS_EPHEMERAL_WORKSPACE` + `ALLOW` sous Windows/Linux ; `DENY` est `BLOCKED/NOT_RUN` et échoue fermé faute d’isolation réseau OS |
+| `minos-distributed-artifact-v1` | `QUALIFIED_WITH_CONSTRAINTS` | structure, tailles, SHA-256, provenance et nettoyage vérifiés sous Windows/Linux |
+| caches source et artefact | `QUALIFIED_WITH_CONSTRAINTS` | bornes, reconstruction, verrouillage et rejet des entrées corrompues vérifiés |
+
+La qualification principale a exercé le dépôt GitHub privé `FTurleque/minos-code-intelligence` au HEAD candidat. Une preuve live complémentaire sur le même produit qualifié a exercé le dépôt GitLab public `t-demo/terraform-lambda-example` au commit `0e16aeada066d2d48c900bcf98579048d29d21bb` sous les deux OS.
+
+Restent hors qualification M25 : GitLab privé live, réseau `DENY` effectivement isolé, GitHub/GitLab Enterprise, SSH, submodules, scheduler/control plane hosted, workers non fiables et multi-tenant.
 
 ## Critères de sortie
 
-M25 n’est terminé que si :
+M25 a satisfait les critères de sortie :
 
 1. les gates statiques/documentaires et le reactor Maven Java 24 passent ;
 2. les caches restent bornés et les chemins/secrets non fiables sont rejetés ;
@@ -118,4 +132,4 @@ M25 n’est terminé que si :
 4. Windows et Linux valident exactement le même HEAD propre ;
 5. la PR est revue puis fusionnée dans `develop` avec protection du HEAD ;
 6. l’issue #84 est fermée completed ;
-7. une PR documentaire post-merge enregistre les SHA réels et place M26 comme prochain jalon.
+7. la présente réconciliation documentaire enregistre les SHA réels et place M26 comme prochain jalon.
