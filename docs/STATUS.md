@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **29 juillet 2026 — M25 Remote & Distributed Indexing terminé, validé exact-head et fusionné**
+Dernière mise à jour documentaire : **29 juillet 2026 — M26 Runtime & Dynamic Intelligence actif, implémentation 8/9**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -34,13 +34,13 @@ M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
 M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
 M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
-M26 — Runtime & Dynamic Intelligence PROCHAIN JALON
-M27 — Team / Hosted Mode             PLANIFIÉ
+M26 — Runtime & Dynamic Intelligence ACTIF — 8/9, qualification locale en attente
+M27 — Team / Hosted Mode             PROCHAIN JALON PLANIFIÉ
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24 et M25 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M26 — Runtime & Dynamic Intelligence est le prochain jalon.
+`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24 et M25 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M26 — Runtime & Dynamic Intelligence est actif sur l’issue #87 et la draft PR #88 ; M27 est le prochain jalon planifié.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -255,10 +255,30 @@ Validated HEAD: fc395d189cf7fc5a0e06130210a3dc763fc48637
 
 Roadmap : [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md). Décision : [ADR-0033](adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md). Guides : [`user/remote-indexing.md`](user/remote-indexing.md) et [`developer/remote-distributed-indexing.md`](developer/remote-distributed-indexing.md).
 
+## M26 — Runtime & Dynamic Intelligence
+
+**ACTIF — implémentation et tests terminés, qualification finale exact-head Windows + Linux en attente — 8/9.**
+
+```text
+Base           : develop @ e37cf39fcf4f7e417c618fa0b16590100c1e0b91
+Branch         : m26-runtime-dynamic-intelligence
+Issue          : #87 OPEN
+Draft PR       : #88 OPEN / DRAFT
+Qualified HEAD : PENDING
+Merge develop  : PENDING
+ADR            : ADR-0034
+```
+
+Contrat candidat : import strict `minos-runtime-observation-v1`, `PARTIAL` seulement, alignement UUID projet + snapshot actif exact, corrélation statique `RESOLVED/AMBIGUOUS/UNRESOLVED`, store local immuable/atomique/checksum-vérifié/borné, couverture et hot paths observés, CLI d’import explicite et trois tools MCP read-only.
+
+Tous les résultats externes portent `OBSERVED_PARTIAL` et `exhaustive: false`. L’absence d’une observation ne prouve jamais la non-exécution ; les traces ne mutent pas le snapshot structuré et ne promeuvent aucune capability provider.
+
+Roadmap : [`roadmap/M26_EXECUTION.md`](roadmap/M26_EXECUTION.md). Décision : [ADR-0034](adr/0034-partial-runtime-observations-with-explicit-static-correlation.md). Guides : [`user/runtime-intelligence.md`](user/runtime-intelligence.md) et [`developer/runtime-dynamic-intelligence.md`](developer/runtime-dynamic-intelligence.md).
+
 ## Prochaine étape
 
-M26 — Runtime & Dynamic Intelligence est le prochain jalon. M27 reste planifié.
+M26 — Runtime & Dynamic Intelligence est le jalon actif. M27 — Team / Hosted Mode est le prochain jalon planifié.
 
 ## Gouvernance juillet 2026
 
-M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25 et la qualification candidate M26 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

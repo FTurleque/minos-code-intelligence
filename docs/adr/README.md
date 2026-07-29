@@ -48,6 +48,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0031](0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | M23 |
 | [0032](0032-evidence-gated-polyglot-scip-providers.md) | Étendre les providers SCIP polyglottes uniquement sous preuves de capability, identité, provenance et plateforme | Accepted | M24 |
 | [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) | Épingler les sources distantes et n’accepter que des artefacts worker bornés, vérifiés et concordants | Accepted | M25 |
+| [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
 
 ## Règle de rédaction
 
