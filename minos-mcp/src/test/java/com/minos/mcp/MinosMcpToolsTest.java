@@ -24,7 +24,7 @@ class MinosMcpToolsTest {
         MinosMcpTools tools = new MinosMcpTools(backend);
 
         List<SyncToolSpecification> specs = tools.specifications();
-        assertEquals(23, MinosMcpTools.TOOL_COUNT);
+        assertEquals(26, MinosMcpTools.TOOL_COUNT);
         assertEquals(MinosMcpTools.TOOL_COUNT, specs.size());
         assertEquals(MinosMcpTools.TOOL_COUNT,
                 specs.stream().map(spec -> spec.tool().name()).distinct().count());
@@ -38,7 +38,10 @@ class MinosMcpToolsTest {
                 "minos_semantic_index_status",
                 "minos_semantic_search",
                 "minos_hybrid_search",
-                "minos_hybrid_context")));
+                "minos_hybrid_context",
+                "minos_runtime_sessions",
+                "minos_runtime_report",
+                "minos_runtime_symbol")));
 
         assertSuccess(call(specs, "minos_project_structure", Map.of("project", "demo")));
         assertSuccess(call(specs, "minos_index_status", Map.of("project", "demo")));
@@ -127,6 +130,15 @@ class MinosMcpToolsTest {
                 "maxTokens", 2048, "maxTokensPerDocument", 256)));
         assertEquals(new MinosMcpBackend.HybridContextRequest(
                 "demo", "authentication", 4, 2048, 256), backend.hybridContextRequest);
+        assertSuccess(call(specs, "minos_runtime_sessions", Map.of("project", "demo", "limit", 12)));
+        assertEquals(new MinosMcpBackend.RuntimeSessionsRequest("demo", 12), backend.runtimeSessionsRequest);
+        assertSuccess(call(specs, "minos_runtime_report", Map.of(
+                "project", "demo", "sessionId", "run-1", "limit", 13)));
+        assertEquals(new MinosMcpBackend.RuntimeReportRequest("demo", "run-1", 13), backend.runtimeReportRequest);
+        assertSuccess(call(specs, "minos_runtime_symbol", Map.of(
+                "project", "demo", "symbolId", "sym-1", "sessionId", "run-1", "limit", 14)));
+        assertEquals(new MinosMcpBackend.RuntimeSymbolRequest("demo", "sym-1", "run-1", 14),
+                backend.runtimeSymbolRequest);
     }
 
     @Test
@@ -141,6 +153,12 @@ class MinosMcpToolsTest {
         assertEquals(new MinosMcpBackend.HybridSearchRequest("demo", "auth", 20, 0.0), backend.hybridSearchRequest);
         assertSuccess(call(specs, "minos_hybrid_context", Map.of("project", "demo", "query", "auth")));
         assertEquals(new MinosMcpBackend.HybridContextRequest("demo", "auth", 10, 4000, 800), backend.hybridContextRequest);
+        assertSuccess(call(specs, "minos_runtime_sessions", Map.of("project", "demo")));
+        assertEquals(new MinosMcpBackend.RuntimeSessionsRequest("demo", 20), backend.runtimeSessionsRequest);
+        assertSuccess(call(specs, "minos_runtime_report", Map.of("project", "demo")));
+        assertEquals(new MinosMcpBackend.RuntimeReportRequest("demo", null, 20), backend.runtimeReportRequest);
+        assertSuccess(call(specs, "minos_runtime_symbol", Map.of("project", "demo", "symbolId", "sym-1")));
+        assertEquals(new MinosMcpBackend.RuntimeSymbolRequest("demo", "sym-1", null, 20), backend.runtimeSymbolRequest);
 
         backend.semanticSearchRequest = null;
         var semanticTooLarge = call(specs, "minos_semantic_search",
@@ -159,6 +177,17 @@ class MinosMcpToolsTest {
                 Map.of("project", "demo", "query", "auth", "maxTokens", 127));
         assertTrue(Boolean.TRUE.equals(contextTokens.isError()));
         assertEquals(null, backend.hybridContextRequest);
+
+        backend.runtimeSessionsRequest = null;
+        var runtimeSessions = call(specs, "minos_runtime_sessions", Map.of("project", "demo", "limit", 129));
+        assertTrue(Boolean.TRUE.equals(runtimeSessions.isError()));
+        assertEquals(null, backend.runtimeSessionsRequest);
+
+        backend.runtimeSymbolRequest = null;
+        var runtimeSymbol = call(specs, "minos_runtime_symbol",
+                Map.of("project", "demo", "symbolId", "sym-1", "limit", 1001));
+        assertTrue(Boolean.TRUE.equals(runtimeSymbol.isError()));
+        assertEquals(null, backend.runtimeSymbolRequest);
     }
 
     @Test
@@ -235,6 +264,9 @@ class MinosMcpToolsTest {
         private SemanticSearchRequest semanticSearchRequest;
         private HybridSearchRequest hybridSearchRequest;
         private HybridContextRequest hybridContextRequest;
+        private RuntimeSessionsRequest runtimeSessionsRequest;
+        private RuntimeReportRequest runtimeReportRequest;
+        private RuntimeSymbolRequest runtimeSymbolRequest;
         private RuntimeException statusFailure;
 
         @Override public String projectStructure(String project) { return "{}"; }
@@ -255,5 +287,8 @@ class MinosMcpToolsTest {
         @Override public String semanticSearch(SemanticSearchRequest request) { semanticSearchRequest = request; return "{}"; }
         @Override public String hybridSearch(HybridSearchRequest request) { hybridSearchRequest = request; return "{}"; }
         @Override public String hybridContext(HybridContextRequest request) { hybridContextRequest = request; return "{}"; }
+        @Override public String runtimeSessions(RuntimeSessionsRequest request) { runtimeSessionsRequest = request; return "{}"; }
+        @Override public String runtimeReport(RuntimeReportRequest request) { runtimeReportRequest = request; return "{}"; }
+        @Override public String runtimeSymbol(RuntimeSymbolRequest request) { runtimeSymbolRequest = request; return "{}"; }
     }
 }
