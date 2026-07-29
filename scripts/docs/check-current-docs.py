@@ -65,6 +65,14 @@ def require_pr_state(relative: str, text: str, pull_request: int, state: str) ->
     )
 
 
+def require_table_row(relative: str, text: str, key: str, *facts: str) -> None:
+    """Require semantic facts in one Markdown row without coupling to column widths."""
+    expected = [normalize_presentation(value) for value in (key, *facts)]
+    rows = [normalize_presentation(line) for line in text.splitlines() if line.lstrip().startswith("|")]
+    if not any(all(value in row for value in expected) for row in rows):
+        raise RuntimeError(f"{relative}: no table row for {key} contains facts: {', '.join(facts)}")
+
+
 def main() -> int:
     try:
         mcp_source = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
@@ -126,13 +134,17 @@ def main() -> int:
         require_text("README.md", readme, "C0 à M20 sont terminés, validés et livrés sur `main`.")
         require_pattern("README.md", readme, r"(?i)M22\b[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*77\b", "M22 completed/qualified/merged via PR #77")
         require_pattern("README.md", readme, r"(?i)M23\b[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*79\b", "M23 completed/qualified/merged via PR #79")
-        require_pattern("README.md", readme, r"(?i)M24\b[^\n]*Polyglot Expansion[^\n]*en cours[^\n]*issue\s*#\s*81[^\n]*(?:Draft\s+)?PR\s*#\s*82\b", "M24 active via issue #81 and draft PR #82")
+        require_pattern("README.md", readme, r"(?i)M24\b[^\n]*Polyglot Expansion[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*82[^\n]*issue\s*#\s*81[^\n]*(?:close|closed)[^\n]*completed", "M24 completed/qualified/merged via PR #82 and issue #81")
+        require_text("README.md", readme, "927f57768a79af162e2cdc765d0f54d274cbe02e")
+        require_text("README.md", readme, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
+        require_text("README.md", readme, "M25 — Remote & Distributed Indexing est le prochain jalon planifié")
         require_text("README.md", readme, "MINOS_SEMANTIC_PROVIDER='ollama'")
         require_text("README.md", readme, "MCP STDIO — 23 tools read-only")
         require_text("README.md", readme, "docs/roadmap/M24_EXECUTION.md")
         require_text("README.md", readme, "docs/user/polyglot-providers.md")
         forbid_text("README.md", readme, "M23 — Semantic Retrieval 2.0 est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M22 — Advanced Provider Intelligence est le jalon fonctionnel actif")
+        forbid_text("README.md", readme, "M24 — Polyglot Expansion est en cours")
         forbid_text("README.md", readme, "C0 à M14 sont terminés et livrés.")
 
         require_text("docs/user/README.md", user_readme, f"Le MCP expose **{tool_count} tools read-only**")
@@ -140,15 +152,21 @@ def main() -> int:
         require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
         forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
 
-        # Roadmap/status authority: M23 is merged, M24 is the only active functional milestone.
+        # Roadmap/status authority: M24 is merged and M25 is only the next planned milestone.
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M22\s+Advanced Provider Intelligence[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M22 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M23\s+Semantic Retrieval 2\.0[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M23 qualified and merged into develop")
-        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*EN COURS[^\n]*issue\s*#\s*81[^\n]*PR\s*#\s*82[^\n]*DRAFT", "M24 active issue #81 / draft PR #82")
+        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M24 qualified and merged into develop")
+        require_issue_state("docs/ROADMAP.md", roadmap, 81, "CLOSED", "completed")
+        require_pr_state("docs/ROADMAP.md", roadmap, 82, "MERGED")
+        require_text("docs/ROADMAP.md", roadmap, "927f57768a79af162e2cdc765d0f54d274cbe02e")
+        require_text("docs/ROADMAP.md", roadmap, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
+        require_text("docs/ROADMAP.md", roadmap, "M25 est le **prochain jalon planifié**")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M24_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0032")
         require_text("docs/ROADMAP.md", roadmap, "issue : #81")
         forbid_text("docs/ROADMAP.md", roadmap, "M23  Semantic Retrieval 2.0                       🚧 EN COURS")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           ⏳ PLANIFIÉ")
+        forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           🚧 EN COURS")
         for milestone in range(24, 28):
             require_pattern("docs/ROADMAP.md", roadmap, rf"(?m)^#{{1,6}}\s*M{milestone}\b", f"M{milestone} roadmap section")
 
@@ -162,10 +180,14 @@ def main() -> int:
         require_text("docs/STATUS.md", status, "ffe12d95ac46c25026661dca51949fb0d39626b4")
         require_text("docs/STATUS.md", status, "KEEP_CURRENT_M20_BACKEND")
         require_text("docs/STATUS.md", status, "semantic-learned-provider")
-        require_pattern("docs/STATUS.md", status, r"(?im)^M24\s+—\s+Polyglot Expansion\s+EN COURS[^\n]*PR\s*#\s*82\s+DRAFT", "M24 active draft PR #82 status")
+        require_pattern("docs/STATUS.md", status, r"(?im)^M24\s+—\s+Polyglot Expansion\s+TERMINÉ,\s*VALIDÉ,\s*MERGÉ\s+develop", "M24 completed/qualified/merged status")
         require_text("docs/STATUS.md", status, "8dbe34cb9e524acb62becda4faa263d74b90b9a9")
+        require_text("docs/STATUS.md", status, "927f57768a79af162e2cdc765d0f54d274cbe02e")
+        require_text("docs/STATUS.md", status, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
+        require_issue_state("docs/STATUS.md", status, 81, "CLOSED", "completed")
+        require_pr_state("docs/STATUS.md", status, 82, "MERGED")
         require_text("docs/STATUS.md", status, "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381")
-        require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  PLANIFIÉ")
+        require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  PROCHAIN JALON PLANIFIÉ")
 
         # M21 retained integrity facts.
         require_pattern("docs/roadmap/M21_EXECUTION.md", execution, r"(?im)^\s*Issue\b[^\n#]*#\s*73\b", "issue #73")
@@ -231,15 +253,21 @@ def main() -> int:
         forbid_text("scripts/m23/run-final.ps1", m23_runner, "gh workflow")
         forbid_text("scripts/m23/run-final.ps1", m23_runner, "gh run")
 
-        # M24 active polyglot contract: implementation may be present, but docs must not invent final PASS.
-        require_issue_state("docs/roadmap/M24_EXECUTION.md", m24_execution, 81, "OPEN")
-        require_pr_state("docs/roadmap/M24_EXECUTION.md", m24_execution, 82, "DRAFT")
+        # M24 final polyglot contract and exact-head evidence.
+        require_issue_state("docs/roadmap/M24_EXECUTION.md", m24_execution, 81, "CLOSED", "completed")
+        require_pr_state("docs/roadmap/M24_EXECUTION.md", m24_execution, 82, "MERGED")
+        require_pattern("docs/roadmap/M24_EXECUTION.md", m24_execution, r"(?im)^\s*Statut\b[^\n]*9\s*/\s*9\b", "M24 9/9 completion")
+        require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, "927f57768a79af162e2cdc765d0f54d274cbe02e")
+        require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
         for slice_name in range(1, 10):
             require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, f"M24-S{slice_name}")
         for token in ("scip-clang", "scip-dotnet", "scip-go", "rust-analyzer", "v0.3.2989", "12c3381"):
             require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, token)
         require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
+        require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, "M24 FINAL POLYGLOT EXPANSION VALIDATION SUCCESS")
+        require_text("docs/roadmap/M24_EXECUTION.md", m24_execution, "M24 LINUX POLYGLOT EXPANSION VALIDATION SUCCESS")
         require_text("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr, "Evidence-gated polyglot SCIP providers")
+        require_text("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr, "Status: **Accepted — final M24 dispositions recorded from exact-head Windows + Linux evidence.**")
         require_text("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr, "2026-07-27")
         require_text("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr, "v0.3.2989")
         require_text("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr, "KEEP_CURRENT_M20_BACKEND")
@@ -250,9 +278,23 @@ def main() -> int:
         require_text("docs/user/polyglot-providers.md", polyglot_user, "scip-go")
         require_text("docs/user/polyglot-providers.md", polyglot_user, "rust-analyzer")
         require_text("docs/user/polyglot-providers.md", polyglot_user, "CFG")
+        require_text("docs/user/README.md", user_readme, "polyglot-providers.md")
         require_text("docs/developer/polyglot-providers.md", polyglot_developer, "ProviderOperationalProfile")
         require_text("docs/developer/polyglot-providers.md", polyglot_developer, "STRUCTURAL_FALLBACK")
         require_text("docs/developer/polyglot-providers.md", polyglot_developer, "PROVIDER_SCOPED_FALLBACK")
+        require_text("docs/developer/README.md", developer_readme, "polyglot-providers.md")
+
+        for relative, document in (
+            ("README.md", readme),
+            ("docs/STATUS.md", status),
+            ("docs/roadmap/M24_EXECUTION.md", m24_execution),
+            ("docs/user/polyglot-providers.md", polyglot_user),
+            ("docs/adr/0032-evidence-gated-polyglot-scip-providers.md", m24_adr),
+        ):
+            require_table_row(relative, document, "scip-clang", "0.4.0", "QUALIFIED_WITH_CONSTRAINTS", "Linux x86_64")
+            require_table_row(relative, document, "scip-dotnet", "0.2.14", "QUALIFIED_WITH_CONSTRAINTS", "Linux x86_64")
+            require_table_row(relative, document, "scip-go", "0.2.7", "QUALIFIED_WITH_CONSTRAINTS", "Windows x86_64", "Linux x86_64")
+            require_table_row(relative, document, "rust-analyzer", "0.3.2989", "12c3381", "QUALIFIED_WITH_CONSTRAINTS", "Windows x86_64", "Linux x86_64")
         require_text("scripts/m24/check-polyglot.py", m24_gate, "M24 POLYGLOT CONSISTENCY SUCCESS")
         require_text("scripts/m24/run-provider-e2e.py", m24_e2e, "M24 PROVIDER END-TO-END EVALUATION SUCCESS")
         require_text("scripts/m24/run-final.ps1", m24_windows, "M24 FINAL POLYGLOT EXPANSION VALIDATION SUCCESS")

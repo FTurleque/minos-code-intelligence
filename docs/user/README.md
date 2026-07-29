@@ -15,6 +15,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Connecter Copilot, Claude ou Codex au MCP natif | [Serveur MCP](mcp.md) |
 | Comprendre / lancer l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
 | Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
+| Indexer C/C++, C#, Go ou Rust | [Providers polyglottes qualifiés avec contraintes](polyglot-providers.md) |
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
@@ -104,7 +105,7 @@ Le guide couvre :
 - configuration optionnelle du MCP Docker lorsque Docker Desktop est déjà disponible ;
 - emplacement du programme et de `MINOS_HOME` ;
 - premier démarrage ;
-- providers qualifiés Java, TypeScript et Python ;
+- providers qualifiés Java, TypeScript, Python, C/C++, C#, Go et Rust, avec leurs contraintes de plateforme ;
 - premier projet et visualisation du graphe ;
 - mise à jour, rollback et désinstallation ;
 - publication d'une release pour les mainteneurs.

@@ -4,18 +4,18 @@ M24 étend la découverte MINOS à C, C++, C#, Go et Rust sans assimiler **déte
 
 La présence d'un fichier `.go`, `.rs`, `.cs`, `CMakeLists.txt` ou `Cargo.toml` permet à MINOS de décrire le projet. Elle ne garantit pas que l'indexeur externe correspondant est installé, prêt, qualifié sur la plateforme courante ni capable de produire toutes les formes d'intelligence MINOS.
 
-## Disposition pendant M24
+## Disposition finale M24
 
-Tant que la qualification exacte Windows + Linux n'a pas été exécutée sur le HEAD final, les quatre nouveaux providers restent `EXPERIMENTAL` dans le produit :
+Les quatre providers ont été qualifiés avec contraintes sur le HEAD exact `927f57768a79af162e2cdc765d0f54d274cbe02e` :
 
-| Langage | Provider | Version M24 | Installation MINOS | Plateforme/runtime visé |
-|---|---|---:|---|---|
-| C / C++ | `scip-clang` | `0.4.0` | non ; binaire opérateur | qualification runtime Linux x86_64 ; Windows explicitement non supporté par le runtime M24 |
-| C# | `scip-dotnet` | `0.2.14` | oui, locale sous `MINOS_HOME/tools` | Linux + Windows **uniquement lorsque l'hôte Windows est supporté par .NET 10** ; Windows 10 Pro 22H2 n'est pas une plateforme de preuve M24 |
-| Go | `scip-go` | `0.2.7` | oui, locale sous `MINOS_HOME/tools` | Windows + Linux avec toolchain Go |
-| Rust | `rust-analyzer scip` | `0.3.2989` / release `2026-07-27` | non ; toolchain opérateur | Windows + Linux si `cargo`, `rustc` et le rust-analyzer épinglé sont présents |
+| Langage | Provider | Version M24 | Disposition | Installation MINOS | Plateformes qualifiées |
+|---|---|---:|---|---|---|
+| C / C++ | `scip-clang` | `0.4.0` | `QUALIFIED_WITH_CONSTRAINTS` | non ; binaire opérateur | Linux x86_64 ; Windows hors contrat runtime M24 |
+| C# | `scip-dotnet` | `0.2.14` | `QUALIFIED_WITH_CONSTRAINTS` | oui, locale sous `MINOS_HOME/tools` | Linux x86_64 ; Windows 10 Pro 22H2 hors preuve car .NET 10 non supporté |
+| Go | `scip-go` | `0.2.7` | `QUALIFIED_WITH_CONSTRAINTS` | oui, locale sous `MINOS_HOME/tools` | Windows x86_64 + Linux x86_64 |
+| Rust | `rust-analyzer scip` | `0.3.2989` / release `2026-07-27` / `12c3381` | `QUALIFIED_WITH_CONSTRAINTS` | non ; toolchain opérateur | Windows x86_64 + Linux x86_64 |
 
-Cette table est un état de qualification, pas une promesse de capacité. La disposition finale est mise à jour uniquement après les gates exact-head M24.
+Cette table n'est pas une promesse de capacité exhaustive. Les symboles/références et la disponibilité runtime restent distincts des capabilities avancées et d'une preuve e2e sur une plateforme donnée.
 
 ## Discovery versus indexation
 
@@ -120,18 +120,16 @@ rust-analyzer 2026-07-27 / v0.3.2989 (commit 12c3381)
 
 MINOS ne lance jamais `rustup update` et n'installe pas implicitement de compilateur Rust. Le runtime reste operator-managed et doit déjà exposer la version qualifiée de `rust-analyzer`.
 
-## Exercer explicitement un provider expérimental
+## Sélectionner explicitement un provider
 
-La négociation automatique continue d'ignorer un provider `EXPERIMENTAL`.
-
-Un override utilisateur est un opt-in explicite :
+Les quatre providers M24 participent désormais à la négociation automatique sous leurs contraintes. Un override utilisateur reste utile pour le diagnostic ou pour imposer un provider précis :
 
 ```powershell
 minos.cmd index mon-projet --provider scip-go --dry-run --format json
 minos.cmd index mon-projet --provider scip-go --force-full --format json
 ```
 
-Ce mécanisme sert à l'évaluation et à la qualification. Il ne transforme pas le provider en provider qualifié.
+Ce mécanisme ne modifie ni la qualification, ni les plateformes, ni les capabilities déclarées par le provider.
 
 ## Ce que symboles/références ne prouvent pas
 

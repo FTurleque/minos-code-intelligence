@@ -86,10 +86,11 @@ flowchart TB
 6. [Semantic Retrieval 2.0 — learned local M23](semantic-retrieval-2.md)
 7. [Provider avancé Program Graph sidecar M21-S7](advanced-program-provider.md)
 8. [Provider Java avancé de référence M22](java-advanced-provider.md)
-9. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-10. [Multi-dépôts et Git](multi-repo-git.md)
-11. [Supply-chain et provenance de release](supply-chain.md)
-12. [Tests et contribution](testing.md)
+9. [Providers polyglottes M24](polyglot-providers.md)
+10. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+11. [Multi-dépôts et Git](multi-repo-git.md)
+12. [Supply-chain et provenance de release](supply-chain.md)
+13. [Tests et contribution](testing.md)
 
 ## Build développeur
 

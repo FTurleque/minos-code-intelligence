@@ -1,13 +1,15 @@
 # M24 — Polyglot Expansion — exécution
 
-Statut : **EN COURS — S1 cadré ; S2→S8 implémentation/qualification en cours ; aucune promotion avant double qualification exact-head Windows + Linux.**
+Statut : **TERMINÉ — S1→S9 validés, 9/9 ; double qualification exact-head Windows + Linux réussie ; fusionné dans `develop`.**
 
 ```text
-Issue   : #81 — OPEN
-PR      : #82 — DRAFT
-Branche : m24-polyglot-expansion
-Base    : develop @ 8dbe34cb9e524acb62becda4faa263d74b90b9a9
-Date    : 28 juillet 2026
+Issue          : #81 — CLOSED / completed
+PR             : #82 — MERGED
+Branche        : m24-polyglot-expansion
+Base           : develop @ 8dbe34cb9e524acb62becda4faa263d74b90b9a9
+Qualified HEAD : 927f57768a79af162e2cdc765d0f54d274cbe02e
+Merge develop  : 2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa
+Date           : 29 juillet 2026
 ```
 
 M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**. M24 n’inspecte, ne relance, ne modifie et n’utilise aucun workflow CI comme preuve.
@@ -73,18 +75,18 @@ M24 a ajouté sans changer ce modèle :
 - runtime polyglotte derrière `ProviderRuntimeManager` ;
 - fixtures déterministes sous `fixtures/m24/` ;
 - fingerprints build M24, avec lecture compatible des snapshots FORMAT_VERSION=1 calculés sous la politique M17 ;
-- opt-in explicite `--provider <id>` pour exercer un provider `EXPERIMENTAL`, sans le rendre éligible à la négociation automatique.
+- sélection explicite `--provider <id>` pour le diagnostic et les fixtures, sans altérer disposition, plateformes ou capabilities.
 
 ## Évaluation upstream et pins M24
 
 Les versions suivantes sont **pinnées pour M24** ; leur présence ne constitue pas une qualification MINOS.
 
-| Écosystème | Provider/indexeur | Version M24 | Licence | Runtime / plateforme upstream | Disposition avant gates |
+| Écosystème | Provider/indexeur | Version M24 | Licence | Disposition finale | Plateformes qualifiées |
 |---|---|---:|---|---|---|
-| C / C++ | `sourcegraph/scip-clang` | `0.4.0` | Apache-2.0 | binaires upstream Linux x86_64 et macOS arm64 ; compilation database requise | `EXPERIMENTAL`, cible de qualification runtime Linux x86_64 ; Windows runtime explicitement bloqué |
-| C# | `sourcegraph/scip-dotnet` | `0.2.14` | Apache-2.0 | outil .NET ; release 0.2.14 construite avec SDK .NET 10 | `EXPERIMENTAL`, candidat Windows + Linux |
-| Go | `scip-code/scip-go` | `0.2.7` | Apache-2.0 | `go install`; projet `go.mod` canonique | `EXPERIMENTAL`, candidat Windows + Linux |
-| Rust | `rust-lang/rust-analyzer scip` | `2026-07-27 / v0.3.2989`, commit `12c3381` | Apache-2.0 / MIT | `cargo`, `rustc`, `rust-analyzer`; le wrapper `scip-rust` n'est pas un moteur distinct | `EXPERIMENTAL` jusqu’à preuve stable identity + plateforme |
+| C / C++ | `sourcegraph/scip-clang` | `0.4.0` | Apache-2.0 | `QUALIFIED_WITH_CONSTRAINTS` ; compilation database requise | Linux x86_64 uniquement ; Windows explicitement hors contrat |
+| C# | `sourcegraph/scip-dotnet` | `0.2.14` | Apache-2.0 | `QUALIFIED_WITH_CONSTRAINTS` ; .NET SDK 10+ | Linux x86_64 uniquement pour M24 |
+| Go | `scip-code/scip-go` | `0.2.7` | Apache-2.0 | `QUALIFIED_WITH_CONSTRAINTS` ; `go.mod` canonique | Windows x86_64 + Linux x86_64 |
+| Rust | `rust-lang/rust-analyzer scip` | `2026-07-27 / v0.3.2989`, commit `12c3381` | Apache-2.0 / MIT | `QUALIFIED_WITH_CONSTRAINTS` ; toolchain opérateur | Windows x86_64 + Linux x86_64 |
 
 Les résultats empiriques M24 priment sur la documentation upstream pour toute promotion.
 
@@ -122,37 +124,37 @@ Règles :
 
 ### M24-S1 — Cadrage, audit provider, ADR, matrice de qualification ✅ IMPLÉMENTÉ
 
-Preuves de structure : issue #81, branche unique, Draft PR #82, ADR-0032, audit tree/upstream, versions et contraintes pinnées.
+Preuves de structure : issue #81, branche unique, PR #82 ouverte initialement en Draft puis `MERGED`, ADR-0032, audit tree/upstream, versions et contraintes pinnées.
 
-### M24-S2 — Infrastructure polyglot + conformance renforcée 🚧 IMPLÉMENTÉ / TEST NON ENCORE EXÉCUTÉ
+### M24-S2 — Infrastructure polyglot + conformance renforcée ✅ VALIDÉ
 
-Vocabulaires language/build étendus ; discovery derrière les SPI ; `ProviderOperationalProfile` additif ; conformance durcie ; sept providers exposés, dont quatre M24 `EXPERIMENTAL` ; CLI provider enrichie.
+Vocabulaires language/build étendus ; discovery derrière les SPI ; `ProviderOperationalProfile` additif ; conformance durcie ; sept providers exposés, dont quatre M24 `QUALIFIED_WITH_CONSTRAINTS` après preuves ; CLI provider enrichie.
 
-### M24-S3 — Stable identities, provenance et normalisation cross-language 🚧 IMPLÉMENTÉ / TEST NON ENCORE EXÉCUTÉ
+### M24-S3 — Stable identities, provenance et normalisation cross-language ✅ VALIDÉ
 
 Tests de répétabilité/non-collision ; raw provider symbol conservé ; `Origin` provider/version/run conservé ; externes provider-scoped ; aucune relation fabriquée.
 
-### M24-S4 — C / C++ / scip-clang 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
+### M24-S4 — C / C++ / scip-clang ✅ VALIDÉ LINUX X86_64
 
 Discovery C/C++ + CMake ; provider 0.4.0 ; process plan `--compdb-path=...` ; Linux x86_64 cible runtime ; Windows `BLOCKED` ; fixture mixte C/C++ ; installation operator-managed.
 
-### M24-S5 — C# / scip-dotnet 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
+### M24-S5 — C# / scip-dotnet ✅ VALIDÉ LINUX X86_64
 
 Discovery `.cs/.csproj/.sln` ; provider 0.2.14 ; installation locale `dotnet tool --tool-path` ; readiness .NET SDK 10+ ; fixture namespace/interface/implémentation/usages.
 
-### M24-S6 — Go / scip-go 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
+### M24-S6 — Go / scip-go ✅ VALIDÉ WINDOWS + LINUX X86_64
 
 Discovery `.go/go.mod/go.work` ; provider 0.2.7 ; installation via `GOBIN` local ; fixture module/package/interface/usages ; `go.work` discovery-only tant que le multi-workspace n'est pas mesuré.
 
-### M24-S7 — Rust / rust-analyzer SCIP 🚧 IMPLÉMENTÉ / E2E À QUALIFIER
+### M24-S7 — Rust / rust-analyzer SCIP ✅ VALIDÉ WINDOWS + LINUX X86_64
 
 Discovery `.rs/Cargo.toml` ; rust-analyzer 2026-07-27 / v0.3.2989 commit `12c3381` ; readiness cargo/rustc/rust-analyzer ; aucun `rustup` implicite ; fixture crate/module/trait/impl/usages.
 
-### M24-S8 — Surfaces publiques, documentation, packaging/runtime 🚧
+### M24-S8 — Surfaces publiques, documentation, packaging/runtime ✅ VALIDÉ
 
-Implémenté : composition M24, CLI provider, guides user/developer, gate statique `scripts/m24/check-polyglot.py`, scope JaCoCo M24 sans baisse historique, isolation sémantique M23. Packaging/release et IntelliJ restent à prouver par logs.
+Composition M24, CLI provider, guides user/developer, gate statique `scripts/m24/check-polyglot.py`, scope JaCoCo M24 sans baisse historique et isolation sémantique M23 validés. Packaging/release Windows et IntelliJ/Plugin Verifier ont été rejoués par le runner final.
 
-### M24-S9 — Qualification finale exact-head Windows + Linux ⏳
+### M24-S9 — Qualification finale exact-head Windows + Linux ✅ VALIDÉ
 
 ```powershell
 .\scripts\m24\run-final.ps1 -ExpectedHead <sha>
@@ -170,19 +172,28 @@ Marqueurs :
 
 ```text
 M24 FINAL POLYGLOT EXPANSION VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: 927f57768a79af162e2cdc765d0f54d274cbe02e
 ```
 
 ```text
 M24 LINUX POLYGLOT EXPANSION VALIDATION SUCCESS
-Validated HEAD: <sha>
+Validated HEAD: 927f57768a79af162e2cdc765d0f54d274cbe02e
 ```
+
+Évidence provider détaillée :
+
+| Plateforme | Providers obligatoires | Résultat JSON |
+|---|---|---|
+| Windows x86_64 | `scip-go`, `rust-analyzer-scip` | `READY`, `e2e: PASS`, plateforme revendiquée pour les deux |
+| Linux x86_64 | `scip-clang`, `scip-dotnet`, `scip-go`, `rust-analyzer-scip` | `READY`, `e2e: PASS`, plateforme revendiquée pour les quatre |
+
+Le Windows de preuve est Windows 10 Pro 22H2 build 19045 : `scip-clang` y est hors contrat M24 et `scip-dotnet` y est `BLOCKED/NOT_RUN` parce que .NET 10 n'y est pas supporté. Aucun de ces deux états n'a été compté comme e2e Windows requis.
 
 ## Politique de disposition
 
-Un provider reste `EXPERIMENTAL` tant que sa plateforme n'est pas enregistrée comme preuve qualifiée. L'évaluateur tente néanmoins l'e2e lorsqu'il peut rendre le runtime `READY`.
+Les preuves ont conduit à une disposition finale `QUALIFIED_WITH_CONSTRAINTS` pour les quatre providers. Les plateformes enregistrées sont strictement celles exercées avec `e2e: PASS` : Linux x86_64 pour `scip-clang`/`scip-dotnet`, Windows x86_64 et Linux x86_64 pour `scip-go`/`rust-analyzer-scip`.
 
-Après réception des logs Windows + Linux : un provider réellement prouvé est promu au niveau justifié et reçoit uniquement les plateformes prouvées ; un provider non prêt garde `EXPERIMENTAL` avec diagnostics visibles. Toute promotion modifie le HEAD et impose un replay exact-head final.
+Cette promotion ne change pas les profils de capabilities mesurés : stable identity reste un fallback structurel partiel ; `CALL_RELATIONS` et l'indexation incrémentale restent non revendiquées ; CFG, def-use, data-flow et security restent hors des claims M24.
 
 ## Promotion
 
@@ -212,4 +223,4 @@ PR documentaire post-merge
 ROADMAP/STATUS : M24 terminé, M25 prochain
 ```
 
-Tout changement après qualification invalide le PASS du SHA précédent, y compris un changement documentaire.
+La séquence a été achevée : PR #82 Ready puis fusionnée avec protection du HEAD attendu, issue #81 fermée comme completed, et branche documentaire post-merge dédiée. Tout changement produit après qualification aurait invalidé le PASS du SHA précédent ; la réconciliation documentaire post-merge ne modifie pas le HEAD produit qualifié.

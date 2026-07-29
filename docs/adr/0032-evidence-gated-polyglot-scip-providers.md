@@ -1,6 +1,6 @@
 # ADR-0032 — Evidence-gated polyglot SCIP providers
 
-Status: **Accepted for M24 implementation; final provider dispositions remain exact-head gated.**
+Status: **Accepted — final M24 dispositions recorded from exact-head Windows + Linux evidence.**
 
 Date: 2026-07-28
 
@@ -34,6 +34,19 @@ The evaluated ecosystems expose viable SCIP paths, but with materially different
 13. **Public surfaces remain additive.** CLI, Java API, MCP, IntelliJ and NEXUS expose provider/discovery data through shared core contracts; they do not maintain divergent hard-coded language capability tables.
 14. **Promotion requires the same exact HEAD on Windows and Linux.** Platform-inapplicable providers must report a documented limitation, not a fake PASS. No GitHub Actions result participates in M24 promotion during July 2026.
 
+## Final M24 disposition
+
+The exact-head gates passed on `927f57768a79af162e2cdc765d0f54d274cbe02e`; PR #82 merged that head into `develop` as `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa` and issue #81 was closed as completed.
+
+| Provider | Final disposition | Qualified platforms |
+|---|---|---|
+| `scip-clang` 0.4.0 | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 |
+| `scip-dotnet` 0.2.14 | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 |
+| `scip-go` 0.2.7 | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64, Linux x86_64 |
+| `rust-analyzer-scip` 2026-07-27 / 0.3.2989 / `12c3381` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64, Linux x86_64 |
+
+Windows required real e2e PASS for Go and Rust. Linux required real e2e PASS for all four providers. The qualified Windows 10 Pro 22H2 host records `scip-clang` as outside the M24 Windows runtime contract and `scip-dotnet` as `BLOCKED/NOT_RUN` because .NET 10 is unsupported there; neither limitation is represented as a successful Windows e2e.
+
 ## Consequences
 
 ### Positive
@@ -49,7 +62,7 @@ The evaluated ecosystems expose viable SCIP paths, but with materially different
 
 - C/C++ cannot be advertised as a qualified Windows indexing runtime in M24 unless upstream/runtime evidence changes;
 - .NET, Go and Rust providers depend on local toolchains whose absence blocks readiness;
-- Rust qualification may remain `EXPERIMENTAL` if a pinned cross-platform rust-analyzer execution cannot be reproduced on both qualification platforms;
+- Rust remains constrained to the pinned release/commit and the two platforms actually reproduced; no other platform or toolchain is implied;
 - provider profiles may differ substantially in structural relationship quality even when symbols/references are strong;
 - a shared SCIP transport does not imply shared semantic completeness.
 
