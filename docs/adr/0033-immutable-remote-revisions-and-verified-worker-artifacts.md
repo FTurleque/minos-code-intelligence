@@ -1,6 +1,6 @@
 # ADR-0033 — Immutable remote revisions and verified worker artifacts
 
-Status: **Accepted**
+Status: **Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.**
 
 Date: 2026-07-29
 
@@ -39,4 +39,8 @@ M25 doit permettre l’indexation distante et une frontière d’exécution dist
 
 ## Evidence
 
-La matrice d’implémentation et les gates exact-head sont suivies dans [`../roadmap/M25_EXECUTION.md`](../roadmap/M25_EXECUTION.md).
+Le HEAD `fc395d189cf7fc5a0e06130210a3dc763fc48637` a passé les runners exact-head Windows x86_64 et Linux x86_64 avant son merge dans `develop` via `1a82f18115184606cbc13a9070b7cc78643ebb35`.
+
+Les dispositions finales sont `QUALIFIED_WITH_CONSTRAINTS` pour GitHub.com privé, GitLab.com public, le worker natif avec politique `ALLOW`, le transport `minos-distributed-artifact-v1` et les caches bornés. Le chemin credential GitLab privé reste contract-tested sans preuve live privée. Le réseau `DENY` demeure `BLOCKED/NOT_RUN` sur le worker natif et échoue fermé jusqu’à l’existence d’un backend prouvant l’isolation réseau OS.
+
+La matrice détaillée et les marqueurs des gates exact-head sont enregistrés dans [`../roadmap/M25_EXECUTION.md`](../roadmap/M25_EXECUTION.md).

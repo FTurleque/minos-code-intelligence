@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **29 juillet 2026 — M25 Remote & Distributed Indexing actif**
+Dernière mise à jour documentaire : **29 juillet 2026 — M25 Remote & Distributed Indexing terminé, validé exact-head et fusionné**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -33,14 +33,14 @@ M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement val
 M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
 M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
-M25 — Remote & Distributed Indexing  ACTIF — S1→S8 implémentés, S9 en attente
-M26 — Runtime & Dynamic Intelligence PLANIFIÉ
+M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
+M26 — Runtime & Dynamic Intelligence PROCHAIN JALON
 M27 — Team / Hosted Mode             PLANIFIÉ
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22, M23 et M24 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M25 est actif sur l’issue #84 et la branche `m25-remote-distributed-indexing` ; S9 n’est pas encore qualifié.
+`develop` contient le tree M21 localement qualifié ainsi que M22, M23, M24 et M25 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M26 — Runtime & Dynamic Intelligence est le prochain jalon.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -221,26 +221,44 @@ Roadmap : [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md). Décision : [A
 
 ## M25 — Remote & Distributed Indexing
 
-**ACTIF — issue #84 OPEN / in progress ; S1→S8 implémentés ; S9 exact-head en attente.**
+**TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS `develop` — 9/9.**
 
 ```text
 Base           : develop @ b17631de59871848351a4139b12be6e0354989bc
 Branch         : m25-remote-distributed-indexing
-Issue          : #84 OPEN / in progress
-PR             : #85 OPEN / DRAFT
-Qualified HEAD : en attente
-Merge develop  : en attente
+Issue          : #84 CLOSED / completed
+PR             : #85 MERGED
+Qualified HEAD : fc395d189cf7fc5a0e06130210a3dc763fc48637
+Merge develop  : 1a82f18115184606cbc13a9070b7cc78643ebb35
 ADR            : ADR-0033
 ```
 
-Contrat courant : GitHub.com/GitLab.com HTTPS uniquement, ref + commit SHA-1 complet, cache source borné, credential indirect et non sérialisé, worker provider-neutral en workspace éphémère, politique réseau obligatoire et `DENY` fail-closed, bundle `minos-distributed-artifact-v1` strict avec SHA-256/provenance, cache artefact borné, puis staging/promotion atomique existants.
+Contrat qualifié : GitHub.com/GitLab.com HTTPS uniquement, ref + commit SHA-1 complet, cache source borné, credential indirect et non sérialisé, worker provider-neutral en workspace éphémère, politique réseau obligatoire et `DENY` fail-closed, bundle `minos-distributed-artifact-v1` strict avec SHA-256/provenance, cache artefact borné, puis staging/promotion atomique existants.
+
+| Surface | Disposition finale M25 | Preuve / limite |
+|---|---|---|
+| GitHub.com HTTPS | `QUALIFIED_WITH_CONSTRAINTS` | dépôt privé, révision exacte et cache MISS→HIT exercés sous Windows x86_64 et Linux x86_64 |
+| GitLab.com HTTPS | `QUALIFIED_WITH_CONSTRAINTS` | dépôt public, révision exacte et cache MISS→HIT exercés sous Windows x86_64 et Linux x86_64 ; credential privé contract-tested, pas de preuve live privée |
+| worker natif local | `QUALIFIED_WITH_CONSTRAINTS` | `PROCESS_EPHEMERAL_WORKSPACE` + `ALLOW` sous Windows/Linux ; `DENY` = `BLOCKED/NOT_RUN`, refus fail-closed faute d’isolation réseau OS |
+| `minos-distributed-artifact-v1` | `QUALIFIED_WITH_CONSTRAINTS` | bundle strict, borné, SHA-256/provenance vérifiés sous Windows/Linux |
+| caches source et artefact | `QUALIFIED_WITH_CONSTRAINTS` | caches bornés, reconstructibles, corruptions/écarts rejetés |
+
+Les runners ont produit sur le même HEAD :
+
+```text
+M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS
+Validated HEAD: fc395d189cf7fc5a0e06130210a3dc763fc48637
+
+M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS
+Validated HEAD: fc395d189cf7fc5a0e06130210a3dc763fc48637
+```
 
 Roadmap : [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md). Décision : [ADR-0033](adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md). Guides : [`user/remote-indexing.md`](user/remote-indexing.md) et [`developer/remote-distributed-indexing.md`](developer/remote-distributed-indexing.md).
 
 ## Prochaine étape
 
-Achever M25-S9 par une qualification locale Windows + Linux du même SHA exact. M26 reste planifié et ne devient pas actif avant merge et réconciliation documentaire de M25.
+M26 — Runtime & Dynamic Intelligence est le prochain jalon. M27 reste planifié.
 
 ## Gouvernance juillet 2026
 
-M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24 et la qualification M25 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23/M24/M25 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

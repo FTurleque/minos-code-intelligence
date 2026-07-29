@@ -57,7 +57,7 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M24 — Polyglot Expansion est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #82 ; l’issue #81 est close/completed.** Le HEAD qualifié est `927f57768a79af162e2cdc765d0f54d274cbe02e` et le merge commit est `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa`. M24 ajoute C/C++, C#, Go et Rust derrière les SPI/provider contracts existants sans confondre discovery, disponibilité runtime, qualification produit et preuve e2e.
 
-**M25 — Remote & Distributed Indexing est actif sur l’issue #84 et la branche `m25-remote-distributed-indexing`.** S1→S8 sont implémentés ; S9 reste en attente de qualification exact-head Windows + Linux. Les sources sont épinglées par ref + SHA complet, les caches sont bornés, les secrets restent hors artefacts/logs et le worker natif refuse toute fausse promesse de réseau `DENY`.
+**M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS. **M26 — Runtime & Dynamic Intelligence est le prochain jalon.**
 
 Voir :
 

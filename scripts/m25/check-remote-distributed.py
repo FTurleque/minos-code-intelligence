@@ -161,10 +161,17 @@ def main() -> int:
             require_facts(relative, document, "github.com", "gitlab.com", "SHA", "DENY", "fail-closed",
                           "minos-distributed-artifact-v1", "provenance", "borné")
         require_facts("docs/roadmap/M25_EXECUTION.md", execution,
-                      "#84", "#85", "DRAFT", "b17631de59871848351a4139b12be6e0354989bc", "M25-S9",
+                      "#84", "CLOSED", "completed", "#85", "MERGED",
+                      "b17631de59871848351a4139b12be6e0354989bc",
+                      "fc395d189cf7fc5a0e06130210a3dc763fc48637",
+                      "1a82f18115184606cbc13a9070b7cc78643ebb35", "M25-S9",
+                      "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
+                      "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS",
                       "M21-S2 / GitHub Actions reste strictement en pause jusqu’en août 2026")
         require_facts("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", adr,
-                      "Status: Accepted", "PROCESS_EPHEMERAL_WORKSPACE", "ScipSymbolSnapshotImporter")
+                      "Status: Accepted — final M25 dispositions recorded from exact-head Windows + Linux evidence.",
+                      "PROCESS_EPHEMERAL_WORKSPACE", "ScipSymbolSnapshotImporter",
+                      "QUALIFIED_WITH_CONSTRAINTS", "BLOCKED/NOT_RUN")
 
         assert_no_workflow_changes()
         print("M25 REMOTE DISTRIBUTED CONSISTENCY SUCCESS")
