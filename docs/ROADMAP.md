@@ -1,10 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 à M27 sont validés exact-head et fusionnés dans `develop`. Aucun M28 n’est défini dans la roadmap courante.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 à M27 sont validés exact-head et fusionnés dans `develop`. M28 — Production Convergence & Architectural Hardening est désormais planifié via l’issue #93 pour fermer les écarts révélés par l’audit post-M27 avant toute nouvelle expansion fonctionnelle majeure.**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), puis par les roadmaps M22 à M27, dont [`roadmap/M27_EXECUTION.md`](roadmap/M27_EXECUTION.md) porte la preuve finale du dernier jalon défini.
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), puis par les roadmaps M22 à M28. Le cadrage détaillé du prochain jalon est [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
 
 ## Principes
 
@@ -241,7 +241,7 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23, M24, M25 puis M26 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. Les preuves M26 sont exclusivement locales Windows + Linux ; aucun résultat GitHub Actions ne sert de preuve en juillet.
+M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale vers `main`. M22 à M27 ont été qualifiés et fusionnés dans `develop` sans masquer cette dette. L’audit post-M27 a ensuite défini M28 comme jalon de convergence/hardening : il doit corriger les écarts de composition, de preuve verticale, de single-source-of-truth, de fitness architecturale, de sandbox remote, de boundaries hosted, de qualité et de gouvernance avant toute nouvelle expansion fonctionnelle majeure.
 
 ```text
 M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
@@ -257,6 +257,8 @@ M25  Remote & Distributed Indexing                ✅ VALIDÉ / MERGÉ develop
 M26  Runtime & Dynamic Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
 M27  Team / Hosted Mode                           ✅ VALIDÉ / MERGÉ develop
+  ↓
+M28  Production Convergence & Architectural Hardening  ⏭ PLANIFIÉ — issue #93
 ```
 
 ## M21 — Production Integrity & Surface Convergence
@@ -417,6 +419,46 @@ Cibles qualifiées avec contraintes : espaces partagés, isolation tenant, réte
 - issue : #90 CLOSED / completed
 - PR : #91 MERGED
 
+## M28 — Production Convergence & Architectural Hardening
+
+**PLANIFIÉ — 0/9 ; issue #93 ouverte.**
+
+Question cible :
+
+> MINOS peut-il garantir que les capacités qualifiées sont réellement câblées dans les compositions de production, que ses sources de vérité restent cohérentes et que ses chemins remote/hosted sont suffisamment durcis pour poursuivre l’évolution sans dette structurelle croissante ?
+
+M28 couvre obligatoirement tous les problèmes et axes d’amélioration identifiés par l’audit post-M27 :
+
+```text
+M28-S1  P0 Advanced-provider production wiring
+M28-S2  Vertical production capability gates
+M28-S3  Product facts & documentation single source of truth
+M28-S4  Architecture dependency fitness
+M28-S5  ProgramGraph maintainability & performance
+M28-S6  Remote worker sandbox hardening
+M28-S7  Team/Hosted production boundaries
+M28-S8  Quality, security & semantic gate hardening
+M28-S9  Governance, backlog reconciliation & main convergence
+```
+
+Priorités bloquantes :
+
+- corriger et prouver le wiring réel de `minos-java-source-v1` depuis `MinosApplication.open()` ;
+- remplacer les preuves seulement textuelles par des preuves verticales de comportement lorsque le claim l’exige ;
+- faire refléter au générateur de product facts le catalogue complet de sept providers ;
+- renforcer les fitness functions inter-modules ;
+- mesurer et optimiser si nécessaire le fingerprint/cache du ProgramGraph Java ;
+- distinguer workspace éphémère et véritable sandbox, avec `DENY` réseau prouvé ou fail-closed explicite ;
+- décomposer les hotspots M22/M27 et formaliser les frontières IdP/KMS/TLS/backup/audit ;
+- renforcer progressivement les gates qualité/sécurité selon le risque ;
+- reprendre M21-S2 en août, réconcilier l’issue C0 #2 et converger `develop` vers `main` avant nouvelle expansion majeure.
+
+M28 ne justifie aucun nouveau ANN/vector database : `KEEP_CURRENT_M20_BACKEND` reste la décision autoritative tant qu’une nouvelle mesure ne démontre pas un bottleneck.
+
+- roadmap d’exécution : [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md)
+- issue : #93 OPEN
+- état : PLANIFIÉ / non qualifié
+
 ## Règle de promotion post-M20
 
-M27 est validé exact-head Windows + Linux et intégré dans `develop`. Aucun M28 n’est défini dans la roadmap courante. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026 ; M21-S2/CI reste en pause jusqu’en août.
+M27 est validé exact-head Windows + Linux et intégré dans `develop`. M28 est désormais défini comme prochain jalon de convergence/hardening ; sa définition ne vaut ni implémentation ni qualification. La promotion finale vers `main` reste bloquée par les gates de production applicables et par M21-S2/CI, qui reste en pause jusqu’en août 2026. Aucun nouveau jalon d’expansion fonctionnelle ne doit contourner M28. L’état post-M27 indiquait auparavant « Aucun M28 n’est défini » ; cette situation est désormais superseded par l’issue #93 et la roadmap M28.
