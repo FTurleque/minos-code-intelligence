@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M24."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M25."""
 
 from __future__ import annotations
 
@@ -118,6 +118,21 @@ SCOPES = {
         ),
         "line": 0.30,
         "branch": 0.15,
+    },
+    "m25-remote-distributed-indexing": {
+        "prefixes": (
+            "com/minos/remote/",
+            "com/minos/git/JGitRemoteRepositoryMaterializer",
+            "com/minos/git/RemoteRepositoryCachePolicy",
+            "com/minos/runtime/DistributedArtifactBundleStore",
+            "com/minos/runtime/DistributedArtifactCachePolicy",
+            "com/minos/runtime/DistributedIndexerExecutor",
+            "com/minos/runtime/LocalIsolatedIndexWorker",
+            "com/minos/cli/LocalRemoteIndexOperations",
+            "com/minos/cli/RemoteIndexCommand",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
     },
 }
 

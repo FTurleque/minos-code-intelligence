@@ -47,6 +47,9 @@ flowchart TB
     SEM --> MCP
     STORE --> WORK[workspace]
     WORK --> GIT[git]
+    REMOTE[remote source cache] --> ORCH
+    ORCH --> WORKER[isolated worker]
+    WORKER --> STORE
     STORE --> NEXUS[integration.nexus]
     SEM --> NEXUS
 ```
@@ -87,10 +90,11 @@ flowchart TB
 7. [Provider avancé Program Graph sidecar M21-S7](advanced-program-provider.md)
 8. [Provider Java avancé de référence M22](java-advanced-provider.md)
 9. [Providers polyglottes M24](polyglot-providers.md)
-10. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-11. [Multi-dépôts et Git](multi-repo-git.md)
-12. [Supply-chain et provenance de release](supply-chain.md)
-13. [Tests et contribution](testing.md)
+10. [Remote & Distributed Indexing M25](remote-distributed-indexing.md)
+11. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+12. [Multi-dépôts et Git](multi-repo-git.md)
+13. [Supply-chain et provenance de release](supply-chain.md)
+14. [Tests et contribution](testing.md)
 
 ## Build développeur
 

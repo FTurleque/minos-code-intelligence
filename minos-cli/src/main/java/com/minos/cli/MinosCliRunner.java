@@ -43,7 +43,8 @@ public final class MinosCliRunner {
             ImpactCommand.NAME,
             IdeCommand.NAME,
             GitActivityCommand.NAME,
-            NexusExportCommand.NAME
+            NexusExportCommand.NAME,
+            RemoteIndexCommand.NAME
     );
 
     private MinosCliRunner() { }
@@ -80,7 +81,8 @@ public final class MinosCliRunner {
                 new LocalAutonomousIndexOperations(app),
                 app.home(),
                 ProviderPlatformService.defaults(app),
-                app.gitIntelligence()
+                app.gitIntelligence(),
+                new LocalRemoteIndexOperations(app)
         ).run(arguments, output, error);
     }
 
@@ -107,6 +109,10 @@ public final class MinosCliRunner {
         }
         if (arguments.length == 2 && GitActivityCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
             output.append(GitActivityCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (arguments.length == 2 && RemoteIndexCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(RemoteIndexCommand.usage()).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
         if (arguments.length == 2 && IdeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
