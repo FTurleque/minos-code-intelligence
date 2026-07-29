@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check current MINOS documentation against authoritative source facts through M24."""
+"""Check current MINOS documentation against authoritative source facts through active M25."""
 
 from __future__ import annotations
 
@@ -90,15 +90,19 @@ def main() -> int:
         semantic_retrieval_2 = read("docs/developer/semantic-retrieval-2.md")
         polyglot_user = read("docs/user/polyglot-providers.md")
         polyglot_developer = read("docs/developer/polyglot-providers.md")
+        remote_user = read("docs/user/remote-indexing.md")
+        remote_developer = read("docs/developer/remote-distributed-indexing.md")
         roadmap = read("docs/ROADMAP.md")
         status = read("docs/STATUS.md")
         execution = read("docs/roadmap/M21_EXECUTION.md")
         m22_execution = read("docs/roadmap/M22_EXECUTION.md")
         m23_execution = read("docs/roadmap/M23_EXECUTION.md")
         m24_execution = read("docs/roadmap/M24_EXECUTION.md")
+        m25_execution = read("docs/roadmap/M25_EXECUTION.md")
         m22_adr = read("docs/adr/0030-java-ast-reference-provider-with-explicit-capability-limits.md")
         m23_adr = read("docs/adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md")
         m24_adr = read("docs/adr/0032-evidence-gated-polyglot-scip-providers.md")
+        m25_adr = read("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
         adr_index = read("docs/adr/README.md")
         supply_chain = read("docs/developer/supply-chain.md")
         root_pom = read("pom.xml")
@@ -123,6 +127,10 @@ def main() -> int:
         m24_linux = read("scripts/m24/run-final.sh")
         m24_gate = read("scripts/m24/check-polyglot.py")
         m24_e2e = read("scripts/m24/run-provider-e2e.py")
+        m25_gate = read("scripts/m25/check-remote-distributed.py")
+        m25_e2e = read("scripts/m25/run-remote-e2e.py")
+        m25_windows = read("scripts/m25/run-final.ps1")
+        m25_linux = read("scripts/m25/run-final.sh")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         java_provider = read("minos-application/src/main/java/com/minos/program/analysis/JavaSourceProgramGraphProvider.java")
         ollama_provider = read("minos-application/src/main/java/com/minos/semantic/OllamaEmbeddingProvider.java")
@@ -137,14 +145,18 @@ def main() -> int:
         require_pattern("README.md", readme, r"(?i)M24\b[^\n]*Polyglot Expansion[^\n]*terminé[^\n]*validé\s+exact-head[^\n]*fusionné[^\n]*develop[^\n]*PR\s*#\s*82[^\n]*issue\s*#\s*81[^\n]*(?:close|closed)[^\n]*completed", "M24 completed/qualified/merged via PR #82 and issue #81")
         require_text("README.md", readme, "927f57768a79af162e2cdc765d0f54d274cbe02e")
         require_text("README.md", readme, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
-        require_text("README.md", readme, "M25 — Remote & Distributed Indexing est le prochain jalon planifié")
+        require_pattern("README.md", readme, r"(?i)M25\b[^\n]*Remote & Distributed Indexing[^\n]*actif[^\n]*issue\s*#\s*84", "M25 active on issue #84")
+        require_text("README.md", readme, "S1→S8 sont implémentés")
         require_text("README.md", readme, "MINOS_SEMANTIC_PROVIDER='ollama'")
         require_text("README.md", readme, "MCP STDIO — 23 tools read-only")
         require_text("README.md", readme, "docs/roadmap/M24_EXECUTION.md")
+        require_text("README.md", readme, "docs/roadmap/M25_EXECUTION.md")
         require_text("README.md", readme, "docs/user/polyglot-providers.md")
+        require_text("README.md", readme, "docs/user/remote-indexing.md")
         forbid_text("README.md", readme, "M23 — Semantic Retrieval 2.0 est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M22 — Advanced Provider Intelligence est le jalon fonctionnel actif")
         forbid_text("README.md", readme, "M24 — Polyglot Expansion est en cours")
+        forbid_text("README.md", readme, "M25 — Remote & Distributed Indexing est le prochain jalon planifié")
         forbid_text("README.md", readme, "C0 à M14 sont terminés et livrés.")
 
         require_text("docs/user/README.md", user_readme, f"Le MCP expose **{tool_count} tools read-only**")
@@ -152,7 +164,7 @@ def main() -> int:
         require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
         forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
 
-        # Roadmap/status authority: M24 is merged and M25 is only the next planned milestone.
+        # Roadmap/status authority: M24 is merged and M25 is the active exact-head milestone.
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M22\s+Advanced Provider Intelligence[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M22 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M23\s+Semantic Retrieval 2\.0[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M23 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M24 qualified and merged into develop")
@@ -160,13 +172,17 @@ def main() -> int:
         require_pr_state("docs/ROADMAP.md", roadmap, 82, "MERGED")
         require_text("docs/ROADMAP.md", roadmap, "927f57768a79af162e2cdc765d0f54d274cbe02e")
         require_text("docs/ROADMAP.md", roadmap, "2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa")
-        require_text("docs/ROADMAP.md", roadmap, "M25 est le **prochain jalon planifié**")
+        require_text("docs/ROADMAP.md", roadmap, "M25 est le **jalon actif**")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M24_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0032")
         require_text("docs/ROADMAP.md", roadmap, "issue : #81")
+        require_text("docs/ROADMAP.md", roadmap, "issue : #84 OPEN / in progress")
+        require_text("docs/ROADMAP.md", roadmap, "roadmap/M25_EXECUTION.md")
+        require_text("docs/ROADMAP.md", roadmap, "ADR-0033")
         forbid_text("docs/ROADMAP.md", roadmap, "M23  Semantic Retrieval 2.0                       🚧 EN COURS")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           ⏳ PLANIFIÉ")
         forbid_text("docs/ROADMAP.md", roadmap, "M24  Polyglot Expansion                           🚧 EN COURS")
+        forbid_text("docs/ROADMAP.md", roadmap, "M25  Remote & Distributed Indexing                ⏭ PROCHAIN JALON PLANIFIÉ")
         for milestone in range(24, 28):
             require_pattern("docs/ROADMAP.md", roadmap, rf"(?m)^#{{1,6}}\s*M{milestone}\b", f"M{milestone} roadmap section")
 
@@ -187,7 +203,12 @@ def main() -> int:
         require_issue_state("docs/STATUS.md", status, 81, "CLOSED", "completed")
         require_pr_state("docs/STATUS.md", status, 82, "MERGED")
         require_text("docs/STATUS.md", status, "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381")
-        require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  PROCHAIN JALON PLANIFIÉ")
+        require_text("docs/STATUS.md", status, "M25 — Remote & Distributed Indexing  ACTIF")
+        require_issue_state("docs/STATUS.md", status, 84, "OPEN", "in progress")
+        require_pr_state("docs/STATUS.md", status, 85, "OPEN")
+        require_text("docs/STATUS.md", status, "DRAFT")
+        require_text("docs/STATUS.md", status, "b17631de59871848351a4139b12be6e0354989bc")
+        require_text("docs/STATUS.md", status, "ADR-0033")
 
         # M21 retained integrity facts.
         require_pattern("docs/roadmap/M21_EXECUTION.md", execution, r"(?im)^\s*Issue\b[^\n#]*#\s*73\b", "issue #73")
@@ -306,6 +327,56 @@ def main() -> int:
         forbid_text("scripts/m24/run-final.sh", m24_linux, "gh workflow")
         forbid_text("scripts/m24/run-final.sh", m24_linux, "gh run")
 
+        # M25 active remote/distributed contract; S9 remains pending until exact-head proof.
+        require_issue_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 84, "OPEN", "in progress")
+        require_pr_state("docs/roadmap/M25_EXECUTION.md", m25_execution, 85, "OPEN")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "DRAFT")
+        require_pattern("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                        r"(?im)^\s*Statut\b[^\n]*S1\s*→\s*S8[^\n]*S9[^\n]*attente",
+                        "M25 S1-S8 implemented and S9 pending")
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, "b17631de59871848351a4139b12be6e0354989bc")
+        for slice_name in range(1, 10):
+            require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, f"M25-S{slice_name}")
+        for fact in (
+            "github.com", "gitlab.com", "FETCH_ONLY", "SHA-1 complet de 40 caractères",
+            "minos-distributed-artifact-v1", "PROCESS_EPHEMERAL_WORKSPACE",
+            "DENY fail-closed", "manifest.properties", "index.scip", "SHA-256",
+        ):
+            require_text("docs/roadmap/M25_EXECUTION.md", m25_execution, fact)
+        require_text("docs/roadmap/M25_EXECUTION.md", m25_execution,
+                     "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
+        require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
+                     "Status: **Accepted**")
+        require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
+                     "Immutable remote revisions and verified worker artifacts")
+        require_text("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md", m25_adr,
+                     "PROCESS_EPHEMERAL_WORKSPACE")
+        require_text("docs/adr/README.md", adr_index,
+                     "0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
+        require_text("docs/user/README.md", user_readme, "remote-indexing.md")
+        require_text("docs/developer/README.md", developer_readme, "remote-distributed-indexing.md")
+        for relative, document in (
+            ("docs/user/remote-indexing.md", remote_user),
+            ("docs/developer/remote-distributed-indexing.md", remote_developer),
+        ):
+            require_text(relative, document, "github.com")
+            require_text(relative, document, "gitlab.com")
+            require_text(relative, document, "minos-distributed-artifact-v1")
+            require_text(relative, document, "DENY")
+            require_text(relative, document, "SHA-256")
+        require_text("scripts/m25/check-remote-distributed.py", m25_gate,
+                     "M25 REMOTE DISTRIBUTED CONSISTENCY SUCCESS")
+        require_text("scripts/m25/run-remote-e2e.py", m25_e2e,
+                     "M25 REMOTE INDEXING END-TO-END SUCCESS")
+        require_text("scripts/m25/run-final.ps1", m25_windows,
+                     "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
+        require_text("scripts/m25/run-final.sh", m25_linux,
+                     "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
+        forbid_text("scripts/m25/run-final.ps1", m25_windows, "gh workflow")
+        forbid_text("scripts/m25/run-final.ps1", m25_windows, "gh run")
+        forbid_text("scripts/m25/run-final.sh", m25_linux, "gh workflow")
+        forbid_text("scripts/m25/run-final.sh", m25_linux, "gh run")
+
         # Existing public surfaces and production gates remain aligned.
         require_text("docs/developer/supply-chain.md", supply_chain, "CycloneDX JSON")
         require_text("docs/developer/supply-chain.md", supply_chain, "RELEASE-MANIFEST.json")
@@ -343,6 +414,7 @@ def main() -> int:
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"java-advanced-provider"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"semantic-learned-provider"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, '"m24-polyglot-provider-platform"')
+        require_text("scripts/quality/check-jacoco.py", quality_gate, '"m25-remote-distributed-indexing"')
         require_text("scripts/quality/check-jacoco.py", quality_gate, "OllamaEmbeddingProvider")
 
         require_text("docs/developer/semantic-scale-qualification.md", semantic_scale, "KEEP_CURRENT_M20_BACKEND")
@@ -352,10 +424,10 @@ def main() -> int:
         require_text("scripts/m21/run-s8.ps1", s8_runner, "M21-S8 SEMANTIC SCALE VALIDATION SUCCESS")
         require_text("scripts/m21/run-s9.ps1", s9_runner, "M21 FINAL PRODUCTION INTEGRITY VALIDATION SUCCESS")
 
-        print(f"M24 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
+        print(f"M25 CURRENT DOCUMENTATION CONSISTENCY SUCCESS (MCP tools={tool_count})")
         return 0
     except Exception as exception:
-        print(f"M24 CURRENT DOCUMENTATION CONSISTENCY FAILED: {exception}", file=sys.stderr)
+        print(f"M25 CURRENT DOCUMENTATION CONSISTENCY FAILED: {exception}", file=sys.stderr)
         return 1
 
 

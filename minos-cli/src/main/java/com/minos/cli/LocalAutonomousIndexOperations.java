@@ -22,6 +22,7 @@ import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 /** Local implementation of the autonomous indexing path. */
 public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
@@ -51,10 +53,18 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final ProjectFingerprintService fingerprintService;
     private final ProjectInvalidationService invalidationService;
     private final IncrementalIndexingPlanner planner;
+    private final UnaryOperator<IndexerExecutor> executorDecorator;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException { this(MinosApplication.open(minosHome)); }
 
     public LocalAutonomousIndexOperations(MinosApplication application) {
+        this(application, UnaryOperator.identity());
+    }
+
+    public LocalAutonomousIndexOperations(
+            MinosApplication application,
+            UnaryOperator<IndexerExecutor> executorDecorator
+    ) {
         this.application = Objects.requireNonNull(application, "application");
         this.projectResolver = new ProjectResolver(application.projectRegistry());
         this.snapshotStore = application.snapshotStore();
@@ -66,6 +76,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.fingerprintService = application.fingerprintService();
         this.invalidationService = application.invalidationService();
         this.planner = application.incrementalIndexingPlanner();
+        this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
     }
 
     @Override public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
@@ -86,7 +97,10 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                     prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
         }
         var executors = prepared.negotiation().selections().stream()
-                .map(selection -> runtimeManager.executor(selection.indexer().id())).toList();
+                .map(selection -> runtimeManager.executor(selection.indexer().id()))
+                .map(executorDecorator)
+                .map(executor -> Objects.requireNonNull(executor, "decorated executor"))
+                .toList();
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore);
         IndexingRun run = forceFull
                 ? lifecycle.execute(prepared.project().id(), prepared.project().rootPath(), prepared.negotiation())

@@ -16,6 +16,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Comprendre / lancer l'indexation automatique | [Indexation autonome](autonomous-indexing.md) |
 | Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
 | Indexer C/C++, C#, Go ou Rust | [Providers polyglottes qualifiés avec contraintes](polyglot-providers.md) |
+| Indexer une révision GitHub/GitLab exacte | [Remote & Distributed Indexing](remote-indexing.md) |
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |

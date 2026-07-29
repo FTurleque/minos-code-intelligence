@@ -24,6 +24,7 @@ public final class MinosCli {
               index             Discover, select and execute providers automatically
               import-scip       Import an explicit SCIP artifact for diagnostics/fallback
               index-status      Show active snapshot and known index metadata
+              remote            Materialize/index an immutable GitHub or GitLab revision
 
             Runtime:
               doctor            Diagnose MINOS and provider prerequisites
@@ -75,6 +76,7 @@ public final class MinosCli {
     private final IdeCommand ideCommand;
     private final GitActivityCommand gitActivityCommand;
     private final NexusExportCommand nexusExportCommand;
+    private final RemoteIndexCommand remoteIndexCommand;
 
     public MinosCli(ProjectSymbolQuery symbolQuery) {
         this(symbolQuery, null, null, null, null, null, null, null);
@@ -137,6 +139,22 @@ public final class MinosCli {
             ProviderPlatformService providerPlatformService,
             GitIntelligenceService gitIntelligenceService
     ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations
+    ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
@@ -160,6 +178,7 @@ public final class MinosCli {
                 ? null
                 : new GitActivityCommand(projectOperations, gitIntelligenceService);
         this.nexusExportCommand = nexusExportCommand;
+        this.remoteIndexCommand = remoteIndexOperations == null ? null : new RemoteIndexCommand(remoteIndexOperations);
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -214,6 +233,9 @@ public final class MinosCli {
         }
         if (NexusExportCommand.NAME.equals(command)) {
             return nexusExportCommand == null ? unavailable(command, error) : nexusExportCommand.run(commandArguments, output, error);
+        }
+        if (RemoteIndexCommand.NAME.equals(command)) {
+            return remoteIndexCommand == null ? unavailable(command, error) : remoteIndexCommand.run(commandArguments, output, error);
         }
         if (FindSymbolCommand.NAME.equals(command)) return findSymbolCommand.run(commandArguments, output, error);
         if (SearchCodeCommand.NAME.equals(command)) return searchCodeCommand.run(commandArguments, output, error);

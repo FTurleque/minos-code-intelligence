@@ -1,10 +1,10 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23 et M24 sont validés et fusionnés dans `develop`. M25 est le prochain jalon planifié ; M26→M27 restent planifiés.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23 et M24 sont validés et fusionnés dans `develop`. M25 est actif ; M26→M27 restent planifiés.**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
-La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md), M23 par [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md) et M24 par [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md).
+La trajectoire M15 à M20 est détaillée dans [`roadmap/M15_M20_EVOLUTION.md`](roadmap/M15_M20_EVOLUTION.md). La consolidation post-M20 est pilotée par [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md), M22 par [`roadmap/M22_EXECUTION.md`](roadmap/M22_EXECUTION.md), M23 par [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md), M24 par [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md) et M25 par [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md).
 
 ## Principes
 
@@ -241,7 +241,7 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23 puis M24 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. M25 est le prochain jalon planifié ; aucun résultat GitHub Actions n'a servi de preuve M24 en juillet.
+M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23 puis M24 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. M25 est actif et se qualifie uniquement par gates locales Windows + Linux ; aucun résultat GitHub Actions ne sert de preuve en juillet.
 
 ```text
 M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
@@ -252,7 +252,7 @@ M23  Semantic Retrieval 2.0                       ✅ VALIDÉ / MERGÉ develop
   ↓
 M24  Polyglot Expansion                           ✅ VALIDÉ / MERGÉ develop
   ↓
-M25  Remote & Distributed Indexing                ⏭ PROCHAIN JALON PLANIFIÉ
+M25  Remote & Distributed Indexing                🚧 ACTIF — S1→S8 implémentés / S9 en attente
   ↓
 M26  Runtime & Dynamic Intelligence               ⏳ PLANIFIÉ
   ↓
@@ -365,13 +365,18 @@ Les capacités avancées M22 (`CFG`, def-use, flux interprocéduraux, sécurité
 
 ## M25 — Remote & Distributed Indexing
 
-**PLANIFIÉ — opt-in.**
+**ACTIF — opt-in ; issue #84 OPEN ; S1→S8 implémentés, S9 exact-head en attente.**
 
 Question cible :
 
 > MINOS peut-il indexer des dépôts distants ou distribuer l'exécution sans abandonner la reproductibilité, la sécurité et l'autorité locale des snapshots ?
 
-Cibles : GitHub/GitLab distants, workers isolés, transport d'artefacts versionné, cache contrôlé, provenance de l'exécution et politique explicite de secrets/réseau.
+Cibles implémentées : GitHub.com/GitLab.com HTTPS épinglés par ref + SHA complet, workers provider-neutral en workspace éphémère, transport `minos-distributed-artifact-v1`, caches bornés, checksum/provenance intégrale et politique explicite de secrets/réseau. Le backend natif refuse `DENY` tant qu’il ne peut pas prouver l’enforcement OS ; staging et promotion atomique existants restent autoritatifs.
+
+- roadmap : [`roadmap/M25_EXECUTION.md`](roadmap/M25_EXECUTION.md)
+- décision : [ADR-0033](adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md)
+- issue : #84 OPEN / in progress
+- PR : #85 OPEN / DRAFT
 
 ## M26 — Runtime & Dynamic Intelligence
 
@@ -395,4 +400,4 @@ Cibles : espaces partagés, isolation tenant, politiques de rétention, authenti
 
 ## Règle de promotion post-M20
 
-M24 est validé et intégré dans `develop`. M25 est le **prochain jalon planifié** ; M25→M27 restent des directions planifiées, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables et n'a pas été tentée par M24 en juillet 2026.
+M24 est validé et intégré dans `develop`. M25 est le **jalon actif** ; ses fonctions ne seront déclarées acquises qu’après double qualification locale sur un SHA exact, review et merge dans `develop`. M26→M27 restent des directions planifiées. La promotion vers `main` reste soumise aux gates de production/CI applicables et n’est pas tentée en juillet 2026.

@@ -23,8 +23,12 @@ MINOS est **local-first**, **agnostique du langage**, indépendant des fournisse
 ```mermaid
 flowchart TB
     SRC[Projet local] --> DISC[Discovery / negotiation]
+    REMOTE[GitHub/GitLab + ref + SHA exact] --> CACHE[Cache source contrôlé]
+    CACHE --> DISC
     DISC --> IDX[Indexeurs qualifiés / SCIP]
     IDX --> MINOS[MINOS Code Intelligence]
+    IDX --> WORKER[Worker isolé + bundle vérifié]
+    WORKER --> MINOS
     GIT[Git local] --> MINOS
     SRC --> ADV[Providers Program Graph qualifiés]
     ADV --> MINOS
@@ -53,7 +57,7 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M24 — Polyglot Expansion est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #82 ; l’issue #81 est close/completed.** Le HEAD qualifié est `927f57768a79af162e2cdc765d0f54d274cbe02e` et le merge commit est `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa`. M24 ajoute C/C++, C#, Go et Rust derrière les SPI/provider contracts existants sans confondre discovery, disponibilité runtime, qualification produit et preuve e2e.
 
-**M25 — Remote & Distributed Indexing est le prochain jalon planifié.** Il n'est pas encore actif.
+**M25 — Remote & Distributed Indexing est actif sur l’issue #84 et la branche `m25-remote-distributed-indexing`.** S1→S8 sont implémentés ; S9 reste en attente de qualification exact-head Windows + Linux. Les sources sont épinglées par ref + SHA complet, les caches sont bornés, les secrets restent hors artefacts/logs et le worker natif refuse toute fausse promesse de réseau `DENY`.
 
 Voir :
 
@@ -63,7 +67,9 @@ Voir :
 - [`docs/roadmap/M22_EXECUTION.md`](docs/roadmap/M22_EXECUTION.md) — Advanced Provider Intelligence ;
 - [`docs/roadmap/M23_EXECUTION.md`](docs/roadmap/M23_EXECUTION.md) — Semantic Retrieval 2.0 ;
 - [`docs/roadmap/M24_EXECUTION.md`](docs/roadmap/M24_EXECUTION.md) — Polyglot Expansion ;
+- [`docs/roadmap/M25_EXECUTION.md`](docs/roadmap/M25_EXECUTION.md) — Remote & Distributed Indexing ;
 - [`docs/user/polyglot-providers.md`](docs/user/polyglot-providers.md) — prérequis, installation et limitations des providers polyglottes ;
+- [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md) — source distante immuable, worker et évidences ;
 - [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Providers polyglottes — M24
@@ -121,6 +127,21 @@ minos.cmd index my-project --provider scip-go --force-full --format json
 
 L'override ne change ni la disposition ni les plateformes/capabilities déclarées par le provider.
 
+## Remote & Distributed Indexing — M25
+
+M25 ajoute un parcours opt-in qui conserve le lifecycle local autoritatif :
+
+```powershell
+minos.cmd remote materialize https://github.com/acme/project --ref main `
+  --commit 0123456789abcdef0123456789abcdef01234567 --format json
+
+minos.cmd remote index https://github.com/acme/project --ref main `
+  --commit 0123456789abcdef0123456789abcdef01234567 `
+  --name acme-project --provider scip-java --worker-network allow --format json
+```
+
+GitHub.com/GitLab.com HTTPS, SHA complet et politique réseau worker explicite sont obligatoires. Le bundle `minos-distributed-artifact-v1` est validé (chemins, tailles, SHA-256 et provenance) avant le staging/promotion existant. Voir [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
+
 ## Retrieval sémantique learned local — M23
 
 Le sémantique reste **désactivé par défaut**. `local-hash` reste un provider déterministe de référence, explicitement non learned.
@@ -167,19 +188,19 @@ Sous Windows :
 .\mvnw.cmd clean verify
 ```
 
-La porte locale finale M24 est :
+La porte locale finale M25 est :
 
 ```powershell
-.\scripts\m24\run-final.ps1 -ExpectedHead <sha>
+.\scripts\m25\run-final.ps1 -ExpectedHead <sha>
 ```
 
 Sous Linux :
 
 ```bash
-./scripts/m24/run-final.sh <sha>
+./scripts/m25/run-final.sh <sha>
 ```
 
-La qualification M24 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce les providers réels applicables, contrôle stable identity/provenance, release Windows et IntelliJ sur Windows, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
+La qualification M25 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce une révision distante réelle et le transport worker jusqu’au snapshot actif, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
 
 La version de développement est :
 
@@ -215,6 +236,7 @@ minos.cmd mcp
 - [Guide utilisateur](docs/user/README.md)
 - [CLI](docs/user/cli.md)
 - [Providers polyglottes](docs/user/polyglot-providers.md)
+- [Remote & Distributed Indexing](docs/user/remote-indexing.md)
 - [Plugin IntelliJ](docs/user/intellij-plugin.md)
 - [API Java](docs/user/java-api.md)
 - [MCP](docs/user/mcp.md)
