@@ -45,7 +45,8 @@ public final class MinosCliRunner {
             GitActivityCommand.NAME,
             NexusExportCommand.NAME,
             RemoteIndexCommand.NAME,
-            RuntimeCommand.NAME
+            RuntimeCommand.NAME,
+            TeamCommand.NAME
     );
 
     private MinosCliRunner() { }
@@ -84,7 +85,8 @@ public final class MinosCliRunner {
                 ProviderPlatformService.defaults(app),
                 app.gitIntelligence(),
                 new LocalRemoteIndexOperations(app),
-                app.runtimeIntelligenceService()
+                app.runtimeIntelligenceService(),
+                app.hostedControlPlaneService().orElse(null)
         ).run(arguments, output, error);
     }
 
@@ -119,6 +121,10 @@ public final class MinosCliRunner {
         }
         if (arguments.length == 2 && RuntimeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
             output.append(RuntimeCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (arguments.length == 2 && TeamCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(TeamCommand.usage()).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
         if (arguments.length == 2 && IdeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {

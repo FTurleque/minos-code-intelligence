@@ -19,6 +19,7 @@ import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
 import com.minos.output.ImpactResultRenderer;
+import com.minos.output.HostedControlPlaneRenderer;
 import com.minos.output.RuntimeIntelligenceRenderer;
 import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
@@ -33,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 /** Production MCP backend that calls shared application services directly. */
 final class MinosApplicationMcpBackend implements MinosMcpBackend {
@@ -61,12 +64,18 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private final ProjectInspectionService projects;
     private final ProjectQueryService queries;
     private final ProviderPlatformService providerPlatform;
+    private final Supplier<String> hostedBearerToken;
 
     MinosApplicationMcpBackend(MinosApplication application) {
+        this(application, () -> System.getenv("MINOS_TEAM_TOKEN"));
+    }
+
+    MinosApplicationMcpBackend(MinosApplication application, Supplier<String> hostedBearerToken) {
         this.application = Objects.requireNonNull(application, "application");
         this.projects = application.projectInspectionService();
         this.queries = application.projectQueryService();
         this.providerPlatform = ProviderPlatformService.defaults(application);
+        this.hostedBearerToken = Objects.requireNonNull(hostedBearerToken, "hostedBearerToken");
     }
 
     @Override
@@ -258,6 +267,52 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         return RuntimeIntelligenceRenderer.renderSymbol(
                 application.runtimeIntelligenceService().symbolReport(
                         request.project(), request.symbolId(), request.sessionId(), request.limit()));
+    }
+
+    @Override
+    public String teamTenant() throws Exception {
+        return HostedControlPlaneRenderer.renderTenant(hosted().tenant(hostedToken()));
+    }
+
+    @Override
+    public String teamWorkspaces() throws Exception {
+        return HostedControlPlaneRenderer.renderWorkspaces(hosted().listWorkspaces(hostedToken()));
+    }
+
+    @Override
+    public String teamWorkspace(String workspaceId) throws Exception {
+        return HostedControlPlaneRenderer.renderWorkspace(hosted().workspace(hostedToken(), parseUuid(workspaceId)));
+    }
+
+    @Override
+    public String teamMembers() throws Exception {
+        return HostedControlPlaneRenderer.renderMembers(hosted().listMembers(hostedToken()));
+    }
+
+    @Override
+    public String teamAudit(int limit) throws Exception {
+        return HostedControlPlaneRenderer.renderAudit(hosted().audit(hostedToken(), limit));
+    }
+
+    private com.minos.hosted.HostedControlPlaneService hosted() {
+        return application.hostedControlPlaneService()
+                .orElseThrow(() -> new IllegalStateException("MINOS team mode is disabled"));
+    }
+
+    private String hostedToken() {
+        String token = hostedBearerToken.get();
+        if (token == null || token.isBlank()) {
+            throw new SecurityException("MINOS_TEAM_TOKEN is required for hosted MCP tools");
+        }
+        return token.trim();
+    }
+
+    private static UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("workspaceId must be a UUID");
+        }
     }
 
     private List<Map<String, Object>> providerProfiles() {

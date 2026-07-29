@@ -11,6 +11,9 @@ import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeIntelligenceService;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligenceService;
+import com.minos.hosted.HmacHostedIdentityProvider;
+import com.minos.hosted.HostedControlPlaneService;
+import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.incremental.FileProjectFingerprintSnapshotStore;
@@ -39,6 +42,8 @@ import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.FileSemanticVectorStore;
+import com.minos.store.EnvironmentHostedTenantKeyProvider;
+import com.minos.store.FileHostedControlPlaneStore;
 import com.minos.store.FileRuntimeObservationStore;
 import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
@@ -47,6 +52,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -65,6 +71,8 @@ public final class MinosApplication {
     public static final String SEMANTIC_ENDPOINT_PROPERTY = "minos.semantic.endpoint";
     public static final String SEMANTIC_TIMEOUT_SECONDS_ENV = "MINOS_SEMANTIC_TIMEOUT_SECONDS";
     public static final String SEMANTIC_TIMEOUT_SECONDS_PROPERTY = "minos.semantic.timeoutSeconds";
+    public static final String HOSTED_MODE_ENV = "MINOS_HOSTED_MODE";
+    public static final String HOSTED_MODE_PROPERTY = "minos.hosted.mode";
 
     private final Path home;
     private final LocalProjectRegistry projectRegistry;
@@ -95,6 +103,7 @@ public final class MinosApplication {
     private final HybridContextBuilder hybridContextBuilder;
     private final WorkspaceIntelligenceService workspaceIntelligence;
     private final RuntimeIntelligenceService runtimeIntelligenceService;
+    private final Optional<HostedControlPlaneService> hostedControlPlaneService;
 
     private MinosApplication(
             Path home,
@@ -114,7 +123,8 @@ public final class MinosApplication {
             SnapshotPromoter snapshotPromoter,
             GitIntelligenceService gitIntelligence,
             List<ProgramGraphProvider> programGraphProviders,
-            Optional<EmbeddingProvider> embeddingProvider
+            Optional<EmbeddingProvider> embeddingProvider,
+            Optional<HostedControlPlaneService> hostedControlPlaneService
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
@@ -151,6 +161,7 @@ public final class MinosApplication {
         this.workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
         this.runtimeIntelligenceService = new RuntimeIntelligenceService(
                 projectRegistry, snapshotStore, runtimeObservationStore);
+        this.hostedControlPlaneService = Objects.requireNonNull(hostedControlPlaneService, "hostedControlPlaneService");
     }
 
     /**
@@ -163,14 +174,11 @@ public final class MinosApplication {
     public static MinosApplication open(Path home) throws IOException {
         Builder builder = builder(home);
         String configured = setting(SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
-        if (configured == null || configured.isBlank() || "disabled".equalsIgnoreCase(configured)) {
-            return builder.build();
-        }
-        String provider = configured.trim().toLowerCase(Locale.ROOT);
+        String provider = configured == null || configured.isBlank() ? "disabled"
+                : configured.trim().toLowerCase(Locale.ROOT);
         if ("local-hash".equals(provider)) {
-            return builder.embeddingProvider(new LocalHashEmbeddingProvider()).build();
-        }
-        if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
+            builder.embeddingProvider(new LocalHashEmbeddingProvider());
+        } else if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
             String model = requiredSetting(SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
             int dimensions = parsePositiveInt(
                     requiredSetting(SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV),
@@ -182,9 +190,19 @@ public final class MinosApplication {
             Duration timeout = timeoutValue == null || timeoutValue.isBlank()
                     ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
                     : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
-            return builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout)).build();
+            builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout));
+        } else if (!"disabled".equals(provider)) {
+            throw new IllegalArgumentException("unsupported semantic provider: " + configured);
         }
-        throw new IllegalArgumentException("unsupported semantic provider: " + configured);
+
+        String hostedMode = setting(HOSTED_MODE_PROPERTY, HOSTED_MODE_ENV);
+        if (hostedMode != null && !hostedMode.isBlank() && !"disabled".equalsIgnoreCase(hostedMode)) {
+            if (!"enabled".equalsIgnoreCase(hostedMode)) {
+                throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
+            }
+            builder.hostedTenantKeyProvider(new EnvironmentHostedTenantKeyProvider());
+        }
+        return builder.build();
     }
 
     private static String setting(String property, String environment) {
@@ -241,6 +259,8 @@ public final class MinosApplication {
     public HybridContextBuilder hybridContextBuilder() { return hybridContextBuilder; }
     public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
     public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
+    /** Empty unless hosted mode was explicitly enabled; local mode remains the default. */
+    public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
 
     public IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
@@ -275,6 +295,8 @@ public final class MinosApplication {
         private GitIntelligenceService gitIntelligence;
         private List<ProgramGraphProvider> programGraphProviders;
         private EmbeddingProvider embeddingProvider;
+        private HostedTenantKeyProvider hostedTenantKeyProvider;
+        private Clock hostedClock = Clock.systemUTC();
 
         private Builder(Path home) {
             this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
@@ -288,6 +310,12 @@ public final class MinosApplication {
         public Builder runtimeObservationStore(RuntimeObservationStore value) { this.runtimeObservationStore = Objects.requireNonNull(value); return this; }
         /** Opts this application instance into semantic embeddings. Default is disabled. */
         public Builder embeddingProvider(EmbeddingProvider value) { this.embeddingProvider = Objects.requireNonNull(value); return this; }
+        /** Explicitly opts this application instance into M27 hosted mode. */
+        public Builder hostedTenantKeyProvider(HostedTenantKeyProvider value) {
+            this.hostedTenantKeyProvider = Objects.requireNonNull(value);
+            return this;
+        }
+        public Builder hostedClock(Clock value) { this.hostedClock = Objects.requireNonNull(value); return this; }
         public Builder discoveryService(ProjectDiscoveryService value) { this.discoveryService = Objects.requireNonNull(value); return this; }
         public Builder fingerprintService(ProjectFingerprintService value) { this.fingerprintService = Objects.requireNonNull(value); return this; }
         public Builder invalidationService(ProjectInvalidationService value) { this.invalidationService = Objects.requireNonNull(value); return this; }
@@ -340,11 +368,30 @@ public final class MinosApplication {
             List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
                     ? programGraphProviders : List.of(new RelationshipProgramGraphProvider());
 
+            Optional<HostedControlPlaneService> effectiveHosted = Optional.empty();
+            if (hostedTenantKeyProvider != null) {
+                FileHostedControlPlaneStore hostedStore = new FileHostedControlPlaneStore(
+                        home.resolve("hosted-control-plane"), hostedTenantKeyProvider);
+                HmacHostedIdentityProvider hostedIdentities = new HmacHostedIdentityProvider(hostedTenantKeyProvider);
+                effectiveHosted = Optional.of(new HostedControlPlaneService(
+                        hostedStore,
+                        hostedIdentities,
+                        hostedTenantKeyProvider,
+                        (projectId, snapshotId) -> {
+                            var active = effectiveSnapshots.loadActiveKnowledge(projectId)
+                                    .orElseThrow(() -> new IOException("hosted project has no active snapshot: " + projectId));
+                            if (!snapshotId.equals(active.snapshotId())) {
+                                throw new IOException("hosted binding requires the exact active snapshot: " + snapshotId);
+                            }
+                        },
+                        hostedClock));
+            }
+
             return new MinosApplication(
                     home, effectiveRegistry, effectiveSnapshots, effectiveIndexState, effectiveFingerprints,
                     effectiveSemanticStore, effectiveRuntimeObservations, effectiveDiscovery, effectiveFingerprintService, effectiveInvalidation,
                     effectivePlanner, effectiveProviderRuntime, effectiveDescriptors, effectiveStager, effectivePromoter,
-                    effectiveGit, effectiveProgramGraphProviders, Optional.ofNullable(embeddingProvider));
+                    effectiveGit, effectiveProgramGraphProviders, Optional.ofNullable(embeddingProvider), effectiveHosted);
         }
     }
 }

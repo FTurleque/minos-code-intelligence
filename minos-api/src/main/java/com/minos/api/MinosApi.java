@@ -70,6 +70,11 @@ public interface MinosApi {
             ImpactQuery query
     ) throws MinosApiException;
 
+    /** Opt-in M27 team surface; default preserves third-party contract-v1 implementations. */
+    default MinosTeamApi team() throws MinosApiException {
+        throw new MinosApiException(ErrorCode.UNAVAILABLE, "team mode is not available in this implementation");
+    }
+
     enum ErrorCode {
         INVALID_REQUEST,
         UNAVAILABLE,
