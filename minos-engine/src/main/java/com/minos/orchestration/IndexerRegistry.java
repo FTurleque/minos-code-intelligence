@@ -71,7 +71,7 @@ public final class IndexerRegistry {
                     .toList();
         }
 
-        List<IndexerSelection> selections = new ArrayList<>();
+        Map<String, IndexerSelection> selectionsByIndexer = new LinkedHashMap<>();
         List<IndexerEvaluation> evaluations = new ArrayList<>();
         EnumSet<Language> uncoveredLanguages = EnumSet.noneOf(Language.class);
 
@@ -121,7 +121,10 @@ public final class IndexerRegistry {
                 }
 
                 if (!selected) {
-                    selections.add(new IndexerSelection(language, candidate));
+                    selectionsByIndexer.putIfAbsent(
+                            candidate.id(),
+                            new IndexerSelection(language, candidate)
+                    );
                     evaluations.add(new IndexerEvaluation(
                             language,
                             candidate.id(),
@@ -146,6 +149,10 @@ public final class IndexerRegistry {
             }
         }
 
-        return new IndexerNegotiationResult(selections, uncoveredLanguages, evaluations);
+        return new IndexerNegotiationResult(
+                List.copyOf(selectionsByIndexer.values()),
+                uncoveredLanguages,
+                evaluations
+        );
     }
 }

@@ -114,6 +114,38 @@ class ProjectFingerprintServiceTest {
     }
 
     @Test
+    void classifiesEveryM24BuildDescriptorAsABuildDefinitionChange(@TempDir Path root) throws Exception {
+        List<String> descriptors = List.of(
+                "CMakeLists.txt",
+                "compile_commands.json",
+                "Minos.M24.csproj",
+                "Minos.M24.sln",
+                "go.mod",
+                "go.sum",
+                "go.work",
+                "Cargo.toml",
+                "Cargo.lock"
+        );
+
+        for (int index = 0; index < descriptors.size(); index++) {
+            String descriptor = descriptors.get(index);
+            Path project = root.resolve("descriptor-" + index);
+            Files.createDirectories(project);
+            Path buildFile = project.resolve(descriptor);
+            Files.writeString(buildFile, "version=1");
+            Files.writeString(project.resolve("source.txt"), "unchanged source");
+            ProjectFingerprint before = service.capture(project);
+
+            Files.writeString(buildFile, "version=2");
+            ProjectChangeSet changes = service.compare(before, service.capture(project));
+
+            assertTrue(changes.buildDefinitionChanged(), descriptor);
+            assertEquals(List.of(descriptor), changes.modifiedFiles(), descriptor);
+            assertEquals(List.of("source.txt"), changes.unchangedFiles(), descriptor);
+        }
+    }
+
+    @Test
     void fingerprintsRootIgnoreControlFilesEvenWhenTheyIgnoreThemselves(@TempDir Path root) throws Exception {
         Files.writeString(root.resolve("pom.xml"), "<project/>");
         Files.writeString(root.resolve(".minosignore"), ".minosignore\n*.tmp\n");

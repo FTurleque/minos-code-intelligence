@@ -21,7 +21,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0004](0004-stack-java-maven-core-sans-framework.md) | Implement the MINOS core with Maven and no server framework | Partially superseded by ADR-0005 | C0/M0 |
 | [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 | Accepted | M0 |
 | [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | M1 |
-| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans un registre local | Accepted | M1 |
+| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans registre local | Accepted | M1 |
 | [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | M1 |
 | [0009](0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | M2 |
 | [0010](0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | M3 |
@@ -46,6 +46,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0029](0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | M20 |
 | [0030](0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | M22 |
 | [0031](0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | M23 |
+| [0032](0032-evidence-gated-polyglot-scip-providers.md) | Étendre les providers SCIP polyglottes uniquement sous preuves de capability, identité, provenance et plateforme | Accepted | M24 |
 
 ## Règle de rédaction
 

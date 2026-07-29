@@ -42,7 +42,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final int MAX_FILES = 10_000_000;
     private static final int MAX_STRING_BYTES = 8 * 1024 * 1024;
     private static final String ACTIVE_FILE = "active.pointer";
-    private static final BuildDescriptorPolicy BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
+    private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
+    private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final HexFormat HEX = HexFormat.of();
 
     private final Path storageRoot;
@@ -286,13 +287,18 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static void verifyFingerprint(ProjectFingerprint fingerprint) throws IOException {
         String expectedProject = aggregateHash(fingerprint.files());
-        String expectedBuild = aggregateHash(fingerprint.files().stream()
-                .filter(file -> isBuildDescriptor(file.relativePath()))
-                .toList());
         if (!expectedProject.equals(fingerprint.projectSha256())) {
             throw new IOException("project fingerprint aggregate mismatch");
         }
-        if (!expectedBuild.equals(fingerprint.buildSha256())) {
+        String currentBuild = buildHash(fingerprint.files(), CURRENT_BUILD_DESCRIPTOR_POLICY);
+        if (currentBuild.equals(fingerprint.buildSha256())) {
+            return;
+        }
+        // FORMAT_VERSION=1 snapshots created before M24 used the M17 descriptor set.
+        // Accept that exact legacy hash so additive build markers do not invalidate
+        // an otherwise immutable historical snapshot.
+        String legacyBuild = buildHash(fingerprint.files(), LEGACY_BUILD_DESCRIPTOR_POLICY);
+        if (!legacyBuild.equals(fingerprint.buildSha256())) {
             throw new IOException("build fingerprint aggregate mismatch");
         }
     }
@@ -310,8 +316,10 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return HEX.formatHex(digest.digest());
     }
 
-    private static boolean isBuildDescriptor(String relativePath) {
-        return BUILD_DESCRIPTOR_POLICY.isBuildDescriptor(Path.of(relativePath));
+    private static String buildHash(List<FileFingerprint> files, BuildDescriptorPolicy policy) {
+        return aggregateHash(files.stream()
+                .filter(file -> policy.isBuildDescriptor(Path.of(file.relativePath())))
+                .toList());
     }
 
     private static void writePointer(Path file, ActivePointer pointer) throws IOException {

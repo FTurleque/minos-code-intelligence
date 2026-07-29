@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Read-only M17 provider capability/limitation diagnostics. */
+/** Read-only provider capability, qualification and runtime diagnostics. */
 public final class ProviderCommand {
     public static final String NAME = "providers";
     private static final String USAGE = "Usage: minos providers [provider-id] [--format <text|json>]";
@@ -55,8 +55,8 @@ public final class ProviderCommand {
         }
         List<String> lines = new ArrayList<>();
         for (ProviderPlatformService.ProviderView provider : providers) {
-            lines.add(provider.id() + "\t" + provider.version() + "\t" + provider.runtimeState()
-                    + "\tscore=" + provider.conformanceScorePercent());
+            lines.add(provider.id() + "\t" + provider.version() + "\t" + provider.qualification()
+                    + "\t" + provider.runtimeState() + "\tscore=" + provider.conformanceScorePercent());
         }
         return String.join("\n", lines);
     }
@@ -66,12 +66,20 @@ public final class ProviderCommand {
         return String.join("\n",
                 "id: " + provider.id(),
                 "version: " + provider.version(),
+                "qualification: " + provider.qualification(),
                 "languages: " + provider.languages(),
                 "buildSystems: " + provider.buildSystems(),
                 "conformanceScore: " + provider.conformanceScorePercent(),
-                "runtimeState: " + provider.runtimeState(),
                 "capabilities: " + provider.capabilities(),
                 "limitations: " + provider.limitations(),
+                "operationalProfileExplicit: " + provider.operationalProfileExplicit(),
+                "qualificationPlatforms: " + provider.qualificationPlatforms(),
+                "runtimeRequirements: " + provider.runtimeRequirements(),
+                "readinessBehavior: " + provider.readinessBehavior(),
+                "installationBehavior: " + provider.installationBehavior(),
+                "stableIdentityBehavior: " + provider.stableIdentityBehavior(),
+                "provenanceBehavior: " + provider.provenanceBehavior(),
+                "runtimeState: " + provider.runtimeState(),
                 "runtimeDiagnostics: " + provider.runtimeDiagnostics());
     }
 
@@ -79,11 +87,19 @@ public final class ProviderCommand {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("id", provider.id());
         value.put("version", provider.version());
+        value.put("qualification", provider.qualification());
         value.put("languages", provider.languages());
         value.put("buildSystems", provider.buildSystems());
         value.put("capabilities", provider.capabilities());
         value.put("conformanceScorePercent", provider.conformanceScorePercent());
         value.put("limitations", provider.limitations());
+        value.put("operationalProfileExplicit", provider.operationalProfileExplicit());
+        value.put("qualificationPlatforms", provider.qualificationPlatforms());
+        value.put("runtimeRequirements", provider.runtimeRequirements());
+        value.put("readinessBehavior", provider.readinessBehavior());
+        value.put("installationBehavior", provider.installationBehavior());
+        value.put("stableIdentityBehavior", provider.stableIdentityBehavior());
+        value.put("provenanceBehavior", provider.provenanceBehavior());
         value.put("runtimeState", provider.runtimeState());
         value.put("runtimeDiagnostics", provider.runtimeDiagnostics());
         return value;

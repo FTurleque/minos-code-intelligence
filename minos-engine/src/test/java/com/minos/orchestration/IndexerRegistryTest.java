@@ -88,6 +88,40 @@ class IndexerRegistryTest {
         assertEquals("experimental", accepted.selections().getFirst().indexer().id());
     }
 
+    @Test
+    void executesAMultiLanguageIndexerOnlyOnceWhileCoveringEveryLanguage() {
+        IndexerRegistry registry = new IndexerRegistry();
+        registry.register(new IndexerDescriptor(
+                "multi-language",
+                "1.0.0",
+                "multi-language",
+                Set.of(Language.C, Language.CPP),
+                Set.of(BuildSystem.CMAKE),
+                Set.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES),
+                IndexerQualification.QUALIFIED,
+                100,
+                List.of()
+        ));
+        ProjectDiscovery project = new ProjectDiscovery(
+                Path.of("multi-language-project"),
+                "multi-language-project",
+                Set.of(Language.C, Language.CPP),
+                Set.of(BuildSystem.CMAKE),
+                List.of()
+        );
+
+        IndexerNegotiationResult result = registry.negotiate(project, IndexingRequirements.baseline());
+
+        assertTrue(result.complete());
+        assertEquals(List.of("multi-language"), result.selections().stream()
+                .map(selection -> selection.indexer().id())
+                .toList());
+        assertEquals(Set.of(Language.C, Language.CPP), result.evaluations().stream()
+                .filter(evaluation -> evaluation.status() == EvaluationStatus.SELECTED)
+                .map(IndexerNegotiationResult.IndexerEvaluation::language)
+                .collect(java.util.stream.Collectors.toSet()));
+    }
+
     private static IndexerDescriptor descriptor(
             String id,
             int priority,

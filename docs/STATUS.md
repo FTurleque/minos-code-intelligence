@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **28 juillet 2026 — réconciliation post-merge M23**
+Dernière mise à jour documentaire : **28 juillet 2026 — M24 Polyglot Expansion en cours**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -32,7 +32,7 @@ M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
 M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
 M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
-M24 — Polyglot Expansion             PLANIFIÉ
+M24 — Polyglot Expansion             EN COURS — PR #82 DRAFT
 M25 — Remote & Distributed Indexing  PLANIFIÉ
 M26 — Runtime & Dynamic Intelligence PLANIFIÉ
 M27 — Team / Hosted Mode             PLANIFIÉ
@@ -40,7 +40,7 @@ M27 — Team / Hosted Mode             PLANIFIÉ
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22 et M23 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M24 est le prochain jalon fonctionnel planifié.
+`develop` contient le tree M21 localement qualifié ainsi que M22 et M23 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M24 est le jalon fonctionnel actif sur `m24-polyglot-expansion` ; sa PR reste Draft tant que les gates exact-head Windows + Linux n'ont pas validé le même SHA.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -169,10 +169,49 @@ IntelliJ : parité M19/M20 PASS et Plugin Verifier compatible sur les deux IDE c
 
 Roadmap : [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md). Décision : [ADR-0031](adr/0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md). Guide : [`developer/semantic-retrieval-2.md`](developer/semantic-retrieval-2.md).
 
+## M24 — Polyglot Expansion
+
+**EN COURS — issue #81 OPEN, Draft PR #82, aucune disposition finale ni plateforme promue sans log exact-head.**
+
+```text
+Base develop : 8dbe34cb9e524acb62becda4faa263d74b90b9a9
+Branch       : m24-polyglot-expansion
+Issue        : #81 OPEN
+PR           : #82 DRAFT
+ADR          : ADR-0032
+```
+
+Périmètre minimal évalué :
+
+```text
+C / C++  -> scip-clang 0.4.0
+C#       -> scip-dotnet 0.2.14 (.NET SDK 10+)
+Go       -> scip-go 0.2.7
+Rust     -> rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381
+```
+
+Les quatre nouveaux providers restent `EXPERIMENTAL` jusqu'à preuve. Les capabilities sont explicites et exhaustives ; stable identity/provenance sont des gates ; CFG/def-use/data-flow/security ne sont jamais extrapolés depuis symboles/références.
+
+Le runtime C/C++ M24 est explicitement limité à Linux x86_64 pour la qualification ; Windows expose la limitation au lieu d'un faux PASS. C# et Go utilisent des installations locales sous `MINOS_HOME/tools`. Rust reste operator-managed et MINOS ne modifie pas `rustup`/la toolchain.
+
+Runners préparés :
+
+```powershell
+.\scripts\m24\run-final.ps1 -ExpectedHead <sha>
+```
+
+```bash
+./scripts/m24/run-final.sh <sha>
+```
+
+Aucun PASS M24 n'est enregistré tant que les deux logs complets n'ont pas validé le même HEAD et un worktree propre.
+
+Roadmap : [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md). Décision : [ADR-0032](adr/0032-evidence-gated-polyglot-scip-providers.md). Guides : [`user/polyglot-providers.md`](user/polyglot-providers.md) et [`developer/polyglot-providers.md`](developer/polyglot-providers.md).
+
 ## Prochaine étape
 
-M24 — Polyglot Expansion reste **PLANIFIÉ**. Son démarrage exige sa propre roadmap opérationnelle, ses critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact.
+Achever l'implémentation/qualification M24, figer les dispositions réelles C/C++ / C# / Go / Rust, puis exécuter la double qualification exact-head Windows + Linux. M25 reste le **prochain jalon planifié après M24**, pas un jalon actif.
 
 ## Gouvernance juillet 2026
 
-M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.
+M21-S2/CI reste **strictement en pause jusqu’en août 2026**. Les qualifications M22/M23 et M24 de juillet sont locales ; aucun workflow GitHub Actions ne fait partie de leur preuve de promotion.

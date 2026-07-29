@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,11 +60,13 @@ class M17ProviderPlatformTest {
     }
 
     @Test
-    void defaultApplicationComposesAllManagedProviderDiagnostics(@TempDir Path home) throws Exception {
+    void defaultApplicationStillContainsAllM17ProvidersAfterAdditiveExpansion(@TempDir Path home) throws Exception {
         MinosApplication application = MinosApplication.open(home);
         ProviderPlatformService platform = ProviderPlatformService.defaults(application);
-        assertEquals(List.of("scip-java", "scip-python", "scip-typescript"),
-                platform.listProviders().stream().map(ProviderPlatformService.ProviderView::id).toList());
+        Set<String> ids = platform.listProviders().stream()
+                .map(ProviderPlatformService.ProviderView::id)
+                .collect(Collectors.toSet());
+        assertTrue(ids.containsAll(Set.of("scip-java", "scip-python", "scip-typescript")));
         assertTrue(platform.inspect("scip-python").limitations().stream()
                 .anyMatch(value -> value.contains("Python")));
     }

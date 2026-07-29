@@ -11,10 +11,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinosApplicationTest {
 
@@ -37,10 +38,18 @@ class MinosApplicationTest {
         assertSame(application.snapshotStager(), application.snapshotStager());
         assertSame(application.snapshotPromoter(), application.snapshotPromoter());
         assertSame(application.gitIntelligence(), application.gitIntelligence());
-        assertEquals(3, application.indexerDescriptors().size());
-        assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-java".equals(value.id())));
-        assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-typescript".equals(value.id())));
-        assertTrue(application.indexerDescriptors().stream().anyMatch(value -> "scip-python".equals(value.id())));
+        Set<String> providerIds = application.indexerDescriptors().stream()
+                .map(value -> value.id())
+                .collect(Collectors.toUnmodifiableSet());
+        assertEquals(Set.of(
+                "scip-java",
+                "scip-typescript",
+                "scip-python",
+                "scip-clang",
+                "scip-dotnet",
+                "scip-go",
+                "rust-analyzer-scip"
+        ), providerIds);
     }
 
     @Test

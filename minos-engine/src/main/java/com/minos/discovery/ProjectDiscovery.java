@@ -45,7 +45,12 @@ public record ProjectDiscovery(
         JAVA,
         KOTLIN,
         TYPESCRIPT,
-        PYTHON
+        PYTHON,
+        C,
+        CPP,
+        CSHARP,
+        GO,
+        RUST
     }
 
     public enum BuildSystem {
@@ -53,7 +58,11 @@ public record ProjectDiscovery(
         GRADLE,
         NPM,
         PNPM,
-        YARN
+        YARN,
+        CMAKE,
+        DOTNET,
+        GO_MODULE,
+        CARGO
     }
 
     public enum SourceRootKind {
