@@ -51,7 +51,9 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M23 — Semantic Retrieval 2.0 est terminé, validé exact-head et fusionné dans `develop` via PR #79.** Le profil canonique qualifié utilise `minos-local-ollama` / `embeddinggemma` / 768 dimensions. Le scan cosine exact reste le backend autorisé conformément à `KEEP_CURRENT_M20_BACKEND`.
 
-**M24 — Polyglot Expansion est en cours sur `m24-polyglot-expansion` via l’issue #81 et la Draft PR #82.** M24 évalue C/C++, C#, Go et Rust derrière les SPI/provider contracts existants. Aucun nouveau provider n'est promu avant les preuves exact-head Windows + Linux ; une discovery réussie ne vaut pas support d’indexation.
+**M24 — Polyglot Expansion est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #82 ; l’issue #81 est close/completed.** Le HEAD qualifié est `927f57768a79af162e2cdc765d0f54d274cbe02e` et le merge commit est `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa`. M24 ajoute C/C++, C#, Go et Rust derrière les SPI/provider contracts existants sans confondre discovery, disponibilité runtime, qualification produit et preuve e2e.
+
+**M25 — Remote & Distributed Indexing est le prochain jalon planifié.** Il n'est pas encore actif.
 
 Voir :
 
@@ -66,14 +68,14 @@ Voir :
 
 ## Providers polyglottes — M24
 
-Les quatre cibles M24 sont évaluées avec une disposition explicite et des capabilities exhaustives :
+Les quatre cibles M24 ont une disposition finale explicite, des plateformes strictement prouvées et des capabilities exhaustives :
 
-| Écosystème | Provider/indexeur | Version M24 | État avant qualification finale |
-|---|---|---:|---|
-| C / C++ | `scip-clang` | `0.4.0` | `EXPERIMENTAL`, runtime M24 Linux x86_64 uniquement |
-| C# | `scip-dotnet` | `0.2.14` | `EXPERIMENTAL`, installation locale MINOS, .NET SDK 10+ |
-| Go | `scip-go` | `0.2.7` | `EXPERIMENTAL`, installation locale MINOS |
-| Rust | `rust-analyzer scip` | `0.3.2989` / 2026-07-27 | `EXPERIMENTAL`, toolchain opérateur |
+| Écosystème | Provider/indexeur | Version M24 | Disposition finale | Plateformes qualifiées |
+|---|---|---:|---|---|
+| C / C++ | `scip-clang` | `0.4.0` | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 uniquement |
+| C# | `scip-dotnet` | `0.2.14` | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 uniquement, .NET SDK 10+ |
+| Go | `scip-go` | `0.2.7` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64 + Linux x86_64 |
+| Rust | `rust-analyzer scip` | `0.3.2989` / 2026-07-27 / `12c3381` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64 + Linux x86_64 |
 
 Les symboles/références SCIP ne prouvent pas CFG, def-use, data-flow ou sécurité. Les capacités avancées M22 restent spécifiques aux providers qui les démontrent réellement.
 
@@ -111,13 +113,13 @@ minos.cmd search my-project GreetingPort --format json
 
 Le parcours normal ne demande plus de préparer `index.scip` manuellement : MINOS découvre le projet, négocie le provider, vérifie son runtime, calcule la portée d’indexation, exécute le provider, normalise, stage puis promeut le snapshot.
 
-Pour exercer explicitement un provider M24 encore expérimental pendant sa qualification :
+Pour sélectionner explicitement un provider M24 qualifié avec contraintes, notamment en diagnostic :
 
 ```powershell
 minos.cmd index my-project --provider scip-go --force-full --format json
 ```
 
-L'override est un opt-in explicite ; la négociation automatique n'invente pas une qualification.
+L'override ne change ni la disposition ni les plateformes/capabilities déclarées par le provider.
 
 ## Retrieval sémantique learned local — M23
 

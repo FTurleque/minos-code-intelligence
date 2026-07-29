@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 et M23 sont validés et fusionnés dans `develop`. M24 est en cours sur la Draft PR #82 ; M25→M27 restent planifiés.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22, M23 et M24 sont validés et fusionnés dans `develop`. M25 est le prochain jalon planifié ; M26→M27 restent planifiés.**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -241,7 +241,7 @@ Merge : `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`.
 
 # Phase post-M20 — Intégrité production puis évolutions
 
-M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22 puis M23 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. M24 est maintenant le jalon fonctionnel actif, toujours sans utiliser GitHub Actions comme preuve en juillet.
+M21 a fermé ses **gates locaux structurants**. Son S2/CI reste volontairement gelé jusqu’en août 2026 et continue de bloquer la promotion finale de M21 vers `main`. M22, M23 puis M24 ont été qualifiés et fusionnés dans `develop` sans masquer ni modifier la dette M21-S2. M25 est le prochain jalon planifié ; aucun résultat GitHub Actions n'a servi de preuve M24 en juillet.
 
 ```text
 M21  Production Integrity & Surface Convergence   ⏸ S2/CI PAUSE — local S1/S3→S9 ✅
@@ -250,9 +250,9 @@ M22  Advanced Provider Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
 M23  Semantic Retrieval 2.0                       ✅ VALIDÉ / MERGÉ develop
   ↓
-M24  Polyglot Expansion                           🚧 EN COURS — issue #81 / PR #82 DRAFT
+M24  Polyglot Expansion                           ✅ VALIDÉ / MERGÉ develop
   ↓
-M25  Remote & Distributed Indexing                ⏳ PLANIFIÉ
+M25  Remote & Distributed Indexing                ⏭ PROCHAIN JALON PLANIFIÉ
   ↓
 M26  Runtime & Dynamic Intelligence               ⏳ PLANIFIÉ
   ↓
@@ -332,7 +332,14 @@ JaCoCo         : 13/13 scopes PASS
 
 ## M24 — Polyglot Expansion
 
-**EN COURS — issue #81 OPEN / Draft PR #82. Aucune disposition finale n'est acquise avant la double qualification exact-head.**
+**TERMINÉ — validé exact-head Windows + Linux et fusionné dans `develop`.**
+
+```text
+Issue          : #81 CLOSED / completed
+PR             : #82 MERGED
+Qualified HEAD : 927f57768a79af162e2cdc765d0f54d274cbe02e
+Merge develop  : 2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa
+```
 
 Question cible :
 
@@ -347,14 +354,14 @@ Go       scip-go 0.2.7
 Rust     rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381
 ```
 
-Les quatre nouveaux providers restent `EXPERIMENTAL` pendant l'implémentation. Discovery, conformance, stable identity, provenance, readiness/installation et plateformes sont qualifiés séparément. Le runtime C/C++ M24 ne prétend pas fonctionner sous Windows ; C# et Go utilisent des installations gérées sous `MINOS_HOME/tools` ; Rust ne modifie jamais implicitement `rustup` ou la toolchain.
+Les quatre nouveaux providers sont finalement `QUALIFIED_WITH_CONSTRAINTS`. `scip-clang` 0.4.0 et `scip-dotnet` 0.2.14 revendiquent uniquement Linux x86_64 ; `scip-go` 0.2.7 et `rust-analyzer-scip` 0.3.2989 / `12c3381` revendiquent Windows x86_64 et Linux x86_64. Discovery, conformance, stable identity, provenance, readiness/installation, qualification produit et e2e restent des dimensions séparées. Le runtime C/C++ M24 ne prétend pas fonctionner sous Windows ; le Windows 10 Pro 22H2 qualifié ne prétend pas supporter .NET 10 ; Rust ne modifie jamais implicitement `rustup` ou la toolchain.
 
 Les capacités avancées M22 (`CFG`, def-use, flux interprocéduraux, sécurité) ne sont pas extrapolées depuis des symboles/références SCIP. Les snapshots structurés restent autoritatifs et M23 reste `HEURISTIC`, opt-in, avec `KEEP_CURRENT_M20_BACKEND`.
 
 - roadmap : [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md)
 - décision : [ADR-0032](adr/0032-evidence-gated-polyglot-scip-providers.md)
-- issue : #81
-- Draft PR : #82
+- issue : #81 CLOSED / completed
+- PR : #82 MERGED
 
 ## M25 — Remote & Distributed Indexing
 
@@ -388,4 +395,4 @@ Cibles : espaces partagés, isolation tenant, politiques de rétention, authenti
 
 ## Règle de promotion post-M20
 
-M23 est validé et intégré dans `develop`. M24 est le jalon fonctionnel actif ; M25→M27 restent des **directions planifiées**, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables et n'est pas tentée par M24 en juillet 2026.
+M24 est validé et intégré dans `develop`. M25 est le **prochain jalon planifié** ; M25→M27 restent des directions planifiées, pas des capacités acquises. Toute promotion exige une roadmap opérationnelle, des critères de sortie mesurables, les ADR nécessaires et une qualification reproductible sur un SHA exact. La promotion vers `main` reste en plus soumise aux gates de production/CI applicables et n'a pas été tentée par M24 en juillet 2026.

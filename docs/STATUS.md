@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **28 juillet 2026 — M24 Polyglot Expansion en cours**
+Dernière mise à jour documentaire : **29 juillet 2026 — M24 Polyglot Expansion validé et fusionné dans `develop`**
 
 Ce fichier décrit l'état courant. Les preuves détaillées de chaque jalon restent dans [`roadmap/`](roadmap/), les preuves historiques dans [`history/milestones/`](history/milestones/) et les décisions durables dans [`adr/`](adr/README.md).
 
@@ -32,15 +32,15 @@ M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
 M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
 M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
-M24 — Polyglot Expansion             EN COURS — PR #82 DRAFT
-M25 — Remote & Distributed Indexing  PLANIFIÉ
+M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
+M25 — Remote & Distributed Indexing  PROCHAIN JALON PLANIFIÉ
 M26 — Runtime & Dynamic Intelligence PLANIFIÉ
 M27 — Team / Hosted Mode             PLANIFIÉ
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié ainsi que M22 et M23 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M24 est le jalon fonctionnel actif sur `m24-polyglot-expansion` ; sa PR reste Draft tant que les gates exact-head Windows + Linux n'ont pas validé le même SHA.
+`develop` contient le tree M21 localement qualifié ainsi que M22, M23 et M24 validés et fusionnés. M21 reste administrativement ouvert uniquement pour S2/CI, explicitement gelé jusqu’en août 2026. M25 est le prochain jalon planifié ; aucun travail M25 n'est encore présenté comme actif ou acquis.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -171,14 +171,16 @@ Roadmap : [`roadmap/M23_EXECUTION.md`](roadmap/M23_EXECUTION.md). Décision : [A
 
 ## M24 — Polyglot Expansion
 
-**EN COURS — issue #81 OPEN, Draft PR #82, aucune disposition finale ni plateforme promue sans log exact-head.**
+**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
 
 ```text
-Base develop : 8dbe34cb9e524acb62becda4faa263d74b90b9a9
-Branch       : m24-polyglot-expansion
-Issue        : #81 OPEN
-PR           : #82 DRAFT
-ADR          : ADR-0032
+Base develop   : 8dbe34cb9e524acb62becda4faa263d74b90b9a9
+Branch         : m24-polyglot-expansion
+Issue          : #81 CLOSED / completed
+PR             : #82 MERGED
+Qualified HEAD : 927f57768a79af162e2cdc765d0f54d274cbe02e
+Merge develop  : 2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa
+ADR            : ADR-0032
 ```
 
 Périmètre minimal évalué :
@@ -190,27 +192,36 @@ Go       -> scip-go 0.2.7
 Rust     -> rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381
 ```
 
-Les quatre nouveaux providers restent `EXPERIMENTAL` jusqu'à preuve. Les capabilities sont explicites et exhaustives ; stable identity/provenance sont des gates ; CFG/def-use/data-flow/security ne sont jamais extrapolés depuis symboles/références.
+Dispositions finales et plateformes prouvées :
+
+| Provider | Disposition | Plateformes qualifiées | Preuve e2e |
+|---|---|---|---|
+| `scip-clang` 0.4.0 | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 | Linux `PASS` ; Windows hors contrat M24 |
+| `scip-dotnet` 0.2.14 | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 | Linux `PASS` ; Windows 10 Pro 22H2 `BLOCKED/NOT_RUN` |
+| `scip-go` 0.2.7 | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64, Linux x86_64 | Windows + Linux `PASS` |
+| `rust-analyzer-scip` 0.3.2989 / `12c3381` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64, Linux x86_64 | Windows + Linux `PASS` |
+
+Les capabilities restent explicites et exhaustives ; stable identity/provenance sont des gates ; CFG/def-use/data-flow/security ne sont jamais extrapolés depuis symboles/références.
 
 Le runtime C/C++ M24 est explicitement limité à Linux x86_64 pour la qualification ; Windows expose la limitation au lieu d'un faux PASS. C# et Go utilisent des installations locales sous `MINOS_HOME/tools`. Rust reste operator-managed et MINOS ne modifie pas `rustup`/la toolchain.
 
-Runners préparés :
+Preuves exact-head enregistrées :
 
-```powershell
-.\scripts\m24\run-final.ps1 -ExpectedHead <sha>
+```text
+M24 FINAL POLYGLOT EXPANSION VALIDATION SUCCESS
+Validated HEAD: 927f57768a79af162e2cdc765d0f54d274cbe02e
+
+M24 LINUX POLYGLOT EXPANSION VALIDATION SUCCESS
+Validated HEAD: 927f57768a79af162e2cdc765d0f54d274cbe02e
 ```
 
-```bash
-./scripts/m24/run-final.sh <sha>
-```
-
-Aucun PASS M24 n'est enregistré tant que les deux logs complets n'ont pas validé le même HEAD et un worktree propre.
+Les JSON d'évidence enregistrent `e2e: PASS` pour `scip-go` et `rust-analyzer-scip` sous Windows, et pour les quatre providers sous Linux. Les deux worktrees étaient propres et le diff `.github/workflows` était vide.
 
 Roadmap : [`roadmap/M24_EXECUTION.md`](roadmap/M24_EXECUTION.md). Décision : [ADR-0032](adr/0032-evidence-gated-polyglot-scip-providers.md). Guides : [`user/polyglot-providers.md`](user/polyglot-providers.md) et [`developer/polyglot-providers.md`](developer/polyglot-providers.md).
 
 ## Prochaine étape
 
-Achever l'implémentation/qualification M24, figer les dispositions réelles C/C++ / C# / Go / Rust, puis exécuter la double qualification exact-head Windows + Linux. M25 reste le **prochain jalon planifié après M24**, pas un jalon actif.
+M25 — Remote & Distributed Indexing est le **prochain jalon planifié après M24**, pas encore un jalon actif. Sa préparation ne peut pas requalifier rétroactivement M24 ni contourner les gates de provenance, d'isolation et de reproductibilité.
 
 ## Gouvernance juillet 2026
 
