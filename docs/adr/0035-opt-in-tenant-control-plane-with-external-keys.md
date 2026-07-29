@@ -1,8 +1,11 @@
 # ADR-0035 — Opt-in tenant control plane with external keys
 
-- Status: **Accepted**
+- Status: **Accepted — final M27 dispositions recorded from exact-head Windows + Linux evidence.**
 - Date: 2026-07-29
 - Milestone: M27
+
+Qualified HEAD: `d4bd51ef52cb329ab75b70b32bc22e2b236bd65d`
+Merge develop: `ee22c3b39b9cd891c18cb61188eb8e973fc7e822`
 
 ## Context
 

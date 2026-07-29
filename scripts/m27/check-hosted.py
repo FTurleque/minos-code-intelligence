@@ -10,6 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "5db06f2a778b60b318ae6d83ad76928c24672810"
+QUALIFIED_HEAD = "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d"
+MERGE_DEVELOP = "ee22c3b39b9cd891c18cb61188eb8e973fc7e822"
 
 
 def read(relative: str) -> str:
@@ -23,6 +25,11 @@ def require(relative: str, text: str, *facts: str) -> None:
     for fact in facts:
         if fact not in text:
             raise RuntimeError(f"{relative}: missing required fact: {fact}")
+
+
+def require_pattern(relative: str, text: str, pattern: str, description: str) -> None:
+    if re.search(pattern, text) is None:
+        raise RuntimeError(f"{relative}: missing required contract: {description}")
 
 
 def forbid(relative: str, text: str, *facts: str) -> None:
@@ -148,10 +155,16 @@ def main() -> int:
             require(relative, document, "opt-in", "tenant", "AES-256-GCM", "audit")
             if "rétention" not in document.casefold() and "retention" not in document.casefold():
                 raise RuntimeError(f"{relative}: missing retention contract")
-        require("M27_EXECUTION.md", documents["docs/roadmap/M27_EXECUTION.md"], "#90", "#91", BASE,
-                "M27-S9", "strictement en pause jusqu’en août 2026")
-        require("ADR-0035", documents["docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"],
-                "Status: **Accepted**", "external keys", "MINOS_TEAM_TOKEN")
+        execution = documents["docs/roadmap/M27_EXECUTION.md"]
+        require("M27_EXECUTION.md", execution, "#90", "#91", BASE, QUALIFIED_HEAD, MERGE_DEVELOP,
+                "M27-S9", "QUALIFIED_WITH_CONSTRAINTS", "strictement en pause jusqu’en août 2026")
+        forbid("M27_EXECUTION.md", execution, "CANDIDATE_FOR_QUALIFICATION",
+               "Qualified HEAD : PENDING", "Merge develop  : PENDING")
+        adr = documents["docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md"]
+        require_pattern("ADR-0035", adr,
+                        r"(?im)^\s*-\s*Status:\s*\*\*Accepted(?:\s+—[^*]+)?\*\*\s*$",
+                        "accepted ADR status, with optional final-evidence qualifier")
+        require("ADR-0035", adr, "external keys", "MINOS_TEAM_TOKEN", QUALIFIED_HEAD, MERGE_DEVELOP)
 
         quality = read("scripts/quality/check-jacoco.py")
         require("check-jacoco.py", quality, '"m27-team-hosted-control-plane"',

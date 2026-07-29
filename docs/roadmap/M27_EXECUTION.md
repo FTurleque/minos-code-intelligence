@@ -1,14 +1,14 @@
 # M27 — Team / Hosted Mode — exécution
 
-Statut : **IMPLÉMENTATION CANDIDATE — qualification exact-head Windows + Linux requise avant promotion — 8/9.**
+Statut : **TERMINÉ, VALIDÉ EXACT-HEAD WINDOWS + LINUX ET FUSIONNÉ DANS develop — 9/9.**
 
 ```text
-Issue          : #90 — OPEN
-PR             : #91 — OPEN / DRAFT
+Issue          : #90 — CLOSED / completed
+PR             : #91 — MERGED
 Branche        : m27-team-hosted-mode
 Base           : develop @ 5db06f2a778b60b318ae6d83ad76928c24672810
-Qualified HEAD : PENDING
-Merge develop  : PENDING
+Qualified HEAD : d4bd51ef52cb329ab75b70b32bc22e2b236bd65d
+Merge develop  : ee22c3b39b9cd891c18cb61188eb8e973fc7e822
 Date           : 29 juillet 2026
 ```
 
@@ -65,21 +65,41 @@ CLI/API couvrent l’administration. Le MCP passe à 31 tools avec cinq vues tea
 
 Tests et e2e couvrent deux tenants, RBAC, token tamper/expiry, ciphertext tamper, rotation, audit, rétention, limites et compatibilité local mode.
 
-### M27-S9 — Qualification et promotion exact-head ⏳ EN ATTENTE
+### M27-S9 — Qualification et promotion exact-head ✅ TERMINÉ
 
-Windows et Linux doivent valider le même SHA propre avant Ready, merge dans `develop`, fermeture #90 et réconciliation documentaire.
+Windows et Linux ont validé `d4bd51ef52cb329ab75b70b32bc22e2b236bd65d` sur des worktrees propres. La PR #91 a ensuite été passée Ready et fusionnée dans `develop` avec protection du HEAD attendu ; l’issue #90 est fermée completed.
 
-## Dispositions candidates
+## Dispositions finales
 
-| Surface | Disposition candidate | Limite explicite |
+| Surface | Disposition finale | Limite explicite |
 |---|---|---|
-| contrôle tenant embarqué | `CANDIDATE_FOR_QUALIFICATION` | pas un SaaS opéré ni un serveur réseau |
-| auth HMAC de référence | `CANDIDATE_FOR_QUALIFICATION` | IdP/KMS et injection des secrets opérateur |
-| store AES-256-GCM | `CANDIDATE_FOR_QUALIFICATION` | backup/disponibilité hors scope |
-| shared workspaces | `CANDIDATE_FOR_QUALIFICATION` | bindings snapshot actif exact uniquement |
-| audit et rétention | `CANDIDATE_FOR_QUALIFICATION` | anciennes clés conservées selon rétention |
-| CLI/API team | `CANDIDATE_FOR_QUALIFICATION` | mutations explicites et authentifiées |
-| MCP team | `CANDIDATE_FOR_QUALIFICATION` | cinq tools strictement read-only |
+| contrôle tenant embarqué | `QUALIFIED_WITH_CONSTRAINTS` | pas un SaaS opéré ni un serveur réseau |
+| auth HMAC de référence | `QUALIFIED_WITH_CONSTRAINTS` | IdP/KMS et injection des secrets opérateur |
+| store AES-256-GCM | `QUALIFIED_WITH_CONSTRAINTS` | backup/disponibilité hors scope |
+| shared workspaces | `QUALIFIED_WITH_CONSTRAINTS` | bindings snapshot actif exact uniquement |
+| audit et rétention | `QUALIFIED_WITH_CONSTRAINTS` | anciennes clés conservées selon rétention |
+| CLI/API team | `QUALIFIED_WITH_CONSTRAINTS` | mutations explicites et authentifiées |
+| MCP team | `QUALIFIED_WITH_CONSTRAINTS` | cinq tools strictement read-only |
+
+## Preuves exact-head
+
+```text
+Windows x86_64
+M27 TEAM HOSTED END-TO-END SUCCESS
+M27 FINAL TEAM HOSTED MODE VALIDATION SUCCESS
+Validated HEAD: d4bd51ef52cb329ab75b70b32bc22e2b236bd65d
+
+Linux x86_64
+M27 TEAM HOSTED END-TO-END SUCCESS
+M27 LINUX TEAM HOSTED MODE VALIDATION SUCCESS
+Validated HEAD: d4bd51ef52cb329ab75b70b32bc22e2b236bd65d
+```
+
+Les deux évidences détaillées portent `status: PASS` et le même `commit`. Elles prouvent deux tenants isolés, le refus RBAC audité, le rejet d’un snapshot obsolète, la rotation de clé, le chiffrement AES-256-GCM sans plaintext, le rejet du tampering, l’absence de suppression implicite et le catalogue MCP de 31 tools dont cinq vues team read-only.
+
+## Jalon suivant
+
+Aucun M28 n’est défini dans la roadmap courante. Un prochain jalon devra être cadré explicitement ; M21-S2/CI reste inchangé et en pause jusqu’en août 2026.
 
 ## Critères de sortie
 
