@@ -17,6 +17,7 @@ Le parcours utilisateur normal commence par une **GitHub Release Windows**. Il n
 | Activer le retrieval sémantique learned local | [Semantic Retrieval 2.0](../developer/semantic-retrieval-2.md) |
 | Indexer C/C++, C#, Go ou Rust | [Providers polyglottes qualifiés avec contraintes](polyglot-providers.md) |
 | Indexer une révision GitHub/GitLab exacte | [Remote & Distributed Indexing](remote-indexing.md) |
+| Importer et lire des observations runtime partielles | [Runtime & Dynamic Intelligence](runtime-intelligence.md) |
 | Utiliser MINOS depuis Java | [API Java locale](java-api.md) |
 | Exporter vers NEXUS | [Intégration NEXUS](nexus.md) |
 | Diagnostiquer un problème | [Dépannage](troubleshooting.md) |
@@ -227,7 +228,7 @@ Le `setup.exe` peut aussi **configurer, construire, démarrer et valider le MCP 
 
 MINOS n'installe pas Docker Desktop lui-même. Si Docker n'est pas disponible pendant le setup, l'installation native reste valide.
 
-Le MCP expose **23 tools read-only**. Le catalogue courant inclut notamment `minos_architecture_graph`, `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, `minos_semantic_search`, `minos_hybrid_search` et `minos_hybrid_context`. La liste exacte est générée dans [`../generated/product-facts.md`](../generated/product-facts.md).
+Le MCP expose **26 tools read-only**. Le catalogue courant inclut notamment `minos_architecture_graph`, `minos_program_graph`, `minos_impact_v2`, `minos_security_paths`, `minos_semantic_search`, `minos_hybrid_search`, `minos_hybrid_context`, `minos_runtime_sessions`, `minos_runtime_report` et `minos_runtime_symbol`. La liste exacte est générée dans [`../generated/product-facts.md`](../generated/product-facts.md).
 
 Le plugin IntelliJ est distinct du MCP : il fonctionne sans LLM et ajoute une UX native, de la navigation et des actions locales d'administration. Les deux intégrations peuvent être installées simultanément.
 

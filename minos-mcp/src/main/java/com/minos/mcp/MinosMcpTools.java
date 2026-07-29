@@ -19,7 +19,7 @@ import java.util.Set;
 /** MCP catalogue mapping protocol arguments directly to shared application services. */
 public final class MinosMcpTools {
 
-    public static final int TOOL_COUNT = 23;
+    public static final int TOOL_COUNT = 26;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
 
     private final MinosMcpBackend backend;
@@ -84,7 +84,13 @@ public final class MinosMcpTools {
                 tool("minos_hybrid_search", "Fuse structured lexical/graph signals with optional semantic ranking while exposing every signal and its nature.", hybridSearchSchema(), args ->
                         backend.hybridSearch(hybridSearchRequest(args))),
                 tool("minos_hybrid_context", "Build bounded M20 hybrid context under explicit document and token budgets.", hybridContextSchema(), args ->
-                        backend.hybridContext(hybridContextRequest(args)))
+                        backend.hybridContext(hybridContextRequest(args))),
+                tool("minos_runtime_sessions", "List immutable partial runtime observation sessions and their active-snapshot alignment.", runtimeSessionsSchema(), args ->
+                        backend.runtimeSessions(runtimeSessionsRequest(args))),
+                tool("minos_runtime_report", "Read observed runtime coverage ratios, hot paths and calls; absence never proves non-execution.", runtimeReportSchema(), args ->
+                        backend.runtimeReport(runtimeReportRequest(args))),
+                tool("minos_runtime_symbol", "Read partial runtime observations for one static symbol without claiming exhaustive execution.", runtimeSymbolSchema(), args ->
+                        backend.runtimeSymbol(runtimeSymbolRequest(args)))
         );
     }
 
@@ -181,6 +187,23 @@ public final class MinosMcpTools {
                 required(args, "project"), required(args, "query"),
                 optionalInteger(args, "maxDocuments", 1, 100), optionalInteger(args, "maxTokens", 128, 65536),
                 optionalInteger(args, "maxTokensPerDocument", 32, 65536));
+    }
+
+    private static MinosMcpBackend.RuntimeSessionsRequest runtimeSessionsRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.runtimeSessionsDefaults(
+                required(args, "project"), optionalInteger(args, "limit", 1, 128));
+    }
+
+    private static MinosMcpBackend.RuntimeReportRequest runtimeReportRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.runtimeReportDefaults(
+                required(args, "project"), optionalString(args, "sessionId"),
+                optionalInteger(args, "limit", 1, 1000));
+    }
+
+    private static MinosMcpBackend.RuntimeSymbolRequest runtimeSymbolRequest(Map<String, Object> args) {
+        return MinosApplicationMcpBackend.runtimeSymbolDefaults(
+                required(args, "project"), required(args, "symbolId"), optionalString(args, "sessionId"),
+                optionalInteger(args, "limit", 1, 1000));
     }
 
     private static String required(Map<String, Object> args, String key) {
@@ -363,6 +386,30 @@ public final class MinosMcpTools {
                         "\"maxTokens\":{\"type\":\"integer\",\"minimum\":128,\"maximum\":65536}," +
                         "\"maxTokensPerDocument\":{\"type\":\"integer\",\"minimum\":32,\"maximum\":65536}",
                 "\"project\",\"query\"");
+    }
+
+    private static String runtimeSessionsSchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":128}",
+                "\"project\"");
+    }
+
+    private static String runtimeReportSchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"sessionId\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
+                "\"project\"");
+    }
+
+    private static String runtimeSymbolSchema() {
+        return objectSchema(
+                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"symbolId\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"sessionId\":{\"type\":\"string\",\"minLength\":1}," +
+                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
+                "\"project\",\"symbolId\"");
     }
 
     private static String commonSymbolProperties() {

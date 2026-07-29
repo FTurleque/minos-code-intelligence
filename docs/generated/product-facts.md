@@ -10,7 +10,7 @@
 
 ## Catalogue MCP
 
-Nombre de tools : **23**
+Nombre de tools : **26**
 
 - `minos_project_structure`
 - `minos_index_status`
@@ -35,6 +35,9 @@ Nombre de tools : **23**
 - `minos_semantic_search`
 - `minos_hybrid_search`
 - `minos_hybrid_context`
+- `minos_runtime_sessions`
+- `minos_runtime_report`
+- `minos_runtime_symbol`
 
 ## Commandes CLI
 
@@ -45,6 +48,8 @@ Nombre de tools : **23**
 - `index`
 - `import-scip`
 - `index-status`
+- `remote`
+- `runtime`
 - `doctor`
 - `tools list`
 - `tools install`

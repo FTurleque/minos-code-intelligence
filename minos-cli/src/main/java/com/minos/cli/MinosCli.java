@@ -2,6 +2,7 @@ package com.minos.cli;
 
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.dynamic.RuntimeIntelligenceService;
 import com.minos.git.GitIntelligenceService;
 import com.minos.impact.ProjectImpactQuery;
 
@@ -27,6 +28,7 @@ public final class MinosCli {
               remote            Materialize/index an immutable GitHub or GitLab revision
 
             Runtime:
+              runtime           Import/query partial runtime observations and hot paths
               doctor            Diagnose MINOS and provider prerequisites
               tools list        List managed providers
               tools install     Install/bootstrap a managed provider
@@ -77,6 +79,7 @@ public final class MinosCli {
     private final GitActivityCommand gitActivityCommand;
     private final NexusExportCommand nexusExportCommand;
     private final RemoteIndexCommand remoteIndexCommand;
+    private final RuntimeCommand runtimeCommand;
 
     public MinosCli(ProjectSymbolQuery symbolQuery) {
         this(symbolQuery, null, null, null, null, null, null, null);
@@ -155,6 +158,24 @@ public final class MinosCli {
             GitIntelligenceService gitIntelligenceService,
             RemoteIndexOperations remoteIndexOperations
     ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
+                remoteIndexOperations, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations,
+            RuntimeIntelligenceService runtimeIntelligenceService
+    ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
@@ -179,6 +200,7 @@ public final class MinosCli {
                 : new GitActivityCommand(projectOperations, gitIntelligenceService);
         this.nexusExportCommand = nexusExportCommand;
         this.remoteIndexCommand = remoteIndexOperations == null ? null : new RemoteIndexCommand(remoteIndexOperations);
+        this.runtimeCommand = runtimeIntelligenceService == null ? null : new RuntimeCommand(runtimeIntelligenceService);
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -236,6 +258,9 @@ public final class MinosCli {
         }
         if (RemoteIndexCommand.NAME.equals(command)) {
             return remoteIndexCommand == null ? unavailable(command, error) : remoteIndexCommand.run(commandArguments, output, error);
+        }
+        if (RuntimeCommand.NAME.equals(command)) {
+            return runtimeCommand == null ? unavailable(command, error) : runtimeCommand.run(commandArguments, output, error);
         }
         if (FindSymbolCommand.NAME.equals(command)) return findSymbolCommand.run(commandArguments, output, error);
         if (SearchCodeCommand.NAME.equals(command)) return searchCodeCommand.run(commandArguments, output, error);

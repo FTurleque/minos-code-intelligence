@@ -252,7 +252,7 @@ service typé MinosApplication
 renderer JSON déterministe
 ```
 
-Catalogue courant : **23 tools**.
+Catalogue courant : **26 tools**.
 
 M19 :
 
@@ -270,6 +270,16 @@ minos_semantic_search
 minos_hybrid_search
 minos_hybrid_context
 ```
+
+M26 :
+
+```text
+minos_runtime_sessions
+minos_runtime_report
+minos_runtime_symbol
+```
+
+Ces tools sont read-only. L’import `minos-runtime-observation-v1` reste une action CLI explicite ; chaque réponse runtime porte `OBSERVED_PARTIAL`, `exhaustive: false`, l’identité du snapshot et les limitations d’absence.
 
 `minos_semantic_index_status` expose `DISABLED/MISSING/STALE/READY`, snapshot, provider/modèle, dimensions, nombre de documents, taille disque et limitations.
 
@@ -367,9 +377,10 @@ Un backend remplaçant `FileSemanticVectorStore` doit implémenter `SemanticVect
 ## Qualité et cohérence
 
 - tests API : contrats historiques + M19 + M20 ;
-- tests MCP : 23 tools, schemas/bornes, mappings, erreurs récupérables ;
+- tests MCP : 26 tools, schemas/bornes, mappings, erreurs récupérables ;
 - tests M19 : ground truths graphes/flux/sécurité ;
 - tests M20 : optionnalité, vector store, Recall@K/MRR/nDCG, gain hybride, budgets, invalidation incrémentale, NEXUS v2 ;
+- tests M26 : format strict, confinement, corrélation résolue/ambiguë/non résolue, immutabilité, checksum, limites, CLI et MCP ;
 - IntelliJ S6 : `scripts/intellij/check-m21-parity.py` + replay du gate M18 et Plugin Verifier branche 261 ;
 - facts générés : `scripts/docs/product-facts.py --check` ;
 - qualité : `scripts/quality/check-jacoco.py` ;

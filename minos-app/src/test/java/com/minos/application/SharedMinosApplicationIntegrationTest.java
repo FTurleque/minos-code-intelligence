@@ -45,7 +45,7 @@ class SharedMinosApplicationIntegrationTest {
         assertEquals("shared-project", multiRepositoryApi.listProjects().getFirst().name());
 
         var mcpTools = MinosMcpApplicationTools.specifications(application);
-        assertEquals(23, mcpTools.size());
+        assertEquals(26, mcpTools.size());
         Set<String> toolNames = mcpTools.stream()
                 .map(spec -> spec.tool().name())
                 .collect(Collectors.toSet());

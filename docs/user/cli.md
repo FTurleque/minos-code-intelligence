@@ -321,6 +321,17 @@ nexus-export --root <project-root>
 
 Le JSON versionné est écrit sur stdout. M20 ajoute des signaux sémantiques v2 sans transférer à MINOS le ranking global, la sélection finale ou le budget multi-source de NEXUS.
 
+## Runtime & Dynamic Intelligence
+
+```text
+runtime import <project> --file <path> [--format <text|json>]
+runtime sessions <project> [--limit <1..128>] [--format <text|json>]
+runtime report <project> [--session <id>] [--limit <1..1000>] [--format <text|json>]
+runtime symbol <project> --symbol <id> [--session <id>] [--limit <1..1000>] [--format <text|json>]
+```
+
+L’import est la seule opération d’écriture M26. Il accepte le format UTF-8 TSV strict `minos-runtime-observation-v1` avec `completeness\tPARTIAL`, un UUID projet et un snapshot actif exact. Les lectures déclarent systématiquement `OBSERVED_PARTIAL` et `exhaustive: false` ; l’absence ne prouve jamais la non-exécution et le ratio observé n’est pas une couverture exhaustive.
+
 ## MCP
 
 Le launcher système accepte :
@@ -331,7 +342,7 @@ minos mcp
 
 La session MCP STDIO reste read-only. Depuis M15, le MCP appelle directement les services applicatifs partagés ; il ne réexécute pas la CLI métier.
 
-Le catalogue courant contient **23 tools read-only**. Il inclut les 16 tools historiques ainsi que :
+Le catalogue courant contient **26 tools read-only**. Il inclut les 16 tools historiques ainsi que :
 
 ```text
 minos_program_graph
@@ -341,6 +352,9 @@ minos_semantic_index_status
 minos_semantic_search
 minos_hybrid_search
 minos_hybrid_context
+minos_runtime_sessions
+minos_runtime_report
+minos_runtime_symbol
 ```
 
 Les réponses des tools historiques de structure/statut restent enrichies par les profils provider lorsque cela s'applique. Les surfaces M19/M20 restent bornées et exposent leurs limitations ; un score sémantique reste un signal `HEURISTIC`, jamais un fait structurel.

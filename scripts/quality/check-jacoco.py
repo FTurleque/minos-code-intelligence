@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M25."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M26."""
 
 from __future__ import annotations
 
@@ -133,6 +133,16 @@ SCOPES = {
         ),
         "line": 0.45,
         "branch": 0.25,
+    },
+    "m26-runtime-dynamic-intelligence": {
+        "prefixes": (
+            "com/minos/dynamic/",
+            "com/minos/store/FileRuntimeObservationStore",
+            "com/minos/cli/RuntimeCommand",
+            "com/minos/output/RuntimeIntelligenceRenderer",
+        ),
+        "line": 0.55,
+        "branch": 0.35,
     },
 }
 

@@ -57,7 +57,9 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M24 — Polyglot Expansion est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #82 ; l’issue #81 est close/completed.** Le HEAD qualifié est `927f57768a79af162e2cdc765d0f54d274cbe02e` et le merge commit est `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa`. M24 ajoute C/C++, C#, Go et Rust derrière les SPI/provider contracts existants sans confondre discovery, disponibilité runtime, qualification produit et preuve e2e.
 
-**M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS. **M26 — Runtime & Dynamic Intelligence est le prochain jalon.**
+**M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS.
+
+**M26 — Runtime & Dynamic Intelligence est le jalon actif sur l’issue #87 et la draft PR #88.** Le format strict `minos-runtime-observation-v1` importe uniquement des sessions `PARTIAL`, les corrèle au snapshot statique actif exact et expose couverture observée, hot paths et appels sans jamais faire de l’absence une preuve de non-exécution. **M27 — Team / Hosted Mode est le prochain jalon planifié.**
 
 Voir :
 
@@ -68,8 +70,10 @@ Voir :
 - [`docs/roadmap/M23_EXECUTION.md`](docs/roadmap/M23_EXECUTION.md) — Semantic Retrieval 2.0 ;
 - [`docs/roadmap/M24_EXECUTION.md`](docs/roadmap/M24_EXECUTION.md) — Polyglot Expansion ;
 - [`docs/roadmap/M25_EXECUTION.md`](docs/roadmap/M25_EXECUTION.md) — Remote & Distributed Indexing ;
+- [`docs/roadmap/M26_EXECUTION.md`](docs/roadmap/M26_EXECUTION.md) — Runtime & Dynamic Intelligence ;
 - [`docs/user/polyglot-providers.md`](docs/user/polyglot-providers.md) — prérequis, installation et limitations des providers polyglottes ;
 - [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md) — source distante immuable, worker et évidences ;
+- [`docs/user/runtime-intelligence.md`](docs/user/runtime-intelligence.md) — import et lecture d’observations runtime partielles ;
 - [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
 
 ## Providers polyglottes — M24
@@ -202,6 +206,29 @@ Sous Linux :
 
 La qualification M25 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce une révision distante réelle et le transport worker jusqu’au snapshot actif, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
 
+## Runtime & Dynamic Intelligence — M26
+
+M26 ajoute une voie locale, opt-in et strictement observationnelle :
+
+```powershell
+minos.cmd runtime import my-project --file .\runtime.tsv --format json
+minos.cmd runtime sessions my-project --format json
+minos.cmd runtime report my-project --session run-2026-07-29 --format json
+minos.cmd runtime symbol my-project --symbol <static-symbol-id> --format json
+```
+
+Chaque résultat déclare `nature: OBSERVED_PARTIAL` et `exhaustive: false`. Le ratio de symboles observés n’est pas une couverture exhaustive ; une trace absente ne prouve jamais la non-exécution. Le snapshot statique structuré reste autoritatif et n’est pas muté par l’import runtime.
+
+Le runner candidat M26 est local et exact-head :
+
+```powershell
+.\scripts\m26\run-final.ps1 -ExpectedHead <sha>
+```
+
+```bash
+./scripts/m26/run-final.sh <sha>
+```
+
 La version de développement est :
 
 ```text
@@ -229,7 +256,7 @@ Le serveur natif est lancé avec :
 minos.cmd mcp
 ```
 
-**MCP STDIO — 23 tools read-only.** Les tools avancés restent capability-honest ; la couche sémantique n'est jamais présentée comme une relation structurale.
+**MCP STDIO — 26 tools read-only.** Les trois tools M26 `minos_runtime_sessions`, `minos_runtime_report` et `minos_runtime_symbol` restent strictement en lecture ; l’import demeure une opération CLI explicite. Les tools avancés restent capability-honest et la couche sémantique n'est jamais présentée comme une relation structurale.
 
 ## Documentation
 
@@ -237,6 +264,7 @@ minos.cmd mcp
 - [CLI](docs/user/cli.md)
 - [Providers polyglottes](docs/user/polyglot-providers.md)
 - [Remote & Distributed Indexing](docs/user/remote-indexing.md)
+- [Runtime & Dynamic Intelligence](docs/user/runtime-intelligence.md)
 - [Plugin IntelliJ](docs/user/intellij-plugin.md)
 - [API Java](docs/user/java-api.md)
 - [MCP](docs/user/mcp.md)

@@ -8,6 +8,8 @@ import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.architecture.LocalProjectArchitectureQuery;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
+import com.minos.dynamic.RuntimeIntelligenceService;
+import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligenceService;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
@@ -37,6 +39,7 @@ import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.FileSemanticVectorStore;
+import com.minos.store.FileRuntimeObservationStore;
 import com.minos.store.FileSymbolSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
@@ -69,6 +72,7 @@ public final class MinosApplication {
     private final FileIndexStateStore indexStateStore;
     private final FileProjectFingerprintSnapshotStore fingerprintStore;
     private final SemanticVectorStore semanticVectorStore;
+    private final RuntimeObservationStore runtimeObservationStore;
     private final ProjectDiscoveryService discoveryService;
     private final ProjectFingerprintService fingerprintService;
     private final ProjectInvalidationService invalidationService;
@@ -90,6 +94,7 @@ public final class MinosApplication {
     private final HybridSearchService hybridSearchService;
     private final HybridContextBuilder hybridContextBuilder;
     private final WorkspaceIntelligenceService workspaceIntelligence;
+    private final RuntimeIntelligenceService runtimeIntelligenceService;
 
     private MinosApplication(
             Path home,
@@ -98,6 +103,7 @@ public final class MinosApplication {
             FileIndexStateStore indexStateStore,
             FileProjectFingerprintSnapshotStore fingerprintStore,
             SemanticVectorStore semanticVectorStore,
+            RuntimeObservationStore runtimeObservationStore,
             ProjectDiscoveryService discoveryService,
             ProjectFingerprintService fingerprintService,
             ProjectInvalidationService invalidationService,
@@ -116,6 +122,7 @@ public final class MinosApplication {
         this.indexStateStore = Objects.requireNonNull(indexStateStore, "indexStateStore");
         this.fingerprintStore = Objects.requireNonNull(fingerprintStore, "fingerprintStore");
         this.semanticVectorStore = Objects.requireNonNull(semanticVectorStore, "semanticVectorStore");
+        this.runtimeObservationStore = Objects.requireNonNull(runtimeObservationStore, "runtimeObservationStore");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.fingerprintService = Objects.requireNonNull(fingerprintService, "fingerprintService");
         this.invalidationService = Objects.requireNonNull(invalidationService, "invalidationService");
@@ -142,6 +149,8 @@ public final class MinosApplication {
         this.hybridSearchService = new HybridSearchService(resolver, snapshotStore, this.semanticIndexService, this.semanticSearchService);
         this.hybridContextBuilder = new HybridContextBuilder(this.hybridSearchService);
         this.workspaceIntelligence = new WorkspaceIntelligenceService(projectRegistry, snapshotStore);
+        this.runtimeIntelligenceService = new RuntimeIntelligenceService(
+                projectRegistry, snapshotStore, runtimeObservationStore);
     }
 
     /**
@@ -209,6 +218,7 @@ public final class MinosApplication {
     public FileIndexStateStore indexStateStore() { return indexStateStore; }
     public FileProjectFingerprintSnapshotStore fingerprintStore() { return fingerprintStore; }
     public SemanticVectorStore semanticVectorStore() { return semanticVectorStore; }
+    public RuntimeObservationStore runtimeObservationStore() { return runtimeObservationStore; }
     public ProjectDiscoveryService discoveryService() { return discoveryService; }
     public ProjectFingerprintService fingerprintService() { return fingerprintService; }
     public ProjectInvalidationService invalidationService() { return invalidationService; }
@@ -230,6 +240,7 @@ public final class MinosApplication {
     public HybridSearchService hybridSearchService() { return hybridSearchService; }
     public HybridContextBuilder hybridContextBuilder() { return hybridContextBuilder; }
     public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
+    public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
 
     public IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
@@ -252,6 +263,7 @@ public final class MinosApplication {
         private FileIndexStateStore indexStateStore;
         private FileProjectFingerprintSnapshotStore fingerprintStore;
         private SemanticVectorStore semanticVectorStore;
+        private RuntimeObservationStore runtimeObservationStore;
         private ProjectDiscoveryService discoveryService;
         private ProjectFingerprintService fingerprintService;
         private ProjectInvalidationService invalidationService;
@@ -273,6 +285,7 @@ public final class MinosApplication {
         public Builder indexStateStore(FileIndexStateStore value) { this.indexStateStore = Objects.requireNonNull(value); return this; }
         public Builder fingerprintStore(FileProjectFingerprintSnapshotStore value) { this.fingerprintStore = Objects.requireNonNull(value); return this; }
         public Builder semanticVectorStore(SemanticVectorStore value) { this.semanticVectorStore = Objects.requireNonNull(value); return this; }
+        public Builder runtimeObservationStore(RuntimeObservationStore value) { this.runtimeObservationStore = Objects.requireNonNull(value); return this; }
         /** Opts this application instance into semantic embeddings. Default is disabled. */
         public Builder embeddingProvider(EmbeddingProvider value) { this.embeddingProvider = Objects.requireNonNull(value); return this; }
         public Builder discoveryService(ProjectDiscoveryService value) { this.discoveryService = Objects.requireNonNull(value); return this; }
@@ -297,6 +310,8 @@ public final class MinosApplication {
             FileIndexStateStore effectiveIndexState = indexStateStore != null ? indexStateStore : new FileIndexStateStore(home.resolve("index-state"));
             FileProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null ? fingerprintStore : new FileProjectFingerprintSnapshotStore(home.resolve("fingerprint-snapshots"));
             SemanticVectorStore effectiveSemanticStore = semanticVectorStore != null ? semanticVectorStore : new FileSemanticVectorStore(home.resolve("semantic-index"));
+            RuntimeObservationStore effectiveRuntimeObservations = runtimeObservationStore != null
+                    ? runtimeObservationStore : new FileRuntimeObservationStore(home.resolve("runtime-observations"));
             ProjectDiscoveryService effectiveDiscovery = discoveryService != null ? discoveryService : new ProjectDiscoveryService();
             ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
             ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
@@ -327,7 +342,7 @@ public final class MinosApplication {
 
             return new MinosApplication(
                     home, effectiveRegistry, effectiveSnapshots, effectiveIndexState, effectiveFingerprints,
-                    effectiveSemanticStore, effectiveDiscovery, effectiveFingerprintService, effectiveInvalidation,
+                    effectiveSemanticStore, effectiveRuntimeObservations, effectiveDiscovery, effectiveFingerprintService, effectiveInvalidation,
                     effectivePlanner, effectiveProviderRuntime, effectiveDescriptors, effectiveStager, effectivePromoter,
                     effectiveGit, effectiveProgramGraphProviders, Optional.ofNullable(embeddingProvider));
         }

@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.store.FileRuntimeObservationStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,6 +35,8 @@ class MinosApplicationTest {
         assertSame(application.architectureQuery(), application.architectureQuery());
         assertSame(application.impactQuery(), application.impactQuery());
         assertSame(application.workspaceIntelligence(), application.workspaceIntelligence());
+        assertSame(application.runtimeObservationStore(), application.runtimeObservationStore());
+        assertSame(application.runtimeIntelligenceService(), application.runtimeIntelligenceService());
         assertSame(application.providerRuntimeManager(), application.providerRuntimeManager());
         assertSame(application.snapshotStager(), application.snapshotStager());
         assertSame(application.snapshotPromoter(), application.snapshotPromoter());
@@ -55,6 +58,7 @@ class MinosApplicationTest {
     @Test
     void builderAcceptsInjectedRuntimeAndSnapshotPorts(@TempDir Path root) throws Exception {
         FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(root.resolve("custom-snapshots"));
+        FileRuntimeObservationStore runtimeObservations = new FileRuntimeObservationStore(root.resolve("custom-runtime"));
         ProviderRuntimeManager runtime = new ProviderRuntimeManager() {
             @Override
             public List<ProviderRuntimeStatus> list() {
@@ -81,11 +85,13 @@ class MinosApplicationTest {
 
         MinosApplication application = MinosApplication.builder(root.resolve("home"))
                 .snapshotStore(snapshots)
+                .runtimeObservationStore(runtimeObservations)
                 .providerRuntimeManager(runtime)
                 .snapshotLifecycle(stager, promoter)
                 .build();
 
         assertSame(snapshots, application.snapshotStore());
+        assertSame(runtimeObservations, application.runtimeObservationStore());
         assertSame(runtime, application.providerRuntimeManager());
         assertSame(stager, application.snapshotStager());
         assertSame(promoter, application.snapshotPromoter());

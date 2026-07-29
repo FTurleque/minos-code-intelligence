@@ -91,10 +91,11 @@ flowchart TB
 8. [Provider Java avancé de référence M22](java-advanced-provider.md)
 9. [Providers polyglottes M24](polyglot-providers.md)
 10. [Remote & Distributed Indexing M25](remote-distributed-indexing.md)
-11. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-12. [Multi-dépôts et Git](multi-repo-git.md)
-13. [Supply-chain et provenance de release](supply-chain.md)
-14. [Tests et contribution](testing.md)
+11. [Runtime & Dynamic Intelligence M26](runtime-dynamic-intelligence.md)
+12. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+13. [Multi-dépôts et Git](multi-repo-git.md)
+14. [Supply-chain et provenance de release](supply-chain.md)
+15. [Tests et contribution](testing.md)
 
 ## Build développeur
 

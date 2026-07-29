@@ -19,6 +19,7 @@ import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
 import com.minos.output.ImpactResultRenderer;
+import com.minos.output.RuntimeIntelligenceRenderer;
 import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
@@ -54,6 +55,7 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENTS = 10;
     private static final int DEFAULT_HYBRID_CONTEXT_TOKENS = 4_000;
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS = 800;
+    private static final int DEFAULT_RUNTIME_LIMIT = 20;
 
     private final MinosApplication application;
     private final ProjectInspectionService projects;
@@ -238,6 +240,26 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                         request.query(), request.maxDocuments(), request.maxTokens(), request.maxTokensPerDocument())));
     }
 
+    @Override
+    public String runtimeSessions(RuntimeSessionsRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderSessions(
+                application.runtimeIntelligenceService().listSessions(request.project(), request.limit()));
+    }
+
+    @Override
+    public String runtimeReport(RuntimeReportRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderReport(
+                application.runtimeIntelligenceService().report(
+                        request.project(), request.sessionId(), request.limit()));
+    }
+
+    @Override
+    public String runtimeSymbol(RuntimeSymbolRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderSymbol(
+                application.runtimeIntelligenceService().symbolReport(
+                        request.project(), request.symbolId(), request.sessionId(), request.limit()));
+    }
+
     private List<Map<String, Object>> providerProfiles() {
         return providerPlatform.listProviders().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -348,5 +370,20 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                 maxDocuments == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENTS : maxDocuments,
                 maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens,
                 maxTokensPerDocument == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS : maxTokensPerDocument);
+    }
+
+    static RuntimeSessionsRequest runtimeSessionsDefaults(String project, Integer limit) {
+        return new RuntimeSessionsRequest(project, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
+    }
+
+    static RuntimeReportRequest runtimeReportDefaults(String project, String sessionId, Integer limit) {
+        return new RuntimeReportRequest(project, sessionId, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
+    }
+
+    static RuntimeSymbolRequest runtimeSymbolDefaults(
+            String project, String symbolId, String sessionId, Integer limit
+    ) {
+        return new RuntimeSymbolRequest(
+                project, symbolId, sessionId, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
     }
 }
