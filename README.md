@@ -61,7 +61,7 @@ MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivati
 
 **M26 — Runtime & Dynamic Intelligence est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #88 ; l’issue #87 est closed/completed.** Le HEAD qualifié est `bf702990125a485646b9b31817c7787086a1dbb3` et le merge commit est `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`. Le format strict `minos-runtime-observation-v1`, la corrélation au snapshot statique exact, le store local, la CLI et les trois outils MCP sont `QUALIFIED_WITH_CONSTRAINTS` : seules des observations `PARTIAL` sont admises et leur absence ne prouve jamais la non-exécution.
 
-**M27 — Team / Hosted Mode est le jalon actif, implémenté sur la draft PR #91 liée à l’issue #90, candidat à la double qualification locale exact-head Windows + Linux.** Il ajoute un contrôle tenant opt-in, RBAC, shared workspaces liés au snapshot actif exact, état AES-256-GCM, clés externes/rotation, audit chaîné, rétention explicite, CLI/API et cinq outils MCP read-only. Local mode reste le défaut ; aucun service SaaS opéré n’est revendiqué.
+**M27 — Team / Hosted Mode est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #91 ; l’issue #90 est closed/completed.** Le HEAD qualifié est `d4bd51ef52cb329ab75b70b32bc22e2b236bd65d` et le merge commit est `ee22c3b39b9cd891c18cb61188eb8e973fc7e822`. Le contrôle tenant opt-in, RBAC, shared workspaces liés au snapshot actif exact, état AES-256-GCM, clés externes/rotation, audit chaîné, rétention explicite, CLI/API et cinq outils MCP read-only sont `QUALIFIED_WITH_CONSTRAINTS`. Local mode reste le défaut ; aucun service SaaS opéré n’est revendiqué.
 
 Voir :
 

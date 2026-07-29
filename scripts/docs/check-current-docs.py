@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check current MINOS documentation through the active M27 qualification candidate."""
+"""Check current MINOS documentation through the completed M27 milestone."""
 
 from __future__ import annotations
 
@@ -168,7 +168,9 @@ def main() -> int:
         require_text("README.md", readme, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("README.md", readme, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
         require_text("README.md", readme, "QUALIFIED_WITH_CONSTRAINTS")
-        require_pattern("README.md", readme, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*(?:jalon actif|actif)[^\n]*(?:PR\s*#\s*91|draft)[^\n]*candidat", "M27 active qualification candidate")
+        require_pattern("README.md", readme, r"(?i)M27\b[^\n]*Team\s*/\s*Hosted Mode[^\n]*terminé[^\n]*validé exact-head[^\n]*PR\s*#\s*91", "M27 qualified and merged")
+        require_text("README.md", readme, "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d")
+        require_text("README.md", readme, "ee22c3b39b9cd891c18cb61188eb8e973fc7e822")
         require_text("README.md", readme, "MINOS_SEMANTIC_PROVIDER='ollama'")
         require_text("README.md", readme, f"MCP STDIO — {tool_count} tools read-only")
         require_text("README.md", readme, "docs/roadmap/M24_EXECUTION.md")
@@ -192,7 +194,7 @@ def main() -> int:
         require_text("docs/user/cli.md", cli, f"Le catalogue courant contient **{tool_count} tools read-only**")
         forbid_text("docs/user/cli.md", cli, "catalogue historique de **16 tools**")
 
-        # Roadmap/status authority: M26 is merged; M27 is the active qualification candidate.
+        # Roadmap/status authority: M26 and M27 are qualified and merged; no M28 is defined.
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M22\s+Advanced Provider Intelligence[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M22 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M23\s+Semantic Retrieval 2\.0[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M23 qualified and merged into develop")
         require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M24\s+Polyglot Expansion[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M24 qualified and merged into develop")
@@ -213,7 +215,12 @@ def main() -> int:
         require_pr_state("docs/ROADMAP.md", roadmap, 88, "MERGED")
         require_text("docs/ROADMAP.md", roadmap, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("docs/ROADMAP.md", roadmap, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
-        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M27\s+Team\s*/\s*Hosted Mode[^\n]*ACTIF[^\n]*CANDIDAT", "M27 active candidate")
+        require_pattern("docs/ROADMAP.md", roadmap, r"(?im)^M27\s+Team\s*/\s*Hosted Mode[^\n]*VALIDÉ\s*/\s*MERGÉ\s+develop", "M27 qualified and merged into develop")
+        require_issue_state("docs/ROADMAP.md", roadmap, 90, "CLOSED", "completed")
+        require_pr_state("docs/ROADMAP.md", roadmap, 91, "MERGED")
+        require_text("docs/ROADMAP.md", roadmap, "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d")
+        require_text("docs/ROADMAP.md", roadmap, "ee22c3b39b9cd891c18cb61188eb8e973fc7e822")
+        require_text("docs/ROADMAP.md", roadmap, "Aucun M28 n’est défini")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M25_EXECUTION.md")
         require_text("docs/ROADMAP.md", roadmap, "ADR-0033")
         require_text("docs/ROADMAP.md", roadmap, "roadmap/M26_EXECUTION.md")
@@ -258,7 +265,12 @@ def main() -> int:
         require_pr_state("docs/STATUS.md", status, 88, "MERGED")
         require_text("docs/STATUS.md", status, "bf702990125a485646b9b31817c7787086a1dbb3")
         require_text("docs/STATUS.md", status, "9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef")
-        require_pattern("docs/STATUS.md", status, r"(?im)^M27\s+—\s+Team\s*/\s*Hosted Mode[^\n]*ACTIF[^\n]*CANDIDAT", "M27 active candidate status")
+        require_pattern("docs/STATUS.md", status, r"(?im)^M27\s+—\s+Team\s*/\s*Hosted Mode[^\n]*TERMINÉ[^\n]*VALIDÉ[^\n]*MERGÉ\s+develop", "M27 qualified status")
+        require_issue_state("docs/STATUS.md", status, 90, "CLOSED", "completed")
+        require_pr_state("docs/STATUS.md", status, 91, "MERGED")
+        require_text("docs/STATUS.md", status, "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d")
+        require_text("docs/STATUS.md", status, "ee22c3b39b9cd891c18cb61188eb8e973fc7e822")
+        require_text("docs/STATUS.md", status, "Aucun M28 n’est défini")
 
         # M21 retained integrity facts.
         require_pattern("docs/roadmap/M21_EXECUTION.md", execution, r"(?im)^\s*Issue\b[^\n#]*#\s*73\b", "issue #73")
@@ -513,16 +525,18 @@ def main() -> int:
         forbid_text("scripts/m26/run-final.sh", m26_linux, "gh workflow")
         forbid_text("scripts/m26/run-final.sh", m26_linux, "gh run")
 
-        # M27 active candidate facts; final SHAs remain pending until double exact-head qualification.
-        require_issue_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 90, "OPEN")
-        require_pr_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 91, "OPEN")
+        # M27 final team/hosted contract and exact-head evidence.
+        require_issue_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 90, "CLOSED", "completed")
+        require_pr_state("docs/roadmap/M27_EXECUTION.md", m27_execution, 91, "MERGED")
         require_pattern("docs/roadmap/M27_EXECUTION.md", m27_execution,
-                        r"(?im)^\s*Statut\b[^\n]*CANDIDATE[^\n]*8\s*/\s*9\b",
-                        "M27 8/9 qualification candidate")
+                        r"(?im)^\s*Statut\b[^\n]*TERMINÉ[^\n]*9\s*/\s*9\b",
+                        "M27 9/9 completion")
         require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
                      "5db06f2a778b60b318ae6d83ad76928c24672810")
-        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Qualified HEAD : PENDING")
-        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Merge develop  : PENDING")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "ee22c3b39b9cd891c18cb61188eb8e973fc7e822")
         for slice_name in range(1, 10):
             require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, f"M27-S{slice_name}")
         for fact in ("opt-in", "RBAC", "AES-256-GCM", "HMAC-SHA-256", "snapshot actif exact",
@@ -530,8 +544,25 @@ def main() -> int:
             require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, fact)
         require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
                      "M21-S2 / GitHub Actions reste **strictement en pause jusqu’en août 2026**")
+        for key in ("contrôle tenant embarqué", "auth HMAC de référence", "store AES-256-GCM",
+                    "shared workspaces", "audit et rétention", "CLI/API team", "MCP team"):
+            require_table_row("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                              key, "QUALIFIED_WITH_CONSTRAINTS")
+        forbid_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Qualified HEAD : PENDING")
+        forbid_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Merge develop  : PENDING")
+        forbid_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "CANDIDATE_FOR_QUALIFICATION")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "M27 FINAL TEAM HOSTED MODE VALIDATION SUCCESS")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution,
+                     "M27 LINUX TEAM HOSTED MODE VALIDATION SUCCESS")
+        require_text("docs/roadmap/M27_EXECUTION.md", m27_execution, "Aucun M28 n’est défini")
+        require_pattern("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
+                        r"(?im)^\s*-\s*Status:\s*\*\*Accepted[^*]*exact-head Windows\s*\+\s*Linux[^*]*\*\*\s*$",
+                        "accepted ADR with final Windows and Linux exact-head evidence")
         require_text("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
-                     "Status: **Accepted**")
+                     "d4bd51ef52cb329ab75b70b32bc22e2b236bd65d")
+        require_text("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
+                     "ee22c3b39b9cd891c18cb61188eb8e973fc7e822")
         require_text("docs/adr/0035-opt-in-tenant-control-plane-with-external-keys.md", m27_adr,
                      "MINOS_TEAM_TOKEN")
         require_text("docs/adr/README.md", adr_index,
