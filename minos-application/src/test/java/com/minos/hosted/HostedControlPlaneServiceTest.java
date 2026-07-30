@@ -29,7 +29,8 @@ class HostedControlPlaneServiceTest {
     @Test
     void authenticatesAndEnforcesRbacWhileAuditingDeniedMutations() throws Exception {
         Fixture fixture = fixture();
-        var bootstrap = fixture.service.bootstrap(fixture.tenant, "Team", "primary", "owner", "Owner",
+        var bootstrap = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
                 Duration.ofHours(1), "bootstrap-1");
         String owner = bootstrap.bearerToken();
         SharedWorkspace workspace = fixture.service.createWorkspace(owner, "create-1", "Shared");
@@ -49,27 +50,76 @@ class HostedControlPlaneServiceTest {
     @Test
     void rejectsTamperedExpiredAndCrossTenantAccess() throws Exception {
         Fixture fixture = fixture();
-        var first = fixture.service.bootstrap(fixture.tenant, "First", "primary", "owner", "Owner",
+        var first = fixture.service.bootstrap(
+                fixture.tenant, "First", "primary", "owner", "Owner",
                 Duration.ofSeconds(1), "bootstrap-1");
         UUID otherTenant = UUID.randomUUID();
-        var second = fixture.service.bootstrap(otherTenant, "Second", "primary", "other", "Other",
+        var second = fixture.service.bootstrap(
+                otherTenant, "Second", "primary", "other", "Other",
                 Duration.ofHours(1), "bootstrap-2");
-        SharedWorkspace otherWorkspace = fixture.service.createWorkspace(second.bearerToken(), "create-2", "Other space");
+        SharedWorkspace otherWorkspace = fixture.service.createWorkspace(
+                second.bearerToken(), "create-2", "Other space");
 
         String tampered = first.bearerToken().substring(0, first.bearerToken().length() - 1) + "A";
         assertThrows(SecurityException.class, () -> fixture.service.listWorkspaces(tampered));
         fixture.clock.advance(Duration.ofSeconds(2));
-        assertThrows(SecurityException.class, () -> fixture.service.listWorkspaces(first.bearerToken()));
+        assertThrows(SecurityException.class,
+                () -> fixture.service.listWorkspaces(first.bearerToken()));
 
         fixture.clock.advance(Duration.ofSeconds(-2));
         assertThrows(IllegalArgumentException.class,
-                () -> fixture.service.workspace(first.bearerToken(), otherWorkspace.workspaceId()));
+                () -> fixture.service.workspace(
+                        first.bearerToken(), otherWorkspace.workspaceId()));
+    }
+
+    @Test
+    void rejectsPersistedAuditEventWithInvalidHmac() throws Exception {
+        Fixture fixture = fixture();
+        String owner = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
+                Duration.ofHours(1), "bootstrap-1").bearerToken();
+        HostedTenantState state = fixture.store.values.get(fixture.tenant);
+        HostedAuditEvent original = state.auditEvents().getFirst();
+        String forgedHash = original.hash().equals("0".repeat(64))
+                ? "f".repeat(64)
+                : "0".repeat(64);
+        HostedAuditEvent forged = new HostedAuditEvent(
+                original.sequence(),
+                original.tenantId(),
+                original.occurredAt(),
+                original.principalId(),
+                original.action(),
+                original.resourceType(),
+                original.resourceId(),
+                original.outcome(),
+                original.requestId(),
+                original.keyId(),
+                original.previousHash(),
+                forgedHash);
+        HostedTenantState tampered = new HostedTenantState(
+                state.tenantId(),
+                state.name(),
+                state.keyId(),
+                state.version(),
+                state.createdAt(),
+                state.updatedAt(),
+                state.retentionPolicy(),
+                state.members(),
+                state.workspaces(),
+                state.auditSequence(),
+                state.auditAnchorHash(),
+                List.of(forged));
+        fixture.store.values.put(fixture.tenant, tampered);
+
+        assertThrows(SecurityException.class,
+                () -> fixture.service.listWorkspaces(owner));
     }
 
     @Test
     void preservesLastOwnerAndVerifiesExactSnapshotBindings() throws Exception {
         Fixture fixture = fixture();
-        String owner = fixture.service.bootstrap(fixture.tenant, "Team", "primary", "owner", "Owner",
+        String owner = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
                 Duration.ofHours(1), "bootstrap-1").bearerToken();
         SharedWorkspace workspace = fixture.service.createWorkspace(owner, "create-1", "Shared");
         assertThrows(IllegalArgumentException.class,
@@ -81,32 +131,40 @@ class HostedControlPlaneServiceTest {
         assertEquals(project, binding.projectId());
         assertEquals(project + ":snapshot-exact", fixture.lastVerifiedBinding);
         assertThrows(IllegalArgumentException.class,
-                () -> fixture.service.bindProject(owner, "bind-2", workspace.workspaceId(), project, "snapshot-other"));
+                () -> fixture.service.bindProject(
+                        owner, "bind-2", workspace.workspaceId(), project, "snapshot-other"));
     }
 
     @Test
     void rotatesEncryptionAndSigningKeyAndInvalidatesOldToken() throws Exception {
         Fixture fixture = fixture();
-        String oldToken = fixture.service.bootstrap(fixture.tenant, "Team", "primary", "owner", "Owner",
+        String oldToken = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
                 Duration.ofHours(1), "bootstrap-1").bearerToken();
-        var rotated = fixture.service.rotateKey(oldToken, "rotate-1", "rotated", Duration.ofHours(1));
+        var rotated = fixture.service.rotateKey(
+                oldToken, "rotate-1", "rotated", Duration.ofHours(1));
 
         assertEquals("rotated", rotated.state().keyId());
-        assertThrows(SecurityException.class, () -> fixture.service.listWorkspaces(oldToken));
-        assertEquals(fixture.tenant, fixture.service.tenant(rotated.replacementBearerToken()).tenantId());
+        assertThrows(SecurityException.class,
+                () -> fixture.service.listWorkspaces(oldToken));
+        assertEquals(fixture.tenant,
+                fixture.service.tenant(rotated.replacementBearerToken()).tenantId());
         assertNotEquals(oldToken, rotated.replacementBearerToken());
     }
 
     @Test
     void plansAndAppliesRetentionOnlyWhenExplicitlyRequested() throws Exception {
         Fixture fixture = fixture();
-        String owner = fixture.service.bootstrap(fixture.tenant, "Team", "primary", "owner", "Owner",
+        String owner = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
                 Duration.ofHours(24), "bootstrap-1").bearerToken();
         SharedWorkspace workspace = fixture.service.createWorkspace(owner, "create-1", "Shared");
         fixture.service.archiveWorkspace(owner, "archive-1", workspace.workspaceId());
-        fixture.service.setRetention(owner, "policy-1", new HostedRetentionPolicy(100, 1, 1));
+        fixture.service.setRetention(
+                owner, "policy-1", new HostedRetentionPolicy(100, 1, 1));
         fixture.clock.advance(Duration.ofHours(23));
-        owner = fixture.service.issueToken(owner, "refresh-1", "owner", Duration.ofHours(24));
+        owner = fixture.service.issueToken(
+                owner, "refresh-1", "owner", Duration.ofHours(24));
         fixture.clock.advance(Duration.ofHours(2));
 
         HostedRetentionPlan plan = fixture.service.retentionPlan(owner);
@@ -123,16 +181,21 @@ class HostedControlPlaneServiceTest {
         HostedTenantKeyProvider keys = (tenantId, keyId, purpose) -> {
             try {
                 byte[] value = MessageDigest.getInstance("SHA-256")
-                        .digest((tenantId + ":" + keyId + ":" + purpose).getBytes(StandardCharsets.UTF_8));
-                return new SecretKeySpec(value, purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION
-                        ? "AES" : "HmacSHA256");
+                        .digest((tenantId + ":" + keyId + ":" + purpose)
+                                .getBytes(StandardCharsets.UTF_8));
+                return new SecretKeySpec(
+                        value,
+                        purpose == HostedTenantKeyProvider.Purpose.ENCRYPTION
+                                ? "AES"
+                                : "HmacSHA256");
             } catch (Exception exception) {
                 throw new IllegalStateException(exception);
             }
         };
         MutableClock clock = new MutableClock(NOW);
         Fixture fixture = new Fixture(UUID.randomUUID(), store, keys, clock);
-        HostedBindingVerifier verifier = (project, snapshot) -> fixture.lastVerifiedBinding = project + ":" + snapshot;
+        HostedBindingVerifier verifier = (project, snapshot) ->
+                fixture.lastVerifiedBinding = project + ":" + snapshot;
         fixture.service = new HostedControlPlaneService(
                 store, new HmacHostedIdentityProvider(keys), keys, verifier, clock);
         return fixture;
@@ -146,7 +209,12 @@ class HostedControlPlaneServiceTest {
         private HostedControlPlaneService service;
         private String lastVerifiedBinding;
 
-        private Fixture(UUID tenant, InMemoryStore store, HostedTenantKeyProvider keys, MutableClock clock) {
+        private Fixture(
+                UUID tenant,
+                InMemoryStore store,
+                HostedTenantKeyProvider keys,
+                MutableClock clock
+        ) {
             this.tenant = tenant;
             this.store = store;
             this.keys = keys;
@@ -159,7 +227,9 @@ class HostedControlPlaneServiceTest {
 
         @Override
         public void create(HostedTenantState state) throws IOException {
-            if (values.putIfAbsent(state.tenantId(), state) != null) throw new IOException("exists");
+            if (values.putIfAbsent(state.tenantId(), state) != null) {
+                throw new IOException("exists");
+            }
         }
 
         @Override
@@ -170,7 +240,9 @@ class HostedControlPlaneServiceTest {
         @Override
         public void save(HostedTenantState state, long expectedVersion) throws IOException {
             HostedTenantState current = values.get(state.tenantId());
-            if (current == null || current.version() != expectedVersion) throw new IOException("concurrent modification");
+            if (current == null || current.version() != expectedVersion) {
+                throw new IOException("concurrent modification");
+            }
             values.put(state.tenantId(), state);
         }
     }
@@ -178,9 +250,13 @@ class HostedControlPlaneServiceTest {
     private static final class MutableClock extends Clock {
         private Instant instant;
 
-        private MutableClock(Instant instant) { this.instant = instant; }
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
 
-        private void advance(Duration duration) { instant = instant.plus(duration); }
+        private void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
 
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }
         @Override public Clock withZone(ZoneId zone) { return this; }
