@@ -22,10 +22,11 @@ import java.util.Comparator;
 import java.util.Objects;
 
 /**
- * Native reference worker: provider process boundary plus a copied ephemeral workspace.
+ * Provider worker with copied ephemeral workspace and explicit sandbox backend.
  *
- * <p>The native adapter does not claim OS-level network denial. A DENY request therefore fails
- * closed unless a hardened backend explicitly supplies that guarantee.</p>
+ * <p>The default native backend does not claim OS-level network denial. A DENY request therefore
+ * fails closed unless an independently qualified backend actually executes the provider and exposes
+ * an OS-enforced guarantee.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
@@ -36,7 +37,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
     private final Path workersRoot;
     private final IndexerExecutor delegate;
     private final DistributedArtifactBundleStore bundleStore;
-    private final boolean networkDenyEnforced;
+    private final WorkerSandboxBackend sandboxBackend;
     private final long maxWorkspaceFiles;
     private final long maxWorkspaceBytes;
     private final Clock clock;
@@ -47,8 +48,15 @@ public final class LocalIsolatedIndexWorker implements Worker {
             IndexerExecutor delegate,
             DistributedArtifactBundleStore bundleStore
     ) {
-        this(workerId, minosHome, delegate, bundleStore, false,
-                DEFAULT_MAX_WORKSPACE_FILES, DEFAULT_MAX_WORKSPACE_BYTES, Clock.systemUTC());
+        this(
+                workerId,
+                minosHome,
+                delegate,
+                bundleStore,
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                DEFAULT_MAX_WORKSPACE_FILES,
+                DEFAULT_MAX_WORKSPACE_BYTES,
+                Clock.systemUTC());
     }
 
     LocalIsolatedIndexWorker(
@@ -56,7 +64,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
             Path minosHome,
             IndexerExecutor delegate,
             DistributedArtifactBundleStore bundleStore,
-            boolean networkDenyEnforced,
+            WorkerSandboxBackend sandboxBackend,
             long maxWorkspaceFiles,
             long maxWorkspaceBytes,
             Clock clock
@@ -69,7 +77,12 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 .toAbsolutePath().normalize().resolve("distributed-workers");
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.bundleStore = Objects.requireNonNull(bundleStore, "bundleStore");
-        this.networkDenyEnforced = networkDenyEnforced;
+        this.sandboxBackend = Objects.requireNonNull(sandboxBackend, "sandboxBackend");
+        if (sandboxBackend.id() == null || sandboxBackend.id().isBlank()) {
+            throw new IllegalArgumentException("sandbox backend id must not be blank");
+        }
+        Objects.requireNonNull(sandboxBackend.isolation(), "sandbox backend isolation");
+        Objects.requireNonNull(sandboxBackend.networkGuarantee(), "sandbox backend network guarantee");
         if (maxWorkspaceFiles < 1 || maxWorkspaceBytes < 1) {
             throw new IllegalArgumentException("workspace limits must be positive");
         }
@@ -83,14 +96,18 @@ public final class LocalIsolatedIndexWorker implements Worker {
         return workerId;
     }
 
+    public String sandboxBackendId() {
+        return sandboxBackend.id();
+    }
+
     @Override
     public WorkerIsolation isolation() {
-        return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
+        return sandboxBackend.isolation();
     }
 
     @Override
     public boolean enforcesNetworkDeny() {
-        return networkDenyEnforced;
+        return sandboxBackend.enforcesNetworkDeny();
     }
 
     @Override
@@ -99,9 +116,11 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (!delegate.indexerId().equals(request.execution().selection().indexer().id())) {
             throw new IllegalArgumentException("worker delegate does not match selected provider");
         }
-        if (request.networkPolicy() == WorkerNetworkPolicy.DENY && !networkDenyEnforced) {
+        if (request.networkPolicy() == WorkerNetworkPolicy.DENY
+                && !sandboxBackend.enforcesNetworkDeny()) {
             throw new IllegalStateException(
-                    "native worker cannot prove OS-level network denial; choose a hardened backend or ALLOW explicitly");
+                    "sandbox backend " + sandboxBackend.id()
+                            + " cannot prove OS-level network denial; DENY remains fail-closed");
         }
 
         Files.createDirectories(workersRoot);
@@ -124,17 +143,18 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     workspace,
                     request.execution().selection(),
                     request.execution().mode(),
-                    request.execution().changedFiles()
-            );
+                    request.execution().changedFiles());
             IndexingArtifact artifact = Objects.requireNonNull(
-                    delegate.execute(isolated), "worker delegate artifact");
+                    sandboxBackend.execute(delegate, isolated, request.networkPolicy()),
+                    "worker sandbox artifact");
             if (artifact.language() != isolated.selection().language()
                     || !artifact.indexerId().equals(delegate.indexerId())) {
-                throw new IOException("worker delegate returned artifact provenance for another provider/language");
+                throw new IOException(
+                        "worker sandbox returned artifact provenance for another provider/language");
             }
             Path artifactPath = artifact.finalArtifact().toAbsolutePath().normalize();
             if (!Files.isRegularFile(artifactPath) || Files.size(artifactPath) < 1L) {
-                throw new IOException("worker delegate did not produce a non-empty artifact");
+                throw new IOException("worker sandbox did not produce a non-empty artifact");
             }
             Instant completedAt = clock.instant();
             DistributedArtifactManifest manifest = new DistributedArtifactManifest(
@@ -149,13 +169,12 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     workerId,
                     isolation(),
                     request.networkPolicy(),
-                    networkDenyEnforced,
+                    sandboxBackend.enforcesNetworkDeny(),
                     startedAt,
                     completedAt,
                     DistributedArtifactManifest.ARTIFACT_PATH,
                     Files.size(artifactPath),
-                    DistributedArtifactBundleStore.sha256(artifactPath)
-            );
+                    DistributedArtifactBundleStore.sha256(artifactPath));
             Path bundle = Files.createTempFile(workersRoot, ".bundle-", ".zip");
             try {
                 bundleStore.createBundle(bundle, manifest, artifactPath);
@@ -186,11 +205,14 @@ public final class LocalIsolatedIndexWorker implements Worker {
         try (var paths = Files.walk(source)) {
             for (Path current : paths.sorted().toList()) {
                 Path relative = source.relativize(current);
-                if (relative.getNameCount() > 0 && ".git".equals(relative.getName(0).toString())) {
+                if (relative.getNameCount() > 0
+                        && ".git".equals(relative.getName(0).toString())) {
                     continue;
                 }
                 if (Files.isSymbolicLink(current)) {
-                    throw new IOException("remote worker rejects symbolic links: " + relative.toString().replace('\\', '/'));
+                    throw new IOException(
+                            "remote worker rejects symbolic links: "
+                                    + relative.toString().replace('\\', '/'));
                 }
                 Path target = targetRoot.resolve(relative).normalize();
                 if (!target.startsWith(targetRoot)) {
