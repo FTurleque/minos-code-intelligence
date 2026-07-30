@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -45,14 +46,17 @@ class LocalIsolatedIndexWorkerTest {
         LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
                 "worker-one", temp.resolve("home"), delegate, store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
-                "fixture-provider", "1.2.3", fixture.materialization(), WorkerNetworkPolicy.ALLOW, worker, store);
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
 
         IndexingArtifact artifact = executor.execute(fixture.execution());
 
         assertEquals(Language.JAVA, artifact.language());
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
-        assertNotEquals(fixture.projectRoot().toAbsolutePath().normalize(),
+        assertEquals("native-process-ephemeral-workspace-v1", worker.sandboxBackendId());
+        assertNotEquals(
+                fixture.projectRoot().toAbsolutePath().normalize(),
                 delegateRoot.get().toAbsolutePath().normalize());
         assertFalse(Files.exists(delegateRoot.get()));
         var verified = executor.verifiedArtifact().orElseThrow();
@@ -61,7 +65,8 @@ class LocalIsolatedIndexWorkerTest {
         assertEquals(WorkerNetworkPolicy.ALLOW, verified.manifest().networkPolicy());
         assertFalse(verified.manifest().networkDenyEnforced());
         try (var paths = Files.list(temp.resolve("home/distributed-workers"))) {
-            assertTrue(paths.findAny().isEmpty(), "transport envelopes and worker directories must be removed");
+            assertTrue(paths.findAny().isEmpty(),
+                    "transport envelopes and worker directories must be removed");
         }
     }
 
@@ -70,14 +75,61 @@ class LocalIsolatedIndexWorkerTest {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
         LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
-                "worker-one", temp.resolve("home"), delegate(temp, new AtomicReference<>()), store);
+                "worker-one", temp.resolve("home"),
+                delegate(temp, new AtomicReference<>()), store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
-                "fixture-provider", "1.2.3", fixture.materialization(), WorkerNetworkPolicy.DENY, worker, store);
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.DENY, worker, store);
 
-        IllegalStateException failure = assertThrows(IllegalStateException.class, () ->
-                executor.execute(fixture.execution()));
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(fixture.execution()));
         assertTrue(failure.getMessage().contains("cannot prove OS-level network denial"));
         assertTrue(executor.verifiedArtifact().isEmpty());
+    }
+
+    @Test
+    void denyIsAcceptedOnlyThroughAnOsEnforcedBackend(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixture(temp);
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        IndexerExecutor delegate = delegate(temp, delegateRoot);
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        WorkerSandboxBackend qualifiedBackend = new WorkerSandboxBackend() {
+            @Override public String id() { return "fixture-os-sandbox"; }
+            @Override public WorkerIsolation isolation() {
+                return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
+            }
+            @Override public NetworkGuarantee networkGuarantee() {
+                return NetworkGuarantee.OS_ENFORCED;
+            }
+            @Override
+            public IndexingArtifact execute(
+                    IndexerExecutor selected,
+                    IndexingExecutionRequest request,
+                    WorkerNetworkPolicy networkPolicy
+            ) throws Exception {
+                assertEquals(WorkerNetworkPolicy.DENY, networkPolicy);
+                return selected.execute(request);
+            }
+        };
+        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+                "worker-qualified",
+                temp.resolve("home"),
+                delegate,
+                store,
+                qualifiedBackend,
+                100,
+                1024 * 1024,
+                Clock.systemUTC());
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.DENY, worker, store);
+
+        executor.execute(fixture.execution());
+
+        assertEquals("fixture-os-sandbox", worker.sandboxBackendId());
+        assertTrue(executor.verifiedArtifact().orElseThrow().manifest().networkDenyEnforced());
+        assertFalse(Files.exists(delegateRoot.get()));
     }
 
     @Test
@@ -102,22 +154,28 @@ class LocalIsolatedIndexWorkerTest {
                 Instant.parse("2026-07-29T00:00:01Z"),
                 DistributedArtifactManifest.ARTIFACT_PATH,
                 Files.size(sourceArtifact),
-                DistributedArtifactBundleStore.sha256(sourceArtifact)
-        );
+                DistributedArtifactBundleStore.sha256(sourceArtifact));
         Path bundle = store.createBundle(temp.resolve("wrong.zip"), wrong, sourceArtifact);
         Worker malicious = new Worker() {
             @Override public String workerId() { return "worker-one"; }
-            @Override public WorkerIsolation isolation() { return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE; }
+            @Override public WorkerIsolation isolation() {
+                return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
+            }
             @Override public boolean enforcesNetworkDeny() { return false; }
-            @Override public WorkerResponse execute(com.minos.remote.DistributedIndexing.WorkerRequest request) {
+            @Override
+            public WorkerResponse execute(
+                    com.minos.remote.DistributedIndexing.WorkerRequest request
+            ) {
                 return new WorkerResponse(bundle, wrong);
             }
         };
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
-                "fixture-provider", "1.2.3", fixture.materialization(), WorkerNetworkPolicy.ALLOW, malicious, store);
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, malicious, store);
 
-        IllegalStateException failure = assertThrows(IllegalStateException.class, () ->
-                executor.execute(fixture.execution()));
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(fixture.execution()));
         assertTrue(failure.getMessage().contains("provenance"));
         assertFalse(Files.exists(bundle), "rejected transport envelopes must be removed");
     }
@@ -132,7 +190,8 @@ class LocalIsolatedIndexWorkerTest {
                 assertTrue(Files.isRegularFile(request.projectRoot().resolve("pom.xml")));
                 assertFalse(Files.exists(request.projectRoot().resolve(".git")));
                 Path output = Files.writeString(
-                        temp.resolve("provider-" + UUID.randomUUID() + ".scip"), "valid-scip-fixture");
+                        temp.resolve("provider-" + UUID.randomUUID() + ".scip"),
+                        "valid-scip-fixture");
                 return new IndexingArtifact(Language.JAVA, indexerId(), output);
             }
         };
@@ -148,16 +207,14 @@ class LocalIsolatedIndexWorkerTest {
                 "main",
                 "a".repeat(40),
                 "project",
-                null
-        );
+                null);
         RemoteMaterialization materialization = new RemoteMaterialization(
                 request,
                 repositoryRoot,
                 projectRoot,
                 "c".repeat(64),
                 false,
-                Instant.parse("2026-07-29T00:00:00Z")
-        );
+                Instant.parse("2026-07-29T00:00:00Z"));
         IndexerDescriptor descriptor = new IndexerDescriptor(
                 "fixture-provider",
                 "1.2.3",
@@ -167,16 +224,14 @@ class LocalIsolatedIndexWorkerTest {
                 Set.of(IndexerCapability.SYMBOLS),
                 IndexerQualification.QUALIFIED,
                 1,
-                List.of()
-        );
+                List.of());
         IndexingExecutionRequest execution = new IndexingExecutionRequest(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 projectRoot,
                 new IndexerSelection(Language.JAVA, descriptor),
                 IndexingMode.FULL,
-                List.of()
-        );
+                List.of());
         return new Fixture(request, repositoryRoot, projectRoot, materialization, execution);
     }
 
