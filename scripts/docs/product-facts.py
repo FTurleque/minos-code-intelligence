@@ -54,30 +54,54 @@ def enum_values(source: str, enum_name: str) -> list[str]:
     return values
 
 
-def provider_facts(source: str) -> list[tuple[str, str, list[str]]]:
-    facts: list[tuple[str, str, list[str]]] = []
-    for method in ("scipJava", "scipTypeScript", "scipPython"):
+def qualified_descriptor_methods(source: str) -> list[str]:
+    """Derive the current provider order from the authoritative qualified catalog methods."""
+    methods: list[str] = []
+    for catalog in ("qualifiedM17Providers", "qualifiedM24Providers"):
+        body = require(
+            rf"public static List<IndexerProvider> {catalog}\(\) \{{(.*?)\n    \}}",
+            source,
+            catalog,
+            re.S,
+        )
+        for method in re.findall(r"provider\((\w+)\(\)", body):
+            if method not in methods:
+                methods.append(method)
+    if len(methods) != 7:
+        raise RuntimeError(f"qualified M24 catalog must expose 7 providers, derived={methods}")
+    return methods
+
+
+def resolve_string(source: str, raw_value: str, label: str) -> str:
+    value = raw_value.strip()
+    if value.startswith('"') and value.endswith('"'):
+        return value.strip('"')
+    return require(
+        rf'public static final String {re.escape(value)}\s*=\s*"([^"]+)"',
+        source,
+        label,
+    )
+
+
+def provider_facts(source: str) -> list[tuple[str, str, str, list[str], list[str]]]:
+    facts: list[tuple[str, str, str, list[str], list[str]]] = []
+    for method in qualified_descriptor_methods(source):
         block = require(
-            rf'public static IndexerDescriptor {method}\(\) \{{(.*?)\n    \}}',
+            rf"public static IndexerDescriptor {method}\(\) \{{(.*?)\n    \}}",
             source,
             method,
             re.S,
         )
-        descriptor = re.search(r'new IndexerDescriptor\(\s*"([^"]+)",\s*([^,]+),', block, re.S)
+        descriptor = re.search(r"new IndexerDescriptor\(\s*([^,]+),\s*([^,]+),", block, re.S)
         if not descriptor:
             raise RuntimeError(f"cannot derive provider descriptor for {method}")
-        provider_id = descriptor.group(1)
-        raw_version = descriptor.group(2).strip()
-        if raw_version.startswith('"') and raw_version.endswith('"'):
-            provider_version = raw_version.strip('"')
-        else:
-            provider_version = require(
-                rf'public static final String {re.escape(raw_version)}\s*=\s*"([^"]+)"',
-                source,
-                f"provider version constant {raw_version}",
-            )
+        provider_id = resolve_string(source, descriptor.group(1), f"provider id for {method}")
+        provider_version = resolve_string(source, descriptor.group(2), f"provider version for {method}")
+        qualification = require(
+            r"IndexerQualification\.([A-Z0-9_]+)", block, f"provider qualification for {method}")
+        languages = sorted(set(re.findall(r"Language\.([A-Z0-9_]+)", block)))
         capabilities = sorted(set(re.findall(r"IndexerCapability\.([A-Z0-9_]+)", block)))
-        facts.append((provider_id, provider_version, capabilities))
+        facts.append((provider_id, provider_version, qualification, languages, capabilities))
     return facts
 
 
@@ -114,8 +138,12 @@ def render() -> str:
     lines.extend(["", "## Commandes CLI", ""])
     lines.extend(f"- `{command}`" for command in commands)
     lines.extend(["", "## Providers qualifiés", ""])
-    for provider_id, provider_version, capabilities in provider_values:
+    for provider_id, provider_version, qualification, languages, capabilities in provider_values:
         lines.append(f"### `{provider_id}` `{provider_version}`")
+        lines.append("")
+        lines.append(f"Disposition : `{qualification}`")
+        lines.append("")
+        lines.append("Langages : " + ", ".join(f"`{value}`" for value in languages))
         lines.append("")
         lines.append("Capabilities : " + ", ".join(f"`{value}`" for value in capabilities))
         lines.append("")
