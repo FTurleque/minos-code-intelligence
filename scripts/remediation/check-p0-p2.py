@@ -89,7 +89,9 @@ def main() -> int:
         require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
                 'graph.capabilities().contains("LOCAL_DATA_FLOW")')
         require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
-                '"minos-java-source-v1".equals(edge.origin().providerId())')
+                '"minos-java-source-v1".equals(edge.providerId())')
+        forbid("AdvancedCodeIntelligenceApiContractTest.java", api_test,
+               "edge.origin().providerId()")
 
         require("product-facts.py", product_facts, "qualified_descriptor_methods")
         require("product-facts.py", product_facts,
