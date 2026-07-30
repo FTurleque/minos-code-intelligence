@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -32,9 +33,7 @@ public final class ProgramGraphService {
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
 
     public ProgramGraphService(LocalProjectRegistry registry, FileSymbolSnapshotStore snapshotStore) {
-        this(registry, snapshotStore, List.of(
-                new RelationshipProgramGraphProvider(),
-                new JavaSourceProgramGraphProvider()));
+        this(registry, snapshotStore, productionProviders());
     }
 
     public ProgramGraphService(
@@ -53,18 +52,30 @@ public final class ProgramGraphService {
     ) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
-        List<ProgramGraphProvider> configured = new ArrayList<>(Objects.requireNonNull(providers, "providers"));
-        if (configured.isEmpty()) {
-            throw new IllegalArgumentException("at least one program graph provider is required");
-        }
-        if (configured.stream().noneMatch(provider -> FileProgramGraphProvider.PROVIDER_ID.equals(provider.id()))) {
-            configured.add(new FileProgramGraphProvider());
-        }
-        this.providers = List.copyOf(configured);
+        this.providers = normalizeProviders(providers);
         if (maxCacheEntries < 1) {
             throw new IllegalArgumentException("maxCacheEntries must be greater than zero");
         }
         this.maxCacheEntries = maxCacheEntries;
+    }
+
+    /**
+     * Authoritative local production composition.
+     *
+     * <p>The relationship provider establishes the structured baseline. Whenever that baseline is
+     * selected, the qualified M22 Java provider is mandatory as well; callers must not accidentally
+     * downgrade the production composition to relationship-only analysis. File sidecars are added by
+     * {@link #normalizeProviders(List)}.</p>
+     */
+    public static List<ProgramGraphProvider> productionProviders() {
+        return List.of(new RelationshipProgramGraphProvider(), new JavaSourceProgramGraphProvider());
+    }
+
+    /** Provider identifiers exposed for composition-root and surface contract tests. */
+    public Set<String> providerIds() {
+        return providers.stream()
+                .map(ProgramGraphProvider::id)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     public ProgramGraph getGraph(String projectIdentifier) throws IOException {
@@ -139,6 +150,29 @@ public final class ProgramGraphService {
             keys.add(provider.id() + "=" + key);
         }
         return keys.stream().sorted().reduce((left, right) -> left + "," + right).orElse("");
+    }
+
+    private static List<ProgramGraphProvider> normalizeProviders(List<ProgramGraphProvider> providers) {
+        List<ProgramGraphProvider> requested = new ArrayList<>(Objects.requireNonNull(providers, "providers"));
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("at least one program graph provider is required");
+        }
+
+        Map<String, ProgramGraphProvider> configured = new LinkedHashMap<>();
+        for (ProgramGraphProvider provider : requested) {
+            ProgramGraphProvider nonNull = Objects.requireNonNull(provider, "providers must not contain null");
+            ProgramGraphProvider previous = configured.putIfAbsent(nonNull.id(), nonNull);
+            if (previous != null && previous.getClass() != nonNull.getClass()) {
+                throw new IllegalArgumentException("conflicting program graph providers share id: " + nonNull.id());
+            }
+        }
+
+        if (configured.containsKey(RelationshipProgramGraphProvider.PROVIDER_ID)
+                && !configured.containsKey(JavaSourceProgramGraphProvider.PROVIDER_ID)) {
+            configured.put(JavaSourceProgramGraphProvider.PROVIDER_ID, new JavaSourceProgramGraphProvider());
+        }
+        configured.putIfAbsent(FileProgramGraphProvider.PROVIDER_ID, new FileProgramGraphProvider());
+        return List.copyOf(configured.values());
     }
 
     private static void requireBound(int value, int minimum, int maximum, String name) {
