@@ -77,7 +77,7 @@ class AdvancedCodeIntelligenceApiContractTest {
         assertTrue(graph.capabilities().contains("CPG"));
         assertTrue(graph.edges().stream().anyMatch(edge -> "CALL".equals(edge.kind())));
         assertTrue(graph.edges().stream().anyMatch(edge ->
-                "minos-java-source-v1".equals(edge.origin().providerId())));
+                "minos-java-source-v1".equals(edge.providerId())));
         assertThrows(UnsupportedOperationException.class, () -> graph.limitations().add("mutate"));
     }
 
