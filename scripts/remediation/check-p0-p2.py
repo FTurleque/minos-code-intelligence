@@ -50,6 +50,9 @@ def main() -> int:
         application_test = read(
             "minos-application/src/test/java/com/minos/application/MinosApplicationTest.java"
         )
+        api_test = read(
+            "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
+        )
         product_facts = read("scripts/docs/product-facts.py")
         generated_facts = read("docs/generated/product-facts.md")
         architecture = read("scripts/architecture/check-module-boundaries.py")
@@ -79,6 +82,14 @@ def main() -> int:
         require("MinosApplicationTest.java", application_test, "MinosApplication.open")
         require("MinosApplicationTest.java", application_test,
                 "ProgramGraphCapability.CONTROL_FLOW")
+        require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
+                "new LocalAdvancedCodeIntelligenceApi(application)")
+        require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
+                'graph.capabilities().contains("CONTROL_FLOW")')
+        require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
+                'graph.capabilities().contains("LOCAL_DATA_FLOW")')
+        require("AdvancedCodeIntelligenceApiContractTest.java", api_test,
+                '"minos-java-source-v1".equals(edge.origin().providerId())')
 
         require("product-facts.py", product_facts, "qualified_descriptor_methods")
         require("product-facts.py", product_facts,
