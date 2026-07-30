@@ -11,16 +11,21 @@ try {
     $Head = (git rev-parse HEAD).Trim()
     if ([string]::IsNullOrWhiteSpace($Head)) { throw 'cannot resolve HEAD' }
 
-    if (-not (git diff --quiet -- .)) {
-        throw 'worktree must be clean before P0-P2 qualification'
+    $StatusBefore = @(git status --porcelain=v1 --untracked-files=all)
+    if ($StatusBefore.Count -ne 0) {
+        throw "worktree must be clean before P0-P2 qualification: $($StatusBefore -join '; ')"
     }
     git diff --exit-code develop...HEAD -- .github/workflows
+    if ($LASTEXITCODE -ne 0) { throw 'GitHub workflow changes are forbidden in this July-safe lot' }
 
     python scripts/remediation/check-p0-p2.py
     if ($LASTEXITCODE -ne 0) { throw 'P0-P2 structural gate failed' }
 
     python scripts/docs/product-facts.py --check
     if ($LASTEXITCODE -ne 0) { throw 'product facts gate failed' }
+
+    python scripts/docs/check-current-docs.py
+    if ($LASTEXITCODE -ne 0) { throw 'current documentation gate failed' }
 
     python scripts/architecture/check-module-boundaries.py
     if ($LASTEXITCODE -ne 0) { throw 'architecture dependency gate failed' }
@@ -36,8 +41,9 @@ try {
     python scripts/quality/check-jacoco.py
     if ($LASTEXITCODE -ne 0) { throw 'JaCoCo gate failed' }
 
-    if (-not (git diff --quiet -- .)) {
-        throw 'qualification modified the worktree'
+    $StatusAfter = @(git status --porcelain=v1 --untracked-files=all)
+    if ($StatusAfter.Count -ne 0) {
+        throw "qualification modified the worktree: $($StatusAfter -join '; ')"
     }
     $Validated = (git rev-parse HEAD).Trim()
     if ($Validated -ne $Head) { throw 'HEAD changed during qualification' }
