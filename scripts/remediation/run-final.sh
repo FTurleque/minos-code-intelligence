@@ -5,11 +5,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 HEAD_SHA="$(git rev-parse HEAD)"
-git diff --quiet -- . || { echo 'worktree must be clean before P0-P2 qualification' >&2; exit 1; }
+STATUS_BEFORE="$(git status --porcelain=v1 --untracked-files=all)"
+[[ -z "$STATUS_BEFORE" ]] || { echo "worktree must be clean before P0-P2 qualification: $STATUS_BEFORE" >&2; exit 1; }
 git diff --exit-code develop...HEAD -- .github/workflows
 
 python3 scripts/remediation/check-p0-p2.py
 python3 scripts/docs/product-facts.py --check
+python3 scripts/docs/check-current-docs.py
 python3 scripts/architecture/check-module-boundaries.py
 
 if [[ "${1:-}" == "--targeted" ]]; then
@@ -19,7 +21,8 @@ else
 fi
 
 python3 scripts/quality/check-jacoco.py
-git diff --quiet -- . || { echo 'qualification modified the worktree' >&2; exit 1; }
+STATUS_AFTER="$(git status --porcelain=v1 --untracked-files=all)"
+[[ -z "$STATUS_AFTER" ]] || { echo "qualification modified the worktree: $STATUS_AFTER" >&2; exit 1; }
 [[ "$(git rev-parse HEAD)" == "$HEAD_SHA" ]] || { echo 'HEAD changed during qualification' >&2; exit 1; }
 
 echo 'P0-P2 LINUX AUDIT REMEDIATION VALIDATION SUCCESS'
