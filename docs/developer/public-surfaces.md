@@ -147,6 +147,8 @@ hybrid-context
 
 Le serveur IDE délègue à `ProgramGraphService`, `AdvancedImpactService`, `SecurityAnalysisService`, `SemanticIndexService`, `SemanticSearchService`, `HybridSearchService` et `HybridContextBuilder`. Le plugin ne produit aucune arête lui-même.
 
+La compatibilité reste qualifiée avec **Plugin Verifier** sur les IDE cibles de la branche 261 ; aucun support d’une autre branche IntelliJ n’est revendiqué sans preuve dédiée.
+
 Invariants UX :
 
 - absence de security path ≠ preuve de sûreté ;
