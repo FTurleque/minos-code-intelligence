@@ -33,6 +33,14 @@ public interface WorkerSandboxBackend {
         return networkGuarantee() == NetworkGuarantee.OS_ENFORCED;
     }
 
+    default WorkerSandboxQualification qualification() {
+        if (networkGuarantee() == NetworkGuarantee.NONE) {
+            return WorkerSandboxQualification.nativeProcessOnly(id(), isolation());
+        }
+        throw new IllegalStateException(
+                "OS-enforced worker backend must provide an independently qualified platform disposition");
+    }
+
     static WorkerSandboxBackend nativeEphemeralWorkspace() {
         return NativeEphemeralWorkspaceBackend.INSTANCE;
     }
