@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static M28 convergence, vertical-surface and decomposition gate."""
+"""Static M28 convergence, vertical-surface, boundary and decomposition gate."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS = ROOT / "minos-application/src/main/java/com/minos/program/analysis"
+HOSTED = ROOT / "minos-application/src/main/java/com/minos/hosted"
+RUNTIME = ROOT / "minos-runtime-local/src/main/java/com/minos/runtime"
 
 
 def read(relative: str) -> str:
@@ -69,11 +71,29 @@ def main() -> int:
         windows_runner = read("scripts/m28/run-program-graph-performance.ps1")
         linux_runner = read("scripts/m28/run-program-graph-performance.sh")
         jacoco = read("scripts/quality/check-jacoco.py")
+
         sandbox = read(
             "minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java"
         )
+        sandbox_qualification = read(
+            "minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxQualification.java"
+        )
+        sandbox_test = read(
+            "minos-runtime-local/src/test/java/com/minos/runtime/WorkerSandboxQualificationTest.java"
+        )
         worker = read(
             "minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java"
+        )
+        remote_doc = read("docs/user/remote-indexing.md")
+
+        hosted_facade = read(
+            "minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java"
+        )
+        hosted_boundary = read(
+            "minos-application/src/main/java/com/minos/hosted/HostedProductionBoundary.java"
+        )
+        hosted_test = read(
+            "minos-application/src/test/java/com/minos/hosted/HostedProductionBoundaryTest.java"
         )
 
         if len(facade.splitlines()) > 80:
@@ -141,12 +161,60 @@ def main() -> int:
         require("WorkerSandboxBackend.java", sandbox, "NetworkGuarantee.OS_ENFORCED")
         require("WorkerSandboxBackend.java", sandbox,
                 "native worker cannot prove OS-level network denial")
+        require("WorkerSandboxQualification.java", sandbox_qualification,
+                "FAIL_CLOSED_NOT_ENFORCED")
+        require("WorkerSandboxQualification.java", sandbox_qualification,
+                "UNTRUSTED_CODE_UNSUPPORTED")
+        require("WorkerSandboxQualification.java", sandbox_qualification,
+                "BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND")
+        require("WorkerSandboxQualification.java", sandbox_qualification,
+                "BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND")
+        require("WorkerSandboxQualification.java", sandbox_qualification,
+                "WORKER_SANDBOX_CLAIM_PROHIBITED")
+        require("WorkerSandboxQualificationTest.java", sandbox_test,
+                "nativeBackendIsExplicitlyProcessOnlyAndProhibitsSandboxClaim")
+        require("WorkerSandboxQualificationTest.java", sandbox_test,
+                "qualificationCannotClaimDenyOrUntrustedCodeWithoutOsEvidence")
         require("LocalIsolatedIndexWorker.java", worker, "DENY remains fail-closed")
+        require("remote-indexing.md", remote_doc, "Il refuse `deny`")
+        require("remote-indexing.md", remote_doc, "ne prouvent pas un blocage réseau au niveau OS")
 
-        print("M28 CONVERGENCE, VERTICAL SURFACE AND DECOMPOSITION CONSISTENCY SUCCESS")
+        if len(hosted_facade.splitlines()) > 260:
+            raise RuntimeError("HostedControlPlaneService must remain a <=260-line facade")
+        for service in (
+            "HostedTenantService", "HostedMembershipService", "HostedWorkspaceService",
+            "HostedRetentionService", "HostedTokenService", "HostedAuthorizationService",
+            "HostedAuditChain", "HostedTenantMutationWriter",
+        ):
+            require("HostedControlPlaneService.java", hosted_facade, service)
+        for port in (
+            "HostedIdentityProvider.java", "HostedTenantKeyProvider.java", "HostedAuditSink.java",
+            "HostedTransportSecurityPort.java", "HostedAvailabilityPort.java",
+        ):
+            if not (HOSTED / port).is_file():
+                raise RuntimeError(f"missing hosted production port: {port}")
+        require("HostedProductionBoundary.java", hosted_boundary, "EMBEDDED_LOCAL_FIRST")
+        require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_NETWORK_TRANSPORT_NOT_PROVIDED")
+        require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_BACKUP_AVAILABILITY_NOT_PROVIDED")
+        require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_SAAS_OPERATION_NOT_CLAIMED")
+        require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_PROCESS_ISOLATION_NOT_QUALIFIED")
+        require("HostedProductionBoundaryTest.java", hosted_test,
+                "embeddedBoundaryDoesNotClaimTransportAvailabilitySaasOrProcessIsolation")
+        require("HostedProductionBoundaryTest.java", hosted_test,
+                "externalAuditSinkReceivesPersistedAllowedAndDeniedEvents")
+        require("HostedProductionBoundaryTest.java", hosted_test,
+                "facadeStaysThinAndCohesiveServicesAreRealSourceFiles")
+
+        if not (RUNTIME / "WorkerSandboxQualification.java").is_file():
+            raise RuntimeError("missing worker sandbox qualification model")
+
+        print("M28 CONVERGENCE, VERTICAL SURFACE, BOUNDARY AND DECOMPOSITION CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:
-        print(f"M28 CONVERGENCE, VERTICAL SURFACE AND DECOMPOSITION CONSISTENCY FAILED: {exception}", file=sys.stderr)
+        print(
+            f"M28 CONVERGENCE, VERTICAL SURFACE, BOUNDARY AND DECOMPOSITION CONSISTENCY FAILED: {exception}",
+            file=sys.stderr,
+        )
         return 1
 
 
