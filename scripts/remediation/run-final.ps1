@@ -28,8 +28,8 @@ try {
     python scripts/docs/product-facts.py --check
     if ($LASTEXITCODE -ne 0) { throw 'product facts gate failed' }
 
-    python scripts/docs/check-current-docs.py
-    if ($LASTEXITCODE -ne 0) { throw 'current documentation gate failed' }
+    python scripts/m28/check-current-docs.py
+    if ($LASTEXITCODE -ne 0) { throw 'M28 current documentation gate failed' }
 
     python scripts/architecture/check-module-boundaries.py
     if ($LASTEXITCODE -ne 0) { throw 'architecture dependency gate failed' }
