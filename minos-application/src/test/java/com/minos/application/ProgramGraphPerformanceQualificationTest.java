@@ -31,6 +31,8 @@ class ProgramGraphPerformanceQualificationTest {
 
     private static final String FILE_COUNT_PROPERTY = "minos.m28.programGraph.files";
     private static final String RESULT_PROPERTY = "minos.m28.programGraph.result";
+    private static final int QUALIFICATION_MAX_NODES = 100_000;
+    private static final int QUALIFICATION_MAX_EDGES = 500_000;
 
     @Test
     void recordsColdWarmCacheHitAndModifiedSourceDisposition(@TempDir Path root) throws Exception {
@@ -56,11 +58,13 @@ class ProgramGraphPerformanceQualificationTest {
         application.fingerprintStore().promote(project.id(), snapshotId);
 
         long coldStarted = System.nanoTime();
-        ProgramGraph cold = application.programGraphService().getGraph(project.id().toString());
+        ProgramGraph cold = application.programGraphService().getGraph(
+                project.id().toString(), QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);
         long coldNanos = System.nanoTime() - coldStarted;
 
         long warmStarted = System.nanoTime();
-        ProgramGraph warm = application.programGraphService().getGraph(project.id().toString());
+        ProgramGraph warm = application.programGraphService().getGraph(
+                project.id().toString(), QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);
         long warmNanos = System.nanoTime() - warmStarted;
 
         var stats = application.programGraphService().cacheStats();
@@ -80,7 +84,8 @@ class ProgramGraphPerformanceQualificationTest {
                 StandardCharsets.UTF_8);
         MinosApplication reopened = MinosApplication.open(home);
         long modifiedStarted = System.nanoTime();
-        ProgramGraph modified = reopened.programGraphService().getGraph(project.id().toString());
+        ProgramGraph modified = reopened.programGraphService().getGraph(
+                project.id().toString(), QUALIFICATION_MAX_NODES, QUALIFICATION_MAX_EDGES);
         long modifiedNanos = System.nanoTime() - modifiedStarted;
         assertFalse(modified.supports(ProgramGraphCapability.CONTROL_FLOW));
         assertTrue(modified.limitations().contains(
