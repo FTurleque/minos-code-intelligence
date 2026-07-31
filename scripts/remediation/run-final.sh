@@ -19,7 +19,7 @@ git diff --exit-code develop...HEAD -- .github/workflows
 python3 scripts/remediation/check-p0-p2.py
 python3 scripts/m28/check-m28.py
 python3 scripts/docs/product-facts.py --check
-python3 scripts/docs/check-current-docs.py
+python3 scripts/m28/check-current-docs.py
 python3 scripts/architecture/check-module-boundaries.py
 
 if [[ "$MODE" == "--targeted" ]]; then
