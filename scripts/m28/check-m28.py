@@ -54,8 +54,11 @@ def main() -> int:
         application_test = read(
             "minos-application/src/test/java/com/minos/application/MinosApplicationTest.java"
         )
-        api_test = read(
+        api_contract_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
+        )
+        api_vertical_test = read(
+            "minos-api/src/test/java/com/minos/api/M28VerticalAdvancedApiTest.java"
         )
         cli_test = read(
             "minos-cli/src/test/java/com/minos/cli/M28VerticalProgramGraphCliTest.java"
@@ -105,24 +108,22 @@ def main() -> int:
 
         require("MinosApplicationTest.java", application_test,
                 "JavaSourceProgramGraphProvider.PROVIDER_ID")
+        require("AdvancedCodeIntelligenceApiContractTest.java", api_contract_test,
+                "new LocalAdvancedCodeIntelligenceApi(application)")
         for name, text in {
             "MinosApplicationTest.java": application_test,
-            "AdvancedCodeIntelligenceApiContractTest.java": api_test,
+            "M28VerticalAdvancedApiTest.java": api_vertical_test,
             "M28VerticalProgramGraphCliTest.java": cli_test,
             "M28VerticalProgramGraphMcpTest.java": mcp_test,
         }.items():
             require(name, text, "CONTROL_FLOW")
             require(name, text, "LOCAL_DATA_FLOW")
         for name, text in {
-            "AdvancedCodeIntelligenceApiContractTest.java": api_test,
+            "M28VerticalAdvancedApiTest.java": api_vertical_test,
             "M28VerticalProgramGraphCliTest.java": cli_test,
             "M28VerticalProgramGraphMcpTest.java": mcp_test,
         }.items():
             require(name, text, "minos-java-source-v1")
-        for name, text in {
-            "M28VerticalProgramGraphCliTest.java": cli_test,
-            "M28VerticalProgramGraphMcpTest.java": mcp_test,
-        }.items():
             require(name, text, "INTERPROCEDURAL_DATA_FLOW")
             require(name, text, "SECURITY_TAINT")
             require(name, text, "TAINT_FLOW")
