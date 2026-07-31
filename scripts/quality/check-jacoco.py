@@ -144,6 +144,7 @@ SCOPES = {
             "com/minos/runtime/DistributedIndexerExecutor",
             "com/minos/runtime/LocalIsolatedIndexWorker",
             "com/minos/runtime/WorkerSandboxBackend",
+            "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/cli/LocalRemoteIndexOperations",
             "com/minos/cli/RemoteIndexCommand",
         ),
