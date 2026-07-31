@@ -103,16 +103,22 @@ def main() -> int:
         require("run-program-graph-performance.sh", linux_runner,
                 "M28 PROGRAM GRAPH PERFORMANCE QUALIFICATION SUCCESS")
 
-        vertical_tests = {
+        require("MinosApplicationTest.java", application_test,
+                "JavaSourceProgramGraphProvider.PROVIDER_ID")
+        for name, text in {
             "MinosApplicationTest.java": application_test,
             "AdvancedCodeIntelligenceApiContractTest.java": api_test,
             "M28VerticalProgramGraphCliTest.java": cli_test,
             "M28VerticalProgramGraphMcpTest.java": mcp_test,
-        }
-        for name, text in vertical_tests.items():
-            require(name, text, "minos-java-source-v1")
+        }.items():
             require(name, text, "CONTROL_FLOW")
             require(name, text, "LOCAL_DATA_FLOW")
+        for name, text in {
+            "AdvancedCodeIntelligenceApiContractTest.java": api_test,
+            "M28VerticalProgramGraphCliTest.java": cli_test,
+            "M28VerticalProgramGraphMcpTest.java": mcp_test,
+        }.items():
+            require(name, text, "minos-java-source-v1")
         for name, text in {
             "M28VerticalProgramGraphCliTest.java": cli_test,
             "M28VerticalProgramGraphMcpTest.java": mcp_test,
