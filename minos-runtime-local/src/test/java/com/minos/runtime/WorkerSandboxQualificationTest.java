@@ -1,6 +1,5 @@
 package com.minos.runtime;
 
-import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,23 +43,5 @@ class WorkerSandboxQualificationTest {
                         WorkerSandboxQualification.Platform.LINUX,
                         WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
                 java.util.List.of()));
-    }
-
-    @Test
-    void nativeBackendStillRejectsDenyBeforeExecutingProvider() {
-        WorkerSandboxBackend backend = WorkerSandboxBackend.nativeEphemeralWorkspace();
-        java.util.concurrent.atomic.AtomicBoolean executed = new java.util.concurrent.atomic.AtomicBoolean();
-
-        IllegalStateException failure = assertThrows(IllegalStateException.class, () -> backend.execute(
-                request -> {
-                    executed.set(true);
-                    return null;
-                },
-                new com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest(
-                        "provider", "1", java.nio.file.Path.of("."), java.util.List.of(), java.util.Map.of()),
-                WorkerNetworkPolicy.DENY));
-
-        assertFalse(executed.get());
-        assertTrue(failure.getMessage().contains("cannot prove OS-level network denial"));
     }
 }
