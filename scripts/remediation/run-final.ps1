@@ -45,7 +45,8 @@ try {
     python scripts/quality/check-jacoco.py
     if ($LASTEXITCODE -ne 0) { throw 'JaCoCo gate failed' }
 
-    & scripts/m28/run-program-graph-performance.ps1 -FileCount $ProgramGraphFiles
+    $ProgramGraphRunner = Join-Path $Root 'scripts\m28\run-program-graph-performance.ps1'
+    & $ProgramGraphRunner -FileCount $ProgramGraphFiles
     if ($LASTEXITCODE -ne 0) { throw 'M28 ProgramGraph performance qualification failed' }
 
     $StatusAfter = @(git status --porcelain=v1 --untracked-files=all)
