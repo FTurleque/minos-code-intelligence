@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static M28 convergence and decomposition gate."""
+"""Static M28 convergence, vertical-surface and decomposition gate."""
 
 from __future__ import annotations
 
@@ -51,6 +51,18 @@ def main() -> int:
             "minos-application/src/test/java/com/minos/application/"
             "ProgramGraphPerformanceQualificationTest.java"
         )
+        application_test = read(
+            "minos-application/src/test/java/com/minos/application/MinosApplicationTest.java"
+        )
+        api_test = read(
+            "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
+        )
+        cli_test = read(
+            "minos-cli/src/test/java/com/minos/cli/M28VerticalProgramGraphCliTest.java"
+        )
+        mcp_test = read(
+            "minos-mcp/src/test/java/com/minos/mcp/M28VerticalProgramGraphMcpTest.java"
+        )
         windows_runner = read("scripts/m28/run-program-graph-performance.ps1")
         linux_runner = read("scripts/m28/run-program-graph-performance.sh")
         jacoco = read("scripts/quality/check-jacoco.py")
@@ -91,6 +103,25 @@ def main() -> int:
         require("run-program-graph-performance.sh", linux_runner,
                 "M28 PROGRAM GRAPH PERFORMANCE QUALIFICATION SUCCESS")
 
+        vertical_tests = {
+            "MinosApplicationTest.java": application_test,
+            "AdvancedCodeIntelligenceApiContractTest.java": api_test,
+            "M28VerticalProgramGraphCliTest.java": cli_test,
+            "M28VerticalProgramGraphMcpTest.java": mcp_test,
+        }
+        for name, text in vertical_tests.items():
+            require(name, text, "minos-java-source-v1")
+            require(name, text, "CONTROL_FLOW")
+            require(name, text, "LOCAL_DATA_FLOW")
+        for name, text in {
+            "M28VerticalProgramGraphCliTest.java": cli_test,
+            "M28VerticalProgramGraphMcpTest.java": mcp_test,
+        }.items():
+            require(name, text, "INTERPROCEDURAL_DATA_FLOW")
+            require(name, text, "SECURITY_TAINT")
+            require(name, text, "TAINT_FLOW")
+            require(name, text, "DERIVED")
+
         for component in (
             "JavaSourceWorkspace", "JavaAstParser", "JavaDefUseAnalyzer",
             "JavaControlFlowAnalyzer", "JavaInterproceduralFlowResolver",
@@ -105,10 +136,10 @@ def main() -> int:
                 "native worker cannot prove OS-level network denial")
         require("LocalIsolatedIndexWorker.java", worker, "DENY remains fail-closed")
 
-        print("M28 CONVERGENCE AND DECOMPOSITION CONSISTENCY SUCCESS")
+        print("M28 CONVERGENCE, VERTICAL SURFACE AND DECOMPOSITION CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:
-        print(f"M28 CONVERGENCE AND DECOMPOSITION CONSISTENCY FAILED: {exception}", file=sys.stderr)
+        print(f"M28 CONVERGENCE, VERTICAL SURFACE AND DECOMPOSITION CONSISTENCY FAILED: {exception}", file=sys.stderr)
         return 1
 
 
