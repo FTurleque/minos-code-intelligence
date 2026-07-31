@@ -42,13 +42,20 @@ def main() -> int:
                 original_require_text(relative, text, "0/9 qualifié")
                 legacy.forbid_text(relative, text, "Aucun M28 n’est défini")
                 return
+            if relative == "docs/STATUS.md" and expected == (
+                    "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381"):
+                for token in ("rust-analyzer", "scip 2026-07-27", "v0.3.2989", "commit 12c3381"):
+                    original_require_text(relative, text, token)
+                return
             if relative == "docs/ROADMAP.md" and expected == "Aucun M28 n’est défini":
                 original_require_text(relative, text, "M28 — Production Convergence & Architectural Hardening")
                 original_require_text(relative, text, "issue #93")
                 original_require_text(relative, text, "roadmap/M28_EXECUTION.md")
                 return
             if relative == "JavaSourceProgramGraphProvider.java" and expected == "OriginType.DERIVED_BY_MINOS":
-                context = (ROOT / "minos-application/src/main/java/com/minos/program/analysis/JavaProgramGraphContext.java")
+                context = ROOT / (
+                    "minos-application/src/main/java/com/minos/program/analysis/"
+                    "JavaProgramGraphContext.java")
                 original_require_text(
                     "JavaProgramGraphContext.java",
                     context.read_text(encoding="utf-8"),
