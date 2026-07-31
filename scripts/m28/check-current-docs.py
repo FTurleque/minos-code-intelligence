@@ -7,6 +7,10 @@ import importlib.util
 import sys
 from pathlib import Path
 
+# This gate imports the legacy checker dynamically. Qualification must not dirty the worktree
+# with scripts/docs/__pycache__ artifacts, so bytecode generation is disabled for this process.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 LEGACY = ROOT / "scripts/docs/check-current-docs.py"
 
