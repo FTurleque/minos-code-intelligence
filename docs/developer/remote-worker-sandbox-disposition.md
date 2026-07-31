@@ -17,7 +17,9 @@ Le backend courant `native-process-ephemeral-workspace-v1` fournit uniquement le
 | Politique `ALLOW` | supportée explicitement |
 | Politique `DENY` | `FAIL_CLOSED_NOT_ENFORCED` |
 | Code non fiable | `UNTRUSTED_CODE_UNSUPPORTED` |
-| Claim « sandbox » | interdit |
+| Claim « sandbox » | `WORKER_SANDBOX_CLAIM_PROHIBITED` |
+
+`WORKER_SANDBOX_CLAIM_PROHIBITED` interdit explicitement de présenter le backend natif actuel comme une sandbox OS qualifiée.
 
 La politique `DENY` est rejetée avant l’exécution du provider. MINOS ne transforme pas l’absence de mécanisme OS en succès logique.
 
