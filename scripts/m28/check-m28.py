@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS = ROOT / "minos-application/src/main/java/com/minos/program/analysis"
 HOSTED = ROOT / "minos-application/src/main/java/com/minos/hosted"
+ENGINE_HOSTED = ROOT / "minos-engine/src/main/java/com/minos/hosted"
 RUNTIME = ROOT / "minos-runtime-local/src/main/java/com/minos/runtime"
 
 
@@ -188,11 +189,13 @@ def main() -> int:
         ):
             require("HostedControlPlaneService.java", hosted_facade, service)
         for port in (
-            "HostedIdentityProvider.java", "HostedTenantKeyProvider.java", "HostedAuditSink.java",
+            "HostedIdentityProvider.java", "HostedAuditSink.java",
             "HostedTransportSecurityPort.java", "HostedAvailabilityPort.java",
         ):
             if not (HOSTED / port).is_file():
                 raise RuntimeError(f"missing hosted production port: {port}")
+        if not (ENGINE_HOSTED / "HostedTenantKeyProvider.java").is_file():
+            raise RuntimeError("missing hosted production port: minos-engine/HostedTenantKeyProvider.java")
         require("HostedProductionBoundary.java", hosted_boundary, "EMBEDDED_LOCAL_FIRST")
         require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_NETWORK_TRANSPORT_NOT_PROVIDED")
         require("HostedProductionBoundary.java", hosted_boundary, "HOSTED_BACKUP_AVAILABILITY_NOT_PROVIDED")
