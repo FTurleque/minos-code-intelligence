@@ -10,19 +10,22 @@ import java.util.UUID;
 final class HostedAuthorizationService {
 
     private final HostedControlPlaneStore store;
-    private final HmacHostedIdentityProvider identities;
+    private final HostedIdentityProvider identities;
     private final HostedAuditChain auditChain;
+    private final HostedAuditSink auditSink;
     private final Clock clock;
 
     HostedAuthorizationService(
             HostedControlPlaneStore store,
-            HmacHostedIdentityProvider identities,
+            HostedIdentityProvider identities,
             HostedAuditChain auditChain,
+            HostedAuditSink auditSink,
             Clock clock
     ) {
         this.store = Objects.requireNonNull(store, "store");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.auditChain = Objects.requireNonNull(auditChain, "auditChain");
+        this.auditSink = Objects.requireNonNull(auditSink, "auditSink");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -66,6 +69,7 @@ final class HostedAuthorizationService {
                     state.keyId(),
                     state.version() + 1);
             store.save(denied, state.version());
+            auditSink.publish(denied.auditEvents().getLast());
             throw new SecurityException("hosted permission denied: " + permission);
         }
         return new MutationContext(claims, state, membership.orElseThrow(), safeRequestId);
