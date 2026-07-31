@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipCleanVerify
+    [switch]$SkipCleanVerify,
+    [ValidateRange(4, 2000)][int]$ProgramGraphFiles = 1000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,6 +22,9 @@ try {
     python scripts/remediation/check-p0-p2.py
     if ($LASTEXITCODE -ne 0) { throw 'P0-P2 structural gate failed' }
 
+    python scripts/m28/check-m28.py
+    if ($LASTEXITCODE -ne 0) { throw 'M28 convergence/decomposition gate failed' }
+
     python scripts/docs/product-facts.py --check
     if ($LASTEXITCODE -ne 0) { throw 'product facts gate failed' }
 
@@ -41,6 +45,9 @@ try {
     python scripts/quality/check-jacoco.py
     if ($LASTEXITCODE -ne 0) { throw 'JaCoCo gate failed' }
 
+    & scripts/m28/run-program-graph-performance.ps1 -FileCount $ProgramGraphFiles
+    if ($LASTEXITCODE -ne 0) { throw 'M28 ProgramGraph performance qualification failed' }
+
     $StatusAfter = @(git status --porcelain=v1 --untracked-files=all)
     if ($StatusAfter.Count -ne 0) {
         throw "qualification modified the worktree: $($StatusAfter -join '; ')"
@@ -48,7 +55,7 @@ try {
     $Validated = (git rev-parse HEAD).Trim()
     if ($Validated -ne $Head) { throw 'HEAD changed during qualification' }
 
-    Write-Host 'P0-P2 FINAL AUDIT REMEDIATION VALIDATION SUCCESS'
+    Write-Host 'M28 JULY-SAFE CROSS-CUTTING VALIDATION SUCCESS'
     Write-Host "Validated HEAD: $Validated"
     Write-Host 'GitHub Actions / M21-S2 were not invoked by this July-safe runner.'
 } finally {
