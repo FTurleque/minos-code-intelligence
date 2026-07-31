@@ -18,7 +18,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -137,18 +136,20 @@ class ProgramGraphPerformanceQualificationTest {
     private static List<String> generateCorpus(Path projectRoot, int fileCount) throws Exception {
         List<String> fileIds = new ArrayList<>(fileCount);
         for (int index = 0; index < fileCount; index++) {
-            String simpleName = "Generated" + String.format("%04d", index);
+            String suffix = String.format("%04d", index);
+            String simpleName = "Generated" + suffix;
+            String calleeName = "callee" + suffix;
             String fileId = "src/main/java/demo/" + simpleName + ".java";
             Path source = projectRoot.resolve(fileId);
             Files.createDirectories(source.getParent());
             Files.writeString(source, """
                     package demo;
                     final class %s {
-                        int callee(int value) {
+                        int %s(int value) {
                             return value + 1;
                         }
                         int run(int value) {
-                            int copy = callee(value);
+                            int copy = %s(value);
                             if (copy > 0) {
                                 copy++;
                             } else {
@@ -157,7 +158,7 @@ class ProgramGraphPerformanceQualificationTest {
                             return copy;
                         }
                     }
-                    """.formatted(simpleName), StandardCharsets.UTF_8);
+                    """.formatted(simpleName, calleeName, calleeName), StandardCharsets.UTF_8);
             fileIds.add(fileId);
         }
         return List.copyOf(fileIds);
@@ -168,7 +169,6 @@ class ProgramGraphPerformanceQualificationTest {
             String snapshotId,
             List<String> fileIds
     ) {
-        Instant now = Instant.parse("2026-07-31T00:00:00Z");
         Origin origin = new Origin("m28-performance", "GENERATED_FIXTURE", "1", snapshotId, OriginType.OTHER);
         return fileIds.stream().map(fileId -> {
             String simpleName = Path.of(fileId).getFileName().toString().replace(".java", "");
