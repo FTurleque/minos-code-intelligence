@@ -28,8 +28,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JavaSourceProgramGraphDecompositionTest {
 
-    private static final Path FIXTURE_ROOT = Path.of("fixtures/m22/java-advanced-provider/project")
-            .toAbsolutePath().normalize();
+    private static final Path REPOSITORY_ROOT = resolveRepositoryRoot();
+    private static final Path FIXTURE_ROOT = REPOSITORY_ROOT
+            .resolve("fixtures/m22/java-advanced-provider/project")
+            .normalize();
+    private static final Path ANALYSIS_SOURCE_ROOT = REPOSITORY_ROOT
+            .resolve("minos-application/src/main/java/com/minos/program/analysis")
+            .normalize();
     private static final List<String> CORPUS = List.of(
             "src/main/java/demo/CfgFixture.java",
             "src/main/java/demo/DefUseFixture.java",
@@ -65,8 +70,7 @@ class JavaSourceProgramGraphDecompositionTest {
 
     @Test
     void publicProviderRemainsAThinFacadeAndResponsibilitiesStaySeparated() throws Exception {
-        Path sourceRoot = Path.of("src/main/java/com/minos/program/analysis");
-        String facade = Files.readString(sourceRoot.resolve("JavaSourceProgramGraphProvider.java"));
+        String facade = Files.readString(ANALYSIS_SOURCE_ROOT.resolve("JavaSourceProgramGraphProvider.java"));
 
         assertTrue(facade.lines().count() <= 80L, "public provider must remain a thin stable facade");
         assertFalse(facade.contains("TreeScanner"));
@@ -82,8 +86,34 @@ class JavaSourceProgramGraphDecompositionTest {
                 "JavaInterproceduralFlowResolver.java",
                 "JavaTaintAnalyzer.java",
                 "JavaProgramGraphAssembler.java")) {
-            assertTrue(Files.isRegularFile(sourceRoot.resolve(component)), "missing component " + component);
+            assertTrue(Files.isRegularFile(ANALYSIS_SOURCE_ROOT.resolve(component)),
+                    "missing component " + component);
         }
+    }
+
+    private static Path resolveRepositoryRoot() {
+        String multiModuleRoot = System.getProperty("maven.multiModuleProjectDirectory");
+        if (multiModuleRoot != null && !multiModuleRoot.isBlank()) {
+            Path candidate = Path.of(multiModuleRoot).toAbsolutePath().normalize();
+            if (isRepositoryRoot(candidate)) {
+                return candidate;
+            }
+        }
+
+        Path candidate = Path.of("").toAbsolutePath().normalize();
+        while (candidate != null) {
+            if (isRepositoryRoot(candidate)) {
+                return candidate;
+            }
+            candidate = candidate.getParent();
+        }
+        throw new IllegalStateException("cannot resolve MINOS repository root for decomposition fitness test");
+    }
+
+    private static boolean isRepositoryRoot(Path candidate) {
+        return Files.isRegularFile(candidate.resolve("pom.xml"))
+                && Files.isDirectory(candidate.resolve("minos-application/src/main/java"))
+                && Files.isDirectory(candidate.resolve("fixtures/m22/java-advanced-provider/project"));
     }
 
     private static RegisteredProject project(Path root) {
