@@ -25,25 +25,31 @@ vérifier SHA-256
         ↓
 lancer setup.exe
         ↓
-%LOCALAPPDATA%\Programs\MINOS
+dossier d'installation
         ↓
-CLI + MCP natif + PATH optionnel
+tâches Windows (PATH)
         ↓
-préflight des clients IA
+Mode MCP
+  ├── MCP natif local — recommandé, sans Docker
+  └── MCP Docker — optionnel, isolation par conteneur
         ↓
-intégrations MCP natives optionnelles
+si natif : préflight + intégrations clients IA
   ├── GitHub Copilot — JetBrains / IntelliJ
   ├── GitHub Copilot CLI
   ├── Claude Code
   ├── Claude Desktop
   └── OpenAI Codex CLI / Desktop
         ↓
-MCP Docker optionnel et séparé
+si Docker : racine des projets exposés
+        ↓
+%LOCALAPPDATA%\Programs\MINOS
         ↓
 minos.cmd doctor
         ↓
 provider → project add → index → search / architecture / MCP
 ```
+
+Les deux modes MCP peuvent être activés simultanément. Le mode natif n'utilise pas Docker.
 
 Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
 
@@ -138,15 +144,13 @@ MINOS
 
 `RUNTIME-MODULES.txt` enregistre les modules présents dans le runtime Java produit. À partir de 1.0.1, la liste est dérivée du JAR final avec `jdeps` puis vérifiée sur l'image `jpackage` créée.
 
-### 4.1 PATH utilisateur
+### 4.1 Tâches Windows / PATH
 
-La tâche :
+La page standard **Select Additional Tasks** ne contient plus les choix MCP. Elle contient uniquement les tâches Windows indépendantes :
 
 ```text
-Ajouter MINOS au PATH de l'utilisateur
+☑ Ajouter MINOS au PATH de l'utilisateur
 ```
-
-est proposée par le setup.
 
 Après installation, ouvrir un **nouveau terminal** avant d'utiliser :
 
@@ -154,11 +158,29 @@ Après installation, ouvrir un **nouveau terminal** avant d'utiliser :
 minos.cmd --version
 ```
 
-### 4.2 Page « Intégrations MCP natives »
+### 4.2 Page « Mode MCP »
 
-À partir du candidat 1.0.1, les clients MCP ne sont plus des cases statiques dans **Select Additional Tasks**.
+Après les tâches Windows, le Wizard demande explicitement comment utiliser le serveur MCP MINOS :
 
-Le Wizard affiche une page dédiée :
+```text
+Mode MCP
+Choisissez comment utiliser le serveur MCP MINOS
+
+☑ MCP natif local — recommandé, sans Docker
+☐ MCP Docker — optionnel, isolation par conteneur
+```
+
+Le MCP natif est recommandé et sélectionné par défaut. Docker reste strictement optionnel. Les deux modes peuvent être activés simultanément.
+
+Le serveur natif fait partie de la distribution MINOS. Ce choix contrôle le parcours d'intégration automatique avec les clients IA. Si le mode natif est décoché, la page d'intégration Copilot/Claude/Codex est ignorée. Le binaire `app\minos.exe mcp` reste néanmoins installé et peut être configuré manuellement plus tard.
+
+Si Docker est décoché, aucune page de racine de projets Docker n'est affichée et aucune configuration Docker n'est démarrée.
+
+### 4.3 Page « Intégrations MCP natives »
+
+Cette page n'apparaît que lorsque **MCP natif local** a été sélectionné sur la page précédente.
+
+Le Wizard affiche :
 
 ```text
 Intégrations MCP natives
@@ -305,25 +327,11 @@ Un bloc `[mcp_servers.minos]` existant mais non géré par MINOS n'est jamais é
 
 Voir [Utiliser MINOS via MCP](mcp.md) pour les configurations manuelles et le catalogue des tools.
 
-### 4.3 Additional Tasks
-
-Après la page MCP, **Select Additional Tasks** ne contient plus les cinq clients natifs.
-
-Elle conserve les choix indépendants :
-
-```text
-Intégration Windows :
-  ☑ Ajouter MINOS au PATH de l'utilisateur
-
-MCP Docker optionnel :
-  ☐ Configurer et démarrer le MCP Docker (Docker Desktop requis)
-```
-
 ### 4.4 MCP Docker pendant le setup
 
 **Docker n'est pas requis pour le MCP natif ni pour les intégrations ci-dessus.**
 
-Si l'option Docker est sélectionnée, le setup demande la **racine des projets** à exposer au conteneur, par exemple :
+Si **MCP Docker** est sélectionné sur la page « Mode MCP », le setup demande la **racine des projets** à exposer au conteneur, par exemple :
 
 ```text
 N:\workspace-dev
@@ -602,7 +610,7 @@ Il utilise un home distinct :
 
 ### 10.1 Configuration après installation
 
-Si l'option Docker n'a pas été sélectionnée pendant le setup :
+Si le mode Docker n'a pas été sélectionné pendant le setup :
 
 ```powershell
 $Minos = "$env:LOCALAPPDATA\Programs\MINOS"
@@ -708,7 +716,7 @@ Les données restent dans :
 %LOCALAPPDATA%\MINOS\docker-data
 ```
 
-Les intégrations MCP sont reproposées après préflight. Une entrée déjà gérée par MINOS est réutilisée/actualisée selon son ownership ; une entrée `minos` étrangère ou modifiée n'est pas écrasée.
+Les modes MCP et les intégrations clientes sont reproposés. Une entrée déjà gérée par MINOS est réutilisée/actualisée selon son ownership ; une entrée `minos` étrangère ou modifiée n'est pas écrasée.
 
 Après mise à jour :
 
@@ -730,38 +738,54 @@ Le parcours PowerShell conserve le backup automatique de l'ancienne installation
 
 Avec le `setup.exe`, utiliser **Paramètres Windows → Applications → Applications installées → MINOS Code Intelligence → Désinstaller**.
 
-Le désinstalleur :
+Le désinstalleur retire normalement :
 
-- retire le programme ;
-- retire le chemin MINOS ajouté au `PATH` lorsqu'il est encore géré ;
-- retire, lorsqu'elles correspondent encore aux entrées gérées, les intégrations MCP natives créées par le setup ;
-- utilise les chemins CLI enregistrés lorsque le `PATH` a changé ;
-- ne touche pas aux autres serveurs MCP des clients ;
-- préserve une entrée gérée que l'utilisateur a modifiée ;
-- retire le conteneur et la configuration runtime du MCP Docker géré par le setup ;
-- tente de supprimer l'image Docker MINOS correspondante ;
-- **ne supprime pas automatiquement les données persistantes MINOS**.
+- le programme ;
+- le chemin MINOS ajouté au `PATH` lorsqu'il est encore géré ;
+- les intégrations MCP natives créées par le setup lorsqu'elles correspondent encore aux entrées gérées ;
+- le conteneur et la configuration runtime du MCP Docker géré par le setup ;
+- l'image Docker MINOS correspondante lorsqu'elle est encore identifiable comme gérée.
 
-Sont notamment conservés :
+Il ne touche pas aux autres serveurs MCP des clients et préserve une entrée gérée que l'utilisateur a modifiée.
+
+### 13.1 Choix de suppression des données locales
+
+Lors d'une désinstallation **interactive**, le désinstalleur propose désormais explicitement :
 
 ```text
-%LOCALAPPDATA%\MINOS\data
-%LOCALAPPDATA%\MINOS\docker-data
-%LOCALAPPDATA%\MINOS\backups
-%LOCALAPPDATA%\MINOS\*.log
+Supprimer également toutes les données MINOS locales ?
+
+%LOCALAPPDATA%\MINOS
+
+[Oui] [Non]
 ```
 
-La configuration runtime `%LOCALAPPDATA%\MINOS\docker` est supprimée lors de la désinstallation d'un MCP Docker géré ; `docker-data` reste conservé.
+Le choix par défaut est **Non / conserver**.
 
-### 13.1 Suppression complète des données
+Si **Non** est choisi, le répertoire utilisateur est conservé pour permettre une réinstallation ou une mise à jour ultérieure :
 
-Cette opération est irréversible et ne fait pas partie de la désinstallation normale :
-
-```powershell
-Remove-Item "$env:LOCALAPPDATA\MINOS" -Recurse -Force
+```text
+%LOCALAPPDATA%\MINOS
 ```
 
-Elle supprime registre, snapshots, états d'indexation, providers gérés, logs, backups et données Docker MINOS. Ne l'utiliser qu'après sauvegarde et décision explicite de supprimer **toutes** les données MINOS.
+Si **Oui** est choisi, le désinstalleur termine d'abord le cleanup normal puis supprime l'arborescence `%LOCALAPPDATA%\MINOS`, notamment :
+
+```text
+data\                    registre, snapshots, index, runs
+providers/outils gérés
+mcp-client-integrations.json
+codex-mcp-integration.json
+backups\
+logs
+Docker config
+docker-data\
+```
+
+Cette suppression est **irréversible**.
+
+Les désinstallations silencieuses et les setups de smoke conservent les données par défaut et n'affichent jamais ce prompt. Une qualification automatisée ne doit donc pas pouvoir purger le vrai `%LOCALAPPDATA%\MINOS` du mainteneur.
+
+Si un fichier reste verrouillé et empêche la purge complète, le désinstalleur affiche le chemin restant et demande de fermer les processus concernés avant suppression manuelle.
 
 ---
 
@@ -826,7 +850,16 @@ Artefact à tester manuellement :
 target\dist\MINOS-1.0.1-windows-x64-setup.exe
 ```
 
-Le mainteneur doit ensuite vérifier visuellement la page de détection MCP et tester un client réel, notamment Copilot, avant d'autoriser la publication.
+Le mainteneur doit vérifier visuellement :
+
+1. l'ordre du Wizard ;
+2. la page « Mode MCP » ;
+3. le parcours natif sans Docker ;
+4. le parcours Docker optionnel ;
+5. la détection des clients IA lorsque le natif est choisi ;
+6. le prompt de désinstallation avec conservation par défaut ;
+7. la purge complète de `%LOCALAPPDATA%\MINOS` lorsqu'elle est explicitement demandée ;
+8. un client réel, notamment Copilot, avant toute autorisation de publication.
 
 ### 15.2 Qualification complète sans publication
 
@@ -844,7 +877,9 @@ En `-ValidateOnly`, il ne crée ni tag ni GitHub Release. Il construit aussi un 
 - pas de mutation PATH utilisateur ;
 - pas de configuration MCP réelle ;
 - pas de Docker réel ;
-- pas de cleanup global d'une installation existante.
+- pas de cleanup global d'une installation existante ;
+- aucun prompt de purge des données utilisateur ;
+- aucune suppression de `%LOCALAPPDATA%\MINOS`.
 
 Ce setup isolé est installé/désinstallé automatiquement et doit passer le handshake MCP réel.
 
