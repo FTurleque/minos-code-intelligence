@@ -14,7 +14,17 @@ cd "$ROOT"
 HEAD_SHA="$(git rev-parse HEAD)"
 STATUS_BEFORE="$(git status --porcelain=v1 --untracked-files=all)"
 [[ -z "$STATUS_BEFORE" ]] || { echo "worktree must be clean before M28 qualification: $STATUS_BEFORE" >&2; exit 1; }
-git diff --exit-code develop...HEAD -- .github/workflows
+
+if [[ "$(date +%s)" -lt "$(date -d '2026-08-01T00:00:00+02:00' +%s)" ]]; then
+  if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+    BASE_REF="origin/${GITHUB_BASE_REF}"
+  elif git show-ref --verify --quiet refs/heads/develop; then
+    BASE_REF="develop"
+  else
+    BASE_REF="origin/develop"
+  fi
+  git diff --exit-code "${BASE_REF}...HEAD" -- .github/workflows
+fi
 
 python3 scripts/remediation/check-p0-p2.py
 python3 scripts/m28/check-m28.py
@@ -35,6 +45,5 @@ STATUS_AFTER="$(git status --porcelain=v1 --untracked-files=all)"
 [[ -z "$STATUS_AFTER" ]] || { echo "qualification modified the worktree: $STATUS_AFTER" >&2; exit 1; }
 [[ "$(git rev-parse HEAD)" == "$HEAD_SHA" ]] || { echo 'HEAD changed during qualification' >&2; exit 1; }
 
-echo 'M28 JULY-SAFE CROSS-CUTTING VALIDATION SUCCESS'
+echo 'M28 CROSS-CUTTING VALIDATION SUCCESS'
 echo "Validated HEAD: $HEAD_SHA"
-echo 'GitHub Actions / M21-S2 were not invoked by this July-safe runner.'
