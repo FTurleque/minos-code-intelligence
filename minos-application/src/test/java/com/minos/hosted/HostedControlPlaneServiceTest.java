@@ -60,7 +60,9 @@ class HostedControlPlaneServiceTest {
         SharedWorkspace otherWorkspace = fixture.service.createWorkspace(
                 second.bearerToken(), "create-2", "Other space");
 
-        String tampered = first.bearerToken().substring(0, first.bearerToken().length() - 1) + "A";
+        char last = first.bearerToken().charAt(first.bearerToken().length() - 1);
+        char replacement = last == 'A' ? 'B' : 'A';
+        String tampered = first.bearerToken().substring(0, first.bearerToken().length() - 1) + replacement;
         assertThrows(SecurityException.class, () -> fixture.service.listWorkspaces(tampered));
         fixture.clock.advance(Duration.ofSeconds(2));
         assertThrows(SecurityException.class,
