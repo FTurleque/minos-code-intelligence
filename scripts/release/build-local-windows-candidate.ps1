@@ -25,6 +25,13 @@ $Java = if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME)) { Join-Path $env:
 if ([string]::IsNullOrWhiteSpace($Java) -or -not (Test-Path -LiteralPath $Java -PathType Leaf)) {
     throw 'JAVA_HOME must point to a JDK 24 installation before building the Windows candidate.'
 }
+$Python = @('python.exe','python','python3.exe','python3') |
+    ForEach-Object { Get-Command $_ -ErrorAction SilentlyContinue } |
+    Where-Object { $_ } |
+    Select-Object -First 1
+if (-not $Python) {
+    throw 'Python 3 is required for Product Facts, documentation and supply-chain validation.'
+}
 
 $Head = (git -C $RepoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Head)) { throw 'Unable to resolve repository HEAD.' }
@@ -38,6 +45,17 @@ Write-Host '=== MINOS local Windows candidate ===' -ForegroundColor Cyan
 Write-Host "Version : $Version"
 Write-Host "HEAD    : $Head"
 Write-Host 'Network publication: DISABLED (this script never creates tags/releases or invokes GitHub Actions).'
+
+Push-Location $RepoRoot
+try {
+    & $Python.Source 'scripts/docs/product-facts.py' '--check'
+    if ($LASTEXITCODE -ne 0) { throw 'Product Facts are stale; refusing to build a release candidate.' }
+    & $Python.Source 'scripts/docs/check-current-docs.py'
+    if ($LASTEXITCODE -ne 0) { throw 'Current documentation/release contract is inconsistent; refusing to build a release candidate.' }
+}
+finally {
+    Pop-Location
+}
 
 $DistributionParameters = @{ Version = $Version }
 if ($SkipMavenVerify) { $DistributionParameters['SkipVerify'] = $true }
