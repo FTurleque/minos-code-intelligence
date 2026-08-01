@@ -35,7 +35,6 @@ VersionInfoProductTextVersion={#MinosVersion}
 
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
-Name: "docker"; Description: "Configurer et démarrer le MCP Docker (Docker Desktop requis)"; GroupDescription: "MCP Docker optionnel :"; Flags: unchecked
 
 [Files]
 Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -55,6 +54,7 @@ Type: files; Name: "{app}\.docker-mcp-managed"
 
 [Code]
 var
+  McpModePage: TInputOptionWizardPage;
   McpClientsPage: TWizardPage;
   McpCopilotJetBrains: TNewCheckBox;
   McpCopilotJetBrainsStatus: TNewStaticText;
@@ -68,6 +68,7 @@ var
   McpCodexStatus: TNewStaticText;
   McpCodexMode: String;
   McpPreflightIni: String;
+  McpPreflightCompleted: Boolean;
   DockerProjectsPage: TInputDirWizardPage;
   DockerWarningShown: Boolean;
 
@@ -79,6 +80,16 @@ end;
 function ShouldRunGlobalCleanup(): Boolean;
 begin
   Result := not IsSmokeBuild();
+end;
+
+function NativeMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[0];
+end;
+
+function DockerMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[1];
 end;
 
 function TrimTrailingBackslash(Value: String): String;
@@ -274,7 +285,7 @@ var
   Parameters: String;
   PowerShell: String;
 begin
-  if IsSmokeBuild() or (not NativeMcpClientSelected()) then
+  if IsSmokeBuild() or (not NativeMcpSelected()) or (not NativeMcpClientSelected()) then
     exit;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -306,7 +317,7 @@ var
   Parameters: String;
   PowerShell: String;
 begin
-  if IsSmokeBuild() then
+  if IsSmokeBuild() or (not DockerMcpSelected()) then
     exit;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -331,8 +342,20 @@ procedure InitializeWizard;
 var
   RequestedRoot: String;
 begin
+  McpModePage := CreateInputOptionPage(
+    wpSelectTasks,
+    'Mode MCP',
+    'Choisissez comment utiliser le serveur MCP MINOS',
+    'Le mode natif fonctionne directement sur Windows sans Docker. Le mode Docker est optionnel et peut être activé en complément.',
+    False,
+    False);
+  McpModePage.Add('MCP natif local — recommandé, sans Docker');
+  McpModePage.Add('MCP Docker — optionnel, isolation par conteneur');
+  McpModePage.Values[0] := True;
+  McpModePage.Values[1] := False;
+
   McpClientsPage := CreateCustomPage(
-    wpSelectDir,
+    McpModePage.ID,
     'Intégrations MCP natives',
     'Connecter le MCP natif MINOS à vos clients IA détectés');
 
@@ -356,11 +379,12 @@ begin
   McpCodexStatus := TNewStaticText.Create(McpClientsPage);
   ConfigureMcpRow(McpCodex, McpCodexStatus, ScaleY(224), 'OpenAI Codex');
 
-  RunMcpPreflight;
+  McpPreflightCompleted := False;
+  DisableAllMcpRows('Détection en attente');
 
   DockerWarningShown := False;
   DockerProjectsPage := CreateInputDirPage(
-    wpSelectTasks,
+    McpClientsPage.ID,
     'MCP Docker MINOS',
     'Choisissez la racine des projets exposés au MCP Docker',
     'Les projets de cette racine seront montés en lecture seule dans le conteneur MINOS.',
@@ -375,13 +399,25 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = DockerProjectsPage.ID) and (not WizardIsTaskSelected('docker'));
+  if PageID = McpClientsPage.ID then
+    Result := not NativeMcpSelected()
+  else if PageID = DockerProjectsPage.ID then
+    Result := not DockerMcpSelected()
+  else
+    Result := False;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if (CurPageID = DockerProjectsPage.ID) and WizardIsTaskSelected('docker') then
+
+  if (CurPageID = McpModePage.ID) and NativeMcpSelected() and (not McpPreflightCompleted) then
+  begin
+    RunMcpPreflight;
+    McpPreflightCompleted := True;
+  end;
+
+  if (CurPageID = DockerProjectsPage.ID) and DockerMcpSelected() then
   begin
     if not DirExists(DockerProjectsPage.Values[0]) then
     begin
@@ -409,7 +445,7 @@ begin
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
     ConfigureNativeMcpClients;
-    if WizardIsTaskSelected('docker') and DockerReady() then ConfigureDockerMcp;
+    if DockerMcpSelected() and DockerReady() then ConfigureDockerMcp;
   end;
 end;
 
