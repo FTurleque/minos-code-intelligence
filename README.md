@@ -13,6 +13,8 @@ Il répond notamment à des questions comme :
 - quels éléments peuvent être potentiellement impactés par une modification ?
 - quelles relations entre dépôts sont réellement prouvables ?
 - quelles zones ont récemment changé dans Git ?
+- quels chemins de programme avancés sont réellement disponibles selon les capacités du provider ?
+- quels résultats supplémentaires apporte le retrieval sémantique/hybride lorsqu'il est activé ?
 
 MINOS est **local-first**, **agnostique du langage**, indépendant des fournisseurs d’IA et découplé des formats d’indexation externes par une couche de normalisation.
 
@@ -21,81 +23,101 @@ MINOS est **local-first**, **agnostique du langage**, indépendant des fournisse
 ```mermaid
 flowchart TB
     SRC[Projet local] --> DISC[Discovery / negotiation]
+    REMOTE[GitHub/GitLab + ref + SHA exact] --> CACHE[Cache source contrôlé]
+    CACHE --> DISC
     DISC --> IDX[Indexeurs qualifiés / SCIP]
     IDX --> MINOS[MINOS Code Intelligence]
+    IDX --> WORKER[Worker isolé + bundle vérifié]
+    WORKER --> MINOS
     GIT[Git local] --> MINOS
+    SRC --> ADV[Providers Program Graph qualifiés]
+    ADV --> MINOS
+    SRC --> SEM[Semantic documents]
+    SEM --> EMB[EmbeddingProvider optionnel]
+    EMB --> MINOS
     MINOS --> CLI[CLI]
     MINOS --> API[API Java]
     MINOS --> MCP[MCP STDIO]
+    MINOS --> IDE[IntelliJ]
     MINOS --> NX[NEXUS export JSON]
     NX --> NEXUS[NEXUS Context Intelligence]
 ```
 
-MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte.
+MINOS n’est ni un chatbot ni un LLM. Il produit des **faits de code, dérivations explicables et vues structurées** consommables par des développeurs, outils, agents et moteurs de contexte. La couche sémantique reste optionnelle et ses scores restent `HEURISTIC`.
 
 ## État courant
 
-**C0 à M14 sont terminés et livrés.**
+**C0 à M20 sont terminés, validés et livrés sur `main`.**
 
-M14 a fermé l’indexation autonome, le runtime provider Windows, la distribution Windows native, le MCP natif et le packaging de release. La PR M14 #43 a été fusionnée dans `main` le 24 juillet 2026.
+**M21 a terminé ses gates locaux S1/S3→S9.** Son seul volet encore ouvert est S2/CI, explicitement gelé jusqu’en août 2026. Le tree M21 localement qualifié a été intégré dans `develop` via PR #75.
 
-Le packaging Windows fournit un **setup.exe complet** tout en conservant le ZIP portable. Les évolutions post-M14 ajoutent la visualisation du graphe d'architecture et l'intégration optionnelle du MCP natif dans les clients IA locaux.
+**M22 — Advanced Provider Intelligence est terminé, validé exact-head et fusionné dans `develop` via PR #77.** Le provider Java `minos-java-source-v1` fournit CFG, def-use, flux interprocéduraux bornés et primitives de sécurité sous capacités/provenance explicites.
+
+**M23 — Semantic Retrieval 2.0 est terminé, validé exact-head et fusionné dans `develop` via PR #79.** Le profil canonique qualifié utilise `minos-local-ollama` / `embeddinggemma` / 768 dimensions. Le scan cosine exact reste le backend autorisé conformément à `KEEP_CURRENT_M20_BACKEND`.
+
+**M24 — Polyglot Expansion est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #82 ; l’issue #81 est close/completed.** Le HEAD qualifié est `927f57768a79af162e2cdc765d0f54d274cbe02e` et le merge commit est `2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa`. M24 ajoute C/C++, C#, Go et Rust derrière les SPI/provider contracts existants sans confondre discovery, disponibilité runtime, qualification produit et preuve e2e.
+
+**M25 — Remote & Distributed Indexing est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #85 ; l’issue #84 est closed/completed.** Le HEAD qualifié est `fc395d189cf7fc5a0e06130210a3dc763fc48637` et le merge commit est `1a82f18115184606cbc13a9070b7cc78643ebb35`. GitHub.com privé et GitLab.com public ont été exercés sur les deux plateformes ; le worker natif est qualifié avec `ALLOW`, tandis que `DENY` reste fail-closed et non qualifié faute d’isolation réseau OS.
+
+**M26 — Runtime & Dynamic Intelligence est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #88 ; l’issue #87 est closed/completed.** Le HEAD qualifié est `bf702990125a485646b9b31817c7787086a1dbb3` et le merge commit est `9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef`. Le format strict `minos-runtime-observation-v1`, la corrélation au snapshot statique exact, le store local, la CLI et les trois outils MCP sont `QUALIFIED_WITH_CONSTRAINTS` : seules des observations `PARTIAL` sont admises et leur absence ne prouve jamais la non-exécution.
+
+**M27 — Team / Hosted Mode est terminé, validé exact-head Windows + Linux et fusionné dans `develop` via la PR #91 ; l’issue #90 est closed/completed.** Le HEAD qualifié est `d4bd51ef52cb329ab75b70b32bc22e2b236bd65d` et le merge commit est `ee22c3b39b9cd891c18cb61188eb8e973fc7e822`. Le contrôle tenant opt-in, RBAC, shared workspaces liés au snapshot actif exact, état AES-256-GCM, clés externes/rotation, audit chaîné, rétention explicite, CLI/API et cinq outils MCP read-only sont `QUALIFIED_WITH_CONSTRAINTS`. Local mode reste le défaut ; aucun service SaaS opéré n’est revendiqué.
 
 Voir :
 
-- [`docs/STATUS.md`](docs/STATUS.md) — état livré sur `main` ;
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit ;
-- [`docs/roadmap/M14_EXECUTION.md`](docs/roadmap/M14_EXECUTION.md) — qualification détaillée M14.
+- [`docs/STATUS.md`](docs/STATUS.md) — état courant et preuves de promotion ;
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — roadmap produit M0→M27 ;
+- [`docs/roadmap/M21_EXECUTION.md`](docs/roadmap/M21_EXECUTION.md) — consolidation post-M20 ;
+- [`docs/roadmap/M22_EXECUTION.md`](docs/roadmap/M22_EXECUTION.md) — Advanced Provider Intelligence ;
+- [`docs/roadmap/M23_EXECUTION.md`](docs/roadmap/M23_EXECUTION.md) — Semantic Retrieval 2.0 ;
+- [`docs/roadmap/M24_EXECUTION.md`](docs/roadmap/M24_EXECUTION.md) — Polyglot Expansion ;
+- [`docs/roadmap/M25_EXECUTION.md`](docs/roadmap/M25_EXECUTION.md) — Remote & Distributed Indexing ;
+- [`docs/roadmap/M26_EXECUTION.md`](docs/roadmap/M26_EXECUTION.md) — Runtime & Dynamic Intelligence ;
+- [`docs/roadmap/M27_EXECUTION.md`](docs/roadmap/M27_EXECUTION.md) — Team / Hosted Mode ;
+- [`docs/user/polyglot-providers.md`](docs/user/polyglot-providers.md) — prérequis, installation et limitations des providers polyglottes ;
+- [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md) — source distante immuable, worker et évidences ;
+- [`docs/user/runtime-intelligence.md`](docs/user/runtime-intelligence.md) — import et lecture d’observations runtime partielles ;
+- [`docs/user/team-hosted-mode.md`](docs/user/team-hosted-mode.md) — tenants, RBAC, espaces partagés, audit et rétention ;
+- [`docs/generated/product-facts.md`](docs/generated/product-facts.md) — facts calculables courants.
+
+## Providers polyglottes — M24
+
+Les quatre cibles M24 ont une disposition finale explicite, des plateformes strictement prouvées et des capabilities exhaustives :
+
+| Écosystème | Provider/indexeur | Version M24 | Disposition finale | Plateformes qualifiées |
+|---|---|---:|---|---|
+| C / C++ | `scip-clang` | `0.4.0` | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 uniquement |
+| C# | `scip-dotnet` | `0.2.14` | `QUALIFIED_WITH_CONSTRAINTS` | Linux x86_64 uniquement, .NET SDK 10+ |
+| Go | `scip-go` | `0.2.7` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64 + Linux x86_64 |
+| Rust | `rust-analyzer scip` | `0.3.2989` / 2026-07-27 / `12c3381` | `QUALIFIED_WITH_CONSTRAINTS` | Windows x86_64 + Linux x86_64 |
+
+Les symboles/références SCIP ne prouvent pas CFG, def-use, data-flow ou sécurité. Les capacités avancées M22 restent spécifiques aux providers qui les démontrent réellement.
+
+Guide complet : **[Providers polyglottes M24](docs/user/polyglot-providers.md)**.
 
 ## Installer MINOS sous Windows
 
 L’utilisateur normal **ne clone pas le dépôt MINOS et ne lance pas Maven**.
 
-Une GitHub Release Windows expose deux canaux :
+Une GitHub Release Windows expose :
 
 ```text
 MINOS-<version>-windows-x64-setup.exe
 MINOS-<version>-windows-x64-setup.exe.sha256
-
 minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
 ```
 
-Le **`setup.exe` est le canal recommandé** pour un poste Windows. Il installe l'application, son runtime Java, la CLI, le MCP natif, l'intégration PATH et le désinstalleur Windows.
+Le `setup.exe` est le canal recommandé. Le ZIP reste le canal portable / automatisation / diagnostic.
 
-Pendant l'installation, l'utilisateur peut choisir explicitement d'enregistrer le MCP natif MINOS dans :
-
-```text
-GitHub Copilot — JetBrains / IntelliJ
-GitHub Copilot CLI
-Claude Code
-Claude Desktop
-OpenAI Codex
-```
-
-Ces intégrations utilisent directement `app\minos.exe mcp` et **ne nécessitent pas Docker**. Le setup peut séparément configurer le MCP Docker si Docker Desktop est déjà installé et démarré.
-
-Le ZIP reste le canal **portable / automatisation / diagnostic** et contient la même application MINOS, les scripts d'intégration MCP natifs, les scripts Docker et l'installateur PowerShell portable.
-
-Parcours recommandé :
-
-```text
-GitHub Release
-→ télécharger setup.exe + SHA-256
-→ vérifier SHA-256
-→ lancer setup.exe
-→ choisir éventuellement les clients MCP natifs
-→ choisir éventuellement le MCP Docker
-→ minos.cmd doctor
-```
-
-Voir **[Installation PROD Windows](docs/user/production-installation.md)** pour le téléchargement, l’installation, les clients MCP natifs, le MCP Docker, les providers, la mise à jour, le rollback et la désinstallation.
+Voir **[Installation PROD Windows](docs/user/production-installation.md)**.
 
 ## Utilisation après installation
 
 ```powershell
 minos.cmd --version
 minos.cmd doctor
+minos.cmd providers --format json
 minos.cmd tools install scip-java
 minos.cmd project add N:\workspace-dev\my-project --name my-project
 minos.cmd index my-project --dry-run
@@ -105,78 +127,135 @@ minos.cmd search my-project GreetingPort --format json
 
 Le parcours normal ne demande plus de préparer `index.scip` manuellement : MINOS découvre le projet, négocie le provider, vérifie son runtime, calcule la portée d’indexation, exécute le provider, normalise, stage puis promeut le snapshot.
 
-L’import d’un artefact SCIP explicite reste disponible pour le diagnostic :
+Pour sélectionner explicitement un provider M24 qualifié avec contraintes, notamment en diagnostic :
 
 ```powershell
-minos.cmd import-scip my-project `
-  --file N:\temp\index.scip `
-  --provider external-provider
+minos.cmd index my-project --provider scip-go --force-full --format json
 ```
+
+L'override ne change ni la disposition ni les plateformes/capabilities déclarées par le provider.
+
+## Remote & Distributed Indexing — M25
+
+M25 ajoute un parcours opt-in qui conserve le lifecycle local autoritatif :
+
+```powershell
+minos.cmd remote materialize https://github.com/acme/project --ref main `
+  --commit 0123456789abcdef0123456789abcdef01234567 --format json
+
+minos.cmd remote index https://github.com/acme/project --ref main `
+  --commit 0123456789abcdef0123456789abcdef01234567 `
+  --name acme-project --provider scip-java --worker-network allow --format json
+```
+
+GitHub.com/GitLab.com HTTPS, SHA complet et politique réseau worker explicite sont obligatoires. Le bundle `minos-distributed-artifact-v1` est validé (chemins, tailles, SHA-256 et provenance) avant le staging/promotion existant. Voir [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
+
+## Retrieval sémantique learned local — M23
+
+Le sémantique reste **désactivé par défaut**. `local-hash` reste un provider déterministe de référence, explicitement non learned.
+
+Profil canonique M23 :
+
+```powershell
+$env:MINOS_SEMANTIC_PROVIDER='ollama'
+$env:MINOS_SEMANTIC_MODEL='embeddinggemma'
+$env:MINOS_SEMANTIC_DIMENSIONS='768'
+$env:MINOS_SEMANTIC_ENDPOINT='http://127.0.0.1:11434/api/embed'
+```
+
+MINOS ne télécharge aucun modèle. Le provider intégré refuse les endpoints non-loopback. Les résultats sémantiques restent `HEURISTIC` et ne deviennent jamais des relations de code. Voir [`docs/developer/semantic-retrieval-2.md`](docs/developer/semantic-retrieval-2.md).
 
 ## Visualiser le graphe d'architecture
 
 **Guide utilisateur détaillé : [Visualiser le graphe d'architecture MINOS](docs/user/architecture-graph.md).**
 
-À retenir : MINOS calcule et exporte le graphe mais n'ouvre pas actuellement une fenêtre graphique intégrée. Pour voir un diagramme, utiliser Mermaid ou Graphviz DOT.
-
-MINOS expose les arêtes de dépendances agrégées entre modules dans la sortie JSON :
-
 ```powershell
 minos.cmd architecture my-project --format json
-```
-
-Pour produire directement un diagramme Mermaid :
-
-```powershell
 minos.cmd architecture my-project --format mermaid |
   Set-Content .\architecture.mmd -Encoding utf8
-```
-
-Ou Graphviz DOT :
-
-```powershell
 minos.cmd architecture my-project --format dot |
   Set-Content .\architecture.dot -Encoding utf8
-```
-
-Avec Graphviz installé, produire puis ouvrir un SVG :
-
-```powershell
-dot -Tsvg .\architecture.dot -o .\architecture.svg
-Start-Process .\architecture.svg
-```
-
-Sur un gros projet, limiter le graphe au voisinage direct d'un module :
-
-```powershell
-minos.cmd architecture my-project --module packages/api --format mermaid
 ```
 
 Les rendus utilisent uniquement les arêtes réellement présentes dans le snapshot actif.
 
 ## Développer MINOS depuis les sources
 
-### Prérequis
+Prérequis :
 
 ```text
 Java 24
 Maven 3.9.x via Maven Wrapper
 Git
+Python pour les gates documentaires/qualité
 ```
 
-Sous Windows PowerShell :
+Sous Windows :
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-La version de développement est actuellement :
+La porte locale finale M27 est :
+
+```powershell
+.\scripts\m27\run-final.ps1 -ExpectedHead <sha>
+```
+
+Sous Linux :
+
+```bash
+./scripts/m27/run-final.sh <sha>
+```
+
+La qualification M27 rejoue Maven/JaCoCo et les régressions historiques pertinentes, exerce le JAR ombré sur deux tenants, RBAC, bindings exact-snapshot, chiffrement, audit, rétention et rotation, puis revérifie exact HEAD + worktree propre. **Aucune GitHub Actions / CI n'est utilisée comme gate en juillet 2026.**
+
+## Runtime & Dynamic Intelligence — M26
+
+M26 ajoute une voie locale, opt-in et strictement observationnelle :
+
+```powershell
+minos.cmd runtime import my-project --file .\runtime.tsv --format json
+minos.cmd runtime sessions my-project --format json
+minos.cmd runtime report my-project --session run-2026-07-29 --format json
+minos.cmd runtime symbol my-project --symbol <static-symbol-id> --format json
+```
+
+Chaque résultat déclare `nature: OBSERVED_PARTIAL` et `exhaustive: false`. Le ratio de symboles observés n’est pas une couverture exhaustive ; une trace absente ne prouve jamais la non-exécution. Le snapshot statique structuré reste autoritatif et n’est pas muté par l’import runtime.
+
+Le runner final M26 est local et exact-head. Windows et Linux ont validé le même HEAD `bf702990125a485646b9b31817c7787086a1dbb3` :
+
+```powershell
+.\scripts\m26\run-final.ps1 -ExpectedHead <sha>
+```
+
+```bash
+./scripts/m26/run-final.sh <sha>
+```
+
+## Team / Hosted Mode — M27
+
+Le contrôle d’équipe est désactivé par défaut. L’opérateur l’active explicitement et injecte une master key base64 de 32 octets ; les tokens ne sont jamais acceptés comme arguments :
+
+```powershell
+$env:MINOS_HOSTED_MODE='enabled'
+$env:MINOS_TEAM_KEY_KEY_A='<base64-32-bytes>'
+minos.cmd team bootstrap --tenant <uuid> --name Team --key-id key-a `
+  --owner alice --owner-name Alice --request-id bootstrap-1
+$env:MINOS_TEAM_TOKEN='<token-retourné-une-seule-fois>'
+minos.cmd team workspace-create --name Platform --request-id workspace-1
+minos.cmd team audit --limit 100
+```
+
+Le store tenant est AES-256-GCM, l’audit est chaîné HMAC-SHA-256, la rotation et l’application de la rétention sont explicites. L’opérateur reste responsable de l’IdP/KMS externe, du transport/TLS, de l’isolation processus, des backups et de la disponibilité. Voir [`docs/user/team-hosted-mode.md`](docs/user/team-hosted-mode.md).
+
+La version de développement est :
 
 ```text
 0.2.0-SNAPSHOT
 ```
 
-Le packaging produit notamment un shaded JAR :
+Le packaging produit notamment :
 
 ```text
 target/minos-code-intelligence-0.2.0-SNAPSHOT-all.jar
@@ -189,151 +268,28 @@ Le launcher du checkout `minos.cmd` recherche automatiquement le shaded JAR cour
 .\minos.cmd doctor
 ```
 
-## Construire ou publier une distribution Windows
-
-Cette section concerne les mainteneurs. Les utilisateurs téléchargent une GitHub Release.
-
-Construire la distribution portable :
-
-```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc2
-```
-
-Construire ensuite le setup Windows avec Inno Setup 6/7 :
-
-```powershell
-.\scripts\release\build-windows-installer.ps1 -Version 0.2.0-rc2
-```
-
-Sorties :
-
-```text
-target/dist/MINOS-0.2.0-rc2-windows-x64-setup.exe
-target/dist/MINOS-0.2.0-rc2-windows-x64-setup.exe.sha256
-target/dist/minos-0.2.0-rc2-windows-x64.zip
-target/dist/minos-0.2.0-rc2-windows-x64.zip.sha256
-```
-
-Publier depuis un poste Windows avec GitHub CLI authentifié :
-
-```powershell
-.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc2
-```
-
-Le même parcours est disponible manuellement dans GitHub Actions via **Publish Windows Release**. Le workflow valide aussi le cycle installation/désinstallation des intégrations MCP natives, construit les deux distributions, vérifie les checksums, smoke-teste le ZIP et le `setup.exe`, vérifie la désinstallation, refuse de remplacer une version/tag existant, puis attache les quatre assets à la GitHub Release.
-
-## Capacités CLI
-
-### Projet, runtime et index
-
-```text
-doctor
-tools list / install / verify
-project add
-project list
-project inspect / inspect
-index
-import-scip
-index-status
-```
-
-### Code Intelligence
-
-```text
-search
-find-symbol
-get-source
-find-usages
-find-implementations
-find-callers
-find-callees
-dependencies
-dependents
-related-tests
-architecture
-impact
-```
-
-`architecture` supporte `text`, `json`, `mermaid` et `dot` ; la sortie JSON contient les arêtes inter-modules détaillées.
-
-### Intégrations
-
-```text
-API Java M11/M12 + getArchitectureGraph
-MCP STDIO — 16 tools read-only
-Git Intelligence via JGit
-Workspaces multi-repositories
-nexus-export — contrat JSON M13
-```
-
 ## MCP
 
-Le mode natif recommandé pour les clients est :
+Le serveur natif est lancé avec :
 
-```text
-command = <installation>\app\minos.exe
-args    = mcp
-env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+```powershell
+minos.cmd mcp
 ```
 
-Le tool `minos_architecture_graph` expose le graphe en JSON, Mermaid ou DOT.
-
-Docker reste un mode MCP durci optionnel : pas de réseau, filesystem read-only et projets read-only. Le `setup.exe` peut préparer, démarrer et valider ce mode si Docker Desktop est déjà opérationnel. Docker n’est pas le moteur principal de compilation/indexation des projets et n'est pas requis pour les intégrations MCP natives.
+**MCP STDIO — 31 tools read-only.** Les cinq vues M27 `minos_team_tenant`, `minos_team_workspaces`, `minos_team_workspace`, `minos_team_members` et `minos_team_audit` restent strictement en lecture et prennent leur identité uniquement depuis `MINOS_TEAM_TOKEN`. Les tools avancés restent capability-honest et la couche sémantique n'est jamais présentée comme une relation structurale.
 
 ## Documentation
 
-### Utilisateur
-
-- **[Guide utilisateur — commencer ici](docs/user/README.md)**
-- **[Visualiser le graphe d'architecture](docs/user/architecture-graph.md)**
-- [Installation PROD Windows](docs/user/production-installation.md)
-- [Indexation autonome](docs/user/autonomous-indexing.md)
-- [Installation depuis les sources](docs/user/installation.md)
+- [Guide utilisateur](docs/user/README.md)
 - [CLI](docs/user/cli.md)
+- [Providers polyglottes](docs/user/polyglot-providers.md)
+- [Remote & Distributed Indexing](docs/user/remote-indexing.md)
+- [Runtime & Dynamic Intelligence](docs/user/runtime-intelligence.md)
+- [Team / Hosted Mode](docs/user/team-hosted-mode.md)
+- [Plugin IntelliJ](docs/user/intellij-plugin.md)
 - [API Java](docs/user/java-api.md)
 - [MCP](docs/user/mcp.md)
-- [MINOS → NEXUS](docs/user/nexus.md)
+- [NEXUS](docs/user/nexus.md)
 - [Dépannage](docs/user/troubleshooting.md)
-
-### Développeur
-
-- [Guide développeur](docs/developer/README.md)
-- [Architecture interne](docs/developer/architecture.md)
-- [Modèle de domaine](docs/developer/domain-model.md)
-- [Indexation, lifecycle et stockage](docs/developer/indexing-and-storage.md)
-- [Surfaces publiques](docs/developer/public-surfaces.md)
-- [Multi-dépôts et Git](docs/developer/multi-repo-git.md)
-- [Tests et contribution](docs/developer/testing.md)
-
-### Architecture et historique
-
+- [Documentation développeur](docs/developer/README.md)
 - [ADR](docs/adr/README.md)
-- [Historique](docs/history/README.md)
-- [Roadmap](docs/ROADMAP.md)
-
-## Stack
-
-```text
-Java             24
-Build            Maven 3.9.x
-SCIP bindings    0.9.0
-MCP Java SDK     2.0.0
-Git              Eclipse JGit 7.6.0.202603022253-r
-MCP transport    STDIO
-Serveur HTTP     aucun requis dans le cœur
-```
-
-## Principes
-
-- **MINOS-first, Glean-optional** ;
-- faits, dérivations et heuristiques restent distincts ;
-- provenance et preuves sont conservées ;
-- les limitations fournisseur ne deviennent jamais des garanties ;
-- les snapshots sont promus de façon cohérente ;
-- l’incrémental n’est activé que lorsqu’un provider le prouve ;
-- l’impact est potentiel, pas une certitude runtime ;
-- une relation cross-repository exige une identité exacte et unique ;
-- l’activité Git n’est pas une mesure automatique d’importance architecturale ;
-- CLI, API, MCP et NEXUS sont des surfaces d’exposition, pas des duplications du métier.
-
-> Règle de développement : **mesurer avant d’industrialiser**.

@@ -5,15 +5,30 @@ import com.minos.domain.InformationNature;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.PriorityQueue;
 
 /** Bounded semantic retrieval over the active, snapshot-aligned vector index. */
 public final class SemanticSearchService {
 
     public static final int MAX_RESULTS = 1_000;
+    public static final int MAX_QUERY_CACHE_ENTRIES = 256;
+
+    private static final Comparator<SearchHit> BEST_FIRST = Comparator
+            .comparingDouble(SearchHit::score).reversed()
+            .thenComparing(hit -> hit.document().stableKey());
+    private static final Comparator<SearchHit> WORST_FIRST = BEST_FIRST.reversed();
 
     private final SemanticIndexService indexService;
+    private final Map<QueryCacheKey, SemanticVector> queryCache = new LinkedHashMap<>(32, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<QueryCacheKey, SemanticVector> eldest) {
+            return size() > MAX_QUERY_CACHE_ENTRIES;
+        }
+    };
 
     public SemanticSearchService(SemanticIndexService indexService) {
         this.indexService = Objects.requireNonNull(indexService, "indexService");
@@ -30,49 +45,78 @@ public final class SemanticSearchService {
                     "SEMANTIC", List.of(), List.copyOf(limitations), elapsedMillis(started));
         }
         EmbeddingProvider provider = indexService.embeddingProvider().orElseThrow();
-        SemanticVector queryVector = provider.embed("query", request.query());
-        if (queryVector.dimensions() != provider.dimensions()) {
-            throw new IllegalStateException("embedding provider returned unexpected query dimensions");
-        }
+        SemanticVector queryVector = queryVector(provider, request.query());
         var index = indexService.activeIndex(projectReference).orElseThrow();
-        List<SearchHit> hits = index.documents().stream()
-                .map(value -> new SearchHit(
-                        value.document(),
-                        cosine(queryVector, value.vector()),
-                        InformationNature.HEURISTIC,
-                        provider.id(),
-                        provider.modelId()))
-                .filter(hit -> hit.score() >= request.minimumScore())
-                .sorted(Comparator.comparingDouble(SearchHit::score).reversed()
-                        .thenComparing(hit -> hit.document().stableKey()))
-                .limit(request.limit())
-                .toList();
+        PriorityQueue<SearchHit> top = new PriorityQueue<>(request.limit(), WORST_FIRST);
+        for (SemanticVectorStore.IndexedDocument value : index.documents()) {
+            double score = cosine(queryVector, value.vector());
+            if (score < request.minimumScore()) continue;
+            SearchHit candidate = new SearchHit(
+                    value.document(), score, InformationNature.HEURISTIC, provider.id(), provider.modelId());
+            if (top.size() < request.limit()) {
+                top.add(candidate);
+            } else if (BEST_FIRST.compare(candidate, top.peek()) < 0) {
+                top.poll();
+                top.add(candidate);
+            }
+        }
+        List<SearchHit> hits = new ArrayList<>(top);
+        hits.sort(BEST_FIRST);
         List<String> limitations = new ArrayList<>(status.limitations());
         limitations.add("VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT");
         limitations.add("VECTOR_SEARCH_LINEAR_SCAN");
+        limitations.add("ANN_NOT_ENABLED_M21_S8_KEEP_CURRENT_BACKEND");
+        limitations.add("SEMANTIC_QUERY_VECTOR_CACHE_BOUNDED_256");
         return new SearchResponse(status.projectId(), index.snapshotId(), request.query(),
                 "SEMANTIC", hits, List.copyOf(limitations), elapsedMillis(started));
     }
 
+    private SemanticVector queryVector(EmbeddingProvider provider, String query) throws IOException {
+        QueryCacheKey key = new QueryCacheKey(provider.id(), provider.modelId(), provider.dimensions(), query);
+        synchronized (queryCache) {
+            SemanticVector cached = queryCache.get(key);
+            if (cached != null) return cached;
+        }
+        SemanticVector embedded = provider.embed("query", query);
+        if (embedded.dimensions() != provider.dimensions()) {
+            throw new IllegalStateException("embedding provider returned unexpected query dimensions");
+        }
+        synchronized (queryCache) {
+            SemanticVector existing = queryCache.get(key);
+            if (existing != null) return existing;
+            queryCache.put(key, embedded);
+        }
+        return embedded;
+    }
+
+    int queryCacheSize() {
+        synchronized (queryCache) {
+            return queryCache.size();
+        }
+    }
+
     private static double cosine(SemanticVector left, SemanticVector right) {
         if (left.dimensions() != right.dimensions()) throw new IllegalArgumentException("vector dimensions mismatch");
+        double denominator = left.norm() * right.norm();
+        if (denominator == 0.0) return 0.0;
         double dot = 0.0;
-        double leftNorm = 0.0;
-        double rightNorm = 0.0;
         for (int i = 0; i < left.dimensions(); i++) {
-            double a = left.values().get(i);
-            double b = right.values().get(i);
-            dot += a * b;
-            leftNorm += a * a;
-            rightNorm += b * b;
+            dot += left.valueAt(i) * right.valueAt(i);
         }
-        if (leftNorm == 0.0 || rightNorm == 0.0) return 0.0;
-        double value = dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+        double value = dot / denominator;
         return Math.max(-1.0, Math.min(1.0, value));
     }
 
     private static long elapsedMillis(long started) {
         return (System.nanoTime() - started) / 1_000_000L;
+    }
+
+    private record QueryCacheKey(String providerId, String modelId, int dimensions, String query) {
+        private QueryCacheKey {
+            Objects.requireNonNull(providerId, "providerId");
+            Objects.requireNonNull(modelId, "modelId");
+            Objects.requireNonNull(query, "query");
+        }
     }
 
     public record SearchRequest(String query, int limit, double minimumScore) {

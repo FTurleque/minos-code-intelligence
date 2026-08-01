@@ -21,6 +21,15 @@ interface MinosMcpBackend {
     String semanticSearch(SemanticSearchRequest request) throws Exception;
     String hybridSearch(HybridSearchRequest request) throws Exception;
     String hybridContext(HybridContextRequest request) throws Exception;
+    String runtimeSessions(RuntimeSessionsRequest request) throws Exception;
+    String runtimeReport(RuntimeReportRequest request) throws Exception;
+    String runtimeSymbol(RuntimeSymbolRequest request) throws Exception;
+
+    default String teamTenant() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamWorkspaces() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamWorkspace(String workspaceId) throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamMembers() throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
+    default String teamAudit(int limit) throws Exception { throw new UnsupportedOperationException("team mode is unavailable"); }
 
     record SearchRequest(
             String project, String query, String qualifiedName, String kind, String module,
@@ -73,5 +82,14 @@ interface MinosMcpBackend {
             int maxTokens,
             int maxTokensPerDocument
     ) {
+    }
+
+    record RuntimeSessionsRequest(String project, int limit) {
+    }
+
+    record RuntimeReportRequest(String project, String sessionId, int limit) {
+    }
+
+    record RuntimeSymbolRequest(String project, String symbolId, String sessionId, int limit) {
     }
 }

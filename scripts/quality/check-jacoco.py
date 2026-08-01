@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted M15 JaCoCo gates for critical MINOS responsibilities."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M28."""
 
 from __future__ import annotations
 
@@ -43,6 +43,136 @@ SCOPES = {
         "line": 0.30,
         "branch": 0.20,
     },
+    "program-graph-analysis": {
+        "prefixes": (
+            "com/minos/program/analysis/ProgramGraphService",
+            "com/minos/program/analysis/ProgramGraphComposer",
+            "com/minos/program/analysis/RelationshipProgramGraphProvider",
+            "com/minos/program/analysis/FileProgramGraphProvider",
+            "com/minos/program/analysis/ProgramGraphEvaluator",
+            "com/minos/program/analysis/InterproceduralFlowService",
+        ),
+        "line": 0.50,
+        "branch": 0.30,
+    },
+    "java-advanced-provider": {
+        "prefixes": (
+            "com/minos/program/analysis/JavaSourceProgramGraphProvider",
+            "com/minos/program/analysis/JavaSourceWorkspace",
+            "com/minos/program/analysis/JavaAstParser",
+            "com/minos/program/analysis/JavaAstSupport",
+            "com/minos/program/analysis/JavaProgramModel",
+            "com/minos/program/analysis/JavaSecurityRules",
+            "com/minos/program/analysis/JavaProgramGraphContext",
+            "com/minos/program/analysis/JavaDefUseAnalyzer",
+            "com/minos/program/analysis/JavaControlFlowAnalyzer",
+            "com/minos/program/analysis/JavaInterproceduralFlowResolver",
+            "com/minos/program/analysis/JavaTaintAnalyzer",
+            "com/minos/program/analysis/JavaProgramGraphAssembler",
+            "com/minos/program/analysis/JavaProgramGraphEngine",
+            "com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
+    },
+    "advanced-impact-security": {
+        "prefixes": (
+            "com/minos/program/analysis/AdvancedImpactService",
+            "com/minos/program/analysis/SecurityAnalysisService",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
+    },
+    "semantic-vector-store": {
+        "prefixes": ("com/minos/store/FileSemanticVectorStore",),
+        "line": 0.45,
+        "branch": 0.20,
+    },
+    "semantic-learned-provider": {
+        "prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",),
+        "line": 0.50,
+        "branch": 0.30,
+    },
+    "semantic-hybrid-retrieval": {
+        "prefixes": (
+            "com/minos/semantic/SemanticDocumentFactory",
+            "com/minos/semantic/SemanticIndexService",
+            "com/minos/semantic/SemanticSearchService",
+            "com/minos/semantic/HybridSearchService",
+            "com/minos/semantic/HybridContextBuilder",
+            "com/minos/semantic/SemanticSearchEvaluator",
+        ),
+        "line": 0.50,
+        "branch": 0.30,
+    },
+    "advanced-public-api": {
+        "prefixes": (
+            "com/minos/api/AdvancedCodeIntelligenceApi",
+            "com/minos/api/LocalAdvancedCodeIntelligenceApi",
+            "com/minos/api/SemanticCodeIntelligenceApi",
+            "com/minos/api/LocalSemanticCodeIntelligenceApi",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
+    },
+    "m19-m20-mcp-catalogue": {
+        "prefixes": ("com/minos/mcp/MinosMcpTools",),
+        "line": 0.50,
+        "branch": 0.30,
+    },
+    "m24-polyglot-provider-platform": {
+        "prefixes": (
+            "com/minos/orchestration/ProviderConformanceKit",
+            "com/minos/orchestration/ProviderOperationalProfile",
+            "com/minos/adapter/scip/ScipIndexerCatalog",
+            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
+            "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
+        ),
+        "line": 0.30,
+        "branch": 0.15,
+    },
+    "m25-remote-distributed-indexing": {
+        "prefixes": (
+            "com/minos/remote/",
+            "com/minos/git/JGitRemoteRepositoryMaterializer",
+            "com/minos/git/RemoteRepositoryCachePolicy",
+            "com/minos/runtime/DistributedArtifactBundleStore",
+            "com/minos/runtime/DistributedArtifactCachePolicy",
+            "com/minos/runtime/DistributedIndexerExecutor",
+            "com/minos/runtime/LocalIsolatedIndexWorker",
+            "com/minos/runtime/WorkerSandboxBackend",
+            "com/minos/runtime/WorkerSandboxQualification",
+            "com/minos/cli/LocalRemoteIndexOperations",
+            "com/minos/cli/RemoteIndexCommand",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
+    },
+    "m26-runtime-dynamic-intelligence": {
+        "prefixes": (
+            "com/minos/dynamic/",
+            "com/minos/store/FileRuntimeObservationStore",
+            "com/minos/cli/RuntimeCommand",
+            "com/minos/output/RuntimeIntelligenceRenderer",
+        ),
+        "line": 0.55,
+        "branch": 0.35,
+    },
+    "m27-team-hosted-control-plane": {
+        "prefixes": (
+            "com/minos/hosted/",
+            "com/minos/store/FileHostedControlPlaneStore",
+            "com/minos/store/EnvironmentHostedTenantKeyProvider",
+            "com/minos/cli/TeamCommand",
+            "com/minos/api/LocalMinosTeamApi",
+            "com/minos/output/HostedControlPlaneRenderer",
+        ),
+        "line": 0.45,
+        "branch": 0.25,
+    },
 }
 
 
@@ -73,7 +203,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        default="target/m15-quality/jacoco-gate.json",
+        default="target/m21-quality/jacoco-gate.json",
         help="machine-readable gate result",
     )
     args = parser.parse_args()
@@ -128,12 +258,12 @@ def main() -> int:
         )
 
     if failures:
-        print("M15 JACOCO GATE FAILED", file=sys.stderr)
+        print("M21 JACOCO GATE FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
 
-    print("M15 JACOCO GATE SUCCESS")
+    print("M21 JACOCO GATE SUCCESS")
     return 0
 
 

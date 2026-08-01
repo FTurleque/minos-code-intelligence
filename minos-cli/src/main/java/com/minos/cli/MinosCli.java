@@ -2,7 +2,9 @@ package com.minos.cli;
 
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
+import com.minos.dynamic.RuntimeIntelligenceService;
 import com.minos.git.GitIntelligenceService;
+import com.minos.hosted.HostedControlPlaneService;
 import com.minos.impact.ProjectImpactQuery;
 
 import java.io.IOException;
@@ -24,8 +26,10 @@ public final class MinosCli {
               index             Discover, select and execute providers automatically
               import-scip       Import an explicit SCIP artifact for diagnostics/fallback
               index-status      Show active snapshot and known index metadata
+              remote            Materialize/index an immutable GitHub or GitLab revision
 
             Runtime:
+              runtime           Import/query partial runtime observations and hot paths
               doctor            Diagnose MINOS and provider prerequisites
               tools list        List managed providers
               tools install     Install/bootstrap a managed provider
@@ -51,6 +55,9 @@ public final class MinosCli {
               git-activity       Show factual Git file/zone activity for a project
               nexus-export       Export the active normalized snapshot as NEXUS contract JSON
 
+            Team / hosted (opt-in):
+              team               Manage tenant-scoped shared workspaces and governance
+
             Exit codes:
               0  success
               1  execution failure / doctor action required
@@ -75,6 +82,9 @@ public final class MinosCli {
     private final IdeCommand ideCommand;
     private final GitActivityCommand gitActivityCommand;
     private final NexusExportCommand nexusExportCommand;
+    private final RemoteIndexCommand remoteIndexCommand;
+    private final RuntimeCommand runtimeCommand;
+    private final TeamCommand teamCommand;
 
     public MinosCli(ProjectSymbolQuery symbolQuery) {
         this(symbolQuery, null, null, null, null, null, null, null);
@@ -137,6 +147,59 @@ public final class MinosCli {
             ProviderPlatformService providerPlatformService,
             GitIntelligenceService gitIntelligenceService
     ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations
+    ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
+                remoteIndexOperations, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations,
+            RuntimeIntelligenceService runtimeIntelligenceService
+    ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
+                remoteIndexOperations, runtimeIntelligenceService, null);
+    }
+
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations,
+            RuntimeIntelligenceService runtimeIntelligenceService,
+            HostedControlPlaneService hostedControlPlaneService
+    ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
@@ -160,6 +223,10 @@ public final class MinosCli {
                 ? null
                 : new GitActivityCommand(projectOperations, gitIntelligenceService);
         this.nexusExportCommand = nexusExportCommand;
+        this.remoteIndexCommand = remoteIndexOperations == null ? null : new RemoteIndexCommand(remoteIndexOperations);
+        this.runtimeCommand = runtimeIntelligenceService == null ? null : new RuntimeCommand(runtimeIntelligenceService);
+        this.teamCommand = hostedControlPlaneService == null ? null : new TeamCommand(
+                hostedControlPlaneService, () -> System.getenv(TeamCommand.TOKEN_ENVIRONMENT_VARIABLE));
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -214,6 +281,15 @@ public final class MinosCli {
         }
         if (NexusExportCommand.NAME.equals(command)) {
             return nexusExportCommand == null ? unavailable(command, error) : nexusExportCommand.run(commandArguments, output, error);
+        }
+        if (RemoteIndexCommand.NAME.equals(command)) {
+            return remoteIndexCommand == null ? unavailable(command, error) : remoteIndexCommand.run(commandArguments, output, error);
+        }
+        if (RuntimeCommand.NAME.equals(command)) {
+            return runtimeCommand == null ? unavailable(command, error) : runtimeCommand.run(commandArguments, output, error);
+        }
+        if (TeamCommand.NAME.equals(command)) {
+            return teamCommand == null ? unavailable(command, error) : teamCommand.run(commandArguments, output, error);
         }
         if (FindSymbolCommand.NAME.equals(command)) return findSymbolCommand.run(commandArguments, output, error);
         if (SearchCodeCommand.NAME.equals(command)) return searchCodeCommand.run(commandArguments, output, error);

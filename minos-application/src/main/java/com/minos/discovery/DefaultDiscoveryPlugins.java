@@ -31,7 +31,11 @@ public final class DefaultDiscoveryPlugins {
                 markerProject("pom.xml"),
                 markerProject("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"),
                 markerProject("package.json"),
-                markerProject("pyproject.toml", "setup.py")
+                markerProject("pyproject.toml", "setup.py"),
+                markerProject("CMakeLists.txt"),
+                extensionMarkerProject(".csproj", ".sln"),
+                markerProject("go.mod", "go.work"),
+                markerProject("Cargo.toml")
         );
     }
 
@@ -42,7 +46,11 @@ public final class DefaultDiscoveryPlugins {
                         "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"),
                 inheritedWorkspaceBuildSystem(BuildSystem.PNPM, "pnpm-lock.yaml", "pnpm-workspace.yaml"),
                 inheritedWorkspaceBuildSystem(BuildSystem.YARN, "yarn.lock"),
-                inheritedWorkspaceBuildSystem(BuildSystem.NPM, "package-lock.json")
+                inheritedWorkspaceBuildSystem(BuildSystem.NPM, "package-lock.json"),
+                markerBuildSystem(BuildSystem.CMAKE, "CMakeLists.txt"),
+                extensionMarkerBuildSystem(BuildSystem.DOTNET, ".csproj", ".sln"),
+                markerBuildSystem(BuildSystem.GO_MODULE, "go.mod", "go.work"),
+                markerBuildSystem(BuildSystem.CARGO, "Cargo.toml")
         );
     }
 
@@ -51,7 +59,12 @@ public final class DefaultDiscoveryPlugins {
                 extensionLanguage(Language.JAVA, ".java"),
                 extensionLanguage(Language.KOTLIN, ".kt", ".kts"),
                 extensionLanguage(Language.TYPESCRIPT, ".ts", ".tsx"),
-                extensionLanguage(Language.PYTHON, ".py")
+                extensionLanguage(Language.PYTHON, ".py"),
+                extensionLanguage(Language.C, ".c", ".h"),
+                extensionLanguage(Language.CPP, ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"),
+                extensionLanguage(Language.CSHARP, ".cs"),
+                extensionLanguage(Language.GO, ".go"),
+                extensionLanguage(Language.RUST, ".rs")
         );
     }
 
@@ -66,7 +79,21 @@ public final class DefaultDiscoveryPlugins {
                 conventionalRoot("tests", SourceRootKind.TEST, Language.TYPESCRIPT, ".ts", ".tsx"),
                 conventionalRoot("src", SourceRootKind.SOURCE, Language.PYTHON, ".py"),
                 conventionalRoot("test", SourceRootKind.TEST, Language.PYTHON, ".py"),
-                conventionalRoot("tests", SourceRootKind.TEST, Language.PYTHON, ".py")
+                conventionalRoot("tests", SourceRootKind.TEST, Language.PYTHON, ".py"),
+                conventionalRoot("src", SourceRootKind.SOURCE, Language.C, ".c", ".h"),
+                conventionalRoot("include", SourceRootKind.SOURCE, Language.C, ".h"),
+                conventionalRoot("test", SourceRootKind.TEST, Language.C, ".c", ".h"),
+                conventionalRoot("tests", SourceRootKind.TEST, Language.C, ".c", ".h"),
+                conventionalRoot("src", SourceRootKind.SOURCE, Language.CPP, ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"),
+                conventionalRoot("include", SourceRootKind.SOURCE, Language.CPP, ".hh", ".hpp", ".hxx"),
+                conventionalRoot("test", SourceRootKind.TEST, Language.CPP, ".cc", ".cpp", ".cxx"),
+                conventionalRoot("tests", SourceRootKind.TEST, Language.CPP, ".cc", ".cpp", ".cxx"),
+                conventionalRoot("src", SourceRootKind.SOURCE, Language.CSHARP, ".cs"),
+                conventionalRoot("test", SourceRootKind.TEST, Language.CSHARP, ".cs"),
+                conventionalRoot("tests", SourceRootKind.TEST, Language.CSHARP, ".cs"),
+                conventionalRoot(".", SourceRootKind.SOURCE, Language.GO, ".go"),
+                conventionalRoot("src", SourceRootKind.SOURCE, Language.RUST, ".rs"),
+                conventionalRoot("tests", SourceRootKind.TEST, Language.RUST, ".rs")
         );
     }
 
@@ -77,11 +104,25 @@ public final class DefaultDiscoveryPlugins {
                 .anyMatch(file -> visibleFile(projectRoot, file, ignorePolicy));
     }
 
+    private static ProjectDetector extensionMarkerProject(String... suffixes) {
+        Set<String> values = normalizedSuffixes(suffixes);
+        return (projectRoot, directory, ignorePolicy) -> containsVisibleMarkerExtension(
+                projectRoot, directory, values, ignorePolicy);
+    }
+
     private static BuildSystemDetector markerBuildSystem(BuildSystem system, String... markers) {
         List<String> names = List.of(markers);
         return (projectRoot, moduleRoot, ignorePolicy) -> names.stream()
                 .map(moduleRoot::resolve)
                 .anyMatch(file -> visibleFile(projectRoot, file, ignorePolicy))
+                ? Optional.of(system)
+                : Optional.empty();
+    }
+
+    private static BuildSystemDetector extensionMarkerBuildSystem(BuildSystem system, String... suffixes) {
+        Set<String> values = normalizedSuffixes(suffixes);
+        return (projectRoot, moduleRoot, ignorePolicy) -> containsVisibleMarkerExtension(
+                projectRoot, moduleRoot, values, ignorePolicy)
                 ? Optional.of(system)
                 : Optional.empty();
     }
@@ -109,7 +150,7 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static LanguageDetector extensionLanguage(Language language, String... extensions) {
-        Set<String> values = Set.of(extensions);
+        Set<String> values = normalizedSuffixes(extensions);
         return file -> {
             String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
             return values.stream().anyMatch(name::endsWith) ? Optional.of(language) : Optional.empty();
@@ -122,9 +163,9 @@ public final class DefaultDiscoveryPlugins {
             Language language,
             String... extensions
     ) {
-        Set<String> values = Set.of(extensions);
+        Set<String> values = normalizedSuffixes(extensions);
         return (projectRoot, moduleRoot, ignorePolicy) -> {
-            Path candidate = moduleRoot.resolve(relative);
+            Path candidate = moduleRoot.resolve(relative).normalize();
             Path projectRelative = projectRoot.relativize(candidate);
             if (!Files.isDirectory(candidate)
                     || ignorePolicy.isIgnored(projectRelative, true)
@@ -135,12 +176,36 @@ public final class DefaultDiscoveryPlugins {
         };
     }
 
+    private static Set<String> normalizedSuffixes(String... suffixes) {
+        return java.util.Arrays.stream(suffixes)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    private static boolean containsVisibleMarkerExtension(
+            Path projectRoot,
+            Path directory,
+            Set<String> suffixes,
+            ProjectIgnorePolicy ignorePolicy
+    ) {
+        if (!Files.isDirectory(directory)) {
+            return false;
+        }
+        try (var entries = Files.list(directory)) {
+            return entries.filter(Files::isRegularFile)
+                    .filter(file -> !ignorePolicy.isIgnored(projectRoot.relativize(file), false))
+                    .map(file -> file.getFileName().toString().toLowerCase(Locale.ROOT))
+                    .anyMatch(name -> suffixes.stream().anyMatch(name::endsWith));
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
     private static boolean containsVisibleExtension(
             Path projectRoot,
             Path sourceRoot,
             Set<String> extensions,
-            ProjectIgnorePolicy ignorePolicy
-    ) throws IOException {
+            ProjectIgnorePolicy ignorePolicy) throws IOException {
         boolean[] found = {false};
         Files.walkFileTree(sourceRoot, new SimpleFileVisitor<>() {
             @Override

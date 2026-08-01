@@ -85,10 +85,10 @@ function Assert-M20Structure {
     )
     foreach ($relative in $required) { [void](Require-File -Relative $relative) }
 
-    Require-Pattern 'minos-domain\pom.xml' `
-        '<include>com/minos/semantic/\*\*/\*\.java</include>' 'M20 domain POM must compile com/minos/semantic/**/*.java explicitly.'
-    Require-Pattern 'minos-application\pom.xml' `
-        '<include>com/minos/semantic/\*\*/\*\.java</include>' 'M20 application POM must compile com/minos/semantic/**/*.java explicitly.'
+    # Since M21-S4, module ownership is physical: sources above live under their
+    # owning module's src/main/java and Maven compiles the natural source tree.
+    # The M21 module-boundary gate owns the no-allowlist invariant; clean verify
+    # below proves these M20 sources are actually compilable from that layout.
 
     Require-Pattern 'minos-api\src\main\java\com\minos\api\MinosApi.java' `
         'CONTRACT_VERSION\s*=\s*"1"' 'M20 must not change historical MinosApi v1.'

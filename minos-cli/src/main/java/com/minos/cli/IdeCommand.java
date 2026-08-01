@@ -22,7 +22,15 @@ public final class IdeCommand {
             "related-tests",
             "index-lifecycle",
             "doctor",
-            "git-activity"
+            "git-activity",
+            "program-graph",
+            "impact-v2",
+            "security-paths",
+            "semantic-index-status",
+            "semantic-index-sync",
+            "semantic-search",
+            "hybrid-search",
+            "hybrid-context"
     );
 
     private static final String USAGE = """

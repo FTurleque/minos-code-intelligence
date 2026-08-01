@@ -22,6 +22,32 @@ if ($env:OS -ne 'Windows_NT') {
     throw 'The Windows distribution must be built on Windows.'
 }
 
+function Resolve-Python {
+    foreach ($Name in @('python.exe', 'python', 'python3.exe', 'python3')) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command) { return $Command.Source }
+    }
+    throw 'Python is required to generate MINOS release supply-chain evidence.'
+}
+
+function Invoke-NativeChecked {
+    param(
+        [Parameter(Mandatory = $true)][string] $File,
+        [Parameter(Mandatory = $true)][string[]] $Arguments,
+        [Parameter(Mandatory = $true)][string] $Failure
+    )
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $File @Arguments
+        $Exit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
+    if ($Exit -ne 0) { throw "$Failure (exit=$Exit)" }
+}
+
 # The setup modifies third-party MCP client configuration. Qualify this lifecycle
 # on every Windows distribution build so local -ValidateOnly runs provide the
 # same safety gate even when GitHub Actions is unavailable.
@@ -68,17 +94,55 @@ if ($JavaVersion -notmatch '"24(?:\.|"|-)') {
 }
 
 # M15-S2 makes the repository POM a real multi-module reactor. Release versions
-# are now supplied through Maven's CI-friendly `revision` property so every
-# module sees one coherent version; do not generate a temporary mono-module POM.
+# are supplied through Maven's CI-friendly `revision` property so every module
+# sees one coherent version; do not generate a temporary mono-module POM.
 Push-Location $RepoRoot
 try {
-    $MavenArgs = @("-Drevision=$Version", 'clean')
+    $MavenArgs = @("-Drevision=$Version")
+    if ($SkipVerify) {
+        # M21-S5 calls this only after the full exact-head core qualification.
+        # Avoid rerunning Surefire while still rebuilding the release binaries.
+        $MavenArgs += '-DskipTests'
+    }
+    $MavenArgs += 'clean'
     $MavenArgs += if ($SkipVerify) { 'package' } else { 'verify' }
     & '.\mvnw.cmd' @MavenArgs
     if ($LASTEXITCODE -ne 0) {
         throw "MINOS Maven build failed with exit code $LASTEXITCODE"
     }
-} finally {
+
+    # makeAggregateBom is an aggregator goal and must execute from the Maven
+    # execution root. Binding it in minos-app caused CycloneDX 2.9.2 to skip it
+    # as a non-execution root. Generate the release SBOM explicitly here, after
+    # the reactor build, so all module artifacts/dependencies are available.
+    $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
+    if ($RootPomContent -notmatch '<cyclonedx\.maven\.plugin\.version>\s*([^<]+)\s*</cyclonedx\.maven\.plugin\.version>') {
+        throw 'Unable to resolve cyclonedx.maven.plugin.version from root pom.xml.'
+    }
+    $CycloneDxVersion = $Matches[1].Trim()
+    $SbomOutputDirectory = Join-Path $RepoRoot 'target\sbom'
+    Remove-Item -LiteralPath $SbomOutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $SbomOutputDirectory | Out-Null
+
+    $CycloneDxArgs = @(
+        "-Drevision=$Version",
+        '-DschemaVersion=1.6',
+        '-DoutputFormat=json',
+        '-DoutputName=minos-cyclonedx',
+        "-DoutputDirectory=$SbomOutputDirectory",
+        '-DoutputReactorProjects=false',
+        '-DincludeTestScope=false',
+        '-DincludeLicenseText=false',
+        '-Dcyclonedx.skipAttach=true',
+        '-DprojectType=application',
+        "org.cyclonedx:cyclonedx-maven-plugin:${CycloneDxVersion}:makeAggregateBom"
+    )
+    & '.\mvnw.cmd' @CycloneDxArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "CycloneDX aggregate SBOM generation failed with exit code $LASTEXITCODE"
+    }
+}
+finally {
     Pop-Location
 }
 
@@ -87,18 +151,28 @@ if (-not (Test-Path -LiteralPath $Jar -PathType Leaf)) {
     throw "Shaded MINOS JAR not found: $Jar"
 }
 
+$SbomSource = Join-Path $RepoRoot 'target\sbom\minos-cyclonedx.json'
+if (-not (Test-Path -LiteralPath $SbomSource -PathType Leaf)) {
+    throw "CycloneDX release SBOM not found after root aggregation: $SbomSource"
+}
+
 $Stage = Join-Path $OutputRoot '.jpackage-input'
 $AppImages = Join-Path $OutputRoot '.jpackage-output'
 $DistributionName = "minos-$Version-windows-x64"
 $Distribution = Join-Path $OutputRoot $DistributionName
 $Zip = Join-Path $OutputRoot "$DistributionName.zip"
 $Checksum = "$Zip.sha256"
+$SbomSidecar = Join-Path $OutputRoot "minos-$Version.cdx.json"
+$SbomSidecarChecksum = "$SbomSidecar.sha256"
+$NoticesSidecar = Join-Path $OutputRoot "MINOS-$Version-THIRD-PARTY-NOTICES.txt"
+$NoticesSidecarChecksum = "$NoticesSidecar.sha256"
 
 Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $Distribution -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue
+foreach ($Artifact in @($Zip, $Checksum, $SbomSidecar, $SbomSidecarChecksum, $NoticesSidecar, $NoticesSidecarChecksum)) {
+    Remove-Item -LiteralPath $Artifact -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Force -Path $Stage, $AppImages, $Distribution | Out-Null
 
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $Stage 'minos.jar')
@@ -110,6 +184,7 @@ $AppVersion = ($Version -split '[-+]')[0]
     '--input', $Stage,
     '--main-jar', 'minos.jar',
     '--main-class', 'com.minos.cli.MinosLauncher',
+    '--add-modules', 'jdk.compiler',
     '--dest', $AppImages,
     '--win-console'
 )
@@ -127,7 +202,8 @@ $LibDirectory = Join-Path $Distribution 'lib'
 $DockerDirectory = Join-Path $Distribution 'docker'
 $DockerScripts = Join-Path $DockerDirectory 'scripts'
 $IntegrationDirectory = Join-Path $Distribution 'integration'
-New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $IntegrationDirectory | Out-Null
+$SupplyChainDirectory = Join-Path $Distribution 'supply-chain'
+New-Item -ItemType Directory -Force -Path $LibDirectory, $DockerScripts, $IntegrationDirectory, $SupplyChainDirectory | Out-Null
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $LibDirectory 'minos.jar') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
     -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
@@ -198,6 +274,11 @@ Optional hardened Docker MCP:
     -Start
 
 Docker Desktop must already be installed and running. Docker is optional and is not required by the native MCP integrations above.
+
+Supply-chain evidence:
+  supply-chain\minos.cdx.json
+  supply-chain\THIRD-PARTY-NOTICES.txt
+  RELEASE-MANIFEST.json
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
 $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
@@ -206,11 +287,47 @@ version=$Version
 commit=$Commit
 java=$JavaVersion
 builtAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
+sbom=supply-chain/minos.cdx.json
+manifest=RELEASE-MANIFEST.json
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'VERSION') -Encoding ascii
 
+Copy-Item -LiteralPath $SbomSource -Destination (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Force
+$Python = Resolve-Python
+Invoke-NativeChecked -File $Python -Arguments @(
+    'scripts/release/generate-third-party-notices.py',
+    '--sbom', (Join-Path $SupplyChainDirectory 'minos.cdx.json'),
+    '--output', (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt'),
+    '--strict'
+) -Failure 'Third-party notice generation failed'
+Invoke-NativeChecked -File $Python -Arguments @(
+    'scripts/release/create-release-manifest.py',
+    '--distribution', $Distribution,
+    '--version', $Version,
+    '--commit', $Commit,
+    '--output', (Join-Path $Distribution 'RELEASE-MANIFEST.json')
+) -Failure 'Release manifest generation failed'
+Invoke-NativeChecked -File $Python -Arguments @(
+    'scripts/release/check-supply-chain.py',
+    '--distribution', $Distribution,
+    '--version', $Version,
+    '--commit', $Commit,
+    '--strict-licenses'
+) -Failure 'Release supply-chain evidence validation failed'
+
+Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'minos.cdx.json') -Destination $SbomSidecar -Force
+Copy-Item -LiteralPath (Join-Path $SupplyChainDirectory 'THIRD-PARTY-NOTICES.txt') -Destination $NoticesSidecar -Force
+
 Compress-Archive -LiteralPath $Distribution -DestinationPath $Zip -CompressionLevel Optimal
-$Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-"$Hash  $([System.IO.Path]::GetFileName($Zip))" | Set-Content -LiteralPath $Checksum -Encoding ascii
+
+function Write-Sha256Sidecar([string] $Artifact, [string] $Sidecar) {
+    $Hash = (Get-FileHash -LiteralPath $Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$Hash  $([System.IO.Path]::GetFileName($Artifact))" | Set-Content -LiteralPath $Sidecar -Encoding ascii
+    return $Hash
+}
+
+$Hash = Write-Sha256Sidecar -Artifact $Zip -Sidecar $Checksum
+$SbomHash = Write-Sha256Sidecar -Artifact $SbomSidecar -Sidecar $SbomSidecarChecksum
+$NoticesHash = Write-Sha256Sidecar -Artifact $NoticesSidecar -Sidecar $NoticesSidecarChecksum
 
 Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinue
@@ -220,3 +337,7 @@ Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
 Write-Host "Distribution : $Distribution"
 Write-Host "ZIP          : $Zip"
 Write-Host "SHA-256      : $Hash"
+Write-Host "SBOM         : $SbomSidecar"
+Write-Host "SBOM SHA-256 : $SbomHash"
+Write-Host "Notices      : $NoticesSidecar"
+Write-Host "Notices SHA  : $NoticesHash"

@@ -21,7 +21,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0004](0004-stack-java-maven-core-sans-framework.md) | Implement the MINOS core with Maven and no server framework | Partially superseded by ADR-0005 | C0/M0 |
 | [0005](0005-aligner-java-24-environnement-developpement.md) | Align MINOS on Java 24 | Accepted | M0 |
 | [0006](0006-promouvoir-les-index-de-maniere-atomique.md) | Promouvoir les index de manière atomique | Accepted | M1 |
-| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans un registre local | Accepted | M1 |
+| [0007](0007-attribuer-identites-projet-workspace-dans-registre-local.md) | Attribuer les identités projet/workspace dans registre local | Accepted | M1 |
 | [0008](0008-negocier-indexeurs-par-capacites-explicites.md) | Négocier les indexeurs par capacités explicites | Accepted | M1 |
 | [0009](0009-normalized-symbol-identity.md) | Modéliser les identités de symboles sans inventer de canonicité | Accepted | M2 |
 | [0010](0010-normalized-relationship-semantics.md) | Normaliser les relations avec provenance, preuve et confiance explicites | Accepted | M3 |
@@ -44,6 +44,13 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0027](0027-intellij-external-client-and-versioned-cli-protocol.md) | Isoler le plugin IntelliJ en client Java 21 et négocier un protocole CLI JSON versionné | Accepted | M18 |
 | [0028](0028-capability-honest-program-graph-and-bounded-advanced-analysis.md) | Composer un program graph capability-honest et borner toutes les analyses avancées | Accepted | M19 |
 | [0029](0029-optional-rebuildable-semantic-layer-and-hybrid-ranking.md) | Garder la couche sémantique optionnelle, reconstruisible et distincte des faits structurés | Accepted | M20 |
+| [0030](0030-java-ast-reference-provider-with-explicit-capability-limits.md) | Fournir un provider Java AST de référence avec limitations et capabilities explicites | Accepted | M22 |
+| [0031](0031-local-learned-semantic-retrieval-with-measurement-gated-ann.md) | Ajouter un provider learned local qualifié et conserver ANN derrière une décision mesurée | Accepted | M23 |
+| [0032](0032-evidence-gated-polyglot-scip-providers.md) | Étendre les providers SCIP polyglottes uniquement sous preuves de capability, identité, provenance et plateforme | Accepted | M24 |
+| [0033](0033-immutable-remote-revisions-and-verified-worker-artifacts.md) | Épingler les sources distantes et n’accepter que des artefacts worker bornés, vérifiés et concordants | Accepted | M25 |
+| [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
+| [0035](0035-opt-in-tenant-control-plane-with-external-keys.md) | Ajouter un contrôle tenant opt-in, chiffré, audité et alimenté par des clés externes | Accepted | M27 |
+| [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
 
 ## Règle de rédaction
 

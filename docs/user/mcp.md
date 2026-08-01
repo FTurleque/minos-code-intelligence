@@ -1,6 +1,10 @@
 # Utiliser MINOS via MCP
 
-MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **23 tools** restent read-only.
+MINOS expose un serveur **Model Context Protocol local via STDIO**. Les **31 tools** restent read-only.
+
+Les trois tools M26 `minos_runtime_sessions`, `minos_runtime_report` et `minos_runtime_symbol` consultent uniquement les sessions runtime déjà importées. Le MCP ne peut ni importer une trace, ni muter le snapshot statique, ni promouvoir une capability provider.
+
+Les cinq tools M27 `minos_team_tenant`, `minos_team_workspaces`, `minos_team_workspace`, `minos_team_members` et `minos_team_audit` sont également read-only. Leur bearer token provient uniquement de `MINOS_TEAM_TOKEN` dans l’environnement du processus MCP ; aucun schéma tool n’accepte un secret.
 
 ## Mode recommandé : runtime natif
 

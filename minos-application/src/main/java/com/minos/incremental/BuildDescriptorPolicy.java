@@ -26,6 +26,15 @@ public final class BuildDescriptorPolicy {
             "pyproject.toml",
             "setup.py"
     );
+    private static final Set<String> M24_ADDITIONAL_FILE_NAMES = Set.of(
+            "CMakeLists.txt",
+            "compile_commands.json",
+            "go.mod",
+            "go.sum",
+            "go.work",
+            "Cargo.toml",
+            "Cargo.lock"
+    );
 
     private final Set<String> fileNames;
 
@@ -41,14 +50,26 @@ public final class BuildDescriptorPolicy {
         this.fileNames = Set.copyOf(normalized);
     }
 
+    /** Historical M17 policy retained for regression fixtures that explicitly request it. */
     public static BuildDescriptorPolicy m17Defaults() {
         return new BuildDescriptorPolicy(M17_DEFAULT_FILE_NAMES);
+    }
+
+    /** Current default policy through M24. */
+    public static BuildDescriptorPolicy m24Defaults() {
+        LinkedHashSet<String> values = new LinkedHashSet<>(M17_DEFAULT_FILE_NAMES);
+        values.addAll(M24_ADDITIONAL_FILE_NAMES);
+        return new BuildDescriptorPolicy(values);
     }
 
     public boolean isBuildDescriptor(Path relativePath) {
         Objects.requireNonNull(relativePath, "relativePath");
         Path fileName = relativePath.getFileName();
-        return fileName != null && fileNames.contains(fileName.toString());
+        if (fileName != null && fileNames.contains(fileName.toString())) {
+            return true;
+        }
+        String name = fileName == null ? "" : fileName.toString().toLowerCase(java.util.Locale.ROOT);
+        return name.endsWith(".csproj") || name.endsWith(".sln");
     }
 
     public Set<String> fileNames() {

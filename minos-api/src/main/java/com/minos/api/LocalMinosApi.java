@@ -53,6 +53,7 @@ public final class LocalMinosApi implements MinosApi {
     private final ProjectSymbolQuery symbolQuery;
     private final ProjectArchitectureQuery architectureQuery;
     private final ProjectImpactQuery impactQuery;
+    private final MinosTeamApi teamApi;
 
     public LocalMinosApi(Path home) throws MinosApiException {
         this(openApplication(home));
@@ -65,6 +66,7 @@ public final class LocalMinosApi implements MinosApi {
         this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
         this.architectureQuery = app.architectureQuery();
         this.impactQuery = app.impactQuery();
+        this.teamApi = new LocalMinosTeamApi(app);
     }
 
     @Override
@@ -183,6 +185,11 @@ public final class LocalMinosApi implements MinosApi {
                     new ImpactAnalysisRequest(value.symbolId(), value.maxDepth(), value.maxResults())
             ));
         });
+    }
+
+    @Override
+    public MinosTeamApi team() {
+        return teamApi;
     }
 
     private static ProjectDto project(ProjectOperations.ProjectView view) {

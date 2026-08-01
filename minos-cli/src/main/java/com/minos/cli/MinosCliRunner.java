@@ -43,7 +43,10 @@ public final class MinosCliRunner {
             ImpactCommand.NAME,
             IdeCommand.NAME,
             GitActivityCommand.NAME,
-            NexusExportCommand.NAME
+            NexusExportCommand.NAME,
+            RemoteIndexCommand.NAME,
+            RuntimeCommand.NAME,
+            TeamCommand.NAME
     );
 
     private MinosCliRunner() { }
@@ -65,6 +68,9 @@ public final class MinosCliRunner {
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
         if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
+        if (isIdeIntelligenceRequest(arguments)) {
+            return new IdeIntelligenceCommand(app).run(slice(arguments, 1), output, error);
+        }
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
@@ -77,7 +83,10 @@ public final class MinosCliRunner {
                 new LocalAutonomousIndexOperations(app),
                 app.home(),
                 ProviderPlatformService.defaults(app),
-                app.gitIntelligence()
+                app.gitIntelligence(),
+                new LocalRemoteIndexOperations(app),
+                app.runtimeIntelligenceService(),
+                app.hostedControlPlaneService().orElse(null)
         ).run(arguments, output, error);
     }
 
@@ -106,6 +115,23 @@ public final class MinosCliRunner {
             output.append(GitActivityCommand.usage()).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
+        if (arguments.length == 2 && RemoteIndexCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(RemoteIndexCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (arguments.length == 2 && RuntimeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(RuntimeCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (arguments.length == 2 && TeamCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(TeamCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
+        if (arguments.length == 2 && IdeCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
+            output.append(IdeCommand.usage()).append('\n').append('\n')
+                    .append(IdeIntelligenceCommand.usage()).append('\n');
+            return FindSymbolCommand.SUCCESS;
+        }
         return statelessHelpCli().run(arguments, output, error);
     }
 
@@ -114,6 +140,13 @@ public final class MinosCliRunner {
         return arguments.length >= 2
                 && IdeCommand.NAME.equals(arguments[0])
                 && "handshake".equals(arguments[1]);
+    }
+
+    static boolean isIdeIntelligenceRequest(String[] arguments) {
+        Objects.requireNonNull(arguments, "arguments");
+        return arguments.length >= 2
+                && IdeCommand.NAME.equals(arguments[0])
+                && !"handshake".equals(arguments[1]);
     }
 
     static int runIdeHandshake(String[] arguments, Appendable output, Appendable error) throws IOException {

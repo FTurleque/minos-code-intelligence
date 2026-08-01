@@ -1,0 +1,13 @@
+id	symbolId	kind	label	fileId	startLine	startColumn	endLine	endColumn	positionEncoding
+block:entry		BASIC_BLOCK	entry	Fixture.java	1	0	1	10	UTF16_CODE_UNITS
+block:branch		BASIC_BLOCK	branch	Fixture.java	2	0	2	12	UTF16_CODE_UNITS
+block:exit		BASIC_BLOCK	exit	Fixture.java	3	0	3	8	UTF16_CODE_UNITS
+var:def		VARIABLE	value definition	Fixture.java	4	0	4	5	UTF16_CODE_UNITS
+var:use		VARIABLE	value use	Fixture.java	5	0	5	5	UTF16_CODE_UNITS
+arg:caller		PARAMETER	caller argument	Fixture.java	6	0	6	8	UTF16_CODE_UNITS
+arg:callee		PARAMETER	callee parameter	Fixture.java	7	0	7	8	UTF16_CODE_UNITS
+ret:callee		RETURN_VALUE	callee return	Fixture.java	8	0	8	8	UTF16_CODE_UNITS
+ret:caller		RETURN_VALUE	caller result	Fixture.java	9	0	9	8	UTF16_CODE_UNITS
+security:source		SOURCE	request input	Fixture.java	10	0	10	8	UTF16_CODE_UNITS
+security:sanitizer		SANITIZER	sanitize	Fixture.java	11	0	11	8	UTF16_CODE_UNITS
+security:sink		SINK	database write	Fixture.java	12	0	12	8	UTF16_CODE_UNITS

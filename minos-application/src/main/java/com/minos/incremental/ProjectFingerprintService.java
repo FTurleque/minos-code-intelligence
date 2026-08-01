@@ -33,7 +33,7 @@ public final class ProjectFingerprintService {
     private final BuildDescriptorPolicy buildDescriptorPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m17Defaults());
+        this(BuildDescriptorPolicy.m24Defaults());
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {

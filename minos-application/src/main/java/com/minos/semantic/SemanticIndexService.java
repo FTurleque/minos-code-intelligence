@@ -88,12 +88,13 @@ public final class SemanticIndexService {
                     null, stored.map(SemanticVectorStore.IndexSnapshot::snapshotId).orElse(null),
                     provider.id(), provider.modelId(), provider.dimensions(),
                     stored.map(value -> value.documents().size()).orElse(0), sizeBytes(projectId),
-                    List.of("ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE"));
+                    appendProviderLimitations(List.of("ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE"), provider));
         }
         if (stored.isEmpty()) {
             return new Status(projectId, project.displayName(), State.MISSING,
                     active.orElseThrow().snapshotId(), null, provider.id(), provider.modelId(),
-                    provider.dimensions(), 0, 0L, List.of("SEMANTIC_INDEX_MISSING"));
+                    provider.dimensions(), 0, 0L,
+                    appendProviderLimitations(List.of("SEMANTIC_INDEX_MISSING"), provider));
         }
         SemanticVectorStore.IndexSnapshot index = stored.orElseThrow();
         boolean modelAligned = provider.id().equals(index.providerId())
@@ -104,7 +105,7 @@ public final class SemanticIndexService {
         List<String> limitations = new ArrayList<>();
         if (!snapshotAligned) limitations.add("SEMANTIC_INDEX_SNAPSHOT_STALE");
         if (!modelAligned) limitations.add("SEMANTIC_INDEX_MODEL_STALE");
-        if (provider instanceof LocalHashEmbeddingProvider) limitations.add("LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL");
+        limitations.addAll(providerLimitations(provider));
         return new Status(projectId, project.displayName(), state,
                 active.orElseThrow().snapshotId(), index.snapshotId(), provider.id(), provider.modelId(),
                 provider.dimensions(), index.documents().size(), sizeBytes(projectId), limitations);
@@ -172,11 +173,9 @@ public final class SemanticIndexService {
                 System.currentTimeMillis(), indexed);
         store.replace(next);
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-        List<String> limitations = provider instanceof LocalHashEmbeddingProvider
-                ? List.of("LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL") : List.of();
         return new UpdateReport(projectId, active.snapshotId(), State.READY,
                 currentDocuments.size(), added, changed, removed, reused,
-                elapsedMillis, sizeBytes(projectId), limitations);
+                elapsedMillis, sizeBytes(projectId), providerLimitations(provider));
     }
 
     private long sizeBytes(String projectId) throws IOException {
@@ -189,6 +188,25 @@ public final class SemanticIndexService {
             bytes += (long) document.vector().dimensions() * Double.BYTES;
         }
         return bytes;
+    }
+
+    private static List<String> appendProviderLimitations(List<String> base, EmbeddingProvider provider) {
+        List<String> result = new ArrayList<>(base);
+        result.addAll(providerLimitations(provider));
+        return List.copyOf(result);
+    }
+
+    private static List<String> providerLimitations(EmbeddingProvider provider) {
+        if (provider instanceof LocalHashEmbeddingProvider) {
+            return List.of("LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL");
+        }
+        if (provider instanceof OllamaEmbeddingProvider) {
+            return List.of(
+                    "LOCAL_LEARNED_EMBEDDING_LOOPBACK_ONLY",
+                    "LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC",
+                    "SEMANTIC_RESULTS_REMAIN_HEURISTIC");
+        }
+        return List.of();
     }
 
     private static void validateProvider(EmbeddingProvider provider) {

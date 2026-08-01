@@ -5,7 +5,8 @@
 
     <description><![CDATA[
     Native IntelliJ client for local-first MINOS Code Intelligence: project/index status,
-    symbol navigation, architecture, impact, related tests and factual Git activity.
+    symbol navigation, architecture, Program Graph, Impact v2, security paths,
+    semantic/hybrid retrieval, related tests and factual Git activity.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -30,8 +31,22 @@
             <action id="Minos.Implementations" class="com.minos.intellij.actions.MinosEditorActions$Implementations" text="Find MINOS implementations"/>
             <separator/>
             <action id="Minos.RelatedTests" class="com.minos.intellij.actions.MinosEditorActions$RelatedTests" text="MINOS related tests"/>
-            <action id="Minos.Impact" class="com.minos.intellij.actions.MinosEditorActions$Impact" text="Analyze MINOS impact"/>
+            <action id="Minos.Impact" class="com.minos.intellij.actions.MinosEditorActions$Impact" text="Analyze MINOS impact (baseline)"/>
             <action id="Minos.Architecture" class="com.minos.intellij.actions.MinosEditorActions$ShowArchitecture" text="Show in MINOS architecture"/>
+            <separator/>
+            <group id="Minos.Advanced.Popup" text="Advanced Intelligence" popup="true">
+                <action id="Minos.ProgramGraph" class="com.minos.intellij.actions.MinosM21Actions$ProgramGraph" text="Show MINOS Program Graph"/>
+                <action id="Minos.ImpactV2" class="com.minos.intellij.actions.MinosM21Actions$ImpactV2" text="Analyze MINOS Impact v2"/>
+                <action id="Minos.SecurityPaths" class="com.minos.intellij.actions.MinosM21Actions$SecurityPaths" text="Analyze MINOS security paths"/>
+            </group>
+            <group id="Minos.Semantic.Popup" text="Semantic &amp; Hybrid" popup="true">
+                <action id="Minos.SemanticIndexStatus" class="com.minos.intellij.actions.MinosM21Actions$SemanticIndexStatus" text="Semantic index status"/>
+                <action id="Minos.SemanticIndexSync" class="com.minos.intellij.actions.MinosM21Actions$SemanticIndexSync" text="Synchronize semantic index"/>
+                <separator/>
+                <action id="Minos.SemanticSearch" class="com.minos.intellij.actions.MinosM21Actions$SemanticSearch" text="Semantic search…"/>
+                <action id="Minos.HybridSearch" class="com.minos.intellij.actions.MinosM21Actions$HybridSearch" text="Hybrid search…"/>
+                <action id="Minos.HybridContext" class="com.minos.intellij.actions.MinosM21Actions$HybridContext" text="Build hybrid context…"/>
+            </group>
             <separator/>
             <action id="Minos.CopyIdentity" class="com.minos.intellij.actions.MinosEditorActions$CopyIdentity" text="Copy MINOS symbol identity"/>
         </group>

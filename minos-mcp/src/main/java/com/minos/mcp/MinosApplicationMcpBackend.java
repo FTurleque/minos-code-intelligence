@@ -19,6 +19,8 @@ import com.minos.output.CodeIntelligenceResultRenderer;
 import com.minos.output.CodeSearchRenderer;
 import com.minos.output.DeterministicJson;
 import com.minos.output.ImpactResultRenderer;
+import com.minos.output.HostedControlPlaneRenderer;
+import com.minos.output.RuntimeIntelligenceRenderer;
 import com.minos.output.SemanticAnalysisResultRenderer;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.output.SymbolResultRenderer;
@@ -32,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 /** Production MCP backend that calls shared application services directly. */
 final class MinosApplicationMcpBackend implements MinosMcpBackend {
@@ -54,17 +58,24 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENTS = 10;
     private static final int DEFAULT_HYBRID_CONTEXT_TOKENS = 4_000;
     private static final int DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS = 800;
+    private static final int DEFAULT_RUNTIME_LIMIT = 20;
 
     private final MinosApplication application;
     private final ProjectInspectionService projects;
     private final ProjectQueryService queries;
     private final ProviderPlatformService providerPlatform;
+    private final Supplier<String> hostedBearerToken;
 
     MinosApplicationMcpBackend(MinosApplication application) {
+        this(application, () -> System.getenv("MINOS_TEAM_TOKEN"));
+    }
+
+    MinosApplicationMcpBackend(MinosApplication application, Supplier<String> hostedBearerToken) {
         this.application = Objects.requireNonNull(application, "application");
         this.projects = application.projectInspectionService();
         this.queries = application.projectQueryService();
         this.providerPlatform = ProviderPlatformService.defaults(application);
+        this.hostedBearerToken = Objects.requireNonNull(hostedBearerToken, "hostedBearerToken");
     }
 
     @Override
@@ -238,6 +249,72 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                         request.query(), request.maxDocuments(), request.maxTokens(), request.maxTokensPerDocument())));
     }
 
+    @Override
+    public String runtimeSessions(RuntimeSessionsRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderSessions(
+                application.runtimeIntelligenceService().listSessions(request.project(), request.limit()));
+    }
+
+    @Override
+    public String runtimeReport(RuntimeReportRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderReport(
+                application.runtimeIntelligenceService().report(
+                        request.project(), request.sessionId(), request.limit()));
+    }
+
+    @Override
+    public String runtimeSymbol(RuntimeSymbolRequest request) throws Exception {
+        return RuntimeIntelligenceRenderer.renderSymbol(
+                application.runtimeIntelligenceService().symbolReport(
+                        request.project(), request.symbolId(), request.sessionId(), request.limit()));
+    }
+
+    @Override
+    public String teamTenant() throws Exception {
+        return HostedControlPlaneRenderer.renderTenant(hosted().tenant(hostedToken()));
+    }
+
+    @Override
+    public String teamWorkspaces() throws Exception {
+        return HostedControlPlaneRenderer.renderWorkspaces(hosted().listWorkspaces(hostedToken()));
+    }
+
+    @Override
+    public String teamWorkspace(String workspaceId) throws Exception {
+        return HostedControlPlaneRenderer.renderWorkspace(hosted().workspace(hostedToken(), parseUuid(workspaceId)));
+    }
+
+    @Override
+    public String teamMembers() throws Exception {
+        return HostedControlPlaneRenderer.renderMembers(hosted().listMembers(hostedToken()));
+    }
+
+    @Override
+    public String teamAudit(int limit) throws Exception {
+        return HostedControlPlaneRenderer.renderAudit(hosted().audit(hostedToken(), limit));
+    }
+
+    private com.minos.hosted.HostedControlPlaneService hosted() {
+        return application.hostedControlPlaneService()
+                .orElseThrow(() -> new IllegalStateException("MINOS team mode is disabled"));
+    }
+
+    private String hostedToken() {
+        String token = hostedBearerToken.get();
+        if (token == null || token.isBlank()) {
+            throw new SecurityException("MINOS_TEAM_TOKEN is required for hosted MCP tools");
+        }
+        return token.trim();
+    }
+
+    private static UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("workspaceId must be a UUID");
+        }
+    }
+
     private List<Map<String, Object>> providerProfiles() {
         return providerPlatform.listProviders().stream().map(value -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -348,5 +425,20 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
                 maxDocuments == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENTS : maxDocuments,
                 maxTokens == null ? DEFAULT_HYBRID_CONTEXT_TOKENS : maxTokens,
                 maxTokensPerDocument == null ? DEFAULT_HYBRID_CONTEXT_DOCUMENT_TOKENS : maxTokensPerDocument);
+    }
+
+    static RuntimeSessionsRequest runtimeSessionsDefaults(String project, Integer limit) {
+        return new RuntimeSessionsRequest(project, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
+    }
+
+    static RuntimeReportRequest runtimeReportDefaults(String project, String sessionId, Integer limit) {
+        return new RuntimeReportRequest(project, sessionId, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
+    }
+
+    static RuntimeSymbolRequest runtimeSymbolDefaults(
+            String project, String symbolId, String sessionId, Integer limit
+    ) {
+        return new RuntimeSymbolRequest(
+                project, symbolId, sessionId, limit == null ? DEFAULT_RUNTIME_LIMIT : limit);
     }
 }

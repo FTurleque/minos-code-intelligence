@@ -1,201 +1,189 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **27 juillet 2026**
+Dernière mise à jour documentaire : **1er août 2026 — M21-S2 CI recovery exécutée (CI PASS / branch-protection BLOCKED plan) ; M28 S1→S8 mergés + S9 gouvernance terminée ; PR #102 prête pour merge main ; release 0.2.0 candidate.**
 
-Ce fichier résume l'état produit livré. Les preuves détaillées sont conservées dans [`history/milestones/`](history/milestones/) et dans les PR/issues de qualification ; les décisions durables sont indexées dans [`adr/`](adr/README.md).
+Ce fichier est la synthèse autoritative de l’état courant. Les contrats détaillés et les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
 ## Synthèse
 
 ```text
-C0 — Cadrage                         TERMINÉ
-M0 — Faisabilité technique          TERMINÉ ET LIVRÉ
-M1 — Découverte et orchestration    TERMINÉ ET LIVRÉ
-M2 — Intelligence des symboles      TERMINÉ ET LIVRÉ
-M3 — Intelligence des relations     TERMINÉ ET LIVRÉ
-M4 — Recherche et contexte compact  TERMINÉ ET LIVRÉ
-M5 — Tests liés et dérivations      TERMINÉ ET LIVRÉ
-M6 — Intelligence d'architecture    TERMINÉ, VALIDÉ ET LIVRÉ
-M7 — Indexation incrémentale        TERMINÉ, VALIDÉ ET LIVRÉ
-M8 — Analyse d'impact               TERMINÉ, VALIDÉ ET LIVRÉ
-M9 — CLI stabilisée                 TERMINÉ, VALIDÉ ET LIVRÉ
-M10 — Serveur MCP                   TERMINÉ, VALIDÉ ET LIVRÉ
-M11 — API publique                  TERMINÉ, VALIDÉ ET LIVRÉ
-M12 — Multi-dépôts + Git            TERMINÉ, VALIDÉ ET LIVRÉ
-M13 — Intégration NEXUS             TERMINÉ, VALIDÉ ET LIVRÉ
-M14 — Indexation autonome + PROD    TERMINÉ, VALIDÉ ET LIVRÉ
-M15 — Industrialisation Core        TERMINÉ, VALIDÉ ET LIVRÉ
-M16 — Scalabilité et performance    TERMINÉ, VALIDÉ ET LIVRÉ
-M17 — Provider & Discovery Platform TERMINÉ, VALIDÉ ET LIVRÉ
-M18 — MINOS for IntelliJ            TERMINÉ, VALIDÉ ET LIVRÉ
-M19 — Advanced Code Intelligence    TERMINÉ, VALIDÉ ET LIVRÉ
-M20 — Semantic & Hybrid Intelligence TERMINÉ, VALIDÉ ET LIVRÉ
+C0→M20                                TERMINÉS, VALIDÉS ET LIVRÉS sur main
+M21 — Production Integrity           S2 DISPOSITION AOÛT 2026 (CI PASS / branch-protection BLOCKED plan) — #73 OPEN
+M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
+M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
+M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
+M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
+M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
+M27 — Team / Hosted Mode             TERMINÉ, VALIDÉ, MERGÉ develop
+M28 — Production Convergence         S1→S8 MERGÉS develop / S9 GOUVERNANCE TERMINÉE — PR #102 OPEN/READY
 ```
 
-La phase M15→M20 est clôturée. Aucun M21 n'est actuellement déclaré.
+**État livré sur `main` : C0→M20.**
 
-## M20 — Semantic & Hybrid Code Intelligence
+`develop` contient le tree M21 localement qualifié et M22→M28 S1→S8 fusionnés. M28 est défini par l'issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). Le gel CI de juillet 2026 a pris fin le 1er août 2026 ; M21-S2 CI recovery est terminée (disposition explicite : CI PASS, branch-protection BLOCKED par contrainte de plan) ; PR #102 est candidate de production pour la promotion `develop → main`.
 
-M20 ajoute une couche sémantique **locale et optionnelle** au-dessus des facts structurés MINOS. Les embeddings restent un signal de ranking/rappel et ne deviennent jamais une preuve de relation de code.
+## M21 — Production Integrity & Surface Convergence
 
-Acquis M20 :
+Issue : **#73 OPEN**. Roadmap : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
 
 ```text
-S1   SemanticDocument SYMBOL / FILE / CHUNK + stableKey/checksum       ✅
-S2   EmbeddingProvider SPI optionnel + provider local-hash             ✅
-S3   vector store local versionné, atomique et reconstruisible        ✅
-S4   recherche sémantique bornée, nature HEURISTIC                    ✅
-S5   ranking hybride LEXICAL + GRAPH + SEMANTIC                       ✅
-S6   contexte v2 borné documents/tokens                               ✅
-S7   index sémantique incrémental + réutilisation des vecteurs        ✅
-S8   SemanticCodeIntelligenceApi v1 + 4 tools MCP                     ✅
-S9   NEXUS semantic signals v2, frontière de responsabilité préservée ✅
+S1   governance + docs + runner local                 VALIDÉ
+S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026
+S3   quality gates M19/M20                            VALIDÉ
+S4   Maven module-boundary hardening                  VALIDÉ
+S5   supply-chain + release hardening                 VALIDÉ
+S6   IntelliJ parity M19/M20                          VALIDÉ
+S7   advanced provider productionization              VALIDÉ
+S8   semantic scale qualification                     VALIDÉ
+S9   final production integrity gate                  VALIDÉ exact-head
 ```
-
-### Autorité et optionnalité
 
 ```text
-facts structurés MINOS   = autoritatifs
-semantic vector score    = HEURISTIC
-hybrid ranking           = sélection dérivée
-NEXUS global ranking     = responsabilité NEXUS
+M21 qualified tree : 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
+develop merge      : 4222706502c54e10f0bf0400a18360fb99e6208c
+M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
 ```
 
-`MinosApplication.open(...)` reste utilisable sans embeddings. L'activation native du provider de référence est explicite :
+Scopes conservés : `semantic-learned-provider`, provider avancé, persistance, API/MCP, remote, runtime et hosted.
+
+**M21-S2 — Disposition 1er août 2026** :
 
 ```text
-MINOS_SEMANTIC_PROVIDER=local-hash
+CI Recovery     : PASS — GitHub Actions gates tous PASS sur 96dc60af936d6df6ce8d40245039fe170554df74
+  PR Validation Ubuntu                  PASS
+  PR Validation Windows                 PASS
+  M28 final Linux exact-head gate       PASS
+  M28 final Windows exact-head gate     PASS
+  M19 Advanced Code Intelligence        PASS
+  M20 Semantic Hybrid                   PASS
+  IntelliJ Plugin Validation            PASS
+Branch protection readiness : BLOCKED — dépôt privé plan gratuit ; API /branches/main/protection retourne HTTP 403 ; branch protection non configurable/vérifiable par API ; aucun required check GitHub-enforced configuré ; mergeable_state=unstable (non blocked)
+Disposition M21-S2 : PASS_WITH_CONSTRAINTS — CI recovery terminée, branch protection platform-blocked (contrainte plan)
+Promotion candidate HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
+PR de promotion : #102 OPEN / candidate de production
 ```
 
-Lorsque le provider est activé, `minos index` réaligne l'index sémantique après la promotion structurée. Une panne sémantique n'invalide pas un snapshot structuré réussi.
+## M22 — Advanced Provider Intelligence
 
-### Surfaces M20
-
-- API Java : `SemanticCodeIntelligenceApi` v1 additive ;
-- MCP : **23 tools read-only** au total ;
-- nouveaux tools :
-  - `minos_semantic_index_status` ;
-  - `minos_semantic_search` ;
-  - `minos_hybrid_search` ;
-  - `minos_hybrid_context` ;
-- NEXUS : contrat de signaux sémantiques v2 sans transfert du ranking global, de la sélection finale ni du budget multi-source.
-
-### Qualification M20
-
-Porte reproductible :
+**TERMINÉ, VALIDÉ exact-head, MERGÉ dans `develop`.**
 
 ```text
-scripts/m20/run-final.ps1
+Issue          : #76 CLOSED / completed
+PR             : #77 MERGED
+Qualified HEAD : 75d6169be6d46d4e60ca19e781ff61704ca1613c
+Merge develop  : 37a3c904fd92c25b343344a26991531c75ebc4b6
 ```
 
-Qualification Windows exact-head :
+Contrat : `minos-java-source-v1`, CFG, def-use local, argument/return flow borné, sécurité explicite, provenance et confiance sans confusion entre capability moteur et fait provider.
+
+## M23 — Semantic Retrieval 2.0
+
+**TERMINÉ, VALIDÉ exact-head, MERGÉ dans `develop`.**
 
 ```text
-Validated HEAD: 8d882e67649667898d55f0be97982b2f217027ba
-M20 FINAL SEMANTIC HYBRID CODE INTELLIGENCE VALIDATION SUCCESS
+Issue          : #78 CLOSED / completed
+PR             : #79 MERGED
+Qualified HEAD : 7a5fe2b96480a21e063b8ffa537009e5bdf99bc0
+Merge develop  : ffe12d95ac46c25026661dca51949fb0d39626b4
+Decision       : KEEP_CURRENT_M20_BACKEND
 ```
 
-Preuves :
+Le provider learned local reste opt-in et loopback-only. L’ANN demeure measurement-gated.
 
-- product facts : PASS ;
-- reactor Maven Java 24 : **13/13 modules SUCCESS** ;
-- `minos-application` : **116 tests**, 0 failure/error/skipped ;
-- `minos-api` : **12 tests**, 0 failure/error/skipped ;
-- `minos-mcp` : **6 tests**, 0 failure/error/skipped ;
-- agrégateur : **50 tests**, 0 failure/error/skipped ;
-- shaded JAR smoke IT : **1/1 PASS** ;
-- JaCoCo : tous les gates ciblés PASS ;
-- exact HEAD et worktree propre : PASS.
+## M24 — Polyglot Expansion
 
-PR #72 mergée via `2d095dd2c9f0d362ee54a9840b2b3e1d217579c1`. Issue #71 fermée comme `completed`.
-
-## M19 — Advanced Code Intelligence
-
-M19 fournit un `ProgramGraph` provider-independent et capability-honest, call graph v2, CFG, data-flow/def-use, propagation interprocédurale bornée, CPG, Impact v2 et primitives de sécurité.
-
-Qualification :
+**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
 
 ```text
-Validated HEAD: 859138cbfdd4e0722a6366efd97fa62ad95c2443
-M19 FINAL ADVANCED CODE INTELLIGENCE VALIDATION SUCCESS
+Base           : 8dbe34cb9e524acb62becda4faa263d74b90b9a9
+Issue          : #81 CLOSED / completed
+PR             : #82 MERGED
+Qualified HEAD : 927f57768a79af162e2cdc765d0f54d274cbe02e
+Merge develop  : 2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa
 ```
 
-PR #70 mergée via `3630ebd0f229e1bc028e92444bfa34c3e7609596`. Issue #69 fermée comme `completed`.
+| Provider | Version / preuve | Disposition | Plateformes |
+|---|---|---|---|
+| scip-clang | 0.4.0 | QUALIFIED_WITH_CONSTRAINTS | Linux x86_64 |
+| scip-dotnet | 0.2.14 | QUALIFIED_WITH_CONSTRAINTS | Linux x86_64 |
+| scip-go | 0.2.7 | QUALIFIED_WITH_CONSTRAINTS | Windows x86_64, Linux x86_64 |
+| rust-analyzer | scip 2026-07-27 / v0.3.2989 / commit 12c3381 | QUALIFIED_WITH_CONSTRAINTS | Windows x86_64, Linux x86_64 |
 
-## M18 — MINOS for IntelliJ
+## M25 — Remote & Distributed Indexing
 
-M18 livre un plugin IntelliJ autonome Java 21 consommant MINOS Java 24 par protocole local JSON `minos-ide` v1, sans réimplémenter l'intelligence métier.
-
-Qualification :
+**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
 
 ```text
-Validated HEAD: 0186146668c12027f44b55d0511a45e89e6dee61
-M18 FINAL INTELLIJ INTEGRATION VALIDATION SUCCESS
+Issue          : #84 CLOSED / completed
+PR             : #85 MERGED
+Qualified tree : b17631de59871848351a4139b12be6e0354989bc
+Qualified HEAD : fc395d189cf7fc5a0e06130210a3dc763fc48637
+Merge develop  : 1a82f18115184606cbc13a9070b7cc78643ebb35
+Decision       : ADR-0033
 ```
 
-PR #68 mergée via `faa51f63c5967d874a7a6685b6b513b83bb736b4`. Issue #67 fermée comme `completed`.
+Le worker natif est qualifié avec contraintes pour workspace/process et `ALLOW`. M28 formalise que `DENY` reste fail-closed et qu’aucun claim sandbox pour code non fiable n’est permis.
 
-## M17 — Provider & Discovery Platform
+## M26 — Runtime & Dynamic Intelligence
 
-M17 transforme discovery et providers en plateforme d'extensions explicites : SPI discovery/provider, profils de capacité exhaustifs, Gradle, workspaces npm/pnpm/yarn, Kotlin/Maven, Python/scip-python et conformance kit.
+**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
 
-## M16 — Scalabilité et performance
+```text
+Issue          : #87 CLOSED / completed
+PR             : #88 MERGED
+Qualified HEAD : bf702990125a485646b9b31817c7787086a1dbb3
+Merge develop  : 9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef
+```
 
-M16 impose une campagne reproductible de performance et gouverne le backend par mesures. Le backend retenu reste snapshots fichiers versionnés + vue/indexes reconstruisibles, avec rétention bornée.
+Les observations restent `PARTIAL` / `OBSERVED_PARTIAL`; l’absence d’observation n’est jamais une preuve d’absence runtime.
 
-## M15 — Industrialisation du Core Engine
+## M27 — Team / Hosted Mode
 
-M15 fournit le reactor Maven multi-module, `MinosApplication`, le découplage MCP, la résolution projet commune, la persistance décomposée, les caches/indexes reconstruisibles, JaCoCo/CI et les facts documentaires calculables.
+**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
 
-## Contrats publics courants
+```text
+Issue          : #90 CLOSED / completed
+PR             : #91 MERGED
+Qualified HEAD : d4bd51ef52cb329ab75b70b32bc22e2b236bd65d
+Merge develop  : ee22c3b39b9cd891c18cb61188eb8e973fc7e822
+```
 
-- CLI : stable, codes de sortie `0/1/2`, diagnostics provider et protocole IDE `minos-ide` v1 ;
-- API Java : `MinosApi` v1 stable + `ProviderPlatformApi` v1 + `AdvancedCodeIntelligenceApi` v1 + `SemanticCodeIntelligenceApi` v1 additives ;
-- MCP : STDIO read-only, **23 tools** ;
-- NEXUS : export local versionné + signaux sémantiques v2, responsabilité globale NEXUS préservée ;
-- IntelliJ : plugin optionnel Java 21 consommant le moteur via protocole externe ;
-- installation PROD Windows : ZIP versionné, runtime Java embarqué, doctor et MCP natif ;
-- Docker MCP : mode durci optionnel.
+Le contrôle tenant embarqué reste opt-in, local-first, RBAC fail-closed, chiffré AES-256-GCM et audité par HMAC chaîné. Il ne vaut pas SaaS opéré.
 
-Les valeurs calculables exactes restent dans [`generated/product-facts.md`](generated/product-facts.md).
+## M28 — Production Convergence & Architectural Hardening
 
-## Frontières architecturales courantes
+**S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING — qualification locale exact-head en cours.**
 
-- MINOS reste propriétaire des faits de Code Intelligence ;
-- les snapshots persistés restent la source de vérité ;
-- les scores sémantiques restent heuristiques ;
-- NEXUS reste propriétaire du ranking global, de la sélection et du budget de contexte multi-source ;
-- le plugin IntelliJ reste un client externe ;
-- les capacités provider et graphes absents ne sont jamais inventés ;
-- discovery et support runtime restent des faits distincts ;
-- l'analyse d'impact reste potentielle, jamais une preuve runtime exhaustive ;
-- Impact v2 conserve M8 comme baseline ;
-- les chemins sécurité sont des chemins statiques observés et bornés ;
-- une relation cross-repository exige une identité exacte et unique ;
-- toute évolution de backend reste gouvernée par des mesures reproductibles M16.
+```text
+Issue          : #93 OPEN
+PR             : #96 MERGED
+Branch         : pre-m28-audit-remediation
+Base develop   : cfbb495fbca8ddaf2b4bd529985e702e02106505
+Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
+Qualified HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
+Promotion main : PR #102 OPEN — governance terminée — en attente merge
+```
 
-## Suite
+État :
 
-**Aucun prochain jalon n'est encore déclaré.**
+- S1/S2 : wiring M22 réel et tests verticaux application/API/CLI-IDE/MCP — IMPLÉMENTÉS, MERGÉS ;
+- S3 : catalogue Product Facts des sept providers et cohérence sémantique — IMPLÉMENTÉ, MERGÉ ;
+- S4 : graphe de dépendances Maven et fitness functions — IMPLÉMENTÉ, MERGÉ ;
+- S5 : provider Java décomposé et profil performance ProgramGraph — IMPLÉMENTÉ, MERGÉ ;
+- S6 : disposition remote explicite — `DENY` non OS-enforced, Windows/Linux `BLOCKED`, code non fiable non supporté — IMPLÉMENTÉ, MERGÉ ;
+- S7 : façade hosted décomposée, ports opérateur et frontière no-SaaS — IMPLÉMENTÉ, MERGÉ ;
+- S8 : gates structurels, négatifs, JaCoCo et runners exact-head — IMPLÉMENTÉS, MERGÉS ;
+- S9 : GOUVERNANCE TERMINÉE — M21-S2 CI PASS / branch-protection BLOCKED (plan) ; develop qualifié ; PR #102 candidate production (CI DEFERRED levé le 1er août 2026).
 
-La prochaine phase doit être cadrée explicitement avec : question produit, périmètre, critères de sortie mesurables, ADR nécessaires et qualification exact-head.
+Le gel CI de juillet 2026 a pris fin le **1er août 2026**. M21-S2 CI recovery est terminée (CI PASS, branch-protection BLOCKED par contrainte de plan GitHub gratuit). `develop` est qualifié sur `96dc60af936d6df6ce8d40245039fe170554df74`. PR #102 est prête pour promotion vers `main`.
 
-## Documentation
+Les commandes autoritatives sont dans [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
 
-- portail : [`README.md`](README.md) ;
-- roadmap : [`ROADMAP.md`](ROADMAP.md) ;
-- exécution M15 : [`roadmap/M15_EXECUTION.md`](roadmap/M15_EXECUTION.md) ;
-- exécution M16 : [`roadmap/M16_EXECUTION.md`](roadmap/M16_EXECUTION.md) ;
-- exécution M17 : [`roadmap/M17_EXECUTION.md`](roadmap/M17_EXECUTION.md) ;
-- exécution M18 : [`roadmap/M18_EXECUTION.md`](roadmap/M18_EXECUTION.md) ;
-- exécution M19 : [`roadmap/M19_EXECUTION.md`](roadmap/M19_EXECUTION.md) ;
-- exécution M20 : [`roadmap/M20_EXECUTION.md`](roadmap/M20_EXECUTION.md) ;
-- utilisateur : [`user/README.md`](user/README.md) ;
-- développeur : [`developer/README.md`](developer/README.md) ;
-- qualité : [`developer/quality-gates.md`](developer/quality-gates.md) ;
-- facts générés : [`generated/product-facts.md`](generated/product-facts.md) ;
-- décisions : [`adr/README.md`](adr/README.md) ;
-- preuves historiques : [`history/milestones/README.md`](history/milestones/README.md).
+## Règle de promotion
 
-## Source de vérité
+- aucun claim sandbox OS ou SaaS sans preuve dédiée ;
+- aucune promotion vers `main` avant vérification réelle des gates requis ;
+- tout nouveau commit invalide les preuves exact-head antérieures.
 
-`STATUS.md` décrit l'état livré. `ROADMAP.md` décrit la progression produit. Les ADR décrivent les décisions durables. Les rapports sous `history/milestones/` restent des archives et peuvent contenir des états intermédiaires propres à leur date de validation.
+**Disposition effective 1er août 2026** : tous les GitHub Actions gates requis PASS sur `96dc60af936d6df6ce8d40245039fe170554df74` ; branch protection platform-blocked (plan gratuit, API 403) ; PR #102 candidate de production.
+

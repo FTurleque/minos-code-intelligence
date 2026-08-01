@@ -1,3 +1,6 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
+
 plugins {
     java
     id("org.jetbrains.intellij.platform") version "2.18.1"
@@ -39,6 +42,12 @@ intellijPlatform {
     pluginVerification {
         ides {
             current()
+            select {
+                types = listOf(IntelliJPlatformType.IntellijIdea)
+                channels = listOf(ProductRelease.Channel.RELEASE)
+                sinceBuild = "261"
+                untilBuild = "261.*"
+            }
         }
     }
 }

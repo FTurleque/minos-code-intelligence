@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(minos_m24_clang LANGUAGES C CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_library(greeting STATIC src/greeting.c)
+target_include_directories(greeting PUBLIC include)
+add_executable(m24-clang src/main.cpp)
+target_link_libraries(m24-clang PRIVATE greeting)
+set_target_properties(m24-clang PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)

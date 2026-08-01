@@ -29,6 +29,7 @@ public final class ProjectIgnorePolicy {
     private static final Set<String> HARD_IGNORED_DIRECTORY_NAMES = Set.of(
             ".git",
             ".idea",
+            ".minos",
             ".minos-m0",
             "node_modules",
             "target",
