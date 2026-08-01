@@ -48,11 +48,14 @@ jobs:
           }
 
           gh release view v1.0.0 --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseExists = ($LASTEXITCODE -eq 0)
+          $global:LASTEXITCODE = 0
+          if ($releaseExists) {
             throw 'GitHub Release v1.0.0 already exists; refusing to overwrite it.'
           }
 
           Write-Host "Production release candidate: $head"
+          Write-Host 'Immutable tag/release guard: PASS (v1.0.0 absent)'
 
       - name: Set up Java 24
         uses: actions/setup-java@v5
@@ -156,12 +159,10 @@ jobs:
           $body = @"
           ## MINOS 1.0.0 production release — SUCCESS
 
-          ```text
-          Version    : 1.0.0
-          Tag        : v1.0.0
-          Target SHA : $env:GITHUB_SHA
-          Workflow   : $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          ```
+          Version: 1.0.0
+          Tag: v1.0.0
+          Target SHA: $env:GITHUB_SHA
+          Workflow: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
 
           Publication performed by the authoritative Windows release script after build, supply-chain generation, setup/ZIP smoke tests and uninstall smoke test.
 
@@ -181,10 +182,8 @@ jobs:
 
           The one-shot production publication did not complete successfully.
 
-          ```text
-          Candidate SHA : $env:GITHUB_SHA
-          Workflow      : $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
-          ```
+          Candidate SHA: $env:GITHUB_SHA
+          Workflow: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
 
           No successful release claim should be made until the failing gate is diagnosed and replayed on the exact candidate SHA.
           "@
