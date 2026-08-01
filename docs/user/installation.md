@@ -1,20 +1,21 @@
 # Installation depuis les sources
 
-Ce document décrit le parcours **développeur/mainteneur**.
+Ce document décrit le parcours **développeur/mainteneur**. Pour utiliser MINOS comme produit installé, voir [Installation PROD Windows](production-installation.md).
 
-Pour utiliser MINOS comme produit installé, voir [Installation PROD Windows](production-installation.md).
-
-## Prérequis de développement
+## Prérequis
 
 ```text
 JDK     24.x uniquement
 Maven   3.9.x via Maven Wrapper
 Git
+Python  3.x pour plusieurs gates/release helpers
 ```
 
 Le `pom.xml` impose Java `[24,25)` et Maven `[3.9,4.0)`.
 
-## Checkout et validation
+Pour construire le setup Windows, Inno Setup 6/7 doit également être disponible.
+
+## Checkout et validation Maven
 
 ```powershell
 git clone https://github.com/FTurleque/minos-code-intelligence.git
@@ -25,24 +26,27 @@ java -version
 .\mvnw.cmd clean verify
 ```
 
-Le runtime Maven doit lui aussi utiliser Java 24.
+## Version de développement
 
-## Artefacts de développement
-
-La version de développement M14 est `0.2.0-SNAPSHOT`.
+La ligne de maintenance courante est :
 
 ```text
-target/minos-code-intelligence-0.2.0-SNAPSHOT.jar
-target/minos-code-intelligence-0.2.0-SNAPSHOT-all.jar
+1.0.1-SNAPSHOT
 ```
 
-Le shaded JAR contient les dépendances de la CLI et du MCP.
+Le shaded JAR de développement est donc notamment :
+
+```text
+target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar
+```
+
+Les scripts de release remplacent la propriété Maven CI-friendly `revision` avec `-Drevision=<version>` ; ils ne nécessitent pas de modifier temporairement les POM.
 
 ## Exécuter depuis le checkout
 
 ```powershell
-$env:MINOS_HOME = 'N:\minos-data'
-$minos = '.\target\minos-code-intelligence-0.2.0-SNAPSHOT-all.jar'
+$env:MINOS_HOME = 'C:\minos-data'
+$minos = '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar'
 
 java -jar $minos --help
 java -jar $minos doctor
@@ -52,52 +56,80 @@ java -jar $minos doctor
 
 ```powershell
 java -jar $minos tools install scip-java
-java -jar $minos project add N:\workspace-dev\my-project --name my-project
+java -jar $minos project add C:\workspace\my-project --name my-project
 java -jar $minos index my-project --dry-run
 java -jar $minos index my-project
 ```
 
-Pour un projet Java, `JAVA_HOME` doit pointer vers le JDK du projet lors de l’exécution du provider.
-
-## Import manuel
-
-```powershell
-java -jar $minos import-scip my-project `
-  --file N:\temp\index.scip `
-  --provider external-provider
-```
+Pour un provider qui invoque la toolchain du projet, les outils correspondants doivent être installés sur le poste.
 
 ## MCP depuis le shaded JAR
-
-Le launcher principal expose désormais :
 
 ```powershell
 java -jar $minos mcp
 ```
 
-Le point d’entrée historique reste également utilisable :
+Entrée directe équivalente :
 
 ```powershell
 java -cp $minos com.minos.mcp.MinosMcpServer
 ```
 
-## Construire la distribution Windows
+Attention : un succès avec le JDK complet de développement ne prouve pas que le runtime `jpackage` Windows est complet. Depuis 1.0.1, la qualification Windows teste explicitement le MCP dans le runtime packagé.
 
-Avec JDK 24 et `jpackage` :
+## Construire une distribution Windows
+
+Le script bas niveau est :
 
 ```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0
+.\scripts\release\build-windows-distribution.ps1 -Version 1.0.1
 ```
 
-Le script exécute `clean verify` par défaut puis produit :
+Il :
+
+- construit le reactor avec `-Drevision=1.0.1` ;
+- analyse le fat JAR via le `jdeps.exe` du JDK 24 ;
+- génère l'image `jpackage` avec les modules requis ;
+- vérifie les modules du runtime créé ;
+- exige notamment `java.xml` ;
+- écrit `RUNTIME-MODULES.txt` ;
+- génère SBOM/notices/manifest ;
+- produit le ZIP portable.
+
+## Construire le setup local à vérifier avant release
+
+Pour la maintenance 1.0.1, utiliser de préférence :
+
+```powershell
+.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
+```
+
+Ce runner est prévu pour la validation locale avant publication. Il :
+
+- refuse un worktree sale ;
+- construit la distribution ;
+- vérifie les intégrations MCP et leur préflight ;
+- lance un vrai handshake MCP sur le binaire packagé ;
+- génère le setup production ;
+- n'installe pas automatiquement ce setup ;
+- ne crée pas de tag ;
+- ne publie pas de GitHub Release ;
+- ne déclenche pas de GitHub Actions.
+
+Sortie principale :
 
 ```text
-target/dist/minos-0.2.0-windows-x64.zip
-target/dist/minos-0.2.0-windows-x64.zip.sha256
+target\dist\MINOS-1.0.1-windows-x64-setup.exe
 ```
+
+La prochaine étape est humaine : lancer ce setup, vérifier le Wizard/détection MCP et tester un client réel avant toute publication.
+
+## Validation de release complète
+
+`scripts/release/publish-windows-release.ps1` est le script de qualification/publication. En mode `-ValidateOnly`, il ne publie pas mais exerce également un setup de smoke **isolé** avec un AppId distinct et un handshake MCP réel.
+
+La publication ne doit être autorisée qu'après validation du setup de production par le mainteneur.
 
 ## Docker MCP depuis les sources
 
-Le workflow historique `docker/scripts/prod-mcp.ps1` reste utile au développement.
-
-Pour un mode Docker construit à partir du **même JAR qu’une release**, utiliser le workflow packagé décrit dans [mcp.md](mcp.md).
+Le workflow Docker reste indépendant du runtime `jpackage` Windows. Voir [mcp.md](mcp.md) pour le MCP natif et Docker.
