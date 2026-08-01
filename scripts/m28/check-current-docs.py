@@ -42,9 +42,11 @@ def main() -> int:
             if relative == "docs/STATUS.md" and expected == "Aucun M28 n’est défini":
                 original_require_text(relative, text, "M28 — Production Convergence")
                 original_require_text(relative, text, "Issue          : #93 OPEN")
-                original_require_text(relative, text, "PR             : #96 OPEN / DRAFT")
-                original_require_text(relative, text, "0/9 qualifié")
+                original_require_text(relative, text, "PR             : #96 MERGED")
+                original_require_text(relative, text, "Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868")
+                original_require_text(relative, text, "S9")
                 legacy.forbid_text(relative, text, "Aucun M28 n’est défini")
+                legacy.forbid_text(relative, text, "PR             : #96 OPEN / DRAFT")
                 return
             if relative == "docs/STATUS.md" and expected == (
                     "rust-analyzer scip 2026-07-27 / v0.3.2989 / commit 12c3381"):
@@ -73,9 +75,10 @@ def main() -> int:
         if result != 0:
             return result
 
-        require_text(ROOT / "docs/roadmap/M28_EXECUTION.md", "0/9 qualifié")
+        require_text(ROOT / "docs/roadmap/M28_EXECUTION.md", "PR             : #96 — MERGED")
         require_text(ROOT / "docs/roadmap/M28_EXECUTION.md", "M28-S9")
         require_text(ROOT / "docs/roadmap/M28_EXECUTION.md", "1er août 2026")
+        require_text(ROOT / "docs/roadmap/M28_EXECUTION.md", "CI DEFERRED")
         require_text(ROOT / "docs/developer/remote-worker-sandbox-disposition.md",
                      "WORKER_SANDBOX_CLAIM_PROHIBITED")
         require_text(ROOT / "docs/developer/remote-worker-sandbox-disposition.md",

@@ -1,22 +1,22 @@
 # M28 — Production Convergence & Architectural Hardening — exécution
 
-Statut : **IMPLÉMENTATION CANDIDATE S1→S8 SUR PR BROUILLON — 0/9 qualifié ; S9 bloqué jusqu’au 1er août 2026.**
+Statut : **S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING (CI DEFERRED).**
 
 ```text
 Issue          : #93 — OPEN
 Branche        : pre-m28-audit-remediation
-PR             : #96 — OPEN / DRAFT
+PR             : #96 — MERGED
 Base           : develop @ cfbb495fbca8ddaf2b4bd529985e702e02106505
-Qualified HEAD : PENDING — tout ancien log est invalidé par les commits M28 courants
-Merge develop  : PENDING
-Promotion main : BLOCKED — M21-S2 / #73 requis en août 2026
+Qualified HEAD : PENDING — qualification locale Windows/Linux en cours
+Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
+Promotion main : DIFFÉRÉE — M21-S2/CI explicitement hors périmètre de cette session
 Date cadrage   : 29 juillet 2026
-Dernière mise  : 31 juillet 2026
+Dernière mise  : 1er août 2026
 ```
 
 M28 est un jalon de **convergence, correction et hardening**. Il n’ajoute ni nouveau provider majeur, ni ANN/vector database, ni service SaaS opéré.
 
-M21-S2 / GitHub Actions reste **strictement en pause jusqu’au 1er août 2026**. En juillet, aucun workflow n’est modifié ou exécuté et aucune promotion vers `main` n’est autorisée.
+Le gel CI de juillet 2026 a pris fin le **1er août 2026**. La présente session reste néanmoins volontairement limitée à l’intégration et à la qualification locale de `develop` : M21-S2, GitHub Actions, required checks, branch protection et promotion vers `main` restent explicitement différés (CI DEFERRED).
 
 ## Question produit
 
@@ -95,7 +95,7 @@ KEEP_FINGERPRINT_CONSTRAINED_IN_MEMORY_CACHE
 
 Cette décision ne devient qualifiée qu’après exécution exact-head sur Windows et Linux.
 
-### M28-S6 — Remote worker sandbox hardening — DISPOSITION CANDIDATE / NON QUALIFIÉE
+### M28-S6 — Remote worker sandbox hardening — DISPOSITION IMPÉMENTÉE, MERGÉE
 
 Le backend natif conserve les garanties M25 de provenance, workspace éphémère, process séparé et bundle vérifié. Il ne revendique pas une sandbox OS.
 
@@ -151,15 +151,17 @@ Les runners Windows/Linux exécutent le même ensemble :
 
 Le scope JaCoCo couvre les composants Java décomposés, `WorkerSandboxQualification` et toutes les classes hosted. Les tests négatifs ciblent wiring, fingerprint stale, RBAC refusé, audit tampering, claims sandbox invalides et frontières hosted.
 
-### M28-S9 — Governance, backlog & main convergence — BLOQUÉ PAR DATE
+### M28-S9 — Governance, backlog & main convergence — PARTIEL / PENDING (CI DEFERRED)
 
-À reprendre à partir du **1er août 2026** :
+Le gel calendaire CI de juillet 2026 a pris fin le **1er août 2026**. M21-S2, CI, required checks, branch protection et promotion `develop → main` sont explicitement différés dans la présente session (CI DEFERRED). M28-S9 reste PARTIEL / PENDING jusqu'à leur complétion.
+
+Travaux restants :
 
 - exécuter les qualifications exact-head Windows et Linux sur le HEAD final de la PR #96 ;
 - corriger tout échec sans changer le HEAD qualifié silencieusement ;
 - reprendre M21-S2 / issue #73 : CI recovery, diagnostics, required checks et readiness de branch protection ;
 - réconcilier l’issue historique C0 #2 ;
-- rendre la PR #96 reviewable puis fusionner dans `develop` uniquement si tous les gates passent ;
+- reprendre M21-S2 / issue #73 : CI recovery, diagnostics, required checks et readiness de branch protection ;
 - qualifier le `develop` consolidé ;
 - promouvoir vers `main` uniquement après les gates de production applicables ;
 - fermer #93, #97, #98 selon leur disposition réelle ;

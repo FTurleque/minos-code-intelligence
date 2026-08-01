@@ -1,6 +1,6 @@
-# Feuille de route — MINOS
+﻿# Feuille de route — MINOS
 
-Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste en pause jusqu’en août 2026. M22 à M27 sont validés exact-head et fusionnés dans `develop`. M28 — Production Convergence & Architectural Hardening est désormais planifié via l’issue #93 pour fermer les écarts révélés par l’audit post-M27 avant toute nouvelle expansion fonctionnelle majeure.**
+Statut : **C0 à M20 terminés, validés et livrés sur `main`. M21 a terminé ses gates locaux S1/S3→S9 ; S2/CI reste différé. M22 à M27 sont validés exact-head et fusionnés dans `develop`. M28 — Production Convergence & Architectural Hardening : S1→S8 implémentés et mergés dans `develop` via PR #96 (issue #93 OPEN) — S9 PARTIEL / PENDING (CI DEFERRED).**
 
 L'état courant est résumé dans [`STATUS.md`](STATUS.md). Les décisions architecturales durables sont dans [`adr/`](adr/README.md). Les preuves historiques restent sous [`history/milestones/`](history/milestones/README.md).
 
@@ -258,7 +258,7 @@ M26  Runtime & Dynamic Intelligence               ✅ VALIDÉ / MERGÉ develop
   ↓
 M27  Team / Hosted Mode                           ✅ VALIDÉ / MERGÉ develop
   ↓
-M28  Production Convergence & Architectural Hardening  ⏭ PLANIFIÉ — issue #93
+M28  Production Convergence & Architectural Hardening  🔄 S1→S8 MERGÉS develop — S9 PARTIEL / PENDING
 ```
 
 ## M21 — Production Integrity & Surface Convergence
@@ -421,7 +421,7 @@ Cibles qualifiées avec contraintes : espaces partagés, isolation tenant, réte
 
 ## M28 — Production Convergence & Architectural Hardening
 
-**PLANIFIÉ — 0/9 ; issue #93 ouverte.**
+**S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING (CI DEFERRED) — issue #93 OPEN.**
 
 Question cible :
 
@@ -457,7 +457,7 @@ M28 ne justifie aucun nouveau ANN/vector database : `KEEP_CURRENT_M20_BACKEND` r
 
 - roadmap d’exécution : [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md)
 - issue : #93 OPEN
-- état : PLANIFIÉ / non qualifié
+- état : S1→S8 MERGÉS dans develop via PR #96 — S9 PARTIEL / PENDING — CI DEFERRED
 
 ## Règle de promotion post-M20
 

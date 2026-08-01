@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **31 juillet 2026 — M28 implémenté en candidat sur PR #96 ; qualification exact-head et gouvernance finales en attente.**
+Dernière mise à jour documentaire : **1er août 2026 — M28 S1→S8 implémentés et mergés dans `develop` via PR #96 ; qualification locale exact-head en cours ; S9/CI/main explicitement différés.**
 
 Ce fichier est la synthèse autoritative de l’état courant. Les contrats détaillés et les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -15,12 +15,12 @@ M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
 M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
 M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M27 — Team / Hosted Mode             TERMINÉ, VALIDÉ, MERGÉ develop
-M28 — Production Convergence         CANDIDAT S1→S8 / 0 sur 9 qualifié / PR #96 DRAFT
+M28 — Production Convergence         S1→S8 MERGÉS develop / S9 PARTIEL — PR #96 MERGED
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié et M22→M27 fusionnés. M28 est défini par l’issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). La branche `pre-m28-audit-remediation` porte l’implémentation candidate S1→S8 dans la PR #96. Aucun PASS sur le HEAD courant n’est déclaré. M21-S2 / #73 et la promotion finale restent bloqués jusqu’au 1er août 2026.
+`develop` contient le tree M21 localement qualifié et M22→M28 S1→S8 fusionnés. M28 est défini par l'issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). Le gel CI de juillet 2026 a pris fin le 1er août 2026 ; M21-S2/CI et la promotion vers `main` restent explicitement différés dans cette session.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -135,35 +135,36 @@ Le contrôle tenant embarqué reste opt-in, local-first, RBAC fail-closed, chiff
 
 ## M28 — Production Convergence & Architectural Hardening
 
-**EN COURS — implémentation candidate S1→S8 sur PR #96 DRAFT ; 0/9 qualifié.**
+**S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING — qualification locale exact-head en cours.**
 
 ```text
 Issue          : #93 OPEN
-PR             : #96 OPEN / DRAFT
+PR             : #96 MERGED
 Branch         : pre-m28-audit-remediation
 Base develop   : cfbb495fbca8ddaf2b4bd529985e702e02106505
-Qualified HEAD : PENDING
-Merge develop  : PENDING
-Promotion main : BLOCKED par M21-S2 / #73
+Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
+Qualified HEAD : PENDING — qualification locale Windows/Linux en cours
+Promotion main : DIFFÉRÉE — M21-S2/CI explicitement hors périmètre de cette session
 ```
 
-État candidat :
+État :
 
-- S1/S2 : wiring M22 réel et tests verticaux application/API/CLI-IDE/MCP ;
-- S3 : catalogue Product Facts des sept providers et cohérence sémantique ;
-- S4 : graphe de dépendances Maven et fitness functions ;
-- S5 : provider Java décomposé et profil performance ProgramGraph ;
-- S6 : disposition remote explicite — `DENY` non OS-enforced, Windows/Linux `BLOCKED`, code non fiable non supporté ;
-- S7 : façade hosted décomposée, ports opérateur et frontière no-SaaS ;
-- S8 : gates structurels, négatifs, JaCoCo et runners exact-head ;
-- S9 : bloqué jusqu’au 1er août 2026 puis qualification Windows/Linux, M21-S2, merge et promotion.
+- S1/S2 : wiring M22 réel et tests verticaux application/API/CLI-IDE/MCP — IMPLÉMENTÉS, MERGÉS ;
+- S3 : catalogue Product Facts des sept providers et cohérence sémantique — IMPLÉMENTÉ, MERGÉ ;
+- S4 : graphe de dépendances Maven et fitness functions — IMPLÉMENTÉ, MERGÉ ;
+- S5 : provider Java décomposé et profil performance ProgramGraph — IMPLÉMENTÉ, MERGÉ ;
+- S6 : disposition remote explicite — `DENY` non OS-enforced, Windows/Linux `BLOCKED`, code non fiable non supporté — IMPLÉMENTÉ, MERGÉ ;
+- S7 : façade hosted décomposée, ports opérateur et frontière no-SaaS — IMPLÉMENTÉ, MERGÉ ;
+- S8 : gates structurels, négatifs, JaCoCo et runners exact-head — IMPLÉMENTÉS, MERGÉS ;
+- S9 : PARTIEL / PENDING — M21-S2, CI, branch protection, promotion main explicitement différés (CI DEFERRED).
 
-Aucun ancien log de la PR #96 ne qualifie le HEAD courant. Les commandes autoritatives sont dans [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
+Le gel CI de juillet 2026 a pris fin le **1er août 2026**. La présente session reste néanmoins volontairement limitée à l’intégration et à la qualification locale de `develop` : M21-S2, GitHub Actions, required checks, branch protection et promotion vers `main` restent explicitement différés.
+
+Les commandes autoritatives sont dans [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
 
 ## Règle de promotion
 
-- aucun workflow GitHub Actions exécuté ou modifié avant août 2026 ;
-- aucun merge de #96 sans qualification du même exact HEAD sur Windows et Linux ;
+- aucun workflow GitHub Actions exécuté ou modifié dans cette session ;
 - aucun claim sandbox OS ou SaaS sans preuve dédiée ;
 - aucune promotion vers `main` avant fermeture réelle de M21-S2 ;
 - tout nouveau commit invalide les preuves exact-head antérieures.
