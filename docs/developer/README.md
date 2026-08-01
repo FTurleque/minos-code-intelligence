@@ -20,8 +20,10 @@ MINOS suit plusieurs règles fortes :
 - un backend ANN/vectoriel n'est adopté qu'après mesure d'un bottleneck ;
 - MINOS ne sélectionne pas le contexte final de NEXUS ;
 - une release distribuée doit conserver une provenance et un inventaire supply-chain vérifiables ;
-- une capability avancée n’est publiée que lorsque le provider courant produit réellement les facts correspondants.
-- le contrôle tenant reste opt-in, chiffré par clés externes et séparé des snapshots autoritatifs.
+- une capability avancée n’est publiée que lorsque le provider courant produit réellement les facts correspondants ;
+- le contrôle tenant reste opt-in, chiffré par clés externes et séparé des snapshots autoritatifs ;
+- une séparation processus/workspace ne devient jamais automatiquement un claim de sandbox OS ;
+- le mode hosted embarqué ne devient jamais automatiquement un claim SaaS, HA ou transport TLS opéré.
 
 ## Carte des sous-systèmes
 
@@ -79,7 +81,8 @@ flowchart TB
 | `com.minos.workspace` | intelligence cross-repository |
 | `com.minos.integration.nexus` | projections versionnées vers NEXUS |
 | `com.minos.output` | rendus texte/JSON |
-| `com.minos.hosted` | identité, RBAC, espaces partagés, audit et rétention M27 |
+| `com.minos.hosted` | identité, RBAC, espaces partagés, audit, rétention et frontières opérateur M27/M28 |
+| `com.minos.runtime` | worker local, bundles distribués et disposition d’isolation remote M25/M28 |
 
 ## Parcours de lecture conseillé
 
@@ -93,12 +96,14 @@ flowchart TB
 8. [Provider Java avancé de référence M22](java-advanced-provider.md)
 9. [Providers polyglottes M24](polyglot-providers.md)
 10. [Remote & Distributed Indexing M25](remote-distributed-indexing.md)
-11. [Runtime & Dynamic Intelligence M26](runtime-dynamic-intelligence.md)
-12. [Team / Hosted Mode M27](team-hosted-mode.md)
-13. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
-14. [Multi-dépôts et Git](multi-repo-git.md)
-15. [Supply-chain et provenance de release](supply-chain.md)
-16. [Tests et contribution](testing.md)
+11. [Disposition d’isolation du worker remote M28](remote-worker-sandbox-disposition.md)
+12. [Runtime & Dynamic Intelligence M26](runtime-dynamic-intelligence.md)
+13. [Team / Hosted Mode M27](team-hosted-mode.md)
+14. [Frontières de production Team/Hosted M28](hosted-production-boundaries.md)
+15. [Qualification de scalabilité sémantique M21-S8](semantic-scale-qualification.md)
+16. [Multi-dépôts et Git](multi-repo-git.md)
+17. [Supply-chain et provenance de release](supply-chain.md)
+18. [Tests et contribution](testing.md)
 
 ## Build développeur
 
@@ -120,7 +125,9 @@ Une évolution doit être placée au niveau architectural le plus bas qui porte 
 - un nouveau provider d'embeddings → `EmbeddingProvider`, sans dépendance cloud implicite dans les services ;
 - un nouveau backend vectoriel → `SemanticVectorStore`, en restant reconstruisible et en exigeant une mesure avant adoption ;
 - un nouveau transport → couche d’exposition, sans dupliquer les services ;
-- une nouvelle dérivation → preuve + nature + confiance explicites.
+- une nouvelle dérivation → preuve + nature + confiance explicites ;
+- un backend worker durci → `WorkerSandboxBackend` + `WorkerSandboxQualification`, avec preuves par plateforme ;
+- un adapter hosted opéré → port explicite, disposition qualifiée et aucun claim implicite depuis le mode embarqué.
 
 ## Documentation historique
 

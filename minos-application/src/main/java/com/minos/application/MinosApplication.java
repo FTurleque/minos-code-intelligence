@@ -28,7 +28,6 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.program.analysis.AdvancedImpactService;
 import com.minos.program.analysis.ProgramGraphProvider;
 import com.minos.program.analysis.ProgramGraphService;
-import com.minos.program.analysis.RelationshipProgramGraphProvider;
 import com.minos.program.analysis.SecurityAnalysisService;
 import com.minos.registry.LocalProjectRegistry;
 import com.minos.runtime.CompositeProviderRuntimeManager;
@@ -366,7 +365,7 @@ public final class MinosApplication {
 
             GitIntelligenceService effectiveGit = gitIntelligence != null ? gitIntelligence : new GitIntelligenceService();
             List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
-                    ? programGraphProviders : List.of(new RelationshipProgramGraphProvider());
+                    ? programGraphProviders : ProgramGraphService.productionProviders(effectiveFingerprints);
 
             Optional<HostedControlPlaneService> effectiveHosted = Optional.empty();
             if (hostedTenantKeyProvider != null) {

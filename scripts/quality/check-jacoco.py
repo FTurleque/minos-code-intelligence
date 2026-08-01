@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M27."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M28."""
 
 from __future__ import annotations
 
@@ -56,7 +56,22 @@ SCOPES = {
         "branch": 0.30,
     },
     "java-advanced-provider": {
-        "prefixes": ("com/minos/program/analysis/JavaSourceProgramGraphProvider",),
+        "prefixes": (
+            "com/minos/program/analysis/JavaSourceProgramGraphProvider",
+            "com/minos/program/analysis/JavaSourceWorkspace",
+            "com/minos/program/analysis/JavaAstParser",
+            "com/minos/program/analysis/JavaAstSupport",
+            "com/minos/program/analysis/JavaProgramModel",
+            "com/minos/program/analysis/JavaSecurityRules",
+            "com/minos/program/analysis/JavaProgramGraphContext",
+            "com/minos/program/analysis/JavaDefUseAnalyzer",
+            "com/minos/program/analysis/JavaControlFlowAnalyzer",
+            "com/minos/program/analysis/JavaInterproceduralFlowResolver",
+            "com/minos/program/analysis/JavaTaintAnalyzer",
+            "com/minos/program/analysis/JavaProgramGraphAssembler",
+            "com/minos/program/analysis/JavaProgramGraphEngine",
+            "com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider",
+        ),
         "line": 0.45,
         "branch": 0.25,
     },
@@ -128,6 +143,8 @@ SCOPES = {
             "com/minos/runtime/DistributedArtifactCachePolicy",
             "com/minos/runtime/DistributedIndexerExecutor",
             "com/minos/runtime/LocalIsolatedIndexWorker",
+            "com/minos/runtime/WorkerSandboxBackend",
+            "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/cli/LocalRemoteIndexOperations",
             "com/minos/cli/RemoteIndexCommand",
         ),

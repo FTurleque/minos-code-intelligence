@@ -70,6 +70,92 @@ jobs:
             target/site/jacoco-aggregate/**
             target/m15-quality/**
 
+  m28-final-linux:
+    name: M28 final Linux exact-head gate
+    if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact M28 head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Prepare Maven Wrapper
+        run: chmod +x mvnw
+
+      - name: Run complete M28 Linux exact-head qualification
+        run: bash scripts/remediation/run-final.sh "" 1000
+
+      - name: Upload M28 Linux diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: m28-linux-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            target/qualification/m28/**
+            target/site/jacoco-aggregate/**
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+
+  m28-final-windows:
+    name: M28 final Windows exact-head gate
+    if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact M28 head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Run complete M28 Windows exact-head qualification
+        shell: powershell
+        run: .\scripts\remediation\run-final.ps1 -ProgramGraphFiles 1000
+
+      - name: Upload M28 Windows diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: m28-windows-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            target/qualification/m28/**
+            target/site/jacoco-aggregate/**
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+
   m15-final-exact-head:
     name: M15 final Windows exact-head gate
     if: github.event_name == 'pull_request' && github.head_ref == 'm15-finalize-s7-s11'

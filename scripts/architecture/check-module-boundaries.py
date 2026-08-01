@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when MINOS module ownership drifts back to compiler allowlists or shared source roots."""
+"""Enforce MINOS source ownership and explicit Maven dependency directions."""
 
 from __future__ import annotations
 
@@ -23,19 +23,71 @@ MODULES = (
     "minos-mcp",
     "minos-app",
 )
+
+# Explicitly allowed direct MINOS dependencies. This is a maximum set, not a requirement:
+# removing a dependency is allowed, adding a dependency outside this policy is blocked.
+ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "minos-domain": frozenset(),
+    "minos-engine": frozenset({"minos-domain"}),
+    "minos-runtime-local": frozenset({"minos-engine"}),
+    "minos-storage-local": frozenset({"minos-engine"}),
+    "minos-provider-scip": frozenset({
+        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
+    }),
+    "minos-integration-git": frozenset({"minos-engine"}),
+    "minos-application": frozenset({
+        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
+        "minos-provider-scip", "minos-integration-git"
+    }),
+    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-storage-local"}),
+    "minos-cli": frozenset({
+        "minos-domain", "minos-engine", "minos-application", "minos-integration-git",
+        "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus"
+    }),
+    # Historical LocalMinosApi wiring still consumes reusable CLI operations. The edge is explicit
+    # and cannot grow into additional surface-to-surface dependencies without a policy change.
+    "minos-api": frozenset({
+        "minos-domain", "minos-engine", "minos-application", "minos-storage-local",
+        "minos-cli", "minos-integration-git"
+    }),
+    "minos-mcp": frozenset({"minos-application"}),
+    "minos-app": frozenset({
+        "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
+        "minos-provider-scip", "minos-integration-git", "minos-application", "minos-nexus",
+        "minos-cli", "minos-api", "minos-mcp"
+    }),
+}
+
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 PACKAGE = re.compile(r"^\s*package\s+([A-Za-z_][\w.]*)\s*;", re.MULTILINE)
+ARTIFACT_TO_MODULE = {
+    "minos-domain": "minos-domain",
+    "minos-engine": "minos-engine",
+    "minos-runtime-local": "minos-runtime-local",
+    "minos-storage-local": "minos-storage-local",
+    "minos-provider-scip": "minos-provider-scip",
+    "minos-integration-git": "minos-integration-git",
+    "minos-application": "minos-application",
+    "minos-nexus": "minos-nexus",
+    "minos-cli": "minos-cli",
+    "minos-api": "minos-api",
+    "minos-mcp": "minos-mcp",
+    "minos-code-intelligence": "minos-app",
+}
 
 
 def fail(message: str) -> None:
     raise RuntimeError(message)
 
 
-def check_pom(module: str) -> None:
+def parse_pom(module: str) -> ET.Element:
     pom = ROOT / module / "pom.xml"
     if not pom.is_file():
         fail(f"{module}: missing pom.xml")
-    root = ET.parse(pom).getroot()
+    return ET.parse(pom).getroot()
+
+
+def check_pom_layout(module: str, root: ET.Element) -> None:
     build = root.find("m:build", NS)
     if build is None:
         return
@@ -56,6 +108,55 @@ def check_pom(module: str) -> None:
             fail(f"{module}: maven-compiler-plugin <includes> is forbidden")
         if configuration.find("m:excludes", NS) is not None:
             fail(f"{module}: maven-compiler-plugin <excludes> is forbidden")
+
+
+def minos_dependencies(module: str, root: ET.Element) -> frozenset[str]:
+    dependencies: set[str] = set()
+    for dependency in root.findall("m:dependencies/m:dependency", NS):
+        if dependency.findtext("m:groupId", default="", namespaces=NS) != "com.minos":
+            continue
+        artifact = dependency.findtext("m:artifactId", default="", namespaces=NS)
+        target = ARTIFACT_TO_MODULE.get(artifact)
+        if target is None:
+            fail(f"{module}: unknown internal artifact dependency com.minos:{artifact}")
+        if target == module:
+            fail(f"{module}: self-dependency is forbidden")
+        dependencies.add(target)
+    return frozenset(dependencies)
+
+
+def check_dependency_policy(graph: dict[str, frozenset[str]]) -> None:
+    if set(ALLOWED_DEPENDENCIES) != set(MODULES):
+        fail("dependency policy must cover every reactor module exactly once")
+
+    for module, dependencies in graph.items():
+        forbidden = dependencies - ALLOWED_DEPENDENCIES[module]
+        if forbidden:
+            fail(f"{module}: forbidden MINOS dependencies: {', '.join(sorted(forbidden))}")
+
+    # Guard the core regardless of future whitelist edits.
+    if graph["minos-domain"]:
+        fail("minos-domain must remain dependency-free inside MINOS")
+    if graph["minos-engine"] - {"minos-domain"}:
+        fail("minos-engine may depend only on minos-domain")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(module: str, path: tuple[str, ...]) -> None:
+        if module in visiting:
+            cycle = " -> ".join((*path, module))
+            fail(f"internal Maven dependency cycle: {cycle}")
+        if module in visited:
+            return
+        visiting.add(module)
+        for dependency in sorted(graph[module]):
+            visit(dependency, (*path, module))
+        visiting.remove(module)
+        visited.add(module)
+
+    for module in MODULES:
+        visit(module, tuple())
 
 
 def check_java_layout() -> tuple[int, dict[str, int]]:
@@ -92,12 +193,19 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
 
 def main() -> int:
     try:
-        for module in MODULES:
-            check_pom(module)
+        roots = {module: parse_pom(module) for module in MODULES}
+        for module, root in roots.items():
+            check_pom_layout(module, root)
+        graph = {module: minos_dependencies(module, root) for module, root in roots.items()}
+        check_dependency_policy(graph)
         total, counts = check_java_layout()
         for module in MODULES:
-            print(f"M21 module-boundary {module}: sources={counts[module]}")
-        print(f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS (modules={len(MODULES)}, sources={total})")
+            dependencies = ",".join(sorted(graph[module])) or "-"
+            print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")
+        print(
+            f"M21 MODULE BOUNDARY CONSISTENCY SUCCESS "
+            f"(modules={len(MODULES)}, sources={total}, dependencyPolicy=explicit-v1)"
+        )
         return 0
     except Exception as exception:
         print(f"M21 MODULE BOUNDARY CONSISTENCY FAILED: {exception}", file=sys.stderr)

@@ -32,9 +32,11 @@ import java.util.Set;
  */
 public final class RelationshipProgramGraphProvider implements ProgramGraphProvider {
 
+    public static final String PROVIDER_ID = "minos-relationships";
+
     @Override
     public String id() {
-        return "minos-relationships";
+        return PROVIDER_ID;
     }
 
     @Override

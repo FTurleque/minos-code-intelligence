@@ -16,7 +16,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /** Short-lived HMAC bearer-token reference implementation for opt-in local hosted mode. */
-public final class HmacHostedIdentityProvider implements HostedIdentityVerifier {
+public final class HmacHostedIdentityProvider implements HostedIdentityProvider {
     public static final String TOKEN_PREFIX = "mht1";
     public static final Duration MAX_TOKEN_LIFETIME = Duration.ofHours(24);
     public static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(1);
@@ -29,6 +29,7 @@ public final class HmacHostedIdentityProvider implements HostedIdentityVerifier 
         this.keys = Objects.requireNonNull(keys, "keys");
     }
 
+    @Override
     public String issue(
             UUID tenantId,
             String principalId,
@@ -65,7 +66,9 @@ public final class HmacHostedIdentityProvider implements HostedIdentityVerifier 
             HostedAccessClaims claims = decode(payload);
             byte[] actual = decodeCanonical(parts[2]);
             byte[] expected = sign(claims.tenantId(), claims.keyId(), parts[1].getBytes(StandardCharsets.US_ASCII));
-            if (!MessageDigest.isEqual(expected, actual)) throw new SecurityException("invalid hosted bearer token");
+            if (!MessageDigest.isEqual(expected, actual)) {
+                throw new SecurityException("invalid hosted bearer token");
+            }
             if (claims.issuedAt().isAfter(now.plus(MAX_FUTURE_SKEW)) || !claims.expiresAt().isAfter(now)
                     || Duration.between(claims.issuedAt(), claims.expiresAt()).compareTo(MAX_TOKEN_LIFETIME) > 0) {
                 throw new SecurityException("invalid hosted bearer token");
@@ -110,16 +113,22 @@ public final class HmacHostedIdentityProvider implements HostedIdentityVerifier 
     }
 
     private static HostedAccessClaims decode(byte[] payload) {
-        if (payload.length > MAX_TOKEN_BYTES) throw new SecurityException("invalid hosted bearer token");
+        if (payload.length > MAX_TOKEN_BYTES) {
+            throw new SecurityException("invalid hosted bearer token");
+        }
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
-            if (input.readInt() != PAYLOAD_VERSION) throw new SecurityException("invalid hosted bearer token");
+            if (input.readInt() != PAYLOAD_VERSION) {
+                throw new SecurityException("invalid hosted bearer token");
+            }
             UUID tenantId = new UUID(input.readLong(), input.readLong());
             String principal = readString(input);
             String keyId = readString(input);
             Instant issuedAt = Instant.ofEpochSecond(input.readLong(), input.readInt());
             Instant expiresAt = Instant.ofEpochSecond(input.readLong(), input.readInt());
             String tokenId = readString(input);
-            if (input.available() != 0) throw new SecurityException("invalid hosted bearer token");
+            if (input.available() != 0) {
+                throw new SecurityException("invalid hosted bearer token");
+            }
             return new HostedAccessClaims(tenantId, principal, keyId, issuedAt, expiresAt, tokenId);
         } catch (java.io.IOException | RuntimeException exception) {
             throw new SecurityException("invalid hosted bearer token", exception);
@@ -127,7 +136,9 @@ public final class HmacHostedIdentityProvider implements HostedIdentityVerifier 
     }
 
     private static byte[] decodeCanonical(String value) {
-        if (value.indexOf('=') >= 0) throw new SecurityException("invalid hosted bearer token");
+        if (value.indexOf('=') >= 0) {
+            throw new SecurityException("invalid hosted bearer token");
+        }
         byte[] decoded = Base64.getUrlDecoder().decode(value);
         if (!value.equals(Base64.getUrlEncoder().withoutPadding().encodeToString(decoded))) {
             throw new SecurityException("invalid hosted bearer token");
@@ -137,7 +148,9 @@ public final class HmacHostedIdentityProvider implements HostedIdentityVerifier 
 
     private static void writeString(DataOutputStream output, String value) throws java.io.IOException {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 4096) throw new IllegalArgumentException("hosted token field exceeds limit");
+        if (bytes.length > 4096) {
+            throw new IllegalArgumentException("hosted token field exceeds limit");
+        }
         output.writeInt(bytes.length);
         output.write(bytes);
     }
