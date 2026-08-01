@@ -222,7 +222,7 @@ $SetupInstalled = $false
 $SetupUninstalled = $false
 try {
     New-Item -ItemType Directory -Force -Path $SetupSmokeRoot | Out-Null
-    Invoke-ProcessChecked -File $SmokeSetup -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="{0}"' -f $SetupInstallRoot),'/TASKS="!addtopath,!docker"') -Failure 'MINOS isolated setup silent installation failed'
+    Invoke-ProcessChecked -File $SmokeSetup -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="{0}"' -f $SetupInstallRoot),'/TASKS="!addtopath"') -Failure 'MINOS isolated setup silent installation failed'
     $SetupInstalled = $true
     foreach ($Required in $RequiredInstalledFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $SetupInstallRoot $Required) -PathType Leaf)) { throw "MINOS isolated setup did not install required file: $Required" }
