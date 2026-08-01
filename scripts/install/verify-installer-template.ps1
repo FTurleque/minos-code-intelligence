@@ -52,7 +52,7 @@ Require 'Flags: dontcopy' 'Installer detector is not embedded for pre-install ex
 # only purge %LOCALAPPDATA%\MINOS after normal uninstall cleanup has completed.
 Require 'DeleteUserDataOnUninstall: Boolean;' 'Installer does not track the optional user-data purge decision.'
 Require 'procedure PromptForUserDataRemoval;' 'Uninstaller does not offer an explicit user-data purge choice.'
-Require "ExpandConstant('{localappdata}\\MINOS')" 'Uninstaller does not target the canonical MINOS user-data directory.'
+Require "ExpandConstant('{localappdata}\MINOS')" 'Uninstaller does not target the canonical MINOS user-data directory.'
 Require 'UninstallSilent' 'Silent uninstall is not guarded against an interactive data-purge prompt.'
 Require 'MB_YESNO or MB_DEFBUTTON2' 'User-data purge prompt must default to preserving data.'
 Require 'procedure DeleteMinosUserData;' 'Uninstaller is missing the guarded user-data purge implementation.'
