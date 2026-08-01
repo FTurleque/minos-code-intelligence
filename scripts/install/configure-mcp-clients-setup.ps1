@@ -7,7 +7,10 @@ param(
     [switch] $CopilotCli,
     [switch] $ClaudeCode,
     [switch] $ClaudeDesktop,
-    [switch] $Codex
+    [switch] $Codex,
+
+    [ValidateSet('auto', 'cli', 'desktop')]
+    [string] $CodexMode = 'auto'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,7 +35,7 @@ if ($ManagerSelected) {
     & $Manager @Parameters
 }
 if ($Codex) {
-    & $CodexManager -InstallRoot $InstallRoot -Action Install -Strict
+    & $CodexManager -InstallRoot $InstallRoot -Action Install -Mode $CodexMode -Strict
 }
 
 $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
@@ -63,10 +66,17 @@ if ($Codex) {
     if (-not (Test-Path -LiteralPath $CodexState -PathType Leaf)) {
         throw 'OpenAI Codex was selected but MINOS could not verify its managed integration state. See %LOCALAPPDATA%\MINOS\mcp-clients.log.'
     }
+    $CodexStateValue = Get-Content -Raw -LiteralPath $CodexState | ConvertFrom-Json
+    if ($CodexMode -eq 'cli' -and [string]$CodexStateValue.mode -ne 'cli') {
+        throw "Codex preflight selected CLI mode but configured mode is '$($CodexStateValue.mode)'."
+    }
+    if ($CodexMode -eq 'desktop' -and [string]$CodexStateValue.mode -ne 'toml') {
+        throw "Codex preflight selected Desktop mode but configured mode is '$($CodexStateValue.mode)'."
+    }
 }
 
 $AllSelected = @($Selected)
-if ($Codex) { $AllSelected += 'codex' }
+if ($Codex) { $AllSelected += "codex:$CodexMode" }
 if ($AllSelected.Count -gt 0) {
     Write-Host "MINOS setup MCP client selection SUCCESS: $($AllSelected -join ', ')" -ForegroundColor Green
 }
