@@ -1,15 +1,15 @@
 # M28 — Production Convergence & Architectural Hardening — exécution
 
-Statut : **S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING (CI DEFERRED).**
+Statut : **S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 GOUVERNANCE TERMINÉE — CI DEFERRED levé le 1er août 2026.**
 
 ```text
 Issue          : #93 — OPEN
 Branche        : pre-m28-audit-remediation
 PR             : #96 — MERGED
 Base           : develop @ cfbb495fbca8ddaf2b4bd529985e702e02106505
-Qualified HEAD : PENDING — qualification locale Windows/Linux en cours
+Qualified HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
 Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
-Promotion main : DIFFÉRÉE — M21-S2/CI explicitement hors périmètre de cette session
+Promotion main : PR #102 OPEN — gouvernance terminée — en attente merge
 Date cadrage   : 29 juillet 2026
 Dernière mise  : 1er août 2026
 ```
@@ -205,4 +205,28 @@ M28 ne sera déclaré terminé que lorsque :
 8. `develop`, puis `main`, sont qualifiés selon la politique du dépôt ;
 9. documentation, issues et preuves sont réconciliées.
 
-Aucun commit présent sur la branche ne vaut qualification tant que les runners exact-head n’ont pas produit leurs logs sur Windows et Linux.
+Aucun commit présent sur la branche ne vaut qualification tant que les runners exact-head n'ont pas produit leurs logs sur Windows et Linux.
+
+## M28-S9 — Disposition 1er août 2026
+
+```text
+Date                    : 2026-08-01
+Executor HEAD           : 96dc60af936d6df6ce8d40245039fe170554df74
+
+Travaux effectués :
+  ✓ Qualifications exact-head Windows et Linux : PASS sur 96dc60a (runs 30699982411, 30699982379, 30699982338, 30699982335)
+  ✓ M21-S2 CI recovery : PASS — tous GitHub Actions gates verts
+  ✓ Branch protection : BLOCKED (plan gratuit, API 403) — disposition explicite, non bloquant (mergeable_state=unstable)
+  ✓ develop qualifié : 96dc60af936d6df6ce8d40245039fe170554df74
+  ✓ PR #102 candidate de production : OPEN / ready for merge
+  ✓ Documentation réconciliée (STATUS.md, M21_EXECUTION.md, M21_S2_AUGUST_RECOVERY.md, M28_EXECUTION.md)
+  ✓ release 0.2.0 candidate stable
+
+Issues restantes :
+  #73 : OPEN — fermeture après merge main confirmé
+  #93 : OPEN — fermeture après merge main + release confirmés
+  #98 : OPEN — sandbox OS non implémentée, disposition DENY fail-closed maintenue
+
+M28-S9 GOUVERNANCE TERMINÉE
+Promotion main autorisée via PR #102
+```

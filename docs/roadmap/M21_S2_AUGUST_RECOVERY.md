@@ -1,6 +1,6 @@
 # M21-S2 — Runbook de reprise août 2026
 
-Statut : **PRÉPARÉ — NON EXÉCUTÉ EN JUILLET.**
+Statut : **EXÉCUTÉ — 1er août 2026.**
 
 Ce runbook prépare la reprise de M21-S2 sans contourner le gel explicite de juillet 2026. Aucune étape GitHub Actions, required checks ou branch protection ne doit être exécutée avant le **1er août 2026**.
 
@@ -85,4 +85,44 @@ Branch protection readiness: PASS or explicit BLOCKED
 Promotion candidate HEAD: <sha>
 ```
 
-Ce texte est un plan de reprise, pas une preuve d’exécution. Toute preuve finale doit être ajoutée à `M21_EXECUTION.md`, `STATUS.md` et l’issue #73 après le 1er août 2026.
+Ce texte est un plan de reprise, pas une preuve d'exécution. Toute preuve finale doit être ajoutée à `M21_EXECUTION.md`, `STATUS.md` et l'issue #73 après le 1er août 2026.
+
+---
+
+## Résultats d'exécution — 1er août 2026
+
+```text
+Date                    : 2026-08-01
+Executor HEAD           : 96dc60af936d6df6ce8d40245039fe170554df74
+
+A — Baseline exacte
+  develop HEAD              : 96dc60af936d6df6ce8d40245039fe170554df74
+  Worktree                  : clean
+  diff .github/workflows    : VIDE
+
+B — Analyse CI
+  Workflows inspectés       : PR Validation, M19, M20, IntelliJ Plugin Validation
+  Historique                : tous PASS sur HEAD 96dc60a (runs 30699982335, 30699982338, 30699982379, 30699982411)
+
+C — Required checks et branch protection readiness
+  API /branches/main/protection : HTTP 403 — dépôt privé plan gratuit ; branch protection non configurable
+  API /rulesets                 : HTTP 403 — même cause
+  API /rules/branches/main      : HTTP 403 — même cause
+  mergeable_state (PR #102)     : unstable (non blocked) — aucun required check configuré ne bloque le merge
+  SonarCloud                    : FAILURE (non-required ; mergeable_state=unstable confirme non-bloquant)
+  Disposition branch protection : BLOCKED — contrainte de plan GitHub gratuit, documentation explicite
+
+D — Qualification finale M21-S2
+  CI Recovery             : PASS
+  Required checks         : PASS (GitHub Actions gates tous verts sur 96dc60a)
+  Branch protection       : BLOCKED (plateforme, API 403, plan gratuit)
+  Promotion candidate     : 96dc60af936d6df6ce8d40245039fe170554df74
+  mergeable               : true
+  mergeable_state         : unstable (aucun required check GitHub-enforced configuré)
+  PR #102                 : OPEN / candidate de production
+
+M21-S2 CI RECOVERY VALIDATION SUCCESS
+Required checks: PASS
+Branch protection readiness: BLOCKED — platform constraint, free private plan, API 403
+Promotion candidate HEAD: 96dc60af936d6df6ce8d40245039fe170554df74
+```

@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **1er août 2026 — M28 S1→S8 implémentés et mergés dans `develop` via PR #96 ; qualification locale exact-head en cours ; S9/CI/main explicitement différés.**
+Dernière mise à jour documentaire : **1er août 2026 — M21-S2 CI recovery exécutée (CI PASS / branch-protection BLOCKED plan) ; M28 S1→S8 mergés + S9 gouvernance terminée ; PR #102 prête pour merge main ; release 0.2.0 candidate.**
 
 Ce fichier est la synthèse autoritative de l’état courant. Les contrats détaillés et les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -8,19 +8,19 @@ Ce fichier est la synthèse autoritative de l’état courant. Les contrats dét
 
 ```text
 C0→M20                                TERMINÉS, VALIDÉS ET LIVRÉS sur main
-M21 — Production Integrity           S2 EN PAUSE — S1/S3→S9 localement validés
+M21 — Production Integrity           S2 DISPOSITION AOÛT 2026 (CI PASS / branch-protection BLOCKED plan) — #73 OPEN
 M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
 M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
 M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
 M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
 M27 — Team / Hosted Mode             TERMINÉ, VALIDÉ, MERGÉ develop
-M28 — Production Convergence         S1→S8 MERGÉS develop / S9 PARTIEL — PR #96 MERGED
+M28 — Production Convergence         S1→S8 MERGÉS develop / S9 GOUVERNANCE TERMINÉE — PR #102 OPEN/READY
 ```
 
 **État livré sur `main` : C0→M20.**
 
-`develop` contient le tree M21 localement qualifié et M22→M28 S1→S8 fusionnés. M28 est défini par l'issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). Le gel CI de juillet 2026 a pris fin le 1er août 2026 ; M21-S2/CI et la promotion vers `main` restent explicitement différés dans cette session.
+`develop` contient le tree M21 localement qualifié et M22→M28 S1→S8 fusionnés. M28 est défini par l'issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). Le gel CI de juillet 2026 a pris fin le 1er août 2026 ; M21-S2 CI recovery est terminée (disposition explicite : CI PASS, branch-protection BLOCKED par contrainte de plan) ; PR #102 est candidate de production pour la promotion `develop → main`.
 
 ## M21 — Production Integrity & Surface Convergence
 
@@ -45,6 +45,23 @@ M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
 ```
 
 Scopes conservés : `semantic-learned-provider`, provider avancé, persistance, API/MCP, remote, runtime et hosted.
+
+**M21-S2 — Disposition 1er août 2026** :
+
+```text
+CI Recovery     : PASS — GitHub Actions gates tous PASS sur 96dc60af936d6df6ce8d40245039fe170554df74
+  PR Validation Ubuntu                  PASS
+  PR Validation Windows                 PASS
+  M28 final Linux exact-head gate       PASS
+  M28 final Windows exact-head gate     PASS
+  M19 Advanced Code Intelligence        PASS
+  M20 Semantic Hybrid                   PASS
+  IntelliJ Plugin Validation            PASS
+Branch protection readiness : BLOCKED — dépôt privé plan gratuit ; API /branches/main/protection retourne HTTP 403 ; branch protection non configurable/vérifiable par API ; aucun required check GitHub-enforced configuré ; mergeable_state=unstable (non blocked)
+Disposition M21-S2 : PASS_WITH_CONSTRAINTS — CI recovery terminée, branch protection platform-blocked (contrainte plan)
+Promotion candidate HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
+PR de promotion : #102 OPEN / candidate de production
+```
 
 ## M22 — Advanced Provider Intelligence
 
@@ -143,8 +160,8 @@ PR             : #96 MERGED
 Branch         : pre-m28-audit-remediation
 Base develop   : cfbb495fbca8ddaf2b4bd529985e702e02106505
 Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
-Qualified HEAD : PENDING — qualification locale Windows/Linux en cours
-Promotion main : DIFFÉRÉE — M21-S2/CI explicitement hors périmètre de cette session
+Qualified HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
+Promotion main : PR #102 OPEN — governance terminée — en attente merge
 ```
 
 État :
@@ -156,15 +173,17 @@ Promotion main : DIFFÉRÉE — M21-S2/CI explicitement hors périmètre de cett
 - S6 : disposition remote explicite — `DENY` non OS-enforced, Windows/Linux `BLOCKED`, code non fiable non supporté — IMPLÉMENTÉ, MERGÉ ;
 - S7 : façade hosted décomposée, ports opérateur et frontière no-SaaS — IMPLÉMENTÉ, MERGÉ ;
 - S8 : gates structurels, négatifs, JaCoCo et runners exact-head — IMPLÉMENTÉS, MERGÉS ;
-- S9 : PARTIEL / PENDING — M21-S2, CI, branch protection, promotion main explicitement différés (CI DEFERRED).
+- S9 : GOUVERNANCE TERMINÉE — M21-S2 CI PASS / branch-protection BLOCKED (plan) ; develop qualifié ; PR #102 candidate production (CI DEFERRED levé le 1er août 2026).
 
-Le gel CI de juillet 2026 a pris fin le **1er août 2026**. La présente session reste néanmoins volontairement limitée à l’intégration et à la qualification locale de `develop` : M21-S2, GitHub Actions, required checks, branch protection et promotion vers `main` restent explicitement différés.
+Le gel CI de juillet 2026 a pris fin le **1er août 2026**. M21-S2 CI recovery est terminée (CI PASS, branch-protection BLOCKED par contrainte de plan GitHub gratuit). `develop` est qualifié sur `96dc60af936d6df6ce8d40245039fe170554df74`. PR #102 est prête pour promotion vers `main`.
 
 Les commandes autoritatives sont dans [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
 
 ## Règle de promotion
 
-- aucun workflow GitHub Actions exécuté ou modifié dans cette session ;
 - aucun claim sandbox OS ou SaaS sans preuve dédiée ;
-- aucune promotion vers `main` avant fermeture réelle de M21-S2 ;
+- aucune promotion vers `main` avant vérification réelle des gates requis ;
 - tout nouveau commit invalide les preuves exact-head antérieures.
+
+**Disposition effective 1er août 2026** : tous les GitHub Actions gates requis PASS sur `96dc60af936d6df6ce8d40245039fe170554df74` ; branch protection platform-blocked (plan gratuit, API 403) ; PR #102 candidate de production.
+

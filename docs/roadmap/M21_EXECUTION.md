@@ -254,3 +254,32 @@ S9 ne lit, ne déclenche et ne modifie aucun workflow CI. S2 reste le seul sous-
 - advanced provider : [`../developer/advanced-program-provider.md`](../developer/advanced-program-provider.md) ;
 - semantic scale : [`../developer/semantic-scale-qualification.md`](../developer/semantic-scale-qualification.md) ;
 - issue de pilotage : #73.
+
+## M21-S2 — Disposition 1er août 2026
+
+```text
+Date                    : 2026-08-01
+HEAD qualifié           : 96dc60af936d6df6ce8d40245039fe170554df74
+
+CI Recovery
+  PR Validation Ubuntu            : PASS (run 30699982411)
+  PR Validation Windows           : PASS (run 30699982411)
+  M28 final Linux exact-head gate : PASS (run 30699982411)
+  M28 final Windows exact-head    : PASS (run 30699982411)
+  M19 Java 24 qualification       : PASS (run 30699982338)
+  M20 Java 24 qualification       : PASS (run 30699982379)
+  IntelliJ 2026.1 / Java 21       : PASS (run 30699982335)
+  SonarCloud                      : FAILURE (non-required, mergeable_state=unstable confirme non-bloquant)
+
+Branch Protection
+  API /branches/main/protection   : HTTP 403 — plan gratuit, dépôt privé
+  API /rulesets                   : HTTP 403 — même cause
+  mergeable_state (PR #102)       : unstable (non blocked) — aucun required check configuré
+  Disposition                     : BLOCKED — contrainte de plan GitHub gratuit
+
+M21-S2 CI RECOVERY VALIDATION SUCCESS
+Required checks: PASS
+Branch protection readiness: BLOCKED — platform constraint, API 403
+Promotion candidate HEAD: 96dc60af936d6df6ce8d40245039fe170554df74
+```
+
