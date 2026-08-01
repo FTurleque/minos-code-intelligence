@@ -17,11 +17,16 @@ if ($env:OS -ne 'Windows_NT') {
 function Resolve-CommandPath([string] $Name) {
     $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $Command) { return '' }
-    if (-not [string]::IsNullOrWhiteSpace($Command.Source)) { return [string]$Command.Source }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Command.Source)) { return [string]$Command.Source }
     if ($Command.PSObject.Properties['Path'] -and -not [string]::IsNullOrWhiteSpace([string]$Command.Path)) {
         return [string]$Command.Path
     }
     return [string]$Command.Name
+}
+
+function Test-VsCodeCopilotShim([string] $Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\.vscode\\|vscode)'
 }
 
 function Invoke-CapabilityProbe([string] $File, [string[]] $Arguments) {
@@ -93,15 +98,13 @@ catch {
 
 function Test-Capability([string] $ToolPath, [string[]] $Arguments) {
     if ([string]::IsNullOrWhiteSpace($ToolPath)) { return $false }
-    $Probe = Invoke-CapabilityProbe -File $ToolPath -Arguments $Arguments
-    return $Probe.ExitCode -eq 0
+    return (Invoke-CapabilityProbe -File $ToolPath -Arguments $Arguments).ExitCode -eq 0
 }
 
 function Test-JetBrainsCopilot {
     $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
     $Roaming = [Environment]::GetFolderPath('ApplicationData')
-    $ConfigRoot = Join-Path $LocalAppData 'github-copilot\intellij'
-    if (Test-Path -LiteralPath $ConfigRoot) { return $true }
+    if (Test-Path -LiteralPath (Join-Path $LocalAppData 'github-copilot\intellij')) { return $true }
 
     foreach ($Root in @((Join-Path $Roaming 'JetBrains'), (Join-Path $LocalAppData 'JetBrains'))) {
         if (-not (Test-Path -LiteralPath $Root -PathType Container)) { continue }
@@ -110,9 +113,7 @@ function Test-JetBrainsCopilot {
             if (-not (Test-Path -LiteralPath $Plugins -PathType Container)) { continue }
             if (Get-ChildItem -LiteralPath $Plugins -Directory -ErrorAction SilentlyContinue |
                     Where-Object { $_.Name -match '(?i)copilot' } |
-                    Select-Object -First 1) {
-                return $true
-            }
+                    Select-Object -First 1) { return $true }
         }
     }
     return $false
@@ -152,10 +153,12 @@ if (Test-JetBrainsCopilot) {
 $Copilot = Resolve-CommandPath 'copilot'
 if ([string]::IsNullOrWhiteSpace($Copilot)) {
     $Results['CopilotCli'] = New-Result $false 'Non disponible — commande introuvable'
+} elseif (Test-VsCodeCopilotShim $Copilot) {
+    # Reject known editor shims before any command probe. Some wrappers may
+    # return success for generic help while not being the standalone Copilot CLI.
+    $Results['CopilotCli'] = New-Result $false 'Non disponible — launcher VS Code détecté, vrai CLI absent'
 } elseif (Test-Capability $Copilot @('mcp', '--help')) {
     $Results['CopilotCli'] = New-Result $true 'Détecté — CLI MCP compatible' 'cli'
-} elseif ($Copilot -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\.vscode\\|vscode)') {
-    $Results['CopilotCli'] = New-Result $false 'Non disponible — launcher VS Code détecté, vrai CLI absent'
 } else {
     $Results['CopilotCli'] = New-Result $false 'Non disponible — commande copilot détectée mais interface MCP incompatible'
 }
