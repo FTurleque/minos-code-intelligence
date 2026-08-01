@@ -1,15 +1,15 @@
 name: Publish Windows Release
 
 on:
-  # Politique du dépôt : la publication reste une action explicite. Une fois
-  # déclenché depuis main, le workflow construit, valide et publie les assets.
-  # Sur une autre branche, le même workflow qualifie les artefacts sans publier.
+  # Publication volontaire uniquement. Ce workflow n'est jamais déclenché par
+  # un push ou une pull request. Sur main il publie; sur une autre branche il
+  # qualifie seulement les artefacts demandés.
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version SemVer à qualifier/publier, par exemple 0.2.0 ou 0.2.0-rc2'
+        description: 'Version SemVer à qualifier/publier, par exemple 1.0.1 ou 1.0.2-rc1'
         required: true
-        default: '0.2.0-rc2'
+        default: '1.0.1'
         type: string
 
 permissions:
@@ -21,9 +21,9 @@ concurrency:
 
 jobs:
   publish:
-    name: Build, smoke test and publish Windows x64
+    name: Build, MCP smoke test and publish Windows x64
     runs-on: windows-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -39,6 +39,11 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
+
+      - name: Installer Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
 
       - name: Installer Inno Setup
         shell: pwsh
@@ -62,14 +67,10 @@ jobs:
         run: |
           java -version
           .\mvnw.cmd -version
+          python --version
           gh --version
           git rev-parse HEAD
           Write-Host "Ref: $env:GITHUB_REF"
-
-      - name: Valider les intégrations MCP natives Windows
-        shell: powershell
-        run: |
-          .\scripts\install\verify-mcp-client-integration.ps1
 
       - name: Construire et qualifier la distribution Windows
         if: github.ref != 'refs/heads/main'
@@ -101,3 +102,7 @@ jobs:
             target/dist/MINOS-${{ inputs.version }}-windows-x64-setup.exe.sha256
             target/dist/minos-${{ inputs.version }}-windows-x64.zip
             target/dist/minos-${{ inputs.version }}-windows-x64.zip.sha256
+            target/dist/minos-${{ inputs.version }}.cdx.json
+            target/dist/minos-${{ inputs.version }}.cdx.json.sha256
+            target/dist/MINOS-${{ inputs.version }}-THIRD-PARTY-NOTICES.txt
+            target/dist/MINOS-${{ inputs.version }}-THIRD-PARTY-NOTICES.txt.sha256
