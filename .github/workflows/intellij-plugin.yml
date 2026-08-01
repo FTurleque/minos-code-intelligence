@@ -2,7 +2,7 @@ name: IntelliJ Plugin Validation
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'minos-intellij/**'
       - 'minos-cli/**'
@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
 
       - name: Set up Java 21
         uses: actions/setup-java@v5
@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload plugin and verification reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: minos-intellij-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout exact M18 head
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload M18 final diagnostics and plugin ZIP
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: m18-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
