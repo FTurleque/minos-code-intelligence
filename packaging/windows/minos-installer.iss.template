@@ -1,12 +1,14 @@
 #define MinosName "MINOS Code Intelligence"
 #define MinosVersion "@@VERSION@@"
 #define MinosAppVersion "@@APP_VERSION@@"
+#define MinosAppId "@@APP_ID@@"
+#define MinosSmokeMode @@SMOKE_MODE@@
 #define MinosSourceDir "@@SOURCE_DIR@@"
 #define MinosOutputDir "@@OUTPUT_DIR@@"
 #define MinosOutputBaseFilename "@@OUTPUT_BASENAME@@"
 
 [Setup]
-AppId={{7B91F355-0B8A-4D28-A6C6-5CE4B1C5F62B}
+AppId={#MinosAppId}
 AppName={#MinosName}
 AppVersion={#MinosVersion}
 AppPublisher=FTurleque
@@ -33,32 +35,50 @@ VersionInfoProductTextVersion={#MinosVersion}
 
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
-Name: "mcp_copilot_jetbrains"; Description: "GitHub Copilot — JetBrains / IntelliJ"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_copilot_cli"; Description: "GitHub Copilot CLI"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_claude_code"; Description: "Claude Code"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_claude_desktop"; Description: "Claude Desktop"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_codex"; Description: "OpenAI Codex"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
 Name: "docker"; Description: "Configurer et démarrer le MCP Docker (Docker Desktop requis)"; GroupDescription: "MCP Docker optionnel :"; Flags: unchecked
 
 [Files]
 Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The detector is also embedded for pre-install extraction. It is still installed
+; normally by the recursive entry above for diagnostics and manual re-checks.
+Source: "{#MinosSourceDir}\integration\detect-mcp-clients.ps1"; Flags: dontcopy
 
 [Icons]
 Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\integration\configure-mcp-clients.ps1"" -InstallRoot ""{app}"" -Action Uninstall"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMinosNativeMcpClients"
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\integration\uninstall-mcp-clients.ps1"" -InstallRoot ""{app}"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMinosNativeMcpClients"; Check: ShouldRunGlobalCleanup
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"; Check: ShouldRunGlobalCleanup
 
 [UninstallDelete]
-; The setup-owned Docker marker must not keep {app} behind when Docker is unavailable.
-; Runtime state and persistent MINOS data live outside {app} and are managed separately.
 Type: files; Name: "{app}\.docker-mcp-managed"
 
 [Code]
 var
+  McpClientsPage: TWizardPage;
+  McpCopilotJetBrains: TNewCheckBox;
+  McpCopilotJetBrainsStatus: TNewStaticText;
+  McpCopilotCli: TNewCheckBox;
+  McpCopilotCliStatus: TNewStaticText;
+  McpClaudeCode: TNewCheckBox;
+  McpClaudeCodeStatus: TNewStaticText;
+  McpClaudeDesktop: TNewCheckBox;
+  McpClaudeDesktopStatus: TNewStaticText;
+  McpCodex: TNewCheckBox;
+  McpCodexStatus: TNewStaticText;
+  McpPreflightIni: String;
   DockerProjectsPage: TInputDirWizardPage;
   DockerWarningShown: Boolean;
+
+function IsSmokeBuild(): Boolean;
+begin
+  Result := {#MinosSmokeMode} = 1;
+end;
+
+function ShouldRunGlobalCleanup(): Boolean;
+begin
+  Result := not IsSmokeBuild();
+end;
 
 function TrimTrailingBackslash(Value: String): String;
 begin
@@ -82,6 +102,9 @@ var
   CurrentPath: String;
   AppPath: String;
 begin
+  if IsSmokeBuild() then
+    exit;
+
   AppPath := TrimTrailingBackslash(ExpandConstant('{app}'));
   if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
     CurrentPath := '';
@@ -95,11 +118,7 @@ begin
     end;
     CurrentPath := CurrentPath + AppPath;
     RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
-    RegWriteStringValue(
-      HKCU,
-      'Software\FTurleque\MINOS',
-      'ManagedPath',
-      AppPath);
+    RegWriteStringValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath', AppPath);
   end;
 end;
 
@@ -111,11 +130,10 @@ var
   Needle: String;
   ManagedPath: String;
 begin
-  if not RegQueryStringValue(
-    HKCU,
-    'Software\FTurleque\MINOS',
-    'ManagedPath',
-    ManagedPath) then
+  if IsSmokeBuild() then
+    exit;
+
+  if not RegQueryStringValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath', ManagedPath) then
     exit;
 
   if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
@@ -138,17 +156,95 @@ begin
   RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
 end;
 
+procedure ConfigureMcpRow(CheckBox: TNewCheckBox; Status: TNewStaticText; Top: Integer; Caption: String);
+begin
+  CheckBox.Parent := McpClientsPage.Surface;
+  CheckBox.Left := 0;
+  CheckBox.Top := Top;
+  CheckBox.Width := McpClientsPage.SurfaceWidth;
+  CheckBox.Caption := Caption;
+  CheckBox.Checked := False;
+
+  Status.Parent := McpClientsPage.Surface;
+  Status.Left := ScaleX(13);
+  Status.Top := Top + ScaleY(21);
+  Status.Width := McpClientsPage.SurfaceWidth - ScaleX(13);
+  Status.AutoSize := False;
+  Status.Height := ScaleY(28);
+  Status.WordWrap := True;
+end;
+
+procedure SetMcpAvailability(CheckBox: TNewCheckBox; Status: TNewStaticText; Section: String);
+var
+  Available: Boolean;
+  Reason: String;
+begin
+  Available := GetIniString(Section, 'Available', '0', McpPreflightIni) = '1';
+  Reason := GetIniString(Section, 'Reason', 'Détection indisponible', McpPreflightIni);
+  CheckBox.Enabled := Available;
+  CheckBox.Checked := False;
+  Status.Caption := Reason;
+end;
+
+procedure DisableAllMcpRows(Reason: String);
+begin
+  McpCopilotJetBrains.Enabled := False;
+  McpCopilotJetBrains.Checked := False;
+  McpCopilotJetBrainsStatus.Caption := Reason;
+  McpCopilotCli.Enabled := False;
+  McpCopilotCli.Checked := False;
+  McpCopilotCliStatus.Caption := Reason;
+  McpClaudeCode.Enabled := False;
+  McpClaudeCode.Checked := False;
+  McpClaudeCodeStatus.Caption := Reason;
+  McpClaudeDesktop.Enabled := False;
+  McpClaudeDesktop.Checked := False;
+  McpClaudeDesktopStatus.Caption := Reason;
+  McpCodex.Enabled := False;
+  McpCodex.Checked := False;
+  McpCodexStatus.Caption := Reason;
+end;
+
+procedure RunMcpPreflight;
+var
+  PowerShell: String;
+  Detector: String;
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  McpPreflightIni := ExpandConstant('{tmp}\minos-mcp-preflight.ini');
+  DeleteFile(McpPreflightIni);
+
+  try
+    ExtractTemporaryFile('detect-mcp-clients.ps1');
+  except
+    DisableAllMcpRows('Détection indisponible — helper MINOS introuvable');
+    exit;
+  end;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Detector := ExpandConstant('{tmp}\detect-mcp-clients.ps1');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Detector + '" -OutputPath "' + McpPreflightIni + '"';
+
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) or (not FileExists(McpPreflightIni)) then
+  begin
+    DisableAllMcpRows('Détection indisponible — le préflight MINOS a échoué');
+    exit;
+  end;
+
+  SetMcpAvailability(McpCopilotJetBrains, McpCopilotJetBrainsStatus, 'CopilotJetBrains');
+  SetMcpAvailability(McpCopilotCli, McpCopilotCliStatus, 'CopilotCli');
+  SetMcpAvailability(McpClaudeCode, McpClaudeCodeStatus, 'ClaudeCode');
+  SetMcpAvailability(McpClaudeDesktop, McpClaudeDesktopStatus, 'ClaudeDesktop');
+  SetMcpAvailability(McpCodex, McpCodexStatus, 'Codex');
+end;
+
 function DockerReady(): Boolean;
 var
   ResultCode: Integer;
 begin
-  Result := Exec(
-    ExpandConstant('{cmd}'),
-    '/C docker version >NUL 2>&1',
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode) and (ResultCode = 0);
+  Result := Exec(ExpandConstant('{cmd}'), '/C docker version >NUL 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
 function GetDockerProjectsRoot(Param: String): String;
@@ -159,11 +255,11 @@ end;
 function NativeMcpClientSelected(): Boolean;
 begin
   Result :=
-    WizardIsTaskSelected('mcp_copilot_jetbrains') or
-    WizardIsTaskSelected('mcp_copilot_cli') or
-    WizardIsTaskSelected('mcp_claude_code') or
-    WizardIsTaskSelected('mcp_claude_desktop') or
-    WizardIsTaskSelected('mcp_codex');
+    (McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked) or
+    (McpCopilotCli.Enabled and McpCopilotCli.Checked) or
+    (McpClaudeCode.Enabled and McpClaudeCode.Checked) or
+    (McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked) or
+    (McpCodex.Enabled and McpCodex.Checked);
 end;
 
 procedure ConfigureNativeMcpClients;
@@ -172,28 +268,21 @@ var
   Parameters: String;
   PowerShell: String;
 begin
-  if not NativeMcpClientSelected() then
+  if IsSmokeBuild() or (not NativeMcpClientSelected()) then
     exit;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -File "' +
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\integration\configure-mcp-clients-setup.ps1') +
     '" -InstallRoot "' + ExpandConstant('{app}') + '"';
 
-  if WizardIsTaskSelected('mcp_copilot_jetbrains') then
-    Parameters := Parameters + ' -CopilotJetBrains';
-  if WizardIsTaskSelected('mcp_copilot_cli') then
-    Parameters := Parameters + ' -CopilotCli';
-  if WizardIsTaskSelected('mcp_claude_code') then
-    Parameters := Parameters + ' -ClaudeCode';
-  if WizardIsTaskSelected('mcp_claude_desktop') then
-    Parameters := Parameters + ' -ClaudeDesktop';
-  if WizardIsTaskSelected('mcp_codex') then
-    Parameters := Parameters + ' -Codex';
+  if McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked then Parameters := Parameters + ' -CopilotJetBrains';
+  if McpCopilotCli.Enabled and McpCopilotCli.Checked then Parameters := Parameters + ' -CopilotCli';
+  if McpClaudeCode.Enabled and McpClaudeCode.Checked then Parameters := Parameters + ' -ClaudeCode';
+  if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then Parameters := Parameters + ' -ClaudeDesktop';
+  if McpCodex.Enabled and McpCodex.Checked then Parameters := Parameters + ' -Codex';
 
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
-     (ResultCode <> 0) then
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
       'MINOS est installé, mais une ou plusieurs intégrations MCP natives n''ont pas pu être configurées.' + #13#10 + #13#10 +
@@ -210,16 +299,17 @@ var
   Parameters: String;
   PowerShell: String;
 begin
+  if IsSmokeBuild() then
+    exit;
+
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -File "' +
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\docker\scripts\configure-docker-mcp.ps1') +
     '" -InstallRoot "' + ExpandConstant('{app}') +
     '" -ProjectsRoot "' + DockerProjectsPage.Values[0] +
     '" -Start -Strict';
 
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
-     (ResultCode <> 0) then
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
       'MINOS est installé, mais la configuration du MCP Docker a échoué.' + #13#10 + #13#10 +
@@ -234,6 +324,33 @@ procedure InitializeWizard;
 var
   RequestedRoot: String;
 begin
+  McpClientsPage := CreateCustomPage(
+    wpSelectDir,
+    'Intégrations MCP natives',
+    'Connecter le MCP natif MINOS à vos clients IA détectés');
+
+  McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage);
+  McpCopilotJetBrainsStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCopilotJetBrains, McpCopilotJetBrainsStatus, ScaleY(8), 'GitHub Copilot — JetBrains / IntelliJ');
+
+  McpCopilotCli := TNewCheckBox.Create(McpClientsPage);
+  McpCopilotCliStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCopilotCli, McpCopilotCliStatus, ScaleY(62), 'GitHub Copilot CLI');
+
+  McpClaudeCode := TNewCheckBox.Create(McpClientsPage);
+  McpClaudeCodeStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpClaudeCode, McpClaudeCodeStatus, ScaleY(116), 'Claude Code');
+
+  McpClaudeDesktop := TNewCheckBox.Create(McpClientsPage);
+  McpClaudeDesktopStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpClaudeDesktop, McpClaudeDesktopStatus, ScaleY(170), 'Claude Desktop');
+
+  McpCodex := TNewCheckBox.Create(McpClientsPage);
+  McpCodexStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCodex, McpCodexStatus, ScaleY(224), 'OpenAI Codex');
+
+  RunMcpPreflight;
+
   DockerWarningShown := False;
   DockerProjectsPage := CreateInputDirPage(
     wpSelectTasks,
@@ -245,10 +362,8 @@ begin
   DockerProjectsPage.Add('Racine des projets :');
 
   RequestedRoot := ExpandConstant('{param:DOCKERPROJECTSROOT|}');
-  if RequestedRoot <> '' then
-    DockerProjectsPage.Values[0] := RequestedRoot
-  else
-    DockerProjectsPage.Values[0] := ExpandConstant('{%USERPROFILE}');
+  if RequestedRoot <> '' then DockerProjectsPage.Values[0] := RequestedRoot
+  else DockerProjectsPage.Values[0] := ExpandConstant('{%USERPROFILE}');
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -285,18 +400,14 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-    if WizardIsTaskSelected('addtopath') then
-      AddMinosToUserPath;
-
+    if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
     ConfigureNativeMcpClients;
-
-    if WizardIsTaskSelected('docker') and DockerReady() then
-      ConfigureDockerMcp;
+    if WizardIsTaskSelected('docker') and DockerReady() then ConfigureDockerMcp;
   end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if CurUninstallStep = usUninstall then
+  if (CurUninstallStep = usUninstall) and (not IsSmokeBuild()) then
     RemoveMinosFromUserPath;
 end;
