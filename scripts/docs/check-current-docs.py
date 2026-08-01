@@ -160,7 +160,15 @@ def main() -> int:
             "CodexMode",
         ):
             require("minos-installer.iss.template", installer, token)
-        for stale_task in ("mcp_copilot_jetbrains", "mcp_copilot_cli", "mcp_claude_code", "mcp_claude_desktop", "mcp_codex"):
+        # Only the obsolete static [Tasks] declarations are forbidden. The new
+        # wizard legitimately contains identifiers such as McpCopilotJetBrains.
+        for stale_task in (
+            'Name: "mcp_copilot_jetbrains"',
+            'Name: "mcp_copilot_cli"',
+            'Name: "mcp_claude_code"',
+            'Name: "mcp_claude_desktop"',
+            'Name: "mcp_codex"',
+        ):
             forbid("minos-installer.iss.template", installer, stale_task)
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
