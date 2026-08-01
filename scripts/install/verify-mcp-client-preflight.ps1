@@ -20,7 +20,7 @@ function Assert-True([bool] $Condition, [string] $Message) {
 
 function Read-IniValue([string] $Path, [string] $Section, [string] $Key) {
     $Current = ''
-    foreach ($Line in [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8)) {
+    foreach ($Line in [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::Unicode)) {
         if ($Line -match '^\[([^\]]+)\]$') {
             $Current = $Matches[1]
             continue
@@ -60,15 +60,18 @@ exit /b 1
 
     Assert-True (Test-Path -LiteralPath $Output -PathType Leaf) 'Preflight did not create its INI contract.'
     Assert-True ((Read-IniValue $Output 'CopilotCli' 'Available') -eq '0') 'VS Code copilot shim was incorrectly accepted as Copilot CLI even though its help probe returned success.'
-    Assert-True ((Read-IniValue $Output 'CopilotCli' 'Reason') -match 'launcher VS Code') 'Copilot shim diagnostic is not explicit.'
+    $CopilotReason = Read-IniValue $Output 'CopilotCli' 'Reason'
+    Assert-True ($CopilotReason -match 'launcher VS Code') 'Copilot shim diagnostic is not explicit.'
+    Assert-True ($CopilotReason.IndexOf([char]0x00E9) -ge 0) 'Copilot shim diagnostic lost its Unicode accented character.'
+    Assert-True ($CopilotReason.IndexOf([char]0x2014) -ge 0) 'Copilot shim diagnostic lost its Unicode em dash.'
     Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Available') -eq '1') 'Compatible Claude Code CLI was not detected.'
     Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Mode') -eq 'cli') 'Claude Code mode should be cli.'
     Assert-True ((Read-IniValue $Output 'Codex' 'Available') -eq '1') 'Compatible Codex CLI was not detected.'
     Assert-True ((Read-IniValue $Output 'Codex' 'Mode') -eq 'cli') 'Codex mode should be cli when a compatible CLI is present.'
 
     $Bytes = [System.IO.File]::ReadAllBytes($Output)
-    $HasBom = $Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF
-    Assert-True (-not $HasBom) 'Preflight INI must be UTF-8 without BOM for deterministic Inno Setup parsing.'
+    $HasUtf16LeBom = $Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE
+    Assert-True $HasUtf16LeBom 'Preflight INI must be UTF-16 LE with BOM for deterministic Windows/Inno Setup Unicode parsing.'
 
     Write-Host 'MINOS MCP CLIENT PREFLIGHT VERIFICATION SUCCESS' -ForegroundColor Green
 }
