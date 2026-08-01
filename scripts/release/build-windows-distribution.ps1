@@ -293,7 +293,9 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp
 foreach ($IntegrationScript in @(
     'configure-mcp-clients.ps1',
     'configure-mcp-clients-setup.ps1',
-    'detect-mcp-clients.ps1'
+    'configure-codex-mcp.ps1',
+    'detect-mcp-clients.ps1',
+    'uninstall-mcp-clients.ps1'
 )) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts\install\$IntegrationScript") `
         -Destination (Join-Path $IntegrationDirectory $IntegrationScript) -Force
