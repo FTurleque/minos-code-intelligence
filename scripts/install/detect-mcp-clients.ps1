@@ -14,6 +14,17 @@ if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS MCP client preflight currently targets Windows hosts.'
 }
 
+# Repository PowerShell scripts are UTF-8 without BOM. Windows PowerShell 5.1
+# parses such files using the legacy ANSI code page, so keep this source file
+# ASCII-only and construct the few required Unicode UI characters at runtime.
+# The generated INI is UTF-16 LE with BOM, which is the native Unicode format
+# consumed reliably by Windows/Inno Setup INI APIs.
+function Ui([string] $Value) {
+    $EAcute = [string][char]0x00E9
+    $EmDash = [string][char]0x2014
+    return $Value.Replace('{e}', $EAcute).Replace('{dash}', $EmDash)
+}
+
 function Resolve-CommandPath([string] $Name) {
     $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $Command) { return '' }
@@ -171,48 +182,48 @@ function New-Result([bool] $Available, [string] $Reason, [string] $Mode = '') {
 $Results = [ordered]@{}
 
 if (Test-JetBrainsCopilot) {
-    $Results['CopilotJetBrains'] = New-Result $true 'Détecté' 'json'
+    $Results['CopilotJetBrains'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
 } else {
-    $Results['CopilotJetBrains'] = New-Result $false 'Non disponible — GitHub Copilot JetBrains / IntelliJ non détecté'
+    $Results['CopilotJetBrains'] = New-Result $false (Ui 'Non disponible {dash} GitHub Copilot JetBrains / IntelliJ non d{e}tect{e}')
 }
 
 $Copilot = Resolve-CommandPath 'copilot'
 if ([string]::IsNullOrWhiteSpace($Copilot)) {
-    $Results['CopilotCli'] = New-Result $false 'Non disponible — commande introuvable'
+    $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} commande introuvable')
 } elseif (Test-VsCodeCopilotShim $Copilot) {
     # Reject known editor shims before any command probe. Some wrappers may
     # return success for generic help while not being the standalone Copilot CLI.
-    $Results['CopilotCli'] = New-Result $false 'Non disponible — launcher VS Code détecté, vrai CLI absent'
+    $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} launcher VS Code d{e}tect{e}, vrai CLI absent')
 } elseif (Test-Capability $Copilot @('mcp', '--help')) {
-    $Results['CopilotCli'] = New-Result $true 'Détecté — CLI MCP compatible' 'cli'
+    $Results['CopilotCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
 } else {
-    $Results['CopilotCli'] = New-Result $false 'Non disponible — commande copilot détectée mais interface MCP incompatible'
+    $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} commande copilot d{e}tect{e}e mais interface MCP incompatible')
 }
 
 $Claude = Resolve-CommandPath 'claude'
 if ([string]::IsNullOrWhiteSpace($Claude)) {
-    $Results['ClaudeCode'] = New-Result $false 'Non disponible — commande introuvable'
+    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande introuvable')
 } elseif (Test-Capability $Claude @('mcp', '--help')) {
-    $Results['ClaudeCode'] = New-Result $true 'Détecté — CLI MCP compatible' 'cli'
+    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
 } else {
-    $Results['ClaudeCode'] = New-Result $false 'Non disponible — commande claude détectée mais interface MCP incompatible'
+    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande claude d{e}tect{e}e mais interface MCP incompatible')
 }
 
 if (Test-ClaudeDesktop) {
-    $Results['ClaudeDesktop'] = New-Result $true 'Détecté' 'json'
+    $Results['ClaudeDesktop'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
 } else {
-    $Results['ClaudeDesktop'] = New-Result $false 'Non disponible — Claude Desktop non détecté'
+    $Results['ClaudeDesktop'] = New-Result $false (Ui 'Non disponible {dash} Claude Desktop non d{e}tect{e}')
 }
 
 $Codex = Resolve-CommandPath 'codex'
 if (-not [string]::IsNullOrWhiteSpace($Codex) -and (Test-Capability $Codex @('mcp', '--help'))) {
-    $Results['Codex'] = New-Result $true 'Détecté — Codex CLI' 'cli'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli'
 } elseif (Test-CodexDesktop) {
-    $Results['Codex'] = New-Result $true 'Détecté — Codex Desktop (configuration via fichier utilisateur)' 'desktop'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop'
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
-    $Results['Codex'] = New-Result $false 'Non disponible — commande codex détectée mais interface MCP incompatible'
+    $Results['Codex'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
 } else {
-    $Results['Codex'] = New-Result $false 'Non disponible — Codex CLI / Desktop non détecté'
+    $Results['Codex'] = New-Result $false (Ui 'Non disponible {dash} Codex CLI / Desktop non d{e}tect{e}')
 }
 
 $Parent = Split-Path -Parent ([System.IO.Path]::GetFullPath($OutputPath))
@@ -231,7 +242,7 @@ foreach ($Name in $Results.Keys) {
 [System.IO.File]::WriteAllLines(
     [System.IO.Path]::GetFullPath($OutputPath),
     $Lines,
-    [System.Text.UTF8Encoding]::new($false))
+    [System.Text.Encoding]::Unicode)
 
 Write-Host "MINOS MCP client preflight written: $OutputPath"
 foreach ($Name in $Results.Keys) {
