@@ -251,6 +251,10 @@ New-Item -ItemType Directory -Force -Path $Stage, $AppImages, $Distribution | Ou
 
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $Stage 'minos.jar')
 $AppVersion = ($Version -split '[-+]')[0]
+# jpackage normally asks jlink to strip native commands from the bundled runtime.
+# MINOS intentionally retains java.exe so release qualification can inspect the
+# exact packaged image with `java --list-modules` instead of inferring its content.
+$JlinkOptions = '--strip-debug --no-man-pages --no-header-files'
 & $Jpackage @(
     '--type', 'app-image',
     '--name', 'minos',
@@ -259,6 +263,7 @@ $AppVersion = ($Version -split '[-+]')[0]
     '--main-jar', 'minos.jar',
     '--main-class', 'com.minos.cli.MinosLauncher',
     '--add-modules', $JdkModuleList,
+    '--jlink-options', $JlinkOptions,
     '--dest', $AppImages,
     '--win-console'
 )
@@ -267,12 +272,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $AppImage = Join-Path $AppImages 'minos'
+$PackagedLauncher = Join-Path $AppImage 'minos.exe'
 $PackagedRuntimeJava = Join-Path $AppImage 'runtime\bin\java.exe'
-if (-not (Test-Path -LiteralPath (Join-Path $AppImage 'minos.exe') -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $PackagedRuntimeJava -PathType Leaf)) {
-    throw "jpackage app image is incomplete: $AppImage"
+if (-not (Test-Path -LiteralPath $PackagedLauncher -PathType Leaf)) {
+    throw "jpackage app image is missing the MINOS launcher: $PackagedLauncher"
+}
+if (-not (Test-Path -LiteralPath $PackagedRuntimeJava -PathType Leaf)) {
+    throw "jpackage app image is missing the auditable runtime java launcher: $PackagedRuntimeJava"
 }
 $ResolvedRuntimeModules = Assert-PackagedRuntimeModules -RuntimeJava $PackagedRuntimeJava -RequiredModules $JdkModules
+$ResolvedRuntimeModuleList = $ResolvedRuntimeModules -join ','
+Write-Host "jpackage runtime modules (resolved): $ResolvedRuntimeModuleList" -ForegroundColor Cyan
 Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
 
 $LibDirectory = Join-Path $Distribution 'lib'
@@ -361,7 +371,8 @@ $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
 version=$Version
 commit=$Commit
 java=$JavaVersion
-runtimeModules=$JdkModuleList
+runtimeModuleRoots=$JdkModuleList
+runtimeModules=$ResolvedRuntimeModuleList
 builtAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 sbom=supply-chain/minos.cdx.json
 manifest=RELEASE-MANIFEST.json
@@ -412,6 +423,7 @@ Write-Host ''
 Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
 Write-Host "Distribution : $Distribution"
 Write-Host "Runtime roots : $JdkModuleList"
+Write-Host "Runtime count : $($ResolvedRuntimeModules.Count)"
 Write-Host "ZIP          : $Zip"
 Write-Host "SHA-256      : $Hash"
 Write-Host "SBOM         : $SbomSidecar"
