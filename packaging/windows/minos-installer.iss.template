@@ -71,6 +71,7 @@ var
   McpPreflightCompleted: Boolean;
   DockerProjectsPage: TInputDirWizardPage;
   DockerWarningShown: Boolean;
+  DeleteUserDataOnUninstall: Boolean;
 
 function IsSmokeBuild(): Boolean;
 begin
@@ -166,6 +167,48 @@ begin
 
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', PaddedPath);
   RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
+end;
+
+procedure PromptForUserDataRemoval;
+var
+  UserDataRoot: String;
+begin
+  DeleteUserDataOnUninstall := False;
+  if IsSmokeBuild() or UninstallSilent() then
+    exit;
+
+  UserDataRoot := ExpandConstant('{localappdata}\MINOS');
+  if not DirExists(UserDataRoot) then
+    exit;
+
+  DeleteUserDataOnUninstall := MsgBox(
+    'Supprimer également toutes les données MINOS locales ?' + #13#10 + #13#10 +
+    UserDataRoot + #13#10 + #13#10 +
+    'Cela supprimera les projets enregistrés, snapshots, index, providers gérés, logs, sauvegardes et données Docker MINOS.' + #13#10 + #13#10 +
+    'Cette opération est irréversible. Choisissez Non pour conserver ces données.',
+    mbConfirmation,
+    MB_YESNO or MB_DEFBUTTON2) = IDYES;
+end;
+
+procedure DeleteMinosUserData;
+var
+  UserDataRoot: String;
+begin
+  if IsSmokeBuild() or (not DeleteUserDataOnUninstall) then
+    exit;
+
+  UserDataRoot := ExpandConstant('{localappdata}\MINOS');
+  if DirExists(UserDataRoot) and (not DelTree(UserDataRoot, True, True, True)) then
+  begin
+    MsgBox(
+      'MINOS a été désinstallé, mais toutes les données locales n''ont pas pu être supprimées :' + #13#10 + #13#10 +
+      UserDataRoot + #13#10 + #13#10 +
+      'Fermez les processus qui utilisent encore ce dossier puis supprimez-le manuellement.',
+      mbError,
+      MB_OK);
+  end;
+
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\FTurleque\MINOS');
 end;
 
 procedure ConfigureMcpRow(CheckBox: TNewCheckBox; Status: TNewStaticText; Top: Integer; Caption: String);
@@ -451,6 +494,14 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if (CurUninstallStep = usUninstall) and (not IsSmokeBuild()) then
-    RemoveMinosFromUserPath;
+  if CurUninstallStep = usUninstall then
+  begin
+    if not IsSmokeBuild() then
+    begin
+      RemoveMinosFromUserPath;
+      PromptForUserDataRemoval;
+    end;
+  end
+  else if CurUninstallStep = usPostUninstall then
+    DeleteMinosUserData;
 end;
