@@ -29,9 +29,39 @@ function Test-VsCodeCopilotShim([string] $Path) {
     return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\.vscode\\|vscode)'
 }
 
+function Resolve-ProbePowerShell([string] $ToolPath) {
+    # npm/global CLIs are commonly exposed as .ps1 shims. Use PowerShell 7 for
+    # those launchers, matching the actual integration manager; Windows
+    # PowerShell 5.1 can otherwise reject a valid modern CLI or its syntax.
+    if ([System.IO.Path]::GetExtension($ToolPath).Equals('.ps1', [StringComparison]::OrdinalIgnoreCase)) {
+        $Pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $Pwsh) { $Pwsh = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1 }
+        if ($null -eq $Pwsh) { return '' }
+        return [string]$Pwsh.Source
+    }
+
+    $WindowsPowerShell = Join-Path ([Environment]::GetFolderPath('System')) 'WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $WindowsPowerShell -PathType Leaf) { return $WindowsPowerShell }
+    $Fallback = Get-Command powershell.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $Fallback) { return '' }
+    return [string]$Fallback.Source
+}
+
 function Invoke-CapabilityProbe([string] $File, [string[]] $Arguments) {
     if ([string]::IsNullOrWhiteSpace($File)) {
         return [pscustomobject]@{ ExitCode = -1; Output = '' }
+    }
+
+    $HostPath = Resolve-ProbePowerShell -ToolPath $File
+    if ([string]::IsNullOrWhiteSpace($HostPath)) {
+        return [pscustomobject]@{
+            ExitCode = -2
+            Output = if ([System.IO.Path]::GetExtension($File) -ieq '.ps1') {
+                "PowerShell 7 (pwsh) is required to probe the CLI launcher '$File'."
+            } else {
+                'No PowerShell host is available for the MCP capability probe.'
+            }
+        }
     }
 
     $Payload = [pscustomobject][ordered]@{
@@ -56,14 +86,10 @@ catch {
 }
 '@
     $Encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($ChildScript))
-    $HostPath = Join-Path ([Environment]::GetFolderPath('System')) 'WindowsPowerShell\v1.0\powershell.exe'
-    if (-not (Test-Path -LiteralPath $HostPath -PathType Leaf)) {
-        $HostPath = (Get-Command powershell.exe -ErrorAction Stop).Source
-    }
 
     $Info = New-Object System.Diagnostics.ProcessStartInfo
     $Info.FileName = $HostPath
-    $Info.Arguments = "-NoLogo -NoProfile -NonInteractive -EncodedCommand $Encoded"
+    $Info.Arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $Encoded"
     $Info.UseShellExecute = $false
     $Info.CreateNoWindow = $true
     $Info.RedirectStandardInput = $true
@@ -129,7 +155,7 @@ function Test-ClaudeDesktop {
 function Test-CodexDesktop {
     $Local = [Environment]::GetFolderPath('LocalApplicationData')
     $HomeDir = [Environment]::GetFolderPath('UserProfile')
-    return (Test-Path -LiteralPath (Join-Path $HomeDir '.codex')) -or
+    return (Test-Path -LiteralPath (Join-Path $HomeDir '.codex\config.toml') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Programs\Codex\Codex.exe') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Codex\Codex.exe') -PathType Leaf)
 }
