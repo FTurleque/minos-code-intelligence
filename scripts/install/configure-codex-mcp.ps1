@@ -6,6 +6,9 @@ param(
     [ValidateSet('Install', 'Uninstall')]
     [string] $Action = 'Install',
 
+    [ValidateSet('auto', 'cli', 'desktop')]
+    [string] $Mode = 'auto',
+
     [switch] $Strict,
 
     [ValidateRange(1, 60)]
@@ -267,13 +270,21 @@ function Uninstall-Cli([object] $State) {
     Write-Log "UNINSTALL client=codex mode=cli tool='$ToolPath'"
 }
 
-Write-Log "BEGIN client=codex action=$Action installRoot='$InstallRoot' dataRoot='$DataRoot'"
+Write-Log "BEGIN client=codex action=$Action requestedMode=$Mode installRoot='$InstallRoot' dataRoot='$DataRoot'"
 try {
     if ($Action -eq 'Install') {
-        $CodexPath = Resolve-CommandPath 'codex'
-        $Capability = if ([string]::IsNullOrWhiteSpace($CodexPath)) { $null } else { Invoke-Capture $CodexPath @('mcp','--help') }
-        if ($null -ne $Capability -and $Capability.ExitCode -eq 0) { Install-Cli $CodexPath }
-        else { Install-Toml }
+        if ($Mode -eq 'desktop') {
+            Install-Toml
+        } else {
+            $CodexPath = Resolve-CommandPath 'codex'
+            $Capability = if ([string]::IsNullOrWhiteSpace($CodexPath)) { $null } else { Invoke-Capture $CodexPath @('mcp','--help') }
+            $CliAvailable = $null -ne $Capability -and $Capability.ExitCode -eq 0
+            if ($Mode -eq 'cli' -and -not $CliAvailable) {
+                throw 'Codex CLI was selected by installer preflight but its MCP capability is no longer available.'
+            }
+            if ($CliAvailable) { Install-Cli $CodexPath }
+            else { Install-Toml }
+        }
     } else {
         $State = Read-State
         if ($null -eq $State) { return }
