@@ -5,7 +5,7 @@
 
 ## Versions
 
-- version Maven : `0.2.0-SNAPSHOT`
+- version Maven : `1.0.1-SNAPSHOT`
 - contrat API Java : `v1`
 
 ## Catalogue MCP
