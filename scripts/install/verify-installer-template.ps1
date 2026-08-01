@@ -24,7 +24,16 @@ function Forbid([string] $Needle, [string] $Message) {
 # when repository .ps1 files are UTF-8 without BOM. Human-facing French labels
 # are validated by the Python documentation/release-contract gate, which reads
 # the template explicitly as UTF-8.
+Require 'McpModePage := CreateInputOptionPage(' 'Installer is missing the explicit MCP mode selection page.'
+Require 'wpSelectTasks,' 'MCP mode selection must be placed after the standard Windows tasks page.'
+Require 'McpModePage.Values[0] := True;' 'Native MCP must be the recommended/default mode.'
+Require 'McpModePage.Values[1] := False;' 'Docker MCP must remain opt-in.'
 Require 'McpClientsPage := CreateCustomPage(' 'Installer is missing the dedicated native MCP integration page.'
+Require 'McpModePage.ID,' 'Native MCP client integration page must follow MCP mode selection.'
+Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Docker projects page.'
+Require 'McpClientsPage.ID,' 'Docker projects page must follow native client integration.'
+Require 'Result := not NativeMcpSelected()' 'Native client integration page is not conditional on native MCP mode.'
+Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
 Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude Code MCP row.'
@@ -37,11 +46,13 @@ Require 'ShouldRunGlobalCleanup' 'Installer smoke isolation does not guard globa
 Require 'if IsSmokeBuild() then' 'Installer smoke mode does not guard global mutations.'
 Require 'integration\uninstall-mcp-clients.ps1' 'Installer does not use the canonical MCP uninstall wrapper.'
 Require 'Flags: dontcopy' 'Installer detector is not embedded for pre-install extraction.'
+Forbid 'Name: "docker"' 'Docker MCP must be selected on the explicit MCP mode page, not as a generic Inno task.'
 Forbid 'Name: "mcp_copilot_jetbrains"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_copilot_cli"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_claude_code"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_claude_desktop"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_codex"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+Forbid "WizardIsTaskSelected('docker')" 'Docker MCP must not depend on the legacy generic task contract.'
 
 foreach ($Token in @('@@VERSION@@','@@APP_VERSION@@','@@APP_ID@@','@@SMOKE_MODE@@','@@SOURCE_DIR@@','@@OUTPUT_DIR@@','@@OUTPUT_BASENAME@@')) {
     if ($Text.IndexOf($Token, [StringComparison]::Ordinal) -lt 0) { throw "Installer template token missing: $Token" }
