@@ -66,6 +66,7 @@ var
   McpClaudeDesktopStatus: TNewStaticText;
   McpCodex: TNewCheckBox;
   McpCodexStatus: TNewStaticText;
+  McpCodexMode: String;
   McpPreflightIni: String;
   DockerProjectsPage: TInputDirWizardPage;
   DockerWarningShown: Boolean;
@@ -188,6 +189,7 @@ end;
 
 procedure DisableAllMcpRows(Reason: String);
 begin
+  McpCodexMode := 'auto';
   McpCopilotJetBrains.Enabled := False;
   McpCopilotJetBrains.Checked := False;
   McpCopilotJetBrainsStatus.Caption := Reason;
@@ -214,6 +216,7 @@ var
 begin
   McpPreflightIni := ExpandConstant('{tmp}\minos-mcp-preflight.ini');
   DeleteFile(McpPreflightIni);
+  McpCodexMode := 'auto';
 
   try
     ExtractTemporaryFile('detect-mcp-clients.ps1');
@@ -238,6 +241,9 @@ begin
   SetMcpAvailability(McpClaudeCode, McpClaudeCodeStatus, 'ClaudeCode');
   SetMcpAvailability(McpClaudeDesktop, McpClaudeDesktopStatus, 'ClaudeDesktop');
   SetMcpAvailability(McpCodex, McpCodexStatus, 'Codex');
+  McpCodexMode := Lowercase(GetIniString('Codex', 'Mode', 'auto', McpPreflightIni));
+  if (McpCodexMode <> 'cli') and (McpCodexMode <> 'desktop') then
+    McpCodexMode := 'auto';
 end;
 
 function DockerReady(): Boolean;
@@ -280,7 +286,8 @@ begin
   if McpCopilotCli.Enabled and McpCopilotCli.Checked then Parameters := Parameters + ' -CopilotCli';
   if McpClaudeCode.Enabled and McpClaudeCode.Checked then Parameters := Parameters + ' -ClaudeCode';
   if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then Parameters := Parameters + ' -ClaudeDesktop';
-  if McpCodex.Enabled and McpCodex.Checked then Parameters := Parameters + ' -Codex';
+  if McpCodex.Enabled and McpCodex.Checked then
+    Parameters := Parameters + ' -Codex -CodexMode "' + McpCodexMode + '"';
 
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
