@@ -54,8 +54,14 @@ jobs:
       - name: Targeted JaCoCo gate
         run: python scripts/quality/check-jacoco.py
 
+      - name: Module boundary consistency
+        run: python scripts/architecture/check-module-boundaries.py
+
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
+
+      - name: Current documentation consistency
+        run: python scripts/docs/check-current-docs.py
 
       - name: Upload verification diagnostics
         if: always()
@@ -69,6 +75,63 @@ jobs:
             **/target/failsafe-reports/**
             target/site/jacoco-aggregate/**
             target/m15-quality/**
+
+  m28-exact-head:
+    name: M28 exact-head (${{ matrix.os }})
+    if: github.event_name == 'pull_request' && (github.head_ref == 'pre-m28-audit-remediation' || github.head_ref == 'develop')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact M28 head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Prepare Maven Wrapper (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x mvnw
+
+      - name: Run complete M28 Linux exact-head qualification
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/remediation/run-final.sh "" 1000
+
+      - name: Run complete M28 Windows exact-head qualification
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\scripts\remediation\run-final.ps1 -ProgramGraphFiles 1000
+
+      - name: Upload M28 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: m28-exact-head-${{ runner.os }}-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
+            target/site/jacoco-aggregate/**
+            target/qualification/m28/**
 
   m15-final-exact-head:
     name: M15 final Windows exact-head gate
