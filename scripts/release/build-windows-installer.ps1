@@ -91,9 +91,10 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 
 $InstallerWork = Join-Path $OutputRoot '.installer'
 $InstallerOutput = if ($Smoke) { Join-Path $OutputRoot '.smoke' } else { $OutputRoot }
-New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out-Null
-$GeneratedIss = Join-Path $InstallerWork (if ($Smoke) { "$DistributionName-smoke.iss" } else { "$DistributionName.iss" })
+$GeneratedIssName = if ($Smoke) { "$DistributionName-smoke.iss" } else { "$DistributionName.iss" }
 $OutputBaseFilename = if ($Smoke) { "MINOS-$Version-windows-x64-smoke-setup" } else { "MINOS-$Version-windows-x64-setup" }
+New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out-Null
+$GeneratedIss = Join-Path $InstallerWork $GeneratedIssName
 $Setup = Join-Path $InstallerOutput "$OutputBaseFilename.exe"
 $Checksum = "$Setup.sha256"
 
@@ -151,12 +152,14 @@ try {
     $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant()
     "$Hash  $([System.IO.Path]::GetFileName($Setup))" | Set-Content -LiteralPath $Checksum -Encoding ascii
 
+    $SuccessMessage = if ($Smoke) { 'MINOS Windows smoke setup SUCCESS' } else { 'MINOS Windows setup SUCCESS' }
+    $ModeLabel = if ($Smoke) { 'isolated smoke' } else { 'production' }
     Write-Host ''
-    Write-Host $(if ($Smoke) { 'MINOS Windows smoke setup SUCCESS' } else { 'MINOS Windows setup SUCCESS' }) -ForegroundColor Green
+    Write-Host $SuccessMessage -ForegroundColor Green
     Write-Host "Setup        : $Setup"
     Write-Host "SHA-256      : $Hash"
     Write-Host "Distribution : $DistributionRoot"
-    Write-Host "AppId mode   : $(if ($Smoke) { 'isolated smoke' } else { 'production' })"
+    Write-Host "AppId mode   : $ModeLabel"
     Write-Host "Inno Setup   : $Iscc"
 }
 finally {
