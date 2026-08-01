@@ -20,8 +20,16 @@ function Forbid([string] $Needle, [string] $Message) {
     if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -ge 0) { throw $Message }
 }
 
-Require "'Intégrations MCP natives'" 'Installer is missing the dedicated native MCP integration page.'
-Require "'Connecter le MCP natif MINOS à vos clients IA détectés'" 'Installer is missing the MCP detection page subtitle.'
+# Keep this verifier ASCII-only so Windows PowerShell 5.1 parses it correctly
+# when repository .ps1 files are UTF-8 without BOM. Human-facing French labels
+# are validated by the Python documentation/release-contract gate, which reads
+# the template explicitly as UTF-8.
+Require 'McpClientsPage := CreateCustomPage(' 'Installer is missing the dedicated native MCP integration page.'
+Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
+Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
+Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude Code MCP row.'
+Require 'McpClaudeDesktop := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude Desktop MCP row.'
+Require 'McpCodex := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Codex MCP row.'
 Require "ExtractTemporaryFile('detect-mcp-clients.ps1')" 'Installer does not run the packaged MCP client detector.'
 Require "GetIniString(Section, 'Available'" 'Installer does not consume preflight availability.'
 Require "GetIniString('Codex', 'Mode'" 'Installer does not consume deterministic Codex preflight mode.'
