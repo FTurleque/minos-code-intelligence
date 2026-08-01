@@ -16,8 +16,19 @@ try {
     if ($StatusBefore.Count -ne 0) {
         throw "worktree must be clean before P0-P2 qualification: $($StatusBefore -join '; ')"
     }
-    git diff --exit-code develop...HEAD -- .github/workflows
-    if ($LASTEXITCODE -ne 0) { throw 'GitHub workflow changes are forbidden in this July-safe lot' }
+
+    $JulyFreezeEnds = [DateTimeOffset]::Parse('2026-08-01T00:00:00+02:00')
+    if ([DateTimeOffset]::Now -lt $JulyFreezeEnds) {
+        $BaseRef = if ($env:GITHUB_BASE_REF) {
+            "origin/$($env:GITHUB_BASE_REF)"
+        } elseif ((git show-ref --verify --quiet refs/heads/develop; $LASTEXITCODE) -eq 0) {
+            'develop'
+        } else {
+            'origin/develop'
+        }
+        git diff --exit-code "$BaseRef...HEAD" -- .github/workflows
+        if ($LASTEXITCODE -ne 0) { throw 'GitHub workflow changes are forbidden before 1 August 2026' }
+    }
 
     python scripts/remediation/check-p0-p2.py
     if ($LASTEXITCODE -ne 0) { throw 'P0-P2 structural gate failed' }
@@ -56,9 +67,8 @@ try {
     $Validated = (git rev-parse HEAD).Trim()
     if ($Validated -ne $Head) { throw 'HEAD changed during qualification' }
 
-    Write-Host 'M28 JULY-SAFE CROSS-CUTTING VALIDATION SUCCESS'
+    Write-Host 'M28 CROSS-CUTTING VALIDATION SUCCESS'
     Write-Host "Validated HEAD: $Validated"
-    Write-Host 'GitHub Actions / M21-S2 were not invoked by this July-safe runner.'
 } finally {
     Pop-Location
 }
