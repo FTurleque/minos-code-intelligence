@@ -41,8 +41,9 @@ try {
 
     @'
 @echo off
-rem Simulates an editor launcher named copilot that is not the GitHub Copilot CLI.
-exit /b 2
+rem Simulates a VS Code/editor shim that misleadingly accepts `mcp --help`.
+if /I "%~1"=="mcp" if /I "%~2"=="--help" exit /b 0
+exit /b 0
 '@ | Set-Content -LiteralPath (Join-Path $VsCodeBin 'copilot.cmd') -Encoding ascii
 
     foreach ($Name in @('claude', 'codex')) {
@@ -58,7 +59,7 @@ exit /b 1
     & $Detector -OutputPath $Output -ProbeTimeoutSeconds 3
 
     Assert-True (Test-Path -LiteralPath $Output -PathType Leaf) 'Preflight did not create its INI contract.'
-    Assert-True ((Read-IniValue $Output 'CopilotCli' 'Available') -eq '0') 'VS Code copilot shim was incorrectly accepted as Copilot CLI.'
+    Assert-True ((Read-IniValue $Output 'CopilotCli' 'Available') -eq '0') 'VS Code copilot shim was incorrectly accepted as Copilot CLI even though its help probe returned success.'
     Assert-True ((Read-IniValue $Output 'CopilotCli' 'Reason') -match 'launcher VS Code') 'Copilot shim diagnostic is not explicit.'
     Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Available') -eq '1') 'Compatible Claude Code CLI was not detected.'
     Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Mode') -eq 'cli') 'Claude Code mode should be cli.'
