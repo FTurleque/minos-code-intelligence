@@ -46,6 +46,20 @@ Require 'ShouldRunGlobalCleanup' 'Installer smoke isolation does not guard globa
 Require 'if IsSmokeBuild() then' 'Installer smoke mode does not guard global mutations.'
 Require 'integration\uninstall-mcp-clients.ps1' 'Installer does not use the canonical MCP uninstall wrapper.'
 Require 'Flags: dontcopy' 'Installer detector is not embedded for pre-install extraction.'
+
+# Uninstall must preserve user data by default, offer an explicit destructive
+# choice in interactive mode, avoid prompts/mutations in silent/smoke runs, and
+# only purge %LOCALAPPDATA%\MINOS after normal uninstall cleanup has completed.
+Require 'DeleteUserDataOnUninstall: Boolean;' 'Installer does not track the optional user-data purge decision.'
+Require 'procedure PromptForUserDataRemoval;' 'Uninstaller does not offer an explicit user-data purge choice.'
+Require "ExpandConstant('{localappdata}\\MINOS')" 'Uninstaller does not target the canonical MINOS user-data directory.'
+Require 'UninstallSilent' 'Silent uninstall is not guarded against an interactive data-purge prompt.'
+Require 'MB_YESNO or MB_DEFBUTTON2' 'User-data purge prompt must default to preserving data.'
+Require 'procedure DeleteMinosUserData;' 'Uninstaller is missing the guarded user-data purge implementation.'
+Require 'DelTree(UserDataRoot, True, True, True)' 'User-data purge does not remove the full MINOS local-data tree.'
+Require 'CurUninstallStep = usPostUninstall' 'User-data purge must run only after normal uninstall cleanup.'
+Require 'RegDeleteKeyIncludingSubkeys' 'Full user-data purge must also remove the MINOS per-user registry state.'
+
 Forbid 'Name: "docker"' 'Docker MCP must be selected on the explicit MCP mode page, not as a generic Inno task.'
 Forbid 'Name: "mcp_copilot_jetbrains"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_copilot_cli"' 'Native MCP clients must not be static Inno [Tasks] entries.'
@@ -53,6 +67,7 @@ Forbid 'Name: "mcp_claude_code"' 'Native MCP clients must not be static Inno [Ta
 Forbid 'Name: "mcp_claude_desktop"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid 'Name: "mcp_codex"' 'Native MCP clients must not be static Inno [Tasks] entries.'
 Forbid "WizardIsTaskSelected('docker')" 'Docker MCP must not depend on the legacy generic task contract.'
+Forbid 'Type: filesandordirs; Name: "{localappdata}\MINOS"' 'User data must never be deleted unconditionally by [UninstallDelete].'
 
 foreach ($Token in @('@@VERSION@@','@@APP_VERSION@@','@@APP_ID@@','@@SMOKE_MODE@@','@@SOURCE_DIR@@','@@OUTPUT_DIR@@','@@OUTPUT_BASENAME@@')) {
     if ($Text.IndexOf($Token, [StringComparison]::Ordinal) -lt 0) { throw "Installer template token missing: $Token" }
