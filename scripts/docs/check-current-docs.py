@@ -19,7 +19,11 @@ def read(relative: str) -> str:
 
 def normalized(value: str) -> str:
     value = value.replace("\ufeff", "").replace("\u00a0", " ")
-    value = re.sub(r"[`*_]+", "", value)
+    # Strip Markdown wrappers, but preserve underscores: they are significant in
+    # technical identifiers such as Inno task names. Removing them made
+    # `mcp_copilot_jetbrains` collide with the valid Pascal identifier
+    # `McpCopilotJetBrains` and produced a false stale-state failure.
+    value = re.sub(r"[`*]+", "", value)
     return re.sub(r"\s+", " ", value).strip().casefold()
 
 
