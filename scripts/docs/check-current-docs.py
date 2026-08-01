@@ -112,6 +112,9 @@ def main() -> int:
         require("docs/releases/1.0.1.md", release_101, "jdeps")
         require("docs/releases/1.0.1.md", release_101, "initialize")
         require("docs/releases/1.0.1.md", release_101, "Codex Desktop")
+        require("docs/releases/1.0.1.md", release_101, "Mode MCP")
+        require("docs/releases/1.0.1.md", release_101, "MCP natif local — recommandé, sans Docker")
+        require("docs/releases/1.0.1.md", release_101, "MCP Docker — optionnel")
 
         # Windows user contract.
         for token in (
@@ -151,18 +154,24 @@ def main() -> int:
             require("build-windows-installer.ps1", build_installer, token)
         for token in ("Invoke-McpHandshake", "MinosNativeMcpSmoke.java", "isolated smoke setup"):
             require("publish-windows-release.ps1", publish, token)
+        forbid("publish-windows-release.ps1", publish, '!docker')
         for token in ("Publication   : NOT PERFORMED", "MINOS LOCAL WINDOWS CANDIDATE SUCCESS"):
             require("build-local-windows-candidate.ps1", local_candidate, token)
         for token in (
+            "Mode MCP",
+            "MCP natif local — recommandé, sans Docker",
+            "MCP Docker — optionnel",
+            "McpModePage := CreateInputOptionPage(",
             "Intégrations MCP natives",
             "detect-mcp-clients.ps1",
             "ShouldRunGlobalCleanup",
             "CodexMode",
         ):
             require("minos-installer.iss.template", installer, token)
-        # Only the obsolete static [Tasks] declarations are forbidden. The new
-        # wizard legitimately contains identifiers such as McpCopilotJetBrains.
+        # Obsolete static [Tasks] declarations are forbidden. MCP mode selection
+        # belongs to the explicit wizard page; only the Windows PATH task remains.
         for stale_task in (
+            'Name: "docker"',
             'Name: "mcp_copilot_jetbrains"',
             'Name: "mcp_copilot_cli"',
             'Name: "mcp_claude_code"',
@@ -170,6 +179,7 @@ def main() -> int:
             'Name: "mcp_codex"',
         ):
             forbid("minos-installer.iss.template", installer, stale_task)
+        forbid("minos-installer.iss.template", installer, "WizardIsTaskSelected('docker')")
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
         require("release-windows.yml", release_workflow, "workflow_dispatch")
