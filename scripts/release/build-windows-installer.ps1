@@ -5,7 +5,11 @@ param(
     [string] $Version,
 
     [string] $DistributionRoot = '',
-    [string] $OutputRoot = ''
+    [string] $OutputRoot = '',
+
+    # Build a non-shippable setup with a distinct AppId and cleanup hooks disabled.
+    # This is the only setup variant release smoke tests are allowed to install.
+    [switch] $Smoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,13 +38,18 @@ foreach ($Required in @(
     'minos.cmd',
     'minos-mcp.cmd',
     'VERSION',
+    'RUNTIME-MODULES.txt',
     'RELEASE-MANIFEST.json',
     'app\minos.exe',
+    'app\runtime\bin\java.exe',
     'lib\minos.jar',
     'supply-chain\minos.cdx.json',
     'supply-chain\THIRD-PARTY-NOTICES.txt',
     'integration\configure-mcp-clients.ps1',
     'integration\configure-mcp-clients-setup.ps1',
+    'integration\configure-codex-mcp.ps1',
+    'integration\detect-mcp-clients.ps1',
+    'integration\uninstall-mcp-clients.ps1',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',
@@ -53,9 +62,7 @@ foreach ($Required in @(
 
 $IsccCandidates = @()
 $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-if ($IsccCommand) {
-    $IsccCandidates += $IsccCommand.Source
-}
+if ($IsccCommand) { $IsccCandidates += $IsccCommand.Source }
 if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
     $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
@@ -83,10 +90,11 @@ if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) {
 }
 
 $InstallerWork = Join-Path $OutputRoot '.installer'
-New-Item -ItemType Directory -Force -Path $InstallerWork, $OutputRoot | Out-Null
-$GeneratedIss = Join-Path $InstallerWork "$DistributionName.iss"
-$OutputBaseFilename = "MINOS-$Version-windows-x64-setup"
-$Setup = Join-Path $OutputRoot "$OutputBaseFilename.exe"
+$InstallerOutput = if ($Smoke) { Join-Path $OutputRoot '.smoke' } else { $OutputRoot }
+New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out-Null
+$GeneratedIss = Join-Path $InstallerWork (if ($Smoke) { "$DistributionName-smoke.iss" } else { "$DistributionName.iss" })
+$OutputBaseFilename = if ($Smoke) { "MINOS-$Version-windows-x64-smoke-setup" } else { "MINOS-$Version-windows-x64-setup" }
+$Setup = Join-Path $InstallerOutput "$OutputBaseFilename.exe"
 $Checksum = "$Setup.sha256"
 
 Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
@@ -104,13 +112,8 @@ function Assert-InnoTaskNames([string] $ScriptContent) {
             $InTasksSection = $Matches[1] -eq 'Tasks'
             continue
         }
-        if (-not $InTasksSection -or [string]::IsNullOrWhiteSpace($Trimmed) -or $Trimmed.StartsWith(';')) {
-            continue
-        }
-        if ($Trimmed -notmatch '^Name:\s*"([^"]+)"') {
-            continue
-        }
-
+        if (-not $InTasksSection -or [string]::IsNullOrWhiteSpace($Trimmed) -or $Trimmed.StartsWith(';')) { continue }
+        if ($Trimmed -notmatch '^Name:\s*"([^"]+)"') { continue }
         $TaskName = $Matches[1]
         $ValidCharacters = $TaskName -match '^[A-Za-z_][A-Za-z0-9_/\\]*$'
         $Reserved = $TaskName -match '^(?i:not|and|or)$'
@@ -123,35 +126,37 @@ function Assert-InnoTaskNames([string] $ScriptContent) {
 
 $BaseVersion = ($Version -split '[-+]')[0]
 $NumericVersion = "$BaseVersion.0"
-# Read and write the Inno Setup template explicitly as UTF-8 so Windows
-# PowerShell 5.1 cannot corrupt the French installer strings.
+$AppId = if ($Smoke) { "MINOS-Release-Smoke-$Version" } else { '{{7B91F355-0B8A-4D28-A6C6-5CE4B1C5F62B}' }
+$SmokeMode = if ($Smoke) { '1' } else { '0' }
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $Iss = [System.IO.File]::ReadAllText($Template, $Utf8)
 $Iss = $Iss.Replace('@@VERSION@@', (Escape-InnoString $Version))
 $Iss = $Iss.Replace('@@APP_VERSION@@', (Escape-InnoString $NumericVersion))
+$Iss = $Iss.Replace('@@APP_ID@@', (Escape-InnoString $AppId))
+$Iss = $Iss.Replace('@@SMOKE_MODE@@', $SmokeMode)
 $Iss = $Iss.Replace('@@SOURCE_DIR@@', (Escape-InnoString $DistributionRoot))
-$Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $OutputRoot))
+$Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $InstallerOutput))
 $Iss = $Iss.Replace('@@OUTPUT_BASENAME@@', (Escape-InnoString $OutputBaseFilename))
+if ($Iss -match '@@[A-Z0-9_]+@@') {
+    throw "Unresolved Inno Setup template token: $($Matches[0])"
+}
 Assert-InnoTaskNames -ScriptContent $Iss
 [System.IO.File]::WriteAllText($GeneratedIss, $Iss, $Utf8)
 
 try {
     & $Iscc $GeneratedIss
-    if ($LASTEXITCODE -ne 0) {
-        throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
-    }
-    if (-not (Test-Path -LiteralPath $Setup -PathType Leaf)) {
-        throw "MINOS setup executable was not produced: $Setup"
-    }
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+    if (-not (Test-Path -LiteralPath $Setup -PathType Leaf)) { throw "MINOS setup executable was not produced: $Setup" }
 
     $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant()
     "$Hash  $([System.IO.Path]::GetFileName($Setup))" | Set-Content -LiteralPath $Checksum -Encoding ascii
 
     Write-Host ''
-    Write-Host 'MINOS Windows setup SUCCESS' -ForegroundColor Green
+    Write-Host $(if ($Smoke) { 'MINOS Windows smoke setup SUCCESS' } else { 'MINOS Windows setup SUCCESS' }) -ForegroundColor Green
     Write-Host "Setup        : $Setup"
     Write-Host "SHA-256      : $Hash"
     Write-Host "Distribution : $DistributionRoot"
+    Write-Host "AppId mode   : $(if ($Smoke) { 'isolated smoke' } else { 'production' })"
     Write-Host "Inno Setup   : $Iscc"
 }
 finally {
