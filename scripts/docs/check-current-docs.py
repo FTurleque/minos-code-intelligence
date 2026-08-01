@@ -115,9 +115,14 @@ def main() -> int:
         require("docs/releases/1.0.1.md", release_101, "Mode MCP")
         require("docs/releases/1.0.1.md", release_101, "MCP natif local — recommandé, sans Docker")
         require("docs/releases/1.0.1.md", release_101, "MCP Docker — optionnel")
+        require("docs/releases/1.0.1.md", release_101, "%LOCALAPPDATA%\\MINOS")
+        require("docs/releases/1.0.1.md", release_101, "Non / conserver")
 
         # Windows user contract.
         for token in (
+            "Mode MCP",
+            "MCP natif local — recommandé, sans Docker",
+            "MCP Docker — optionnel",
             "Intégrations MCP natives",
             "clients IA détectés",
             "launcher VS Code détecté",
@@ -125,6 +130,8 @@ def main() -> int:
             "RUNTIME-MODULES.txt",
             "java.xml",
             "build-local-windows-candidate.ps1",
+            "%LOCALAPPDATA%\\MINOS",
+            "Supprimer également toutes les données MINOS locales",
         ):
             require("docs/user/production-installation.md", install, token)
         require_regex(
@@ -166,6 +173,10 @@ def main() -> int:
             "detect-mcp-clients.ps1",
             "ShouldRunGlobalCleanup",
             "CodexMode",
+            "PromptForUserDataRemoval",
+            "DeleteMinosUserData",
+            "MB_YESNO or MB_DEFBUTTON2",
+            "DelTree(UserDataRoot, True, True, True)",
         ):
             require("minos-installer.iss.template", installer, token)
         # Obsolete static [Tasks] declarations are forbidden. MCP mode selection
