@@ -19,12 +19,15 @@ try {
 
     $JulyFreezeEnds = [DateTimeOffset]::Parse('2026-08-01T00:00:00+02:00')
     if ([DateTimeOffset]::Now -lt $JulyFreezeEnds) {
-        $BaseRef = if ($env:GITHUB_BASE_REF) {
-            "origin/$($env:GITHUB_BASE_REF)"
-        } elseif ((git show-ref --verify --quiet refs/heads/develop; $LASTEXITCODE) -eq 0) {
-            'develop'
+        if ($env:GITHUB_BASE_REF) {
+            $BaseRef = "origin/$($env:GITHUB_BASE_REF)"
         } else {
-            'origin/develop'
+            git show-ref --verify --quiet refs/heads/develop
+            if ($LASTEXITCODE -eq 0) {
+                $BaseRef = 'develop'
+            } else {
+                $BaseRef = 'origin/develop'
+            }
         }
         git diff --exit-code "$BaseRef...HEAD" -- .github/workflows
         if ($LASTEXITCODE -ne 0) { throw 'GitHub workflow changes are forbidden before 1 August 2026' }
