@@ -1,0 +1,46 @@
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$Template = Join-Path $RepoRoot 'packaging\windows\minos-installer.iss.template'
+$Builder = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
+if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) { throw "Installer template not found: $Template" }
+if (-not (Test-Path -LiteralPath $Builder -PathType Leaf)) { throw "Installer builder not found: $Builder" }
+
+$Text = [System.IO.File]::ReadAllText($Template, [System.Text.Encoding]::UTF8)
+$BuilderText = [System.IO.File]::ReadAllText($Builder, [System.Text.Encoding]::UTF8)
+
+function Require([string] $Needle, [string] $Message) {
+    if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) { throw $Message }
+}
+function Forbid([string] $Needle, [string] $Message) {
+    if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -ge 0) { throw $Message }
+}
+
+Require "'Intégrations MCP natives'" 'Installer is missing the dedicated native MCP integration page.'
+Require "'Connecter le MCP natif MINOS à vos clients IA détectés'" 'Installer is missing the MCP detection page subtitle.'
+Require "ExtractTemporaryFile('detect-mcp-clients.ps1')" 'Installer does not run the packaged MCP client detector.'
+Require "GetIniString(Section, 'Available'" 'Installer does not consume preflight availability.'
+Require "GetIniString('Codex', 'Mode'" 'Installer does not consume deterministic Codex preflight mode.'
+Require 'ShouldRunGlobalCleanup' 'Installer smoke isolation does not guard global uninstall hooks.'
+Require 'if IsSmokeBuild() then' 'Installer smoke mode does not guard global mutations.'
+Require 'integration\uninstall-mcp-clients.ps1' 'Installer does not use the canonical MCP uninstall wrapper.'
+Require 'Flags: dontcopy' 'Installer detector is not embedded for pre-install extraction.'
+Forbid 'Name: "mcp_copilot_jetbrains"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+Forbid 'Name: "mcp_copilot_cli"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+Forbid 'Name: "mcp_claude_code"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+Forbid 'Name: "mcp_claude_desktop"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+Forbid 'Name: "mcp_codex"' 'Native MCP clients must not be static Inno [Tasks] entries.'
+
+foreach ($Token in @('@@VERSION@@','@@APP_VERSION@@','@@APP_ID@@','@@SMOKE_MODE@@','@@SOURCE_DIR@@','@@OUTPUT_DIR@@','@@OUTPUT_BASENAME@@')) {
+    if ($Text.IndexOf($Token, [StringComparison]::Ordinal) -lt 0) { throw "Installer template token missing: $Token" }
+}
+if ($BuilderText.IndexOf("[switch] `$Smoke", [StringComparison]::Ordinal) -lt 0 -or
+    $BuilderText.IndexOf("MINOS-Release-Smoke-", [StringComparison]::Ordinal) -lt 0) {
+    throw 'Installer builder does not expose the isolated smoke AppId contract.'
+}
+
+Write-Host 'MINOS INSTALLER TEMPLATE VERIFICATION SUCCESS' -ForegroundColor Green
