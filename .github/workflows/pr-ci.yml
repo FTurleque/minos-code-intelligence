@@ -72,7 +72,7 @@ jobs:
 
   m28-final-linux:
     name: M28 final Linux exact-head gate
-    if: github.event_name == 'pull_request' && github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop'
+    if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -116,7 +116,7 @@ jobs:
 
   m28-final-windows:
     name: M28 final Windows exact-head gate
-    if: github.event_name == 'pull_request' && github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop'
+    if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
     runs-on: windows-latest
     timeout-minutes: 90
 
