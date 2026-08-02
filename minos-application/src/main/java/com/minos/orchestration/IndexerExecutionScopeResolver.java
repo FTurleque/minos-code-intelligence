@@ -21,6 +21,10 @@ import java.util.Set;
  * Execution still has to happen at a build/module root that is meaningful to that
  * provider. This distinction is required for polyglot monorepos where the registered
  * project root is not itself a valid TypeScript, Go, Rust, .NET, CMake, ... build root.</p>
+ *
+ * <p>The absolute {@code registeredProjectRoot} remains owned by the execution request;
+ * this resolver returns only project-relative roots so the lifecycle can derive each
+ * concrete provider root without losing the registered-project identity.</p>
  */
 public final class IndexerExecutionScopeResolver {
 
