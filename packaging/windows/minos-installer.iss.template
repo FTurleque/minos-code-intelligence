@@ -105,18 +105,28 @@ end;
 function ExistingMcpBackend(): String;
 var
   ConfigPath: String;
-  ConfigText: String;
-  Normalized: String;
+  Lines: TArrayOfString;
+  I: Integer;
+  Line: String;
 begin
   Result := '';
   ConfigPath := ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties');
-  if FileExists(ConfigPath) and LoadStringFromFile(ConfigPath, ConfigText) then
+  if FileExists(ConfigPath) and LoadStringsFromFile(ConfigPath, Lines) then
   begin
-    Normalized := Lowercase(ConfigText);
-    if Pos('backend=docker', Normalized) > 0 then
-      Result := 'docker'
-    else if Pos('backend=native', Normalized) > 0 then
-      Result := 'native';
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      Line := Lowercase(Trim(Lines[I]));
+      if Line = 'backend=docker' then
+      begin
+        Result := 'docker';
+        exit;
+      end
+      else if Line = 'backend=native' then
+      begin
+        Result := 'native';
+        exit;
+      end;
+    end;
   end;
 end;
 
@@ -399,15 +409,7 @@ begin
     Parameters := Parameters + ' -ProjectsRoot "' + DockerProjectsPage.Values[0] + '"';
 
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-  begin
     Result := False;
-    MsgBox(
-      'MINOS est installé, mais le backend MCP sélectionné n''a pas atteint son gate de validation/handshake.' + #13#10 + #13#10 +
-      'La configuration MCP active précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué.' + #13#10 +
-      'Diagnostic : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log',
-      mbError,
-      MB_OK);
-  end;
 end;
 
 procedure InitializeWizard;
@@ -530,8 +532,12 @@ begin
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
-    if ConfigureSelectedMcpBackend() then
-      ConfigureMcpClients;
+    if not ConfigureSelectedMcpBackend() then
+      RaiseException(
+        'Le backend MCP sélectionné n''a pas atteint son gate de validation/handshake. ' +
+        'La configuration précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué. ' +
+        'Diagnostic : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log');
+    ConfigureMcpClients;
   end;
 end;
 
