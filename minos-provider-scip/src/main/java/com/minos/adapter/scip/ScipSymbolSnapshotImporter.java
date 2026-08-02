@@ -37,7 +37,11 @@ public final class ScipSymbolSnapshotImporter {
         Objects.requireNonNull(snapshotStore, "snapshotStore");
 
         Index index = new ScipIndexReader().read(indexFile);
-        Map<String, String> fileIds = defaultFileIds(index, request.fileIdsByRelativePath());
+        Map<String, String> fileIds = defaultFileIds(
+                index,
+                request.fileIdsByRelativePath(),
+                request.projectRelativeRoot()
+        );
         CapturingStore capture = new CapturingStore();
         ScipIngestionReport ingestion = new ScipIngestionAdapter().ingest(
                 index,
@@ -47,7 +51,8 @@ public final class ScipSymbolSnapshotImporter {
                         request.providerId(),
                         request.providerVersion(),
                         request.indexRunId(),
-                        fileIds
+                        fileIds,
+                        request.projectRelativeRoot()
                 ),
                 capture
         );
@@ -82,14 +87,18 @@ public final class ScipSymbolSnapshotImporter {
 
     private static Map<String, String> defaultFileIds(
             Index index,
-            Map<String, String> explicitFileIds
+            Map<String, String> explicitFileIds,
+            String projectRelativeRoot
     ) {
         Map<String, String> fileIds = new LinkedHashMap<>(explicitFileIds);
         index.getDocumentsList().forEach(document -> {
             String relativePath = document.getRelativePath();
             String normalized = safeRelativePath(relativePath);
             if (normalized != null) {
-                fileIds.putIfAbsent(relativePath, normalized);
+                String projectRelative = projectRelativeRoot == null || projectRelativeRoot.isBlank()
+                        ? normalized
+                        : projectRelativeRoot + "/" + normalized;
+                fileIds.putIfAbsent(relativePath, projectRelative);
             }
         });
         return Map.copyOf(fileIds);
