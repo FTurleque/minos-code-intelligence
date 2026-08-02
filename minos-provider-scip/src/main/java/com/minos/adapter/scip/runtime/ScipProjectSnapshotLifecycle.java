@@ -15,8 +15,12 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.FileSymbolSnapshotStore;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,9 +85,11 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
 
         for (IndexingArtifact artifact : request.artifacts()) {
             IndexerDescriptor descriptor = descriptor(artifact.indexerId());
-            Path providerRoot = runRoot.resolve("providers").resolve(artifact.indexerId());
+            String scope = scopeKey(artifact.projectRelativeRoot());
+            String portableRoot = portable(artifact.projectRelativeRoot());
+            Path providerRoot = runRoot.resolve("providers").resolve(artifact.indexerId()).resolve(scope);
             FileSymbolSnapshotStore providerStore = new FileSymbolSnapshotStore(providerRoot);
-            String providerSnapshotId = "provider-" + request.runId() + "-" + artifact.indexerId();
+            String providerSnapshotId = "provider-" + request.runId() + "-" + artifact.indexerId() + "-" + scope;
             new ScipSymbolSnapshotImporter().importSnapshot(
                     artifact.finalArtifact(),
                     new ScipSymbolSnapshotRequest(
@@ -92,14 +98,16 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                             null,
                             descriptor.id(),
                             descriptor.version(),
-                            request.runId() + ":" + descriptor.id(),
-                            Map.of()
+                            request.runId() + ":" + descriptor.id() + ":" + scope,
+                            Map.of(),
+                            portableRoot
                     ),
                     providerStore
             );
             CodeKnowledgeSnapshot normalized = providerStore.loadActiveKnowledge(request.projectId())
                     .orElseThrow(() -> new IllegalStateException(
-                            "provider normalization did not publish its temporary snapshot: " + descriptor.id()));
+                            "provider normalization did not publish its temporary snapshot: "
+                                    + descriptor.id() + " scope=" + portableRoot));
             normalized.symbols().forEach(symbol -> putUnique(symbols, symbol.id(), symbol, "symbol"));
             normalized.occurrences().forEach(occurrence ->
                     putUnique(occurrences, occurrence.id(), occurrence, "occurrence"));
@@ -152,6 +160,24 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             throw new IllegalArgumentException("no SCIP descriptor is registered for provider: " + providerId);
         }
         return descriptor;
+    }
+
+    private static String scopeKey(Path relativeRoot) {
+        String portable = portable(relativeRoot);
+        if (portable.isBlank()) {
+            return "root";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            String hash = HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8)));
+            return "module-" + hash.substring(0, 16);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private static String portable(Path path) {
+        return path == null ? "" : path.normalize().toString().replace('\\', '/');
     }
 
     private static Path normalizedHome(Path minosHome) {
