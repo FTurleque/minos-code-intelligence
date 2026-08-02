@@ -22,11 +22,11 @@ class M29McpClientBackendAgnosticContractTest {
         assertTrue(manager.contains("command = $MinosExe"));
         assertTrue(manager.contains("args = @('mcp')"));
         assertTrue(manager.contains("MINOS_HOME = $DataRoot"));
-        assertTrue(manager.contains("'CopilotJetBrains'"));
-        assertTrue(manager.contains("'CopilotCli'"));
-        assertTrue(manager.contains("'ClaudeCode'"));
-        assertTrue(manager.contains("'ClaudeDesktop'"));
-        assertTrue(manager.contains("'Codex'"));
+        assertTrue(manager.contains("$CopilotJetBrains"));
+        assertTrue(manager.contains("$CopilotCli"));
+        assertTrue(manager.contains("$ClaudeCode"));
+        assertTrue(manager.contains("$ClaudeDesktop"));
+        assertTrue(manager.contains("$Codex"));
         assertFalse(manager.toLowerCase().contains("docker exec"),
                 "client integration must never own backend transport");
 
