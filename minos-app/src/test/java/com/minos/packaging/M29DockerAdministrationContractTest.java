@@ -13,7 +13,7 @@ class M29DockerAdministrationContractTest {
 
     @Test
     void composeSeparatesReadOnlyQueryPlaneFromWritableEphemeralAdminPlane() throws Exception {
-        String compose = Files.readString(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
+        String compose = normalizedText(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
         String query = section(compose, "  minos-mcp:", "  minos-admin:");
         String admin = section(compose, "  minos-admin:", "  minos-bootstrap:");
         String bootstrap = compose.substring(compose.indexOf("  minos-bootstrap:"));
@@ -46,8 +46,8 @@ class M29DockerAdministrationContractTest {
     @Test
     void packagedWorkflowBootstrapsMappingAndExposesAdminAction() throws Exception {
         Path root = repoRoot();
-        String workflow = Files.readString(root.resolve("docker/scripts/prod-mcp-release.ps1"));
-        String dockerfile = Files.readString(root.resolve("docker/Dockerfile.mcp.release"));
+        String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
+        String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
 
         assertTrue(workflow.contains("'Admin'"));
         assertTrue(workflow.contains("'minos-bootstrap'"));
@@ -55,6 +55,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("MINOS_HOST_PROJECTS_ROOT"));
         assertTrue(workflow.contains("formatVersion = 3"));
         assertTrue(dockerfile.contains("MINOS_RUNTIME_LOCATION=docker"));
+    }
+
+    private static String normalizedText(Path path) throws IOException {
+        return Files.readString(path).replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static String section(String content, String start, String end) {
