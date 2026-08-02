@@ -61,7 +61,7 @@ foreach ($Relative in $ScriptsToParse) {
     $Errors = $null
     [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
     if ($Errors.Count -gt 0) {
-        throw "M29-S6 PowerShell parse failed for $Relative: $($Errors[0].Message)"
+        throw "M29-S6 PowerShell parse failed for ${Relative}: $($Errors[0].Message)"
     }
 }
 Write-Host 'M29-S6 PowerShell parse preflight SUCCESS' -ForegroundColor Cyan
