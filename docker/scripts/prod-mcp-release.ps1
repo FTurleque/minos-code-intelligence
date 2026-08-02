@@ -55,6 +55,8 @@ $BackupsRoot = Join-Path $InstallRoot 'backups'
 $ComposeFile = Join-Path $RuntimeRoot 'compose.mcp.prod.yaml'
 $EnvironmentFile = Join-Path $RuntimeRoot '.env'
 $MetadataFile = Join-Path $RuntimeRoot 'installation.json'
+$ProviderInventoryFile = Join-Path $RuntimeRoot 'provider-inventory.json'
+$ProviderChecksumsFile = Join-Path $RuntimeRoot 'provider-binary-sha256.txt'
 
 function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
@@ -70,9 +72,6 @@ function Compose([string[]] $Arguments) {
 function Invoke-DockerAllowFailure([string[]] $Arguments) {
     $PreviousErrorActionPreference = $ErrorActionPreference
     try {
-        # Windows PowerShell 5.1 can surface native stderr as ErrorRecord objects.
-        # Cleanup commands must inspect the native exit code instead of failing on
-        # harmless diagnostic output.
         $ErrorActionPreference = 'Continue'
         $Output = ((& $DockerCommand.Source @Arguments 2>&1) | Out-String).Trim()
         $ExitCode = $LASTEXITCODE
@@ -86,10 +85,17 @@ function Invoke-DockerAllowFailure([string[]] $Arguments) {
     }
 }
 
+function Read-ImageFile([string] $Image, [string] $Path) {
+    $Result = Invoke-DockerAllowFailure -Arguments @(
+        'run', '--rm', '--network', 'none', '--entrypoint', 'cat', $Image, $Path
+    )
+    if ($Result.ExitCode -ne 0) {
+        throw "MINOS Docker image evidence is missing: $Path (exit=$($Result.ExitCode)): $($Result.Output)"
+    }
+    return [string] $Result.Output
+}
+
 function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
-    # `java -version` writes to stderr on success. Capture both native streams
-    # directly so Windows PowerShell 5.1 never promotes the banner to a red
-    # NativeCommandError record.
     $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
     $ProcessInfo.FileName = $DockerCommand.Source
     $ProcessInfo.Arguments = 'run --rm --network none --entrypoint java "{0}" -version' -f $Image
@@ -125,11 +131,17 @@ function Assert-DockerJavaRuntime([string] $Image, [string] $Failure) {
 }
 
 function Require-Installed {
-    foreach ($File in @($ComposeFile, $EnvironmentFile, $MetadataFile)) {
+    foreach ($File in @($ComposeFile, $EnvironmentFile, $MetadataFile, $ProviderInventoryFile, $ProviderChecksumsFile)) {
         if (-not (Test-Path -LiteralPath $File -PathType Leaf)) {
             throw "MINOS Docker PROD is not installed: missing $File"
         }
     }
+}
+
+function Initialize-And-VerifyProviderTools {
+    Compose @('run', '--rm', '--no-deps', 'minos-tools-bootstrap')
+    Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'list', '--format', 'json')
+    Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'verify', '--format', 'json')
 }
 
 switch ($Action) {
@@ -190,6 +202,13 @@ MINOS_GIT_COMMIT=$Commit
         Compose @('config', '--quiet')
         Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
 
+        Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/provider-inventory.json' |
+            Set-Content -LiteralPath $ProviderInventoryFile -Encoding utf8
+        Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/binary-sha256.txt' |
+            Set-Content -LiteralPath $ProviderChecksumsFile -Encoding ascii
+
+        Initialize-And-VerifyProviderTools
+
         # Configure the portable host/container root mapping before any Docker-side project operation.
         # The Java bootstrap refuses to silently replace a conflicting existing mapping.
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
@@ -198,7 +217,7 @@ MINOS_GIT_COMMIT=$Commit
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
 
         [ordered]@{
-            formatVersion = 3
+            formatVersion = 4
             installedAt = $Timestamp
             image = $Image
             version = $Version
@@ -208,9 +227,13 @@ MINOS_GIT_COMMIT=$Commit
             containerProjectsRoot = '/workspace/projects'
             containerName = $ContainerName
             composeProject = $ComposeProject
+            providerInventory = $ProviderInventoryFile
+            providerChecksums = $ProviderChecksumsFile
+            providerToolsVolume = 'minos-provider-tools'
             queryPlane = [ordered]@{
                 service = 'minos-mcp'
                 dataReadOnly = $true
+                providerToolsReadOnly = $true
                 projectsReadOnly = $true
                 network = 'none'
             }
@@ -218,18 +241,20 @@ MINOS_GIT_COMMIT=$Commit
                 service = 'minos-admin'
                 ephemeral = $true
                 dataReadOnly = $false
+                providerToolsReadOnly = $true
                 projectsReadOnly = $true
                 network = 'none'
             }
         } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $MetadataFile -Encoding utf8
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green
-        Write-Host "Image    : $Image"
-        Write-Host "Data     : $DataRoot -> /var/lib/minos"
-        Write-Host "Projects : $ProjectsRoot -> /workspace/projects (read-only)"
-        Write-Host 'Network  : none'
-        Write-Host 'Query    : persistent hardened minos-mcp plane; MINOS data read-only'
-        Write-Host 'Admin    : ephemeral minos-admin plane; MINOS data writable, projects read-only'
+        Write-Host "Image     : $Image"
+        Write-Host "Data      : $DataRoot -> /var/lib/minos"
+        Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
+        Write-Host 'Network   : none'
+        Write-Host 'Providers : image-prepared + isolated named volume mounted read-only in query/admin planes'
+        Write-Host 'Query     : persistent hardened minos-mcp plane; MINOS data read-only'
+        Write-Host 'Admin     : ephemeral minos-admin plane; MINOS data writable, projects read-only'
     }
     'Start' {
         Require-Installed
@@ -254,6 +279,7 @@ MINOS_GIT_COMMIT=$Commit
     'Status' {
         Require-Installed
         Get-Content -LiteralPath $MetadataFile
+        Get-Content -LiteralPath $ProviderInventoryFile
         & docker ps -a --filter "name=^/$ContainerName$"
     }
     'Validate' {
@@ -261,9 +287,10 @@ MINOS_GIT_COMMIT=$Commit
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
+        Initialize-And-VerifyProviderTools
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
-        Write-Host 'MINOS Docker query/admin configuration validated.' -ForegroundColor Green
+        Write-Host 'MINOS Docker query/admin/provider configuration validated.' -ForegroundColor Green
     }
     'Stop' {
         Require-Installed
@@ -275,19 +302,19 @@ MINOS_GIT_COMMIT=$Commit
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         $ManagedImage = [string] $Metadata.image
 
-        # `down` removes setup-managed containers. Persistent MINOS data is a bind mount
-        # outside this runtime directory and is intentionally preserved.
-        Compose @('down', '--timeout', '10', '--remove-orphans')
+        # Only the immutable provider-tools named volume is managed by Compose.
+        # Persistent MINOS business data is a bind mount and remains preserved.
+        Compose @('down', '--timeout', '10', '--remove-orphans', '--volumes')
 
         if (-not [string]::IsNullOrWhiteSpace($ManagedImage)) {
             $ImageRemoval = Invoke-DockerAllowFailure -Arguments @('image', 'rm', $ManagedImage)
             if ($ImageRemoval.ExitCode -ne 0) {
-                Write-Warning "MINOS Docker container was removed, but image '$ManagedImage' could not be removed: $($ImageRemoval.Output)"
+                Write-Warning "MINOS Docker containers/provider volume were removed, but image '$ManagedImage' could not be removed: $($ImageRemoval.Output)"
             }
         }
 
         Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host 'MINOS Docker MCP/admin runtime configuration removed.' -ForegroundColor Green
+        Write-Host 'MINOS Docker MCP/admin/provider runtime configuration removed.' -ForegroundColor Green
         Write-Host "Persistent data preserved: $DataRoot"
     }
 }
