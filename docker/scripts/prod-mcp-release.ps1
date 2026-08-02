@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Install', 'Start', 'Attach', 'Status', 'Validate', 'Stop', 'Uninstall')]
+    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')]
     [string] $Action,
 
     [string] $Jar = '',
@@ -11,6 +11,7 @@ param(
     [string] $DataRoot = '',
     [string] $ProjectsRoot = '',
     [string] $ImageTag = '',
+    [string[]] $MinosArguments = @(),
 
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $ContainerName = 'minos-mcp-prod',
@@ -181,14 +182,23 @@ MINOS_CONTAINER_NAME=$ContainerName
 MINOS_IMAGE=$Image
 MINOS_DATA_DIR="$(ConvertTo-DockerPath $DataRoot)"
 MINOS_PROJECTS_DIR="$(ConvertTo-DockerPath $ProjectsRoot)"
+MINOS_HOST_PROJECTS_ROOT="$(ConvertTo-DockerPath $ProjectsRoot)"
 MINOS_VERSION=$Version
 MINOS_GIT_COMMIT=$Commit
 "@ | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
 
         Compose @('config', '--quiet')
         Assert-DockerJavaRuntime -Image $Image -Failure 'The MINOS Docker image does not expose a valid Java runtime.'
+
+        # Configure the portable host/container root mapping before any Docker-side project operation.
+        # The Java bootstrap refuses to silently replace a conflicting existing mapping.
+        Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
+
+        # Prove that the same release JAR exposes the full stable CLI from the isolated admin plane.
+        Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
+
         [ordered]@{
-            formatVersion = 2
+            formatVersion = 3
             installedAt = $Timestamp
             image = $Image
             version = $Version
@@ -198,18 +208,33 @@ MINOS_GIT_COMMIT=$Commit
             containerProjectsRoot = '/workspace/projects'
             containerName = $ContainerName
             composeProject = $ComposeProject
-        } | ConvertTo-Json | Set-Content -LiteralPath $MetadataFile -Encoding utf8
+            queryPlane = [ordered]@{
+                service = 'minos-mcp'
+                dataReadOnly = $true
+                projectsReadOnly = $true
+                network = 'none'
+            }
+            adminPlane = [ordered]@{
+                service = 'minos-admin'
+                ephemeral = $true
+                dataReadOnly = $false
+                projectsReadOnly = $true
+                network = 'none'
+            }
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $MetadataFile -Encoding utf8
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green
         Write-Host "Image    : $Image"
         Write-Host "Data     : $DataRoot -> /var/lib/minos"
         Write-Host "Projects : $ProjectsRoot -> /workspace/projects (read-only)"
         Write-Host 'Network  : none'
+        Write-Host 'Query    : persistent hardened minos-mcp plane; MINOS data read-only'
+        Write-Host 'Admin    : ephemeral minos-admin plane; MINOS data writable, projects read-only'
     }
     'Start' {
         Require-Installed
         Compose @('up', '-d', '--force-recreate', 'minos-mcp')
-        Write-Host 'MINOS Docker MCP started.' -ForegroundColor Green
+        Write-Host 'MINOS Docker MCP query plane started.' -ForegroundColor Green
     }
     'Attach' {
         Require-Installed
@@ -217,6 +242,14 @@ MINOS_GIT_COMMIT=$Commit
         if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 130) {
             throw "MCP STDIO session failed with exit code $LASTEXITCODE"
         }
+    }
+    'Admin' {
+        Require-Installed
+        if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) {
+            throw '-MinosArguments is required for Admin, for example -MinosArguments @(''project'',''list'').'
+        }
+        $ComposeArguments = @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArguments
+        Compose $ComposeArguments
     }
     'Status' {
         Require-Installed
@@ -228,20 +261,21 @@ MINOS_GIT_COMMIT=$Commit
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
-        Write-Host 'MINOS Docker configuration validated.' -ForegroundColor Green
+        Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
+        Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
+        Write-Host 'MINOS Docker query/admin configuration validated.' -ForegroundColor Green
     }
     'Stop' {
         Require-Installed
         Compose @('stop', '--timeout', '10', 'minos-mcp')
-        Write-Host 'MINOS Docker MCP stopped.' -ForegroundColor Green
+        Write-Host 'MINOS Docker MCP query plane stopped.' -ForegroundColor Green
     }
     'Uninstall' {
         Require-Installed
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         $ManagedImage = [string] $Metadata.image
 
-        # `down` removes the setup-managed container rather than merely leaving
-        # it stopped in Docker Desktop. Persistent MINOS data is a bind mount
+        # `down` removes setup-managed containers. Persistent MINOS data is a bind mount
         # outside this runtime directory and is intentionally preserved.
         Compose @('down', '--timeout', '10', '--remove-orphans')
 
@@ -253,7 +287,7 @@ MINOS_GIT_COMMIT=$Commit
         }
 
         Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host 'MINOS Docker MCP container and runtime configuration removed.' -ForegroundColor Green
+        Write-Host 'MINOS Docker MCP/admin runtime configuration removed.' -ForegroundColor Green
         Write-Host "Persistent data preserved: $DataRoot"
     }
 }
