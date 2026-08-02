@@ -45,6 +45,9 @@ services:
     environment:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
+      COURSIER_CACHE: /var/lib/minos/cache/coursier
+      DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home
+      NUGET_PACKAGES: /var/lib/minos/cache/nuget
     working_dir: /workspace/projects
     volumes:
       - type: bind
@@ -163,6 +166,9 @@ services:
     environment:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
+      COURSIER_CACHE: /tmp/minos-coursier-cache
+      DOTNET_CLI_HOME: /tmp/minos-dotnet-home
+      NUGET_PACKAGES: /tmp/minos-nuget
     volumes:
       - type: volume
         source: minos-provider-tools
@@ -170,7 +176,7 @@ services:
         read_only: true
     read_only: true
     tmpfs:
-      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
       - /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
