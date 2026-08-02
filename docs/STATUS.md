@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S3 et S4 PASS exact-head `3df1b40...` ; S5 Autonomous Indexing & Vector Lifecycle implémenté sur un HEAD plus récent et en attente de qualification exact-head.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 Backend-agnostic MCP client integration implémenté sur un HEAD plus récent et en attente de qualification exact-head.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -24,8 +24,9 @@ M29-S1                           ✅ PASS exact-head c7a4e944...
 M29-S2                           ✅ PASS exact-head c7a4e944...
 M29-S3                           ✅ PASS exact-head 3df1b40...
 M29-S4                           ✅ PASS exact-head 3df1b40...
-M29-S5                           🟨 implémenté ; qualification run-s5.ps1 requise
-M29-S6 → S8                      non démarrés / non qualifiés
+M29-S5                           ✅ PASS exact-head 0959fb9...
+M29-S6                           🟨 implémenté ; qualification run-s6.ps1 requise
+M29-S7 → S8                      non démarrés / non qualifiés
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
@@ -129,9 +130,9 @@ Marqueur exact :
 M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-### S5 — Autonomous Indexing & Vector Lifecycle — 🟨 implémenté / non qualifié
+### S5 — Autonomous Indexing & Vector Lifecycle — ✅ PASS exact-head `0959fb9...`
 
-Le défaut provider→module root est maintenant traité par une distinction explicite :
+Le défaut provider→module root est traité par une distinction explicite :
 
 ```text
 registeredProjectRoot
@@ -145,7 +146,7 @@ Un provider est exécuté sur la racine de module/build réellement découverte.
 
 Le lifecycle conserve la promotion projet atomique. Un échec sur un scope imbriqué conserve le snapshot actif précédent ; le test `IndexingLifecycleScopedExecutionTest` verrouille ce rollback. Le planner `NONE|FULL|INCREMENTAL` reste capability-honest : l'incrémental multi-scope n'est pas revendiqué tant qu'un provider qualifié ne le supporte pas.
 
-La fixture live S5 est :
+Fixture qualifiée :
 
 ```text
 fixtures/polyglot/m29-scoped-modules
@@ -153,29 +154,60 @@ fixtures/polyglot/m29-scoped-modules
 
 Elle combine une racine Maven Java et deux modules TypeScript `ui/app` / `ui/lib`, sans `package.json` ni `tsconfig.json` à la racine globale.
 
-Le workflow Docker persiste désormais la sélection sémantique dans `.env` et `installation.json` (format 5). Les seuls modes packagés admis à ce stade sont `disabled` et `local-hash`. `local-hash` est un provider de référence zéro-réseau destiné à qualifier le plumbing ; il ne constitue pas une preuve de qualité de modèle appris.
-
-Le runner `scripts/m29/run-s5.ps1` doit encore être exécuté exact-head. Il enchaîne S4 sur la même image avec `local-hash`, puis exige :
+Preuve exacte sur `0959fb9f64e2ecf61e20281f29c694e86d67c62b` :
 
 ```text
-JAVA + TYPESCRIPT / MAVEN + NPM
-scip-java root + scip-typescript ui/app + ui/lib
-index SUCCEEDED / READY
-semantic READY — minos-local-hash / 384 dimensions
-semantic-index/<projectId>/index-v2.bin présent
-hybrid READY_WITH_SEMANTIC
-signal semantic HEURISTIC
-second index = NONE / NO_CHANGES
-forced FULL = nouveau snapshot + semantic realigné
-query-plane recreate = semantic/hybrid toujours READY
-worktree toujours propre
+13/13 Maven                     SUCCESS
+S4 provider-complete            SUCCESS
+JAVA + TYPESCRIPT               détectés
+MAVEN + NPM                     détectés
+scip-java                       racine projet
+scip-typescript                 ui/app + ui/lib
+first FULL                      SUCCEEDED / READY
+semantic                        READY / minos-local-hash / 384 dimensions / 19 documents
+index-v2.bin                    persistant / non vide
+hybrid                          READY_WITH_SEMANTIC / HEURISTIC
+second index                    NONE / NO_CHANGES / même snapshot
+forced FULL                     nouveau snapshot / semantic réaligné
+query recreate                  semantic READY / hybrid READY_WITH_SEMANTIC
+```
+
+Marqueur exact :
+
+```text
+M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS
 ```
 
 Le vector store reste celui existant : `index-v2.bin`, composants `float32`, scan exact. Aucune base vectorielle externe, ANN ou HNSW n'est introduite.
 
-### S6 / S7 / S8
+### S6 — Backend-agnostic MCP client integration — 🟨 implémenté / non qualifié
 
-- S6 : clients MCP backend-agnostic Copilot/Claude/Codex ;
+Les intégrations Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop continuent toutes à cibler :
+
+```text
+command = <installation>\app\minos.exe
+args    = mcp
+env     = MINOS_HOME=<dataRoot>
+```
+
+Aucun client ne possède de logique `docker exec`, de nom de conteneur ou de configuration Compose. Le choix `native|docker` reste exclusivement dans `<MINOS_HOME>/runtime/backend.properties`, lu par `McpBackendRouter`.
+
+Le nouveau verifier `scripts/install/verify-mcp-client-backend-routing.ps1` configure les clients dans un environnement Windows isolé, bascule `backend.properties` de `native` à `docker` et exige que les fichiers/configurations clientes restent byte-identical. Il est chaîné au preflight Windows existant. `M29McpClientBackendAgnosticContractTest` verrouille le même contrat côté Maven.
+
+Gate exact-head :
+
+```text
+scripts/m29/run-s6.ps1
+```
+
+Marqueur requis :
+
+```text
+M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
+```
+
+### S7 / S8
+
 - S7 : installer, switching transactionnel, lifecycle ;
 - S8 : qualification native/Docker machine-readable.
 
@@ -196,11 +228,13 @@ Aucun claim de parité avant S8.
 ```text
 pull HEAD courant
 → check-current-docs.py
-→ run-s5.ps1 exact-head
-   → S4 exact-head sur la même installation / local-hash
-   → fixture polyglotte scoped
-   → structured + semantic + hybrid + NONE + forced FULL + recreate
-→ seulement après SUCCESS : S5 peut passer ✅
+→ mvnw.cmd clean verify
+→ run-s6.ps1 exact-head -SkipMavenVerify
+   → PowerShell parser preflight
+   → MCP client integration verifier
+   → MCP client detection/preflight + Codex Desktop + installer template chain
+   → backend-routing verifier native -> docker / configs byte-identical
+→ seulement après SUCCESS : S6 peut passer ✅
 ```
 
 Aucune PR, GitHub Actions ou merge M29 sans autorisation explicite.
