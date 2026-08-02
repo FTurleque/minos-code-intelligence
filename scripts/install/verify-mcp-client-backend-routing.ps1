@@ -75,6 +75,14 @@ function Write-BackendConfiguration([string] $DataRoot, [ValidateSet('native', '
     return $Path
 }
 
+function Read-BackendValue([string] $Path) {
+    $Line = [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8) |
+        Where-Object { $_ -like 'backend=*' } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($Line)) { return '' }
+    return ($Line -split '=', 2)[1].Trim()
+}
+
 $Root = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-s6-clients-' + [Guid]::NewGuid())
 $OldPath = $env:Path
 try {
@@ -168,13 +176,13 @@ try {
     }
 
     $NativeConfig = Write-BackendConfiguration -DataRoot $DataRoot -Backend native
-    Assert-True ((Get-Content -Raw -LiteralPath $NativeConfig) -match '(?m)^backend=native$') 'Native backend config was not written under MINOS_HOME.'
+    Assert-True ((Read-BackendValue $NativeConfig) -eq 'native') 'Native backend config was not written under MINOS_HOME.'
     $Before = @{}
     foreach ($Artifact in $ClientArtifacts) { $Before[$Artifact] = Get-Sha256 $Artifact }
 
     $DockerConfig = Write-BackendConfiguration -DataRoot $DataRoot -Backend docker
     Assert-True ($DockerConfig -eq $NativeConfig) 'Backend switch changed the configuration location.'
-    Assert-True ((Get-Content -Raw -LiteralPath $DockerConfig) -match '(?m)^backend=docker$') 'Docker backend config was not written under MINOS_HOME.'
+    Assert-True ((Read-BackendValue $DockerConfig) -eq 'docker') 'Docker backend config was not written under MINOS_HOME.'
     foreach ($Artifact in $ClientArtifacts) {
         Assert-True ((Get-Sha256 $Artifact) -eq $Before[$Artifact]) "Backend switch rewrote client configuration: $Artifact"
     }
