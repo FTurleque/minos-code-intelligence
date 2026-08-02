@@ -127,7 +127,7 @@ try {
 
     $Backup = $null
     if (Test-Path -LiteralPath $InstallRoot) {
-        $Backup = "$InstallRoot.backup-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))"
+        $Backup = "$InstallRoot.backup-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff'))"
         Move-Item -LiteralPath $InstallRoot -Destination $Backup
     }
 
