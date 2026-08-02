@@ -122,13 +122,15 @@ scip-java version 0.0.0-SNAPSHOT
 
 Cette chaîne est une métadonnée embarquée du launcher et **n'est pas utilisée comme provenance de l'artefact**. `provider-inventory.json` conserve séparément `version=0.13.1` et `reportedVersion=0.0.0-SNAPSHOT`, tandis que `provider-binary-sha256.txt` contient le hash du launcher réellement exécuté. Le probe offline vérifie le retour réel du launcher sans prétendre qu'il expose `0.13.1`.
 
-`scip-java` embarque également Mordant/JNA. JNA doit pouvoir extraire puis charger une bibliothèque native ; le tmpfs général `/tmp` reste volontairement `noexec`. Le launcher standalone est donc construit avec :
+`scip-java` embarque également Mordant/JNA. JNA doit pouvoir extraire puis charger une bibliothèque native ; le tmpfs général `/tmp` reste volontairement `noexec`. Les plans provider positionnent donc :
 
 ```text
--Djna.tmpdir=/run/minos-native
+JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
 ```
 
-Les seuls plans qui exécutent des providers (`minos-admin` et `minos-provider-probe`) montent `/run/minos-native` comme tmpfs éphémère, `nosuid,nodev,exec`, borné à 16 MiB. Le plan MCP query n'expose pas ce tmpfs exécutable.
+Le launcher standalone conserve également son option embarquée `-Djna.tmpdir=/run/minos-native`. Les seuls plans qui exécutent des providers (`minos-admin` et `minos-provider-probe`) montent `/run/minos-native` comme tmpfs éphémère, `nosuid,nodev,exec`, borné à 16 MiB. Le plan MCP query n'expose pas ce tmpfs exécutable.
+
+Le déplacement de `java.io.tmpdir` est nécessaire au vrai `scip-java index` : le provider fabrique un shim `javac` temporaire qu'il doit exécuter. Ce shim ne doit jamais être créé sous le `/tmp` général `noexec`.
 
 ### Maven et staging Java
 
@@ -145,6 +147,15 @@ Le projet Docker reste strictement read-only. MINOS crée donc, pour chaque run 
 ```
 
 Le provider travaille dans ce staging ; la racine `/workspace/projects/...` n'est jamais rendue writable. Les arbres générés préexistants (`target`, `build`, `out`, `node_modules`, etc.) et les métadonnées VCS/IDE ne sont pas copiés dans le staging.
+
+Le staging Linux exclut également les deux launchers Maven racine :
+
+```text
+mvnw
+mvnw.cmd
+```
+
+La configuration projet `.mvn` reste disponible. Ce choix est volontaire : `scip-java` préfère `./mvnw` lorsqu'il existe, mais le checkout source est matérialisé sur Windows et le wrapper peut donc être host-dépendant. Docker doit utiliser le **Maven qualifié de l'image**, pas un wrapper copié depuis le poste ni une distribution téléchargée par Maven Wrapper.
 
 Apache Maven 3.9.16 est packagé directement dans l'image et vérifié pendant le BUILD puis dans le probe offline. Son repository local et son HOME sont explicitement confinés :
 
@@ -222,7 +233,7 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 
 Les sources restent read-only dans `minos-admin`. Les process plans M29 ne doivent pas déposer `index.scip`, `target/` ou autre artefact de provider dans la racine projet.
 
-Les sorties SCIP Java, TypeScript, C/C++, C#, Go et Rust sont redirigées vers le run directory MINOS sous l'état writable. Python utilisait déjà un output externe. Rust redirige aussi `CARGO_TARGET_DIR` vers son run directory. Java exécute son build complet depuis le staging writable décrit ci-dessus.
+Les sorties SCIP Java, TypeScript, C/C++, C#, Go et Rust sont redirigées vers le run directory MINOS sous l'état writable. Python utilisait déjà un output externe. Rust redirige aussi `CARGO_TARGET_DIR` vers son run directory. Java exécute son build complet depuis le staging writable décrit ci-dessus avec le Maven 3.9.16 de l'image.
 
 Tout provider qui exige encore une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount ne doit pas être rendu writable pour le contourner.
 
@@ -296,6 +307,8 @@ La purge explicite des données et le switching transactionnel natif/Docker rel�
 
 ## État de qualification
 
-S4 a obtenu un PASS exact-head sur `f39802e966370f0934436163eecc180e4d76a271` avec les sept providers READY et un probe offline complet. Le S3 exécuté sur ce même SHA a ensuite révélé un défaut différent pendant le vrai build Java : `scip-java` tentait de créer `/workspace/projects/.../target/scip-targetroot` sur le mount source read-only.
+S4 a obtenu une nouvelle preuve exact-head complète sur `45536e2fc7d32ed67932e2715e458fa26a8239b1` : Maven 13/13, docs checker, image Docker 31/31, Maven 3.9.16, probe offline, sept providers READY et `doctor.ready=true` ont PASS.
 
-La remédiation staging + Maven packagé modifie le HEAD ; elle doit donc repasser **S4 puis S3 exact-head** avant toute nouvelle claim PASS sur la branche courante.
+S3 exécuté immédiatement sur ce même SHA a ensuite prouvé que le staging writable corrige l'ancienne écriture `target/scip-targetroot` sur source read-only. Le nouveau défaut exact est que `scip-java` sélectionne `.../workspace/mvnw`, issu du checkout Windows, et échoue au lancement avec `error=2, No such file or directory`. Son stdout montre aussi un `javac` temporaire sous `/tmp/scip-java...`, incompatible avec le contrat `/tmp` noexec.
+
+La remédiation courante exclut `mvnw`/`mvnw.cmd` du staging Linux, conserve `.mvn`, force l'usage du Maven 3.9.16 packagé et route `java.io.tmpdir`/JNA vers `/run/minos-native`. Ces changements modifient le HEAD ; ils doivent donc repasser **S4 puis S3 exact-head** avant toute nouvelle claim PASS sur la branche courante.
