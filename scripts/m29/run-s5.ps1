@@ -41,8 +41,9 @@ function Invoke-NativeCapture {
     $Previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $Output = ((& $File @Arguments 2>&1) | Out-String).Trim()
+        $Captured = @(& $File @Arguments 2>&1)
         $ExitCode = $LASTEXITCODE
+        $Output = (($Captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
     }
     finally { $ErrorActionPreference = $Previous }
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
