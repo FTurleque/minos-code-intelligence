@@ -121,9 +121,11 @@ $Suffix = $Head.Substring(0, [Math]::Min(12, $Head.Length))
 $QualificationRoot = Join-Path $env:TEMP "minos-m29-s7-$Suffix"
 $OutputRoot = Join-Path $RepoRoot "target\m29\s7-dist-$Suffix"
 $Distribution = Join-Path $OutputRoot "minos-$Version-windows-x64"
-$InstallRoot = Join-Path $QualificationRoot 'install'
-$DataRoot = Join-Path $QualificationRoot 'data'
-$DockerInstallRoot = Join-Path $QualificationRoot 'docker-runtime'
+$NativeInstallRoot = Join-Path $QualificationRoot 'native-install'
+$NativeDataRoot = Join-Path $QualificationRoot 'native-data'
+$DockerAppRoot = Join-Path $QualificationRoot 'docker-install'
+$DockerHome = Join-Path $QualificationRoot 'docker-home'
+$DockerRuntimeRoot = Join-Path $QualificationRoot 'docker-runtime'
 $DockerDataRoot = Join-Path $QualificationRoot 'docker-data'
 $ContainerName = "minos-m29-s7-$Suffix"
 $ComposeProject = "minos-m29-s7-$Suffix"
@@ -132,6 +134,7 @@ $ReportPath = Join-Path $ReportRoot "s7-qualification-$Head.json"
 $StartedAt = [DateTime]::UtcNow
 $Passed = $false
 $DockerInstalled = $false
+$SmokeSetup = ''
 $PreserveSentinel = Join-Path $DockerDataRoot 's7-preserve-sentinel.txt'
 
 try {
@@ -159,8 +162,8 @@ try {
         & '.\scripts\install\verify-mcp-client-backend-routing.ps1'
         & '.\scripts\install\verify-installer-template.ps1'
 
-        # Build an actual Windows distribution and compile an isolated smoke
-        # setup so Inno Pascal syntax and packaged helper presence are proven.
+        # Build the real Windows distribution and compile an isolated smoke
+        # setup so packaging plus Inno Pascal syntax are part of the gate.
         & '.\scripts\release\build-windows-distribution.ps1' `
             -Version $Version `
             -OutputRoot $OutputRoot `
@@ -178,80 +181,91 @@ try {
         throw "M29-S7 smoke setup was not produced: $SmokeSetup"
     }
 
-    # Native-only install from the built distribution, entirely isolated from
-    # the user's real MINOS_HOME and Docker runtime.
+    # 1) Native-only installation from the built distribution.
     & (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Package $Distribution `
-        -InstallRoot $InstallRoot `
+        -InstallRoot $NativeInstallRoot `
         -McpBackend native `
-        -DataRoot $DataRoot `
-        -DockerInstallRoot $DockerInstallRoot `
-        -DockerDataRoot $DockerDataRoot `
-        -DockerContainerName $ContainerName `
-        -DockerComposeProject $ComposeProject
-    Assert-Backend -Home $DataRoot -Expected 'native'
+        -DataRoot $NativeDataRoot `
+        -DockerInstallRoot (Join-Path $QualificationRoot 'native-unused-docker-runtime') `
+        -DockerDataRoot (Join-Path $QualificationRoot 'native-unused-docker-data') `
+        -DockerContainerName ($ContainerName + '-native-unused') `
+        -DockerComposeProject ($ComposeProject + '-native-unused')
+    Assert-Backend -Home $NativeDataRoot -Expected 'native'
     Write-Host 'M29-S7 native-only install SUCCESS' -ForegroundColor Green
 
-    # Deterministic same-version ZIP upgrade. The backend remains native and the
-    # previous install directory is backed up before replacement.
+    # 2) Deterministic same-version native ZIP upgrade.
     & (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
         -Package $Distribution `
-        -InstallRoot $InstallRoot `
+        -InstallRoot $NativeInstallRoot `
         -McpBackend native `
-        -DataRoot $DataRoot `
-        -DockerInstallRoot $DockerInstallRoot `
+        -DataRoot $NativeDataRoot `
+        -DockerInstallRoot (Join-Path $QualificationRoot 'native-unused-docker-runtime') `
+        -DockerDataRoot (Join-Path $QualificationRoot 'native-unused-docker-data') `
+        -DockerContainerName ($ContainerName + '-native-unused') `
+        -DockerComposeProject ($ComposeProject + '-native-unused')
+    Assert-Backend -Home $NativeDataRoot -Expected 'native'
+    $NativeBackups = @(Get-ChildItem -LiteralPath $QualificationRoot -Directory -Filter 'native-install.backup-*' -ErrorAction SilentlyContinue)
+    if ($NativeBackups.Count -lt 1) {
+        throw 'M29-S7 native ZIP upgrade did not preserve a previous installation backup.'
+    }
+    Write-Host 'M29-S7 ZIP upgrade SUCCESS' -ForegroundColor Green
+
+    # 3) Docker-only fresh installation. This is the single real Docker image
+    # build/install in S7 and uses only isolated qualification roots.
+    & (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
+        -Package $Distribution `
+        -InstallRoot $DockerAppRoot `
+        -McpBackend docker `
+        -ProjectsRoot $ProjectsRoot `
+        -DataRoot $DockerHome `
+        -DockerInstallRoot $DockerRuntimeRoot `
         -DockerDataRoot $DockerDataRoot `
         -DockerContainerName $ContainerName `
         -DockerComposeProject $ComposeProject
-    Assert-Backend -Home $DataRoot -Expected 'native'
-    Write-Host 'M29-S7 ZIP upgrade SUCCESS' -ForegroundColor Green
+    $DockerInstalled = $true
+    Assert-Backend -Home $DockerHome -Expected 'docker'
+    New-Item -ItemType Directory -Force -Path $DockerDataRoot | Out-Null
+    [System.IO.File]::WriteAllText($PreserveSentinel, 'preserve-me', [System.Text.UTF8Encoding]::new($false))
+    Write-Host 'M29-S7 Docker-only install SUCCESS' -ForegroundColor Green
 
-    $Switcher = Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1'
+    $Switcher = Join-Path $DockerAppRoot 'integration\switch-mcp-backend.ps1'
     $SwitchCommon = @{
-        InstallRoot = $InstallRoot
-        DataRoot = $DataRoot
-        DockerInstallRoot = $DockerInstallRoot
+        InstallRoot = $DockerAppRoot
+        DataRoot = $DockerHome
+        DockerInstallRoot = $DockerRuntimeRoot
         DockerDataRoot = $DockerDataRoot
         DockerContainerName = $ContainerName
         DockerComposeProject = $ComposeProject
     }
 
-    # Native -> Docker performs the single real Docker install/build for S7.
-    & $Switcher @SwitchCommon -TargetBackend docker -ProjectsRoot $ProjectsRoot
-    $DockerInstalled = $true
-    Assert-Backend -Home $DataRoot -Expected 'docker'
-    New-Item -ItemType Directory -Force -Path $DockerDataRoot | Out-Null
-    [System.IO.File]::WriteAllText($PreserveSentinel, 'preserve-me', [System.Text.UTF8Encoding]::new($false))
-    Write-Host 'M29-S7 native -> Docker SUCCESS' -ForegroundColor Green
-
-    # Docker -> native must commit native before stopping Docker and preserve
-    # Docker business data for a future switch.
+    # 4) Docker -> native commits native then retires Docker, preserving data.
     & $Switcher @SwitchCommon -TargetBackend native
-    Assert-Backend -Home $DataRoot -Expected 'native'
+    Assert-Backend -Home $DockerHome -Expected 'native'
     if (-not (Test-Path -LiteralPath $PreserveSentinel -PathType Leaf)) {
         throw 'M29-S7 Docker -> native switch deleted persistent Docker data.'
     }
     Write-Host 'M29-S7 Docker -> native SUCCESS' -ForegroundColor Green
 
-    # Switch back to the exact same Docker runtime: it must Start+Validate+probe
-    # without a second install/build. The switch-state report proves reuse.
+    # 5) Native -> Docker must reuse the exact same managed runtime, proving
+    # Start + Validate + MCP handshake without a second image build.
     & $Switcher @SwitchCommon -TargetBackend docker -ProjectsRoot $ProjectsRoot
-    Assert-Backend -Home $DataRoot -Expected 'docker'
-    $SwitchState = Get-Content -Raw -LiteralPath (Join-Path $DataRoot 'runtime\backend-switch.json') | ConvertFrom-Json
+    Assert-Backend -Home $DockerHome -Expected 'docker'
+    $SwitchState = Get-Content -Raw -LiteralPath (Join-Path $DockerHome 'runtime\backend-switch.json') | ConvertFrom-Json
     if (-not [bool]$SwitchState.reusedDockerRuntime) {
-        throw 'M29-S7 native -> Docker repeat did not reuse the qualified managed Docker runtime.'
+        throw 'M29-S7 native -> Docker did not reuse the qualified managed Docker runtime.'
     }
     Write-Host 'M29-S7 native -> Docker reuse SUCCESS' -ForegroundColor Green
 
-    # End with native selected so the live Docker query plane is retired before
-    # cleanup. The runtime uninstall below must still preserve DockerDataRoot.
+    # 6) End with native selected and persistent Docker data still present.
     & $Switcher @SwitchCommon -TargetBackend native
-    Assert-Backend -Home $DataRoot -Expected 'native'
+    Assert-Backend -Home $DockerHome -Expected 'native'
 
-    $DockerWorkflow = Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1'
+    # 7) Runtime uninstall must preserve Docker data by default.
+    $DockerWorkflow = Join-Path $DockerAppRoot 'docker\scripts\prod-mcp-release.ps1'
     & $DockerWorkflow `
         -Action Uninstall `
-        -InstallRoot $DockerInstallRoot `
+        -InstallRoot $DockerRuntimeRoot `
         -DataRoot $DockerDataRoot `
         -ContainerName $ContainerName `
         -ComposeProject $ComposeProject
@@ -261,11 +275,10 @@ try {
     }
     Write-Host 'M29-S7 uninstall-preserve SUCCESS' -ForegroundColor Green
 
-    # Explicit qualification purge: destructive data deletion is separate from
-    # runtime uninstall and must remove only the isolated qualification roots.
-    Remove-Item -LiteralPath $DataRoot -Recurse -Force -ErrorAction Stop
+    # 8) Destructive purge is explicit and separate from runtime uninstall.
+    Remove-Item -LiteralPath $DockerHome -Recurse -Force -ErrorAction Stop
     Remove-Item -LiteralPath $DockerDataRoot -Recurse -Force -ErrorAction Stop
-    if ((Test-Path -LiteralPath $DataRoot) -or (Test-Path -LiteralPath $DockerDataRoot)) {
+    if ((Test-Path -LiteralPath $DockerHome) -or (Test-Path -LiteralPath $DockerDataRoot)) {
         throw 'M29-S7 explicit qualification purge did not remove isolated MINOS data roots.'
     }
     Write-Host 'M29-S7 explicit purge SUCCESS' -ForegroundColor Green
@@ -279,11 +292,11 @@ try {
     Write-Host 'M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS' -ForegroundColor Green
 }
 finally {
-    if ($DockerInstalled -and (Test-Path -LiteralPath (Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1') -PathType Leaf)) {
+    if ($DockerInstalled -and (Test-Path -LiteralPath (Join-Path $DockerAppRoot 'docker\scripts\prod-mcp-release.ps1') -PathType Leaf)) {
         try {
-            & (Join-Path $InstallRoot 'docker\scripts\prod-mcp-release.ps1') `
+            & (Join-Path $DockerAppRoot 'docker\scripts\prod-mcp-release.ps1') `
                 -Action Uninstall `
-                -InstallRoot $DockerInstallRoot `
+                -InstallRoot $DockerRuntimeRoot `
                 -DataRoot $DockerDataRoot `
                 -ContainerName $ContainerName `
                 -ComposeProject $ComposeProject
@@ -303,8 +316,9 @@ finally {
         projectsRoot = $ProjectsRoot
         windowsDistribution = $Distribution
         smokeSetup = $SmokeSetup
-        isolatedInstallRoot = $InstallRoot
-        backendSequence = @('native', 'docker', 'native', 'docker-reuse', 'native')
+        nativeInstallRoot = $NativeInstallRoot
+        dockerInstallRoot = $DockerAppRoot
+        backendSequence = @('native-only', 'native-upgrade', 'docker-only', 'native', 'docker-reuse', 'native')
         uninstallPreservedData = $Passed
         explicitPurge = $Passed
     } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ReportPath -Encoding utf8
