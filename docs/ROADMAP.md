@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 planifié pour rendre Docker autonome et paritaire avec le natif.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 démarré sur une branche dédiée pour rendre Docker autonome et paritaire avec le natif, sans claim de parité à ce stade.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves d'exécution détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -90,14 +90,15 @@ Objectifs obligatoires avant publication :
 11. faire valider visuellement le setup et tester la connexion MCP réelle dans Copilot avant toute publication ;
 12. ne créer `v1.0.1` qu'après autorisation explicite de publication.
 
-Tant que M29 n'est pas qualifié, **1.0.1 ne doit pas présenter Docker comme un backend fonctionnellement équivalent au natif**. Le natif reste le parcours MCP intégré/recommandé ; Docker reste un runtime isolé avancé dont la parité complète est explicitement planifiée.
+Tant que M29 n'est pas qualifié, **1.0.1 ne doit pas présenter Docker comme un backend fonctionnellement équivalent au natif**. Le natif reste le parcours MCP intégré/recommandé ; Docker reste un runtime isolé avancé dont la parité complète est un objectif M29 non encore acquis.
 
 Voir [`releases/1.0.1.md`](releases/1.0.1.md) et [`user/production-installation.md`](user/production-installation.md).
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **PLANIFIÉ — démarrage prévu le 3 août 2026**.  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 implémentés mais non qualifiés exact-head.**  
+Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
 ### Objectif
@@ -147,14 +148,26 @@ Le travail porte sur :
 
 | Sous-étape | Objet | État |
 |---|---|---|
-| M29-S1 | Backend contract & ADR | ⬜ |
-| M29-S2 | Project identity, path mapping & portable persistence | ⬜ |
-| M29-S3 | Autonomous Docker administration plane | ⬜ |
+| M29-S1 | Backend contract & ADR | 🟨 implémenté — qualification locale requise |
+| M29-S2 | Project identity, path mapping & portable persistence | 🟨 implémenté partiellement — qualification locale requise |
+| M29-S3 | Autonomous Docker administration plane | ⬜ bloqué par gate S1/S2 |
 | M29-S4 | Provider-complete Docker image | ⬜ |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
+
+`🟨` signifie code présent, **pas PASS**.
+
+### S1 — contrat backend déjà implémenté
+
+Le point d'entrée stable `minos.exe mcp` charge une configuration versionnée `native|docker` avant d'ouvrir `MinosApplication`. Docker effectue un probe borné du daemon et du conteneur puis ouvre la session STDIO par `docker exec -i`. Configuration invalide ou Docker indisponible échoue explicitement ; aucun fallback Docker → natif n'est autorisé. ADR-0037 documente ce contrat.
+
+### S2 — identité/path mapping déjà implémenté
+
+Le mapping `hostRoot ↔ containerRoot` est typé et versionné. Lorsque ce mapping est actif, le registre persiste `rootRelativePath` au lieu du chemin physique absolu. Les UUID projet/workspace restent autoritatifs. Les anciens `rootPath` sont migrés atomiquement avec backup `.m29-v1.bak`.
+
+Ces deux sous-étapes restent à qualifier sur un SHA exact avec JDK 24/Maven et Docker réel avant de poursuivre S3.
 
 ### Définition de parité
 
@@ -185,7 +198,19 @@ aux seules différences explicitement permises de chemin, provenance et runtime 
 
 ### Runtime providers Docker
 
-L'image Docker doit devenir provider-complete pour les capacités réellement revendiquées. Les outils sont préparés pendant BUILD/install avec versions/provenance/SBOM ; l'exécution qualifiée reste sans réseau :
+L'audit M29 du catalogue réel identifie :
+
+```text
+scip-java            0.13.1
+scip-typescript      0.4.0
+scip-python          0.6.6
+scip-clang           0.4.0
+scip-dotnet          0.2.14
+scip-go              0.2.7
+rust-analyzer-scip   0.3.2989 / release 2026-07-27 / commit 12c3381
+```
+
+Plusieurs managers actuels installent encore les providers à la demande. S4 devra déplacer les téléchargements en BUILD/préparation, tracer versions/provenance/checksums/licences/SBOM puis qualifier l'exécution sans réseau :
 
 ```text
 réseau contrôlé pendant préparation
@@ -224,10 +249,11 @@ Le worker distant natif ne revendique toujours pas une sandbox OS pour code non 
 
 ## Séquence de travail
 
-1. terminer/qualifier explicitement le candidat 1.0.1 sans lui faire revendiquer une parité Docker inexistante ;
-2. démarrer M29 sur une branche dédiée depuis la base autoritative choisie ;
-3. commencer par M29-S1 (contrat backend + ADR), puis M29-S2 (identité/path mapping/persistance) avant tout raccordement client ;
+1. maintenir la dépendance explicite sur le candidat 1.0.1 sans lui faire revendiquer une parité Docker inexistante ;
+2. qualifier M29-S1 puis M29-S2 sur le SHA exact ;
+3. seulement après ces PASS, implémenter S3 puis S4/S5 ;
 4. rendre Docker réellement autonome avant de modifier l'UX pour le présenter comme alternative équivalente ;
-5. ne déclarer M29 terminé qu'après le rapport de parité exact-head.
+5. ne déclarer M29 terminé qu'après le rapport de parité exact-head S8 ;
+6. ne créer aucune PR/CI M29 sans autorisation explicite du mainteneur.
 
 Aucune `v1.0.1` n'est considérée publiée tant que le tag et la GitHub Release n'existent pas après les gates manuels/automatisés autorisés.
