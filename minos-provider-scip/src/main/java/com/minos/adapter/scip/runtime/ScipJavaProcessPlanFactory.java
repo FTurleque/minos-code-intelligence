@@ -38,9 +38,6 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             throw new IllegalArgumentException(
                     "qualified MINOS scip-java runtime currently requires Maven pom.xml: " + root);
         }
-        if (!Files.isRegularFile(coursier)) {
-            throw new IllegalStateException("Coursier executable is missing: " + coursier);
-        }
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-java incremental execution is not qualified");
         }
@@ -49,6 +46,9 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
         Files.createDirectories(output.getParent());
         if (CommandLocator.isWindows()) {
+            if (!Files.isRegularFile(coursier)) {
+                throw new IllegalStateException("Coursier executable is missing: " + coursier);
+            }
             if (!Files.isRegularFile(windowsRunner)) {
                 throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
             }
@@ -77,6 +77,20 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             );
         }
 
+        var standalone = CommandLocator.find("scip-java");
+        if (standalone.isPresent()) {
+            return new IndexerProcessPlan(
+                    standaloneCommand(standalone.orElseThrow(), output),
+                    root,
+                    Map.of(),
+                    output,
+                    Duration.ofHours(1)
+            );
+        }
+
+        if (!Files.isRegularFile(coursier)) {
+            throw new IllegalStateException("scip-java standalone launcher and Coursier executable are missing");
+        }
         return new IndexerProcessPlan(
                 List.of(
                         coursier.toString(),
@@ -89,6 +103,15 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                 Map.of(),
                 output,
                 Duration.ofHours(1)
+        );
+    }
+
+    static List<String> standaloneCommand(Path launcher, Path output) {
+        Path normalizedLauncher = Objects.requireNonNull(launcher, "launcher").toAbsolutePath().normalize();
+        Path normalizedOutput = Objects.requireNonNull(output, "output").toAbsolutePath().normalize();
+        return List.of(
+                normalizedLauncher.toString(),
+                "index", "--output", normalizedOutput.toString()
         );
     }
 
