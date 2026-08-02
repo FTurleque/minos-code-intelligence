@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 PASS exact-head `f7ef0e3...` ; S7 installer/switching/lifecycle implémenté sur un HEAD plus récent et en attente de qualification exact-head.**
+Dernière mise à jour : **3 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1–S7 PASS ; S8 à qualifier.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -26,7 +26,7 @@ M29-S3                           ✅ PASS exact-head 3df1b40...
 M29-S4                           ✅ PASS exact-head 3df1b40...
 M29-S5                           ✅ PASS exact-head 0959fb9...
 M29-S6                           ✅ PASS exact-head f7ef0e3...
-M29-S7                           🟨 implémenté ; qualification run-s7.ps1 requise
+M29-S7                           ✅ PASS exact-head 50b462f...
 M29-S8                           non démarré / non qualifié
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```

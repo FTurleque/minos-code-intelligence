@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3/S4 PASS exact-head `3df1b40...`, S5 PASS exact-head `0959fb9...`, S6 PASS exact-head `f7ef0e3...`, S7 installer/switching/lifecycle implémenté sur un HEAD plus récent et en attente de qualification exact-head, sans claim de parité.**
+Statut au **3 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1–S7 PASS (S7 exact-head `50b462f...`), S8 à qualifier.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -77,7 +77,7 @@ Tant que M29 n'est pas qualifié, **1.0.1 ne présente pas Docker comme fonction
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 PASS exact-head `f7ef0e3...`; S7 installer/switching/lifecycle implémenté et en attente de `run-s7.ps1`.**  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 PASS exact-head `f7ef0e3...`; S7 PASS exact-head `50b462f...`; S8 à qualifier.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -124,7 +124,7 @@ M29 ne crée pas de nouvelle base vectorielle externe par défaut et n'introduit
 | M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...` |
 | M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...` |
 | M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...` |
-| M29-S7 | Installer, switching & lifecycle | 🟨 implémenté ; qualification exact-head requise |
+| M29-S7 | Installer, switching & lifecycle | ✅ PASS exact-head `50b462f...` |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
 ### S1/S2 — fondations qualifiées
@@ -256,7 +256,7 @@ Rapport :
 target/m29/s6-qualification-f7ef0e3dbe820253decd83a1dc27bf2651ef6de9.json
 ```
 
-### S7 — installer / switching — 🟨
+### S7 — installer / switching — ✅ PASS exact-head `50b462f...`
 
 Le switching natif↔Docker est implémenté comme une transaction :
 

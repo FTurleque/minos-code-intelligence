@@ -1,6 +1,6 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **EN COURS — S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 PASS exact-head `f7ef0e3...` ; S7 installer/switching/lifecycle implémenté sur un HEAD plus récent, qualification `run-s7.ps1` requise**  
+Statut : **EN COURS — S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 PASS exact-head `f7ef0e3...` ; S7 PASS exact-head `50b462f...` ; S8 à qualifier**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**
@@ -88,7 +88,7 @@ MinosLauncher
 | M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...` |
 | M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...` |
 | M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...` |
-| M29-S7 | Installer, switching & lifecycle | 🟨 implémenté ; `run-s7.ps1` requis |
+| M29-S7 | Installer, switching & lifecycle | ✅ PASS exact-head `50b462f...` |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
 Un PASS sur un ancien HEAD reste une preuve historique mais ne qualifie pas automatiquement un HEAD modifié.
@@ -353,7 +353,7 @@ target/m29/s6-qualification-f7ef0e3dbe820253decd83a1dc27bf2651ef6de9.json
 
 ---
 
-## M29-S7 — Installer, switching & lifecycle — 🟨 IMPLÉMENTÉ / À QUALIFIER
+## M29-S7 — Installer, switching & lifecycle — ✅ PASS exact-head `50b462f8253dc560fe8a35ef9d47e30fe25dbfe4`
 
 ### 1. Orchestrateur transactionnel
 
