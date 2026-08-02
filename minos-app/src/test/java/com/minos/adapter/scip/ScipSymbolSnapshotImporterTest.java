@@ -157,6 +157,43 @@ class ScipSymbolSnapshotImporterTest {
         assertTrue(response.contexts().getFirst().source().content().contains("convert"));
     }
 
+    @Test
+    void prefixesProviderRelativePathsWhenArtifactComesFromNestedModule(@TempDir Path root)
+            throws IOException {
+        Path indexFile = root.resolve("index.scip");
+        writeIndex(indexFile);
+        Path projectRoot = Files.createDirectories(root.resolve("project"));
+        Path source = projectRoot.resolve("modules/core/src/main/java/com/minos/Converter.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, String.join("\n",
+                "package com.minos;", "", "class Converter {", "", "", "", "",
+                "  int convert(int value) { return value; }", "", "", "",
+                "  String convert(String value) { return value; }", "", "", "",
+                "  int usage = convert(1);", "}"
+        ));
+        LocalProjectRegistry registry = new LocalProjectRegistry(root.resolve("registry"));
+        RegisteredProject project = registry.registerProject(projectRoot, "scoped-source");
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(root.resolve("snapshots"));
+
+        new ScipSymbolSnapshotImporter().importSnapshot(
+                indexFile,
+                new ScipSymbolSnapshotRequest(
+                        project.id(), "snapshot-scoped", "main", "scip-java",
+                        "0.13.1", "run-scoped", Map.of(), "modules/core"),
+                snapshots
+        );
+        LocalProjectSymbolQuery query = new LocalProjectSymbolQuery(registry, snapshots);
+        var response = query.searchCode(project.id().toString(), new CodeSearchCriteria(
+                new SymbolSearchCriteria(
+                        "convert", "com.minos.Converter.convert", SymbolKind.METHOD,
+                        "main", 1),
+                0, 0, 0, 1, 512, true));
+
+        assertEquals("modules/core/src/main/java/com/minos/Converter.java",
+                response.contexts().getFirst().symbol().fileId());
+        assertTrue(response.contexts().getFirst().source().content().contains("convert"));
+    }
+
     private static void writeIndex(Path indexFile) throws IOException {
         Document document = Document.newBuilder()
                 .setLanguage("java")
