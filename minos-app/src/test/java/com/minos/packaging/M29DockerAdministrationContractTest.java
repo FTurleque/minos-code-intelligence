@@ -41,7 +41,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(providerProbe.contains("user: \"10001:10001\""));
         assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
         assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
+        assertTrue(providerProbe.contains("scip-java --version"));
         assertTrue(providerProbe.contains("scip-java version 0.13.1"));
+        assertFalse(providerProbe.contains("cs launch org.scip-code:scip-java"),
+                "offline provider probe must not require a mutable Coursier cache");
         assertTrue(providerProbe.contains("scip-typescript/0.4.0"));
         assertTrue(providerProbe.contains("scip-python/0.6.6"));
         assertTrue(providerProbe.contains("scip-dotnet/0.2.14"));
@@ -66,6 +69,8 @@ class M29DockerAdministrationContractTest {
         Path root = repoRoot();
         String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
+        String javaPlan = normalizedText(root.resolve(
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
         String polyglotRuntime = normalizedText(root.resolve(
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"));
 
@@ -93,6 +98,13 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("grep -F \"rust-analyzer ${RUST_ANALYZER_VERSION}\""));
         assertFalse(dockerfile.contains("grep -E \"${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}\""),
                 "rust-analyzer --version does not expose artifact release/commit provenance");
+        assertTrue(dockerfile.contains("cs bootstrap \"org.scip-code:scip-java:${SCIP_JAVA_VERSION}\""));
+        assertTrue(dockerfile.contains("--standalone"));
+        assertTrue(dockerfile.contains("-o /usr/local/bin/scip-java"));
+        assertTrue(dockerfile.contains("/usr/local/bin/scip-java"));
+        assertTrue(dockerfile.contains("Coursier standalone bootstrap"));
+        assertFalse(dockerfile.contains("COURSIER_CACHE=/opt/minos/coursier-cache"),
+                "runtime image must not depend on a read-only Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
         assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
         assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
@@ -103,6 +115,8 @@ class M29DockerAdministrationContractTest {
         assertFalse(dockerfile.contains("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"),
                 "S4 must not hide missing .NET runtime dependencies behind invariant globalization");
 
+        assertTrue(javaPlan.contains("CommandLocator.find(\"scip-java\")"));
+        assertTrue(javaPlan.contains("standaloneCommand"));
         assertTrue(polyglotRuntime.contains("output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)"));
         assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE)"));
         assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT)"));
