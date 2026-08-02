@@ -1,8 +1,8 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S4 provider-complete qualifié sur `45536e2...` ; S3 atteint le vrai `scip-java` depuis son staging writable puis révèle un wrapper Maven host-dépendant, remédiation implémentée et requalification S4→S3 requise.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S4 provider-complete PASS exact-head `0f5668f...` ; S3 atteint le vrai plan Docker mais la fixture monorepo historique révèle un défaut provider→module root désormais classé S5 ; le runner S3 utilise une fixture Java Maven contrôlée et doit être requalifié exact-head.**
 
-Ce fichier est la synthèse autoritative de l'état courant. Les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
+Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
 ## Synthèse
 
@@ -22,62 +22,46 @@ branche M29                      m29-autonomous-docker-runtime
 baseline M29                     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
 M29-S1                           ✅ PASS exact-head c7a4e944...
 M29-S2                           ✅ PASS exact-head c7a4e944...
-M29-S3                           🟨 staging writable prouvé ; dernier échec workspace/mvnw ENOENT
-M29-S4                           ✅ PASS exact-head 45536e2... ; HEAD courant modifié, requalification requise
-M29-S5 → S8                      non démarrés / non qualifiés
+M29-S3                           🟨 fixture contrôlée corrigée ; requalification requise
+M29-S4                           ✅ PASS exact-head 0f5668f... ; HEAD courant modifié, rerun requis
+M29-S5                           ⬜ inclut le routage provider→module root polyglotte
+M29-S6 → S8                      non démarrés / non qualifiés
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
-`main` et `develop` représentent encore la ligne produit 1.0.0 publiée. La branche de maintenance `fix/v1.0.1-release-hardening` porte le candidat de correction Windows 1.0.1 ; elle n'est pas une release et aucun tag `v1.0.1` n'existe au démarrage M29.
+`main` et `develop` représentent encore la ligne produit 1.0.0 publiée. La branche de maintenance `fix/v1.0.1-release-hardening` porte le candidat 1.0.1 ; aucun tag `v1.0.1` n'est publié.
 
-M29 a été démarré le **2 août 2026** depuis la branche 1.0.1, car celle-ci contient les prérequis installer/MCP nécessaires. Cette dépendance ne permet pas de contourner #106 : M29 ne devra pas être intégré en réécrivant ou en sautant l'historique 1.0.x.
+M29 a été démarré le **2 août 2026** depuis la branche 1.0.1 afin de réutiliser les prérequis installer/MCP. Cette dépendance ne permet pas de contourner #106.
 
 ## Release 1.0.0
 
-MINOS 1.0.0 est la première release stable publiée après la convergence C0→M28 et la promotion `develop → main` via la PR #102.
-
-La release reste immuable. Le tag `v1.0.0` et la branche `release/v1.0.0` ne doivent jamais être réécrits ou retaggés.
-
-Un défaut post-publication a été identifié dans la distribution Windows native : l'image Java créée par `jpackage` utilisait une liste de modules trop étroite et pouvait manquer `java.xml`, provoquant :
+MINOS 1.0.0 est la première release stable après convergence C0→M28 et PR de promotion #102.
 
 ```text
-java.lang.NoClassDefFoundError: org/w3c/dom/Node
+main/tag v1.0.0 : 1adbc45339efe37cd26d1937025bfa69d7b57811
+M21 #73          : CLOSED / completed
+M28 #93          : CLOSED / completed
 ```
 
-La correction est portée par 1.0.1 et ne modifie pas 1.0.0.
-
-Voir [`releases/1.0.0.md`](releases/1.0.0.md) et [`releases/1.0.1.md`](releases/1.0.1.md).
+La release est immuable. Le défaut Windows `NoClassDefFoundError: org/w3c/dom/Node` est corrigé uniquement par 1.0.1 ; `v1.0.0` ne doit jamais être retaggé.
 
 ## Candidat 1.0.1
+
+État : **EN PRÉPARATION — NON PUBLIÉE**.
 
 Le candidat 1.0.1 porte notamment :
 
 - runtime Windows dérivé du JAR final avec `jdeps` ;
-- vérification `java --list-modules` et non-régression `java.xml` ;
-- handshake MCP réel sur distribution et setup isolé ;
-- setup smoke isolé des installations réelles ;
-- page MCP et capability probes Copilot/Claude/Codex ;
-- faux launcher Copilot/VS Code rejeté ;
-- Codex Desktop via configuration utilisateur TOML ;
-- backups, ownership et désinstallation sélective des configurations tierces ;
-- chemins CLI sauvegardés ;
-- `slf4j-nop` pour garder stderr MCP propre ;
-- runner local `scripts/release/build-local-windows-candidate.ps1` sans publication/tag.
+- contrôle `java.xml` ;
+- vrai handshake MCP distribution/setup ;
+- setup smoke isolé ;
+- détection clients Copilot/Claude/Codex ;
+- Codex Desktop via configuration utilisateur ;
+- backups, ownership et désinstallation sélective ;
+- `slf4j-nop` pour stderr MCP propre ;
+- runner local de candidate sans publication.
 
-La séquence de publication reste :
-
-```text
-code + docs
-→ build local Windows
-→ runtime module gate
-→ MCP handshake distribution/setup
-→ vérification visuelle setup
-→ vérification clients réels
-→ autorisation explicite
-→ seulement ensuite tag v1.0.1 + GitHub Release
-```
-
-M29 n'altère pas ce contrat.
+Tant que M29 n'a pas passé S8, le natif reste le parcours MCP recommandé ; Docker ne doit pas être présenté comme équivalent fonctionnel.
 
 ## État des jalons
 
@@ -88,127 +72,72 @@ M29 n'altère pas ce contrat.
 | M22 — Advanced Provider Intelligence | terminé |
 | M23 — Semantic Retrieval 2.0 | terminé |
 | M24 — Polyglot Expansion | terminé |
-| M25 — Remote & Distributed Indexing | terminé avec disposition sandbox honnête |
+| M25 — Remote & Distributed Indexing | terminé avec contraintes sandbox explicites |
 | M26 — Runtime & Dynamic Intelligence | terminé |
-| M27 — Team / Hosted Mode | terminé avec frontières local-first/no-SaaS explicites |
+| M27 — Team / Hosted Mode | terminé |
 | M28 — Production Convergence | terminé ; #93 CLOSED / completed ; PR #102 merged |
-| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS ; S4 PASS sur 45536e2 ; S3 remédiation Maven/tmpdir à requalifier** |
+| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN** |
 
 ## M29 — Docker autonome & Native Parity
 
-### Baseline et sécurité CI
+### S1 — backend contract — ✅ PASS
 
-Avant création de branche, les triggers GitHub Actions ont été audités. Sur la baseline M29, les workflows actifs pertinents sont `pull_request`, `workflow_dispatch` ou `release`; le one-shot `release-v1.0.0.yml` avec trigger push n'est plus présent sur la ligne 1.0.1.
-
-La branche `m29-autonomous-docker-runtime` a été créée depuis :
-
-```text
-db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
-```
-
-sans PR et sans déclencher de CI. Aucune PR/Action/merge M29 n'est autorisé implicitement.
-
-### M29-S1 — contrat backend — ✅ PASS
-
-Le contrat comprend :
-
-- backend explicite `native | docker` ;
-- configuration versionnée `<MINOS_HOME>/runtime/backend.properties` ;
-- migration pré-M29 vers `native` explicite ;
-- invalidité/version/backend inconnu = fail-closed ;
-- écriture atomique ;
-- `minos.exe mcp` route avant `MinosApplication.open(...)` ;
-- Docker effectue probe daemon + conteneur puis `docker exec -i` ;
-- Docker indisponible = erreur explicite ;
-- aucun fallback Docker → natif ;
-- ADR-0037 accepté pour le contrat, sans claim de parité.
-
-Preuve Windows exact-head du 2 août 2026 :
+Preuve :
 
 ```text
 HEAD                         c7a4e94414f4e2b6e3a2a23beacd303ca740387e
 mvnw.cmd clean verify        BUILD SUCCESS
 13/13 modules                SUCCESS
-McpBackendRouterTest         6/6 PASS
 suite totale                 417 PASS
-check-current-docs.py        SUCCESS
+McpBackendRouterTest         6/6 PASS
 ```
 
-### M29-S2 — identité et chemins portables — ✅ PASS
+Contrat : `native|docker`, backend explicite, migration pré-M29 vers native, fail-closed, `minos.exe mcp` stable, Docker indisponible = erreur, aucun fallback Docker→native.
 
-Le code qualifié apporte :
+### S2 — identité portable — ✅ PASS
 
-- mapping typé/versionné `hostRoot ↔ containerRoot` ;
-- runtime location `native|docker` ;
-- registre projet portable via `rootRelativePath` ;
-- UUID projet/workspace conservés ;
-- migration des anciens `rootPath` absolus avec backup `.m29-v1.bak` et remplacement atomique ;
-- tests Windows path ↔ Linux path, même projectId, idempotence et fail-closed hors racine.
+`ProjectPathMappingTest` prouve le mapping host/container, les UUID stables et `rootRelativePath` portable.
 
-Sur le même HEAD :
+### S3 — administration Docker autonome — 🟨
+
+Le Compose sépare :
 
 ```text
-ProjectPathMappingTest       4/4 PASS
-Minos Application            161/161 PASS
-Storage                       42/42 PASS
+minos-mcp
+minos-admin
+minos-bootstrap
+minos-tools-bootstrap
+minos-provider-probe
+minos-provider-tools
 ```
 
-La preuve process native↔Docker réelle est volontairement reportée aux gates d'intégration S3/S5/S8 ; elle n'est pas utilisée pour revendiquer une parité prématurée.
+Le plan query persistant, les bootstraps et le probe restent `network_mode: none`. Les projets sont read-only. Le plan admin éphémère peut résoudre les dépendances du projet et écrit uniquement l'état/caches/staging MINOS.
 
-### M29-S3 — administration Docker autonome — 🟨 STAGING PROUVÉ, INDEX FINAL NON PASS
-
-Le runtime Compose sépare `minos-mcp`, `minos-admin` et `minos-bootstrap`. Les projets restent read-only partout. Le plan query persistant, les bootstraps et le probe provider restent `network_mode: none`; seul le plan admin/indexation éphémère peut disposer d'un egress pour les dépendances du projet. Tous conservent filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs bornés ; seul `/var/lib/minos` est writable dans le plan admin.
-
-Première preuve Docker réelle sur `b780feb7d27bd34952d1952f8d80b06755980684` :
+Première preuve réelle sur :
 
 ```text
-mvnw.cmd clean verify                   BUILD SUCCESS — 13/13
-check-current-docs.py                   SUCCESS
-Docker server / Compose                 29.6.2 / 5.3.1
-Install + Validate                      PASS
-mapping N:/workspace-dev ↔ /workspace/projects   PASS / idempotent
-project list sur home neuf              0 projet
-project add / inspect                   PASS
-index réel                              BLOQUÉ
+b780feb7d27bd34952d1952f8d80b06755980684
 ```
 
-Premier blocage reproduit :
+avec `project add/inspect` puis défaut provider Rust. Les défauts suivants ont été réellement atteints et corrigés successivement : source RO `target/scip-targetroot`, `workspace/mvnw` host-dépendant et tmp Java sous `/tmp` noexec.
+
+Le HEAD `0f5668f8ea10303a5df4cffd0e79376a21979fbd` confirme que ces remédiations tiennent côté image : Maven 3.9.16 et `/run/minos-native` passent le probe offline.
+
+Le S3 sur ce même HEAD a ensuite révélé un défaut différent : la fixture était le monorepo MINOS complet. Discovery sélectionne plusieurs providers, mais `scip-typescript` reçoit la racine du monorepo et échoue car aucun `tsconfig.json`/`package.json` n'existe à cette racine.
+
+Le runner S3 utilise désormais :
 
 ```text
-provider runtime is not ready: rust-analyzer-scip
-missing Rust runtime requirements: cargo, rustc, rust-analyzer
+minos-code-intelligence/fixtures/java/java-multi-module
 ```
 
-S4 a ensuite fourni l'image provider-complete. Après correction de l'écriture `target/scip-targetroot` sur le projet RO, la nouvelle preuve exacte `45536e2fc7d32ed67932e2715e458fa26a8239b1` atteint un vrai workspace writable :
+Cette fixture doit prouver : scip-java réel, Maven image, staging writable, sources RO, `index → READY`, `semantic status`, `hybrid status`, MCP et recreate/persistance.
 
-```text
-/var/lib/minos/runs/70cff100-5b72-4e89-b9d5-26af87c06735/scip-java/workspace
-```
+Le défaut provider→module root du monorepo polyglotte est conservé pour S5.
 
-Le `project add` / `project inspect` passe sur un home Docker neuf, avec `moduleCount=40` et `NEVER_INDEXED`. Le provider échoue ensuite sur :
+### S4 — provider-complete image — ✅ PASS exact-head `0f5668f...`
 
-```text
-Cannot run program ".../scip-java/workspace/mvnw": error=2, No such file or directory
-```
-
-`provider.stdout.log` prouve que `scip-java` choisit `workspace/mvnw`. Le staging provient d'un checkout Windows ; ce wrapper ne doit pas piloter l'exécution Maven Linux. La même trace montre que le provider prépare son `javac` temporaire sous `/tmp/scip-java...`, alors que `/tmp` reste volontairement `noexec`.
-
-Remédiation courante :
-
-- `mvnw` et `mvnw.cmd` exclus du staging Linux ;
-- `.mvn` conservé ;
-- Maven Docker 3.9.16 utilisé depuis `PATH` ;
-- repository Maven sous `/var/lib/minos/cache/maven/repository` ;
-- `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native` ;
-- `/run/minos-native` reste un tmpfs borné `exec` uniquement sur les plans providers ;
-- `/tmp` reste `noexec` ;
-- source `/workspace/projects/...` reste RO.
-
-**S3 reste non-PASS** tant que le HEAD remédié n'a pas obtenu `index → READY`, puis statuts semantic/hybrid, handshake MCP et recreate/persistance.
-
-### M29-S4 — provider-complete image implémentée — ✅ DERNIER PASS `45536e2...`, HEAD COURANT À REQUALIFIER
-
-L'image M29 prépare pendant BUILD les runtimes/providers revendiqués par le catalogue M24 :
+La provider-complete image implémentée prépare :
 
 ```text
 scip-java            0.13.1
@@ -217,94 +146,80 @@ scip-python          0.6.6
 scip-clang           0.4.0
 scip-dotnet          0.2.14
 scip-go              0.2.7
-rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
+rust-analyzer-scip   0.3.2989
+Apache Maven         3.9.16
 ```
 
-Toolchains Docker préparées : JDK 24, Apache Maven 3.9.16, Node 20.20.2, Python 3/pip, .NET SDK 10.0.302, Go 1.26.5, Rust 1.97.1, Coursier et runtimes associés. Le Node 20 est conservé explicitement pour compatibilité avec `scip-typescript 0.4.0`; cette dépendance est enregistrée comme limitation et ne doit pas être masquée.
+La CLI expose `tools verify --all` et le probe offline a prouvé 7/7 providers READY sur `0f5668f8ea10303a5df4cffd0e79376a21979fbd`.
 
-Les providers/toolchains sont téléchargés au BUILD. En RUN, le query MCP, bootstraps et probe restent `network_mode: none`. Les outils providers sont copiés depuis l'image dans un volume Linux Compose `minos-provider-tools`, monté read-only dans `minos-mcp` et `minos-admin`; le business data reste le bind host séparé. L'egress admin n'est autorisé que pour les dépendances déclarées par le projet.
-
-L'image produit aussi :
+Preuve :
 
 ```text
-provider-inventory.json
-provider-binary-sha256.txt
-```
-
-Le workflow `Install`/`Validate` initialise le volume providers et exécute les probes MINOS. La CLI possède `tools verify --all`, qui échoue si **n'importe quel provider annoncé** n'est pas `READY`, sans modifier le comportement historique de `tools verify` côté natif.
-
-Dernière preuve S4 complète :
-
-```text
-HEAD                                   45536e2fc7d32ed67932e2715e458fa26a8239b1
-Maven                                  13/13 SUCCESS
-unit tests                             433 PASS
-ShadedJarSmokeIT                       1 PASS
-check-current-docs.py                  SUCCESS
-Docker image                           31/31 FINISHED
-Apache Maven                           3.9.16
-provider probe offline                 SUCCESS
-providers READY                        7/7
-doctor.ready                           true
+13/13 modules Maven SUCCESS
+433 unit tests + 1 smoke IT PASS
+check-current-docs.py SUCCESS
+Docker image 31/31 FINISHED
+provider probe offline SUCCESS
+7/7 providers READY
+doctor.ready=true
 M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-Le gate exact-head S4 est `scripts/m29/run-s4.ps1`. Les changements ultérieurs `mvnw`/tmpdir modifient la branche ; cette preuve reste valide pour `45536e2...` mais ne qualifie pas automatiquement le HEAD courant.
+Le HEAD courant a avancé avec le runner S3 et la réconciliation documentaire ; il doit être requalifié avant nouveau claim courant.
 
-### Sources projet read-only
+### S5 — prochain travail métier après PASS S3
 
-M29 interdit aux providers de déposer `index.scip` dans la racine source. Les process plans Java, TypeScript, C/C++, C#, Go et Rust routent l'artefact dans le run directory MINOS ; Python le faisait déjà. Rust redirige également `CARGO_TARGET_DIR` hors du projet. Java utilise maintenant un staging writable sous `/var/lib/minos/runs`, sans `mvnw`/`mvnw.cmd`, afin de conserver les sources host read-only et d'utiliser le Maven qualifié de l'image.
+S5 couvre : lifecycle autonome, fingerprint/invalidation, `NONE|FULL|INCREMENTAL`, promotion atomique, recovery, vector store et recherche sémantique/hybride.
 
-### Vector store
-
-MINOS conserve le vector store v2 existant :
+Il inclut désormais explicitement :
 
 ```text
-index-v2.bin
-float32
+provider negotiation
+→ module/build root appropriée
+→ provider executor
 ```
 
-Les snapshots structurés restent autoritatifs et les résultats sémantiques restent `HEURISTIC`. M29 ne crée pas de nouvelle base vectorielle externe et n'introduit pas ANN/HNSW/Lucene/vector DB sans nouvelle mesure.
+pour les monorepos polyglottes.
 
-### Gate courant
+Le vector store existant reste `index-v2.bin` / `float32`, scan exact, résultats `HEURISTIC`.
 
-Le HEAD courant a changé depuis le PASS `45536e2...`. La séquence obligatoire reste :
+### S6/S7/S8
+
+- S6 : clients MCP backend-agnostic Copilot/Claude/Codex ;
+- S7 : installer, switching transactionnel, lifecycle ;
+- S8 : qualification native/Docker machine-readable.
+
+Gate final :
 
 ```text
-run-s4.ps1 exact-head
-→ providers offline READY
-→ run-s3.ps1 sur exactement le même HEAD
-→ projet neuf Docker-only
-→ project add / index / READY
-→ semantic + hybrid status
-→ MCP initialize/tools-list
-→ restart/recreate + persistance
+native result == docker result
 ```
 
-S5 ne sera déclaré commencé qu'après ces preuves.
+Aucun claim de parité avant S8.
 
 ## Limite explicitement ouverte — #98
 
-L'issue #98 reste ouverte : la sandbox OS réelle Windows/Linux du worker distant n'est pas implémentée ni qualifiée.
+#98 reste OPEN. La sandbox OS réelle du worker distant est indépendante de M29 et ne doit pas être revendiquée implicitement.
+
+## Gate courant
 
 ```text
-network DENY sans backend OS prouvé  → fail-closed
-code non fiable                      → non supporté
-claim « sandbox OS réelle »          → interdit
+pull HEAD courant
+→ run-s4.ps1 exact-head
+→ si PASS, run-s3.ps1 même HEAD
+→ fixture Java Maven contrôlée
+→ index READY + semantic/hybrid + MCP + recreate
+→ seulement ensuite S5
 ```
 
-M29 est indépendant de #98 : rendre Docker MCP autonome et paritaire ne constitue pas, à lui seul, une sandbox OS réelle pour les workers distants.
+Aucune PR, GitHub Actions ou merge M29 sans autorisation explicite.
 
-## Sources de vérité opérationnelles
+## Sources de vérité
 
-- état produit : ce fichier ;
-- roadmap : [`ROADMAP.md`](ROADMAP.md) ;
-- convergence M28 : [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md) ;
-- exécution M29 : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md) / #107 ;
-- ADR backend M29 : [`adr/0037-first-class-native-and-docker-runtime-backends.md`](adr/0037-first-class-native-and-docker-runtime-backends.md) ;
-- runtime Docker M29 : [`user/docker-runtime.md`](user/docker-runtime.md) ;
-- installation Windows : [`user/production-installation.md`](user/production-installation.md) ;
-- release 1.0.0 : [`releases/1.0.0.md`](releases/1.0.0.md) ;
-- candidat 1.0.1 : [`releases/1.0.1.md`](releases/1.0.1.md) ;
-- publication autoritative : `scripts/release/publish-windows-release.ps1` ;
-- construction locale sûre : `scripts/release/build-local-windows-candidate.ps1`.
+- état produit : `docs/STATUS.md` ;
+- roadmap : `docs/ROADMAP.md` ;
+- exécution M29 : `docs/roadmap/M29_EXECUTION.md` et issue #107 ;
+- ADR : `docs/adr/0037-first-class-native-and-docker-runtime-backends.md` ;
+- guide Docker : `docs/user/docker-runtime.md` ;
+- release 1.0.0 : `docs/releases/1.0.0.md` ;
+- candidat 1.0.1 : `docs/releases/1.0.1.md`.
