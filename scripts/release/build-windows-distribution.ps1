@@ -118,22 +118,23 @@ function Assert-PackagedRuntimeModules {
     return $Present
 }
 
-# The setup modifies third-party MCP client configuration. Qualify this lifecycle
-# on every Windows distribution build so local candidate builds catch integration
-# regressions without contacting GitHub or publishing anything.
+# The setup modifies third-party MCP client configuration and now owns the
+# transactional native/docker backend lifecycle. Qualify both on every Windows
+# distribution build without contacting GitHub or publishing anything.
 foreach ($Verifier in @(
     'scripts\install\verify-mcp-client-integration.ps1',
-    'scripts\install\verify-mcp-client-preflight.ps1'
+    'scripts\install\verify-mcp-client-preflight.ps1',
+    'scripts\install\verify-mcp-backend-lifecycle.ps1'
 )) {
     $VerifierPath = Join-Path $RepoRoot $Verifier
     if (-not (Test-Path -LiteralPath $VerifierPath -PathType Leaf)) {
-        throw "MINOS MCP client integration verifier not found: $VerifierPath"
+        throw "MINOS MCP integration/lifecycle verifier not found: $VerifierPath"
     }
     try {
         & $VerifierPath
     }
     catch {
-        throw "MINOS native MCP client integration verification failed ($Verifier): $($_.Exception.Message)"
+        throw "MINOS MCP integration/lifecycle verification failed ($Verifier): $($_.Exception.Message)"
     }
 }
 
@@ -305,7 +306,9 @@ foreach ($IntegrationScript in @(
     'configure-mcp-clients-setup.ps1',
     'configure-codex-mcp.ps1',
     'detect-mcp-clients.ps1',
-    'uninstall-mcp-clients.ps1'
+    'uninstall-mcp-clients.ps1',
+    'probe-mcp-backend.ps1',
+    'switch-mcp-backend.ps1'
 )) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts\install\$IntegrationScript") `
         -Destination (Join-Path $IntegrationDirectory $IntegrationScript) -Force
@@ -345,10 +348,15 @@ Quick start:
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
 
-MCP native:
+Stable MCP entrypoint (native or Docker):
   command = <installation>\app\minos.exe
   args    = mcp
   env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+
+Backend selection:
+  integration\switch-mcp-backend.ps1
+  native | docker
+  Docker selection is fail-closed when Docker Desktop is unavailable.
 
 The Windows setup detects supported clients before offering integration:
   - GitHub Copilot for JetBrains / IntelliJ
@@ -357,7 +365,7 @@ The Windows setup detects supported clients before offering integration:
   - Claude Desktop
   - OpenAI Codex CLI / Codex Desktop user configuration
 
-Optional hardened Docker MCP remains separate from native MCP integration.
+Client configuration is backend-agnostic; switching changes MINOS backend state, not client files.
 
 Supply-chain evidence:
   supply-chain\minos.cdx.json
