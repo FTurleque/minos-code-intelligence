@@ -1,27 +1,15 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **EN COURS — S1/S2 qualifiés exact-head ; S3 implémenté, gate Docker réel à exécuter**  
+Statut : **EN COURS — S1/S2 qualifiés exact-head ; S3 prouvé jusqu'au vrai `index` et bloqué par l'absence de runtimes providers ; S4 provider-complete implémenté, qualification exact-head requise**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**
 
 ## Objectif produit
 
-Faire du runtime Docker MINOS un **backend autonome de premier rang**, fonctionnellement équivalent au runtime natif pour :
+Faire du runtime Docker MINOS un **backend autonome de premier rang**, fonctionnellement équivalent au runtime natif pour administration, discovery, providers/indexation, snapshots, persistance, vector store, recherche structurée/sémantique/hybride, architecture/impact/ProgramGraph, MCP, clients IA et lifecycle d'installation.
 
-- administration ;
-- découverte et enregistrement de projets/workspaces ;
-- providers et indexation ;
-- snapshots structurés ;
-- persistance et récupération ;
-- vector store sémantique ;
-- recherche structurée, sémantique et hybride ;
-- architecture, impact, related tests et ProgramGraph ;
-- MCP ;
-- intégrations Copilot / Claude / Codex ;
-- install / upgrade / switching / uninstall.
-
-À la fin de M29, choisir **Natif Windows** ou **Docker isolé** doit changer le lieu d'exécution, pas les capacités métier disponibles ni les résultats attendus.
+À la fin de M29, choisir **Natif Windows** ou **Docker isolé** doit changer le lieu d'exécution, pas les capacités métier ni les résultats attendus.
 
 ## Baseline autoritative au démarrage
 
@@ -38,60 +26,24 @@ branche M29 avant démarrage      ABSENTE
 PR M29                           ABSENTE
 ```
 
-La branche 1.0.1 est 72 commits devant `main` et contient les prérequis installer/MCP/ownership nécessaires à M29. M29 part donc de son HEAD courant, mais **ne peut pas être intégré en contournant la résolution de 1.0.1**.
+M29 dépend des prérequis 1.0.1 installer/MCP/ownership mais **ne peut pas être intégré en contournant la résolution de 1.0.1**. Aucun workflow/PR/merge M29 ne doit être déclenché sans autorisation explicite.
 
-Audit des triggers avant création de branche : les workflows présents sur cette baseline sont déclenchés par `pull_request`, `workflow_dispatch` ou `release`; le one-shot `release-v1.0.0.yml` avec trigger push n'existe plus sur la baseline 1.0.1. Un push sur la branche de travail M29 ne déclenche donc pas de GitHub Action dans cet état. Aucune PR/CI ne doit être déclenchée sans autorisation explicite.
+## Invariants non négociables
 
-## État de départ Docker
-
-Le Docker release pré-M29 savait :
-
-- construire une image MINOS à partir du JAR de release ;
-- démarrer un conteneur durci ;
-- monter les projets en lecture seule sous `/workspace/projects` ;
-- persister un home Docker séparé sous `/var/lib/minos` ;
-- fonctionner avec `network_mode: none` ;
-- exposer une session MCP STDIO via `docker exec -i`.
-
-Mais il n'était **pas autonome ni équivalent au natif** :
-
-- les clients IA étaient configurés vers le MCP natif ;
-- le home Docker pré-M29 était distinct de `%LOCALAPPDATA%\MINOS\data` ;
-- le registre projet pré-M29 persistait des chemins physiques absolus ;
-- l'image Docker n'embarquait pas tous les runtimes/providers nécessaires à l'indexation autonome ;
-- les gates Docker historiques ne prouvaient pas une parité métier complète native/Docker.
-
-## Données et vector store
-
-MINOS possède déjà un **vector store sémantique persistant v2** :
-
-```text
-index-v2.bin
-float32 vector components
-```
-
-Les snapshots structurés restent la source d'autorité et les résultats vectoriels restent `HEURISTIC`.
-
-M29 **ne crée pas une nouvelle base vectorielle externe** par défaut. Il doit :
-
-- rendre les stores existants portables et cohérents côté Docker ;
-- préserver providerId/modelId/dimensions/stableKey/checksum ;
-- reconstruire ou migrer de façon déterministe lorsque nécessaire ;
-- conserver le scan exact actuel tant qu'une mesure ne justifie pas ANN ;
-- ne pas introduire HNSW/Lucene/vector DB tierce sans gate `measure before optimize`.
-
-## Principes non négociables
-
-1. **Docker autonome** : aucun index natif préalable requis.
-2. **Parité métier** : pas de sous-ensemble Docker présenté comme équivalent.
-3. **Identités stables** : UUID projet/workspace indépendants du runtime.
-4. **Chemins portables** : le chemin physique n'est pas une identité portable.
-5. **Snapshots autoritatifs** : le vectoriel ne remplace pas le modèle structuré.
-6. **Runtime offline** : préparation providers pendant build/install ; pas de téléchargement implicite en RUN.
-7. **Sécurité Docker conservée** : `network_mode: none`, projets read-only pour le MCP et l'admin, filesystem read-only quand possible, `cap_drop: ALL`, `no-new-privileges`.
-8. **MCP read-only** pour les agents ; administration/indexation via un plan explicite séparé.
-9. **Clients IA backend-agnostic** : Copilot/Claude/Codex ne connaissent pas le détail du backend.
-10. **Claim de parité interdit sans preuve comparative exact-head**.
+1. Docker autonome : aucun index natif préalable.
+2. Identités projet/workspace stables entre runtimes.
+3. Chemins physiques non utilisés comme identité portable.
+4. Snapshots structurés autoritatifs.
+5. Vector store existant conservé : `index-v2.bin`, composants `float32`, scan exact ; résultats vectoriels `HEURISTIC`.
+6. M29 **ne crée pas une nouvelle base vectorielle externe** et n'introduit ni ANN/HNSW/Lucene/vector DB sans nouvelle mesure.
+7. Providers préparés au BUILD/install ; aucun téléchargement implicite en RUN.
+8. `network_mode: none` en RUN.
+9. Projets read-only dans le plan MCP **et** le plan admin/indexation.
+10. Filesystem conteneur read-only quand possible, `cap_drop: ALL`, `no-new-privileges: true`, tmpfs borné.
+11. MCP query-only séparé du plan admin/indexation.
+12. Copilot / Claude / Codex restent backend-agnostic via `minos.exe mcp`.
+13. Aucun claim de parité sans rapport comparatif exact-head S8.
+14. #98 reste indépendante et OPEN.
 
 ## Architecture cible
 
@@ -111,7 +63,7 @@ MCP Java     docker exec -i
              MCP Java
 ```
 
-Le plan Docker possède désormais en plus un plan d'administration/indexation éphémère :
+Administration Docker :
 
 ```text
 host operator
@@ -131,116 +83,59 @@ MinosLauncher
 |---|---|---|
 | M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
 | M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
-| M29-S3 | Autonomous Docker administration plane | 🟨 implémenté — gate Maven/Docker exact-head requis |
-| M29-S4 | Provider-complete Docker image | ⬜ |
+| M29-S3 | Autonomous Docker administration plane | 🟨 vrai lifecycle atteint ; gate final bloqué par S4 |
+| M29-S4 | Provider-complete Docker image | 🟨 implémenté — `run-s4.ps1` exact-head requis |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
-`🟨` ne signifie pas PASS. Une étape n'est cochée ✅ qu'après preuve exact-head.
+`🟨` ne signifie pas PASS.
 
 ---
 
-## M29-S1 — Backend contract & ADR
+## M29-S1 — Backend contract & ADR — ✅ PASS
 
-### Contrat implémenté
+Implémenté : backend `native|docker`, `<MINOS_HOME>/runtime/backend.properties`, migration pré-M29 vers native explicite, parsing fail-closed, écriture atomique, routage `minos mcp` avant `MinosApplication.open`, probes Docker bornés, `docker exec -i`, aucun fallback Docker→native, ADR-0037.
 
-- enum explicite `native | docker` ;
-- configuration versionnée `<MINOS_HOME>/runtime/backend.properties` ;
-- `formatVersion=1` ;
-- migration d'un home pré-M29 absent de configuration vers `native` **explicite** ;
-- version/backend/propriété inconnus = fail-closed ;
-- écriture atomique ;
-- routage de `minos mcp` avant `MinosApplication.open(...)` ;
-- backend natif = MCP Java in-process ;
-- backend Docker = probe daemon, probe conteneur, puis `docker exec -i` ;
-- timeout de probe borné ;
-- interruption avec terminaison du process enfant ;
-- aucun fallback Docker -> natif ;
-- ADR-0037 accepté pour ce contrat ; ADR-0021 partiellement superseded.
-
-### Preuve exact-head
-
-Qualification Windows reçue le 2 août 2026 sur :
+Preuve exact-head :
 
 ```text
-HEAD c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+HEAD                         c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+mvnw.cmd clean verify        BUILD SUCCESS
+13/13 modules                SUCCESS
+McpBackendRouterTest         6/6 PASS
+suite totale                 417 PASS
+check-current-docs.py        SUCCESS
 ```
-
-Résultats :
-
-```text
-mvnw.cmd clean verify      BUILD SUCCESS
-13/13 modules             SUCCESS
-McpBackendRouterTest      6/6 PASS
-suite totale              417 PASS, 0 failure, 0 error, 0 skipped
-check-current-docs.py     SUCCESS
-```
-
-Le défaut de compilation initial sur le contrat `NativeMcpRunner` a été corrigé avant cette qualification ; le test de propagation checked failure fait partie des 6 cas S1.
-
-**Disposition S1 : ✅ PASS pour le contrat backend et sa qualification locale.** Les handshakes comparatifs natif/Docker complets restent couverts par les gates S3/S6/S8 et ne constituent pas encore une claim de parité.
 
 ---
 
-## M29-S2 — Project identity, path mapping & portable persistence
+## M29-S2 — Project identity, path mapping & portable persistence — ✅ PASS
 
-### Contrat implémenté
-
-Un mapping runtime typé/versionné a été introduit :
+Mapping versionné :
 
 ```text
-hostRoot      ↔ containerRoot
 N:\workspace-dev ↔ /workspace/projects
 ```
 
-Le mapping physique vit sous :
+Le registre portable persiste `rootRelativePath`, conserve projectId/workspaceId, migre les anciens `rootPath` avec backup `.m29-v1.bak` et remplacement atomique, et résout le chemin selon `MINOS_RUNTIME_LOCATION=native|docker`.
+
+Preuve sur le même HEAD :
 
 ```text
-<MINOS_HOME>/runtime/project-paths.properties
+ProjectPathMappingTest       4/4 PASS
+Minos Application            161/161 PASS
+Storage                       42/42 PASS
 ```
 
-Le registre projet, lorsqu'un mapping est actif, persiste :
-
-```text
-rootRelativePath=<racine-relative-portable>
-```
-
-et non plus un `rootPath` absolu comme identité portable.
-
-Un ancien enregistrement `rootPath=<absolu>` :
-
-1. conserve son UUID projet et son workspaceId ;
-2. est résolu contre hostRoot ou containerRoot ;
-3. reçoit une sauvegarde `.m29-v1.bak` ;
-4. est remplacé atomiquement par `rootRelativePath` ;
-5. peut être relu idempotemment.
-
-Le runtime courant est explicite via `minos.runtime.location` / `MINOS_RUNTIME_LOCATION` (`native` par défaut, `docker` dans le conteneur).
-
-### Preuve exact-head
-
-Sur le même HEAD `c7a4e944...` :
-
-```text
-ProjectPathMappingTest    4/4 PASS
-Minos Application         161/161 PASS
-Storage                    42/42 PASS
-build reactor              BUILD SUCCESS
-```
-
-Ces tests couvrent mapping lexical Windows/Linux, rejet hors racine, même fichier registre lu selon le runtime, conservation projectId/workspaceId, migration legacy idempotente et backup.
-
-**Disposition S2 : ✅ PASS pour le contrat de portabilité implémenté.** La preuve process native↔Docker et la persistance réelle après recreate restent des preuves d'intégration S3/S5/S8.
+Les preuves process native↔Docker restent volontairement dans S3/S5/S8.
 
 ---
 
-## M29-S3 — Autonomous Docker administration plane
+## M29-S3 — Autonomous Docker administration plane — 🟨
 
-### Implémentation présente
-
-Le Compose de production sépare désormais trois services :
+### Architecture implémentée
 
 ```text
 minos-mcp        persistent query plane
@@ -248,118 +143,161 @@ minos-admin      ephemeral administration/indexing plane
 minos-bootstrap  ephemeral path-mapping bootstrap
 ```
 
-`minos-mcp` :
+`minos-mcp` : `/var/lib/minos` RO, projets RO, filesystem RO, `network_mode: none`, `cap_drop: ALL`, `no-new-privileges:true`.
 
-- `/var/lib/minos` read-only ;
-- `/workspace/projects` read-only ;
-- filesystem read-only ;
-- `network_mode: none` ;
-- `cap_drop: ALL` ;
-- `no-new-privileges:true` ;
-- session MCP via `docker exec -i`.
+`minos-admin` : état MINOS writable, projets toujours RO, filesystem conteneur RO + tmpfs, même réseau/capabilities/security, invocation éphémère.
 
-`minos-admin` :
+`minos-bootstrap` : crée/idempotence le mapping `project-paths.properties` et refuse un remplacement conflictuel.
 
-- exécute `com.minos.cli.MinosLauncher` ;
-- `/var/lib/minos` writable explicitement ;
-- projets toujours read-only ;
-- filesystem conteneur read-only + tmpfs borné ;
-- même `network_mode: none`, `cap_drop: ALL`, `no-new-privileges:true` ;
-- conteneur éphémère via `docker compose run --rm --no-deps`.
+Surfaces disponibles : `doctor`, `tools list`, `tools verify`, `project add/list/inspect`, `index`, `index-status`, `semantic status`, `hybrid status`, `mcp`.
 
-`minos-bootstrap` :
+### Preuve Docker réelle
 
-- exécute `DockerRuntimeBootstrap` avant les opérations métier ;
-- crée `project-paths.properties` via le store Java versionné ;
-- est idempotent ;
-- refuse de remplacer implicitement un mapping existant différent.
-
-Le workflow packagé ajoute :
+Qualification sur :
 
 ```text
--Action Admin -MinosArguments <...>
+HEAD b780feb7d27bd34952d1952f8d80b06755980684
 ```
 
-et valide pendant `Install`/`Validate` :
+Résultats :
 
 ```text
-docker compose config
-Java image
-bootstrap mapping
-MinosLauncher --help dans minos-admin
+mvnw.cmd clean verify                 BUILD SUCCESS — 13/13
+check-current-docs.py                 SUCCESS
+Docker server                         29.6.2
+Docker Compose                        5.3.1
+Install / Validate                    PASS
+mapping host/container                PASS / idempotent
+project list sur home neuf            count=0
+project add                           PASS
+project inspect                       PASS / NEVER_INDEXED
+index réel                            FAIL provider runtime
 ```
 
-Un wrapper source `docker/scripts/minos-docker.ps1` simplifie l'usage opérateur.
-
-### Surface admin requise
-
-Le plan Docker peut maintenant appeler le CLI stable pour :
+Erreur autoritative :
 
 ```text
-minos doctor
-minos tools list
-minos tools verify
-minos project add
-minos project list
-minos project inspect
-minos index
-minos index-status
-minos semantic status
-minos hybrid status
-minos mcp
+provider runtime is not ready: rust-analyzer-scip
+missing Rust runtime requirements: cargo, rustc, rust-analyzer
 ```
 
-M29 ajoute `semantic status` et `hybrid status` au CLI. Le premier expose l'état du vector store (`DISABLED|NO_ACTIVE_SNAPSHOT|MISSING|STALE|READY`). Le second expose `NO_ACTIVE_SNAPSHOT|READY_STRUCTURED_FALLBACK|READY_WITH_SEMANTIC` sans transformer le signal vectoriel `HEURISTIC` en fait structurel.
+Cette preuve démontre que le plan admin atteint le vrai `index`; elle remplace l'ancien diagnostic Docker daemon arrêté. S3 reste toutefois 🟨 car le gate exige encore `index→READY`, semantic/hybrid status post-index, MCP initialize/tools-list et restart/recreate avec état persistant.
 
-Documentation opérateur : `docs/user/docker-runtime.md`.
-
-### Tests ajoutés
-
-- `DockerRuntimeBootstrapTest` : création, idempotence, refus de remplacement implicite, usage invalide ;
-- `RetrievalStatusCommandTest` : semantic READY, hybrid structured fallback, no-active-snapshot, aide stateless ;
-- `M29DockerAdministrationContractTest` : séparation query/admin, data RO/RW, projets RO, sécurité Docker, bootstrap et workflow packagé.
-
-### Gate S3 restant
-
-Le code S3 n'est **pas encore PASS**. Il faut exécuter sur son HEAD exact :
-
-```text
-mvnw.cmd clean verify
-check-current-docs.py
-docker version
-docker compose config
-Install / Validate
-projet neuf -> Docker seulement -> project add -> index -> READY
-semantic status / hybrid status
-Start -> MCP initialize/tools/list
-restart/recreate -> état persistant
-```
-
-Le daemon Docker `desktop-linux` était arrêté lors de la dernière preuve reçue ; le CLI Docker 29.6.2 était présent mais le pipe `dockerDesktopLinuxEngine` était absent. Ce blocage est environnemental et interdit de déclarer S3 PASS tant qu'une preuve Docker réelle n'est pas fournie.
+Runner : `scripts/m29/run-s3.ps1`.
 
 ---
 
-## M29-S4 — Provider-complete Docker image
+## M29-S4 — Provider-complete Docker image — 🟨 IMPLÉMENTÉ
 
-Inventaire à qualifier contre le catalogue réel M24 :
+### Inventaire contractuel
 
-- Java/Kotlin — `scip-java 0.13.1` ;
-- TypeScript — `scip-typescript 0.4.0` ;
-- Python — `scip-python 0.6.6` ;
-- C/C++ — `scip-clang 0.4.0` ;
-- C# — `scip-dotnet 0.2.14` ;
-- Go — `scip-go 0.2.7` ;
-- Rust — `rust-analyzer-scip 0.3.2989`, release `2026-07-27`, commit `12c3381`.
+```text
+scip-java            0.13.1
+scip-typescript      0.4.0
+scip-python          0.6.6
+scip-clang           0.4.0
+scip-dotnet          0.2.14
+scip-go              0.2.7
+rust-analyzer-scip   0.3.2989 / release 2026-07-27 / commit 12c3381
+```
 
-L'audit initial confirme que plusieurs managers actuels installent encore des artefacts à la demande (`npm`, `dotnet tool install`, `go install`, Coursier). M29 doit déplacer ces téléchargements vers BUILD/préparation contrôlée, enregistrer versions/provenance/checksums/licences/SBOM, puis exécuter offline en RUN.
+### Image préparée
 
-Provider absent/non qualifié dans l'image = capability non revendiquée.
+L'image `docker/Dockerfile.mcp.release` prépare au BUILD :
+
+- JDK 24 avec `javac` ;
+- Coursier + cache pré-résolu pour `scip-java 0.13.1` ;
+- Node 20.20.2 + npm pour `scip-typescript 0.4.0` et `scip-python 0.6.6` ;
+- Python 3 + pip ;
+- `scip-clang 0.4.0` ;
+- .NET SDK 10.0.302 + `scip-dotnet 0.2.14` ;
+- Go 1.26.5 + `scip-go 0.2.7` ;
+- Rust 1.97.1 + `rust-analyzer` release 2026-07-27 / commit 12c3381.
+
+Node 20 est conservé pour la compatibilité déclarée de `scip-typescript 0.4.0`; cette contrainte est inscrite dans l'inventaire et ne constitue pas une généralisation de support Node.
+
+L'image génère :
+
+```text
+/opt/minos/provider-evidence/provider-inventory.json
+/opt/minos/provider-evidence/binary-sha256.txt
+```
+
+### Séparation business state / provider tools
+
+Les outils préparés par l'image sont copiés par `minos-tools-bootstrap` dans un volume Linux Compose :
+
+```text
+minos-provider-tools
+```
+
+`minos-mcp` et `minos-admin` montent ce volume sur `/var/lib/minos/tools` en read-only. Le business state reste dans le bind host `/var/lib/minos`. `minos-tools-bootstrap` est lui-même `network_mode: none`, root filesystem RO, `cap_drop: ALL`, `no-new-privileges:true`; il n'écrit que le volume providers lors de l'initialisation de version.
+
+`Uninstall` supprime ce volume providers géré et l'image, mais préserve le business data bind par défaut.
+
+### Gate capability-honest
+
+La CLI ajoute :
+
+```text
+minos tools verify --all
+```
+
+Le mode historique `tools verify` continue à vérifier seulement les providers `requiredByDefault`. `--all` échoue si n'importe quel provider annoncé n'est pas `READY`.
+
+Le runner `scripts/m29/run-s4.ps1` impose :
+
+```text
+exact HEAD + worktree clean
+Maven clean verify
+check-current-docs.py
+Docker linux/amd64
+Install / Validate
+network_mode:none
+tools verify --all
+providers / doctor
+provider inventory format=1
+7 provider IDs attendus
+checksums non vides
+rapport JSON exact-head
+```
+
+**Aucune disposition PASS S4 avant exécution réelle de ce runner.**
+
+### Projets read-only : artefacts provider
+
+Les providers ne doivent jamais contourner le mount RO en produisant `index.scip` dans les sources. M29 route maintenant les sorties dans le run directory MINOS pour Java, TypeScript, C/C++, C#, Go et Rust ; Python était déjà conforme.
+
+Rust redirige aussi :
+
+```text
+CARGO_TARGET_DIR=<runDirectory>/cargo-target
+```
+
+Tests concernés : `M24PolyglotProcessPlanFactoryTest`, `M29DockerAdministrationContractTest`, `ToolsCommandTest`.
+
+### Après PASS S4
+
+Relancer immédiatement `scripts/m29/run-s3.ps1` sur le **même HEAD**. S3 ne passe que si :
+
+```text
+projet neuf Docker-only
+→ project add
+→ index réel
+→ READY
+→ index-status
+→ semantic/hybrid status
+→ MCP initialize/tools-list
+→ force recreate
+→ registre/index state toujours présents
+→ second handshake MCP
+```
 
 ---
 
 ## M29-S5 — Autonomous indexing & vector lifecycle
 
-À implémenter/qualifier : discovery, fingerprints, invalidation, `NONE|FULL|INCREMENTAL` selon capability, staging/promotion atomique, snapshot précédent conservé sur échec, recovery, vector store v2, semantic/hybrid et restart/upgrade.
+À implémenter/qualifier après S3/S4 : discovery, fingerprints, invalidation, `NONE|FULL|INCREMENTAL` selon capability, staging/promotion atomique, ancien snapshot conservé sur échec, recovery, vector store v2, semantic/hybrid, restart/upgrade.
 
 Gate : premier run FULL→SUCCEEDED/READY ; second run NONE si provider qualifié ; échec provider conserve ancien snapshot ; recovery revient READY.
 
@@ -393,26 +331,13 @@ Clients IA
 [ ] Codex
 ```
 
-Le choix backend est exclusif. Docker Desktop/daemon et racine projets sont validés avant activation.
-
-Switch transactionnel : prepare → validate → handshake → switch config atomique → retire old backend si approprié. Échec = configuration active inchangée/rollback.
-
-Qualifier install, upgrade, reinstall/repair, switch dans les deux sens, uninstall conservation données (défaut) et purge explicite.
+Le choix backend est exclusif. Docker Desktop/daemon et racine projets sont validés avant activation. Le switch est transactionnel : prepare → validate → handshake → config atomique → retrait ancien backend ; échec = configuration active inchangée/rollback.
 
 ---
 
 ## M29-S8 — Native/Docker parity qualification
 
-Même fixture/corpus, rapport machine-readable comparant au minimum :
-
-- registry/workspaces/index state/snapshot identity ;
-- symboles, occurrences, relations, implementations, references ;
-- architecture, impact, related tests, ProgramGraph, source retrieval ;
-- structured/semantic/hybrid/hybrid context ;
-- vector store ;
-- MCP tools/list et réponses représentatives ;
-- restart/recovery ;
-- timings, mémoire, espace disque.
+Même fixture/corpus, rapport machine-readable comparant au minimum : registre/workspaces, index state/snapshot identity, symboles/occurrences/relations, implementations/references, architecture/impact/tests/ProgramGraph/source retrieval, structured/semantic/hybrid, vector store, MCP tools/list/réponses, restart/recovery, timings/mémoire/disque.
 
 Rapport : fixture, backend, provider set, snapshot id, vector model identity, result digest, différences autorisées, mesures, PASS/FAIL.
 
@@ -430,29 +355,19 @@ Aucun claim de parité avant PASS.
 
 ## Relation avec 1.0.1 et #98
 
-1.0.1 reste non publiée au démarrage M29. M29 dépend de ses prérequis installer/MCP mais ne modifie pas l'historique 1.0.x et ne peut être intégré en contournant la résolution de #106.
+1.0.1 reste non publiée au démarrage M29. M29 dépend de ses prérequis installer/MCP mais ne modifie pas l'historique 1.0.x et ne peut être intégré en contournant #106.
 
 #98 reste indépendante : autonomie/parité Docker MCP ≠ sandbox OS réelle des workers distants.
 
 ## Gate bloquant courant
 
-S1/S2 ont une preuve locale exact-head et sont PASS. S3 est désormais implémenté mais n'a encore aucune preuve Maven/Docker sur son nouveau HEAD.
-
-Le dernier diagnostic Docker fourni est :
-
 ```text
-Docker CLI 29.6.2 présent
-context desktop-linux
-Docker daemon indisponible : dockerDesktopLinuxEngine pipe absent
+S4 exact-head sans preuve Docker réelle → pas de PASS S4
+S4 PASS → rerun S3 même HEAD
+S3 sans index READY + MCP + recreate → pas de PASS S3
 ```
 
-Conformément à la méthode M29 :
-
-```text
-S3 sans preuve exact-head Maven + Docker réel -> pas de PASS -> pas de S4
-```
-
-La prochaine action est donc une qualification locale exact-head avec Docker Desktop démarré. Aucune PR/CI ne doit être créée ou déclenchée pour contourner ce gate.
+Aucune PR/CI ne doit être créée ou déclenchée pour contourner ces gates.
 
 ## Définition de terminé
 
@@ -461,11 +376,11 @@ M29 est terminé uniquement lorsque :
 1. Docker indexe un projet neuf sans état natif ;
 2. Docker restaure son état après restart ;
 3. registre/snapshots/vector store sont cohérents et portables ;
-4. le mapping de chemins est qualifié ;
+4. mapping de chemins qualifié ;
 5. tous les providers revendiqués fonctionnent sans réseau en RUN ;
 6. tous les clients MCP supportés peuvent utiliser Docker ;
-7. le même point d'entrée client route proprement vers les deux backends ;
-8. les résultats natif/Docker passent le rapport de parité ;
-9. install/switch/update/uninstall sont qualifiés ;
-10. docs, ADR et guides sont alignés ;
-11. aucune claim de parité n'est publiée avant preuve exact-head.
+7. le même point d'entrée client route vers les deux backends ;
+8. résultats natif/Docker passent le rapport de parité ;
+9. install/switch/update/uninstall qualifiés ;
+10. docs/ADR/guides alignés ;
+11. aucune claim de parité publiée avant preuve exact-head.
