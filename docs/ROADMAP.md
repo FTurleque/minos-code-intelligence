@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **1er août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 planifié pour rendre Docker autonome et paritaire avec le natif.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves d'exécution détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -14,7 +14,8 @@ L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves d'exécution dét
 - les décisions de backend sont guidées par la mesure ;
 - les claims remote/hosted/sandbox restent fail-closed lorsqu'ils ne sont pas prouvés ;
 - une release est immuable : un défaut publié reçoit une version corrective, jamais un retag silencieux ;
-- pour Windows, le binaire packagé et son runtime embarqué doivent être testés, pas seulement le JAR sur un JDK complet.
+- pour Windows, le binaire packagé et son runtime embarqué doivent être testés, pas seulement le JAR sur un JDK complet ;
+- un backend Docker n'est déclaré équivalent au natif qu'après une qualification de parité métier, données, providers, MCP et lifecycle.
 
 ## Trajectoire livrée C0 → M28
 
@@ -81,7 +82,7 @@ Objectifs obligatoires avant publication :
 3. lancer un vrai handshake MCP sur la distribution portable ;
 4. lancer le même handshake sur une installation setup isolée ;
 5. empêcher les smoke tests de toucher une installation MINOS réelle ;
-6. restaurer l'UX d'installation avec page **Intégrations MCP natives** et détection des clients ;
+6. restaurer l'UX d'installation avec détection des clients MCP ;
 7. capability-prober Copilot CLI, Claude Code et Codex CLI ;
 8. prendre en charge Codex Desktop via sa configuration utilisateur lorsque ce mode est détecté ;
 9. préserver, sauvegarder et désinstaller uniquement les configurations appartenant à MINOS ;
@@ -89,7 +90,129 @@ Objectifs obligatoires avant publication :
 11. faire valider visuellement le setup et tester la connexion MCP réelle dans Copilot avant toute publication ;
 12. ne créer `v1.0.1` qu'après autorisation explicite de publication.
 
+Tant que M29 n'est pas qualifié, **1.0.1 ne doit pas présenter Docker comme un backend fonctionnellement équivalent au natif**. Le natif reste le parcours MCP intégré/recommandé ; Docker reste un runtime isolé avancé dont la parité complète est explicitement planifiée.
+
 Voir [`releases/1.0.1.md`](releases/1.0.1.md) et [`user/production-installation.md`](user/production-installation.md).
+
+## M29 — Autonomous Docker Runtime & Native Parity
+
+Issue : **#107**  
+Statut : **PLANIFIÉ — démarrage prévu le 3 août 2026**.  
+Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
+
+### Objectif
+
+Faire de Docker un backend **autonome**, et non un simple conteneur MCP dépendant d'un état préparé ailleurs.
+
+À terme :
+
+```text
+Copilot / Claude / Codex
+          |
+          v
+     minos.exe mcp
+          |
+    backend selection
+       /       \
+      /         \
+ native         docker
+   |              |
+MCP Java     Docker MCP autonome
+```
+
+Le choix de backend ne doit changer que le lieu d'exécution. Les capacités métier, les stores, les tools MCP et les résultats attendus doivent être équivalents aux différences de chemin/provenance explicitement autorisées près.
+
+### Données et vector store
+
+MINOS possède déjà un vector store sémantique persistant v2 :
+
+```text
+index-v2.bin
+float32 vector components
+```
+
+M29 réutilise ce store et les snapshots structurés existants. Il ne crée pas une nouvelle base vectorielle externe par défaut.
+
+Le travail porte sur :
+
+- identité projet/workspace indépendante du runtime ;
+- mapping explicite chemins Windows ↔ chemins conteneur ;
+- portabilité/migration du registre et de l'index state ;
+- snapshots structurés cohérents ;
+- vector store reconstruit/migré de façon déterministe ;
+- provider/model/dimensions/stableKey/checksum préservés ;
+- aucune introduction ANN/HNSW/Lucene/vector DB tierce sans nouvelle mesure.
+
+### Sous-étapes
+
+| Sous-étape | Objet | État |
+|---|---|---|
+| M29-S1 | Backend contract & ADR | ⬜ |
+| M29-S2 | Project identity, path mapping & portable persistence | ⬜ |
+| M29-S3 | Autonomous Docker administration plane | ⬜ |
+| M29-S4 | Provider-complete Docker image | ⬜ |
+| M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
+| M29-S6 | Backend-agnostic MCP client integration | ⬜ |
+| M29-S7 | Installer, switching & lifecycle | ⬜ |
+| M29-S8 | Native/Docker parity qualification | ⬜ |
+
+### Définition de parité
+
+Docker ne sera considéré équivalent que s'il peut, **sans état natif préalable** :
+
+```text
+project add
+→ provider/runtime qualification
+→ index
+→ READY
+→ snapshots
+→ vector store
+→ structured/semantic/hybrid queries
+→ MCP initialize/tools/list
+→ requêtes réelles Copilot/Claude/Codex
+→ restart/recovery
+```
+
+La qualification finale exécutera les mêmes fixtures en natif et Docker et comparera registre, snapshots, symboles, relations, source retrieval, architecture, impact, ProgramGraph, recherche sémantique/hybride, vector store, tools MCP, réponses représentatives et performances.
+
+Gate final :
+
+```text
+native result == docker result
+```
+
+aux seules différences explicitement permises de chemin, provenance et runtime près.
+
+### Runtime providers Docker
+
+L'image Docker doit devenir provider-complete pour les capacités réellement revendiquées. Les outils sont préparés pendant BUILD/install avec versions/provenance/SBOM ; l'exécution qualifiée reste sans réseau :
+
+```text
+réseau contrôlé pendant préparation
+→ providers/runtimes vérifiés
+→ image finale
+→ network_mode: none en RUN
+```
+
+Aucun téléchargement implicite de provider n'est autorisé pendant l'indexation isolée.
+
+### Installer cible après parité
+
+```text
+Mode MCP
+( ) MCP natif Windows — recommandé
+( ) MCP Docker — isolation renforcée
+( ) Ne pas configurer le MCP maintenant
+
+Clients IA
+[ ] Copilot JetBrains
+[ ] Copilot CLI
+[ ] Claude Code
+[ ] Claude Desktop
+[ ] Codex
+```
+
+La page clients devient commune aux backends. `minos.exe mcp` reste le point d'entrée stable et route vers le backend choisi. Les changements native↔Docker doivent être transactionnels avec rollback si le nouveau backend n'est pas qualifié.
 
 ## Reliquat produit explicite
 
@@ -97,13 +220,14 @@ Voir [`releases/1.0.1.md`](releases/1.0.1.md) et [`user/production-installation.
 
 État : **OPEN**.
 
-Le worker distant natif ne revendique toujours pas une sandbox OS pour code non fiable. `DENY` reste fail-closed lorsqu'aucun backend OS qualifié ne peut le garantir. La suite de la roadmap peut implémenter/qualifier les backends Windows et Linux suivis par #98, mais aucun document ni release 1.x ne doit présenter cette capacité comme acquise avant preuve.
+Le worker distant natif ne revendique toujours pas une sandbox OS pour code non fiable. `DENY` reste fail-closed lorsqu'aucun backend OS qualifié ne peut le garantir. M29 est indépendant de #98 : l'autonomie/parité Docker MCP ne constitue pas une sandbox OS des workers distants.
 
-## Prochaine décision produit
+## Séquence de travail
 
-Après validation et publication éventuelle de 1.0.1, deux axes sont séparés :
-
-- maintenance 1.x : correctifs, packaging, ergonomie, compatibilité clients et sécurité sans expansion de claims ;
-- évolution fonctionnelle : nouveaux jalons uniquement après cadrage explicite, sans masquer le reliquat #98.
+1. terminer/qualifier explicitement le candidat 1.0.1 sans lui faire revendiquer une parité Docker inexistante ;
+2. démarrer M29 sur une branche dédiée depuis la base autoritative choisie ;
+3. commencer par M29-S1 (contrat backend + ADR), puis M29-S2 (identité/path mapping/persistance) avant tout raccordement client ;
+4. rendre Docker réellement autonome avant de modifier l'UX pour le présenter comme alternative équivalente ;
+5. ne déclarer M29 terminé qu'après le rapport de parité exact-head.
 
 Aucune `v1.0.1` n'est considérée publiée tant que le tag et la GitHub Release n'existent pas après les gates manuels/automatisés autorisés.
