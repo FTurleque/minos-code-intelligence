@@ -78,6 +78,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("SCIP_GO_VERSION=0.2.7"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_RELEASE=2026-07-27"));
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
+        assertTrue(dockerfile.contains("libicu-dev"),
+                ".NET must run with ICU installed instead of silently enabling invariant globalization");
+        assertFalse(dockerfile.contains("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"),
+                "S4 must not hide missing .NET runtime dependencies behind invariant globalization");
     }
 
     @Test
