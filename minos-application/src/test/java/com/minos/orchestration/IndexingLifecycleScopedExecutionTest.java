@@ -21,6 +21,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,25 +37,7 @@ class IndexingLifecycleScopedExecutionTest {
         Path libArtifact = Files.writeString(root.resolve("lib.scip"), "lib");
 
         List<IndexingExecutionRequest> requests = new ArrayList<>();
-        IndexerExecutor executor = new IndexerExecutor() {
-            @Override
-            public String indexerId() {
-                return "scip-typescript";
-            }
-
-            @Override
-            public IndexingArtifact execute(IndexingExecutionRequest request) {
-                requests.add(request);
-                Path artifact = request.projectRoot().equals(app) ? appArtifact : libArtifact;
-                return new IndexingArtifact(
-                        Language.TYPESCRIPT,
-                        indexerId(),
-                        artifact,
-                        request.projectRelativeRoot()
-                );
-            }
-        };
-
+        IndexerExecutor executor = scopedExecutor(app, appArtifact, libArtifact, requests, new AtomicBoolean(false));
         AtomicReference<IndexSnapshotStageRequest> staged = new AtomicReference<>();
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
                 List.of(executor),
@@ -66,7 +49,92 @@ class IndexingLifecycleScopedExecutionTest {
                 new InMemoryIndexStateStore()
         );
         UUID projectId = UUID.randomUUID();
-        ProjectDiscovery discovery = new ProjectDiscovery(
+        ProjectDiscovery discovery = discovery(root);
+        IndexerNegotiationResult negotiation = negotiation();
+
+        IndexingRun run = lifecycle.execute(projectId, root, discovery, negotiation);
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(2, requests.size());
+        assertTrue(requests.stream().allMatch(request -> request.registeredProjectRoot().equals(root)));
+        assertEquals(
+                List.of(Path.of("ui/app"), Path.of("ui/lib")),
+                requests.stream().map(IndexingExecutionRequest::projectRelativeRoot).toList()
+        );
+        assertEquals(List.of(app, lib), requests.stream().map(IndexingExecutionRequest::projectRoot).toList());
+        assertEquals(
+                List.of(Path.of("ui/app"), Path.of("ui/lib")),
+                staged.get().artifacts().stream().map(IndexingArtifact::projectRelativeRoot).toList()
+        );
+        assertEquals("snapshot-scoped", run.activeSnapshotAfter().orElseThrow());
+    }
+
+    @Test
+    void failedNestedScopeKeepsPreviouslyPromotedProjectSnapshot(@TempDir Path root) throws Exception {
+        Path app = Files.createDirectories(root.resolve("ui/app"));
+        Files.createDirectories(root.resolve("ui/lib"));
+        Path appArtifact = Files.writeString(root.resolve("app.scip"), "app");
+        Path libArtifact = Files.writeString(root.resolve("lib.scip"), "lib");
+        AtomicBoolean failLib = new AtomicBoolean(false);
+        IndexerExecutor executor = scopedExecutor(app, appArtifact, libArtifact, new ArrayList<>(), failLib);
+        InMemoryIndexStateStore stateStore = new InMemoryIndexStateStore();
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(executor),
+                request -> "snapshot-" + request.runId(),
+                (projectId, runId, snapshotId) -> { },
+                stateStore
+        );
+        UUID projectId = UUID.randomUUID();
+        ProjectDiscovery discovery = discovery(root);
+        IndexerNegotiationResult negotiation = negotiation();
+
+        IndexingRun first = lifecycle.execute(projectId, root, discovery, negotiation);
+        assertEquals(IndexingRun.Status.SUCCEEDED, first.status());
+        String stableSnapshot = first.activeSnapshotAfter().orElseThrow();
+
+        failLib.set(true);
+        IndexingRun failed = lifecycle.execute(projectId, root, discovery, negotiation);
+
+        assertEquals(IndexingRun.Status.FAILED, failed.status());
+        assertEquals(stableSnapshot, failed.activeSnapshotBefore().orElseThrow());
+        assertEquals(stableSnapshot, failed.activeSnapshotAfter().orElseThrow());
+        ProjectIndexState state = lifecycle.projectState(projectId);
+        assertEquals(ProjectIndexState.Availability.STALE, state.availability());
+        assertEquals(stableSnapshot, state.activeSnapshotId().orElseThrow());
+    }
+
+    private static IndexerExecutor scopedExecutor(
+            Path app,
+            Path appArtifact,
+            Path libArtifact,
+            List<IndexingExecutionRequest> requests,
+            AtomicBoolean failLib
+    ) {
+        return new IndexerExecutor() {
+            @Override
+            public String indexerId() {
+                return "scip-typescript";
+            }
+
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) {
+                requests.add(request);
+                if (failLib.get() && request.projectRelativeRoot().equals(Path.of("ui/lib"))) {
+                    throw new IllegalStateException("controlled nested provider failure");
+                }
+                Path artifact = request.projectRoot().equals(app) ? appArtifact : libArtifact;
+                return new IndexingArtifact(
+                        Language.TYPESCRIPT,
+                        indexerId(),
+                        artifact,
+                        request.projectRelativeRoot()
+                );
+            }
+        };
+    }
+
+    private static ProjectDiscovery discovery(Path root) {
+        return new ProjectDiscovery(
                 root,
                 "polyglot",
                 Set.of(Language.TYPESCRIPT),
@@ -86,6 +154,9 @@ class IndexingLifecycleScopedExecutionTest {
                         )
                 )
         );
+    }
+
+    private static IndexerNegotiationResult negotiation() {
         IndexerDescriptor descriptor = new IndexerDescriptor(
                 "scip-typescript",
                 "0.4.0",
@@ -98,26 +169,6 @@ class IndexingLifecycleScopedExecutionTest {
                 List.of()
         );
         IndexerSelection selection = new IndexerSelection(Language.TYPESCRIPT, descriptor);
-        IndexerNegotiationResult negotiation = new IndexerNegotiationResult(
-                List.of(selection),
-                Set.of(),
-                List.of()
-        );
-
-        IndexingRun run = lifecycle.execute(projectId, root, discovery, negotiation);
-
-        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
-        assertEquals(2, requests.size());
-        assertTrue(requests.stream().allMatch(request -> request.registeredProjectRoot().equals(root)));
-        assertEquals(
-                List.of(Path.of("ui/app"), Path.of("ui/lib")),
-                requests.stream().map(IndexingExecutionRequest::projectRelativeRoot).toList()
-        );
-        assertEquals(List.of(app, lib), requests.stream().map(IndexingExecutionRequest::projectRoot).toList());
-        assertEquals(
-                List.of(Path.of("ui/app"), Path.of("ui/lib")),
-                staged.get().artifacts().stream().map(IndexingArtifact::projectRelativeRoot).toList()
-        );
-        assertEquals("snapshot-scoped", run.activeSnapshotAfter().orElseThrow());
+        return new IndexerNegotiationResult(List.of(selection), Set.of(), List.of());
     }
 }
