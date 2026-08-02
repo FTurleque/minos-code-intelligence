@@ -52,8 +52,8 @@ function Assert-NativeSuccess {
     return $Result.Output
 }
 
-function Read-Backend([string] $Home) {
-    $Path = Join-Path $Home 'runtime\backend.properties'
+function Read-Backend([string] $DataRoot) {
+    $Path = Join-Path $DataRoot 'runtime\backend.properties'
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
     $Line = [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8) |
         Where-Object { $_ -like 'backend=*' } |
@@ -62,10 +62,10 @@ function Read-Backend([string] $Home) {
     return ($Line -split '=', 2)[1].Trim()
 }
 
-function Assert-Backend([string] $Home, [string] $Expected) {
-    $Actual = Read-Backend -Home $Home
+function Assert-Backend([string] $DataRoot, [string] $Expected) {
+    $Actual = Read-Backend -DataRoot $DataRoot
     if ($Actual -ne $Expected) {
-        throw "M29-S7 backend mismatch: expected $Expected, found '$Actual' in $Home"
+        throw "M29-S7 backend mismatch: expected $Expected, found '$Actual' in $DataRoot"
     }
 }
 
@@ -195,7 +195,7 @@ try {
         -DockerDataRoot (Join-Path $QualificationRoot 'native-unused-docker-data') `
         -DockerContainerName ($ContainerName + '-native-unused') `
         -DockerComposeProject ($ComposeProject + '-native-unused')
-    Assert-Backend -Home $NativeDataRoot -Expected 'native'
+    Assert-Backend -DataRoot $NativeDataRoot -Expected 'native'
     Write-Host 'M29-S7 native-only install SUCCESS' -ForegroundColor Green
 
     # 2) Deterministic same-version native ZIP upgrade.
@@ -208,7 +208,7 @@ try {
         -DockerDataRoot (Join-Path $QualificationRoot 'native-unused-docker-data') `
         -DockerContainerName ($ContainerName + '-native-unused') `
         -DockerComposeProject ($ComposeProject + '-native-unused')
-    Assert-Backend -Home $NativeDataRoot -Expected 'native'
+    Assert-Backend -DataRoot $NativeDataRoot -Expected 'native'
     $NativeBackups = @(Get-ChildItem -LiteralPath $QualificationRoot -Directory -Filter 'native-install.backup-*' -ErrorAction SilentlyContinue)
     if ($NativeBackups.Count -lt 1) {
         throw 'M29-S7 native ZIP upgrade did not preserve a previous installation backup.'
@@ -228,7 +228,7 @@ try {
         -DockerContainerName $ContainerName `
         -DockerComposeProject $ComposeProject
     $DockerInstalled = $true
-    Assert-Backend -Home $DockerHome -Expected 'docker'
+    Assert-Backend -DataRoot $DockerHome -Expected 'docker'
     New-Item -ItemType Directory -Force -Path $DockerDataRoot | Out-Null
     [System.IO.File]::WriteAllText($PreserveSentinel, 'preserve-me', [System.Text.UTF8Encoding]::new($false))
     Write-Host 'M29-S7 Docker-only install SUCCESS' -ForegroundColor Green
@@ -245,7 +245,7 @@ try {
 
     # 4) Docker -> native commits native then retires Docker, preserving data.
     & $Switcher @SwitchCommon -TargetBackend native
-    Assert-Backend -Home $DockerHome -Expected 'native'
+    Assert-Backend -DataRoot $DockerHome -Expected 'native'
     if (-not (Test-Path -LiteralPath $PreserveSentinel -PathType Leaf)) {
         throw 'M29-S7 Docker -> native switch deleted persistent Docker data.'
     }
@@ -254,7 +254,7 @@ try {
     # 5) Native -> Docker must reuse the exact same managed runtime, proving
     # Start + Validate + MCP handshake without a second image build.
     & $Switcher @SwitchCommon -TargetBackend docker -ProjectsRoot $ProjectsRoot
-    Assert-Backend -Home $DockerHome -Expected 'docker'
+    Assert-Backend -DataRoot $DockerHome -Expected 'docker'
     $SwitchState = Get-Content -Raw -LiteralPath (Join-Path $DockerHome 'runtime\backend-switch.json') | ConvertFrom-Json
     if (-not [bool]$SwitchState.reusedDockerRuntime) {
         throw 'M29-S7 native -> Docker did not reuse the qualified managed Docker runtime.'
@@ -263,7 +263,7 @@ try {
 
     # 6) End with native selected and persistent Docker data still present.
     & $Switcher @SwitchCommon -TargetBackend native
-    Assert-Backend -Home $DockerHome -Expected 'native'
+    Assert-Backend -DataRoot $DockerHome -Expected 'native'
 
     # 7) Runtime uninstall must preserve Docker data by default.
     $DockerWorkflow = Join-Path $DockerAppRoot 'docker\scripts\prod-mcp-release.ps1'
