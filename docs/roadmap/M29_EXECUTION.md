@@ -1,6 +1,6 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **EN COURS — S1/S2 qualifiés exact-head ; S3 prouvé jusqu'au vrai `index` et bloqué par l'absence de runtimes providers ; S4 provider-complete implémenté, qualification exact-head requise**  
+Statut : **EN COURS — S1/S2 qualifiés exact-head ; S4 a PASS sur `f39802e...` ; S3 sur ce même HEAD a révélé l'écriture `scip-java target/scip-targetroot` sur source RO ; remédiation staging/Maven implémentée, requalification exact-head S4→S3 requise**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**
@@ -36,8 +36,8 @@ M29 dépend des prérequis 1.0.1 installer/MCP/ownership mais **ne peut pas êtr
 4. Snapshots structurés autoritatifs.
 5. Vector store existant conservé : `index-v2.bin`, composants `float32`, scan exact ; résultats vectoriels `HEURISTIC`.
 6. M29 **ne crée pas une nouvelle base vectorielle externe** et n'introduit ni ANN/HNSW/Lucene/vector DB sans nouvelle mesure.
-7. Providers préparés au BUILD/install ; aucun téléchargement implicite en RUN.
-8. `network_mode: none` en RUN.
+7. Providers/toolchains MINOS préparés au BUILD/install ; aucun téléchargement implicite de provider en RUN. Les dépendances déclarées par un projet compilé peuvent être résolues par le plan admin/indexation éphémère et sont mises en cache uniquement sous `/var/lib/minos`.
+8. `network_mode: none` est obligatoire pour le plan MCP query persistant, le bootstrap mapping, le bootstrap tools et le probe provider offline. Le plan admin/indexation éphémère peut disposer d'un egress de dépendances projet ; cet egress n'est jamais exposé au MCP query.
 9. Projets read-only dans le plan MCP **et** le plan admin/indexation.
 10. Filesystem conteneur read-only quand possible, `cap_drop: ALL`, `no-new-privileges: true`, tmpfs borné.
 11. MCP query-only séparé du plan admin/indexation.
@@ -83,14 +83,14 @@ MinosLauncher
 |---|---|---|
 | M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
 | M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
-| M29-S3 | Autonomous Docker administration plane | 🟨 vrai lifecycle atteint ; gate final bloqué par S4 |
-| M29-S4 | Provider-complete Docker image | 🟨 implémenté — `run-s4.ps1` exact-head requis |
+| M29-S3 | Autonomous Docker administration plane | 🟨 vrai lifecycle atteint ; dernier blocage `scip-java` sur source RO, remédiation implémentée/non qualifiée |
+| M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `f39802e...` ; modifications post-PASS imposent requalification avant nouveau claim courant |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
-`🟨` ne signifie pas PASS.
+`🟨` ne signifie pas PASS. Un PASS sur un ancien HEAD reste une preuve historique mais ne qualifie pas automatiquement un HEAD modifié.
 
 ---
 
@@ -145,15 +145,15 @@ minos-bootstrap  ephemeral path-mapping bootstrap
 
 `minos-mcp` : `/var/lib/minos` RO, projets RO, filesystem RO, `network_mode: none`, `cap_drop: ALL`, `no-new-privileges:true`.
 
-`minos-admin` : état MINOS writable, projets toujours RO, filesystem conteneur RO + tmpfs, même réseau/capabilities/security, invocation éphémère.
+`minos-admin` : état MINOS writable, projets toujours RO, filesystem conteneur RO + tmpfs, `cap_drop: ALL`, `no-new-privileges:true`, invocation éphémère. L'egress n'est disponible que sur ce plan pour résoudre les dépendances du build du projet ; providers et toolchains restent prépackagés.
 
-`minos-bootstrap` : crée/idempotence le mapping `project-paths.properties` et refuse un remplacement conflictuel.
+`minos-bootstrap` : crée/idempotence le mapping `project-paths.properties` et refuse un remplacement conflictuel ; réseau none.
 
 Surfaces disponibles : `doctor`, `tools list`, `tools verify`, `project add/list/inspect`, `index`, `index-status`, `semantic status`, `hybrid status`, `mcp`.
 
-### Preuve Docker réelle
+### Preuves Docker réelles
 
-Qualification sur :
+Première preuve lifecycle sur :
 
 ```text
 HEAD b780feb7d27bd34952d1952f8d80b06755980684
@@ -174,20 +174,46 @@ project inspect                       PASS / NEVER_INDEXED
 index réel                            FAIL provider runtime
 ```
 
-Erreur autoritative :
+Erreur alors autoritative :
 
 ```text
 provider runtime is not ready: rust-analyzer-scip
 missing Rust runtime requirements: cargo, rustc, rust-analyzer
 ```
 
-Cette preuve démontre que le plan admin atteint le vrai `index`; elle remplace l'ancien diagnostic Docker daemon arrêté. S3 reste toutefois 🟨 car le gate exige encore `index→READY`, semantic/hybrid status post-index, MCP initialize/tools-list et restart/recreate avec état persistant.
+S4 a ensuite fourni l'image provider-complete. Sur le HEAD exact `f39802e966370f0934436163eecc180e4d76a271`, le probe provider offline a PASS avec les 7 providers READY. Le S3 rejoué sur ce même HEAD a atteint le vrai `scip-java index` puis échoué avec :
+
+```text
+java.nio.file.FileSystemException:
+/workspace/projects/minos-code-intelligence/target/scip-targetroot: Read-only file system
+```
+
+La stack confirme `Embedded.customJavac → MavenBuildTool.runBuild → IndexCommand`. Ce défaut est distinct des anciens problèmes Coursier/JNA : le provider est lancé correctement, mais son build écrit dans son working tree.
+
+### Remédiation courante
+
+Le process plan Java Linux/Docker crée maintenant un staging writable :
+
+```text
+/var/lib/minos/runs/<run-id>/scip-java/workspace
+```
+
+Les sources d'origine restent montées RO. Les arbres générés préexistants (`target`, `build`, `out`, `node_modules`, caches VCS/IDE) ne sont pas importés. Le `target/scip-targetroot` du provider est créé uniquement dans le staging.
+
+L'image embarque aussi Apache Maven 3.9.16, conforme au contrat MINOS `[3.9,4.0)`. Le repository Maven est confiné :
+
+```text
+MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
+HOME=/var/lib/minos/cache/home
+```
+
+Cette remédiation modifie le HEAD ; S3 ne peut pas passer avant nouvelle qualification S4 puis S3 sur le même HEAD.
 
 Runner : `scripts/m29/run-s3.ps1`.
 
 ---
 
-## M29-S4 — Provider-complete Docker image — 🟨 IMPLÉMENTÉ
+## M29-S4 — Provider-complete Docker image — ✅ PASS HISTORIQUE / REQUALIFICATION COURANTE REQUISE
 
 ### Inventaire contractuel
 
@@ -206,7 +232,8 @@ rust-analyzer-scip   0.3.2989 / release 2026-07-27 / commit 12c3381
 L'image `docker/Dockerfile.mcp.release` prépare au BUILD :
 
 - JDK 24 avec `javac` ;
-- Coursier + cache pré-résolu pour `scip-java 0.13.1` ;
+- Apache Maven 3.9.16 ;
+- Coursier + launcher standalone pour `scip-java 0.13.1` ;
 - Node 20.20.2 + npm pour `scip-typescript 0.4.0` et `scip-python 0.6.6` ;
 - Python 3 + pip ;
 - `scip-clang 0.4.0` ;
@@ -262,7 +289,7 @@ Maven clean verify
 check-current-docs.py
 Docker linux/amd64
 Install / Validate
-network_mode:none
+provider probe network_mode:none
 tools verify --all
 providers / doctor
 provider inventory format=1
@@ -271,21 +298,35 @@ checksums non vides
 rapport JSON exact-head
 ```
 
-**Aucune disposition PASS S4 avant exécution réelle de ce runner.**
+Preuve historique complète :
+
+```text
+HEAD f39802e966370f0934436163eecc180e4d76a271
+13/13 modules Maven SUCCESS
+433 tests PASS
+check-current-docs.py SUCCESS
+Docker image 30/30 FINISHED
+provider probe offline SUCCESS
+7/7 providers READY
+tools verify --all PASS
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
+```
+
+Les changements staging/Maven postérieurs à ce HEAD imposent une nouvelle exécution du runner avant de qualifier la branche courante.
 
 ### Projets read-only : artefacts provider
 
-Les providers ne doivent jamais contourner le mount RO en produisant `index.scip` dans les sources. M29 route maintenant les sorties dans le run directory MINOS pour Java, TypeScript, C/C++, C#, Go et Rust ; Python était déjà conforme.
+Les providers ne doivent jamais contourner le mount RO en produisant `index.scip` ou des outputs de build dans les sources. M29 route les sorties dans le run directory MINOS pour Java, TypeScript, C/C++, C#, Go et Rust ; Python était déjà conforme.
 
-Rust redirige aussi :
+Java utilise désormais un workspace de staging writable sous le run directory. Rust redirige aussi :
 
 ```text
 CARGO_TARGET_DIR=<runDirectory>/cargo-target
 ```
 
-Tests concernés : `M24PolyglotProcessPlanFactoryTest`, `M29DockerAdministrationContractTest`, `ToolsCommandTest`.
+Tests concernés : `ManagedScipProviderRuntimeManagerTest`, `M24PolyglotProcessPlanFactoryTest`, `M29DockerAdministrationContractTest`, `ToolsCommandTest`.
 
-### Après PASS S4
+### Après PASS S4 courant
 
 Relancer immédiatement `scripts/m29/run-s3.ps1` sur le **même HEAD**. S3 ne passe que si :
 
@@ -371,9 +412,10 @@ Aucun claim de parité avant PASS.
 ## Gate bloquant courant
 
 ```text
-S4 exact-head sans preuve Docker réelle → pas de PASS S4
-S4 PASS → rerun S3 même HEAD
-S3 sans index READY + MCP + recreate → pas de PASS S3
+HEAD courant modifié après le PASS S4 f39802e...
+→ rerun S4 exact-head obligatoire
+→ si S4 PASS, rerun S3 sur exactement le même HEAD
+→ S3 sans index READY + MCP + recreate = pas de PASS S3
 ```
 
 Aucune PR/CI ne doit être créée ou déclenchée pour contourner ces gates.
@@ -386,7 +428,7 @@ M29 est terminé uniquement lorsque :
 2. Docker restaure son état après restart ;
 3. registre/snapshots/vector store sont cohérents et portables ;
 4. mapping de chemins qualifié ;
-5. tous les providers revendiqués fonctionnent sans réseau en RUN ;
+5. tous les providers revendiqués sont packagés et passent le probe offline sans téléchargement de provider en RUN ; les dépendances propres aux projets compilés sont résolues uniquement dans le plan admin/indexation éphémère et mises en cache sous `/var/lib/minos` ;
 6. tous les clients MCP supportés peuvent utiliser Docker ;
 7. le même point d'entrée client route vers les deux backends ;
 8. résultats natif/Docker passent le rapport de parité ;
