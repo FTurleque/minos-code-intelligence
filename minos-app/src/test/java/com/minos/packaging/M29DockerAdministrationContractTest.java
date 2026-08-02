@@ -16,17 +16,21 @@ class M29DockerAdministrationContractTest {
         String compose = normalizedText(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
         String query = section(compose, "  minos-mcp:", "  minos-admin:");
         String admin = section(compose, "  minos-admin:", "  minos-bootstrap:");
-        String bootstrap = compose.substring(compose.indexOf("  minos-bootstrap:"));
+        String bootstrap = section(compose, "  minos-bootstrap:", "  minos-tools-bootstrap:");
+        String toolsBootstrap = compose.substring(compose.indexOf("  minos-tools-bootstrap:"));
 
         assertTrue(query.contains("io.minos.runtime-plane: query"));
         assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"),
                 "MCP query plane must mount MINOS business state read-only");
+        assertTrue(query.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
 
         assertTrue(admin.contains("io.minos.runtime-plane: admin"));
         assertTrue(admin.contains("target: /var/lib/minos"));
         assertFalse(admin.contains("target: /var/lib/minos\n        read_only: true"),
                 "admin/indexing plane needs explicit write access to MINOS_HOME");
+        assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"),
+                "provider tools must stay immutable during admin/indexing RUN");
         assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"),
                 "admin/indexing must never make project sources writable");
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
@@ -34,27 +38,65 @@ class M29DockerAdministrationContractTest {
         assertTrue(bootstrap.contains("com.minos.cli.DockerRuntimeBootstrap"));
         assertTrue(bootstrap.contains("configure-project-paths"));
 
-        for (String plane : new String[]{query, admin, bootstrap}) {
+        for (String plane : new String[]{query, admin, bootstrap, toolsBootstrap}) {
             assertTrue(plane.contains("network_mode: none"));
             assertTrue(plane.contains("read_only: true"));
             assertTrue(plane.contains("cap_drop:\n      - ALL"));
             assertTrue(plane.contains("no-new-privileges:true"));
-            assertTrue(plane.contains("MINOS_RUNTIME_LOCATION: docker"));
         }
+        assertTrue(query.contains("MINOS_RUNTIME_LOCATION: docker"));
+        assertTrue(admin.contains("MINOS_RUNTIME_LOCATION: docker"));
+        assertTrue(bootstrap.contains("MINOS_RUNTIME_LOCATION: docker"));
+        assertTrue(toolsBootstrap.contains("io.minos.runtime-plane: tools-bootstrap"));
+        assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
     }
 
     @Test
-    void packagedWorkflowBootstrapsMappingAndExposesAdminAction() throws Exception {
+    void packagedWorkflowBootstrapsMappingProvidersAndExposesAdminAction() throws Exception {
         Path root = repoRoot();
         String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
 
         assertTrue(workflow.contains("'Admin'"));
         assertTrue(workflow.contains("'minos-bootstrap'"));
+        assertTrue(workflow.contains("'minos-tools-bootstrap'"));
         assertTrue(workflow.contains("'minos-admin'"));
+        assertTrue(workflow.contains("'tools', 'list', '--format', 'json'"));
+        assertTrue(workflow.contains("'tools', 'verify', '--format', 'json'"));
+        assertTrue(workflow.contains("provider-inventory.json"));
+        assertTrue(workflow.contains("provider-binary-sha256.txt"));
         assertTrue(workflow.contains("MINOS_HOST_PROJECTS_ROOT"));
-        assertTrue(workflow.contains("formatVersion = 3"));
+        assertTrue(workflow.contains("formatVersion = 4"));
+        assertTrue(workflow.contains("'--volumes'"));
+
+        assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
         assertTrue(dockerfile.contains("MINOS_RUNTIME_LOCATION=docker"));
+        assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
+        assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
+        assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
+        assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
+        assertTrue(dockerfile.contains("SCIP_DOTNET_VERSION=0.2.14"));
+        assertTrue(dockerfile.contains("SCIP_GO_VERSION=0.2.7"));
+        assertTrue(dockerfile.contains("RUST_ANALYZER_RELEASE=2026-07-27"));
+        assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
+    }
+
+    @Test
+    void providerProcessPlansKeepGeneratedIndexesOutOfProjectRoots() throws Exception {
+        Path root = repoRoot();
+        for (String relative : new String[]{
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipTypeScriptProcessPlanFactory.java",
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java",
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory.java",
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory.java",
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory.java",
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"
+        }) {
+            String source = normalizedText(root.resolve(relative));
+            assertTrue(source.contains("runDirectory"), relative + " must route output through the MINOS run directory");
+            assertFalse(source.contains("root.resolve(\"index.scip\")"),
+                    relative + " must not declare index.scip inside read-only project sources");
+        }
     }
 
     @Test
