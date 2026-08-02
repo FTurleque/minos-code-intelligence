@@ -42,7 +42,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
         assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
         assertTrue(providerProbe.contains("scip-java --version"));
-        assertTrue(providerProbe.contains("scip-java version 0.13.1"));
+        assertTrue(providerProbe.contains("scip-java version 0.0.0-SNAPSHOT"),
+                "standalone scip-java reports embedded build metadata rather than the Maven artifact version");
+        assertFalse(providerProbe.contains("scip-java version 0.13.1"),
+                "runtime probe must not claim a version string the standalone executable does not report");
         assertFalse(providerProbe.contains("cs launch org.scip-code:scip-java"),
                 "offline provider probe must not require a mutable Coursier cache");
         assertTrue(providerProbe.contains("scip-typescript/0.4.0"));
@@ -86,6 +89,7 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
+        assertTrue(dockerfile.contains("SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT"));
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_DOTNET_VERSION=0.2.14"));
@@ -98,11 +102,17 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("grep -F \"rust-analyzer ${RUST_ANALYZER_VERSION}\""));
         assertFalse(dockerfile.contains("grep -E \"${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}\""),
                 "rust-analyzer --version does not expose artifact release/commit provenance");
+        assertTrue(dockerfile.contains("cs launch \"org.scip-code:scip-java:${SCIP_JAVA_VERSION}\""));
+        assertTrue(dockerfile.contains("grep -F \"scip-java version ${SCIP_JAVA_VERSION}\" /tmp/scip-java-coordinate.version"),
+                "build must verify the exact Maven coordinate before standalone packaging");
         assertTrue(dockerfile.contains("cs bootstrap \"org.scip-code:scip-java:${SCIP_JAVA_VERSION}\""));
         assertTrue(dockerfile.contains("--standalone"));
         assertTrue(dockerfile.contains("-o /usr/local/bin/scip-java"));
+        assertTrue(dockerfile.contains("grep -F \"scip-java version ${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\" /tmp/scip-java-standalone.version"));
         assertTrue(dockerfile.contains("/usr/local/bin/scip-java"));
         assertTrue(dockerfile.contains("Coursier standalone bootstrap"));
+        assertTrue(dockerfile.contains("\\\"reportedVersion\\\":\\\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\\\""));
+        assertTrue(dockerfile.contains("artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}"));
         assertFalse(dockerfile.contains("COURSIER_CACHE=/opt/minos/coursier-cache"),
                 "runtime image must not depend on a read-only Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
