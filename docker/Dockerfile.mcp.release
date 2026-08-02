@@ -70,7 +70,7 @@ RUN set -eux; \
     maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
     curl -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
     curl -fsSLo /tmp/maven.sha512 "${maven_base}/${maven_archive}.sha512"; \
-    printf '%s  %s\n' "$$(cat /tmp/maven.sha512)" "/tmp/${maven_archive}" | sha512sum -c -; \
+    printf '%s  %s\n' "$(cat /tmp/maven.sha512)" "/tmp/${maven_archive}" | sha512sum -c -; \
     unzip -q "/tmp/${maven_archive}" -d /opt; \
     ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \
     rm -f "/tmp/${maven_archive}" /tmp/maven.sha512; \
