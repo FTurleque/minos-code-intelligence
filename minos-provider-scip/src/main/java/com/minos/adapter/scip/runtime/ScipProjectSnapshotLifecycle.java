@@ -98,7 +98,7 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                             null,
                             descriptor.id(),
                             descriptor.version(),
-                            request.runId() + ":" + descriptor.id() + ":" + scope,
+                            request.runId() + ":" + descriptor.id(),
                             Map.of(),
                             portableRoot
                     ),
