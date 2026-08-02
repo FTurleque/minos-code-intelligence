@@ -185,7 +185,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     }
 
     private static <T> void putUnique(Map<String, T> values, String id, T value, String type) {
-        if (values.putIfAbsent(id, value) != null) {
+        T existing = values.putIfAbsent(id, value);
+        if (existing != null && !existing.equals(value)) {
             throw new IllegalStateException("provider snapshot collision on " + type + " id: " + id);
         }
     }
