@@ -1,4 +1,4 @@
-[CmdletBinding()]
+[CmdletBinding()
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -81,10 +81,11 @@ finally {
 }
 
 # Keep the installer-facing verification chain in one entry point so every
-# Windows distribution build checks detection, Codex Desktop lifecycle and the
-# Inno contract without depending on GitHub Actions.
+# Windows distribution build checks detection, Codex Desktop lifecycle, backend-agnostic
+# client routing and the Inno contract without depending on GitHub Actions.
 foreach ($FollowUp in @(
     'scripts\install\verify-codex-mcp-integration.ps1',
+    'scripts\install\verify-mcp-client-backend-routing.ps1',
     'scripts\install\verify-installer-template.ps1'
 )) {
     $FollowUpPath = Join-Path $RepoRoot $FollowUp
