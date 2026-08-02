@@ -113,6 +113,21 @@ class McpBackendRouterTest {
         assertTrue(processes.attachCommands.isEmpty());
     }
 
+    @Test
+    void nativeBackendPropagatesCheckedMcpFailure(@TempDir Path home) throws Exception {
+        new McpBackendConfigurationStore(home).save(McpBackendConfiguration.nativeDefault());
+        FakeProcessExecutor processes = new FakeProcessExecutor();
+        McpBackendRouter router = new McpBackendRouter(
+                ignored -> { throw new Exception("native MCP failed"); },
+                new DockerMcpTransport(processes));
+
+        Exception failure = assertThrows(Exception.class, () -> router.run(home));
+
+        assertEquals("native MCP failed", failure.getMessage());
+        assertTrue(processes.probeCommands.isEmpty());
+        assertTrue(processes.attachCommands.isEmpty());
+    }
+
     private static McpBackendConfiguration dockerConfiguration() {
         return new McpBackendConfiguration(
                 McpBackendConfiguration.CURRENT_FORMAT_VERSION,
