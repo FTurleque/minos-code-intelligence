@@ -24,7 +24,7 @@ if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) {
 }
 New-Item -ItemType Directory -Force -Path $CandidateHome | Out-Null
 
-function New-ProcessStartInfo([string] $Launcher, [string] $Home) {
+function New-ProcessStartInfo([string] $Launcher, [string] $MinosHome) {
     $Info = New-Object System.Diagnostics.ProcessStartInfo
     if ([System.IO.Path]::GetExtension($Launcher) -ieq '.cmd' -or
         [System.IO.Path]::GetExtension($Launcher) -ieq '.bat') {
@@ -44,7 +44,7 @@ function New-ProcessStartInfo([string] $Launcher, [string] $Home) {
     $Info.RedirectStandardError = $true
     $Info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
     $Info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    $Info.EnvironmentVariables['MINOS_HOME'] = $Home
+    $Info.EnvironmentVariables['MINOS_HOME'] = $MinosHome
     return $Info
 }
 
@@ -77,7 +77,7 @@ function Await-McpResponse(
 }
 
 $Process = New-Object System.Diagnostics.Process
-$Process.StartInfo = New-ProcessStartInfo -Launcher $LauncherPath -Home $CandidateHome
+$Process.StartInfo = New-ProcessStartInfo -Launcher $LauncherPath -MinosHome $CandidateHome
 try {
     if (-not $Process.Start()) {
         throw 'MINOS MCP backend probe process did not start.'
