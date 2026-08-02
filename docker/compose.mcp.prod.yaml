@@ -150,7 +150,7 @@ services:
         /var/lib/minos/tools/scip-go/0.2.7/scip-go --help >/dev/null
         rustc --version
         cargo --version
-        rust-analyzer --version 2>&1 | grep -E "2026-07-27|12c3381"
+        rust-analyzer --version 2>&1 | grep -F "rust-analyzer 0.3.2989"
         echo "MINOS Docker offline provider probe SUCCESS"
     user: "10001:10001"
     init: true
