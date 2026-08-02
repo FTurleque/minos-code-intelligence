@@ -87,13 +87,15 @@ RUN set -eux; \
     rm -f /tmp/scip-clang; \
     scip-clang --version | grep -F "${SCIP_CLANG_VERSION}"
 
+# The standalone rust-analyzer binary reports only its executable version. Release date and
+# commit are artifact provenance and remain pinned by the download URL + provider inventory.
 RUN set -eux; \
     curl -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
     gunzip /tmp/rust-analyzer.gz; \
     install -m 0755 /tmp/rust-analyzer /usr/local/bin/rust-analyzer; \
     rm -f /tmp/rust-analyzer; \
     rust-analyzer --version | tee /tmp/rust-analyzer.version; \
-    grep -E "${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}" /tmp/rust-analyzer.version; \
+    grep -F "rust-analyzer ${RUST_ANALYZER_VERSION}" /tmp/rust-analyzer.version; \
     rm -f /tmp/rust-analyzer.version
 
 RUN set -eux; \
