@@ -33,12 +33,15 @@ public final class RustAnalyzerScipProcessPlanFactory implements IndexerProcessP
         if (!Files.isRegularFile(executable)) {
             throw new IllegalStateException("rust-analyzer executable is missing: " + executable);
         }
-        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Path runRoot = runDirectory.toAbsolutePath().normalize();
+        Path output = runRoot.resolve("index.scip");
+        Path cargoTarget = runRoot.resolve("cargo-target");
         Files.createDirectories(output.getParent());
+        Files.createDirectories(cargoTarget);
         return new IndexerProcessPlan(
                 CommandLocator.invocation(executable, "scip", ".", "--output", output.toString()),
                 root,
-                Map.of(),
+                Map.of("CARGO_TARGET_DIR", cargoTarget.toString()),
                 output,
                 Duration.ofMinutes(30)
         );
