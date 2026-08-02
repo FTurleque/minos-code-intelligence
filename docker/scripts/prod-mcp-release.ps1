@@ -11,6 +11,7 @@ param(
     [string] $DataRoot = '',
     [string] $ProjectsRoot = '',
     [string] $ImageTag = '',
+    [string] $SemanticProvider = '',
     [string[]] $MinosArguments = @(),
 
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
@@ -50,6 +51,17 @@ $ProviderChecksumsFile = Join-Path $RuntimeRoot 'provider-binary-sha256.txt'
 
 function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
+}
+
+function Resolve-SemanticProvider([string] $Requested) {
+    $Value = $Requested
+    if ([string]::IsNullOrWhiteSpace($Value)) { $Value = $env:MINOS_SEMANTIC_PROVIDER }
+    if ([string]::IsNullOrWhiteSpace($Value)) { return 'disabled' }
+    $Normalized = $Value.Trim().ToLowerInvariant()
+    if ($Normalized -notin @('disabled', 'local-hash')) {
+        throw "Packaged Docker semantic provider '$Value' is not qualified by M29. Allowed: disabled, local-hash."
+    }
+    return $Normalized
 }
 
 function Compose([string[]] $Arguments) {
@@ -121,6 +133,7 @@ switch ($Action) {
         $Jar = (Resolve-Path -LiteralPath $Jar).Path
         if ([string]::IsNullOrWhiteSpace($Version)) { throw '-Version is required for Install.' }
         if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) { throw "Projects root does not exist: $ProjectsRoot" }
+        $ResolvedSemanticProvider = Resolve-SemanticProvider $SemanticProvider
 
         New-Item -ItemType Directory -Force -Path $RuntimeRoot, $DataRoot, $BackupsRoot | Out-Null
         if (Test-Path -LiteralPath $MetadataFile) {
@@ -158,6 +171,7 @@ MINOS_PROJECTS_DIR="$(ConvertTo-DockerPath $ProjectsRoot)"
 MINOS_HOST_PROJECTS_ROOT="$(ConvertTo-DockerPath $ProjectsRoot)"
 MINOS_VERSION=$Version
 MINOS_GIT_COMMIT=$Commit
+MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 "@ | Set-Content -LiteralPath $EnvironmentFile -Encoding ascii
 
         Compose @('config', '--quiet')
@@ -170,7 +184,7 @@ MINOS_GIT_COMMIT=$Commit
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
 
         [ordered]@{
-            formatVersion = 4
+            formatVersion = 5
             installedAt = $Timestamp
             image = $Image
             version = $Version
@@ -180,6 +194,7 @@ MINOS_GIT_COMMIT=$Commit
             containerProjectsRoot = '/workspace/projects'
             containerName = $ContainerName
             composeProject = $ComposeProject
+            semanticProvider = $ResolvedSemanticProvider
             providerInventory = $ProviderInventoryFile
             providerChecksums = $ProviderChecksumsFile
             providerToolsVolume = 'minos-provider-tools'
@@ -192,6 +207,7 @@ MINOS_GIT_COMMIT=$Commit
         Write-Host "Image     : $Image"
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
         Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
+        Write-Host "Semantic  : $ResolvedSemanticProvider"
         Write-Host 'Network   : persistent query/bootstrap/provider-probe none; ephemeral admin/indexing may resolve project dependencies'
         Write-Host 'Providers : image-prepared, executable-probed offline, isolated named volume mounted read-only in query/admin planes'
         Write-Host 'Query     : persistent hardened minos-mcp plane; MINOS data read-only; network none'
