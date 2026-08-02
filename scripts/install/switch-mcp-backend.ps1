@@ -177,18 +177,21 @@ function Resolve-DockerRuntimeParameters {
         [string]$Marker['composeProject']
     } else { $DockerComposeProject }
     return [pscustomobject]@{
-        InstallRoot = $ResolvedInstallRoot
-        DataRoot = $ResolvedDataRoot
+        InstallRoot = [System.IO.Path]::GetFullPath($ResolvedInstallRoot)
+        DataRoot = [System.IO.Path]::GetFullPath($ResolvedDataRoot)
         ContainerName = $ResolvedContainer
         ComposeProject = $ResolvedProject
     }
 }
 
-function Invoke-DockerRuntimeAction([ValidateSet('Start', 'Stop')] [string] $Action) {
+function Invoke-DockerRuntimeAction(
+    [ValidateSet('Start', 'Stop')] [string] $Action,
+    [object] $Runtime = $null
+) {
     if (-not (Test-Path -LiteralPath $DockerWorkflowPath -PathType Leaf)) {
         throw "MINOS Docker workflow is missing: $DockerWorkflowPath"
     }
-    $Runtime = Resolve-DockerRuntimeParameters
+    if ($null -eq $Runtime) { $Runtime = Resolve-DockerRuntimeParameters }
     & $DockerWorkflowPath `
         -Action $Action `
         -InstallRoot $Runtime.InstallRoot `
@@ -208,13 +211,51 @@ function Stop-CandidateDockerBestEffort {
     }
 }
 
+function New-DockerRuntimeSnapshot([object] $Runtime) {
+    $SnapshotRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-docker-runtime-rollback-' + [Guid]::NewGuid())
+    New-Item -ItemType Directory -Force -Path $SnapshotRoot | Out-Null
+    $RuntimeSource = Join-Path $Runtime.InstallRoot 'runtime'
+    $RuntimeBackup = Join-Path $SnapshotRoot 'runtime'
+    $RuntimeExisted = Test-Path -LiteralPath $RuntimeSource -PathType Container
+    if ($RuntimeExisted) {
+        Copy-Item -LiteralPath $RuntimeSource -Destination $RuntimeBackup -Recurse -Force
+    }
+    $MarkerExisted = Test-Path -LiteralPath $ManagedMarker -PathType Leaf
+    $MarkerBytes = if ($MarkerExisted) { [System.IO.File]::ReadAllBytes($ManagedMarker) } else { [byte[]]@() }
+    return [pscustomobject]@{
+        Root = $SnapshotRoot
+        Runtime = $Runtime
+        RuntimeExisted = $RuntimeExisted
+        RuntimeBackup = $RuntimeBackup
+        MarkerExisted = $MarkerExisted
+        MarkerBytes = $MarkerBytes
+    }
+}
+
+function Restore-DockerRuntimeSnapshot([object] $Snapshot) {
+    $RuntimeDestination = Join-Path $Snapshot.Runtime.InstallRoot 'runtime'
+    Remove-Item -LiteralPath $RuntimeDestination -Recurse -Force -ErrorAction SilentlyContinue
+    if ($Snapshot.RuntimeExisted) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $RuntimeDestination) | Out-Null
+        Copy-Item -LiteralPath $Snapshot.RuntimeBackup -Destination $RuntimeDestination -Recurse -Force
+    }
+    if ($Snapshot.MarkerExisted) {
+        [System.IO.File]::WriteAllBytes($ManagedMarker, $Snapshot.MarkerBytes)
+    }
+    else {
+        Remove-Item -LiteralPath $ManagedMarker -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $PreviousBackend = Read-CurrentBackend
 $BackendFileExisted = Test-Path -LiteralPath $BackendFile -PathType Leaf
 $BackendFileBytes = if ($BackendFileExisted) { [System.IO.File]::ReadAllBytes($BackendFile) } else { [byte[]]@() }
+$PreviousDockerRuntime = if ($PreviousBackend -eq 'docker') { Resolve-DockerRuntimeParameters } else { $null }
+$DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker') {
+    New-DockerRuntimeSnapshot -Runtime $PreviousDockerRuntime
+} else { $null }
 $CandidateHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-backend-probe-' + [Guid]::NewGuid())
 $Committed = $false
-$RetiredOldDocker = $false
-$StartedAt = [DateTime]::UtcNow
 
 Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend"
 try {
@@ -266,8 +307,7 @@ try {
     # persistent process to retire. Docker is stopped, not uninstalled, so a
     # later switch can reuse its persisted data and setup-owned runtime.
     if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'native') {
-        Invoke-DockerRuntimeAction -Action Stop
-        $RetiredOldDocker = $true
+        Invoke-DockerRuntimeAction -Action Stop -Runtime $PreviousDockerRuntime
         Write-SwitchLog 'RETIRE backend=docker action=stop result=success'
     }
 
@@ -305,9 +345,21 @@ catch {
         }
     }
 
-    if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'native') {
+    if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker') {
         try {
-            Invoke-DockerRuntimeAction -Action Start
+            Stop-CandidateDockerBestEffort
+            Restore-DockerRuntimeSnapshot -Snapshot $DockerRuntimeSnapshot
+            Invoke-DockerRuntimeAction -Action Start -Runtime $PreviousDockerRuntime
+            Write-SwitchLog 'ROLLBACK upgrade=docker runtime=restored action=start result=success'
+        }
+        catch {
+            Write-SwitchLog ("ROLLBACK upgrade=docker result=failure message='" + $_.Exception.Message.Replace("'", "''") + "'")
+            throw "MINOS Docker upgrade failed and the previous Docker runtime could not be restored: $($Failure.Exception.Message); rollback: $($_.Exception.Message)"
+        }
+    }
+    elseif ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'native') {
+        try {
+            Invoke-DockerRuntimeAction -Action Start -Runtime $PreviousDockerRuntime
             Write-SwitchLog 'ROLLBACK backend=docker action=start result=success'
         }
         catch {
@@ -323,4 +375,7 @@ catch {
 }
 finally {
     Remove-Item -LiteralPath $CandidateHome -Recurse -Force -ErrorAction SilentlyContinue
+    if ($null -ne $DockerRuntimeSnapshot) {
+        Remove-Item -LiteralPath $DockerRuntimeSnapshot.Root -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
