@@ -11,11 +11,13 @@ services:
     network_mode: none
     environment:
       MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
     working_dir: /workspace/projects
     volumes:
       - type: bind
         source: "${MINOS_DATA_DIR}"
         target: /var/lib/minos
+        read_only: true
       - type: bind
         source: "${MINOS_PROJECTS_DIR}"
         target: /workspace/projects
@@ -33,3 +35,73 @@ services:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
       io.minos.version: "${MINOS_VERSION}"
       io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: query
+
+  minos-admin:
+    image: "${MINOS_IMAGE}"
+    entrypoint:
+      - java
+      - -cp
+      - /opt/minos/minos.jar
+      - com.minos.cli.MinosLauncher
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+    working_dir: /workspace/projects
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+      - type: bind
+        source: "${MINOS_PROJECTS_DIR}"
+        target: /workspace/projects
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: admin
+
+  minos-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint:
+      - java
+      - -cp
+      - /opt/minos/minos.jar
+      - com.minos.cli.DockerRuntimeBootstrap
+    command:
+      - configure-project-paths
+      - "${MINOS_HOST_PROJECTS_ROOT}"
+      - /workspace/projects
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: bootstrap
