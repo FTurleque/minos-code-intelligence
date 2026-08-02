@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3 ayant atteint le vrai lifecycle Docker et S4 provider-complete implémenté en attente de qualification exact-head, sans claim de parité.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S4 provider-complete PASS sur `45536e2...`, et S3 ayant atteint le vrai `scip-java` depuis le staging writable avant un défaut Maven wrapper/tmpdir désormais remédié mais non encore requalifié, sans claim de parité.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves d'exécution détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -97,7 +97,7 @@ Voir [`releases/1.0.1.md`](releases/1.0.1.md) et [`user/production-installation.
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS exact-head ; S3 atteint le vrai index Docker puis révèle le blocage provider ; S4 implémenté et non encore qualifié.**  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS exact-head ; S4 PASS exact-head `45536e2...` ; S3 atteint le staging writable puis révèle le défaut `workspace/mvnw`/tmpdir, remédié mais non encore requalifié.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -140,8 +140,8 @@ Le travail porte sur identité portable, mapping host/container, registre/index-
 |---|---|---|
 | M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
 | M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
-| M29-S3 | Autonomous Docker administration plane | 🟨 plan réel prouvé jusqu'au `index`; gate final bloqué par S4 |
-| M29-S4 | Provider-complete Docker image | 🟨 implémenté — qualification `run-s4.ps1` requise |
+| M29-S3 | Autonomous Docker administration plane | 🟨 vrai staging/index atteint ; wrapper Maven/tmpdir remédié, requalification requise |
+| M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `45536e2...` ; HEAD courant modifié, rerun requis |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
@@ -163,20 +163,34 @@ ProjectPathMappingTest       4/4 PASS
 check-current-docs.py        SUCCESS
 ```
 
-### S3 — preuve Docker réelle et frontière S4
+### S3 — preuve Docker réelle et progression
 
-Le Compose sépare `minos-mcp`, `minos-admin` et `minos-bootstrap`, avec `network_mode: none`, projets read-only, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs borné. Le plan admin peut écrire l'état MINOS mais pas les sources.
+Le Compose sépare `minos-mcp`, `minos-admin`, `minos-bootstrap`, `minos-tools-bootstrap` et `minos-provider-probe`. Les sources projets restent read-only. Le plan query persistant, les bootstraps et le probe provider restent `network_mode: none`; seul le plan admin/indexation éphémère peut résoudre des dépendances de projet. Filesystem conteneur read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs bornés restent obligatoires.
 
-Sur `b780feb7d27bd34952d1952f8d80b06755980684`, Maven/docs, Docker server/Compose, Install/Validate, mapping, `project list`, `project add` et `project inspect` ont passé. Le vrai `index` a ensuite échoué :
+Sur `b780feb7d27bd34952d1952f8d80b06755980684`, Maven/docs, Docker server/Compose, Install/Validate, mapping, `project list`, `project add` et `project inspect` ont passé. Le vrai `index` a ensuite échoué faute de runtime Rust dans l'image.
+
+Après l'image provider-complete et la remédiation du working tree Java, le S3 sur `45536e2fc7d32ed67932e2715e458fa26a8239b1` atteint :
 
 ```text
-provider runtime is not ready: rust-analyzer-scip
-missing Rust runtime requirements: cargo, rustc, rust-analyzer
+project list = 0
+project add = PASS
+project inspect = PASS / NEVER_INDEXED / moduleCount=40
+workingDirectory=/var/lib/minos/runs/<run-id>/scip-java/workspace
 ```
 
-Cette preuve valide l'accès au lifecycle réel mais ne permet pas de cocher S3 : `index → READY`, MCP et recreate restent requis après S4.
+L'ancienne écriture `/workspace/projects/.../target/scip-targetroot` n'est plus la panne. Le nouvel échec exact est :
 
-### S4 — image provider-complete implémentée
+```text
+Cannot run program ".../scip-java/workspace/mvnw": error=2, No such file or directory
+```
+
+Le wrapper provient d'un checkout Windows et ne doit pas gouverner l'exécution Linux. La trace montre également un shim `javac` généré sous `/tmp/scip-java...`, incompatible avec le tmpfs général `noexec`.
+
+La remédiation exclut `mvnw`/`mvnw.cmd` du staging Linux, conserve `.mvn`, utilise Apache Maven 3.9.16 fourni par l'image et route `java.io.tmpdir`/JNA vers le tmpfs borné exécutable `/run/minos-native`.
+
+Cette preuve valide l'accès au lifecycle réel mais ne permet pas de cocher S3 : `index → READY`, semantic/hybrid, MCP et recreate restent requis.
+
+### S4 — image provider-complete implémentée et qualifiée sur 45536e2
 
 Le catalogue Docker préparé est :
 
@@ -190,11 +204,28 @@ scip-go              0.2.7
 rust-analyzer-scip   0.3.2989 / release 2026-07-27 / commit 12c3381
 ```
 
-L'image prépare les téléchargements/toolchains pendant BUILD, produit `provider-inventory.json` et `provider-binary-sha256.txt`, puis le runtime reste `network_mode: none`. Les outils sont initialisés dans un volume Linux `minos-provider-tools` et montés read-only dans `minos-mcp` et `minos-admin`.
+L'image prépare providers/toolchains pendant BUILD, dont Apache Maven 3.9.16. Elle produit `provider-inventory.json` et `provider-binary-sha256.txt`. Les outils sont initialisés dans un volume Linux `minos-provider-tools` et montés read-only dans `minos-mcp` et `minos-admin`.
 
 La CLI `tools verify --all` rend le gate capability-honest : un provider annoncé mais non `READY` fait échouer S4. Le runner exact-head `scripts/m29/run-s4.ps1` vérifie les sept providers offline ainsi que l'inventaire et les checksums.
 
-Les process plans n'écrivent plus `index.scip` dans les sources read-only : Java, TypeScript, C/C++, C#, Go et Rust utilisent le run directory MINOS ; Python était déjà conforme. Rust redirige aussi `CARGO_TARGET_DIR` hors de la racine projet.
+Preuve exacte :
+
+```text
+HEAD                                   45536e2fc7d32ed67932e2715e458fa26a8239b1
+Maven                                  13/13 SUCCESS
+433 unit tests + 1 smoke IT            PASS
+check-current-docs.py                  SUCCESS
+Docker image                           31/31 FINISHED
+Apache Maven                           3.9.16
+provider probe offline                 SUCCESS
+providers READY                        7/7
+doctor.ready                           true
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
+```
+
+Les changements de remédiation S3 postérieurs à ce SHA imposent un nouveau `run-s4.ps1` exact-head avant de relancer S3.
+
+Les process plans n'écrivent pas `index.scip` dans les sources read-only : Java, TypeScript, C/C++, C#, Go et Rust utilisent le run directory MINOS ; Python était déjà conforme. Rust redirige aussi `CARGO_TARGET_DIR` hors de la racine projet. Java travaille dans un staging writable, sans wrapper Maven host-dépendant.
 
 ### Définition de parité
 
@@ -253,8 +284,8 @@ Le worker distant natif ne revendique toujours pas une sandbox OS pour code non 
 
 1. maintenir la dépendance explicite sur le candidat 1.0.1 sans lui faire revendiquer une parité Docker inexistante ;
 2. S1/S2 sont qualifiés ;
-3. qualifier S4 exact-head avec `run-s4.ps1` ;
-4. si S4 passe, relancer immédiatement `run-s3.ps1` sur le même HEAD jusqu'à `READY` + MCP + recreate ;
+3. requalifier S4 exact-head après le correctif Maven/tmpdir ;
+4. si S4 passe, relancer immédiatement `run-s3.ps1` sur le même HEAD jusqu'à `READY` + semantic/hybrid + MCP + recreate ;
 5. seulement ensuite conduire S5 puis S6/S7/S8 ;
 6. ne déclarer M29 terminé qu'après le rapport de parité exact-head S8 ;
 7. ne créer aucune PR/CI M29 sans autorisation explicite du mainteneur.
