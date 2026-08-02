@@ -9,6 +9,7 @@ ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
 ARG NODE_VERSION=20.20.2
+ARG MAVEN_VERSION=3.9.16
 ARG COURSIER_VERSION=2.1.25-M26
 ARG SCIP_TYPESCRIPT_VERSION=0.4.0
 ARG SCIP_JAVA_VERSION=0.13.1
@@ -61,6 +62,19 @@ RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
     && cargo --version \
     && go version \
     && dotnet --version
+
+# scip-java's Maven build is executed at runtime against a writable staging copy of the project.
+# Package an exact Maven 3.9 line in the image so the provider never depends on a host Maven install.
+RUN set -eux; \
+    maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \
+    maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
+    curl -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
+    curl -fsSLo /tmp/maven.sha512 "${maven_base}/${maven_archive}.sha512"; \
+    printf '%s  %s\n' "$$(cat /tmp/maven.sha512)" "/tmp/${maven_archive}" | sha512sum -c -; \
+    unzip -q "/tmp/${maven_archive}" -d /opt; \
+    ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \
+    rm -f "/tmp/${maven_archive}" /tmp/maven.sha512; \
+    mvn --version | grep -F "Apache Maven ${MAVEN_VERSION}"
 
 # scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line
 # for provider compatibility and expose this limitation in the provider inventory.
@@ -122,8 +136,9 @@ RUN set -eux; \
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
 # embeds the exact 0.13.1 artifact. The standalone launcher still materializes its embedded JAR
-# resources into COURSIER_CACHE at startup; Compose points that cache at writable MINOS/tmp roots
-# while keeping network_mode:none. Mordant/JNA extraction stays isolated in /run/minos-native.
+# resources into COURSIER_CACHE at startup; Compose points that cache at writable MINOS/tmp roots.
+# Project dependency resolution for the real Maven build is a separate indexing concern handled by
+# the ephemeral admin plane; the persistent MCP query plane remains networkless.
 RUN set -eux; \
     export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
     mkdir -p /run/minos-native; \
@@ -150,6 +165,7 @@ RUN set -eux; \
       /usr/local/bin/scip-java \
       /usr/local/bin/scip-clang \
       /usr/local/bin/rust-analyzer \
+      /usr/local/bin/mvn \
       "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet" \
       "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go" \
       > /opt/minos/provider-evidence/binary-sha256.txt; \
@@ -163,9 +179,10 @@ RUN set -eux; \
       '  "platform": "linux/amd64",' \
       "  \"minosVersion\": \"${MINOS_VERSION}\"," \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
-      '  "networkPolicy": "build-only downloads; runtime network none",' \
+      '  "networkPolicy": "provider payload is build-time prepared; persistent query runtime network none; ephemeral indexing may resolve project dependencies",' \
+      "  \"buildTools\": {\"maven\":\"${MAVEN_VERSION}\"}," \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; embedded JARs materialize into a writable runtime COURSIER_CACHE without downloads; JNA extraction is isolated to /run/minos-native\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; embedded JARs materialize into a writable runtime COURSIER_CACHE without provider downloads; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
       "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
