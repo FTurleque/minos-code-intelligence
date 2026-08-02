@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés, S3 atteint le vrai lifecycle Docker puis est bloqué par les runtimes providers ; S4 provider-complete implémenté et à qualifier exact-head.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S4 provider-complete qualifié sur `45536e2...` ; S3 atteint le vrai `scip-java` depuis son staging writable puis révèle un wrapper Maven host-dépendant, remédiation implémentée et requalification S4→S3 requise.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -22,8 +22,8 @@ branche M29                      m29-autonomous-docker-runtime
 baseline M29                     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
 M29-S1                           ✅ PASS exact-head c7a4e944...
 M29-S2                           ✅ PASS exact-head c7a4e944...
-M29-S3                           🟨 plan admin prouvé ; index bloqué par provider image
-M29-S4                           🟨 provider-complete image implémentée ; qualification pending
+M29-S3                           🟨 staging writable prouvé ; dernier échec workspace/mvnw ENOENT
+M29-S4                           ✅ PASS exact-head 45536e2... ; HEAD courant modifié, requalification requise
 M29-S5 → S8                      non démarrés / non qualifiés
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
@@ -92,7 +92,7 @@ M29 n'altère pas ce contrat.
 | M26 — Runtime & Dynamic Intelligence | terminé |
 | M27 — Team / Hosted Mode | terminé avec frontières local-first/no-SaaS explicites |
 | M28 — Production Convergence | terminé ; #93 CLOSED / completed ; PR #102 merged |
-| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS ; S3 runtime atteint ; S4 implémenté en attente de qualification** |
+| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS ; S4 PASS sur 45536e2 ; S3 remédiation Maven/tmpdir à requalifier** |
 
 ## M29 — Docker autonome & Native Parity
 
@@ -155,11 +155,11 @@ Storage                       42/42 PASS
 
 La preuve process native↔Docker réelle est volontairement reportée aux gates d'intégration S3/S5/S8 ; elle n'est pas utilisée pour revendiquer une parité prématurée.
 
-### M29-S3 — administration Docker autonome — 🟨 PLAN PROUVÉ, GATE FINAL BLOQUÉ PAR S4
+### M29-S3 — administration Docker autonome — 🟨 STAGING PROUVÉ, INDEX FINAL NON PASS
 
-Le runtime Compose possède les plans `minos-mcp`, `minos-admin` et `minos-bootstrap`. Les projets restent read-only ; seul le plan admin peut écrire l'état métier `/var/lib/minos`. Tous conservent `network_mode: none`, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs borné.
+Le runtime Compose sépare `minos-mcp`, `minos-admin` et `minos-bootstrap`. Les projets restent read-only partout. Le plan query persistant, les bootstraps et le probe provider restent `network_mode: none`; seul le plan admin/indexation éphémère peut disposer d'un egress pour les dépendances du projet. Tous conservent filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs bornés ; seul `/var/lib/minos` est writable dans le plan admin.
 
-Preuve Docker réelle sur `b780feb7d27bd34952d1952f8d80b06755980684` :
+Première preuve Docker réelle sur `b780feb7d27bd34952d1952f8d80b06755980684` :
 
 ```text
 mvnw.cmd clean verify                   BUILD SUCCESS — 13/13
@@ -172,18 +172,43 @@ project add / inspect                   PASS
 index réel                              BLOQUÉ
 ```
 
-Blocage reproduit :
+Premier blocage reproduit :
 
 ```text
 provider runtime is not ready: rust-analyzer-scip
 missing Rust runtime requirements: cargo, rustc, rust-analyzer
 ```
 
-Cette preuve confirme que le plan S3 atteint bien le vrai lifecycle Docker. **S3 reste néanmoins non-PASS** tant que l'image S4 ne permet pas `index → READY`, puis handshake MCP et recreate/persistance.
+S4 a ensuite fourni l'image provider-complete. Après correction de l'écriture `target/scip-targetroot` sur le projet RO, la nouvelle preuve exacte `45536e2fc7d32ed67932e2715e458fa26a8239b1` atteint un vrai workspace writable :
 
-### M29-S4 — provider-complete Docker image — 🟨 IMPLÉMENTÉ, QUALIFICATION EXACT-HEAD REQUISE
+```text
+/var/lib/minos/runs/70cff100-5b72-4e89-b9d5-26af87c06735/scip-java/workspace
+```
 
-L'image M29 prépare maintenant pendant BUILD les runtimes/providers revendiqués par le catalogue M24 :
+Le `project add` / `project inspect` passe sur un home Docker neuf, avec `moduleCount=40` et `NEVER_INDEXED`. Le provider échoue ensuite sur :
+
+```text
+Cannot run program ".../scip-java/workspace/mvnw": error=2, No such file or directory
+```
+
+`provider.stdout.log` prouve que `scip-java` choisit `workspace/mvnw`. Le staging provient d'un checkout Windows ; ce wrapper ne doit pas piloter l'exécution Maven Linux. La même trace montre que le provider prépare son `javac` temporaire sous `/tmp/scip-java...`, alors que `/tmp` reste volontairement `noexec`.
+
+Remédiation courante :
+
+- `mvnw` et `mvnw.cmd` exclus du staging Linux ;
+- `.mvn` conservé ;
+- Maven Docker 3.9.16 utilisé depuis `PATH` ;
+- repository Maven sous `/var/lib/minos/cache/maven/repository` ;
+- `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native` ;
+- `/run/minos-native` reste un tmpfs borné `exec` uniquement sur les plans providers ;
+- `/tmp` reste `noexec` ;
+- source `/workspace/projects/...` reste RO.
+
+**S3 reste non-PASS** tant que le HEAD remédié n'a pas obtenu `index → READY`, puis statuts semantic/hybrid, handshake MCP et recreate/persistance.
+
+### M29-S4 — provider-complete image implémentée — ✅ DERNIER PASS `45536e2...`, HEAD COURANT À REQUALIFIER
+
+L'image M29 prépare pendant BUILD les runtimes/providers revendiqués par le catalogue M24 :
 
 ```text
 scip-java            0.13.1
@@ -195,9 +220,9 @@ scip-go              0.2.7
 rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 ```
 
-Toolchains Docker préparées : JDK 24, Node 20.20.2, Python 3/pip, .NET SDK 10.0.302, Go 1.26.5, Rust 1.97.1, Coursier et runtimes associés. Le Node 20 est conservé explicitement pour compatibilité avec `scip-typescript 0.4.0`; cette dépendance est enregistrée comme limitation et ne doit pas être masquée.
+Toolchains Docker préparées : JDK 24, Apache Maven 3.9.16, Node 20.20.2, Python 3/pip, .NET SDK 10.0.302, Go 1.26.5, Rust 1.97.1, Coursier et runtimes associés. Le Node 20 est conservé explicitement pour compatibilité avec `scip-typescript 0.4.0`; cette dépendance est enregistrée comme limitation et ne doit pas être masquée.
 
-Les téléchargements sont limités au BUILD. En RUN, `network_mode: none` reste obligatoire. Les outils providers sont copiés depuis l'image dans un volume Linux Compose `minos-provider-tools`, monté read-only dans `minos-mcp` et `minos-admin`; le business data reste le bind host séparé.
+Les providers/toolchains sont téléchargés au BUILD. En RUN, le query MCP, bootstraps et probe restent `network_mode: none`. Les outils providers sont copiés depuis l'image dans un volume Linux Compose `minos-provider-tools`, monté read-only dans `minos-mcp` et `minos-admin`; le business data reste le bind host séparé. L'egress admin n'est autorisé que pour les dépendances déclarées par le projet.
 
 L'image produit aussi :
 
@@ -206,26 +231,29 @@ provider-inventory.json
 provider-binary-sha256.txt
 ```
 
-Le workflow `Install`/`Validate` initialise le volume providers et exécute les probes MINOS. La CLI possède désormais `tools verify --all`, qui échoue si **n'importe quel provider annoncé** n'est pas `READY`, sans modifier le comportement historique de `tools verify` côté natif.
+Le workflow `Install`/`Validate` initialise le volume providers et exécute les probes MINOS. La CLI possède `tools verify --all`, qui échoue si **n'importe quel provider annoncé** n'est pas `READY`, sans modifier le comportement historique de `tools verify` côté natif.
 
-Le gate exact-head S4 est `scripts/m29/run-s4.ps1`. Il exige notamment :
+Dernière preuve S4 complète :
 
 ```text
-Maven + docs PASS
-Docker linux/amd64
-build image provider-complete
-Install / Validate
-network_mode:none
-minos tools verify --all
-provider inventory = 7 providers attendus
-checksums non vides
+HEAD                                   45536e2fc7d32ed67932e2715e458fa26a8239b1
+Maven                                  13/13 SUCCESS
+unit tests                             433 PASS
+ShadedJarSmokeIT                       1 PASS
+check-current-docs.py                  SUCCESS
+Docker image                           31/31 FINISHED
+Apache Maven                           3.9.16
+provider probe offline                 SUCCESS
+providers READY                        7/7
+doctor.ready                           true
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-Aucune disposition PASS S4 n'est enregistrée avant exécution réelle de ce runner.
+Le gate exact-head S4 est `scripts/m29/run-s4.ps1`. Les changements ultérieurs `mvnw`/tmpdir modifient la branche ; cette preuve reste valide pour `45536e2...` mais ne qualifie pas automatiquement le HEAD courant.
 
 ### Sources projet read-only
 
-M29 interdit aux providers de déposer `index.scip` dans la racine source. Les process plans Java, TypeScript, C/C++, C#, Go et Rust routent maintenant l'artefact dans le run directory MINOS ; Python le faisait déjà. Rust redirige également `CARGO_TARGET_DIR` hors du projet. Cette propriété est couverte par les tests M24 et packaging M29.
+M29 interdit aux providers de déposer `index.scip` dans la racine source. Les process plans Java, TypeScript, C/C++, C#, Go et Rust routent l'artefact dans le run directory MINOS ; Python le faisait déjà. Rust redirige également `CARGO_TARGET_DIR` hors du projet. Java utilise maintenant un staging writable sous `/var/lib/minos/runs`, sans `mvnw`/`mvnw.cmd`, afin de conserver les sources host read-only et d'utiliser le Maven qualifié de l'image.
 
 ### Vector store
 
@@ -240,12 +268,12 @@ Les snapshots structurés restent autoritatifs et les résultats sémantiques re
 
 ### Gate courant
 
-Le gate courant est S4, puis retour immédiat au gate S3 sur le **même HEAD** si S4 passe :
+Le HEAD courant a changé depuis le PASS `45536e2...`. La séquence obligatoire reste :
 
 ```text
 run-s4.ps1 exact-head
 → providers offline READY
-→ run-s3.ps1 exact-head
+→ run-s3.ps1 sur exactement le même HEAD
 → projet neuf Docker-only
 → project add / index / READY
 → semantic + hybrid status
