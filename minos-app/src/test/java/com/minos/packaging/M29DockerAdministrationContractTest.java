@@ -26,6 +26,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
         assertFalse(query.contains("/run/minos-native"),
                 "query-only MCP plane must not expose the provider native-extraction tmpfs");
+        assertFalse(query.contains("COURSIER_CACHE:"),
+                "query-only MCP plane must not expose provider runtime caches");
 
         assertTrue(admin.contains("io.minos.runtime-plane: admin"));
         assertTrue(admin.contains("target: /var/lib/minos"));
@@ -33,6 +35,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"));
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
+        assertTrue(admin.contains("COURSIER_CACHE: /var/lib/minos/cache/coursier"),
+                "admin/indexing must materialize standalone Coursier resources only under writable MINOS state");
+        assertTrue(admin.contains("DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home"));
+        assertTrue(admin.contains("NUGET_PACKAGES: /var/lib/minos/cache/nuget"));
         assertTrue(admin.contains("/tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777"));
         assertTrue(admin.contains("/run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777"),
                 "admin/indexing needs only a bounded exec tmpfs for provider native extraction");
@@ -40,11 +46,13 @@ class M29DockerAdministrationContractTest {
         assertTrue(bootstrap.contains("com.minos.cli.DockerRuntimeBootstrap"));
         assertTrue(bootstrap.contains("configure-project-paths"));
         assertFalse(bootstrap.contains("/run/minos-native"));
+        assertFalse(bootstrap.contains("COURSIER_CACHE:"));
         assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
         assertTrue(toolsBootstrap.contains("user: \"0:0\""));
         assertFalse(toolsBootstrap.contains("chown"),
                 "tools bootstrap must not require CAP_CHOWN after cap_drop: ALL");
         assertFalse(toolsBootstrap.contains("/run/minos-native"));
+        assertFalse(toolsBootstrap.contains("COURSIER_CACHE:"));
         assertTrue(providerProbe.contains("user: \"10001:10001\""));
         assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
         assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
@@ -55,8 +63,12 @@ class M29DockerAdministrationContractTest {
         assertFalse(providerProbe.contains("scip-java version 0.13.1"),
                 "runtime probe must not claim a version string the standalone executable does not report");
         assertFalse(providerProbe.contains("cs launch org.scip-code:scip-java"),
-                "offline provider probe must not require a mutable Coursier cache");
-        assertTrue(providerProbe.contains("/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777"));
+                "offline provider probe must not require network-time Coursier resolution");
+        assertTrue(providerProbe.contains("COURSIER_CACHE: /tmp/minos-coursier-cache"),
+                "standalone bootstrap must have a writable ephemeral resource-materialization cache");
+        assertTrue(providerProbe.contains("DOTNET_CLI_HOME: /tmp/minos-dotnet-home"));
+        assertTrue(providerProbe.contains("NUGET_PACKAGES: /tmp/minos-nuget"));
+        assertTrue(providerProbe.contains("/tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777"));
         assertTrue(providerProbe.contains("/run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777"));
         assertTrue(providerProbe.contains("scip-typescript/0.4.0"));
         assertTrue(providerProbe.contains("scip-python/0.6.6"));
@@ -126,9 +138,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("Coursier standalone bootstrap"));
         assertTrue(dockerfile.contains("\\\"reportedVersion\\\":\\\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\\\""));
         assertTrue(dockerfile.contains("artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}"));
+        assertTrue(dockerfile.contains("embedded JARs materialize into a writable runtime COURSIER_CACHE without downloads"));
         assertTrue(dockerfile.contains("JNA extraction is isolated to /run/minos-native"));
         assertFalse(dockerfile.contains("COURSIER_CACHE=/opt/minos/coursier-cache"),
-                "runtime image must not depend on a read-only Coursier cache for scip-java");
+                "runtime image must not depend on a packaged mutable Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
         assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
         assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
