@@ -113,6 +113,14 @@ scip-java version 0.0.0-SNAPSHOT
 
 Cette chaîne est une métadonnée embarquée du launcher et **n'est pas utilisée comme provenance de l'artefact**. `provider-inventory.json` conserve séparément `version=0.13.1` et `reportedVersion=0.0.0-SNAPSHOT`, tandis que `provider-binary-sha256.txt` contient le hash du launcher réellement exécuté. Le probe offline vérifie le retour réel du launcher sans prétendre qu'il expose `0.13.1`.
 
+`scip-java` embarque également Mordant/JNA. JNA doit pouvoir extraire puis charger une bibliothèque native ; le tmpfs général `/tmp` reste volontairement `noexec`. Le launcher standalone est donc construit avec :
+
+```text
+-Djna.tmpdir=/run/minos-native
+```
+
+Les seuls plans qui exécutent des providers (`minos-admin` et `minos-provider-probe`) montent `/run/minos-native` comme tmpfs éphémère, `nosuid,nodev,exec`, borné à 16 MiB. Le plan MCP query n'expose pas ce tmpfs exécutable. Cette exception est limitée au chargement natif du provider et ne rend ni le filesystem conteneur, ni les sources projet, ni le volume providers writable.
+
 ### Limitation Node
 
 `scip-typescript 0.4.0` est préparé avec Node 20.20.2 pour rester sur la ligne Node documentée par ce provider. Cette contrainte est enregistrée dans l'inventaire ; elle ne doit pas être interprétée comme une recommandation générale de Node 20 pour d'autres usages.
