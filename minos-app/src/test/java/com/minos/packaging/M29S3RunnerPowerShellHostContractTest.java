@@ -13,15 +13,26 @@ class M29S3RunnerPowerShellHostContractTest {
 
     @Test
     void s3HandshakeReusesCurrentPowerShellHostInsteadOfAssumingWindowsPowerShellInPath() throws Exception {
-        String runner = normalizedText(repoRoot().resolve("scripts/m29/run-s3.ps1"));
+        Path root = repoRoot();
+        String runner = normalizedText(root.resolve("scripts/m29/run-s3.ps1"));
+        String s4 = normalizedText(root.resolve("scripts/m29/run-s4.ps1"));
 
         assertTrue(runner.contains("function Resolve-PowerShellHost"));
         assertTrue(runner.contains("Get-Process -Id $PID"));
         assertTrue(runner.contains("Join-Path $PSHOME 'pwsh.exe'"));
         assertTrue(runner.contains("Join-Path $PSHOME 'powershell.exe'"));
         assertTrue(runner.contains("Resolve-PowerShellHost"));
+        assertTrue(runner.contains("if ($Current -and -not [string]::IsNullOrWhiteSpace($Current.Path) -and (Test-Path -LiteralPath $Current.Path -PathType Leaf))"),
+                "the current-host probe must remain parseable by Windows PowerShell 5.1");
+        assertFalse(runner.contains("$Current.Path)\n            -and"),
+                "Windows PowerShell 5.1 rejects the historical newline before -and in this if condition");
         assertFalse(runner.contains("(Get-Command powershell.exe -ErrorAction Stop).Source"),
                 "S3 must work from PowerShell 7 hosts where legacy powershell.exe is not on PATH");
+
+        assertTrue(s4.contains("[System.Management.Automation.Language.Parser]::ParseFile"),
+                "S4 must parse the downstream S3 gate before Maven or Docker work");
+        assertTrue(s4.contains("M29-S4 PowerShell parse preflight: run-s3.ps1 OK"));
+        assertTrue(s4.contains("M29-S4 BLOCKED: run-s3.ps1 PowerShell parse failed"));
     }
 
     private static String normalizedText(Path path) throws IOException {
