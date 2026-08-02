@@ -44,6 +44,18 @@ $Dirty = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'status'
 if (-not [string]::IsNullOrWhiteSpace($Dirty)) { throw "M29-S4 requires a clean worktree. Dirty entries:`n$Dirty" }
 Write-Host "M29-S4 exact HEAD: $Head" -ForegroundColor Cyan
 
+# Fail before Maven/Docker if the downstream S3 gate is not syntactically valid on the
+# current Windows PowerShell host. This closes the gap where Java contract tests could pass
+# while run-s3.ps1 itself still contained a parser error.
+$S3Runner = Join-Path $RepoRoot 'scripts\m29\run-s3.ps1'
+$ParseTokens = $null
+$ParseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile($S3Runner, [ref] $ParseTokens, [ref] $ParseErrors) | Out-Null
+if ($ParseErrors.Count -gt 0) {
+    throw "M29-S4 BLOCKED: run-s3.ps1 PowerShell parse failed: $($ParseErrors[0].Message)"
+}
+Write-Host 'M29-S4 PowerShell parse preflight: run-s3.ps1 OK' -ForegroundColor Cyan
+
 if (-not $SkipMavenVerify) {
     Push-Location $RepoRoot
     try {
