@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -15,7 +16,8 @@ public record ScipSymbolSnapshotRequest(
         String providerId,
         String providerVersion,
         String indexRunId,
-        Map<String, String> fileIdsByRelativePath
+        Map<String, String> fileIdsByRelativePath,
+        String projectRelativeRoot
 ) {
     public ScipSymbolSnapshotRequest {
         Objects.requireNonNull(projectId, "projectId");
@@ -27,6 +29,33 @@ public record ScipSymbolSnapshotRequest(
         fileIdsByRelativePath = fileIdsByRelativePath == null
                 ? Map.of()
                 : Map.copyOf(fileIdsByRelativePath);
+        projectRelativeRoot = normalizeRelativeRoot(projectRelativeRoot);
+    }
+
+    /** Compatibility constructor for historical project-root SCIP imports. */
+    public ScipSymbolSnapshotRequest(
+            UUID projectId,
+            String snapshotId,
+            String moduleId,
+            String providerId,
+            String providerVersion,
+            String indexRunId,
+            Map<String, String> fileIdsByRelativePath
+    ) {
+        this(projectId, snapshotId, moduleId, providerId, providerVersion, indexRunId,
+                fileIdsByRelativePath, "");
+    }
+
+    private static String normalizeRelativeRoot(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        Path path = Path.of(value.replace('\\', '/')).normalize();
+        if (path.isAbsolute() || path.startsWith("..")) {
+            throw new IllegalArgumentException("projectRelativeRoot must stay inside the registered project");
+        }
+        String portable = path.toString().replace('\\', '/');
+        return ".".equals(portable) ? "" : portable;
     }
 
     private static String blankToNull(String value) {
