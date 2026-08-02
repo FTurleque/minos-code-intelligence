@@ -67,6 +67,17 @@ class ManagedScipProviderRuntimeManagerTest {
     }
 
     @Test
+    void createsStandaloneScipJavaCommandWithoutCoursierRuntimeDependency() {
+        Path launcher = temporaryDirectory.resolve("scip-java");
+        Path output = temporaryDirectory.resolve("run").resolve("index.scip");
+
+        assertEquals(List.of(
+                launcher.toAbsolutePath().normalize().toString(),
+                "index", "--output", output.toAbsolutePath().normalize().toString()
+        ), ScipJavaProcessPlanFactory.standaloneCommand(launcher, output));
+    }
+
+    @Test
     void requiresThePinnedVersionInTheInstallationProbeLog() throws IOException {
         Path validLog = temporaryDirectory.resolve("valid.log");
         Path invalidLog = temporaryDirectory.resolve("invalid.log");
