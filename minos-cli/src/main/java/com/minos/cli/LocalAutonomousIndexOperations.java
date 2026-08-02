@@ -103,8 +103,19 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 .toList();
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore);
         IndexingRun run = forceFull
-                ? lifecycle.execute(prepared.project().id(), prepared.project().rootPath(), prepared.negotiation())
-                : lifecycle.executePlanned(prepared.project().id(), prepared.project().rootPath(), prepared.negotiation(), prepared.plan())
+                ? lifecycle.execute(
+                        prepared.project().id(),
+                        prepared.project().rootPath(),
+                        prepared.discovery(),
+                        prepared.negotiation()
+                )
+                : lifecycle.executePlanned(
+                                prepared.project().id(),
+                                prepared.project().rootPath(),
+                                prepared.discovery(),
+                                prepared.negotiation(),
+                                prepared.plan()
+                        )
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
             throw new IllegalStateException("indexing run " + run.id() + " failed: "
@@ -191,7 +202,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 discovery.languages().stream().map(Enum::name).sorted().toList(),
                 discovery.buildSystems().stream().map(Enum::name).sorted().toList(),
                 providers, runtimes, effectiveMode, reasons, forceFull ? List.of() : plan.changedFiles(), forceFull);
-        return new Prepared(project, negotiation, plan, indexState, current, view);
+        return new Prepared(project, discovery, negotiation, plan, indexState, current, view);
     }
 
     private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
@@ -214,6 +225,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
 
     private record Prepared(
             RegisteredProject project,
+            ProjectDiscovery discovery,
             IndexerNegotiationResult negotiation,
             IncrementalIndexingPlan plan,
             ProjectIndexState indexState,
