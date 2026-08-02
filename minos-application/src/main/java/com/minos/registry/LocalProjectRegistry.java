@@ -21,25 +21,49 @@ import java.util.UUID;
 /**
  * Registre local file-backed pour les identités projet/workspace de M1.
  *
- * <p>Les UUID sont attribués aléatoirement puis persistés. Le chemin d'un projet
- * sert uniquement à retrouver un enregistrement existant et n'est jamais
- * transformé en identifiant métier.</p>
+ * <p>Depuis M29, lorsqu'un mapping runtime est configuré, les UUID restent les identités
+ * autoritatives et le registre persiste uniquement une racine projet relative portable.
+ * Le chemin physique est résolu à l'ouverture pour le runtime natif ou Docker courant.</p>
  */
 public final class LocalProjectRegistry {
 
     private static final String PROJECTS_DIRECTORY = "projects";
     private static final String WORKSPACES_DIRECTORY = "workspaces";
+    private static final String LEGACY_ROOT_PATH = "rootPath";
+    private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
 
     private final Path storageRoot;
     private final Path projectsDirectory;
     private final Path workspacesDirectory;
+    private final Optional<ProjectPathMapping> pathMapping;
+    private final ProjectPathMapping.RuntimeLocation runtimeLocation;
 
     public LocalProjectRegistry(Path storageRoot) throws IOException {
-        this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot")
-                .toAbsolutePath()
-                .normalize();
+        this(
+                storageRoot,
+                loadPathMapping(storageRoot),
+                ProjectPathMapping.resolveRuntimeLocation(System.getenv(), System.getProperties())
+        );
+    }
+
+    public LocalProjectRegistry(
+            Path storageRoot,
+            ProjectPathMapping pathMapping,
+            ProjectPathMapping.RuntimeLocation runtimeLocation
+    ) throws IOException {
+        this(storageRoot, Optional.of(Objects.requireNonNull(pathMapping, "pathMapping")), runtimeLocation);
+    }
+
+    private LocalProjectRegistry(
+            Path storageRoot,
+            Optional<ProjectPathMapping> pathMapping,
+            ProjectPathMapping.RuntimeLocation runtimeLocation
+    ) throws IOException {
+        this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
         this.projectsDirectory = this.storageRoot.resolve(PROJECTS_DIRECTORY);
         this.workspacesDirectory = this.storageRoot.resolve(WORKSPACES_DIRECTORY);
+        this.pathMapping = Objects.requireNonNull(pathMapping, "pathMapping");
+        this.runtimeLocation = Objects.requireNonNull(runtimeLocation, "runtimeLocation");
         Files.createDirectories(projectsDirectory);
         Files.createDirectories(workspacesDirectory);
     }
@@ -51,19 +75,11 @@ public final class LocalProjectRegistry {
         Optional<RegisteredProject> existing = listProjects().stream()
                 .filter(project -> project.rootPath().equals(canonicalRoot))
                 .findFirst();
-        if (existing.isPresent()) {
-            return existing.get();
-        }
+        if (existing.isPresent()) return existing.get();
 
         Instant now = Instant.now();
         RegisteredProject project = new RegisteredProject(
-                UUID.randomUUID(),
-                canonicalRoot,
-                displayName,
-                Optional.empty(),
-                now,
-                now
-        );
+                UUID.randomUUID(), canonicalRoot, displayName, Optional.empty(), now, now);
         writeProject(project);
         return project;
     }
@@ -72,12 +88,7 @@ public final class LocalProjectRegistry {
         validateName(name, "name");
         Instant now = Instant.now();
         RegisteredWorkspace workspace = new RegisteredWorkspace(
-                UUID.randomUUID(),
-                name,
-                List.of(),
-                now,
-                now
-        );
+                UUID.randomUUID(), name, List.of(), now, now);
         writeWorkspace(workspace);
         return workspace;
     }
@@ -85,24 +96,14 @@ public final class LocalProjectRegistry {
     public synchronized RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(workspaceId, "workspaceId");
-
         RegisteredProject project = findProject(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
         findWorkspace(workspaceId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown workspace: " + workspaceId));
-
-        if (project.workspaceId().filter(workspaceId::equals).isPresent()) {
-            return project;
-        }
-
+        if (project.workspaceId().filter(workspaceId::equals).isPresent()) return project;
         RegisteredProject updated = new RegisteredProject(
-                project.id(),
-                project.rootPath(),
-                project.displayName(),
-                Optional.of(workspaceId),
-                project.createdAt(),
-                Instant.now()
-        );
+                project.id(), project.rootPath(), project.displayName(), Optional.of(workspaceId),
+                project.createdAt(), Instant.now());
         writeProject(updated);
         return updated;
     }
@@ -111,19 +112,10 @@ public final class LocalProjectRegistry {
         Objects.requireNonNull(projectId, "projectId");
         RegisteredProject project = findProject(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
-
-        if (project.workspaceId().isEmpty()) {
-            return project;
-        }
-
+        if (project.workspaceId().isEmpty()) return project;
         RegisteredProject updated = new RegisteredProject(
-                project.id(),
-                project.rootPath(),
-                project.displayName(),
-                Optional.empty(),
-                project.createdAt(),
-                Instant.now()
-        );
+                project.id(), project.rootPath(), project.displayName(), Optional.empty(),
+                project.createdAt(), Instant.now());
         writeProject(updated);
         return updated;
     }
@@ -131,37 +123,26 @@ public final class LocalProjectRegistry {
     public synchronized Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         Path file = projectsDirectory.resolve(projectId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
-        }
+        if (!Files.isRegularFile(file)) return Optional.empty();
         return Optional.of(readProject(file));
     }
 
     public synchronized Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Path file = workspacesDirectory.resolve(workspaceId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
-        }
+        if (!Files.isRegularFile(file)) return Optional.empty();
         WorkspaceMetadata metadata = readWorkspaceMetadata(file);
         List<UUID> projectIds = listProjects().stream()
                 .filter(project -> project.workspaceId().filter(workspaceId::equals).isPresent())
                 .map(RegisteredProject::id)
                 .toList();
         return Optional.of(new RegisteredWorkspace(
-                metadata.id(),
-                metadata.name(),
-                projectIds,
-                metadata.createdAt(),
-                metadata.updatedAt()
-        ));
+                metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
     }
 
     public synchronized List<RegisteredProject> listProjects() throws IOException {
         List<RegisteredProject> projects = new ArrayList<>();
-        for (Path file : propertyFiles(projectsDirectory)) {
-            projects.add(readProject(file));
-        }
+        for (Path file : propertyFiles(projectsDirectory)) projects.add(readProject(file));
         projects.sort(Comparator.comparing(project -> project.id().toString()));
         return List.copyOf(projects);
     }
@@ -176,25 +157,31 @@ public final class LocalProjectRegistry {
                     .map(RegisteredProject::id)
                     .toList();
             workspaces.add(new RegisteredWorkspace(
-                    metadata.id(),
-                    metadata.name(),
-                    projectIds,
-                    metadata.createdAt(),
-                    metadata.updatedAt()
-            ));
+                    metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
         }
         workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));
         return List.copyOf(workspaces);
     }
 
-    public Path storageRoot() {
-        return storageRoot;
-    }
+    public Path storageRoot() { return storageRoot; }
+    public Optional<ProjectPathMapping> pathMapping() { return pathMapping; }
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() { return runtimeLocation; }
 
     private void writeProject(RegisteredProject project) throws IOException {
         Properties properties = new Properties();
         properties.setProperty("id", project.id().toString());
-        properties.setProperty("rootPath", project.rootPath().toString());
+        if (pathMapping.isPresent()) {
+            try {
+                properties.setProperty(
+                        PORTABLE_ROOT_PATH,
+                        pathMapping.orElseThrow().relativeForPhysical(project.rootPath(), runtimeLocation));
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("project path cannot be represented by configured runtime mapping: "
+                        + project.rootPath(), exception);
+            }
+        } else {
+            properties.setProperty(LEGACY_ROOT_PATH, project.rootPath().toString());
+        }
         properties.setProperty("displayName", project.displayName());
         properties.setProperty("workspaceId", project.workspaceId().map(UUID::toString).orElse(""));
         properties.setProperty("createdAt", project.createdAt().toString());
@@ -211,18 +198,65 @@ public final class LocalProjectRegistry {
         writePropertiesAtomically(workspacesDirectory.resolve(workspace.id() + ".properties"), properties);
     }
 
-    private static RegisteredProject readProject(Path file) throws IOException {
+    private RegisteredProject readProject(Path file) throws IOException {
         Properties properties = readProperties(file);
         UUID id = UUID.fromString(required(properties, "id", file));
-        Path rootPath = Path.of(required(properties, "rootPath", file)).toAbsolutePath().normalize();
+        String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
+        String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
+        if (!relativeRoot.isEmpty() && !legacyRoot.isEmpty()) {
+            throw new IOException("registry project contains both legacy and portable roots: " + file);
+        }
+
+        Path rootPath;
+        boolean migrateLegacy = false;
+        if (!relativeRoot.isEmpty()) {
+            ProjectPathMapping mapping = pathMapping.orElseThrow(() ->
+                    new IOException("portable project registry requires runtime path mapping: " + file));
+            try {
+                rootPath = mapping.resolve(relativeRoot, runtimeLocation);
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("invalid portable project root in " + file, exception);
+            }
+        } else {
+            if (legacyRoot.isEmpty()) throw new IOException("missing registry project root in " + file);
+            if (pathMapping.isPresent()) {
+                try {
+                    String migratedRelative = pathMapping.orElseThrow().relativeForLegacyPath(legacyRoot);
+                    rootPath = pathMapping.orElseThrow().resolve(migratedRelative, runtimeLocation);
+                    relativeRoot = migratedRelative;
+                    migrateLegacy = true;
+                } catch (IllegalArgumentException exception) {
+                    throw new IOException("legacy project root cannot be migrated with configured mapping: "
+                            + legacyRoot, exception);
+                }
+            } else {
+                rootPath = Path.of(legacyRoot).toAbsolutePath().normalize();
+            }
+        }
+
         String displayName = required(properties, "displayName", file);
         String rawWorkspaceId = properties.getProperty("workspaceId", "").trim();
         Optional<UUID> workspaceId = rawWorkspaceId.isEmpty()
-                ? Optional.empty()
-                : Optional.of(UUID.fromString(rawWorkspaceId));
+                ? Optional.empty() : Optional.of(UUID.fromString(rawWorkspaceId));
         Instant createdAt = Instant.parse(required(properties, "createdAt", file));
         Instant updatedAt = Instant.parse(required(properties, "updatedAt", file));
-        return new RegisteredProject(id, rootPath, displayName, workspaceId, createdAt, updatedAt);
+        RegisteredProject project = new RegisteredProject(
+                id, rootPath, displayName, workspaceId, createdAt, updatedAt);
+        if (migrateLegacy) migrateLegacyProject(file, project, relativeRoot);
+        return project;
+    }
+
+    private void migrateLegacyProject(Path file, RegisteredProject project, String relativeRoot) throws IOException {
+        Path backup = file.resolveSibling(file.getFileName().toString() + ".m29-v1.bak");
+        if (!Files.exists(backup)) Files.copy(file, backup, StandardCopyOption.COPY_ATTRIBUTES);
+        Properties properties = new Properties();
+        properties.setProperty("id", project.id().toString());
+        properties.setProperty(PORTABLE_ROOT_PATH, relativeRoot);
+        properties.setProperty("displayName", project.displayName());
+        properties.setProperty("workspaceId", project.workspaceId().map(UUID::toString).orElse(""));
+        properties.setProperty("createdAt", project.createdAt().toString());
+        properties.setProperty("updatedAt", project.updatedAt().toString());
+        writePropertiesAtomically(file, properties);
     }
 
     private static WorkspaceMetadata readWorkspaceMetadata(Path file) throws IOException {
@@ -231,15 +265,12 @@ public final class LocalProjectRegistry {
                 UUID.fromString(required(properties, "id", file)),
                 required(properties, "name", file),
                 Instant.parse(required(properties, "createdAt", file)),
-                Instant.parse(required(properties, "updatedAt", file))
-        );
+                Instant.parse(required(properties, "updatedAt", file)));
     }
 
     private static Properties readProperties(Path file) throws IOException {
         Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) { properties.load(reader); }
         return properties;
     }
 
@@ -253,8 +284,7 @@ public final class LocalProjectRegistry {
 
     private static List<Path> propertyFiles(Path directory) throws IOException {
         try (var paths = Files.list(directory)) {
-            return paths
-                    .filter(Files::isRegularFile)
+            return paths.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".properties"))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList();
@@ -266,20 +296,12 @@ public final class LocalProjectRegistry {
         Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
-                    temporary,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            )) {
+                    temporary, StandardCharsets.UTF_8,
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS local registry");
             }
             try {
-                Files.move(
-                        temporary,
-                        target,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException exception) {
                 Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -297,12 +319,15 @@ public final class LocalProjectRegistry {
         return canonical;
     }
 
-    private static void validateName(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
+    private static Optional<ProjectPathMapping> loadPathMapping(Path storageRoot) throws IOException {
+        Path absoluteStorage = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        Path home = absoluteStorage.getParent();
+        return home == null ? Optional.empty() : new ProjectPathMappingStore(home).loadOptional();
     }
 
-    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {
+    private static void validateName(String value, String label) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
     }
+
+    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) { }
 }
