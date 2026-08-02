@@ -1,20 +1,169 @@
-FROM eclipse-temurin:24-jre
+FROM rust:1.97.1-bookworm AS rust-toolchain
+FROM golang:1.26.5-bookworm AS go-toolchain
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS dotnet-toolchain
 
+FROM eclipse-temurin:24-jdk
+
+ARG TARGETARCH
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
+ARG NODE_VERSION=20.20.2
+ARG COURSIER_VERSION=2.1.25-M26
+ARG SCIP_TYPESCRIPT_VERSION=0.4.0
+ARG SCIP_JAVA_VERSION=0.13.1
+ARG SCIP_PYTHON_VERSION=0.6.6
+ARG SCIP_CLANG_VERSION=0.4.0
+ARG SCIP_DOTNET_VERSION=0.2.14
+ARG SCIP_GO_VERSION=0.2.7
+ARG RUST_ANALYZER_RELEASE=2026-07-27
+ARG RUST_ANALYZER_VERSION=0.3.2989
+ARG RUST_ANALYZER_COMMIT=12c3381
 
 LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
       org.opencontainers.image.version="${MINOS_VERSION}" \
       org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
       org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
-      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence"
+      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence" \
+      io.minos.providers.prepared="true"
+
+ENV MINOS_HOME=/var/lib/minos \
+    MINOS_RUNTIME_LOCATION=docker \
+    JAVA_HOME=/opt/java/openjdk \
+    DOTNET_ROOT=/usr/share/dotnet \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    NUGET_XMLDOC_MODE=skip \
+    GOPATH=/opt/minos/go-path \
+    GOMODCACHE=/opt/minos/go-mod-cache \
+    GOCACHE=/var/lib/minos/cache/go-build \
+    CARGO_HOME=/usr/local/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    COURSIER_CACHE=/opt/minos/coursier-cache \
+    PATH=/usr/local/cargo/bin:/usr/local/go/bin:/usr/share/dotnet:/usr/local/bin:/opt/java/openjdk/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+USER root
+RUN test "${TARGETARCH}" = "amd64" || (echo "MINOS M29 provider-complete image is qualified only for linux/amd64" >&2; exit 1)
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       bash ca-certificates curl file git gzip python3 python3-pip tar unzip xz-utils \
+       build-essential pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+COPY --from=dotnet-toolchain /usr/share/dotnet /usr/share/dotnet
+
+RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+    && rustc --version \
+    && cargo --version \
+    && go version \
+    && dotnet --version
+
+# scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line
+# for provider compatibility and expose this limitation in the provider inventory.
+RUN set -eux; \
+    node_archive="node-v${NODE_VERSION}-linux-x64.tar.xz"; \
+    curl -fsSLo "/tmp/${node_archive}" "https://nodejs.org/dist/v${NODE_VERSION}/${node_archive}"; \
+    curl -fsSLo /tmp/node-SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    cd /tmp; \
+    grep " ${node_archive}$" node-SHASUMS256.txt | sha256sum -c -; \
+    tar -xJf "${node_archive}" -C /usr/local --strip-components=1; \
+    rm -f "/tmp/${node_archive}" /tmp/node-SHASUMS256.txt; \
+    node --version; npm --version
+
+RUN set -eux; \
+    curl -fsSLo /tmp/cs.gz "https://github.com/coursier/coursier/releases/download/v${COURSIER_VERSION}/cs-x86_64-pc-linux.gz"; \
+    gunzip /tmp/cs.gz; \
+    install -m 0755 /tmp/cs /usr/local/bin/cs; \
+    rm -f /tmp/cs; \
+    cs --help >/dev/null
+
+RUN set -eux; \
+    curl -fsSLo /tmp/scip-clang "https://github.com/sourcegraph/scip-clang/releases/download/v${SCIP_CLANG_VERSION}/scip-clang-x86_64-linux"; \
+    install -m 0755 /tmp/scip-clang /usr/local/bin/scip-clang; \
+    rm -f /tmp/scip-clang; \
+    scip-clang --version | grep -F "${SCIP_CLANG_VERSION}"
+
+RUN set -eux; \
+    curl -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
+    gunzip /tmp/rust-analyzer.gz; \
+    install -m 0755 /tmp/rust-analyzer /usr/local/bin/rust-analyzer; \
+    rm -f /tmp/rust-analyzer; \
+    rust-analyzer --version | tee /tmp/rust-analyzer.version; \
+    grep -E "${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}" /tmp/rust-analyzer.version; \
+    rm -f /tmp/rust-analyzer.version
+
+RUN set -eux; \
+    mkdir -p "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \
+    npm install --prefix "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}" \
+      --no-audit --no-fund --ignore-scripts "@sourcegraph/scip-typescript@${SCIP_TYPESCRIPT_VERSION}"; \
+    test -x "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}/node_modules/.bin/scip-typescript"; \
+    mkdir -p "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \
+    npm install --prefix "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}" \
+      --no-audit --no-fund "@sourcegraph/scip-python@${SCIP_PYTHON_VERSION}"; \
+    test -x "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}/node_modules/.bin/scip-python"; \
+    python3 --version; pip3 --version
+
+RUN set -eux; \
+    dotnet tool install --tool-path "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}" \
+      scip-dotnet --version "${SCIP_DOTNET_VERSION}"; \
+    printf '%s\n' "${SCIP_DOTNET_VERSION}" > "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/.minos-version"; \
+    test -x "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet"; \
+    GOBIN="/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}" \
+      go install "github.com/scip-code/scip-go/cmd/scip-go@v${SCIP_GO_VERSION}"; \
+    printf '%s\n' "${SCIP_GO_VERSION}" > "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/.minos-version"; \
+    test -x "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go"
+
+# Pre-resolve the exact scip-java coordinate while network is available during BUILD.
+# Runtime containers have network_mode:none and reuse this immutable Coursier cache.
+RUN set -eux; \
+    mkdir -p "${COURSIER_CACHE}"; \
+    cs launch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
+      --jvm system --main org.scip_code.scip_java.ScipJava -- --version \
+      | tee /tmp/scip-java.version; \
+    grep -F "scip-java version ${SCIP_JAVA_VERSION}" /tmp/scip-java.version; \
+    rm -f /tmp/scip-java.version
+
+RUN set -eux; \
+    mkdir -p /opt/minos/provider-evidence; \
+    sha256sum \
+      /usr/local/bin/cs \
+      /usr/local/bin/scip-clang \
+      /usr/local/bin/rust-analyzer \
+      "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet" \
+      "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go" \
+      > /opt/minos/provider-evidence/binary-sha256.txt; \
+    npm --prefix "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}" ls --json --depth=0 \
+      > /opt/minos/provider-evidence/scip-typescript-npm.json; \
+    npm --prefix "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}" ls --json --depth=0 \
+      > /opt/minos/provider-evidence/scip-python-npm.json; \
+    printf '%s\n' \
+      '{' \
+      '  "formatVersion": 1,' \
+      '  "platform": "linux/amd64",' \
+      "  \"minosVersion\": \"${MINOS_VERSION}\"," \
+      "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
+      '  "networkPolicy": "build-only downloads; runtime network none",' \
+      '  "providers": [' \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"delivery\":\"Coursier cache\"}," \
+      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
+      "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
+      "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
+      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"dotnet tool\",\"sdk\":\"10.0.302\"}," \
+      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go install\",\"toolchain\":\"1.26.5\"}," \
+      "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"1.97.1\"}" \
+      '  ]' \
+      '}' > /opt/minos/provider-evidence/provider-inventory.json; \
+    chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence "${COURSIER_CACHE}"
 
 WORKDIR /opt/minos
 COPY minos.jar /opt/minos/minos.jar
-
-ENV MINOS_HOME=/var/lib/minos \
-    MINOS_RUNTIME_LOCATION=docker
+RUN chmod 0444 /opt/minos/minos.jar \
+    && mkdir -p /var/lib/minos \
+    && chown 10001:10001 /var/lib/minos
 
 USER 10001:10001
 ENTRYPOINT ["java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"]
