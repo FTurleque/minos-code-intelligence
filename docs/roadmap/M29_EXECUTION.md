@@ -1,6 +1,6 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **EN COURS — S1/S2 qualifiés exact-head ; S4 a PASS sur `f39802e...` ; S3 sur ce même HEAD a révélé l'écriture `scip-java target/scip-targetroot` sur source RO ; remédiation staging/Maven implémentée, requalification exact-head S4→S3 requise**  
+Statut : **EN COURS — S1/S2 qualifiés exact-head ; S4 a PASS sur `45536e2...` ; S3 sur ce même HEAD atteint le staging writable puis échoue car `scip-java` choisit le `mvnw` matérialisé par le checkout Windows ; remédiation Maven image + tmpdir exécutable implémentée, requalification exact-head S4→S3 requise**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**
@@ -83,8 +83,8 @@ MinosLauncher
 |---|---|---|
 | M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
 | M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
-| M29-S3 | Autonomous Docker administration plane | 🟨 vrai lifecycle atteint ; dernier blocage `scip-java` sur source RO, remédiation implémentée/non qualifiée |
-| M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `f39802e...` ; modifications post-PASS imposent requalification avant nouveau claim courant |
+| M29-S3 | Autonomous Docker administration plane | 🟨 staging writable atteint ; dernier blocage exact `workspace/mvnw` ENOENT, remédiation implémentée/non qualifiée |
+| M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `45536e2...` ; modifications post-PASS imposent requalification avant nouveau claim courant |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
@@ -190,9 +190,52 @@ java.nio.file.FileSystemException:
 
 La stack confirme `Embedded.customJavac → MavenBuildTool.runBuild → IndexCommand`. Ce défaut est distinct des anciens problèmes Coursier/JNA : le provider est lancé correctement, mais son build écrit dans son working tree.
 
+Après remédiation staging/Maven, S4 a été requalifié sur :
+
+```text
+HEAD 45536e2fc7d32ed67932e2715e458fa26a8239b1
+Maven                              13/13 SUCCESS
+suite unitaires                    433 PASS
+ShadedJarSmokeIT                   1 PASS
+check-current-docs.py              SUCCESS
+Docker image                       31/31 FINISHED
+Apache Maven                       3.9.16
+provider probe offline             SUCCESS
+providers READY                    7/7
+doctor.ready                       true
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
+```
+
+Le S3 lancé immédiatement sur **le même HEAD** prouve que le staging RO→RW fonctionne :
+
+```text
+project list                       count=0
+project add                        PASS
+project inspect                    PASS / NEVER_INDEXED / moduleCount=40
+run id                             70cff100-5b72-4e89-b9d5-26af87c06735
+workingDirectory                   /var/lib/minos/runs/70cff100-5b72-4e89-b9d5-26af87c06735/scip-java/workspace
+source project                     toujours /workspace/projects/... en read-only
+```
+
+Le nouveau défaut exact est :
+
+```text
+java.io.IOException: Cannot run program
+"/var/lib/minos/runs/70cff100-5b72-4e89-b9d5-26af87c06735/scip-java/workspace/mvnw"
+(in directory ".../workspace"): error=2, No such file or directory
+```
+
+`provider.stdout.log` prouve que `scip-java` sélectionne explicitement le wrapper staging :
+
+```text
+$ .../workspace/mvnw -Dmaven.compiler.useIncrementalCompilation=false ... clean verify -DskipTests
+```
+
+Le checkout source est matérialisé sur Windows ; le wrapper copié dans le staging Linux est donc un artefact host-dépendant. En outre, `scip-java` génère son faux `javac` sous le temp Java (`/tmp/scip-java.../bin/javac`) alors que le tmpfs général reste volontairement `noexec`.
+
 ### Remédiation courante
 
-Le process plan Java Linux/Docker crée maintenant un staging writable :
+Le process plan Java Linux/Docker crée toujours son staging writable :
 
 ```text
 /var/lib/minos/runs/<run-id>/scip-java/workspace
@@ -200,12 +243,29 @@ Le process plan Java Linux/Docker crée maintenant un staging writable :
 
 Les sources d'origine restent montées RO. Les arbres générés préexistants (`target`, `build`, `out`, `node_modules`, caches VCS/IDE) ne sont pas importés. Le `target/scip-targetroot` du provider est créé uniquement dans le staging.
 
-L'image embarque aussi Apache Maven 3.9.16, conforme au contrat MINOS `[3.9,4.0)`. Le repository Maven est confiné :
+Les launchers Maven racine host-dépendants sont maintenant exclus du staging Linux :
+
+```text
+mvnw
+mvnw.cmd
+```
+
+La configuration projet `.mvn` reste copiée. En l'absence de `./mvnw`, `scip-java` utilise le Maven de l'image : **Apache Maven 3.9.16**, conforme au contrat MINOS `[3.9,4.0)` et déjà qualifié par S4. Aucun téléchargement de distribution Maven Wrapper n'est nécessaire.
+
+Le repository Maven et HOME sont confinés :
 
 ```text
 MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
 HOME=/var/lib/minos/cache/home
 ```
+
+Le tmpfs général `/tmp` reste `noexec`. Le plan admin/provider positionne désormais :
+
+```text
+JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
+```
+
+Ainsi les shims compilateur temporaires de `scip-java` et l'extraction native utilisent uniquement le tmpfs borné `/run/minos-native`, monté `exec`, sans assouplir le filesystem conteneur ni `/tmp`.
 
 Cette remédiation modifie le HEAD ; S3 ne peut pas passer avant nouvelle qualification S4 puis S3 sur le même HEAD.
 
@@ -213,7 +273,7 @@ Runner : `scripts/m29/run-s3.ps1`.
 
 ---
 
-## M29-S4 — Provider-complete Docker image — ✅ PASS HISTORIQUE / REQUALIFICATION COURANTE REQUISE
+## M29-S4 — Provider-complete Docker image — ✅ PASS QUALIFIÉ `45536e2...` / REQUALIFICATION COURANTE REQUISE
 
 ### Inventaire contractuel
 
@@ -312,13 +372,28 @@ tools verify --all PASS
 M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-Les changements staging/Maven postérieurs à ce HEAD imposent une nouvelle exécution du runner avant de qualifier la branche courante.
+Dernière preuve exacte avant la remédiation `mvnw`/tmpdir :
+
+```text
+HEAD 45536e2fc7d32ed67932e2715e458fa26a8239b1
+13/13 modules Maven SUCCESS
+433 unit tests + 1 smoke IT PASS
+check-current-docs.py SUCCESS
+Docker image 31/31 FINISHED
+provider probe offline SUCCESS
+Apache Maven 3.9.16
+7/7 providers READY
+doctor.ready=true
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
+```
+
+Les changements `mvnw`/`JAVA_TOOL_OPTIONS` postérieurs à ce HEAD imposent une nouvelle exécution du runner avant de qualifier la branche courante.
 
 ### Projets read-only : artefacts provider
 
 Les providers ne doivent jamais contourner le mount RO en produisant `index.scip` ou des outputs de build dans les sources. M29 route les sorties dans le run directory MINOS pour Java, TypeScript, C/C++, C#, Go et Rust ; Python était déjà conforme.
 
-Java utilise désormais un workspace de staging writable sous le run directory. Rust redirige aussi :
+Java utilise désormais un workspace de staging writable sous le run directory, exclut les launchers Maven racine du checkout host et utilise le Maven qualifié de l'image. Rust redirige aussi :
 
 ```text
 CARGO_TARGET_DIR=<runDirectory>/cargo-target
@@ -412,9 +487,11 @@ Aucun claim de parité avant PASS.
 ## Gate bloquant courant
 
 ```text
-HEAD courant modifié après le PASS S4 f39802e...
+HEAD courant modifié après le PASS S4 45536e2...
 → rerun S4 exact-head obligatoire
 → si S4 PASS, rerun S3 sur exactement le même HEAD
+→ vérifier que scip-java utilise `mvn` image, pas `workspace/mvnw`
+→ vérifier que son compiler shim temporaire est sous /run/minos-native
 → S3 sans index READY + MCP + recreate = pas de PASS S3
 ```
 
