@@ -6,13 +6,14 @@ M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'admin
 
 ## Plans d'exécution
 
-| Plan | Service Compose | Durée | `/var/lib/minos` | `/workspace/projects` | Réseau |
-|---|---|---:|---|---|---|
-| MCP query | `minos-mcp` | persistant | read-only | read-only | `none` |
-| Administration / indexation | `minos-admin` | éphémère | read-write | read-only | `none` |
-| Bootstrap mapping | `minos-bootstrap` | éphémère | read-write | non requis | `none` |
+| Plan | Service Compose | Durée | État MINOS | Provider tools | Projets | Réseau |
+|---|---|---:|---|---|---|---|
+| MCP query | `minos-mcp` | persistant | read-only | read-only | read-only | `none` |
+| Administration / indexation | `minos-admin` | éphémère | read-write | read-only | read-only | `none` |
+| Bootstrap mapping | `minos-bootstrap` | éphémère | read-write | non requis | non requis | `none` |
+| Bootstrap providers | `minos-tools-bootstrap` | éphémère | non requis | initialise le volume géré | non requis | `none` |
 
-Les trois plans gardent :
+Les plans RUN gardent :
 
 ```text
 container filesystem read-only
@@ -23,7 +24,7 @@ bounded tmpfs
 MINOS_RUNTIME_LOCATION=docker
 ```
 
-Le plan admin n'obtient donc pas le droit de modifier le code source des projets. Il ne peut écrire que l'état métier MINOS monté sous `/var/lib/minos`.
+Le plan admin n'obtient donc pas le droit de modifier le code source des projets. Il écrit l'état métier MINOS sous `/var/lib/minos`; les outils providers préparés au BUILD vivent dans un volume Linux séparé et sont montés read-only dans les plans métier.
 
 ## Mapping des projets
 
@@ -47,11 +48,56 @@ Dans les commandes exécutées **dans Docker**, utiliser le chemin visible par l
 /workspace/projects/my-project
 ```
 
-et non :
+et non `N:\workspace-dev\my-project`.
+
+## Provider-complete image M29-S4
+
+L'image M29 prépare pendant BUILD :
 
 ```text
-N:\workspace-dev\my-project
+scip-java            0.13.1
+scip-typescript      0.4.0
+scip-python          0.6.6
+scip-clang           0.4.0
+scip-dotnet          0.2.14
+scip-go              0.2.7
+rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
 ```
+
+Les toolchains nécessaires sont également préparées : JDK 24, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
+
+Les téléchargements se produisent au BUILD. En RUN :
+
+```text
+network_mode: none
+```
+
+Le bundle provider est initialisé dans le volume Docker nommé :
+
+```text
+minos-provider-tools
+```
+
+monté sous :
+
+```text
+/var/lib/minos/tools
+```
+
+Ce volume est distinct du business data bind `%LOCALAPPDATA%\MINOS\docker-data` ou du `DataRoot` choisi. Il évite de transporter des exécutables Linux sur NTFS et permet de garder les provider tools read-only pendant les requêtes et l'indexation.
+
+L'image produit aussi :
+
+```text
+provider-inventory.json
+provider-binary-sha256.txt
+```
+
+Ces preuves sont copiées dans le répertoire runtime de l'installation.
+
+### Limitation Node
+
+`scip-typescript 0.4.0` est préparé avec Node 20.20.2 pour rester sur la ligne Node documentée par ce provider. Cette contrainte est enregistrée dans l'inventaire ; elle ne doit pas être interprétée comme une recommandation générale de Node 20 pour d'autres usages.
 
 ## Installation du runtime Docker de travail
 
@@ -72,10 +118,13 @@ $Jar = '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar'
 
 1. construit l'image depuis le JAR exact ;
 2. valide `docker compose config` ;
-3. contrôle le runtime Java de l'image ;
-4. initialise le mapping host/container ;
-5. vérifie que le plan admin expose le CLI stable ;
-6. persiste les métadonnées de l'installation.
+3. contrôle Java dans l'image ;
+4. extrait l'inventaire/checksums providers ;
+5. initialise `minos-provider-tools` depuis le bundle image ;
+6. exécute `tools list` puis `tools verify` sans réseau ;
+7. initialise le mapping host/container ;
+8. vérifie que le plan admin expose le CLI stable ;
+9. persiste les métadonnées de l'installation.
 
 ## Exécuter le CLI MINOS dans Docker
 
@@ -87,6 +136,7 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 & $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('tools', 'list', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('tools', 'verify', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
 
 & $Docker -Action Admin -MinosArguments @(
   'project', 'add', '/workspace/projects/my-project',
@@ -99,11 +149,21 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 & $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
 ```
 
-Un raccourci source est également disponible :
+`tools verify --all` est le gate S4 capability-honest : il échoue si un provider annoncé par MINOS n'est pas `READY`. Le `tools verify` historique conserve son comportement et vérifie seulement les providers requis par défaut.
+
+Un raccourci source reste disponible :
 
 ```powershell
 .\docker\scripts\minos-docker.ps1 project list --format json
 ```
+
+## Projets read-only pendant l'indexation
+
+Les sources restent read-only dans `minos-admin`. Les process plans M29 ne doivent pas déposer `index.scip`, `target/` ou autre artefact de provider dans la racine projet.
+
+Les sorties SCIP Java, TypeScript, C/C++, C#, Go et Rust sont redirigées vers le run directory MINOS sous l'état writable. Python utilisait déjà un output externe. Rust redirige aussi `CARGO_TARGET_DIR` vers son run directory.
+
+Tout provider qui exige encore une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount ne doit pas être rendu writable pour le contourner.
 
 ## État sémantique et hybride
 
@@ -114,14 +174,14 @@ semantic status <project> [--format <text|json>]
 hybrid status <project> [--format <text|json>]
 ```
 
-Exemples Docker :
+Exemples :
 
 ```powershell
 & $Docker -Action Admin -MinosArguments @('semantic', 'status', 'my-project', '--format', 'json')
 & $Docker -Action Admin -MinosArguments @('hybrid', 'status', 'my-project', '--format', 'json')
 ```
 
-`semantic status` reflète l'état du vector store persistant : `DISABLED`, `NO_ACTIVE_SNAPSHOT`, `MISSING`, `STALE` ou `READY`.
+`semantic status` reflète `DISABLED`, `NO_ACTIVE_SNAPSHOT`, `MISSING`, `STALE` ou `READY`.
 
 `hybrid status` distingue :
 
@@ -131,23 +191,23 @@ READY_STRUCTURED_FALLBACK
 READY_WITH_SEMANTIC
 ```
 
-Le fallback hybride lexical/graphe reste utilisable avec un snapshot actif lorsque le signal sémantique n'est pas `READY`. Le signal vectoriel reste `HEURISTIC` et ne crée jamais de fait structurel.
+Le signal vectoriel reste `HEURISTIC` et ne crée jamais de fait structurel.
 
 ## MCP query-only
 
-Démarrer le plan MCP :
+Démarrer :
 
 ```powershell
 & $Docker -Action Start
 ```
 
-Ouvrir une session STDIO :
+Session STDIO :
 
 ```powershell
 & $Docker -Action Attach
 ```
 
-Le processus MCP est lancé directement dans le conteneur query-only. Ce plan voit les projets et l'état MINOS en lecture seule.
+Le processus MCP est lancé dans le conteneur query-only. Il voit projets, état métier et provider tools en lecture seule.
 
 Arrêt :
 
@@ -162,12 +222,21 @@ Arrêt :
 & $Docker -Action Status
 ```
 
-`Validate` revalide :
+`Validate` revalide Compose, Java, bundle provider, `tools list/verify`, mapping et CLI admin.
 
-- la syntaxe Compose ;
-- Java dans l'image ;
-- l'idempotence du mapping ;
-- l'accès au CLI via le plan admin.
+Le gate exact-head S4 complet est :
+
+```powershell
+.\scripts\m29\run-s4.ps1 -ExpectedHead <sha> -ProjectsRoot N:\workspace-dev
+```
+
+Après PASS S4, relancer le gate S3 sur le **même SHA** :
+
+```powershell
+.\scripts\m29\run-s3.ps1 -ExpectedHead <sha> -ProjectsRoot N:\workspace-dev
+```
+
+S3 doit alors atteindre `index → READY`, handshake MCP et recreate/persistance.
 
 ## Désinstallation
 
@@ -175,12 +244,12 @@ Arrêt :
 & $Docker -Action Uninstall
 ```
 
-Le conteneur et la configuration runtime gérés sont retirés. Les données persistantes sont conservées par défaut.
+Le conteneur, l'image, la configuration runtime et le volume `minos-provider-tools` gérés sont retirés. Les données métier persistantes sont conservées par défaut.
 
-La purge explicite des données et le switching transactionnel natif/Docker relèvent de M29-S7 et ne doivent pas être simulés par suppression manuelle pendant la qualification S3.
+La purge explicite des données et le switching transactionnel natif/Docker relèvent de M29-S7.
 
-## Limite actuelle avant M29-S4
+## État de qualification
 
-Le plan admin permet maintenant d'exécuter l'indexation depuis Docker, mais **M29-S4 doit encore rendre l'image provider-complete et qualifier les providers offline**. Tant que S4 n'est pas passé, l'absence d'un runtime provider dans l'image est une limitation réelle et non une preuve d'échec du plan d'administration.
+Le plan S3 a déjà été exercé sur Docker réel jusqu'au vrai `index`. L'échec observé était l'absence de `cargo`, `rustc` et `rust-analyzer` dans l'ancienne image, ce qui a déclenché S4.
 
-Aucun provider ne doit être déclaré supporté dans l'image avant qualification réelle sans réseau en RUN.
+S4 est maintenant implémenté mais **aucun provider ne doit être déclaré supporté dans l'image avant qualification réelle sans réseau en RUN**. Aucune claim de parité native/Docker n'est acquise à ce stade.
