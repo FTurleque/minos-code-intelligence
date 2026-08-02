@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 Backend-agnostic MCP client integration implémenté sur un HEAD plus récent et en attente de qualification exact-head.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés ; S3/S4 PASS exact-head `3df1b40...` ; S5 PASS exact-head `0959fb9...` ; S6 PASS exact-head `f7ef0e3...` ; S7 installer/switching/lifecycle implémenté sur un HEAD plus récent et en attente de qualification exact-head.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -25,8 +25,9 @@ M29-S2                           ✅ PASS exact-head c7a4e944...
 M29-S3                           ✅ PASS exact-head 3df1b40...
 M29-S4                           ✅ PASS exact-head 3df1b40...
 M29-S5                           ✅ PASS exact-head 0959fb9...
-M29-S6                           🟨 implémenté ; qualification run-s6.ps1 requise
-M29-S7 → S8                      non démarrés / non qualifiés
+M29-S6                           ✅ PASS exact-head f7ef0e3...
+M29-S7                           🟨 implémenté ; qualification run-s7.ps1 requise
+M29-S8                           non démarré / non qualifié
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
@@ -180,9 +181,9 @@ M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS
 
 Le vector store reste celui existant : `index-v2.bin`, composants `float32`, scan exact. Aucune base vectorielle externe, ANN ou HNSW n'est introduite.
 
-### S6 — Backend-agnostic MCP client integration — 🟨 implémenté / non qualifié
+### S6 — Backend-agnostic MCP client integration — ✅ PASS exact-head `f7ef0e3...`
 
-Les intégrations Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop continuent toutes à cibler :
+Les intégrations Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop ciblent toutes :
 
 ```text
 command = <installation>\app\minos.exe
@@ -192,26 +193,89 @@ env     = MINOS_HOME=<dataRoot>
 
 Aucun client ne possède de logique `docker exec`, de nom de conteneur ou de configuration Compose. Le choix `native|docker` reste exclusivement dans `<MINOS_HOME>/runtime/backend.properties`, lu par `McpBackendRouter`.
 
-Le nouveau verifier `scripts/install/verify-mcp-client-backend-routing.ps1` configure les clients dans un environnement Windows isolé, bascule `backend.properties` de `native` à `docker` et exige que les fichiers/configurations clientes restent byte-identical. Il est chaîné au preflight Windows existant. `M29McpClientBackendAgnosticContractTest` verrouille le même contrat côté Maven.
-
-Gate exact-head :
+Qualification exacte sur `f7ef0e3dbe820253decd83a1dc27bf2651ef6de9` :
 
 ```text
-scripts/m29/run-s6.ps1
+PowerShell parse preflight                   SUCCESS
+Maven 13/13                                  SUCCESS
+check-current-docs.py                        SUCCESS
+MCP client integration                       SUCCESS
+MCP client preflight                         SUCCESS
+Codex Desktop lifecycle                      SUCCESS
+backend-routing verifier                     SUCCESS
+installer template verifier                  SUCCESS
+client configs native -> docker              byte-identical
 ```
 
-Marqueur requis :
+Marqueur exact :
 
 ```text
 M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
 ```
 
-### S7 / S8
+Rapport :
 
-- S7 : installer, switching transactionnel, lifecycle ;
-- S8 : qualification native/Docker machine-readable.
+```text
+target/m29/s6-qualification-f7ef0e3dbe820253decd83a1dc27bf2651ef6de9.json
+```
 
-Gate final :
+### S7 — Installer, switching & lifecycle — 🟨 implémenté / à qualifier
+
+S7 introduit un orchestrateur unique :
+
+```text
+scripts/install/switch-mcp-backend.ps1
+```
+
+La transaction est :
+
+```text
+prepare -> validate -> handshake -> commit backend.properties -> retire ancien backend
+```
+
+Le handshake candidat utilise `scripts/install/probe-mcp-backend.ps1` et le point d'entrée stable `minos.exe mcp` dans un `MINOS_HOME` isolé. `backend.properties` n'est committé qu'après `initialize` + `tools/list` réussis. En cas d'échec, la configuration précédente est restaurée ; un upgrade Docker→Docker sauvegarde/restaure aussi le runtime Docker précédent puis le redémarre.
+
+Un runtime Docker déjà géré avec le même `VERSION`, commit, `ProjectsRoot`, racines Docker et identité container/Compose est réutilisé par `Start + Validate + handshake` au lieu de reconstruire l'image.
+
+Le setup Windows propose exactement trois choix exclusifs :
+
+```text
+MCP natif Windows — recommandé
+MCP Docker — isolation renforcée
+Ne pas configurer maintenant
+```
+
+Lors d'un upgrade, le backend déjà persisté dans `%LOCALAPPDATA%\MINOS\data\runtime\backend.properties` est présélectionné. Les clients IA sont communs aux deux backends et restent configurés uniquement sur `minos.exe mcp + MINOS_HOME`. Docker explicitement sélectionné mais indisponible bloque le wizard : aucun fallback natif silencieux.
+
+Le ZIP `install.ps1` accepte aussi `none|native|docker`, sauvegarde l'installation précédente avant remplacement et restaure ce backup si la validation du nouveau payload/backend échoue. Les racines data/Docker sont surchargeables pour qualification isolée.
+
+Verifiers :
+
+```text
+scripts/install/verify-mcp-backend-lifecycle.ps1
+scripts/install/verify-installer-template.ps1
+M29InstallerBackendLifecycleContractTest
+```
+
+Le verifier transactionnel injecte des échecs avant et après commit, prouve le rollback, la réutilisation du runtime Docker, l'upgrade et le rollback d'upgrade, et vérifie qu'une configuration tierce reste byte-identical.
+
+Gate exact-head :
+
+```text
+scripts/m29/run-s7.ps1
+```
+
+Le gate construit une vraie distribution Windows et compile un setup Inno smoke, puis utilise des racines temporaires pour qualifier : native-only, upgrade native, Docker-only, Docker→native, native→Docker reuse, uninstall avec conservation des données Docker puis purge explicite.
+
+Marqueur requis :
+
+```text
+M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS
+```
+
+### S8 — Native/Docker parity qualification — ⬜
+
+Même corpus, même configuration métier, rapport machine-readable. Gate final :
 
 ```text
 native result == docker result
@@ -227,14 +291,20 @@ Aucun claim de parité avant S8.
 
 ```text
 pull HEAD courant
-→ check-current-docs.py
-→ mvnw.cmd clean verify
-→ run-s6.ps1 exact-head -SkipMavenVerify
+→ run-s7.ps1 exact-head
    → PowerShell parser preflight
-   → MCP client integration verifier
-   → MCP client detection/preflight + Codex Desktop + installer template chain
-   → backend-routing verifier native -> docker / configs byte-identical
-→ seulement après SUCCESS : S6 peut passer ✅
+   → Maven clean verify
+   → check-current-docs.py
+   → lifecycle transactionnel avec fault injection
+   → backend-agnostic client routing
+   → installer template contract
+   → vraie distribution Windows + compilation setup Inno smoke
+   → native-only + upgrade
+   → Docker-only
+   → Docker -> native -> Docker(reuse) -> native
+   → uninstall preserve
+   → purge explicite isolée
+→ seulement après SUCCESS : S7 peut passer ✅
 ```
 
 Aucune PR, GitHub Actions ou merge M29 sans autorisation explicite.
