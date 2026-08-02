@@ -433,7 +433,7 @@ Le verifier écrit ensuite dans le même `MINOS_HOME` :
 backend=native
 → hash de toutes les configurations clientes
 backend=docker
-→ mêmes hashes client byte-for-byte
+→ mêmes hashes client byte-identical / byte-for-byte
 ```
 
 Seul `backend.properties` change. Le verifier est ajouté à la chaîne `verify-mcp-client-preflight.ps1`, donc les futures constructions Windows l'exécutent via le gate d'intégration existant.
