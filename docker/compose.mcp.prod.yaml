@@ -47,6 +47,7 @@ services:
       HOME: /var/lib/minos/cache/home
       COURSIER_CACHE: /var/lib/minos/cache/coursier
       MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository
+      JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
       DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home
       NUGET_PACKAGES: /var/lib/minos/cache/nuget
     working_dir: /workspace/projects
@@ -169,6 +170,7 @@ services:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
       COURSIER_CACHE: /tmp/minos-coursier-cache
+      JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
       DOTNET_CLI_HOME: /tmp/minos-dotnet-home
       NUGET_PACKAGES: /tmp/minos-nuget
     volumes:
