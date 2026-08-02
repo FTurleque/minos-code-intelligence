@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 Docker autonome/paritaire démarré sur branche dédiée, sans claim de parité.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés, S3 Docker autonome implémenté en attente de gate Docker réel.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -20,9 +20,10 @@ fix/v1.0.1-release-hardening     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5 au dé
 M29 #107                         EN COURS — Docker autonome & Native Parity
 branche M29                      m29-autonomous-docker-runtime
 baseline M29                     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
-M29-S1                           implémenté / qualification locale pending
-M29-S2                           implémenté partiellement / qualification locale pending
-M29-S3 → S8                      non démarrés tant que les gates S1/S2 ne sont pas prouvés
+M29-S1                           ✅ PASS exact-head c7a4e944...
+M29-S2                           ✅ PASS exact-head c7a4e944...
+M29-S3                           🟨 implémenté / qualification Maven+Docker pending
+M29-S4 → S8                      non démarrés tant que le gate S3 n'est pas prouvé
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
@@ -90,7 +91,7 @@ M29 n'altère pas ce contrat.
 | M26 — Runtime & Dynamic Intelligence | terminé |
 | M27 — Team / Hosted Mode | terminé avec frontières local-first/no-SaaS explicites |
 | M28 — Production Convergence | terminé ; #93 CLOSED / completed ; PR #102 merged |
-| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 implémentés mais non qualifiés** |
+| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS, S3 implémenté en attente de preuve** |
 
 ## M29 — Docker autonome & Native Parity
 
@@ -98,7 +99,7 @@ M29 n'altère pas ce contrat.
 
 Avant création de branche, les triggers GitHub Actions ont été audités. Sur la baseline M29, les workflows actifs pertinents sont `pull_request`, `workflow_dispatch` ou `release`; le one-shot `release-v1.0.0.yml` avec trigger push n'est plus présent sur la ligne 1.0.1.
 
-La branche `m29-autonomous-docker-runtime` a donc été créée depuis :
+La branche `m29-autonomous-docker-runtime` a été créée depuis :
 
 ```text
 db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
@@ -106,9 +107,9 @@ db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
 
 sans PR et sans déclencher de CI. Aucune PR/Action/merge M29 n'est autorisé implicitement.
 
-### M29-S1 — contrat backend
+### M29-S1 — contrat backend — ✅ PASS
 
-Présent dans le code, mais **pas encore qualifié exact-head** :
+Le contrat comprend :
 
 - backend explicite `native | docker` ;
 - configuration versionnée `<MINOS_HOME>/runtime/backend.properties` ;
@@ -121,18 +122,63 @@ Présent dans le code, mais **pas encore qualifié exact-head** :
 - aucun fallback Docker → natif ;
 - ADR-0037 accepté pour le contrat, sans claim de parité.
 
-### M29-S2 — identité et chemins portables
+Preuve Windows exact-head du 2 août 2026 :
 
-Présent dans le code, mais **pas encore qualifié exact-head** :
+```text
+HEAD                         c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+mvnw.cmd clean verify        BUILD SUCCESS
+13/13 modules                SUCCESS
+McpBackendRouterTest         6/6 PASS
+suite totale                 417 PASS
+check-current-docs.py        SUCCESS
+```
+
+### M29-S2 — identité et chemins portables — ✅ PASS
+
+Le code qualifié apporte :
 
 - mapping typé/versionné `hostRoot ↔ containerRoot` ;
 - runtime location `native|docker` ;
 - registre projet portable via `rootRelativePath` ;
 - UUID projet/workspace conservés ;
 - migration des anciens `rootPath` absolus avec backup `.m29-v1.bak` et remplacement atomique ;
-- tests ajoutés pour Windows path ↔ Linux path, même projectId, idempotence et fail-closed hors racine.
+- tests Windows path ↔ Linux path, même projectId, idempotence et fail-closed hors racine.
 
-Les surfaces source/Git/architecture/impact/ProgramGraph/snapshots/index-state/vector store doivent encore être qualifiées dans des processus natif et Docker réels.
+Sur le même HEAD :
+
+```text
+ProjectPathMappingTest       4/4 PASS
+Minos Application            161/161 PASS
+Storage                       42/42 PASS
+```
+
+La preuve process native↔Docker réelle est volontairement reportée aux gates d'intégration S3/S5/S8 ; elle n'est pas utilisée pour revendiquer une parité prématurée.
+
+### M29-S3 — administration Docker autonome — 🟨 IMPLÉMENTÉ
+
+Le runtime Compose possède maintenant trois plans :
+
+- `minos-mcp` : persistant, projets et `/var/lib/minos` read-only ;
+- `minos-admin` : éphémère, projets read-only, `/var/lib/minos` writable ;
+- `minos-bootstrap` : éphémère, initialise le mapping portable avant toute opération métier.
+
+Tous conservent `network_mode: none`, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs borné.
+
+Le workflow packagé expose `-Action Admin -MinosArguments ...`, et les commandes Docker peuvent atteindre `doctor`, `tools`, `project`, `index`, `index-status`, ainsi que les nouveaux diagnostics `semantic status` / `hybrid status`. Le MCP reste attaché au plan query-only.
+
+Tests ajoutés :
+
+```text
+DockerRuntimeBootstrapTest
+RetrievalStatusCommandTest
+M29DockerAdministrationContractTest
+```
+
+Documentation : [`user/docker-runtime.md`](user/docker-runtime.md).
+
+**S3 n'est pas encore PASS.** Son nouveau HEAD doit encore passer Maven puis un gate Docker réel : install/validate, projet neuf, `project add`, index, READY, status semantic/hybrid, MCP, restart/recreate et persistance.
+
+Le dernier diagnostic hôte reçu est : Docker CLI 29.6.2 présent, contexte `desktop-linux`, mais daemon indisponible car le pipe `dockerDesktopLinuxEngine` n'existe pas.
 
 ### Vector store
 
@@ -147,7 +193,22 @@ Les snapshots structurés restent autoritatifs et les résultats sémantiques re
 
 ### Gate courant
 
-Aucun PASS S1/S2 n'est enregistré tant que les tests Maven/JDK 24 et les sessions Docker réelles n'ont pas été exécutés sur le SHA exact. La roadmap détaillée décrit ce gate dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
+S1/S2 sont prouvés. S3 est le gate courant :
+
+```text
+nouveau HEAD exact
+→ mvnw.cmd clean verify
+→ check-current-docs.py
+→ Docker Desktop démarré
+→ Install / Validate
+→ projet neuf Docker-only
+→ project add / index / READY
+→ semantic + hybrid status
+→ MCP
+→ restart/recreate + persistance
+```
+
+Aucun passage à S4 sans cette preuve. La roadmap détaillée est [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
 ## Limite explicitement ouverte — #98
 
@@ -168,6 +229,7 @@ M29 est indépendant de #98 : rendre Docker MCP autonome et paritaire ne constit
 - convergence M28 : [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md) ;
 - exécution M29 : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md) / #107 ;
 - ADR backend M29 : [`adr/0037-first-class-native-and-docker-runtime-backends.md`](adr/0037-first-class-native-and-docker-runtime-backends.md) ;
+- runtime Docker M29 : [`user/docker-runtime.md`](user/docker-runtime.md) ;
 - installation Windows : [`user/production-installation.md`](user/production-installation.md) ;
 - release 1.0.0 : [`releases/1.0.0.md`](releases/1.0.0.md) ;
 - candidat 1.0.1 : [`releases/1.0.1.md`](releases/1.0.1.md) ;
