@@ -105,6 +105,7 @@ foreach ($Relative in $ScriptsToParse) {
 }
 Write-Host 'M29-S7 PowerShell parse preflight SUCCESS' -ForegroundColor Cyan
 
+# Docker capability is cheap to probe and a hard requirement for this S7 gate.
 $Docker = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $Docker) {
     throw 'M29-S7 BLOCKED: docker.exe is not installed or not present in PATH.'
@@ -144,13 +145,8 @@ try {
 
     Push-Location $RepoRoot
     try {
-        if (-not $SkipMavenVerify) {
-            & '.\mvnw.cmd' clean verify
-            if ($LASTEXITCODE -ne 0) {
-                throw "M29-S7 Maven qualification failed with exit code $LASTEXITCODE"
-            }
-        }
-
+        # Fail-fast gates first. These are intentionally before Maven and before
+        # any Docker image build so a static/doc/transaction defect is cheap.
         $Python = Get-Command python -ErrorAction SilentlyContinue
         if (-not $Python) { $Python = Get-Command python3 -ErrorAction Stop }
         & $Python.Source '.\scripts\docs\check-current-docs.py'
@@ -161,6 +157,14 @@ try {
         & '.\scripts\install\verify-mcp-backend-lifecycle.ps1'
         & '.\scripts\install\verify-mcp-client-backend-routing.ps1'
         & '.\scripts\install\verify-installer-template.ps1'
+        Write-Host 'M29-S7 cheap contract gates SUCCESS' -ForegroundColor Cyan
+
+        if (-not $SkipMavenVerify) {
+            & '.\mvnw.cmd' clean verify
+            if ($LASTEXITCODE -ne 0) {
+                throw "M29-S7 Maven qualification failed with exit code $LASTEXITCODE"
+            }
+        }
 
         # Build the real Windows distribution and compile an isolated smoke
         # setup so packaging plus Inno Pascal syntax are part of the gate.
