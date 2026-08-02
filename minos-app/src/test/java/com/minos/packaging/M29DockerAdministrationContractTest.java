@@ -35,6 +35,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(bootstrap.contains("com.minos.cli.DockerRuntimeBootstrap"));
         assertTrue(bootstrap.contains("configure-project-paths"));
         assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
+        assertTrue(toolsBootstrap.contains("user: \"0:0\""));
+        assertFalse(toolsBootstrap.contains("chown"),
+                "tools bootstrap must not require CAP_CHOWN after cap_drop: ALL");
+        assertTrue(providerProbe.contains("user: \"10001:10001\""));
         assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
         assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
         assertTrue(providerProbe.contains("scip-java version 0.13.1"));
@@ -92,6 +96,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
         assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
         assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
+        assertTrue(dockerfile.contains("chmod -R a+rX /opt/minos/provider-tools"),
+                "provider payload must remain readable/executable by uid 10001 without ownership mutation");
         assertTrue(dockerfile.contains("libicu-dev"),
                 ".NET must run with ICU installed instead of silently enabling invariant globalization");
         assertFalse(dockerfile.contains("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"),
