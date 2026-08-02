@@ -9,6 +9,15 @@ param(
     [string] $McpBackend = 'none',
 
     [string] $ProjectsRoot = '',
+    [string] $DataRoot = '',
+    [string] $DockerInstallRoot = '',
+    [string] $DockerDataRoot = '',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $DockerContainerName = 'minos-mcp-prod',
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $DockerComposeProject = 'minos-mcp-prod',
 
     [switch] $AddToPath
 )
@@ -51,11 +60,25 @@ if ($env:OS -ne 'Windows_NT') {
     throw 'MINOS Windows installer can only run on Windows.'
 }
 
+$LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
 $ResolvedPackage = (Resolve-Path -LiteralPath $Package).Path
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
-    $InstallRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\MINOS'
+    $InstallRoot = Join-Path $LocalAppData 'Programs\MINOS'
 }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+if ([string]::IsNullOrWhiteSpace($DataRoot)) {
+    $DataRoot = Join-Path $LocalAppData 'MINOS\data'
+}
+$DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
+if ([string]::IsNullOrWhiteSpace($DockerInstallRoot)) {
+    $DockerInstallRoot = Join-Path $LocalAppData 'MINOS\docker'
+}
+$DockerInstallRoot = [System.IO.Path]::GetFullPath($DockerInstallRoot)
+if ([string]::IsNullOrWhiteSpace($DockerDataRoot)) {
+    $DockerDataRoot = Join-Path $LocalAppData 'MINOS\docker-data'
+}
+$DockerDataRoot = [System.IO.Path]::GetFullPath($DockerDataRoot)
+
 if ($McpBackend -eq 'docker') {
     if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
         throw '-ProjectsRoot is required when -McpBackend docker is selected.'
@@ -119,6 +142,11 @@ try {
             $SwitchParameters = @{
                 InstallRoot = $InstallRoot
                 TargetBackend = $McpBackend
+                DataRoot = $DataRoot
+                DockerInstallRoot = $DockerInstallRoot
+                DockerDataRoot = $DockerDataRoot
+                DockerContainerName = $DockerContainerName
+                DockerComposeProject = $DockerComposeProject
             }
             if ($McpBackend -eq 'docker') {
                 $SwitchParameters['ProjectsRoot'] = $ProjectsRoot
@@ -150,12 +178,13 @@ try {
     Write-Host ''
     Write-Host 'MINOS installation SUCCESS' -ForegroundColor Green
     Write-Host "Install : $InstallRoot"
-    Write-Host "Data    : $([Environment]::GetFolderPath('LocalApplicationData'))\MINOS\data"
+    Write-Host "Data    : $DataRoot"
     Write-Host "Command : $(Join-Path $InstallRoot 'minos.cmd')"
     Write-Host "MCP     : $McpBackend"
     Write-Host "Switch  : $(Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1')"
     if ($McpBackend -eq 'docker') {
         Write-Host "Projects: $ProjectsRoot"
+        Write-Host "Docker  : $DockerInstallRoot"
     }
     if ($AddToPath) {
         Write-Host 'PATH    : added for the current user; open a new terminal before using `minos.cmd` by name.'
