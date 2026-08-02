@@ -3,7 +3,6 @@ package com.minos.cli;
 import com.minos.application.MinosApplication;
 import com.minos.mcp.MinosMcpServer;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -11,7 +10,7 @@ import java.util.Objects;
 final class McpBackendRouter {
 
     interface NativeMcpRunner {
-        void run(Path home) throws IOException;
+        void run(Path home) throws Exception;
     }
 
     private final NativeMcpRunner nativeRunner;
@@ -26,7 +25,7 @@ final class McpBackendRouter {
         this.dockerTransport = Objects.requireNonNull(dockerTransport, "dockerTransport");
     }
 
-    int run(Path home) throws IOException, InterruptedException {
+    int run(Path home) throws Exception {
         Objects.requireNonNull(home, "home");
         McpBackendConfiguration configuration = new McpBackendConfigurationStore(home).loadOrMigrate();
         return switch (configuration.backend()) {
