@@ -23,10 +23,13 @@ class M29InstallerBackendLifecycleContractTest {
         String zipInstaller = text(root.resolve("scripts/install/install-windows.ps1"));
 
         assertOrdered(switcher,
-                "PREPARE target=docker result=success",
+                "PREPARE target=docker mode=install result=success",
                 "HANDSHAKE target=$TargetBackend result=success",
                 "COMMIT backend=$TargetBackend result=success",
                 "RETIRE backend=docker action=stop result=success");
+        assertTrue(switcher.contains("Test-ReusableDockerRuntime"));
+        assertTrue(switcher.contains("PREPARE target=docker mode=reuse result=success"));
+        assertTrue(switcher.contains("Invoke-DockerRuntimeAction -Action Validate"));
         assertTrue(switcher.contains("Restore-BackendConfiguration"));
         assertTrue(switcher.contains("New-DockerRuntimeSnapshot"));
         assertTrue(switcher.contains("Restore-DockerRuntimeSnapshot"));
@@ -44,9 +47,10 @@ class M29InstallerBackendLifecycleContractTest {
                 "Fresh native backend selection was not committed",
                 "Native -> Docker switch was not committed",
                 "Docker -> native switch was not committed",
+                "Same-version native -> Docker rebuilt the managed runtime instead of reusing it",
                 "Failed Docker handshake changed the active backend",
                 "Retirement failure did not restore the previous Docker config",
-                "Docker same-backend upgrade did not prepare a new runtime generation",
+                "Docker package upgrade did not prepare a new runtime generation",
                 "Failed Docker upgrade did not restore the previous runtime generation",
                 "Backend lifecycle modified unrelated third-party client configuration"}) {
             assertTrue(lifecycle.contains(proof), "missing S7 lifecycle proof: " + proof);
@@ -75,6 +79,10 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(distribution.contains("verify-mcp-backend-lifecycle.ps1"));
         assertTrue(zipInstaller.contains("[ValidateSet('none', 'native', 'docker')]"));
         assertTrue(zipInstaller.contains("TargetBackend = $McpBackend"));
+        assertTrue(zipInstaller.contains("DataRoot = $DataRoot"));
+        assertTrue(zipInstaller.contains("DockerInstallRoot = $DockerInstallRoot"));
+        assertTrue(zipInstaller.contains("DockerDataRoot = $DockerDataRoot"));
+        assertTrue(zipInstaller.contains("yyyyMMdd-HHmmssfff"));
         assertOrdered(zipInstaller,
                 "Copy-Item -LiteralPath $Source -Destination $InstallRoot -Recurse",
                 "& $Switcher @SwitchParameters",
