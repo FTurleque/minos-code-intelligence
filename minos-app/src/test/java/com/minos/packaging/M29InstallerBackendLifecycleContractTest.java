@@ -21,6 +21,7 @@ class M29InstallerBackendLifecycleContractTest {
         String distribution = text(root.resolve("scripts/release/build-windows-distribution.ps1"));
         String builder = text(root.resolve("scripts/release/build-windows-installer.ps1"));
         String zipInstaller = text(root.resolve("scripts/install/install-windows.ps1"));
+        String runner = text(root.resolve("scripts/m29/run-s7.ps1"));
 
         assertOrdered(switcher,
                 "PREPARE target=docker mode=install result=success",
@@ -83,11 +84,27 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(zipInstaller.contains("DockerInstallRoot = $DockerInstallRoot"));
         assertTrue(zipInstaller.contains("DockerDataRoot = $DockerDataRoot"));
         assertTrue(zipInstaller.contains("yyyyMMdd-HHmmssfff"));
+        assertTrue(zipInstaller.contains("$OriginalUserPath"));
+        assertTrue(zipInstaller.contains("$PathChanged"));
         assertOrdered(zipInstaller,
                 "Copy-Item -LiteralPath $Source -Destination $InstallRoot -Recurse",
-                "& $Switcher @SwitchParameters",
-                "[Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')");
+                "[Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')",
+                "& $Switcher @SwitchParameters");
+        assertTrue(zipInstaller.contains("[Environment]::SetEnvironmentVariable('Path', $OriginalUserPath, 'User')"));
         assertTrue(zipInstaller.contains("Move-Item -LiteralPath $Backup -Destination $InstallRoot"));
+
+        assertTrue(runner.contains("M29-S7 exact-head mismatch"));
+        assertTrue(runner.contains("verify-mcp-backend-lifecycle.ps1"));
+        assertTrue(runner.contains("verify-mcp-client-backend-routing.ps1"));
+        assertTrue(runner.contains("verify-installer-template.ps1"));
+        assertTrue(runner.contains("build-windows-distribution.ps1"));
+        assertTrue(runner.contains("build-windows-installer.ps1"));
+        assertTrue(runner.contains("M29-S7 native-only install SUCCESS"));
+        assertTrue(runner.contains("M29-S7 Docker-only install SUCCESS"));
+        assertTrue(runner.contains("M29-S7 native -> Docker reuse SUCCESS"));
+        assertTrue(runner.contains("M29-S7 uninstall-preserve SUCCESS"));
+        assertTrue(runner.contains("M29-S7 explicit purge SUCCESS"));
+        assertTrue(runner.contains("M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS"));
     }
 
     private static void assertOrdered(String text, String... tokens) {
