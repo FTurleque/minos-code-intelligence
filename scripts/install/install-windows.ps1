@@ -5,6 +5,11 @@ param(
 
     [string] $InstallRoot = '',
 
+    [ValidateSet('none', 'native', 'docker')]
+    [string] $McpBackend = 'none',
+
+    [string] $ProjectsRoot = '',
+
     [switch] $AddToPath
 )
 
@@ -51,6 +56,15 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     $InstallRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\MINOS'
 }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+if ($McpBackend -eq 'docker') {
+    if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
+        throw '-ProjectsRoot is required when -McpBackend docker is selected.'
+    }
+    $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
+    if (-not (Test-Path -LiteralPath $ProjectsRoot -PathType Container)) {
+        throw "Docker projects root does not exist: $ProjectsRoot"
+    }
+}
 
 $Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("minos-install-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path $Temporary | Out-Null
@@ -76,6 +90,8 @@ try {
         'VERSION',
         'app\minos.exe',
         'lib\minos.jar',
+        'integration\probe-mcp-backend.ps1',
+        'integration\switch-mcp-backend.ps1',
         'docker\Dockerfile.mcp.release',
         'docker\compose.mcp.prod.yaml',
         'docker\scripts\prod-mcp-release.ps1',
@@ -91,9 +107,36 @@ try {
         $Backup = "$InstallRoot.backup-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))"
         Move-Item -LiteralPath $InstallRoot -Destination $Backup
     }
+
     try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallRoot) | Out-Null
         Copy-Item -LiteralPath $Source -Destination $InstallRoot -Recurse
+
+        $InstalledVersion = Invoke-MinosVersion -Launcher (Join-Path $InstallRoot 'minos.cmd')
+
+        if ($McpBackend -ne 'none') {
+            $Switcher = Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1'
+            $SwitchParameters = @{
+                InstallRoot = $InstallRoot
+                TargetBackend = $McpBackend
+            }
+            if ($McpBackend -eq 'docker') {
+                $SwitchParameters['ProjectsRoot'] = $ProjectsRoot
+            }
+            & $Switcher @SwitchParameters
+        }
+
+        # Only mutate the user PATH after the installed payload and requested MCP
+        # backend have both passed validation. A failed upgrade restores the old
+        # installation without leaving a new PATH mutation behind.
+        if ($AddToPath) {
+            $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $Parts = @($UserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($Parts -notcontains $InstallRoot) {
+                $NewPath = (($Parts + $InstallRoot) -join ';')
+                [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
+            }
+        }
     }
     catch {
         Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -103,24 +146,17 @@ try {
         throw
     }
 
-    if ($AddToPath) {
-        $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $Parts = @($UserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        if ($Parts -notcontains $InstallRoot) {
-            $NewPath = (($Parts + $InstallRoot) -join ';')
-            [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
-        }
-    }
-
-    $InstalledVersion = Invoke-MinosVersion -Launcher (Join-Path $InstallRoot 'minos.cmd')
     Write-Host $InstalledVersion
-
     Write-Host ''
     Write-Host 'MINOS installation SUCCESS' -ForegroundColor Green
     Write-Host "Install : $InstallRoot"
     Write-Host "Data    : $([Environment]::GetFolderPath('LocalApplicationData'))\MINOS\data"
     Write-Host "Command : $(Join-Path $InstallRoot 'minos.cmd')"
-    Write-Host "Docker  : $(Join-Path $InstallRoot 'docker\scripts\configure-docker-mcp.ps1')"
+    Write-Host "MCP     : $McpBackend"
+    Write-Host "Switch  : $(Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1')"
+    if ($McpBackend -eq 'docker') {
+        Write-Host "Projects: $ProjectsRoot"
+    }
     if ($AddToPath) {
         Write-Host 'PATH    : added for the current user; open a new terminal before using `minos.cmd` by name.'
     }
