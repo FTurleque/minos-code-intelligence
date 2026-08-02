@@ -70,7 +70,6 @@ var
   McpPreflightIni: String;
   McpPreflightCompleted: Boolean;
   DockerProjectsPage: TInputDirWizardPage;
-  DockerWarningShown: Boolean;
   DeleteUserDataOnUninstall: Boolean;
 
 function IsSmokeBuild(): Boolean;
@@ -91,6 +90,34 @@ end;
 function DockerMcpSelected(): Boolean;
 begin
   Result := McpModePage.Values[1];
+end;
+
+function NoMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[2];
+end;
+
+function McpBackendSelected(): Boolean;
+begin
+  Result := NativeMcpSelected() or DockerMcpSelected();
+end;
+
+function ExistingMcpBackend(): String;
+var
+  ConfigPath: String;
+  ConfigText: String;
+  Normalized: String;
+begin
+  Result := '';
+  ConfigPath := ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties');
+  if FileExists(ConfigPath) and LoadStringFromFile(ConfigPath, ConfigText) then
+  begin
+    Normalized := Lowercase(ConfigText);
+    if Pos('backend=docker', Normalized) > 0 then
+      Result := 'docker'
+    else if Pos('backend=native', Normalized) > 0 then
+      Result := 'native';
+  end;
 end;
 
 function TrimTrailingBackslash(Value: String): String;
@@ -307,12 +334,7 @@ begin
   Result := Exec(ExpandConstant('{cmd}'), '/C docker version >NUL 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
-function GetDockerProjectsRoot(Param: String): String;
-begin
-  Result := DockerProjectsPage.Values[0];
-end;
-
-function NativeMcpClientSelected(): Boolean;
+function McpClientSelected(): Boolean;
 begin
   Result :=
     (McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked) or
@@ -322,13 +344,13 @@ begin
     (McpCodex.Enabled and McpCodex.Checked);
 end;
 
-procedure ConfigureNativeMcpClients;
+procedure ConfigureMcpClients;
 var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
 begin
-  if IsSmokeBuild() or (not NativeMcpSelected()) or (not NativeMcpClientSelected()) then
+  if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then
     exit;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -346,36 +368,43 @@ begin
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
-      'MINOS est installé, mais une ou plusieurs intégrations MCP natives n''ont pas pu être configurées.' + #13#10 + #13#10 +
-      'Le CLI et le MCP natif restent utilisables directement.' + #13#10 +
+      'MINOS est installé et le backend MCP a été validé, mais une ou plusieurs intégrations clientes n''ont pas pu être configurées.' + #13#10 + #13#10 +
+      'Le point d''entrée stable minos.exe mcp reste utilisable directement.' + #13#10 +
       'Diagnostic : %LOCALAPPDATA%\MINOS\mcp-clients.log',
       mbError,
       MB_OK);
   end;
 end;
 
-procedure ConfigureDockerMcp;
+function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
+  TargetBackend: String;
 begin
-  if IsSmokeBuild() or (not DockerMcpSelected()) then
+  Result := True;
+  if IsSmokeBuild() or NoMcpSelected() then
     exit;
+
+  if NativeMcpSelected() then TargetBackend := 'native'
+  else TargetBackend := 'docker';
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{app}\docker\scripts\configure-docker-mcp.ps1') +
+    ExpandConstant('{app}\integration\switch-mcp-backend.ps1') +
     '" -InstallRoot "' + ExpandConstant('{app}') +
-    '" -ProjectsRoot "' + DockerProjectsPage.Values[0] +
-    '" -Start -Strict';
+    '" -TargetBackend ' + TargetBackend;
+  if DockerMcpSelected() then
+    Parameters := Parameters + ' -ProjectsRoot "' + DockerProjectsPage.Values[0] + '"';
 
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
+    Result := False;
     MsgBox(
-      'MINOS est installé, mais la configuration du MCP Docker a échoué.' + #13#10 + #13#10 +
-      'Le CLI et le MCP natif restent utilisables.' + #13#10 +
-      'Diagnostic : %LOCALAPPDATA%\MINOS\docker-setup.log',
+      'MINOS est installé, mais le backend MCP sélectionné n''a pas atteint son gate de validation/handshake.' + #13#10 + #13#10 +
+      'La configuration MCP active précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué.' + #13#10 +
+      'Diagnostic : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log',
       mbError,
       MB_OK);
   end;
@@ -384,23 +413,37 @@ end;
 procedure InitializeWizard;
 var
   RequestedRoot: String;
+  ExistingBackend: String;
 begin
   McpModePage := CreateInputOptionPage(
     wpSelectTasks,
     'Mode MCP',
-    'Choisissez comment utiliser le serveur MCP MINOS',
-    'Le mode natif fonctionne directement sur Windows sans Docker. Le mode Docker est optionnel et peut être activé en complément.',
-    False,
-    False);
-  McpModePage.Add('MCP natif local — recommandé, sans Docker');
-  McpModePage.Add('MCP Docker — optionnel, isolation par conteneur');
-  McpModePage.Values[0] := True;
-  McpModePage.Values[1] := False;
+    'Choisissez le backend du serveur MCP MINOS',
+    'Un seul backend est actif à la fois. Les clients IA utilisent toujours le même point d''entrée minos.exe mcp.',
+    True,
+    True);
+  McpModePage.Add('MCP natif Windows — recommandé');
+  McpModePage.Add('MCP Docker — isolation renforcée');
+  McpModePage.Add('Ne pas configurer maintenant');
+
+  ExistingBackend := ExistingMcpBackend();
+  if ExistingBackend = 'docker' then
+  begin
+    McpModePage.Values[0] := False;
+    McpModePage.Values[1] := True;
+    McpModePage.Values[2] := False;
+  end
+  else
+  begin
+    McpModePage.Values[0] := True;
+    McpModePage.Values[1] := False;
+    McpModePage.Values[2] := False;
+  end;
 
   McpClientsPage := CreateCustomPage(
     McpModePage.ID,
-    'Intégrations MCP natives',
-    'Connecter le MCP natif MINOS à vos clients IA détectés');
+    'Clients IA',
+    'Connecter le point d''entrée MCP MINOS stable aux clients IA détectés');
 
   McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage);
   McpCopilotJetBrainsStatus := TNewStaticText.Create(McpClientsPage);
@@ -425,7 +468,6 @@ begin
   McpPreflightCompleted := False;
   DisableAllMcpRows('Détection en attente');
 
-  DockerWarningShown := False;
   DockerProjectsPage := CreateInputDirPage(
     McpClientsPage.ID,
     'MCP Docker MINOS',
@@ -443,7 +485,7 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   if PageID = McpClientsPage.ID then
-    Result := not NativeMcpSelected()
+    Result := NoMcpSelected()
   else if PageID = DockerProjectsPage.ID then
     Result := not DockerMcpSelected()
   else
@@ -454,7 +496,7 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
 
-  if (CurPageID = McpModePage.ID) and NativeMcpSelected() and (not McpPreflightCompleted) then
+  if (CurPageID = McpModePage.ID) and McpBackendSelected() and (not McpPreflightCompleted) then
   begin
     RunMcpPreflight;
     McpPreflightCompleted := True;
@@ -469,15 +511,16 @@ begin
       exit;
     end;
 
-    if (not DockerReady()) and (not DockerWarningShown) then
+    if not DockerReady() then
     begin
-      DockerWarningShown := True;
       MsgBox(
         'Docker Desktop n''est pas disponible ou son daemon n''est pas démarré.' + #13#10 + #13#10 +
-        'MINOS sera installé normalement, mais la configuration du MCP Docker sera ignorée. ' +
-        'Vous pourrez la lancer plus tard depuis les scripts installés.',
-        mbInformation,
+        'Le backend Docker a été explicitement sélectionné : l''installation ne basculera pas silencieusement vers le backend natif.' + #13#10 +
+        'Démarrez Docker Desktop puis réessayez, ou revenez en arrière pour sélectionner un autre mode.',
+        mbError,
         MB_OK);
+      Result := False;
+      exit;
     end;
   end;
 end;
@@ -487,8 +530,8 @@ begin
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
-    ConfigureNativeMcpClients;
-    if DockerMcpSelected() and DockerReady() then ConfigureDockerMcp;
+    if ConfigureSelectedMcpBackend() then
+      ConfigureMcpClients;
   end;
 end;
 
