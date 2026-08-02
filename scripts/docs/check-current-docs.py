@@ -19,10 +19,6 @@ def read(relative: str) -> str:
 
 def normalized(value: str) -> str:
     value = value.replace("\ufeff", "").replace("\u00a0", " ")
-    # Strip Markdown wrappers, but preserve underscores: they are significant in
-    # technical identifiers such as Inno task names. Removing them made
-    # `mcp_copilot_jetbrains` collide with the valid Pascal identifier
-    # `McpCopilotJetBrains` and produced a false stale-state failure.
     value = re.sub(r"[`*]+", "", value)
     return re.sub(r"\s+", " ", value).strip().casefold()
 
@@ -82,10 +78,13 @@ def main() -> int:
         require("docs/STATUS.md", status, "1adbc45339efe37cd26d1937025bfa69d7b57811")
         require("docs/STATUS.md", status, "M29 #107")
         require("docs/STATUS.md", status, "Docker autonome & Native Parity")
+        require("docs/STATUS.md", status, "m29-autonomous-docker-runtime")
+        require("docs/STATUS.md", status, "qualification locale pending")
         require("docs/ROADMAP.md", roadmap, "PR promotion")
         require("docs/ROADMAP.md", roadmap, "#93 CLOSED / completed")
         require("docs/ROADMAP.md", roadmap, "M29 — Autonomous Docker Runtime & Native Parity")
         require("docs/ROADMAP.md", roadmap, "Issue : **#107**")
+        require("docs/ROADMAP.md", roadmap, "EN COURS")
         require("docs/ROADMAP.md", roadmap, "index-v2.bin")
         require("docs/ROADMAP.md", roadmap, "native result == docker result")
 
@@ -99,10 +98,13 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 is planned, not delivered. Its contract must remain capability-honest.
+        # M29 is now in progress but parity remains unproved. The checker must reject the old planned state
+        # just as strongly as it rejects an unsupported delivered/parity claim.
         for token in (
-            "PLANIFIÉ",
+            "EN COURS",
             "#107",
+            "m29-autonomous-docker-runtime",
+            "db33cae87b37f9c2c36e536c96a4ccb6e24df3e5",
             "Docker autonome",
             "index-v2.bin",
             "float32",
@@ -120,11 +122,16 @@ def main() -> int:
             "Codex",
             "native result == docker result",
             "#98",
+            "pas de preuve",
         ):
             require("docs/roadmap/M29_EXECUTION.md", m29, token)
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
-        require("docs/roadmap/M29_EXECUTION.md", m29, "3 août 2026")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "2 août 2026")
+        forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
+        forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
+        forbid("docs/STATUS.md", status, "M29 #107                         PLANIFIÉ")
+        forbid("docs/ROADMAP.md", roadmap, "Statut : **PLANIFIÉ — démarrage prévu le 3 août 2026")
 
         stale_current = (
             "release 0.2.0 candidate",
@@ -153,7 +160,7 @@ def main() -> int:
         require("docs/releases/1.0.1.md", release_101, "%LOCALAPPDATA%\\MINOS")
         require("docs/releases/1.0.1.md", release_101, "Non / conserver")
 
-        # Windows user contract.
+        # Windows user contract remains 1.0.1 until M29 parity is qualified.
         for token in (
             "Mode MCP",
             "MCP natif local — recommandé, sans Docker",
@@ -214,8 +221,6 @@ def main() -> int:
             "DelTree(UserDataRoot, True, True, True)",
         ):
             require("minos-installer.iss.template", installer, token)
-        # Obsolete static [Tasks] declarations are forbidden. MCP mode selection
-        # belongs to the explicit wizard page; only the Windows PATH task remains.
         for stale_task in (
             'Name: "docker"',
             'Name: "mcp_copilot_jetbrains"',
@@ -230,7 +235,6 @@ def main() -> int:
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
         require("release-windows.yml", release_workflow, "workflow_dispatch")
 
-        # The completed one-shot publisher must no longer be part of the current branch.
         if (ROOT / ".github/workflows/release-v1.0.0.yml").exists():
             raise RuntimeError("completed one-shot release-v1.0.0.yml must not remain on the maintenance line")
 
