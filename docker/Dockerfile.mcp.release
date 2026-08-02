@@ -12,6 +12,7 @@ ARG NODE_VERSION=20.20.2
 ARG COURSIER_VERSION=2.1.25-M26
 ARG SCIP_TYPESCRIPT_VERSION=0.4.0
 ARG SCIP_JAVA_VERSION=0.13.1
+ARG SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT
 ARG SCIP_PYTHON_VERSION=0.6.6
 ARG SCIP_CLANG_VERSION=0.4.0
 ARG SCIP_DOTNET_VERSION=0.2.14
@@ -118,19 +119,24 @@ RUN set -eux; \
     printf '%s\n' "${SCIP_GO_VERSION}" > "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/.minos-version"; \
     test -x "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go"
 
-# Build a standalone scip-java launcher while network is available. --standalone embeds the
-# resolved JARs, so RUN containers never need a writable Coursier cache or network access.
+# Build a standalone scip-java launcher while network is available. The Maven coordinate is
+# verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
+# embeds the exact 0.13.1 artifact. Runtime qualification checks that real reported value.
 RUN set -eux; \
-    COURSIER_CACHE=/tmp/minos-coursier-build-cache \
-      cs bootstrap "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
-        -M org.scip_code.scip_java.ScipJava \
-        --standalone \
-        -o /usr/local/bin/scip-java; \
+    export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
+    cs launch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
+      --jvm system --main org.scip_code.scip_java.ScipJava -- --version \
+      | tee /tmp/scip-java-coordinate.version; \
+    grep -F "scip-java version ${SCIP_JAVA_VERSION}" /tmp/scip-java-coordinate.version; \
+    cs bootstrap "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
+      -M org.scip_code.scip_java.ScipJava \
+      --standalone \
+      -o /usr/local/bin/scip-java; \
     chmod 0755 /usr/local/bin/scip-java; \
-    rm -rf /tmp/minos-coursier-build-cache; \
-    scip-java --version | tee /tmp/scip-java.version; \
-    grep -F "scip-java version ${SCIP_JAVA_VERSION}" /tmp/scip-java.version; \
-    rm -f /tmp/scip-java.version
+    scip-java --version | tee /tmp/scip-java-standalone.version; \
+    grep -F "scip-java version ${SCIP_JAVA_STANDALONE_REPORTED_VERSION}" /tmp/scip-java-standalone.version; \
+    rm -rf /tmp/minos-coursier-build-cache \
+      /tmp/scip-java-coordinate.version /tmp/scip-java-standalone.version
 
 RUN set -eux; \
     mkdir -p /opt/minos/provider-evidence; \
@@ -154,7 +160,7 @@ RUN set -eux; \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
       '  "networkPolicy": "build-only downloads; runtime network none",' \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}\"}," \
       "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
