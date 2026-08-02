@@ -95,6 +95,7 @@ $BackendFile = Join-Path $RuntimeRoot 'backend.properties'
 $SwitchStateFile = Join-Path $RuntimeRoot 'backend-switch.json'
 $SwitchLog = Join-Path $RuntimeRoot 'backend-switch.log'
 $ManagedMarker = Join-Path $InstallRoot '.docker-mcp-managed'
+$VersionFile = Join-Path $InstallRoot 'VERSION'
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 
 function Write-SwitchLog([string] $Message) {
@@ -126,6 +127,33 @@ function Read-CurrentBackend {
         throw "MINOS backend configuration is invalid: expected backend=native|docker in $BackendFile"
     }
     return $Backend
+}
+
+function Test-ReusableDockerRuntime {
+    if (-not (Test-Path -LiteralPath $ManagedMarker -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath $VersionFile -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $DockerInstallRoot 'runtime') -PathType Container)) { return $false }
+
+    $Marker = Read-KeyValueFile -Path $ManagedMarker
+    $Identity = Read-KeyValueFile -Path $VersionFile
+    $ExpectedVersion = [string]$Identity['version']
+    $ExpectedCommit = [string]$Identity['commit']
+    if ([string]::IsNullOrWhiteSpace($ExpectedVersion) -or [string]::IsNullOrWhiteSpace($ExpectedCommit)) { return $false }
+
+    try {
+        $MarkerProjects = [System.IO.Path]::GetFullPath([string]$Marker['projectsRoot'])
+        $MarkerInstall = [System.IO.Path]::GetFullPath([string]$Marker['dockerInstallRoot'])
+        $MarkerData = [System.IO.Path]::GetFullPath([string]$Marker['dockerDataRoot'])
+    }
+    catch { return $false }
+
+    return [string]$Marker['version'] -eq $ExpectedVersion -and
+        [string]$Marker['commit'] -eq $ExpectedCommit -and
+        $MarkerProjects -eq $ProjectsRoot -and
+        $MarkerInstall -eq $DockerInstallRoot -and
+        $MarkerData -eq $DockerDataRoot -and
+        [string]$Marker['containerName'] -eq $DockerContainerName -and
+        [string]$Marker['composeProject'] -eq $DockerComposeProject
 }
 
 function Write-BackendConfiguration([string] $Backend) {
@@ -185,7 +213,7 @@ function Resolve-DockerRuntimeParameters {
 }
 
 function Invoke-DockerRuntimeAction(
-    [ValidateSet('Start', 'Stop')] [string] $Action,
+    [ValidateSet('Start', 'Stop', 'Validate')] [string] $Action,
     [object] $Runtime = $null
 ) {
     if (-not (Test-Path -LiteralPath $DockerWorkflowPath -PathType Leaf)) {
@@ -250,33 +278,42 @@ function Restore-DockerRuntimeSnapshot([object] $Snapshot) {
 $PreviousBackend = Read-CurrentBackend
 $BackendFileExisted = Test-Path -LiteralPath $BackendFile -PathType Leaf
 $BackendFileBytes = if ($BackendFileExisted) { [System.IO.File]::ReadAllBytes($BackendFile) } else { [byte[]]@() }
+$ReuseDockerRuntime = $TargetBackend -eq 'docker' -and (Test-ReusableDockerRuntime)
 $PreviousDockerRuntime = if ($PreviousBackend -eq 'docker') { Resolve-DockerRuntimeParameters } else { $null }
-$DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker') {
+$DockerRuntimeSnapshot = if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker' -and -not $ReuseDockerRuntime) {
     New-DockerRuntimeSnapshot -Runtime $PreviousDockerRuntime
 } else { $null }
 $CandidateHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-backend-probe-' + [Guid]::NewGuid())
 $Committed = $false
 
-Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend"
+Write-SwitchLog "BEGIN previous=$PreviousBackend target=$TargetBackend reuseDocker=$ReuseDockerRuntime"
 try {
-    # PREPARE + VALIDATE. Docker setup performs install/build, start and its
-    # provider/query validation before the shared backend selection changes.
+    # PREPARE + VALIDATE. Reuse a same-version managed Docker runtime when
+    # switching back to it; only a new/mismatched release goes through install.
     if ($TargetBackend -eq 'docker') {
-        $DockerParameters = @{
-            InstallRoot = $InstallRoot
-            ProjectsRoot = $ProjectsRoot
-            Start = $true
-            Strict = $true
-            DockerInstallRoot = $DockerInstallRoot
-            DockerDataRoot = $DockerDataRoot
-            DockerContainerName = $DockerContainerName
-            DockerComposeProject = $DockerComposeProject
+        if ($ReuseDockerRuntime) {
+            $ReusableRuntime = Resolve-DockerRuntimeParameters
+            Invoke-DockerRuntimeAction -Action Start -Runtime $ReusableRuntime
+            Invoke-DockerRuntimeAction -Action Validate -Runtime $ReusableRuntime
+            Write-SwitchLog 'PREPARE target=docker mode=reuse result=success'
         }
-        if (-not [string]::IsNullOrWhiteSpace($DockerImageTag)) {
-            $DockerParameters['DockerImageTag'] = $DockerImageTag
+        else {
+            $DockerParameters = @{
+                InstallRoot = $InstallRoot
+                ProjectsRoot = $ProjectsRoot
+                Start = $true
+                Strict = $true
+                DockerInstallRoot = $DockerInstallRoot
+                DockerDataRoot = $DockerDataRoot
+                DockerContainerName = $DockerContainerName
+                DockerComposeProject = $DockerComposeProject
+            }
+            if (-not [string]::IsNullOrWhiteSpace($DockerImageTag)) {
+                $DockerParameters['DockerImageTag'] = $DockerImageTag
+            }
+            & $DockerConfiguratorPath @DockerParameters
+            Write-SwitchLog 'PREPARE target=docker mode=install result=success'
         }
-        & $DockerConfiguratorPath @DockerParameters
-        Write-SwitchLog 'PREPARE target=docker result=success'
     }
     else {
         Write-SwitchLog 'PREPARE target=native result=success'
@@ -323,6 +360,7 @@ try {
         dockerContainerName = $DockerContainerName
         dockerComposeProject = $DockerComposeProject
         projectsRoot = $ProjectsRoot
+        reusedDockerRuntime = $ReuseDockerRuntime
         transaction = 'prepare -> validate -> handshake -> commit -> retire'
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $SwitchStateFile -Encoding utf8
 
@@ -345,7 +383,7 @@ catch {
         }
     }
 
-    if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker') {
+    if ($PreviousBackend -eq 'docker' -and $TargetBackend -eq 'docker' -and -not $ReuseDockerRuntime) {
         try {
             Stop-CandidateDockerBestEffort
             Restore-DockerRuntimeSnapshot -Snapshot $DockerRuntimeSnapshot
@@ -367,7 +405,7 @@ catch {
             throw "MINOS backend switch failed and the previous Docker backend could not be restarted: $($Failure.Exception.Message); restart: $($_.Exception.Message)"
         }
     }
-    elseif ($TargetBackend -eq 'docker') {
+    elseif ($TargetBackend -eq 'docker' -and $PreviousBackend -ne 'docker') {
         Stop-CandidateDockerBestEffort
     }
 
