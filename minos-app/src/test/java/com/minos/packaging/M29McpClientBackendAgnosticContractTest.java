@@ -51,6 +51,10 @@ class M29McpClientBackendAgnosticContractTest {
         assertTrue(runner.contains("verify-mcp-client-integration.ps1"));
         assertTrue(runner.contains("verify-mcp-client-preflight.ps1"));
         assertTrue(runner.contains("M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS"));
+        assertTrue(runner.contains("${Relative}:"),
+                "Windows PowerShell 5.1 requires braced interpolation before a literal colon");
+        assertFalse(runner.contains("$Relative:"),
+                "unbraced variable interpolation before ':' does not parse on Windows PowerShell 5.1");
     }
 
     private static String text(Path path) throws IOException {
