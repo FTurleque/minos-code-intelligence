@@ -131,11 +131,27 @@ try {
         Move-Item -LiteralPath $InstallRoot -Destination $Backup
     }
 
+    $OriginalUserPath = if ($AddToPath) { [Environment]::GetEnvironmentVariable('Path', 'User') } else { $null }
+    $PathChanged = $false
+
     try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallRoot) | Out-Null
         Copy-Item -LiteralPath $Source -Destination $InstallRoot -Recurse
 
         $InstalledVersion = Invoke-MinosVersion -Launcher (Join-Path $InstallRoot 'minos.cmd')
+
+        # PATH is transactional with the payload. Apply it before backend
+        # switching so a backend failure can restore both PATH and program
+        # payload; after a successful backend transaction no fallible install
+        # mutation remains.
+        if ($AddToPath) {
+            $Parts = @($OriginalUserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            if ($Parts -notcontains $InstallRoot) {
+                $NewPath = (($Parts + $InstallRoot) -join ';')
+                [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
+                $PathChanged = $true
+            }
+        }
 
         if ($McpBackend -ne 'none') {
             $Switcher = Join-Path $InstallRoot 'integration\switch-mcp-backend.ps1'
@@ -153,20 +169,16 @@ try {
             }
             & $Switcher @SwitchParameters
         }
-
-        # Only mutate the user PATH after the installed payload and requested MCP
-        # backend have both passed validation. A failed upgrade restores the old
-        # installation without leaving a new PATH mutation behind.
-        if ($AddToPath) {
-            $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-            $Parts = @($UserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-            if ($Parts -notcontains $InstallRoot) {
-                $NewPath = (($Parts + $InstallRoot) -join ';')
-                [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
-            }
-        }
     }
     catch {
+        if ($PathChanged) {
+            try {
+                [Environment]::SetEnvironmentVariable('Path', $OriginalUserPath, 'User')
+            }
+            catch {
+                Write-Warning "MINOS install rollback could not restore the user PATH: $($_.Exception.Message)"
+            }
+        }
         Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
         if ($null -ne $Backup -and (Test-Path -LiteralPath $Backup)) {
             Move-Item -LiteralPath $Backup -Destination $InstallRoot
@@ -187,7 +199,7 @@ try {
         Write-Host "Docker  : $DockerInstallRoot"
     }
     if ($AddToPath) {
-        Write-Host 'PATH    : added for the current user; open a new terminal before using `minos.cmd` by name.'
+        Write-Host 'PATH    : added/preserved for the current user; open a new terminal before using `minos.cmd` by name.'
     }
     if ($null -ne $Backup) {
         Write-Host "Backup  : $Backup"
