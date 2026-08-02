@@ -82,6 +82,7 @@ final class ScipIngestionAdapter {
                     request.moduleId(),
                     fileId,
                     request.projectRelativePath(fact.relativePath()),
+                    request.projectRelativeRoot(),
                     declarationLocation,
                     request.providerId(),
                     request.providerVersion(),
