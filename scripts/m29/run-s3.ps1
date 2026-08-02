@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $ProjectsRoot = '',
-    [string] $FixtureRelativePath = 'minos-code-intelligence',
+    [string] $FixtureRelativePath = 'minos-code-intelligence/fixtures/java/java-multi-module',
     [string] $ExpectedHead = '',
     [switch] $SkipMavenVerify,
     [switch] $KeepArtifacts
@@ -22,6 +22,9 @@ $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 $FixtureHostPath = [System.IO.Path]::GetFullPath((Join-Path $ProjectsRoot $FixtureRelativePath))
 if (-not (Test-Path -LiteralPath $FixtureHostPath -PathType Container)) {
     throw "M29-S3 fixture project does not exist: $FixtureHostPath"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $FixtureHostPath 'pom.xml') -PathType Leaf)) {
+    throw "M29-S3 fixture must be the controlled Maven project used to qualify scip-java: $FixtureHostPath"
 }
 
 function Invoke-NativeCapture {
@@ -67,6 +70,7 @@ if (-not [string]::IsNullOrWhiteSpace($Dirty)) {
     throw "M29-S3 requires a clean worktree. Dirty entries:`n$Dirty"
 }
 Write-Host "M29-S3 exact HEAD: $Head" -ForegroundColor Cyan
+Write-Host "M29-S3 controlled fixture: $FixtureRelativePath" -ForegroundColor Cyan
 
 if (-not $SkipMavenVerify) {
     Push-Location $RepoRoot
@@ -178,8 +182,10 @@ try {
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'add', $ContainerFixture, '--name', 'm29-s3-fixture', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'inspect', 'm29-s3-fixture', '--format', 'json')
 
-    # This is deliberately a real index, not a dry-run. If the image cannot execute the selected
-    # provider offline, S3 remains red and the evidence becomes the concrete S4 provider-image blocker.
+    # S3 deliberately uses the controlled Java multi-module fixture instead of the MINOS repository
+    # root. The gate here is the Docker administration/indexing plane itself: scip-java must compile
+    # and index a read-only Maven project from writable MINOS staging with packaged Maven and bounded
+    # executable tmpfs. Polyglot monorepo module-root routing is qualified separately in M29-S5.
     Invoke-Workflow -Action Admin -MinosArguments @('index', 'm29-s3-fixture', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('index-status', 'm29-s3-fixture', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('semantic', 'status', 'm29-s3-fixture', '--format', 'json')
