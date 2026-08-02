@@ -121,9 +121,12 @@ RUN set -eux; \
 
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
-# embeds the exact 0.13.1 artifact. Runtime qualification checks that real reported value.
+# embeds the exact 0.13.1 artifact. Mordant pulls JNA at runtime; keep general /tmp noexec and
+# hard-code JNA extraction to the dedicated bounded exec tmpfs mounted by admin/probe planes.
 RUN set -eux; \
     export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
+    mkdir -p /run/minos-native; \
+    chmod 1777 /run/minos-native; \
     cs launch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
       --jvm system --main org.scip_code.scip_java.ScipJava -- --version \
       | tee /tmp/scip-java-coordinate.version; \
@@ -131,6 +134,7 @@ RUN set -eux; \
     cs bootstrap "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
       -M org.scip_code.scip_java.ScipJava \
       --standalone \
+      --java-opt -Djna.tmpdir=/run/minos-native \
       -o /usr/local/bin/scip-java; \
     chmod 0755 /usr/local/bin/scip-java; \
     scip-java --version | tee /tmp/scip-java-standalone.version; \
@@ -160,7 +164,7 @@ RUN set -eux; \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
       '  "networkPolicy": "build-only downloads; runtime network none",' \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; JNA extraction is isolated to /run/minos-native\"}," \
       "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
