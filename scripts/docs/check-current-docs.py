@@ -81,8 +81,11 @@ def main() -> int:
         require("docs/STATUS.md", status, "M29 #107")
         require("docs/STATUS.md", status, "Docker autonome & Native Parity")
         require("docs/STATUS.md", status, "m29-autonomous-docker-runtime")
-        require("docs/STATUS.md", status, "qualification Maven+Docker pending")
         require("docs/STATUS.md", status, "417 PASS")
+        require("docs/STATUS.md", status, "b780feb7d27bd34952d1952f8d80b06755980684")
+        require("docs/STATUS.md", status, "provider-complete image implémentée")
+        require("docs/STATUS.md", status, "tools verify --all")
+
         require("docs/ROADMAP.md", roadmap, "PR promotion")
         require("docs/ROADMAP.md", roadmap, "#93 CLOSED / completed")
         require("docs/ROADMAP.md", roadmap, "M29 — Autonomous Docker Runtime & Native Parity")
@@ -91,6 +94,8 @@ def main() -> int:
         require("docs/ROADMAP.md", roadmap, "index-v2.bin")
         require("docs/ROADMAP.md", roadmap, "native result == docker result")
         require("docs/ROADMAP.md", roadmap, "minos-admin")
+        require("docs/ROADMAP.md", roadmap, "run-s4.ps1")
+        require("docs/ROADMAP.md", roadmap, "minos-provider-tools")
 
         # M21/M28 final dispositions must not regress to pre-promotion status.
         require("docs/roadmap/M21_EXECUTION.md", m21, "TERMINÉ")
@@ -102,8 +107,8 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 is in progress. S1/S2 are now exact-head qualified, while S3 remains an
-        # implementation awaiting its own Maven + real-Docker proof.
+        # M29 is in progress. S1/S2 are exact-head qualified. S3 has real Docker evidence
+        # through the provider boundary; S4 is implemented but must not be claimed PASS yet.
         for token in (
             "EN COURS",
             "#107",
@@ -123,8 +128,16 @@ def main() -> int:
             "417 PASS",
             "McpBackendRouterTest",
             "ProjectPathMappingTest",
+            "b780feb7d27bd34952d1952f8d80b06755980684",
+            "missing Rust runtime requirements: cargo, rustc, rust-analyzer",
             "minos-admin",
             "minos-bootstrap",
+            "minos-tools-bootstrap",
+            "minos-provider-tools",
+            "tools verify --all",
+            "provider-inventory.json",
+            "provider-binary-sha256.txt",
+            "run-s4.ps1",
             "semantic status",
             "hybrid status",
             "network_mode: none",
@@ -138,23 +151,32 @@ def main() -> int:
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
         require("docs/roadmap/M29_EXECUTION.md", m29, "2 août 2026")
-        require("docs/roadmap/M29_EXECUTION.md", m29, "S3 sans preuve exact-head Maven + Docker réel")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "Aucune disposition PASS S4")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
+        forbid("docs/roadmap/M29_EXECUTION.md", m29, "Le daemon Docker `desktop-linux` était arrêté")
         forbid("docs/STATUS.md", status, "M29 #107                         PLANIFIÉ")
         forbid("docs/STATUS.md", status, "qualification locale pending")
+        forbid("docs/STATUS.md", status, "qualification Maven+Docker pending")
         forbid("docs/ROADMAP.md", roadmap, "Statut : **PLANIFIÉ — démarrage prévu le 3 août 2026")
+        forbid("docs/ROADMAP.md", roadmap, "S3 reste 🟨 car le nouveau HEAD n'a pas encore passé sa qualification Maven/Docker réelle")
 
         for token in (
             "minos-mcp",
             "minos-admin",
             "minos-bootstrap",
+            "minos-tools-bootstrap",
+            "minos-provider-tools",
             "network_mode: none",
             "cap_drop: ALL",
             "no-new-privileges: true",
             "semantic status",
             "hybrid status",
             "M29-S4",
+            "tools verify --all",
+            "provider-inventory.json",
+            "provider-binary-sha256.txt",
+            "run-s4.ps1",
             "aucun provider ne doit être déclaré supporté",
         ):
             require("docs/user/docker-runtime.md", docker_runtime, token)
@@ -221,6 +243,9 @@ def main() -> int:
         docker_compose = read("docker/compose.mcp.prod.yaml")
         docker_workflow = read("docker/scripts/prod-mcp-release.ps1")
         docker_image = read("docker/Dockerfile.mcp.release")
+        tools_command = read("minos-cli/src/main/java/com/minos/cli/ToolsCommand.java")
+        s3_runner = read("scripts/m29/run-s3.ps1")
+        s4_runner = read("scripts/m29/run-s4.ps1")
 
         require("pom.xml", pom, "<revision>1.0.1-SNAPSHOT</revision>")
         require("pom.xml", pom, "slf4j-nop")
@@ -261,11 +286,54 @@ def main() -> int:
             forbid("minos-installer.iss.template", installer, stale_task)
         forbid("minos-installer.iss.template", installer, "WizardIsTaskSelected('docker')")
 
-        for token in ("minos-mcp:", "minos-admin:", "minos-bootstrap:", "MINOS_RUNTIME_LOCATION: docker"):
+        for token in (
+            "minos-mcp:",
+            "minos-admin:",
+            "minos-bootstrap:",
+            "minos-tools-bootstrap:",
+            "minos-provider-tools:",
+            "MINOS_RUNTIME_LOCATION: docker",
+            "network_mode: none",
+        ):
             require("docker/compose.mcp.prod.yaml", docker_compose, token)
-        for token in ("'Admin'", "MINOS_HOST_PROJECTS_ROOT", "minos-bootstrap", "minos-admin", "formatVersion = 3"):
+        for token in (
+            "'Admin'",
+            "MINOS_HOST_PROJECTS_ROOT",
+            "minos-bootstrap",
+            "minos-tools-bootstrap",
+            "minos-admin",
+            "provider-inventory.json",
+            "provider-binary-sha256.txt",
+            "formatVersion = 4",
+            "'--volumes'",
+        ):
             require("docker/scripts/prod-mcp-release.ps1", docker_workflow, token)
-        require("docker/Dockerfile.mcp.release", docker_image, "MINOS_RUNTIME_LOCATION=docker")
+        for token in (
+            "FROM eclipse-temurin:24-jdk",
+            "MINOS_RUNTIME_LOCATION=docker",
+            "SCIP_TYPESCRIPT_VERSION=0.4.0",
+            "SCIP_JAVA_VERSION=0.13.1",
+            "SCIP_PYTHON_VERSION=0.6.6",
+            "SCIP_CLANG_VERSION=0.4.0",
+            "SCIP_DOTNET_VERSION=0.2.14",
+            "SCIP_GO_VERSION=0.2.7",
+            "RUST_ANALYZER_RELEASE=2026-07-27",
+            "provider-evidence/provider-inventory.json",
+        ):
+            require("docker/Dockerfile.mcp.release", docker_image, token)
+        for token in ("verify --all", "parsed.all()", "--all is only valid with tools verify"):
+            require("ToolsCommand.java", tools_command, token)
+        for token in ("'index', 'm29-s3-fixture'", "Invoke-McpHandshake", "FAIL_OR_BLOCKED"):
+            require("run-s3.ps1", s3_runner, token)
+        for token in (
+            "M29-S4 exact-head mismatch",
+            "tools', 'verify', '--all'",
+            "provider-inventory.json",
+            "provider-binary-sha256.txt",
+            "linux/amd64",
+            "7 provider IDs",
+        ):
+            require("run-s4.ps1", s4_runner, token)
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
         require("release-windows.yml", release_workflow, "workflow_dispatch")
