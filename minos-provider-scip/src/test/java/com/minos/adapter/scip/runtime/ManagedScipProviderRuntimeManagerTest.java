@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,6 +76,33 @@ class ManagedScipProviderRuntimeManagerTest {
                 launcher.toAbsolutePath().normalize().toString(),
                 "index", "--output", output.toAbsolutePath().normalize().toString()
         ), ScipJavaProcessPlanFactory.standaloneCommand(launcher, output));
+    }
+
+    @Test
+    void stagesScipJavaBuildOutsideProjectAndSkipsGeneratedTrees() throws IOException {
+        Path project = Files.createDirectories(temporaryDirectory.resolve("source-project"));
+        Path source = Files.createDirectories(project.resolve("src/main/java/example"));
+        Path generated = Files.createDirectories(project.resolve("target/classes"));
+        Files.writeString(project.resolve("pom.xml"), "<project/>\n");
+        Files.writeString(source.resolve("Greeting.java"), "package example; final class Greeting {}\n");
+        Files.writeString(generated.resolve("Greeting.class"), "generated");
+
+        Path run = Files.createDirectories(temporaryDirectory.resolve("run"));
+        Path workspace = ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run);
+
+        assertEquals(run.resolve("workspace").toAbsolutePath().normalize(), workspace);
+        assertFalse(workspace.startsWith(project.toAbsolutePath().normalize()));
+        assertTrue(Files.isRegularFile(workspace.resolve("pom.xml")));
+        assertTrue(Files.isRegularFile(workspace.resolve("src/main/java/example/Greeting.java")));
+        assertFalse(Files.exists(workspace.resolve("target")),
+                "pre-existing Maven outputs must never be imported into the writable staging tree");
+
+        Path providerTarget = workspace.resolve("target/scip-targetroot");
+        Files.createDirectories(providerTarget);
+        Files.writeString(providerTarget.resolve("probe.txt"), "writable");
+        assertTrue(Files.isRegularFile(providerTarget.resolve("probe.txt")));
+        assertTrue(Files.isRegularFile(project.resolve("target/classes/Greeting.class")),
+                "staging must not mutate the original project tree");
     }
 
     @Test
