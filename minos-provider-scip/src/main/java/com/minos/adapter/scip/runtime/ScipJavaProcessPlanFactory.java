@@ -23,6 +23,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
 
     private static final Set<String> STAGING_EXCLUDED_DIRECTORIES = Set.of(
             ".git", ".idea", ".gradle", ".cache", "target", "build", "out", "node_modules");
+    private static final Set<String> STAGING_EXCLUDED_ROOT_FILES = Set.of("mvnw", "mvnw.cmd");
 
     private final Path coursier;
     private final String coordinate;
@@ -89,6 +90,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         // project tree. Docker project mounts are intentionally read-only, so Linux/Docker runs
         // execute against an isolated writable staging copy under MINOS_HOME/runs instead of ever
         // relaxing the source mount. Generated/build/cache directories are not copied into staging.
+        // Root Maven wrapper launchers are deliberately omitted as well: scip-java prefers ./mvnw
+        // when present, while a Windows host checkout may materialize it with Windows line endings.
+        // Docker carries the qualified Maven 3.9.16 runtime in PATH, so staged indexing uses that
+        // deterministic image-provided Maven instead of a host-dependent wrapper or wrapper download.
         Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
 
         var standalone = CommandLocator.find("scip-java");
@@ -154,6 +159,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 if (attributes.isSymbolicLink()) {
+                    return FileVisitResult.CONTINUE;
+                }
+                if (root.equals(file.getParent())
+                        && STAGING_EXCLUDED_ROOT_FILES.contains(file.getFileName().toString())) {
                     return FileVisitResult.CONTINUE;
                 }
                 Path target = stagedTarget(root, workspace, file);
