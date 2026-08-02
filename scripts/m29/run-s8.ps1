@@ -278,10 +278,14 @@ try {
     }
 
     $NativeSearchParsed = $NativeSearchLine | ConvertFrom-Json
+    $NativeSearchProps = $NativeSearchParsed.PSObject.Properties
+    $NativeHasResult = $null -ne $NativeSearchProps['result']
+    $NativeHasError  = $null -ne $NativeSearchProps['error']
+    $NativeContent   = if ($NativeHasResult) { $NativeSearchParsed.result.PSObject.Properties['content'] } else { $null }
     $NativeCallStructure = [pscustomobject]@{
-        hasResult  = $null -ne $NativeSearchParsed.result
-        hasError   = $null -ne $NativeSearchParsed.error
-        contentIsArray = ($NativeSearchParsed.result.content -is [System.Array]) -or ($NativeSearchParsed.result.content -is [System.Collections.IEnumerable])
+        hasResult      = $NativeHasResult
+        hasError       = $NativeHasError
+        contentIsArray = $null -ne $NativeContent
     } | ConvertTo-Json -Compress
     Write-Host "M29-S8 native MCP probe SUCCESS ($NativeToolCount tools)" -ForegroundColor Cyan
 
@@ -325,10 +329,14 @@ try {
     }
 
     $DockerSearchParsed = $DockerSearchLine | ConvertFrom-Json
+    $DockerSearchProps = $DockerSearchParsed.PSObject.Properties
+    $DockerHasResult = $null -ne $DockerSearchProps['result']
+    $DockerHasError  = $null -ne $DockerSearchProps['error']
+    $DockerContent   = if ($DockerHasResult) { $DockerSearchParsed.result.PSObject.Properties['content'] } else { $null }
     $DockerCallStructure = [pscustomobject]@{
-        hasResult  = $null -ne $DockerSearchParsed.result
-        hasError   = $null -ne $DockerSearchParsed.error
-        contentIsArray = ($DockerSearchParsed.result.content -is [System.Array]) -or ($DockerSearchParsed.result.content -is [System.Collections.IEnumerable])
+        hasResult      = $DockerHasResult
+        hasError       = $DockerHasError
+        contentIsArray = $null -ne $DockerContent
     } | ConvertTo-Json -Compress
     Write-Host "M29-S8 Docker MCP probe SUCCESS ($DockerToolCount tools)" -ForegroundColor Cyan
 
