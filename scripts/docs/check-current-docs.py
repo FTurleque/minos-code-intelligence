@@ -93,8 +93,9 @@ def main() -> int:
             "tools verify --all",
             "M29-S3                           ✅ PASS exact-head 3df1b40...",
             "M29-S4                           ✅ PASS exact-head 3df1b40...",
-            "M29-S5                           🟨",
-            "run-s5.ps1",
+            "M29-S5                           ✅ PASS exact-head 0959fb9...",
+            "M29-S6                           🟨",
+            "run-s6.ps1",
         ):
             require("docs/STATUS.md", status, token)
 
@@ -108,11 +109,13 @@ def main() -> int:
             "native result == docker result",
             "minos-admin",
             "minos-provider-tools",
-            "run-s5.ps1",
+            "run-s6.ps1",
             "3df1b40ca0daf50779596f6e955d966ed5eb4973",
+            "0959fb9f64e2ecf61e20281f29c694e86d67c62b",
             "M29-S3 | Autonomous Docker administration plane | ✅ PASS exact-head `3df1b40...`",
             "M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...`",
-            "M29-S5 | Autonomous indexing & vector lifecycle | 🟨",
+            "M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...`",
+            "M29-S6 | Backend-agnostic MCP client integration | 🟨",
         ):
             require("docs/ROADMAP.md", roadmap, token)
 
@@ -126,7 +129,7 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 execution truth: S3/S4 are exact-head qualified; S5 is implemented but pending live qualification.
+        # M29 execution truth: S3/S4/S5 are exact-head qualified; S6 is implemented and pending live qualification.
         for token in (
             "EN COURS",
             "#107",
@@ -166,8 +169,14 @@ def main() -> int:
             "minos-local-hash",
             "384 dimensions",
             "READY_WITH_SEMANTIC",
-            "run-s5.ps1",
+            "0959fb9f64e2ecf61e20281f29c694e86d67c62b",
             "M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS",
+            "verify-mcp-client-backend-routing.ps1",
+            "M29McpClientBackendAgnosticContractTest",
+            "backend.properties",
+            "byte-identical",
+            "run-s6.ps1",
+            "M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS",
             "minos-admin",
             "minos-bootstrap",
             "minos-tools-bootstrap",
@@ -190,8 +199,10 @@ def main() -> int:
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
         forbid("docs/STATUS.md", status, "M29-S3                           🟨")
         forbid("docs/STATUS.md", status, "M29-S4                           🟨")
+        forbid("docs/STATUS.md", status, "M29-S5                           🟨")
         forbid("docs/ROADMAP.md", roadmap, "M29-S3 | Autonomous Docker administration plane | 🟨")
         forbid("docs/ROADMAP.md", roadmap, "M29-S4 | Provider-complete Docker image | 🟨")
+        forbid("docs/ROADMAP.md", roadmap, "M29-S5 | Autonomous indexing & vector lifecycle | 🟨")
 
         for token in (
             "minos-mcp",
@@ -287,9 +298,15 @@ def main() -> int:
         runtime_ports = read("minos-engine/src/main/java/com/minos/orchestration/IndexingRuntimePorts.java")
         snapshot_lifecycle = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")
         tools_command = read("minos-cli/src/main/java/com/minos/cli/ToolsCommand.java")
+        mcp_clients = read("scripts/install/configure-mcp-clients.ps1")
+        codex_mcp = read("scripts/install/configure-codex-mcp.ps1")
+        mcp_preflight = read("scripts/install/verify-mcp-client-preflight.ps1")
+        mcp_backend_verifier = read("scripts/install/verify-mcp-client-backend-routing.ps1")
+        s6_contract_test = read("minos-app/src/test/java/com/minos/packaging/M29McpClientBackendAgnosticContractTest.java")
         s3_runner = read("scripts/m29/run-s3.ps1")
         s4_runner = read("scripts/m29/run-s4.ps1")
         s5_runner = read("scripts/m29/run-s5.ps1")
+        s6_runner = read("scripts/m29/run-s6.ps1")
 
         require("pom.xml", pom, "<revision>1.0.1-SNAPSHOT</revision>")
         require("pom.xml", pom, "slf4j-nop")
@@ -361,6 +378,24 @@ def main() -> int:
             require("ScipProjectSnapshotLifecycle.java", snapshot_lifecycle, token)
         for token in ("verify --all", "parsed.all()", "--all is only valid with tools verify"):
             require("ToolsCommand.java", tools_command, token)
+
+        for token in ("command = $MinosExe", "args = @('mcp')", "MINOS_HOME = $DataRoot", "CopilotJetBrains", "CopilotCli", "ClaudeCode", "ClaudeDesktop", "Codex"):
+            require("configure-mcp-clients.ps1", mcp_clients, token)
+        forbid("configure-mcp-clients.ps1", mcp_clients, "docker exec")
+        for token in ("[mcp_servers.minos]", 'args = ["mcp"]', "MINOS_HOME", "$MinosExe"):
+            require("configure-codex-mcp.ps1", codex_mcp, token)
+        forbid("configure-codex-mcp.ps1", codex_mcp, "docker exec")
+        require("verify-mcp-client-preflight.ps1", mcp_preflight, "verify-mcp-client-backend-routing.ps1")
+        for token in (
+            "Copilot JetBrains", "Copilot CLI", "Claude Code", "Claude Desktop", "Codex CLI/Desktop",
+            "backend.properties", "backend=native", "backend=docker", "docker exec", "minos-mcp-prod",
+            "native -> docker changes backend.properties only", "client configs remain byte-identical",
+            "MINOS MCP BACKEND-AGNOSTIC CLIENT ROUTING VERIFICATION SUCCESS",
+        ):
+            require("verify-mcp-client-backend-routing.ps1", mcp_backend_verifier, token)
+        for token in ("everySupportedClientTargetsStableMinosMcpEntrypoint", "backend.properties", "byte-identical", "run-s6.ps1"):
+            require("M29McpClientBackendAgnosticContractTest.java", s6_contract_test, token)
+
         for token in ("'index', 'm29-s3-fixture'", "Invoke-McpHandshake", "FAIL_OR_BLOCKED"):
             require("run-s3.ps1", s3_runner, token)
         for token in (
@@ -377,8 +412,15 @@ def main() -> int:
             "M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS",
         ):
             require("run-s5.ps1", s5_runner, token)
+        for token in (
+            "M29-S6 exact-head mismatch", "verify-mcp-client-integration.ps1",
+            "verify-mcp-client-preflight.ps1", "verify-mcp-client-backend-routing.ps1",
+            "check-current-docs.py", "M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS",
+            "stableEntrypoint = 'minos.exe mcp'", "clientConfigOwnsDockerTransport = $false",
+        ):
+            require("run-s6.ps1", s6_runner, token)
 
-        # Controlled fixture must reproduce a monorepo without a root TypeScript manifest.
+        # Controlled S5 fixture must reproduce a monorepo without a root TypeScript manifest.
         fixture = ROOT / "fixtures/polyglot/m29-scoped-modules"
         require_file("fixtures/polyglot/m29-scoped-modules/pom.xml")
         require_file("fixtures/polyglot/m29-scoped-modules/src/main/java/com/minos/fixture/RootGreeting.java")
@@ -386,7 +428,7 @@ def main() -> int:
         require_file("fixtures/polyglot/m29-scoped-modules/ui/app/tsconfig.json")
         require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/package.json")
         require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/tsconfig.json")
-        if (fixture.joinpath("package.json").exists() or fixture.joinpath("tsconfig.json").exists()):
+        if fixture.joinpath("package.json").exists() or fixture.joinpath("tsconfig.json").exists():
             raise RuntimeError("M29 S5 fixture must not contain a root TypeScript manifest")
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
