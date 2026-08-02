@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3/S4 PASS exact-head `3df1b40...`, S5 implémenté sur un HEAD plus récent et en attente de qualification exact-head, sans claim de parité.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3/S4 PASS exact-head `3df1b40...`, S5 PASS exact-head `0959fb9...`, S6 backend-agnostic MCP client integration implémenté sur un HEAD plus récent et en attente de qualification exact-head, sans claim de parité.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -77,7 +77,7 @@ Tant que M29 n'est pas qualifié, **1.0.1 ne présente pas Docker comme fonction
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 provider→module/build root + vector lifecycle implémenté et en attente de `run-s5.ps1`.**  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 backend-agnostic MCP client integration implémenté et en attente de `run-s6.ps1`.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -122,8 +122,8 @@ M29 ne crée pas de nouvelle base vectorielle externe par défaut et n'introduit
 | M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
 | M29-S3 | Autonomous Docker administration plane | ✅ PASS exact-head `3df1b40...` |
 | M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...` |
-| M29-S5 | Autonomous indexing & vector lifecycle | 🟨 implémenté ; qualification exact-head requise |
-| M29-S6 | Backend-agnostic MCP client integration | ⬜ |
+| M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...` |
+| M29-S6 | Backend-agnostic MCP client integration | 🟨 implémenté ; qualification exact-head requise |
 | M29-S7 | Installer, switching & lifecycle | ⬜ |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
@@ -148,7 +148,7 @@ minos-provider-tools volume
 
 Le query plane reste `network_mode: none`, état/projets/tools read-only. L'admin plane peut écrire `/var/lib/minos` et résoudre uniquement les dépendances du projet ; les sources restent read-only.
 
-Après correction du runtime Rust, du staging scip-java, de `workspace/mvnw`, du tmp Java noexec et du host PowerShell, la qualification finale est :
+Qualification finale :
 
 ```text
 HEAD 3df1b40ca0daf50779596f6e955d966ed5eb4973
@@ -181,9 +181,9 @@ doctor.ready                           true
 M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-### S5 — autonomous indexing & vector lifecycle — 🟨
+### S5 — autonomous indexing & vector lifecycle — ✅
 
-La correction de routage distingue désormais :
+Le routage distingue :
 
 ```text
 registeredProjectRoot
@@ -194,11 +194,7 @@ registeredProjectRoot
 → atomic project staging/promotion
 ```
 
-Pour un reactor réellement multi-module qualifié (ex. Maven/scip-java), le provider peut rester à la racine projet. Pour TypeScript sans manifest global, il s'exécute sur chaque module réellement découvert. Les chemins SCIP relatifs au module sont préfixés vers la racine projet avant création des file IDs et identités structurelles.
-
-Le test `IndexingLifecycleScopedExecutionTest` prouve aussi qu'un échec d'un scope imbriqué laisse le snapshot précédemment promu actif. L'incrémental multi-scope reste fail-closed tant qu'il n'est pas qualifié ; `NONE|FULL|INCREMENTAL` reste piloté par les capabilities existantes.
-
-Fixture de promotion :
+Fixture qualifiée :
 
 ```text
 fixtures/polyglot/m29-scoped-modules
@@ -208,35 +204,46 @@ ui/lib      NPM / TypeScript
 root TS manifest absent par construction
 ```
 
-Le workflow Docker persiste `MINOS_SEMANTIC_PROVIDER` dans `.env` et `installation.json` format 5. Les modes packagés S5 sont `disabled|local-hash`. `local-hash` est zéro-réseau et sert uniquement à qualifier le plumbing sémantique ; il n'est pas présenté comme modèle appris.
-
-`run-s5.ps1` exécute un gate exact-head intégré :
+Preuve exact-head `0959fb9f64e2ecf61e20281f29c694e86d67c62b` :
 
 ```text
-S4 exact-head avec local-hash, même image/data root
-→ discovery JAVA+TYPESCRIPT / MAVEN+NPM
-→ scip-java à la racine
-→ scip-typescript sur ui/app et ui/lib
-→ index READY + fingerprint promotion
-→ semantic READY / minos-local-hash / 384 dimensions
-→ index-v2.bin non vide
-→ hybrid READY_WITH_SEMANTIC + limitation HEURISTIC
-→ second index NONE / NO_CHANGES
-→ forced FULL + nouveau snapshot + vector realignment
-→ recreate query plane
-→ semantic/hybrid toujours READY en read-only
-→ worktree inchangé
-```
-
-Aucun PASS S5 n'est déclaré avant le marqueur :
-
-```text
+13/13 modules Maven                    SUCCESS
+S4 provider-complete                   SUCCESS
+JAVA + TYPESCRIPT / MAVEN + NPM        détectés
+scip-java                              root
+scip-typescript                        ui/app + ui/lib
+FULL index                             SUCCEEDED / READY
+semantic                               READY / minos-local-hash / 384 / 19 docs
+index-v2.bin                           présent / non vide
+hybrid                                 READY_WITH_SEMANTIC / HEURISTIC
+second index                           NONE / NO_CHANGES
+forced FULL                            fresh snapshot + semantic realignment
+query recreate                         semantic/hybrid READY
 M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS
 ```
 
-### S6 — clients MCP
+Le store reste `index-v2.bin`, float32 exact scan ; aucune base vectorielle externe n'est introduite.
 
-Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop, Codex CLI/Desktop continuent tous à utiliser `minos.exe mcp` ; MINOS sélectionne le backend.
+### S6 — clients MCP backend-agnostic — 🟨
+
+Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop gardent tous le même contrat :
+
+```text
+command = <installation>\app\minos.exe
+args    = mcp
+env     = MINOS_HOME=<dataRoot>
+```
+
+Le choix backend est lu dans `<MINOS_HOME>/runtime/backend.properties` par `McpBackendRouter`. Les clients n'embarquent ni `docker exec`, ni nom de conteneur, ni Compose.
+
+`verify-mcp-client-backend-routing.ps1` configure toutes les familles clientes dans un environnement Windows isolé, bascule `native -> docker` et vérifie que leurs fichiers restent byte-identical. Le verifier est chaîné au preflight de construction Windows. `M29McpClientBackendAgnosticContractTest` verrouille le contrat côté Maven.
+
+Gate exact-head :
+
+```text
+scripts/m29/run-s6.ps1
+M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
+```
 
 ### S7 — installer / switching
 
@@ -262,8 +269,8 @@ aux seules différences explicitement permises de chemin/provenance/runtime prè
 
 1. tirer le HEAD courant de `m29-autonomous-docker-runtime` ;
 2. exécuter `check-current-docs.py` ;
-3. exécuter `run-s5.ps1 -ExpectedHead <HEAD> -ProjectsRoot N:\workspace-dev` ;
-4. le runner réexécute S4 exact-head avec `local-hash`, conserve cette installation et exécute S5 sur la même image ;
-5. si et seulement si le marqueur S5 SUCCESS est obtenu, réconcilier S5 puis démarrer S6 ;
+3. exécuter `mvnw.cmd clean verify` ;
+4. exécuter `run-s6.ps1 -ExpectedHead <HEAD> -SkipMavenVerify` ;
+5. si et seulement si le marqueur S6 SUCCESS est obtenu, réconcilier S6 puis démarrer S7 ;
 6. aucune PR/CI/merge M29 sans autorisation explicite ;
-7. aucune claim de parité avant S8.
+7. aucun claim de parité avant S8.
