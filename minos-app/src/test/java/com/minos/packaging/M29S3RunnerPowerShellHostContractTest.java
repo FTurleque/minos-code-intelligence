@@ -35,10 +35,17 @@ class M29S3RunnerPowerShellHostContractTest {
         assertTrue(s4.contains("'scripts\\m29\\run-s3.ps1', 'scripts\\m29\\run-s5.ps1'"));
         assertTrue(s4.contains("M29-S4 PowerShell parse preflight:"));
         assertTrue(s4.contains("PowerShell parse failed"));
+        assertTrue(s4.contains("Documentation consistency remains mandatory even when Maven was already qualified separately."),
+                "-SkipMavenVerify must never bypass the authoritative documentation checker");
+        assertTrue(s4.contains("& $Python.Source '.\\scripts\\docs\\check-current-docs.py'"));
+        assertTrue(s4.contains("$Captured | ForEach-Object { $_.ToString() }"),
+                "native stderr must be normalized instead of rendering NativeCommandError records");
 
         assertTrue(s5.contains("M29-S5 exact-head mismatch"));
         assertTrue(s5.contains("SemanticProvider = 'local-hash'"));
         assertTrue(s5.contains("M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS"));
+        assertTrue(s5.contains("$Captured | ForEach-Object { $_.ToString() }"),
+                "S5 Docker stderr capture must stay readable on Windows PowerShell 5.1");
     }
 
     private static String normalizedText(Path path) throws IOException {
