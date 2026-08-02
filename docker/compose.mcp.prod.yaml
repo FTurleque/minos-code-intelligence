@@ -4,9 +4,7 @@ services:
   minos-mcp:
     image: "${MINOS_IMAGE}"
     container_name: "${MINOS_CONTAINER_NAME}"
-    entrypoint:
-      - sleep
-      - infinity
+    entrypoint: [sleep, infinity]
     init: true
     network_mode: none
     environment:
@@ -29,10 +27,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
     stop_grace_period: 10s
     labels:
@@ -43,11 +39,7 @@ services:
 
   minos-admin:
     image: "${MINOS_IMAGE}"
-    entrypoint:
-      - java
-      - -cp
-      - /opt/minos/minos.jar
-      - com.minos.cli.MinosLauncher
+    entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.MinosLauncher]
     init: true
     network_mode: none
     environment:
@@ -69,10 +61,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
@@ -82,15 +72,8 @@ services:
 
   minos-bootstrap:
     image: "${MINOS_IMAGE}"
-    entrypoint:
-      - java
-      - -cp
-      - /opt/minos/minos.jar
-      - com.minos.cli.DockerRuntimeBootstrap
-    command:
-      - configure-project-paths
-      - "${MINOS_HOST_PROJECTS_ROOT}"
-      - /workspace/projects
+    entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.DockerRuntimeBootstrap]
+    command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT}", /workspace/projects]
     init: true
     network_mode: none
     environment:
@@ -103,10 +86,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
@@ -116,9 +97,7 @@ services:
 
   minos-tools-bootstrap:
     image: "${MINOS_IMAGE}"
-    entrypoint:
-      - /bin/sh
-      - -c
+    entrypoint: [/bin/sh, -c]
     command:
       - |
         set -eu
@@ -144,16 +123,57 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: "no"
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
       io.minos.version: "${MINOS_VERSION}"
       io.minos.revision: "${MINOS_GIT_COMMIT}"
       io.minos.runtime-plane: tools-bootstrap
+
+  minos-provider-probe:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        java -version
+        javac -version
+        cs launch org.scip-code:scip-java:0.13.1 --jvm system --main org.scip_code.scip_java.ScipJava -- --version 2>&1 | grep -F "scip-java version 0.13.1"
+        /var/lib/minos/tools/scip-typescript/0.4.0/node_modules/.bin/scip-typescript --help >/dev/null
+        /var/lib/minos/tools/scip-python/0.6.6/node_modules/.bin/scip-python --help >/dev/null
+        scip-clang --version 2>&1 | grep -F "0.4.0"
+        dotnet --version
+        /var/lib/minos/tools/scip-dotnet/0.2.14/scip-dotnet --help >/dev/null
+        go version
+        /var/lib/minos/tools/scip-go/0.2.7/scip-go --help >/dev/null
+        rustc --version
+        cargo --version
+        rust-analyzer --version 2>&1 | grep -E "2026-07-27|12c3381"
+        echo "MINOS Docker offline provider probe SUCCESS"
+    user: "10001:10001"
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+    volumes:
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: provider-probe
 
 volumes:
   minos-provider-tools:
