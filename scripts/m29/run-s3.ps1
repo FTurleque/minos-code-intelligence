@@ -60,6 +60,32 @@ function Assert-NativeSuccess {
     return $Result.Output
 }
 
+function Resolve-PowerShellHost {
+    $Current = Get-Process -Id $PID -ErrorAction SilentlyContinue
+    if ($Current -and -not [string]::IsNullOrWhiteSpace($Current.Path)
+            -and (Test-Path -LiteralPath $Current.Path -PathType Leaf)) {
+        return $Current.Path
+    }
+
+    foreach ($Candidate in @(
+        (Join-Path $PSHOME 'pwsh.exe'),
+        (Join-Path $PSHOME 'powershell.exe')
+    )) {
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+            return $Candidate
+        }
+    }
+
+    foreach ($Name in @('pwsh.exe', 'powershell.exe')) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command -and -not [string]::IsNullOrWhiteSpace($Command.Source)) {
+            return $Command.Source
+        }
+    }
+
+    throw 'M29-S3 cannot resolve a PowerShell host executable for the MCP attach wrapper.'
+}
+
 $Git = (Get-Command git -ErrorAction Stop).Source
 $Head = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -Failure 'Unable to resolve M29 HEAD').Trim()
 if (-not [string]::IsNullOrWhiteSpace($ExpectedHead) -and $Head -ne $ExpectedHead.Trim()) {
@@ -151,7 +177,7 @@ function Invoke-Workflow {
 
 function Invoke-McpHandshake {
     $Wrapper = Join-Path $InstallRoot 'm29-s3-mcp.cmd'
-    $PowerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $PowerShell = Resolve-PowerShellHost
     $EscapedWorkflow = $Workflow.Replace('"', '""')
     $EscapedInstall = $InstallRoot.Replace('"', '""')
     $EscapedData = $DataRoot.Replace('"', '""')
