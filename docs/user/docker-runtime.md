@@ -1,8 +1,8 @@
 # Runtime Docker autonome MINOS
 
-> État M29 : cette surface est en cours de qualification sur la branche `m29-autonomous-docker-runtime`. Elle ne constitue pas encore une claim de parité native/Docker ni une fonctionnalité publiée de `1.0.1`.
+> État M29 : S3/S4 sont qualifiés exact-head sur `3df1b40ca0daf50779596f6e955d966ed5eb4973`. S5 est implémenté sur un HEAD plus récent et attend sa qualification `run-s5.ps1`. Cette surface ne constitue pas encore une claim de parité native/Docker ni une fonctionnalité publiée de `1.0.1`.
 
-M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'administration et l'indexation puissent écrire l'état MINOS et les artefacts de build sans rendre le serveur MCP des agents mutable.
+M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'administration et l'indexation puissent écrire l'état MINOS et les artefacts de build sans rendre le serveur MCP mutable.
 
 ## Plans d'exécution
 
@@ -24,37 +24,24 @@ bounded tmpfs
 MINOS_RUNTIME_LOCATION=docker
 ```
 
-Le serveur MCP persistant, le bootstrap et le probe provider gardent `network_mode:none`. Le plan admin/indexation est éphémère et peut résoudre les dépendances propres au projet (Maven/NuGet/etc.) ; cette exception réseau ne sert jamais à installer implicitement les providers MINOS, qui restent préparés au BUILD et vérifiés offline.
+Le serveur MCP persistant, les bootstraps et le probe provider gardent `network_mode: none`. Le plan admin/indexation est éphémère et peut résoudre les dépendances propres au projet ; cette exception réseau ne sert jamais à installer implicitement les providers MINOS.
 
-Le plan admin n'obtient jamais le droit de modifier le code source des projets. Il écrit l'état métier, les caches de build et les workspaces de staging uniquement sous `/var/lib/minos`. Les outils providers préparés au BUILD vivent dans un volume Linux séparé et sont montés read-only dans les plans métier.
+Le plan admin n'obtient jamais le droit de modifier le code source. Il écrit état métier, caches et staging uniquement sous `/var/lib/minos`.
 
 ## Mapping des projets
 
-Lors de l'installation Docker, MINOS crée une configuration runtime versionnée :
+Configuration runtime versionnée :
 
 ```text
 <MINOS_HOME>/runtime/project-paths.properties
-```
-
-Exemple :
-
-```text
 N:/workspace-dev <-> /workspace/projects
 ```
 
-Le registre métier persiste ensuite un `rootRelativePath`, pas le chemin physique du poste ou du conteneur. Le bootstrap est idempotent et refuse de remplacer implicitement un mapping existant différent.
-
-Dans les commandes exécutées **dans Docker**, utiliser le chemin visible par le conteneur :
-
-```text
-/workspace/projects/my-project
-```
-
-et non `N:\workspace-dev\my-project`.
+Le registre persiste `rootRelativePath`, pas le chemin physique host/container. Dans Docker, les commandes utilisent `/workspace/projects/...`.
 
 ## Provider-complete image M29-S4
 
-L'image M29 prépare pendant BUILD :
+L'image prépare au BUILD :
 
 ```text
 scip-java            0.13.1
@@ -64,13 +51,10 @@ scip-clang           0.4.0
 scip-dotnet          0.2.14
 scip-go              0.2.7
 rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
+Apache Maven         3.9.16
 ```
 
-Les toolchains nécessaires sont également préparées : JDK 24, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
-
-Les téléchargements des **providers et toolchains MINOS** se produisent au BUILD. Le probe `minos-provider-probe` s'exécute avec `network_mode:none` et prouve que les exécutables annoncés sont présents sans installation réseau en RUN.
-
-L'indexation d'un projet compilé constitue un problème différent : Maven, NuGet ou d'autres build systems peuvent devoir résoudre les dépendances déclarées par le projet. Cette résolution est autorisée uniquement dans le plan admin/indexation éphémère ; elle n'ouvre jamais le réseau au serveur MCP query.
+Les toolchains nécessaires sont JDK 24, **Apache Maven 3.9.16**, Coursier, Node/npm, Python/pip, .NET SDK 10, Go et Rust/cargo/rustc/rust-analyzer.
 
 Le bundle provider est initialisé dans le volume Docker nommé :
 
@@ -78,168 +62,128 @@ Le bundle provider est initialisé dans le volume Docker nommé :
 minos-provider-tools
 ```
 
-monté sous :
+monté sous `/var/lib/minos/tools`, read-only dans les plans métier. L'image produit aussi `provider-inventory.json` et `provider-binary-sha256.txt`.
+
+Le probe `minos-provider-probe` reste le gate explicite offline. La CLI ajoute le gate capability-honest :
 
 ```text
-/var/lib/minos/tools
+minos tools verify --all
 ```
 
-Ce volume est distinct du business data bind `%LOCALAPPDATA%\MINOS\docker-data` ou du `DataRoot` choisi. Il évite de transporter des exécutables Linux sur NTFS et permet de garder les provider tools read-only pendant les requêtes et l'indexation.
+### Provenance scip-java
 
-L'image produit aussi :
-
-```text
-provider-inventory.json
-provider-binary-sha256.txt
-```
-
-Ces preuves sont copiées dans le répertoire runtime de l'installation. Le manifeste binaire inclut également le Maven packagé requis par `scip-java`.
-
-### Provenance scip-java et version du launcher standalone
-
-La version supportée de `scip-java` reste l'artefact Maven exact :
+La coordonnée autoritative reste :
 
 ```text
 org.scip-code:scip-java:0.13.1
 ```
 
-Pendant le BUILD, MINOS exécute cette coordonnée via Coursier et exige `scip-java version 0.13.1`. Il construit ensuite `/usr/local/bin/scip-java` avec `cs bootstrap --standalone`. Tous les JAR du provider sont donc embarqués dans le launcher : le RUN n'a besoin d'aucun téléchargement ni d'aucune résolution réseau pour **le provider lui-même**.
+Le launcher standalone construit via Coursier retourne actuellement `scip-java version 0.0.0-SNAPSHOT`; cette chaîne n'est pas la provenance de l'artefact. L'inventaire conserve séparément la coordonnée/version attendue et le checksum du binaire réellement exécuté.
 
-Le bootstrap Coursier standalone matérialise néanmoins ses JAR embarqués dans un cache local au démarrage. MINOS fournit explicitement un emplacement writable sans assouplir le filesystem conteneur :
-
-```text
-minos-admin          COURSIER_CACHE=/var/lib/minos/cache/coursier
-minos-provider-probe COURSIER_CACHE=/tmp/minos-coursier-cache
-```
-
-Le premier chemin reste sous l'état writable MINOS ; le second vit dans le tmpfs borné du probe et disparaît avec le conteneur. Le probe reste `network_mode:none` : ce cache sert uniquement à matérialiser les ressources déjà embarquées.
-
-Ce launcher standalone retourne actuellement :
-
-```text
-scip-java version 0.0.0-SNAPSHOT
-```
-
-Cette chaîne est une métadonnée embarquée du launcher et **n'est pas utilisée comme provenance de l'artefact**. `provider-inventory.json` conserve séparément `version=0.13.1` et `reportedVersion=0.0.0-SNAPSHOT`, tandis que `provider-binary-sha256.txt` contient le hash du launcher réellement exécuté. Le probe offline vérifie le retour réel du launcher sans prétendre qu'il expose `0.13.1`.
-
-`scip-java` embarque également Mordant/JNA. JNA doit pouvoir extraire puis charger une bibliothèque native ; le tmpfs général `/tmp` reste volontairement `noexec`. Les plans provider positionnent donc :
+JNA et le shim `javac` temporaire de scip-java ont besoin d'un emplacement exécutable. Le `/tmp` général reste `noexec`; les plans provider positionnent :
 
 ```text
 JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
 ```
 
-Le launcher standalone conserve également son option embarquée `-Djna.tmpdir=/run/minos-native`. Les seuls plans qui exécutent des providers (`minos-admin` et `minos-provider-probe`) montent `/run/minos-native` comme tmpfs éphémère, `nosuid,nodev,exec`, borné à 16 MiB. Le plan MCP query n'expose pas ce tmpfs exécutable.
-
-Le déplacement de `java.io.tmpdir` est nécessaire au vrai `scip-java index` : le provider fabrique un shim `javac` temporaire qu'il doit exécuter. Ce shim ne doit jamais être créé sous le `/tmp` général `noexec`.
+`/run/minos-native` est un tmpfs `nosuid,nodev,exec`, borné à 16 MiB, exposé uniquement aux plans provider.
 
 ### Maven et staging Java
 
-`scip-java index` ne se contente pas d'écrire `index.scip` : son build Maven crée notamment :
-
-```text
-target/scip-targetroot
-```
-
-Le projet Docker reste strictement read-only. MINOS crée donc, pour chaque run Java Linux/Docker, une copie de travail writable sous :
+Le projet reste read-only. scip-java travaille dans :
 
 ```text
 /var/lib/minos/runs/<run-id>/scip-java/workspace
 ```
 
-Le provider travaille dans ce staging ; la racine `/workspace/projects/...` n'est jamais rendue writable. Les arbres générés préexistants (`target`, `build`, `out`, `node_modules`, etc.) et les métadonnées VCS/IDE ne sont pas copiés dans le staging.
-
-Le staging Linux exclut également les deux launchers Maven racine :
+Les arbres générés (`target`, `build`, `out`, `node_modules`, etc.) ne sont pas copiés. Le staging Linux exclut les launchers racine :
 
 ```text
 mvnw
 mvnw.cmd
 ```
 
-La configuration projet `.mvn` reste disponible. Ce choix est volontaire : `scip-java` préfère `./mvnw` lorsqu'il existe, mais le checkout source est matérialisé sur Windows et le wrapper peut donc être host-dépendant. Docker doit utiliser le **Maven qualifié de l'image**, pas un wrapper copié depuis le poste ni une distribution téléchargée par Maven Wrapper.
-
-Apache Maven 3.9.16 est packagé directement dans l'image et vérifié pendant le BUILD puis dans le probe offline. Son repository local et son HOME sont explicitement confinés :
+`.mvn` reste disponible. Docker utilise le Maven 3.9.16 qualifié de l'image. Son état writable est confiné :
 
 ```text
 HOME=/var/lib/minos/cache/home
 MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
 ```
 
-Les dépendances déjà présentes y sont réutilisées entre les indexations. Les dépendances manquantes du **projet** peuvent être résolues par le plan admin éphémère.
+Le checkpoint historique `45536e2fc7d32ed67932e2715e458fa26a8239b1` avait précisément exposé `workspace/mvnw` / `error=2, No such file or directory`; ce défaut est corrigé.
 
-Les outils .NET reçoivent eux aussi des emplacements writable explicites :
+## Routage provider → module/build root M29-S5
+
+Un projet enregistré peut être un monorepo dont la racine globale n'est pas une racine valide pour tous les providers. MINOS distingue désormais :
 
 ```text
-minos-admin          DOTNET_CLI_HOME=/var/lib/minos/cache/dotnet-home
-                     NUGET_PACKAGES=/var/lib/minos/cache/nuget
-minos-provider-probe DOTNET_CLI_HOME=/tmp/minos-dotnet-home
-                     NUGET_PACKAGES=/tmp/minos-nuget
+registeredProjectRoot
+projectRoot          = racine réelle d'exécution provider
+projectRelativeRoot  = position portable de cette racine dans le projet
 ```
 
-### Limitation Node
+Exemple de qualification :
 
-`scip-typescript 0.4.0` est préparé avec Node 20.20.2 pour rester sur la ligne Node documentée par ce provider. Cette contrainte est enregistrée dans l'inventaire ; elle ne doit pas être interprétée comme une recommandation générale de Node 20 pour d'autres usages.
+```text
+fixtures/polyglot/m29-scoped-modules
+├── pom.xml                         -> scip-java à la racine
+├── src/main/java/...
+└── ui
+    ├── app/package.json            -> scip-typescript dans ui/app
+    ├── app/tsconfig.json
+    ├── lib/package.json            -> scip-typescript dans ui/lib
+    └── lib/tsconfig.json
+```
 
-## Installation du runtime Docker de travail
+Il n'existe volontairement aucun `package.json` ni `tsconfig.json` à la racine globale.
 
-Depuis un checkout M29 qualifié :
+Les exécutions scoped d'un même provider sont isolées sous :
+
+```text
+/var/lib/minos/runs/<run-id>/<provider>/scopes/module-<sha16>
+```
+
+Un chemin SCIP relatif au module comme `src/app.ts` est transformé en chemin projet `ui/app/src/app.ts` avant création du file ID et de l'identité structurelle path-based. Le snapshot projet n'est promu qu'après réussite de tous les scopes et du staging.
+
+## Configuration sémantique persistante S5
+
+Le workflow Docker persiste désormais la sélection sémantique dans le fichier runtime `.env` et dans `installation.json` **format 5**. La même configuration est injectée dans `minos-admin` et `minos-mcp`, afin qu'un query container recréé relise le même store.
+
+Modes packagés actuellement admis :
+
+```text
+disabled
+local-hash
+```
+
+Installation de qualification S5 :
 
 ```powershell
-$Jar = '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar'
-
 .\docker\scripts\prod-mcp-release.ps1 `
   -Action Install `
-  -Jar $Jar `
+  -Jar '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar' `
   -Version '1.0.1-SNAPSHOT' `
   -Commit (git rev-parse HEAD) `
-  -ProjectsRoot 'N:\workspace-dev'
+  -ProjectsRoot 'N:\workspace-dev' `
+  -SemanticProvider local-hash
 ```
 
-`Install` :
+`local-hash` expose le provider `minos-local-hash`, 384 dimensions. C'est un provider déterministe zéro-réseau destiné à valider le plumbing provider/store/search. **Ce n'est pas un modèle appris et il ne remplace pas la qualification de qualité M23.**
 
-1. construit l'image depuis le JAR exact ;
-2. valide `docker compose config` ;
-3. contrôle Java dans l'image ;
-4. extrait l'inventaire/checksums providers ;
-5. initialise `minos-provider-tools` depuis le bundle image ;
-6. exécute le probe provider offline puis `tools list` / `tools verify --all` ;
-7. initialise le mapping host/container ;
-8. vérifie que le plan admin expose le CLI stable ;
-9. persiste les métadonnées de l'installation.
+## Vector store
 
-## Exécuter le CLI MINOS dans Docker
+Le store existant est conservé :
 
-Le workflow packagé accepte `-Action Admin` :
-
-```powershell
-$Docker = '.\docker\scripts\prod-mcp-release.ps1'
-
-& $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('tools', 'list', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
-
-& $Docker -Action Admin -MinosArguments @(
-  'project', 'add', '/workspace/projects/my-project',
-  '--name', 'my-project', '--format', 'json'
-)
-
-& $Docker -Action Admin -MinosArguments @('project', 'inspect', 'my-project', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('index', 'my-project', '--format', 'json')
-& $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
+```text
+/var/lib/minos/semantic-index/<projectId>/index-v2.bin
+format v2
+float32
+exact scan
 ```
 
-`tools verify --all` est le gate capability-honest. Le probe `minos-provider-probe` reste le gate explicite démontrant que le payload provider et Maven sont exécutables sans réseau.
+Aucun ANN, HNSW, Lucene ou vector DB externe n'est ajouté par M29. Le signal sémantique reste `HEURISTIC` et ne devient jamais un fait structurel.
 
-## Projets read-only pendant l'indexation
-
-Les sources restent read-only dans `minos-admin`. Les process plans M29 ne doivent pas déposer `index.scip`, `target/` ou autre artefact de provider dans la racine projet.
-
-Les sorties SCIP Java, TypeScript, C/C++, C#, Go et Rust sont redirigées vers le run directory MINOS sous l'état writable. Python utilisait déjà un output externe. Rust redirige aussi `CARGO_TARGET_DIR` vers son run directory. Java exécute son build complet depuis le staging writable décrit ci-dessus avec le Maven 3.9.16 de l'image.
-
-Tout provider qui exige encore une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount ne doit pas être rendu writable pour le contourner.
-
-## État sémantique et hybride
-
-M29 ajoute deux diagnostics CLI read-only :
+Diagnostics :
 
 ```text
 semantic status <project> [--format <text|json>]
@@ -256,59 +200,43 @@ READY_STRUCTURED_FALLBACK
 READY_WITH_SEMANTIC
 ```
 
-Le signal vectoriel reste `HEURISTIC` et ne crée jamais de fait structurel.
+En `READY_WITH_SEMANTIC`, la limitation `SEMANTIC_SIGNAL_IS_HEURISTIC_NOT_STRUCTURAL_FACT` reste explicitement exposée.
 
-## MCP query-only
+## Installation / administration
 
-Démarrer :
-
-```powershell
-& $Docker -Action Start
-```
-
-Session STDIO :
+Workflow :
 
 ```powershell
-& $Docker -Action Attach
+$Docker = '.\docker\scripts\prod-mcp-release.ps1'
+& $Docker -Action Admin -MinosArguments @('doctor', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('project', 'add', '/workspace/projects/my-project', '--name', 'my-project', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('index', 'my-project', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('index-status', 'my-project', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('semantic', 'status', 'my-project', '--format', 'json')
+& $Docker -Action Admin -MinosArguments @('hybrid', 'status', 'my-project', '--format', 'json')
 ```
 
-Le processus MCP est lancé dans le conteneur query-only. Il voit projets, état métier et provider tools en lecture seule, avec `network_mode:none`.
+Les sorties provider Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
 
-## Validation et état
+## Qualification courante
+
+S3/S4 sont prouvés sur :
+
+```text
+3df1b40ca0daf50779596f6e955d966ed5eb4973
+M29-S3 DOCKER ADMINISTRATION QUALIFICATION SUCCESS
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
+```
+
+S5 n'est pas encore PASS. Le gate exact-head est :
 
 ```powershell
-& $Docker -Action Validate
-& $Docker -Action Status
+.\scripts\m29\run-s5.ps1 `
+  -ExpectedHead <HEAD> `
+  -ProjectsRoot N:\workspace-dev
 ```
 
-Le gate exact-head S4 complet est :
+Il doit prouver sur la même installation : provider scopes `ui/app` + `ui/lib`, structured READY, `index-v2.bin`, semantic READY, hybrid `READY_WITH_SEMANTIC`, second index `NONE/NO_CHANGES`, forced FULL, recreate query et worktree inchangé.
 
-```powershell
-.\scripts\m29\run-s4.ps1 -ExpectedHead <sha> -ProjectsRoot N:\workspace-dev
-```
-
-Le gate S3 doit ensuite être exécuté sur le **même SHA** :
-
-```powershell
-.\scripts\m29\run-s3.ps1 -ExpectedHead <sha> -ProjectsRoot N:\workspace-dev
-```
-
-S3 doit atteindre `index → READY`, les statuts semantic/hybrid, le handshake MCP et la preuve recreate/persistance.
-
-## Désinstallation
-
-```powershell
-& $Docker -Action Uninstall
-```
-
-Le conteneur, l'image, la configuration runtime et le volume `minos-provider-tools` gérés sont retirés. Les données métier persistantes sont conservées par défaut.
-
-La purge explicite des données et le switching transactionnel natif/Docker relèvent de M29-S7.
-
-## État de qualification
-
-S4 a obtenu une nouvelle preuve exact-head complète sur `45536e2fc7d32ed67932e2715e458fa26a8239b1` : Maven 13/13, docs checker, image Docker 31/31, Maven 3.9.16, probe offline, sept providers READY et `doctor.ready=true` ont PASS.
-
-S3 exécuté immédiatement sur ce même SHA a ensuite prouvé que le staging writable corrige l'ancienne écriture `target/scip-targetroot` sur source read-only. Le nouveau défaut exact est que `scip-java` sélectionne `.../workspace/mvnw`, issu du checkout Windows, et échoue au lancement avec `error=2, No such file or directory`. Son stdout montre aussi un `javac` temporaire sous `/tmp/scip-java...`, incompatible avec le contrat `/tmp` noexec.
-
-La remédiation courante exclut `mvnw`/`mvnw.cmd` du staging Linux, conserve `.mvn`, force l'usage du Maven 3.9.16 packagé et route `java.io.tmpdir`/JNA vers `/run/minos-native`. Ces changements modifient le HEAD ; ils doivent donc repasser **S4 puis S3 exact-head** avant toute nouvelle claim PASS sur la branche courante.
+Aucune parité native/Docker n'est revendiquée avant M29-S8.
