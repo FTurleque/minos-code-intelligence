@@ -18,7 +18,7 @@ class M29DockerAdministrationContractTest {
         String admin = section(compose, "  minos-admin:", "  minos-bootstrap:");
         String bootstrap = section(compose, "  minos-bootstrap:", "  minos-tools-bootstrap:");
         String toolsBootstrap = section(compose, "  minos-tools-bootstrap:", "  minos-provider-probe:");
-        String providerProbe = section(compose, "  minos-provider-probe:", "volumes:");
+        String providerProbe = section(compose, "  minos-provider-probe:", "\nvolumes:\n  minos-provider-tools:");
 
         assertTrue(query.contains("io.minos.runtime-plane: query"));
         assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"));
