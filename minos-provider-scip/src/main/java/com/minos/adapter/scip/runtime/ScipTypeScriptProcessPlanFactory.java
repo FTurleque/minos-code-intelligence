@@ -24,7 +24,7 @@ public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPla
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) {
+    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws java.io.IOException {
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (!Files.isRegularFile(root.resolve("tsconfig.json"))
                 && !Files.isRegularFile(root.resolve("package.json"))) {
@@ -37,8 +37,12 @@ public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPla
             throw new IllegalStateException("scip-typescript incremental execution is not qualified");
         }
 
+        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Files.createDirectories(output.getParent());
         List<String> arguments = new ArrayList<>();
         arguments.add("index");
+        arguments.add("--output");
+        arguments.add(output.toString());
         if (!Files.isRegularFile(root.resolve("tsconfig.json")) && Files.isRegularFile(root.resolve("package.json"))) {
             arguments.add("--infer-tsconfig");
         }
@@ -46,7 +50,7 @@ public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPla
                 CommandLocator.invocation(executable, arguments.toArray(String[]::new)),
                 root,
                 Map.of(),
-                root.resolve("index.scip"),
+                output,
                 Duration.ofMinutes(30)
         );
     }
