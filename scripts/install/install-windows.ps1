@@ -138,6 +138,17 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallRoot) | Out-Null
         Copy-Item -LiteralPath $Source -Destination $InstallRoot -Recurse
 
+        # The Docker ownership marker contains the previous managed runtime
+        # identity and custom roots. Preserve it across a ZIP payload replacement
+        # so the switcher can reuse or transactionally upgrade that runtime.
+        if ($null -ne $Backup) {
+            $PreviousMarker = Join-Path $Backup '.docker-mcp-managed'
+            $CurrentMarker = Join-Path $InstallRoot '.docker-mcp-managed'
+            if (Test-Path -LiteralPath $PreviousMarker -PathType Leaf) {
+                Copy-Item -LiteralPath $PreviousMarker -Destination $CurrentMarker -Force
+            }
+        }
+
         $InstalledVersion = Invoke-MinosVersion -Launcher (Join-Path $InstallRoot 'minos.cmd')
 
         # PATH is transactional with the payload. Apply it before backend
