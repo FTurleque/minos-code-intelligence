@@ -7,15 +7,22 @@ import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** Plan d'exécution local de scip-java. */
 public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFactory {
+
+    private static final Set<String> STAGING_EXCLUDED_DIRECTORIES = Set.of(
+            ".git", ".idea", ".gradle", ".cache", "target", "build", "out", "node_modules");
 
     private final Path coursier;
     private final String coordinate;
@@ -43,7 +50,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         }
         requireProjectJdk();
 
-        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
+        Path output = normalizedRunDirectory.resolve("index.scip");
         Files.createDirectories(output.getParent());
         if (CommandLocator.isWindows()) {
             if (!Files.isRegularFile(coursier)) {
@@ -55,7 +63,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             Path powershell = ManagedScipProviderRuntimeManager.powerShellExecutable()
                     .orElseThrow(() -> new IllegalStateException(
                             "PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
-            Path providerOutput = runDirectory.resolve("scip-java-output").toAbsolutePath().normalize();
+            Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
             Files.createDirectories(providerOutput);
             return new IndexerProcessPlan(
                     CommandLocator.invocation(
@@ -77,11 +85,17 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             );
         }
 
+        // scip-java's Maven build creates target/scip-targetroot and other compiler outputs in the
+        // project tree. Docker project mounts are intentionally read-only, so Linux/Docker runs
+        // execute against an isolated writable staging copy under MINOS_HOME/runs instead of ever
+        // relaxing the source mount. Generated/build/cache directories are not copied into staging.
+        Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
+
         var standalone = CommandLocator.find("scip-java");
         if (standalone.isPresent()) {
             return new IndexerProcessPlan(
                     standaloneCommand(standalone.orElseThrow(), output),
-                    root,
+                    executionRoot,
                     Map.of(),
                     output,
                     Duration.ofHours(1)
@@ -99,7 +113,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                         "--main", ManagedScipProviderRuntimeManager.SCIP_JAVA_MAIN_CLASS,
                         "--", "index", "--output", output.toString()
                 ),
-                root,
+                executionRoot,
                 Map.of(),
                 output,
                 Duration.ofHours(1)
@@ -113,6 +127,76 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                 normalizedLauncher.toString(),
                 "index", "--output", normalizedOutput.toString()
         );
+    }
+
+    static Path prepareWritableWorkspace(Path projectRoot, Path runDirectory) throws IOException {
+        Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
+        Path run = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
+        Path workspace = run.resolve("workspace").normalize();
+        if (workspace.startsWith(root)) {
+            throw new IllegalArgumentException("scip-java staging workspace must be outside the source project: " + workspace);
+        }
+        deleteRecursively(workspace);
+        Files.createDirectories(workspace);
+
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                if (!directory.equals(root)
+                        && STAGING_EXCLUDED_DIRECTORIES.contains(directory.getFileName().toString())) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                Path target = stagedTarget(root, workspace, directory);
+                Files.createDirectories(target);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                if (attributes.isSymbolicLink()) {
+                    return FileVisitResult.CONTINUE;
+                }
+                Path target = stagedTarget(root, workspace, file);
+                Files.createDirectories(target.getParent());
+                Files.copy(file, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+
+        if (!Files.isRegularFile(workspace.resolve("pom.xml"))) {
+            throw new IllegalStateException("scip-java staging did not preserve the root pom.xml: " + workspace);
+        }
+        return workspace;
+    }
+
+    private static Path stagedTarget(Path root, Path workspace, Path source) {
+        Path target = workspace.resolve(root.relativize(source)).normalize();
+        if (!target.startsWith(workspace)) {
+            throw new IllegalArgumentException("project staging path escapes workspace: " + source);
+        }
+        return target;
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                Files.deleteIfExists(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path directory, IOException exception) throws IOException {
+                if (exception != null) {
+                    throw exception;
+                }
+                Files.deleteIfExists(directory);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private static void requireProjectJdk() {
