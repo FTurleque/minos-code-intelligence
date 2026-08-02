@@ -18,6 +18,10 @@ services:
         source: "${MINOS_DATA_DIR}"
         target: /var/lib/minos
         read_only: true
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
       - type: bind
         source: "${MINOS_PROJECTS_DIR}"
         target: /workspace/projects
@@ -54,6 +58,10 @@ services:
       - type: bind
         source: "${MINOS_DATA_DIR}"
         target: /var/lib/minos
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
       - type: bind
         source: "${MINOS_PROJECTS_DIR}"
         target: /workspace/projects
@@ -105,3 +113,52 @@ services:
       io.minos.version: "${MINOS_VERSION}"
       io.minos.revision: "${MINOS_GIT_COMMIT}"
       io.minos.runtime-plane: bootstrap
+
+  minos-tools-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+        set -eu
+        marker=/var/lib/minos/tools/.minos-image-revision
+        if [ -f "$$marker" ] && [ "$$(cat "$$marker")" = "$${MINOS_GIT_COMMIT}" ]; then
+          echo "MINOS Docker provider tools already match image revision $${MINOS_GIT_COMMIT}."
+          exit 0
+        fi
+        find /var/lib/minos/tools -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/
+        printf '%s\n' "$${MINOS_GIT_COMMIT}" > "$$marker"
+        chown -R 10001:10001 /var/lib/minos/tools
+        echo "MINOS Docker provider tools initialized for $${MINOS_GIT_COMMIT}."
+    user: "0:0"
+    init: true
+    network_mode: none
+    environment:
+      MINOS_GIT_COMMIT: "${MINOS_GIT_COMMIT}"
+    volumes:
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: tools-bootstrap
+
+volumes:
+  minos-provider-tools:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: provider-tools
