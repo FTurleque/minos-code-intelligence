@@ -178,7 +178,7 @@ try {
     Invoke-Workflow -Action Validate
 
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'list', '--format', 'json')
-    $ContainerFixture = '/workspace/projects/' + ($FixtureRelativePath.Replace('\\', '/').Trim('/'))
+    $ContainerFixture = '/workspace/projects/' + ($FixtureRelativePath.Replace('\', '/').Trim('/'))
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'add', $ContainerFixture, '--name', 'm29-s3-fixture', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('project', 'inspect', 'm29-s3-fixture', '--format', 'json')
 
