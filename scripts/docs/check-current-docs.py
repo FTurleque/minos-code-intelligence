@@ -51,6 +51,7 @@ def main() -> int:
             "docs/roadmap/M21_EXECUTION.md": read("docs/roadmap/M21_EXECUTION.md"),
             "docs/roadmap/M21_S2_AUGUST_RECOVERY.md": read("docs/roadmap/M21_S2_AUGUST_RECOVERY.md"),
             "docs/roadmap/M28_EXECUTION.md": read("docs/roadmap/M28_EXECUTION.md"),
+            "docs/roadmap/M29_EXECUTION.md": read("docs/roadmap/M29_EXECUTION.md"),
             "docs/user/production-installation.md": read("docs/user/production-installation.md"),
             "docs/releases/1.0.0.md": read("docs/releases/1.0.0.md"),
             "docs/releases/1.0.1.md": read("docs/releases/1.0.1.md"),
@@ -62,6 +63,7 @@ def main() -> int:
         m21 = current_files["docs/roadmap/M21_EXECUTION.md"]
         m21_recovery = current_files["docs/roadmap/M21_S2_AUGUST_RECOVERY.md"]
         m28 = current_files["docs/roadmap/M28_EXECUTION.md"]
+        m29 = current_files["docs/roadmap/M29_EXECUTION.md"]
         install = current_files["docs/user/production-installation.md"]
         release_100 = current_files["docs/releases/1.0.0.md"]
         release_101 = current_files["docs/releases/1.0.1.md"]
@@ -78,8 +80,14 @@ def main() -> int:
         require("docs/STATUS.md", status, "#93 CLOSED / completed")
         require("docs/STATUS.md", status, "PR de promotion #102")
         require("docs/STATUS.md", status, "1adbc45339efe37cd26d1937025bfa69d7b57811")
+        require("docs/STATUS.md", status, "M29 #107")
+        require("docs/STATUS.md", status, "Docker autonome & Native Parity")
         require("docs/ROADMAP.md", roadmap, "PR promotion")
         require("docs/ROADMAP.md", roadmap, "#93 CLOSED / completed")
+        require("docs/ROADMAP.md", roadmap, "M29 — Autonomous Docker Runtime & Native Parity")
+        require("docs/ROADMAP.md", roadmap, "Issue : **#107**")
+        require("docs/ROADMAP.md", roadmap, "index-v2.bin")
+        require("docs/ROADMAP.md", roadmap, "native result == docker result")
 
         # M21/M28 final dispositions must not regress to pre-promotion status.
         require("docs/roadmap/M21_EXECUTION.md", m21, "TERMINÉ")
@@ -90,6 +98,33 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "#93 CLOSED / completed")
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
+
+        # M29 is planned, not delivered. Its contract must remain capability-honest.
+        for token in (
+            "PLANIFIÉ",
+            "#107",
+            "Docker autonome",
+            "index-v2.bin",
+            "float32",
+            "M29-S1",
+            "M29-S2",
+            "M29-S3",
+            "M29-S4",
+            "M29-S5",
+            "M29-S6",
+            "M29-S7",
+            "M29-S8",
+            "network_mode: none",
+            "Copilot",
+            "Claude",
+            "Codex",
+            "native result == docker result",
+            "#98",
+        ):
+            require("docs/roadmap/M29_EXECUTION.md", m29, token)
+        require("docs/roadmap/M29_EXECUTION.md", m29, "aucune nouvelle base vectorielle externe")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "3 août 2026")
 
         stale_current = (
             "release 0.2.0 candidate",
