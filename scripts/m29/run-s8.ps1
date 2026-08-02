@@ -146,13 +146,11 @@ function Get-NormalizedToolSchema([pscustomobject] $ToolsListResponse) {
 }
 
 $Git = (Get-Command git -ErrorAction Stop).Source
-$Head = (& $Git -C $RepoRoot rev-parse HEAD 2>&1).Trim()
-if ($LASTEXITCODE -ne 0) { throw "Unable to resolve M29 HEAD" }
+$Head = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -Failure 'Unable to resolve M29 HEAD').Trim()
 if ($Head -ne $ExpectedHead.Trim()) {
     throw "M29-S8 exact-head mismatch: expected $ExpectedHead, found $Head"
 }
-$Dirty = (& $Git -C $RepoRoot status --porcelain 2>&1).Trim()
-if ($LASTEXITCODE -ne 0) { throw "Unable to inspect git status" }
+$Dirty = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'status', '--porcelain') -Failure 'Unable to inspect git status').Trim()
 if (-not [string]::IsNullOrWhiteSpace($Dirty)) {
     throw "M29-S8 requires a clean worktree. Dirty entries:`n$Dirty"
 }
@@ -357,8 +355,7 @@ try {
     }
     Write-Host "M29-S8 tools/call response structure parity PASS" -ForegroundColor Cyan
 
-    $FinalDirty = (& $Git -C $RepoRoot status --porcelain 2>&1).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Unable to inspect final git status" }
+    $FinalDirty = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'status', '--porcelain') -Failure 'Unable to inspect final git status').Trim()
     if (-not [string]::IsNullOrWhiteSpace($FinalDirty)) {
         throw "M29-S8 qualification modified the source checkout:`n$FinalDirty"
     }
