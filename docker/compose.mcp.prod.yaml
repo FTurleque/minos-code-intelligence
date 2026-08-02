@@ -10,6 +10,11 @@ services:
     environment:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
+      MINOS_SEMANTIC_PROVIDER: "${MINOS_SEMANTIC_PROVIDER:-disabled}"
+      MINOS_SEMANTIC_MODEL: "${MINOS_SEMANTIC_MODEL:-}"
+      MINOS_SEMANTIC_DIMENSIONS: "${MINOS_SEMANTIC_DIMENSIONS:-}"
+      MINOS_SEMANTIC_ENDPOINT: "${MINOS_SEMANTIC_ENDPOINT:-}"
+      MINOS_SEMANTIC_TIMEOUT_SECONDS: "${MINOS_SEMANTIC_TIMEOUT_SECONDS:-}"
     working_dir: /workspace/projects
     volumes:
       - type: bind
@@ -44,6 +49,11 @@ services:
     environment:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
+      MINOS_SEMANTIC_PROVIDER: "${MINOS_SEMANTIC_PROVIDER:-disabled}"
+      MINOS_SEMANTIC_MODEL: "${MINOS_SEMANTIC_MODEL:-}"
+      MINOS_SEMANTIC_DIMENSIONS: "${MINOS_SEMANTIC_DIMENSIONS:-}"
+      MINOS_SEMANTIC_ENDPOINT: "${MINOS_SEMANTIC_ENDPOINT:-}"
+      MINOS_SEMANTIC_TIMEOUT_SECONDS: "${MINOS_SEMANTIC_TIMEOUT_SECONDS:-}"
       HOME: /var/lib/minos/cache/home
       COURSIER_CACHE: /var/lib/minos/cache/coursier
       MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository
