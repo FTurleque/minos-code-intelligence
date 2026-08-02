@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 démarré sur une branche dédiée pour rendre Docker autonome et paritaire avec le natif, sans claim de parité à ce stade.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés et S3 implémenté en attente de gate Docker réel, sans claim de parité.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves d'exécution détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -97,7 +97,7 @@ Voir [`releases/1.0.1.md`](releases/1.0.1.md) et [`user/production-installation.
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 implémentés mais non qualifiés exact-head.**  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS exact-head, S3 implémenté en attente de qualification.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -148,9 +148,9 @@ Le travail porte sur :
 
 | Sous-étape | Objet | État |
 |---|---|---|
-| M29-S1 | Backend contract & ADR | 🟨 implémenté — qualification locale requise |
-| M29-S2 | Project identity, path mapping & portable persistence | 🟨 implémenté partiellement — qualification locale requise |
-| M29-S3 | Autonomous Docker administration plane | ⬜ bloqué par gate S1/S2 |
+| M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
+| M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
+| M29-S3 | Autonomous Docker administration plane | 🟨 implémenté — qualification Maven/Docker requise |
 | M29-S4 | Provider-complete Docker image | ⬜ |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
@@ -159,15 +159,47 @@ Le travail porte sur :
 
 `🟨` signifie code présent, **pas PASS**.
 
-### S1 — contrat backend déjà implémenté
+### S1/S2 — preuve enregistrée
 
-Le point d'entrée stable `minos.exe mcp` charge une configuration versionnée `native|docker` avant d'ouvrir `MinosApplication`. Docker effectue un probe borné du daemon et du conteneur puis ouvre la session STDIO par `docker exec -i`. Configuration invalide ou Docker indisponible échoue explicitement ; aucun fallback Docker → natif n'est autorisé. ADR-0037 documente ce contrat.
+Qualification Windows du 2 août 2026 :
 
-### S2 — identité/path mapping déjà implémenté
+```text
+HEAD                         c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+mvnw.cmd clean verify        BUILD SUCCESS
+13/13 modules                SUCCESS
+suite totale                 417 PASS
+McpBackendRouterTest         6/6 PASS
+ProjectPathMappingTest       4/4 PASS
+check-current-docs.py        SUCCESS
+```
 
-Le mapping `hostRoot ↔ containerRoot` est typé et versionné. Lorsque ce mapping est actif, le registre persiste `rootRelativePath` au lieu du chemin physique absolu. Les UUID projet/workspace restent autoritatifs. Les anciens `rootPath` sont migrés atomiquement avec backup `.m29-v1.bak`.
+S1 et S2 sont donc acquises pour leurs contrats implémentés. Les preuves d'intégration process native↔Docker restent dans les gates S3/S5/S8 et ne valent pas encore claim de parité.
 
-Ces deux sous-étapes restent à qualifier sur un SHA exact avec JDK 24/Maven et Docker réel avant de poursuivre S3.
+### S3 — plan d'administration Docker implémenté
+
+Le Compose M29 sépare :
+
+```text
+minos-mcp        query-only persistant
+minos-admin      administration/indexation éphémère
+minos-bootstrap  mapping host/container éphémère
+```
+
+Le plan MCP monte `/var/lib/minos` et les projets read-only. Le plan admin garde les projets read-only mais peut écrire `/var/lib/minos`. Les deux restent `network_mode: none`, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` avec tmpfs borné.
+
+Le bootstrap crée le mapping versionné avant l'administration et refuse un remplacement implicite conflictuel.
+
+Le workflow Docker packagé expose :
+
+```powershell
+prod-mcp-release.ps1 -Action Admin -MinosArguments @(...)
+```
+
+Il peut appeler le CLI stable pour `doctor`, `tools list/verify`, `project add/list/inspect`, `index`, `index-status`, `semantic status` et `hybrid status`. Le MCP reste attaché au plan query-only.
+
+Guide : [`user/docker-runtime.md`](user/docker-runtime.md).
+
+S3 reste 🟨 car le nouveau HEAD n'a pas encore passé sa qualification Maven/Docker réelle. Le dernier hôte observé avait Docker CLI 29.6.2 mais le daemon `desktop-linux` arrêté.
 
 ### Définition de parité
 
@@ -250,9 +282,9 @@ Le worker distant natif ne revendique toujours pas une sandbox OS pour code non 
 ## Séquence de travail
 
 1. maintenir la dépendance explicite sur le candidat 1.0.1 sans lui faire revendiquer une parité Docker inexistante ;
-2. qualifier M29-S1 puis M29-S2 sur le SHA exact ;
-3. seulement après ces PASS, implémenter S3 puis S4/S5 ;
-4. rendre Docker réellement autonome avant de modifier l'UX pour le présenter comme alternative équivalente ;
+2. S1/S2 sont qualifiés ; qualifier maintenant S3 sur le SHA exact avec Docker réel ;
+3. seulement après PASS S3, démarrer S4 puis S5 ;
+4. rendre Docker réellement autonome/provider-complete avant de modifier l'UX pour le présenter comme alternative équivalente ;
 5. ne déclarer M29 terminé qu'après le rapport de parité exact-head S8 ;
 6. ne créer aucune PR/CI M29 sans autorisation explicite du mainteneur.
 
