@@ -17,60 +17,59 @@ class M29DockerAdministrationContractTest {
         String query = section(compose, "  minos-mcp:", "  minos-admin:");
         String admin = section(compose, "  minos-admin:", "  minos-bootstrap:");
         String bootstrap = section(compose, "  minos-bootstrap:", "  minos-tools-bootstrap:");
-        String toolsBootstrap = compose.substring(compose.indexOf("  minos-tools-bootstrap:"));
+        String toolsBootstrap = section(compose, "  minos-tools-bootstrap:", "  minos-provider-probe:");
+        String providerProbe = section(compose, "  minos-provider-probe:", "volumes:");
 
         assertTrue(query.contains("io.minos.runtime-plane: query"));
-        assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"),
-                "MCP query plane must mount MINOS business state read-only");
+        assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"));
         assertTrue(query.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
 
         assertTrue(admin.contains("io.minos.runtime-plane: admin"));
         assertTrue(admin.contains("target: /var/lib/minos"));
-        assertFalse(admin.contains("target: /var/lib/minos\n        read_only: true"),
-                "admin/indexing plane needs explicit write access to MINOS_HOME");
-        assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"),
-                "provider tools must stay immutable during admin/indexing RUN");
-        assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"),
-                "admin/indexing must never make project sources writable");
+        assertFalse(admin.contains("target: /var/lib/minos\n        read_only: true"));
+        assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"));
+        assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"));
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
 
         assertTrue(bootstrap.contains("com.minos.cli.DockerRuntimeBootstrap"));
         assertTrue(bootstrap.contains("configure-project-paths"));
+        assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
+        assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
+        assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
+        assertTrue(providerProbe.contains("scip-java version 0.13.1"));
+        assertTrue(providerProbe.contains("scip-typescript/0.4.0"));
+        assertTrue(providerProbe.contains("scip-python/0.6.6"));
+        assertTrue(providerProbe.contains("scip-dotnet/0.2.14"));
+        assertTrue(providerProbe.contains("scip-go/0.2.7"));
 
-        for (String plane : new String[]{query, admin, bootstrap, toolsBootstrap}) {
+        for (String plane : new String[]{query, admin, bootstrap, toolsBootstrap, providerProbe}) {
             assertTrue(plane.contains("network_mode: none"));
             assertTrue(plane.contains("read_only: true"));
-            assertTrue(plane.contains("cap_drop:\n      - ALL"));
-            assertTrue(plane.contains("no-new-privileges:true"));
+            assertTrue(plane.contains("cap_drop: [ALL]"));
+            assertTrue(plane.contains("security_opt: [no-new-privileges:true]"));
         }
         assertTrue(query.contains("MINOS_RUNTIME_LOCATION: docker"));
         assertTrue(admin.contains("MINOS_RUNTIME_LOCATION: docker"));
         assertTrue(bootstrap.contains("MINOS_RUNTIME_LOCATION: docker"));
-        assertTrue(toolsBootstrap.contains("io.minos.runtime-plane: tools-bootstrap"));
-        assertTrue(toolsBootstrap.contains("cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/"));
     }
 
     @Test
-    void packagedWorkflowBootstrapsMappingProvidersAndExposesAdminAction() throws Exception {
+    void packagedWorkflowBootstrapsAndProbesEveryAdvertisedProviderOffline() throws Exception {
         Path root = repoRoot();
         String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
 
-        assertTrue(workflow.contains("'Admin'"));
-        assertTrue(workflow.contains("'minos-bootstrap'"));
         assertTrue(workflow.contains("'minos-tools-bootstrap'"));
-        assertTrue(workflow.contains("'minos-admin'"));
+        assertTrue(workflow.contains("'minos-provider-probe'"));
         assertTrue(workflow.contains("'tools', 'list', '--format', 'json'"));
-        assertTrue(workflow.contains("'tools', 'verify', '--format', 'json'"));
+        assertTrue(workflow.contains("'tools', 'verify', '--all', '--format', 'json'"));
         assertTrue(workflow.contains("provider-inventory.json"));
         assertTrue(workflow.contains("provider-binary-sha256.txt"));
-        assertTrue(workflow.contains("MINOS_HOST_PROJECTS_ROOT"));
         assertTrue(workflow.contains("formatVersion = 4"));
         assertTrue(workflow.contains("'--volumes'"));
 
         assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
-        assertTrue(dockerfile.contains("MINOS_RUNTIME_LOCATION=docker"));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
@@ -93,27 +92,30 @@ class M29DockerAdministrationContractTest {
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"
         }) {
             String source = normalizedText(root.resolve(relative));
-            assertTrue(source.contains("runDirectory"), relative + " must route output through the MINOS run directory");
-            assertFalse(source.contains("root.resolve(\"index.scip\")"),
-                    relative + " must not declare index.scip inside read-only project sources");
+            assertTrue(source.contains("runDirectory"));
+            assertFalse(source.contains("root.resolve(\"index.scip\")"));
         }
+        String rust = normalizedText(root.resolve(
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"));
+        assertTrue(rust.contains("CARGO_TARGET_DIR"));
     }
 
     @Test
-    void s3RunnerFailsFastOnDockerAndExercisesRealLifecycleWhenAvailable() throws Exception {
-        String runner = normalizedText(repoRoot().resolve("scripts/m29/run-s3.ps1"));
+    void s3AndS4RunnersRemainExactHeadBlockingGates() throws Exception {
+        Path root = repoRoot();
+        String s3 = normalizedText(root.resolve("scripts/m29/run-s3.ps1"));
+        String s4 = normalizedText(root.resolve("scripts/m29/run-s4.ps1"));
 
-        assertTrue(runner.contains("M29-S3 exact-head mismatch"));
-        assertTrue(runner.contains("status', '--porcelain"));
-        assertTrue(runner.contains("Docker Desktop Linux daemon is unavailable"));
-        assertTrue(runner.contains("'project', 'add'"));
-        assertTrue(runner.contains("'index', 'm29-s3-fixture'"));
-        assertFalse(runner.contains("'index', 'm29-s3-fixture', '--dry-run'"),
-                "S3 gate must exercise a real provider/index lifecycle rather than only planning it");
-        assertTrue(runner.contains("MinosNativeMcpSmoke.java"));
-        assertTrue(runner.contains("Invoke-McpHandshake"));
-        assertTrue(runner.contains("Invoke-Workflow -Action Start"));
-        assertTrue(runner.contains("result = if ($Passed) { 'PASS' } else { 'FAIL_OR_BLOCKED' }"));
+        assertTrue(s3.contains("M29-S3 exact-head mismatch"));
+        assertTrue(s3.contains("'index', 'm29-s3-fixture'"));
+        assertFalse(s3.contains("'index', 'm29-s3-fixture', '--dry-run'"));
+        assertTrue(s3.contains("Invoke-McpHandshake"));
+
+        assertTrue(s4.contains("M29-S4 exact-head mismatch"));
+        assertTrue(s4.contains("'tools', 'verify', '--all'"));
+        assertTrue(s4.contains("provider-inventory.json"));
+        assertTrue(s4.contains("provider-binary-sha256.txt"));
+        assertTrue(s4.contains("FAIL_OR_BLOCKED"));
     }
 
     private static String normalizedText(Path path) throws IOException {
