@@ -178,7 +178,9 @@ def main() -> int:
             "provider-inventory.json",
             "provider-binary-sha256.txt",
             "run-s4.ps1",
-            "aucun provider ne doit être déclaré supporté",
+            "probe `minos-provider-probe` reste le gate explicite",
+            "Apache Maven 3.9.16",
+            "/var/lib/minos/runs/<run-id>/scip-java/workspace",
         ):
             require("docs/user/docker-runtime.md", docker_runtime, token)
 
@@ -205,6 +207,7 @@ def main() -> int:
         require("docs/releases/1.0.1.md", release_101, "Codex Desktop")
         require("docs/releases/1.0.1.md", release_101, "Mode MCP")
         require("docs/releases/1.0.1.md", release_101, "MCP natif local — recommandé, sans Docker")
+        require("docs/releases/1.0.1.md", release_101, "MCP Docker — optionnel")
         require("docs/releases/1.0.1.md", release_101, "%LOCALAPPDATA%\\MINOS")
         require("docs/releases/1.0.1.md", release_101, "Non / conserver")
 
@@ -243,6 +246,7 @@ def main() -> int:
         docker_compose = read("docker/compose.mcp.prod.yaml")
         docker_workflow = read("docker/scripts/prod-mcp-release.ps1")
         docker_image = read("docker/Dockerfile.mcp.release")
+        scip_java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java")
         tools_command = read("minos-cli/src/main/java/com/minos/cli/ToolsCommand.java")
         s3_runner = read("scripts/m29/run-s3.ps1")
         s4_runner = read("scripts/m29/run-s4.ps1")
@@ -294,6 +298,8 @@ def main() -> int:
             "minos-provider-tools:",
             "MINOS_RUNTIME_LOCATION: docker",
             "network_mode: none",
+            "MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository",
+            "HOME: /var/lib/minos/cache/home",
         ):
             require("docker/compose.mcp.prod.yaml", docker_compose, token)
         for token in (
@@ -311,6 +317,8 @@ def main() -> int:
         for token in (
             "FROM eclipse-temurin:24-jdk",
             "MINOS_RUNTIME_LOCATION=docker",
+            "MAVEN_VERSION=3.9.16",
+            "mvn --version",
             "SCIP_TYPESCRIPT_VERSION=0.4.0",
             "SCIP_JAVA_VERSION=0.13.1",
             "SCIP_PYTHON_VERSION=0.6.6",
@@ -321,6 +329,14 @@ def main() -> int:
             "provider-evidence/provider-inventory.json",
         ):
             require("docker/Dockerfile.mcp.release", docker_image, token)
+        for token in (
+            "STAGING_EXCLUDED_DIRECTORIES",
+            "prepareWritableWorkspace",
+            'run.resolve("workspace")',
+            '"target", "build", "out", "node_modules"',
+            "staging workspace must be outside the source project",
+        ):
+            require("ScipJavaProcessPlanFactory.java", scip_java_plan, token)
         for token in ("verify --all", "parsed.all()", "--all is only valid with tools verify"):
             require("ToolsCommand.java", tools_command, token)
         for token in ("'index', 'm29-s3-fixture'", "Invoke-McpHandshake", "FAIL_OR_BLOCKED"):
