@@ -84,6 +84,28 @@ function Read-BackendValue([string] $Path) {
     return ($Line -split '=', 2)[1].Trim()
 }
 
+function Get-CodexManagedBlock([string] $Text) {
+    $Match = [regex]::Match(
+        $Text,
+        '(?ms)# BEGIN MINOS MANAGED MCP SERVER.*?# END MINOS MANAGED MCP SERVER')
+    if (-not $Match.Success) { return '' }
+    return $Match.Value
+}
+
+function Read-TomlBasicStringValue([string] $Text, [string] $Key) {
+    $Pattern = '(?m)^\s*' + [regex]::Escape($Key) + '\s*=\s*(?<value>"(?:\\.|[^"\\])*")\s*$'
+    $Match = [regex]::Match($Text, $Pattern)
+    if (-not $Match.Success) { return '' }
+    try {
+        # MINOS emits TOML basic strings using the same escaping subset as JSON
+        # for backslash, quote, CR and LF. Decode before comparing Windows paths.
+        return [string]($Match.Groups['value'].Value | ConvertFrom-Json)
+    }
+    catch {
+        throw "Unable to decode Codex TOML value '$Key': $($_.Exception.Message)"
+    }
+}
+
 $Root = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-m29-s6-clients-' + [Guid]::NewGuid())
 $OldPath = $env:Path
 try {
@@ -157,10 +179,12 @@ try {
     }
 
     $CodexText = [System.IO.File]::ReadAllText($CodexDesktopConfig, [System.Text.Encoding]::UTF8)
-    Assert-True ($CodexText.Contains('[mcp_servers.minos]')) 'Codex Desktop MINOS section is missing.'
-    Assert-True ($CodexText.IndexOf($ExpectedExe, [StringComparison]::OrdinalIgnoreCase) -ge 0) 'Codex Desktop does not target minos.exe.'
-    Assert-True ($CodexText.Contains('args = ["mcp"]')) 'Codex Desktop does not use the stable mcp subcommand.'
-    Assert-True ($CodexText.IndexOf($DataRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0) 'Codex Desktop does not preserve MINOS_HOME.'
+    $CodexBlock = Get-CodexManagedBlock $CodexText
+    Assert-True (-not [string]::IsNullOrWhiteSpace($CodexBlock)) 'Codex Desktop MINOS managed block is missing.'
+    Assert-True ($CodexBlock.Contains('[mcp_servers.minos]')) 'Codex Desktop MINOS section is missing.'
+    Assert-True ((Read-TomlBasicStringValue -Text $CodexBlock -Key 'command') -eq $ExpectedExe) 'Codex Desktop does not target minos.exe.'
+    Assert-True ($CodexBlock.Contains('args = ["mcp"]')) 'Codex Desktop does not use the stable mcp subcommand.'
+    Assert-True ((Read-TomlBasicStringValue -Text $CodexBlock -Key 'MINOS_HOME') -eq $DataRoot) 'Codex Desktop does not preserve MINOS_HOME.'
 
     $ClientArtifacts = @(
         $CopilotConfig,
