@@ -46,6 +46,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         }
         requireProjectJdk();
 
+        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Files.createDirectories(output.getParent());
         if (CommandLocator.isWindows()) {
             if (!Files.isRegularFile(windowsRunner)) {
                 throw new IllegalStateException("managed scip-java Windows runner is missing: " + windowsRunner);
@@ -81,11 +83,11 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                         "launch", coordinate,
                         "--jvm", "system",
                         "--main", ManagedScipProviderRuntimeManager.SCIP_JAVA_MAIN_CLASS,
-                        "--", "index"
+                        "--", "index", "--output", output.toString()
                 ),
                 root,
                 Map.of(),
-                root.resolve("index.scip"),
+                output,
                 Duration.ofHours(1)
         );
     }
