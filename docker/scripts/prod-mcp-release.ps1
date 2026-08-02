@@ -108,8 +108,9 @@ function Require-Installed {
 
 function Initialize-And-VerifyProviderTools {
     Compose @('run', '--rm', '--no-deps', 'minos-tools-bootstrap')
-    # Real executable probes run with network_mode:none, read-only rootfs and provider tools mounted read-only.
+    # This probe is the offline provider payload gate: network none, read-only rootfs and tools RO.
     Compose @('run', '--rm', '--no-deps', 'minos-provider-probe')
+    # Capability checks are local inspections; the admin plane itself may use dependency egress for real indexing.
     Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'list', '--format', 'json')
     Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'verify', '--all', '--format', 'json')
 }
@@ -184,17 +185,17 @@ MINOS_GIT_COMMIT=$Commit
             providerToolsVolume = 'minos-provider-tools'
             providerProbe = 'minos-provider-probe'
             queryPlane = [ordered]@{ service = 'minos-mcp'; dataReadOnly = $true; providerToolsReadOnly = $true; projectsReadOnly = $true; network = 'none' }
-            adminPlane = [ordered]@{ service = 'minos-admin'; ephemeral = $true; dataReadOnly = $false; providerToolsReadOnly = $true; projectsReadOnly = $true; network = 'none' }
+            adminPlane = [ordered]@{ service = 'minos-admin'; ephemeral = $true; dataReadOnly = $false; providerToolsReadOnly = $true; projectsReadOnly = $true; network = 'dependency-egress' }
         } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $MetadataFile -Encoding utf8
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green
         Write-Host "Image     : $Image"
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
         Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
-        Write-Host 'Network   : none'
+        Write-Host 'Network   : persistent query/bootstrap/provider-probe none; ephemeral admin/indexing may resolve project dependencies'
         Write-Host 'Providers : image-prepared, executable-probed offline, isolated named volume mounted read-only in query/admin planes'
-        Write-Host 'Query     : persistent hardened minos-mcp plane; MINOS data read-only'
-        Write-Host 'Admin     : ephemeral minos-admin plane; MINOS data writable, projects read-only'
+        Write-Host 'Query     : persistent hardened minos-mcp plane; MINOS data read-only; network none'
+        Write-Host 'Admin     : ephemeral minos-admin plane; MINOS data writable, projects read-only, dependency egress enabled'
     }
     'Start' {
         Require-Installed
