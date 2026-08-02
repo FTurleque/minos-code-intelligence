@@ -20,6 +20,7 @@ def read(relative: str) -> str:
 def normalized(value: str) -> str:
     value = value.replace("\ufeff", "").replace("\u00a0", " ")
     value = re.sub(r"[`*]+", "", value)
+    value = re.sub(r"\s*:\s*", ":", value)
     return re.sub(r"\s+", " ", value).strip().casefold()
 
 
