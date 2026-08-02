@@ -103,7 +103,16 @@ La version supportée de `scip-java` reste l'artefact Maven exact :
 org.scip-code:scip-java:0.13.1
 ```
 
-Pendant le BUILD, MINOS exécute cette coordonnée via Coursier et exige `scip-java version 0.13.1`. Il construit ensuite `/usr/local/bin/scip-java` avec `cs bootstrap --standalone` afin que le RUN n'ait besoin ni du réseau ni d'un cache Coursier writable.
+Pendant le BUILD, MINOS exécute cette coordonnée via Coursier et exige `scip-java version 0.13.1`. Il construit ensuite `/usr/local/bin/scip-java` avec `cs bootstrap --standalone`. Tous les JAR nécessaires sont donc embarqués dans le launcher : le RUN n'a besoin d'aucun téléchargement ni d'aucune résolution Maven réseau.
+
+Le bootstrap Coursier standalone matérialise néanmoins ses JAR embarqués dans un cache local au démarrage. MINOS fournit explicitement un emplacement writable sans assouplir le filesystem conteneur :
+
+```text
+minos-admin          COURSIER_CACHE=/var/lib/minos/cache/coursier
+minos-provider-probe COURSIER_CACHE=/tmp/minos-coursier-cache
+```
+
+Le premier chemin reste sous l'état writable MINOS ; le second vit dans le tmpfs borné du probe et disparaît avec le conteneur. `network_mode:none` reste actif dans les deux cas : ce cache sert uniquement à matérialiser les ressources déjà embarquées, jamais à les télécharger.
 
 Ce launcher standalone retourne actuellement :
 
@@ -120,6 +129,15 @@ Cette chaîne est une métadonnée embarquée du launcher et **n'est pas utilis�
 ```
 
 Les seuls plans qui exécutent des providers (`minos-admin` et `minos-provider-probe`) montent `/run/minos-native` comme tmpfs éphémère, `nosuid,nodev,exec`, borné à 16 MiB. Le plan MCP query n'expose pas ce tmpfs exécutable. Cette exception est limitée au chargement natif du provider et ne rend ni le filesystem conteneur, ni les sources projet, ni le volume providers writable.
+
+Les outils .NET reçoivent eux aussi des emplacements writable explicites afin d'éviter tout fallback implicite vers `/.dotnet`, `/.nuget` ou un home read-only :
+
+```text
+minos-admin          DOTNET_CLI_HOME=/var/lib/minos/cache/dotnet-home
+                     NUGET_PACKAGES=/var/lib/minos/cache/nuget
+minos-provider-probe DOTNET_CLI_HOME=/tmp/minos-dotnet-home
+                     NUGET_PACKAGES=/tmp/minos-nuget
+```
 
 ### Limitation Node
 
