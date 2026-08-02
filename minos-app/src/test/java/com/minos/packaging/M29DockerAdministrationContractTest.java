@@ -43,6 +43,8 @@ class M29DockerAdministrationContractTest {
                 "admin/indexing must materialize standalone Coursier resources only under writable MINOS state");
         assertTrue(admin.contains("MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository"),
                 "Maven dependency state must remain under writable MINOS state instead of the project tree/rootfs");
+        assertTrue(admin.contains("JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native"),
+                "scip-java-generated compiler shims and native extraction must use the bounded executable tmpfs");
         assertTrue(admin.contains("DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home"));
         assertTrue(admin.contains("NUGET_PACKAGES: /var/lib/minos/cache/nuget"));
         assertTrue(admin.contains("/tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777"));
@@ -74,6 +76,7 @@ class M29DockerAdministrationContractTest {
                 "offline provider probe must not require network-time Coursier resolution");
         assertTrue(providerProbe.contains("COURSIER_CACHE: /tmp/minos-coursier-cache"),
                 "standalone bootstrap must have a writable ephemeral resource-materialization cache");
+        assertTrue(providerProbe.contains("JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native"));
         assertTrue(providerProbe.contains("DOTNET_CLI_HOME: /tmp/minos-dotnet-home"));
         assertTrue(providerProbe.contains("NUGET_PACKAGES: /tmp/minos-nuget"));
         assertTrue(providerProbe.contains("/tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777"));
@@ -169,6 +172,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(javaPlan.contains("CommandLocator.find(\"scip-java\")"));
         assertTrue(javaPlan.contains("standaloneCommand"));
         assertTrue(javaPlan.contains("prepareWritableWorkspace"));
+        assertTrue(javaPlan.contains("STAGING_EXCLUDED_ROOT_FILES"));
+        assertTrue(javaPlan.contains("Set.of(\"mvnw\", \"mvnw.cmd\")"));
         assertTrue(javaPlan.contains("executionRoot"));
         assertTrue(javaPlan.contains("target/scip-targetroot"));
         assertTrue(polyglotRuntime.contains("output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)"));
@@ -196,6 +201,7 @@ class M29DockerAdministrationContractTest {
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
         assertTrue(javaPlan.contains("prepareWritableWorkspace"));
         assertTrue(javaPlan.contains("STAGING_EXCLUDED_DIRECTORIES"));
+        assertTrue(javaPlan.contains("STAGING_EXCLUDED_ROOT_FILES"));
         String rust = normalizedText(root.resolve(
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"));
         assertTrue(rust.contains("CARGO_TARGET_DIR"));
