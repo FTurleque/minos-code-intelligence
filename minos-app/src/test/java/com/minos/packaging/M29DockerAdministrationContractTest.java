@@ -25,6 +25,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(query.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
         assertTrue(query.contains("network_mode: none"));
+        assertTrue(query.contains("MINOS_SEMANTIC_PROVIDER: \"${MINOS_SEMANTIC_PROVIDER:-disabled}\""),
+                "query and admin planes must reopen the same persisted semantic-provider selection");
         assertFalse(query.contains("/run/minos-native"),
                 "query-only MCP plane must not expose the provider native-extraction tmpfs");
         assertFalse(query.contains("COURSIER_CACHE:"),
@@ -36,6 +38,7 @@ class M29DockerAdministrationContractTest {
         assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"));
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
+        assertTrue(admin.contains("MINOS_SEMANTIC_PROVIDER: \"${MINOS_SEMANTIC_PROVIDER:-disabled}\""));
         assertFalse(admin.contains("network_mode: none"),
                 "ephemeral indexing must be able to resolve project build dependencies; only query/MCP is networkless");
         assertTrue(admin.contains("HOME: /var/lib/minos/cache/home"));
@@ -118,7 +121,11 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("'tools', 'verify', '--all', '--format', 'json'"));
         assertTrue(workflow.contains("provider-inventory.json"));
         assertTrue(workflow.contains("provider-binary-sha256.txt"));
-        assertTrue(workflow.contains("formatVersion = 4"));
+        assertTrue(workflow.contains("formatVersion = 5"));
+        assertTrue(workflow.contains("function Resolve-SemanticProvider"));
+        assertTrue(workflow.contains("Allowed: disabled, local-hash"));
+        assertTrue(workflow.contains("MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider"));
+        assertTrue(workflow.contains("semanticProvider = $ResolvedSemanticProvider"));
         assertTrue(workflow.contains("'--volumes'"));
 
         assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
