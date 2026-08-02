@@ -386,7 +386,7 @@ def main() -> int:
         require_file("fixtures/polyglot/m29-scoped-modules/ui/app/tsconfig.json")
         require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/package.json")
         require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/tsconfig.json")
-        if (fixture.joinpath("package.json").exists() or fixture.joinpath("tsconfig.json").exists():
+        if (fixture.joinpath("package.json").exists() or fixture.joinpath("tsconfig.json").exists()):
             raise RuntimeError("M29 S5 fixture must not contain a root TypeScript manifest")
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
