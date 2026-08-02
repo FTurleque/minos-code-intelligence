@@ -24,6 +24,7 @@ class M29DockerAdministrationContractTest {
         assertTrue(query.contains("target: /var/lib/minos\n        read_only: true"));
         assertTrue(query.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(query.contains("target: /workspace/projects\n        read_only: true"));
+        assertTrue(query.contains("network_mode: none"));
         assertFalse(query.contains("/run/minos-native"),
                 "query-only MCP plane must not expose the provider native-extraction tmpfs");
         assertFalse(query.contains("COURSIER_CACHE:"),
@@ -35,8 +36,13 @@ class M29DockerAdministrationContractTest {
         assertTrue(admin.contains("target: /var/lib/minos/tools\n        read_only: true"));
         assertTrue(admin.contains("target: /workspace/projects\n        read_only: true"));
         assertTrue(admin.contains("com.minos.cli.MinosLauncher"));
+        assertFalse(admin.contains("network_mode: none"),
+                "ephemeral indexing must be able to resolve project build dependencies; only query/MCP is networkless");
+        assertTrue(admin.contains("HOME: /var/lib/minos/cache/home"));
         assertTrue(admin.contains("COURSIER_CACHE: /var/lib/minos/cache/coursier"),
                 "admin/indexing must materialize standalone Coursier resources only under writable MINOS state");
+        assertTrue(admin.contains("MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository"),
+                "Maven dependency state must remain under writable MINOS state instead of the project tree/rootfs");
         assertTrue(admin.contains("DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home"));
         assertTrue(admin.contains("NUGET_PACKAGES: /var/lib/minos/cache/nuget"));
         assertTrue(admin.contains("/tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777"));
@@ -56,6 +62,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(providerProbe.contains("user: \"10001:10001\""));
         assertTrue(providerProbe.contains("io.minos.runtime-plane: provider-probe"));
         assertTrue(providerProbe.contains("MINOS Docker offline provider probe SUCCESS"));
+        assertTrue(providerProbe.contains("mvn --version"),
+                "offline image probe must prove the Maven runtime required by scip-java");
         assertTrue(providerProbe.contains("scip_java_version=\"$$(scip-java --version 2>&1)\""),
                 "probe must preserve scip-java diagnostics instead of hiding failures behind grep");
         assertTrue(providerProbe.contains("scip-java version 0.0.0-SNAPSHOT"),
@@ -79,10 +87,12 @@ class M29DockerAdministrationContractTest {
                 "runtime probe must verify the executable version, not provenance metadata absent from --version");
 
         for (String plane : new String[]{query, admin, bootstrap, toolsBootstrap, providerProbe}) {
-            assertTrue(plane.contains("network_mode: none"));
             assertTrue(plane.contains("read_only: true"));
             assertTrue(plane.contains("cap_drop: [ALL]"));
             assertTrue(plane.contains("security_opt: [no-new-privileges:true]"));
+        }
+        for (String networklessPlane : new String[]{query, bootstrap, toolsBootstrap, providerProbe}) {
+            assertTrue(networklessPlane.contains("network_mode: none"));
         }
         assertTrue(query.contains("MINOS_RUNTIME_LOCATION: docker"));
         assertTrue(admin.contains("MINOS_RUNTIME_LOCATION: docker"));
@@ -109,6 +119,10 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("'--volumes'"));
 
         assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
+        assertTrue(dockerfile.contains("MAVEN_VERSION=3.9.16"));
+        assertTrue(dockerfile.contains("apache-maven-${MAVEN_VERSION}-bin.zip"));
+        assertTrue(dockerfile.contains("sha512sum -c -"));
+        assertTrue(dockerfile.contains("mvn --version | grep -F \"Apache Maven ${MAVEN_VERSION}\""));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
         assertTrue(dockerfile.contains("SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT"));
@@ -138,8 +152,8 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("Coursier standalone bootstrap"));
         assertTrue(dockerfile.contains("\\\"reportedVersion\\\":\\\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\\\""));
         assertTrue(dockerfile.contains("artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}"));
-        assertTrue(dockerfile.contains("embedded JARs materialize into a writable runtime COURSIER_CACHE without downloads"));
-        assertTrue(dockerfile.contains("JNA extraction is isolated to /run/minos-native"));
+        assertTrue(dockerfile.contains("embedded JARs materialize into a writable runtime COURSIER_CACHE without provider downloads"));
+        assertTrue(dockerfile.contains("real Maven indexing executes from a writable MINOS staging tree"));
         assertFalse(dockerfile.contains("COURSIER_CACHE=/opt/minos/coursier-cache"),
                 "runtime image must not depend on a packaged mutable Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
@@ -154,6 +168,9 @@ class M29DockerAdministrationContractTest {
 
         assertTrue(javaPlan.contains("CommandLocator.find(\"scip-java\")"));
         assertTrue(javaPlan.contains("standaloneCommand"));
+        assertTrue(javaPlan.contains("prepareWritableWorkspace"));
+        assertTrue(javaPlan.contains("executionRoot"));
+        assertTrue(javaPlan.contains("target/scip-targetroot"));
         assertTrue(polyglotRuntime.contains("output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)"));
         assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE)"));
         assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT)"));
@@ -175,6 +192,10 @@ class M29DockerAdministrationContractTest {
             assertTrue(source.contains("runDirectory"));
             assertFalse(source.contains("root.resolve(\"index.scip\")"));
         }
+        String javaPlan = normalizedText(root.resolve(
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
+        assertTrue(javaPlan.contains("prepareWritableWorkspace"));
+        assertTrue(javaPlan.contains("STAGING_EXCLUDED_DIRECTORIES"));
         String rust = normalizedText(root.resolve(
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"));
         assertTrue(rust.contains("CARGO_TARGET_DIR"));
