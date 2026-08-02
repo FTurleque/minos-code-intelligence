@@ -42,6 +42,9 @@ class M29DockerAdministrationContractTest {
         assertTrue(providerProbe.contains("scip-python/0.6.6"));
         assertTrue(providerProbe.contains("scip-dotnet/0.2.14"));
         assertTrue(providerProbe.contains("scip-go/0.2.7"));
+        assertTrue(providerProbe.contains("rust-analyzer 0.3.2989"));
+        assertFalse(providerProbe.contains("2026-07-27|12c3381"),
+                "runtime probe must verify the executable version, not provenance metadata absent from --version");
 
         for (String plane : new String[]{query, admin, bootstrap, toolsBootstrap, providerProbe}) {
             assertTrue(plane.contains("network_mode: none"));
@@ -76,7 +79,12 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_DOTNET_VERSION=0.2.14"));
         assertTrue(dockerfile.contains("SCIP_GO_VERSION=0.2.7"));
+        assertTrue(dockerfile.contains("RUST_ANALYZER_VERSION=0.3.2989"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_RELEASE=2026-07-27"));
+        assertTrue(dockerfile.contains("RUST_ANALYZER_COMMIT=12c3381"));
+        assertTrue(dockerfile.contains("grep -F \"rust-analyzer ${RUST_ANALYZER_VERSION}\""));
+        assertFalse(dockerfile.contains("grep -E \"${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}\""),
+                "rust-analyzer --version does not expose artifact release/commit provenance");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
         assertTrue(dockerfile.contains("libicu-dev"),
                 ".NET must run with ICU installed instead of silently enabling invariant globalization");
