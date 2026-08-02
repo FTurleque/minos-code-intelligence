@@ -39,7 +39,6 @@ ENV MINOS_HOME=/var/lib/minos \
     GOCACHE=/var/lib/minos/cache/go-build \
     CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
-    COURSIER_CACHE=/opt/minos/coursier-cache \
     PATH=/usr/local/bin:/usr/local/cargo/bin:/usr/local/go/bin:/usr/share/dotnet:/opt/java/openjdk/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 USER root
@@ -119,13 +118,17 @@ RUN set -eux; \
     printf '%s\n' "${SCIP_GO_VERSION}" > "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/.minos-version"; \
     test -x "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go"
 
-# Pre-resolve the exact scip-java coordinate while network is available during BUILD.
-# Runtime containers have network_mode:none and reuse this immutable Coursier cache.
+# Build a standalone scip-java launcher while network is available. --standalone embeds the
+# resolved JARs, so RUN containers never need a writable Coursier cache or network access.
 RUN set -eux; \
-    mkdir -p "${COURSIER_CACHE}"; \
-    cs launch "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
-      --jvm system --main org.scip_code.scip_java.ScipJava -- --version \
-      | tee /tmp/scip-java.version; \
+    COURSIER_CACHE=/tmp/minos-coursier-build-cache \
+      cs bootstrap "org.scip-code:scip-java:${SCIP_JAVA_VERSION}" \
+        -M org.scip_code.scip_java.ScipJava \
+        --standalone \
+        -o /usr/local/bin/scip-java; \
+    chmod 0755 /usr/local/bin/scip-java; \
+    rm -rf /tmp/minos-coursier-build-cache; \
+    scip-java --version | tee /tmp/scip-java.version; \
     grep -F "scip-java version ${SCIP_JAVA_VERSION}" /tmp/scip-java.version; \
     rm -f /tmp/scip-java.version
 
@@ -133,6 +136,7 @@ RUN set -eux; \
     mkdir -p /opt/minos/provider-evidence; \
     sha256sum \
       /usr/local/bin/cs \
+      /usr/local/bin/scip-java \
       /usr/local/bin/scip-clang \
       /usr/local/bin/rust-analyzer \
       "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet" \
@@ -150,7 +154,7 @@ RUN set -eux; \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
       '  "networkPolicy": "build-only downloads; runtime network none",' \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"delivery\":\"Coursier cache\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\"}," \
       "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
@@ -159,7 +163,7 @@ RUN set -eux; \
       "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"1.97.1\"}" \
       '  ]' \
       '}' > /opt/minos/provider-evidence/provider-inventory.json; \
-    chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence "${COURSIER_CACHE}"
+    chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence
 
 WORKDIR /opt/minos
 COPY minos.jar /opt/minos/minos.jar
