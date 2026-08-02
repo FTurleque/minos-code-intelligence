@@ -122,7 +122,7 @@ def main() -> int:
             "#98",
         ):
             require("docs/roadmap/M29_EXECUTION.md", m29, token)
-        require("docs/roadmap/M29_EXECUTION.md", m29, "aucune nouvelle base vectorielle externe")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
         require("docs/roadmap/M29_EXECUTION.md", m29, "3 août 2026")
 
