@@ -64,6 +64,7 @@ function Write-BackendConfiguration([string] $DataRoot, [ValidateSet('native', '
     $Runtime = Join-Path $DataRoot 'runtime'
     New-Item -ItemType Directory -Force -Path $Runtime | Out-Null
     $Path = Join-Path $Runtime 'backend.properties'
+    # S6 exercises both persisted contract values explicitly: backend=native and backend=docker.
     $Lines = @(
         '# MINOS MCP backend configuration v1',
         'formatVersion=1',
