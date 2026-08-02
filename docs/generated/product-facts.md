@@ -72,6 +72,8 @@ Nombre de tools : **31**
 - `related-tests`
 - `architecture`
 - `impact`
+- `semantic status`
+- `hybrid status`
 - `ide handshake`
 - `git-activity`
 - `nexus-export`
