@@ -45,6 +45,14 @@ class M29McpClientBackendAgnosticContractTest {
         assertTrue(verifier.contains("native -> docker changes backend.properties only"));
         assertTrue(verifier.contains("client configs remain byte-identical"));
         assertTrue(verifier.contains("MINOS MCP BACKEND-AGNOSTIC CLIENT ROUTING VERIFICATION SUCCESS"));
+        assertTrue(verifier.contains("Read-TomlBasicStringValue"),
+                "Codex Desktop values must be decoded from serialized TOML before path comparison");
+        assertTrue(verifier.contains("-Key 'command') -eq $ExpectedExe"));
+        assertTrue(verifier.contains("-Key 'MINOS_HOME') -eq $DataRoot"));
+        assertFalse(verifier.contains("$CodexText.IndexOf($ExpectedExe"),
+                "raw TOML text cannot be compared to an unescaped Windows path");
+        assertFalse(verifier.contains("$CodexText.IndexOf($DataRoot"),
+                "raw TOML text cannot be compared to an unescaped MINOS_HOME path");
 
         assertTrue(runner.contains("M29-S6 exact-head mismatch"));
         assertTrue(runner.contains("verify-mcp-client-backend-routing.ps1"));
