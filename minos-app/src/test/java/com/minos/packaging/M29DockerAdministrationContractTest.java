@@ -62,6 +62,8 @@ class M29DockerAdministrationContractTest {
         Path root = repoRoot();
         String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
+        String polyglotRuntime = normalizedText(root.resolve(
+                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"));
 
         assertTrue(workflow.contains("'minos-tools-bootstrap'"));
         assertTrue(workflow.contains("'minos-provider-probe'"));
@@ -82,14 +84,23 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("RUST_ANALYZER_VERSION=0.3.2989"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_RELEASE=2026-07-27"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_COMMIT=12c3381"));
+        assertTrue(dockerfile.contains("PATH=/usr/local/bin:/usr/local/cargo/bin:"),
+                "standalone rust-analyzer must win PATH resolution over the rustup proxy");
         assertTrue(dockerfile.contains("grep -F \"rust-analyzer ${RUST_ANALYZER_VERSION}\""));
         assertFalse(dockerfile.contains("grep -E \"${RUST_ANALYZER_RELEASE}|${RUST_ANALYZER_COMMIT}\""),
                 "rust-analyzer --version does not expose artifact release/commit provenance");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
+        assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
+        assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
         assertTrue(dockerfile.contains("libicu-dev"),
                 ".NET must run with ICU installed instead of silently enabling invariant globalization");
         assertFalse(dockerfile.contains("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"),
                 "S4 must not hide missing .NET runtime dependencies behind invariant globalization");
+
+        assertTrue(polyglotRuntime.contains("output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)"));
+        assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE)"));
+        assertFalse(polyglotRuntime.contains("!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT)"));
+        assertTrue(polyglotRuntime.contains("artifact provenance release"));
     }
 
     @Test
