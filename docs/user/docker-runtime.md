@@ -95,6 +95,24 @@ provider-binary-sha256.txt
 
 Ces preuves sont copiées dans le répertoire runtime de l'installation.
 
+### Provenance scip-java et version du launcher standalone
+
+La version supportée de `scip-java` reste l'artefact Maven exact :
+
+```text
+org.scip-code:scip-java:0.13.1
+```
+
+Pendant le BUILD, MINOS exécute cette coordonnée via Coursier et exige `scip-java version 0.13.1`. Il construit ensuite `/usr/local/bin/scip-java` avec `cs bootstrap --standalone` afin que le RUN n'ait besoin ni du réseau ni d'un cache Coursier writable.
+
+Ce launcher standalone retourne actuellement :
+
+```text
+scip-java version 0.0.0-SNAPSHOT
+```
+
+Cette chaîne est une métadonnée embarquée du launcher et **n'est pas utilisée comme provenance de l'artefact**. `provider-inventory.json` conserve séparément `version=0.13.1` et `reportedVersion=0.0.0-SNAPSHOT`, tandis que `provider-binary-sha256.txt` contient le hash du launcher réellement exécuté. Le probe offline vérifie le retour réel du launcher sans prétendre qu'il expose `0.13.1`.
+
 ### Limitation Node
 
 `scip-typescript 0.4.0` est préparé avec Node 20.20.2 pour rester sur la ligne Node documentée par ce provider. Cette contrainte est enregistrée dans l'inventaire ; elle ne doit pas être interprétée comme une recommandation générale de Node 20 pour d'autres usages.
