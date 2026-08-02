@@ -232,15 +232,13 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path executable = analyzer.orElseThrow();
         Probe probe = probe(CommandLocator.invocation(executable, "--version"));
         String output = probe.output();
-        if (!probe.success() || (!output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE)
-                && !output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT))) {
+        if (!probe.success() || !output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)) {
             return status(
                     ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID,
                     ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
                     ProviderRuntimeStatus.State.INVALID,
                     Optional.of(executable),
-                    "rust-analyzer must match release " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE
-                            + " / commit " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT
+                    "rust-analyzer version probe must report " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION
                             + "; output=" + sanitize(output));
         }
         return status(
@@ -248,8 +246,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                 ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
                 ProviderRuntimeStatus.State.READY,
                 Optional.of(executable),
-                "operator-managed rust-analyzer " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE
-                        + " (v" + ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION + ") ready; cargo/rustc present");
+                "operator-managed rust-analyzer v" + ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION
+                        + " ready; artifact provenance release " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE
+                        + " / commit " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT
+                        + "; cargo/rustc present");
     }
 
     private ProviderRuntimeStatus installDotnet() throws Exception {
