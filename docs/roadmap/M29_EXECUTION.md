@@ -223,6 +223,15 @@ L'image génère :
 /opt/minos/provider-evidence/binary-sha256.txt
 ```
 
+Le workflow packagé exporte ensuite ces preuves dans le runtime installé sous :
+
+```text
+<InstallRoot>/runtime/provider-inventory.json
+<InstallRoot>/runtime/provider-binary-sha256.txt
+```
+
+La différence de nom est volontaire : `binary-sha256.txt` est le manifeste interne à l'image ; `provider-binary-sha256.txt` est la copie d'évidence explicite conservée côté installation Windows.
+
 ### Séparation business state / provider tools
 
 Les outils préparés par l'image sont copiés par `minos-tools-bootstrap` dans un volume Linux Compose :
