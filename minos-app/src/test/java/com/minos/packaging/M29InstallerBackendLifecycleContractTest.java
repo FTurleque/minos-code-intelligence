@@ -84,6 +84,8 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(zipInstaller.contains("DockerInstallRoot = $DockerInstallRoot"));
         assertTrue(zipInstaller.contains("DockerDataRoot = $DockerDataRoot"));
         assertTrue(zipInstaller.contains("yyyyMMdd-HHmmssfff"));
+        assertTrue(zipInstaller.contains("$PreviousMarker"));
+        assertTrue(zipInstaller.contains(".docker-mcp-managed"));
         assertTrue(zipInstaller.contains("$OriginalUserPath"));
         assertTrue(zipInstaller.contains("$PathChanged"));
         assertOrdered(zipInstaller,
@@ -97,6 +99,7 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(runner.contains("verify-mcp-backend-lifecycle.ps1"));
         assertTrue(runner.contains("verify-mcp-client-backend-routing.ps1"));
         assertTrue(runner.contains("verify-installer-template.ps1"));
+        assertTrue(runner.contains("M29-S7 cheap contract gates SUCCESS"));
         assertTrue(runner.contains("build-windows-distribution.ps1"));
         assertTrue(runner.contains("build-windows-installer.ps1"));
         assertTrue(runner.contains("M29-S7 native-only install SUCCESS"));
