@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **3 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1–S7 PASS ; S8 à qualifier.**
+Dernière mise à jour : **3 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1–S8 PASS ; candidat Windows 1.0.1 à construire.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -27,7 +27,7 @@ M29-S4                           ✅ PASS exact-head 3df1b40...
 M29-S5                           ✅ PASS exact-head 0959fb9...
 M29-S6                           ✅ PASS exact-head f7ef0e3...
 M29-S7                           ✅ PASS exact-head 50b462f...
-M29-S8                           non démarré / non qualifié
+M29-S8                           ✅ PASS exact-head da6a76f...
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 

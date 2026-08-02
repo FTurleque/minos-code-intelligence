@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **3 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1–S7 PASS (S7 exact-head `50b462f...`), S8 à qualifier.**
+Statut au **3 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 S1–S8 PASS (S8 exact-head `da6a76f...`), candidat Windows 1.0.1 à construire.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -77,7 +77,7 @@ Tant que M29 n'est pas qualifié, **1.0.1 ne présente pas Docker comme fonction
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 PASS exact-head `f7ef0e3...`; S7 PASS exact-head `50b462f...`; S8 à qualifier.**  
+Statut : **S1–S8 QUALIFIÉS — branche `m29-autonomous-docker-runtime`; S7 PASS exact-head `50b462f...`; S8 PASS exact-head `da6a76f...`; candidat Windows 1.0.1 à construire.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -125,7 +125,7 @@ M29 ne crée pas de nouvelle base vectorielle externe par défaut et n'introduit
 | M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...` |
 | M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...` |
 | M29-S7 | Installer, switching & lifecycle | ✅ PASS exact-head `50b462f...` |
-| M29-S8 | Native/Docker parity qualification | ⬜ |
+| M29-S8 | Native/Docker parity qualification | ✅ PASS exact-head `da6a76f...` |
 
 ### S1/S2 — fondations qualifiées
 
@@ -310,7 +310,7 @@ Marqueur requis :
 M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS
 ```
 
-### S8 — parité
+### S8 — parité — ✅ PASS exact-head `da6a76f...`
 
 Même corpus, même configuration métier, rapport machine-readable.
 
