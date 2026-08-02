@@ -61,6 +61,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+      - /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
@@ -139,7 +140,12 @@ services:
         set -eu
         java -version
         javac -version
-        scip-java --version 2>&1 | grep -F "scip-java version 0.0.0-SNAPSHOT"
+        scip_java_version="$$(scip-java --version 2>&1)" || {
+          printf '%s\n' "$$scip_java_version"
+          exit 1
+        }
+        printf '%s\n' "$$scip_java_version"
+        printf '%s\n' "$$scip_java_version" | grep -F "scip-java version 0.0.0-SNAPSHOT"
         /var/lib/minos/tools/scip-typescript/0.4.0/node_modules/.bin/scip-typescript --help >/dev/null
         /var/lib/minos/tools/scip-python/0.6.6/node_modules/.bin/scip-python --help >/dev/null
         scip-clang --version 2>&1 | grep -F "0.4.0"
@@ -165,6 +171,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      - /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
