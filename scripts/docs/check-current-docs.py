@@ -48,6 +48,7 @@ def main() -> int:
             "docs/roadmap/M21_S2_AUGUST_RECOVERY.md": read("docs/roadmap/M21_S2_AUGUST_RECOVERY.md"),
             "docs/roadmap/M28_EXECUTION.md": read("docs/roadmap/M28_EXECUTION.md"),
             "docs/roadmap/M29_EXECUTION.md": read("docs/roadmap/M29_EXECUTION.md"),
+            "docs/user/docker-runtime.md": read("docs/user/docker-runtime.md"),
             "docs/user/production-installation.md": read("docs/user/production-installation.md"),
             "docs/releases/1.0.0.md": read("docs/releases/1.0.0.md"),
             "docs/releases/1.0.1.md": read("docs/releases/1.0.1.md"),
@@ -60,6 +61,7 @@ def main() -> int:
         m21_recovery = current_files["docs/roadmap/M21_S2_AUGUST_RECOVERY.md"]
         m28 = current_files["docs/roadmap/M28_EXECUTION.md"]
         m29 = current_files["docs/roadmap/M29_EXECUTION.md"]
+        docker_runtime = current_files["docs/user/docker-runtime.md"]
         install = current_files["docs/user/production-installation.md"]
         release_100 = current_files["docs/releases/1.0.0.md"]
         release_101 = current_files["docs/releases/1.0.1.md"]
@@ -79,7 +81,8 @@ def main() -> int:
         require("docs/STATUS.md", status, "M29 #107")
         require("docs/STATUS.md", status, "Docker autonome & Native Parity")
         require("docs/STATUS.md", status, "m29-autonomous-docker-runtime")
-        require("docs/STATUS.md", status, "qualification locale pending")
+        require("docs/STATUS.md", status, "qualification Maven+Docker pending")
+        require("docs/STATUS.md", status, "417 PASS")
         require("docs/ROADMAP.md", roadmap, "PR promotion")
         require("docs/ROADMAP.md", roadmap, "#93 CLOSED / completed")
         require("docs/ROADMAP.md", roadmap, "M29 — Autonomous Docker Runtime & Native Parity")
@@ -87,6 +90,7 @@ def main() -> int:
         require("docs/ROADMAP.md", roadmap, "EN COURS")
         require("docs/ROADMAP.md", roadmap, "index-v2.bin")
         require("docs/ROADMAP.md", roadmap, "native result == docker result")
+        require("docs/ROADMAP.md", roadmap, "minos-admin")
 
         # M21/M28 final dispositions must not regress to pre-promotion status.
         require("docs/roadmap/M21_EXECUTION.md", m21, "TERMINÉ")
@@ -98,8 +102,8 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 is now in progress but parity remains unproved. The checker must reject the old planned state
-        # just as strongly as it rejects an unsupported delivered/parity claim.
+        # M29 is in progress. S1/S2 are now exact-head qualified, while S3 remains an
+        # implementation awaiting its own Maven + real-Docker proof.
         for token in (
             "EN COURS",
             "#107",
@@ -116,22 +120,44 @@ def main() -> int:
             "M29-S6",
             "M29-S7",
             "M29-S8",
+            "417 PASS",
+            "McpBackendRouterTest",
+            "ProjectPathMappingTest",
+            "minos-admin",
+            "minos-bootstrap",
+            "semantic status",
+            "hybrid status",
             "network_mode: none",
             "Copilot",
             "Claude",
             "Codex",
             "native result == docker result",
             "#98",
-            "pas de preuve",
         ):
             require("docs/roadmap/M29_EXECUTION.md", m29, token)
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
         require("docs/roadmap/M29_EXECUTION.md", m29, "2 août 2026")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "S3 sans preuve exact-head Maven + Docker réel")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
         forbid("docs/STATUS.md", status, "M29 #107                         PLANIFIÉ")
+        forbid("docs/STATUS.md", status, "qualification locale pending")
         forbid("docs/ROADMAP.md", roadmap, "Statut : **PLANIFIÉ — démarrage prévu le 3 août 2026")
+
+        for token in (
+            "minos-mcp",
+            "minos-admin",
+            "minos-bootstrap",
+            "network_mode: none",
+            "cap_drop: ALL",
+            "no-new-privileges: true",
+            "semantic status",
+            "hybrid status",
+            "M29-S4",
+            "aucun provider ne doit être déclaré supporté",
+        ):
+            require("docs/user/docker-runtime.md", docker_runtime, token)
 
         stale_current = (
             "release 0.2.0 candidate",
@@ -192,6 +218,9 @@ def main() -> int:
         local_candidate = read("scripts/release/build-local-windows-candidate.ps1")
         installer = read("packaging/windows/minos-installer.iss.template")
         release_workflow = read(".github/workflows/release-windows.yml")
+        docker_compose = read("docker/compose.mcp.prod.yaml")
+        docker_workflow = read("docker/scripts/prod-mcp-release.ps1")
+        docker_image = read("docker/Dockerfile.mcp.release")
 
         require("pom.xml", pom, "<revision>1.0.1-SNAPSHOT</revision>")
         require("pom.xml", pom, "slf4j-nop")
@@ -231,6 +260,12 @@ def main() -> int:
         ):
             forbid("minos-installer.iss.template", installer, stale_task)
         forbid("minos-installer.iss.template", installer, "WizardIsTaskSelected('docker')")
+
+        for token in ("minos-mcp:", "minos-admin:", "minos-bootstrap:", "MINOS_RUNTIME_LOCATION: docker"):
+            require("docker/compose.mcp.prod.yaml", docker_compose, token)
+        for token in ("'Admin'", "MINOS_HOST_PROJECTS_ROOT", "minos-bootstrap", "minos-admin", "formatVersion = 3"):
+            require("docker/scripts/prod-mcp-release.ps1", docker_workflow, token)
+        require("docker/Dockerfile.mcp.release", docker_image, "MINOS_RUNTIME_LOCATION=docker")
 
         require("release-windows.yml", release_workflow, "default: '1.0.1'")
         require("release-windows.yml", release_workflow, "workflow_dispatch")
