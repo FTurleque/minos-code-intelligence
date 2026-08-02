@@ -16,6 +16,7 @@ class M29S3RunnerPowerShellHostContractTest {
         Path root = repoRoot();
         String runner = normalizedText(root.resolve("scripts/m29/run-s3.ps1"));
         String s4 = normalizedText(root.resolve("scripts/m29/run-s4.ps1"));
+        String s5 = normalizedText(root.resolve("scripts/m29/run-s5.ps1"));
 
         assertTrue(runner.contains("function Resolve-PowerShellHost"));
         assertTrue(runner.contains("Get-Process -Id $PID"));
@@ -30,9 +31,14 @@ class M29S3RunnerPowerShellHostContractTest {
                 "S3 must work from PowerShell 7 hosts where legacy powershell.exe is not on PATH");
 
         assertTrue(s4.contains("[System.Management.Automation.Language.Parser]::ParseFile"),
-                "S4 must parse the downstream S3 gate before Maven or Docker work");
-        assertTrue(s4.contains("M29-S4 PowerShell parse preflight: run-s3.ps1 OK"));
-        assertTrue(s4.contains("M29-S4 BLOCKED: run-s3.ps1 PowerShell parse failed"));
+                "S4 must parse downstream PowerShell gates before Maven or Docker work");
+        assertTrue(s4.contains("'scripts\\m29\\run-s3.ps1', 'scripts\\m29\\run-s5.ps1'"));
+        assertTrue(s4.contains("M29-S4 PowerShell parse preflight:"));
+        assertTrue(s4.contains("PowerShell parse failed"));
+
+        assertTrue(s5.contains("M29-S5 exact-head mismatch"));
+        assertTrue(s5.contains("SemanticProvider = 'local-hash'"));
+        assertTrue(s5.contains("M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS"));
     }
 
     private static String normalizedText(Path path) throws IOException {
