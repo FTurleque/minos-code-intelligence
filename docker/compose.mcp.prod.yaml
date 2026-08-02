@@ -139,7 +139,7 @@ services:
         set -eu
         java -version
         javac -version
-        cs launch org.scip-code:scip-java:0.13.1 --jvm system --main org.scip_code.scip_java.ScipJava -- --version 2>&1 | grep -F "scip-java version 0.13.1"
+        scip-java --version 2>&1 | grep -F "scip-java version 0.13.1"
         /var/lib/minos/tools/scip-typescript/0.4.0/node_modules/.bin/scip-typescript --help >/dev/null
         /var/lib/minos/tools/scip-python/0.6.6/node_modules/.bin/scip-python --help >/dev/null
         scip-clang --version 2>&1 | grep -F "0.4.0"
