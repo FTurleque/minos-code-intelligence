@@ -77,7 +77,7 @@ Tant que M29 n'est pas qualifié, **1.0.1 ne présente pas Docker comme fonction
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **S1–S8 QUALIFIÉS — branche `m29-autonomous-docker-runtime`; S7 PASS exact-head `50b462f...`; S8 PASS exact-head `da6a76f...`; candidat Windows 1.0.1 à construire.**  
+Statut : **EN COURS — S1–S8 qualifiés (S8 exact-head `da6a76f...`) ; candidat Windows 1.0.1 à construire ; PR non créée.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 

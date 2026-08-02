@@ -1,6 +1,6 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **QUALIFIÉ — S1–S8 PASS ; S8 exact-head `da6a76f...` ; candidat Windows 1.0.1 à construire**  
+Statut : **EN COURS — S1–S8 qualifiés (S8 exact-head `da6a76f...`) ; candidat Windows 1.0.1 à construire ; PR non créée**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**

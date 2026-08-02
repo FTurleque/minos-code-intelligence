@@ -97,12 +97,12 @@ def main() -> int:
             "M29-S4                           ✅ PASS exact-head 3df1b40...",
             "M29-S5                           ✅ PASS exact-head 0959fb9...",
             "M29-S6                           ✅ PASS exact-head f7ef0e3...",
-            "M29-S7                           🟨",
-            "run-s7.ps1",
-            "M29-S8",
+            "M29-S7                           ✅ PASS exact-head 50b462f...",
+            "M29-S8                           ✅ PASS exact-head da6a76f...",
         ))
         for stale in (
             "M29-S6                           🟨",
+            "M29-S7                           🟨",
             "run-s6.ps1 exact-head",
         ):
             forbid("docs/STATUS.md", status, stale)
@@ -120,10 +120,14 @@ def main() -> int:
             "M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...`",
             "M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...`",
             "M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...`",
-            "M29-S7 | Installer, switching & lifecycle | 🟨",
-            "run-s7.ps1",
+            "M29-S7 | Installer, switching & lifecycle | ✅ PASS exact-head `50b462f...`",
+            "M29-S8 | Native/Docker parity qualification | ✅ PASS exact-head `da6a76f...`",
         ))
-        forbid("docs/ROADMAP.md", roadmap, "M29-S6 | Backend-agnostic MCP client integration | 🟨")
+        for stale in (
+            "M29-S6 | Backend-agnostic MCP client integration | 🟨",
+            "M29-S7 | Installer, switching & lifecycle | 🟨",
+        ):
+            forbid("docs/ROADMAP.md", roadmap, stale)
 
         # Historical dispositions must never regress.
         require_all("docs/roadmap/M21_EXECUTION.md", m21, ("TERMINÉ", "#73 CLOSED / completed", "PASS_WITH_CONSTRAINTS"))
