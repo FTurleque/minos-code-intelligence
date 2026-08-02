@@ -43,6 +43,7 @@ final class ScipSymbolNormalizer {
                 moduleId,
                 fileId,
                 fact == null ? null : fact.relativePath(),
+                "",
                 declarationLocation,
                 providerId,
                 providerVersion,
@@ -57,6 +58,33 @@ final class ScipSymbolNormalizer {
             String moduleId,
             String fileId,
             String projectRelativePath,
+            SymbolLocation declarationLocation,
+            String providerId,
+            String providerVersion,
+            String indexRunId,
+            boolean generated) {
+        return normalize(
+                fact,
+                projectId,
+                moduleId,
+                fileId,
+                projectRelativePath,
+                "",
+                declarationLocation,
+                providerId,
+                providerVersion,
+                indexRunId,
+                generated
+        );
+    }
+
+    Optional<Symbol> normalize(
+            ScipSymbolFact fact,
+            String projectId,
+            String moduleId,
+            String fileId,
+            String projectRelativePath,
+            String projectRelativeRoot,
             SymbolLocation declarationLocation,
             String providerId,
             String providerVersion,
@@ -83,7 +111,8 @@ final class ScipSymbolNormalizer {
                     kind,
                     declarationLocation,
                     qualifiedName,
-                    projectRelativePath
+                    projectRelativePath,
+                    projectRelativeRoot
             );
         } else {
             identityQuality = SymbolIdentityQuality.PROVIDER_SCOPED_FALLBACK;
@@ -137,13 +166,30 @@ final class ScipSymbolNormalizer {
             SymbolKind kind,
             SymbolLocation location,
             String qualifiedName,
-            String projectRelativePath) {
+            String projectRelativePath,
+            String projectRelativeRoot) {
         String locationPart = location == null
                 ? ""
                 : location.startLine() + ":" + location.startColumn()
                     + "-" + location.endLine() + ":" + location.endColumn();
+        String scopePart = projectRelativeRoot == null ? "" : projectRelativeRoot.trim();
 
         if (qualifiedName != null) {
+            if (!scopePart.isBlank()) {
+                // SCIP providers such as scip-typescript intentionally omit the module-file
+                // descriptor from MINOS qualified names. Keep historical root identities stable,
+                // but use the portable execution scope to distinguish equal qualified names that
+                // legitimately live in different modules of the same registered project.
+                return String.join("\u001F",
+                        projectId,
+                        fact.language(),
+                        kind.name(),
+                        qualifiedName,
+                        fact.signature(),
+                        "scope=" + scopePart,
+                        fact.signature().isBlank() ? locationPart : ""
+                );
+            }
             return String.join("\u001F",
                     projectId,
                     fact.language(),
