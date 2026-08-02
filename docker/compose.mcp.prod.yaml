@@ -109,7 +109,6 @@ services:
         find /var/lib/minos/tools -mindepth 1 -maxdepth 1 -exec rm -rf {} +
         cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/
         printf '%s\n' "$${MINOS_GIT_COMMIT}" > "$$marker"
-        chown -R 10001:10001 /var/lib/minos/tools
         echo "MINOS Docker provider tools initialized for $${MINOS_GIT_COMMIT}."
     user: "0:0"
     init: true
