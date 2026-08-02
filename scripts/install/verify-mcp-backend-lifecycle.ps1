@@ -162,12 +162,26 @@ try {
     Assert-True ($AfterGeneration -eq ($BeforeGeneration + 1)) 'Docker same-backend upgrade did not prepare a new runtime generation.'
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Docker same-backend upgrade changed backend selection.'
 
+    # A failed same-backend upgrade must restore both the previous Docker runtime
+    # generation and its active query plane, not merely leave backend=docker.
+    $StableGeneration = $AfterGeneration
+    $env:MINOS_S7_FAIL_PROBE = 'docker'
+    $FailedAsExpected = $false
+    try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $FailedAsExpected = $true }
+    Assert-True $FailedAsExpected 'Forced Docker upgrade handshake failure did not fail the upgrade.'
+    $env:MINOS_S7_FAIL_PROBE = ''
+    $RolledBackGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
+    Assert-True ($RolledBackGeneration -eq $StableGeneration) 'Failed Docker upgrade did not restore the previous runtime generation.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Failed Docker upgrade changed the active backend selection.'
+    $Actions = [System.IO.File]::ReadAllLines($FakeLog)
+    Assert-True ($Actions -contains 'workflow:Start') 'Failed Docker upgrade did not restart the restored Docker runtime.'
+
     # Third-party client configuration is outside the backend transaction and
     # must remain byte-identical through every switch/rollback/upgrade case.
     Assert-True (((Get-FileHash -LiteralPath $ThirdParty -Algorithm SHA256).Hash) -eq $ThirdPartyHash) 'Backend lifecycle modified unrelated third-party client configuration.'
 
     Write-Host 'MINOS MCP BACKEND TRANSACTIONAL LIFECYCLE VERIFICATION SUCCESS' -ForegroundColor Green
-    Write-Host 'Cases: native install, Docker install, native->Docker, Docker->native, rollback before/after commit, Docker upgrade'
+    Write-Host 'Cases: native install, Docker install, native->Docker, Docker->native, rollback before/after commit, Docker upgrade + upgrade rollback'
 }
 finally {
     $env:MINOS_S7_FAIL_PROBE = $OldFailProbe
