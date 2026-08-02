@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string] $ExpectedHead,
     [string] $ProjectsRoot = '',
+    [ValidateSet('disabled', 'local-hash')][string] $SemanticProvider = 'disabled',
     [switch] $SkipMavenVerify,
     [switch] $KeepArtifacts
 )
@@ -44,17 +45,22 @@ $Dirty = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'status'
 if (-not [string]::IsNullOrWhiteSpace($Dirty)) { throw "M29-S4 requires a clean worktree. Dirty entries:`n$Dirty" }
 Write-Host "M29-S4 exact HEAD: $Head" -ForegroundColor Cyan
 
-# Fail before Maven/Docker if the downstream S3 gate is not syntactically valid on the
-# current Windows PowerShell host. This closes the gap where Java contract tests could pass
-# while run-s3.ps1 itself still contained a parser error.
-$S3Runner = Join-Path $RepoRoot 'scripts\m29\run-s3.ps1'
-$ParseTokens = $null
-$ParseErrors = $null
-[System.Management.Automation.Language.Parser]::ParseFile($S3Runner, [ref] $ParseTokens, [ref] $ParseErrors) | Out-Null
-if ($ParseErrors.Count -gt 0) {
-    throw "M29-S4 BLOCKED: run-s3.ps1 PowerShell parse failed: $($ParseErrors[0].Message)"
+# Fail before Maven/Docker if downstream qualification gates are not syntactically valid on
+# the current Windows PowerShell host. Java contract tests alone cannot prove script parsing.
+foreach ($RelativeRunner in @('scripts\m29\run-s3.ps1', 'scripts\m29\run-s5.ps1')) {
+    $Runner = Join-Path $RepoRoot $RelativeRunner
+    if (-not (Test-Path -LiteralPath $Runner -PathType Leaf)) {
+        if ($RelativeRunner.EndsWith('run-s5.ps1')) { continue }
+        throw "M29-S4 BLOCKED: required PowerShell gate is missing: $Runner"
+    }
+    $ParseTokens = $null
+    $ParseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($Runner, [ref] $ParseTokens, [ref] $ParseErrors) | Out-Null
+    if ($ParseErrors.Count -gt 0) {
+        throw "M29-S4 BLOCKED: $([System.IO.Path]::GetFileName($Runner)) PowerShell parse failed: $($ParseErrors[0].Message)"
+    }
+    Write-Host "M29-S4 PowerShell parse preflight: $([System.IO.Path]::GetFileName($Runner)) OK" -ForegroundColor Cyan
 }
-Write-Host 'M29-S4 PowerShell parse preflight: run-s3.ps1 OK' -ForegroundColor Cyan
 
 if (-not $SkipMavenVerify) {
     Push-Location $RepoRoot
@@ -101,6 +107,7 @@ function Invoke-Workflow {
         $Parameters['Version'] = '1.0.1-SNAPSHOT'
         $Parameters['Commit'] = $Head
         $Parameters['ProjectsRoot'] = $ProjectsRoot
+        $Parameters['SemanticProvider'] = $SemanticProvider
     }
     if ($MinosArguments.Count -gt 0) { $Parameters['MinosArguments'] = $MinosArguments }
     & $Workflow @Parameters
@@ -121,12 +128,17 @@ try {
 
     $InventoryPath = Join-Path $InstallRoot 'runtime\provider-inventory.json'
     $ChecksumsPath = Join-Path $InstallRoot 'runtime\provider-binary-sha256.txt'
+    $MetadataPath = Join-Path $InstallRoot 'runtime\installation.json'
     if (-not (Test-Path -LiteralPath $InventoryPath -PathType Leaf)) { throw "provider inventory missing: $InventoryPath" }
     if (-not (Test-Path -LiteralPath $ChecksumsPath -PathType Leaf)) { throw "provider checksum evidence missing: $ChecksumsPath" }
+    if (-not (Test-Path -LiteralPath $MetadataPath -PathType Leaf)) { throw "installation metadata missing: $MetadataPath" }
     $Inventory = Get-Content -Raw -LiteralPath $InventoryPath | ConvertFrom-Json
+    $Metadata = Get-Content -Raw -LiteralPath $MetadataPath | ConvertFrom-Json
     if ($Inventory.formatVersion -ne 1) { throw "unsupported provider inventory format: $($Inventory.formatVersion)" }
     if ($Inventory.platform -ne 'linux/amd64') { throw "unexpected provider inventory platform: $($Inventory.platform)" }
     if ($Inventory.minosCommit -ne $Head) { throw "provider inventory commit mismatch: $($Inventory.minosCommit)" }
+    if ($Metadata.formatVersion -ne 5) { throw "unexpected Docker installation metadata format: $($Metadata.formatVersion)" }
+    if ($Metadata.semanticProvider -ne $SemanticProvider) { throw "Docker semantic provider mismatch: $($Metadata.semanticProvider)" }
 
     $ExpectedProviders = @('scip-java', 'scip-typescript', 'scip-python', 'scip-clang', 'scip-dotnet', 'scip-go', 'rust-analyzer-scip')
     Write-Host 'M29-S4 expected inventory: 7 provider IDs'
@@ -150,6 +162,7 @@ finally {
         dockerArchitecture = $Architecture
         installRoot = $InstallRoot
         dataRoot = $DataRoot
+        semanticProvider = $SemanticProvider
         providerCount = if ($null -eq $Inventory) { 0 } else { @($Inventory.providers).Count }
         runtimeNetwork = 'none'
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ReportPath -Encoding utf8
