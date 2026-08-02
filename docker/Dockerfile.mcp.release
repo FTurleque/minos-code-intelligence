@@ -121,8 +121,9 @@ RUN set -eux; \
 
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
-# embeds the exact 0.13.1 artifact. Mordant pulls JNA at runtime; keep general /tmp noexec and
-# hard-code JNA extraction to the dedicated bounded exec tmpfs mounted by admin/probe planes.
+# embeds the exact 0.13.1 artifact. The standalone launcher still materializes its embedded JAR
+# resources into COURSIER_CACHE at startup; Compose points that cache at writable MINOS/tmp roots
+# while keeping network_mode:none. Mordant/JNA extraction stays isolated in /run/minos-native.
 RUN set -eux; \
     export COURSIER_CACHE=/tmp/minos-coursier-build-cache; \
     mkdir -p /run/minos-native; \
@@ -164,7 +165,7 @@ RUN set -eux; \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
       '  "networkPolicy": "build-only downloads; runtime network none",' \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; JNA extraction is isolated to /run/minos-native\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; embedded JARs materialize into a writable runtime COURSIER_CACHE without downloads; JNA extraction is isolated to /run/minos-native\"}," \
       "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
       "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
       "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
