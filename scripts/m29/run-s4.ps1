@@ -14,53 +14,34 @@ if ($env:OS -ne 'Windows_NT') {
 }
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) {
-    $ProjectsRoot = Split-Path -Parent $RepoRoot
-}
+if ([string]::IsNullOrWhiteSpace($ProjectsRoot)) { $ProjectsRoot = Split-Path -Parent $RepoRoot }
 $ProjectsRoot = [System.IO.Path]::GetFullPath($ProjectsRoot)
 
 function Invoke-NativeCapture {
-    param(
-        [Parameter(Mandatory = $true)][string] $File,
-        [Parameter(Mandatory = $true)][string[]] $Arguments
-    )
+    param([Parameter(Mandatory = $true)][string] $File, [Parameter(Mandatory = $true)][string[]] $Arguments)
     $Previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
         $Output = ((& $File @Arguments 2>&1) | Out-String).Trim()
         $ExitCode = $LASTEXITCODE
     }
-    finally {
-        $ErrorActionPreference = $Previous
-    }
+    finally { $ErrorActionPreference = $Previous }
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
 }
 
 function Assert-NativeSuccess {
-    param(
-        [Parameter(Mandatory = $true)][string] $File,
-        [Parameter(Mandatory = $true)][string[]] $Arguments,
-        [Parameter(Mandatory = $true)][string] $Failure
-    )
+    param([Parameter(Mandatory = $true)][string] $File, [Parameter(Mandatory = $true)][string[]] $Arguments, [Parameter(Mandatory = $true)][string] $Failure)
     $Result = Invoke-NativeCapture -File $File -Arguments $Arguments
-    if ($Result.ExitCode -ne 0) {
-        throw "$Failure (exit=$($Result.ExitCode)): $($Result.Output)"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($Result.Output)) {
-        Write-Host $Result.Output
-    }
+    if ($Result.ExitCode -ne 0) { throw "$Failure (exit=$($Result.ExitCode)): $($Result.Output)" }
+    if (-not [string]::IsNullOrWhiteSpace($Result.Output)) { Write-Host $Result.Output }
     return $Result.Output
 }
 
 $Git = (Get-Command git -ErrorAction Stop).Source
 $Head = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -Failure 'Unable to resolve M29 HEAD').Trim()
-if ($Head -ne $ExpectedHead.Trim()) {
-    throw "M29-S4 exact-head mismatch: expected $ExpectedHead, found $Head"
-}
+if ($Head -ne $ExpectedHead.Trim()) { throw "M29-S4 exact-head mismatch: expected $ExpectedHead, found $Head" }
 $Dirty = (Assert-NativeSuccess -File $Git -Arguments @('-C', $RepoRoot, 'status', '--porcelain') -Failure 'Unable to inspect git status').Trim()
-if (-not [string]::IsNullOrWhiteSpace($Dirty)) {
-    throw "M29-S4 requires a clean worktree. Dirty entries:`n$Dirty"
-}
+if (-not [string]::IsNullOrWhiteSpace($Dirty)) { throw "M29-S4 requires a clean worktree. Dirty entries:`n$Dirty" }
 Write-Host "M29-S4 exact HEAD: $Head" -ForegroundColor Cyan
 
 if (-not $SkipMavenVerify) {
@@ -73,21 +54,15 @@ if (-not $SkipMavenVerify) {
         & $Python.Source '.\scripts\docs\check-current-docs.py'
         if ($LASTEXITCODE -ne 0) { throw "M29-S4 documentation consistency failed with exit code $LASTEXITCODE" }
     }
-    finally {
-        Pop-Location
-    }
+    finally { Pop-Location }
 }
 
 $Docker = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $Docker) { throw 'M29-S4 BLOCKED: docker.exe is not installed or not present in PATH.' }
 $DockerServer = Invoke-NativeCapture -File $Docker.Source -Arguments @('version', '--format', '{{.Server.Version}}')
-if ($DockerServer.ExitCode -ne 0) {
-    throw "M29-S4 BLOCKED: Docker Desktop Linux daemon is unavailable: $($DockerServer.Output)"
-}
+if ($DockerServer.ExitCode -ne 0) { throw "M29-S4 BLOCKED: Docker Desktop Linux daemon is unavailable: $($DockerServer.Output)" }
 $Architecture = (Assert-NativeSuccess -File $Docker.Source -Arguments @('info', '--format', '{{.Architecture}}') -Failure 'Unable to resolve Docker server architecture').Trim()
-if ($Architecture -ne 'x86_64') {
-    throw "M29-S4 provider image is currently qualified only for linux/amd64; Docker server architecture is $Architecture"
-}
+if ($Architecture -ne 'x86_64') { throw "M29-S4 provider image is currently qualified only for linux/amd64; Docker server architecture is $Architecture" }
 Assert-NativeSuccess -File $Docker.Source -Arguments @('compose', 'version') -Failure 'Docker Compose is unavailable' | Out-Null
 
 $Jar = Join-Path $RepoRoot 'target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar'
@@ -107,18 +82,8 @@ $Passed = $false
 $Inventory = $null
 
 function Invoke-Workflow {
-    param(
-        [Parameter(Mandatory = $true)][ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')][string] $Action,
-        [string[]] $MinosArguments = @(),
-        [switch] $Install
-    )
-    $Parameters = @{
-        Action = $Action
-        InstallRoot = $InstallRoot
-        DataRoot = $DataRoot
-        ContainerName = $ContainerName
-        ComposeProject = $ComposeProject
-    }
+    param([Parameter(Mandatory = $true)][ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')][string] $Action, [string[]] $MinosArguments = @(), [switch] $Install)
+    $Parameters = @{ Action = $Action; InstallRoot = $InstallRoot; DataRoot = $DataRoot; ContainerName = $ContainerName; ComposeProject = $ComposeProject }
     if ($Install) {
         $Parameters['Jar'] = $Jar
         $Parameters['Version'] = '1.0.1-SNAPSHOT'
@@ -137,7 +102,7 @@ try {
     Invoke-Workflow -Action Install -Install
     Invoke-Workflow -Action Validate
 
-    # This is the S4 capability-honest offline gate. The minos-admin service is network_mode:none.
+    # Install/Validate already execute the real offline executable probe and all-provider MINOS verification.
     Invoke-Workflow -Action Admin -MinosArguments @('tools', 'verify', '--all', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('providers', '--format', 'json')
     Invoke-Workflow -Action Admin -MinosArguments @('doctor', '--format', 'json')
@@ -151,10 +116,8 @@ try {
     if ($Inventory.platform -ne 'linux/amd64') { throw "unexpected provider inventory platform: $($Inventory.platform)" }
     if ($Inventory.minosCommit -ne $Head) { throw "provider inventory commit mismatch: $($Inventory.minosCommit)" }
 
-    $ExpectedProviders = @(
-        'scip-java', 'scip-typescript', 'scip-python', 'scip-clang',
-        'scip-dotnet', 'scip-go', 'rust-analyzer-scip'
-    )
+    $ExpectedProviders = @('scip-java', 'scip-typescript', 'scip-python', 'scip-clang', 'scip-dotnet', 'scip-go', 'rust-analyzer-scip')
+    Write-Host 'M29-S4 expected inventory: 7 provider IDs'
     $Ids = @($Inventory.providers | ForEach-Object { [string] $_.id })
     $Missing = @($ExpectedProviders | Where-Object { $_ -notin $Ids })
     if ($Missing.Count -gt 0) { throw "provider inventory is incomplete: $($Missing -join ', ')" }
