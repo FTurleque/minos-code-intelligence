@@ -107,8 +107,8 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 is in progress. S1/S2 are exact-head qualified. S3 has real Docker evidence
-        # through the provider boundary; S4 is implemented but must not be claimed PASS yet.
+        # M29 is in progress. S1/S2 are exact-head qualified. S3 has reached real Docker indexing;
+        # S4 has a historical exact-head PASS, but any modified current HEAD must be requalified.
         for token in (
             "EN COURS",
             "#107",
@@ -151,7 +151,8 @@ def main() -> int:
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
         require("docs/roadmap/M29_EXECUTION.md", m29, "2 août 2026")
-        require("docs/roadmap/M29_EXECUTION.md", m29, "Aucune disposition PASS S4")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "PASS HISTORIQUE / REQUALIFICATION COURANTE REQUISE")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "f39802e966370f0934436163eecc180e4d76a271")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Le daemon Docker `desktop-linux` était arrêté")
@@ -204,7 +205,6 @@ def main() -> int:
         require("docs/releases/1.0.1.md", release_101, "Codex Desktop")
         require("docs/releases/1.0.1.md", release_101, "Mode MCP")
         require("docs/releases/1.0.1.md", release_101, "MCP natif local — recommandé, sans Docker")
-        require("docs/releases/1.0.1.md", release_101, "MCP Docker — optionnel")
         require("docs/releases/1.0.1.md", release_101, "%LOCALAPPDATA%\\MINOS")
         require("docs/releases/1.0.1.md", release_101, "Non / conserver")
 
