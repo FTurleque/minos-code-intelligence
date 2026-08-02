@@ -1,6 +1,6 @@
 # M29 — Autonomous Docker Runtime & Native Parity
 
-Statut : **EN COURS — implémentation S1/S2 présente, qualification locale exact-head requise avant S3**  
+Statut : **EN COURS — S1/S2 qualifiés exact-head ; S3 implémenté, gate Docker réel à exécuter**  
 Issue : **#107 — M29 — Autonomous Docker Runtime & Native Parity**  
 Branche : **`m29-autonomous-docker-runtime`**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**
@@ -44,7 +44,7 @@ Audit des triggers avant création de branche : les workflows présents sur cett
 
 ## État de départ Docker
 
-Le Docker release pré-M29 sait :
+Le Docker release pré-M29 savait :
 
 - construire une image MINOS à partir du JAR de release ;
 - démarrer un conteneur durci ;
@@ -53,13 +53,13 @@ Le Docker release pré-M29 sait :
 - fonctionner avec `network_mode: none` ;
 - exposer une session MCP STDIO via `docker exec -i`.
 
-Mais il n'est **pas encore autonome ni équivalent au natif** :
+Mais il n'était **pas autonome ni équivalent au natif** :
 
-- les clients IA sont configurés vers le MCP natif ;
-- le home Docker pré-M29 est distinct de `%LOCALAPPDATA%\MINOS\data` ;
-- le registre projet pré-M29 persiste des chemins physiques absolus ;
-- l'image Docker n'embarque pas encore tous les runtimes/providers nécessaires à l'indexation autonome ;
-- les gates Docker historiques ne prouvent pas une parité métier complète native/Docker.
+- les clients IA étaient configurés vers le MCP natif ;
+- le home Docker pré-M29 était distinct de `%LOCALAPPDATA%\MINOS\data` ;
+- le registre projet pré-M29 persistait des chemins physiques absolus ;
+- l'image Docker n'embarquait pas tous les runtimes/providers nécessaires à l'indexation autonome ;
+- les gates Docker historiques ne prouvaient pas une parité métier complète native/Docker.
 
 ## Données et vector store
 
@@ -88,7 +88,7 @@ M29 **ne crée pas une nouvelle base vectorielle externe** par défaut. Il doit 
 4. **Chemins portables** : le chemin physique n'est pas une identité portable.
 5. **Snapshots autoritatifs** : le vectoriel ne remplace pas le modèle structuré.
 6. **Runtime offline** : préparation providers pendant build/install ; pas de téléchargement implicite en RUN.
-7. **Sécurité Docker conservée** : `network_mode: none`, projets read-only pour le MCP, filesystem read-only quand possible, `cap_drop: ALL`, `no-new-privileges`.
+7. **Sécurité Docker conservée** : `network_mode: none`, projets read-only pour le MCP et l'admin, filesystem read-only quand possible, `cap_drop: ALL`, `no-new-privileges`.
 8. **MCP read-only** pour les agents ; administration/indexation via un plan explicite séparé.
 9. **Clients IA backend-agnostic** : Copilot/Claude/Codex ne connaissent pas le détail du backend.
 10. **Claim de parité interdit sans preuve comparative exact-head**.
@@ -111,13 +111,27 @@ MCP Java     docker exec -i
              MCP Java
 ```
 
+Le plan Docker possède désormais en plus un plan d'administration/indexation éphémère :
+
+```text
+host operator
+     |
+     v
+prod-mcp-release.ps1 -Action Admin
+     |
+     v
+minos-admin (ephemeral)
+     |
+MinosLauncher
+```
+
 ## Avancement
 
 | Sous-étape | Objet | État |
 |---|---|---|
-| M29-S1 | Backend contract & ADR | 🟨 implémenté — gate local non exécuté |
-| M29-S2 | Project identity, path mapping & portable persistence | 🟨 implémenté partiellement — gate local non exécuté |
-| M29-S3 | Autonomous Docker administration plane | ⬜ bloqué par gate S1/S2 |
+| M29-S1 | Backend contract & ADR | ✅ PASS exact-head `c7a4e944...` |
+| M29-S2 | Project identity, path mapping & portable persistence | ✅ PASS exact-head `c7a4e944...` |
+| M29-S3 | Autonomous Docker administration plane | 🟨 implémenté — gate Maven/Docker exact-head requis |
 | M29-S4 | Provider-complete Docker image | ⬜ |
 | M29-S5 | Autonomous indexing & vector lifecycle | ⬜ |
 | M29-S6 | Backend-agnostic MCP client integration | ⬜ |
@@ -146,29 +160,33 @@ MCP Java     docker exec -i
 - aucun fallback Docker -> natif ;
 - ADR-0037 accepté pour ce contrat ; ADR-0021 partiellement superseded.
 
-### Tests ajoutés
+### Preuve exact-head
 
-- migration pré-M29 vers native ;
-- configuration invalide/inconnue ;
-- Docker indisponible sans appel natif ;
-- ordre daemon/container/STDIO ;
-- backend natif sans appel Docker.
+Qualification Windows reçue le 2 août 2026 sur :
 
-### Gate restant
+```text
+HEAD c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+```
 
-- compiler/tests JDK 24 exact-head ;
-- session MCP native réelle ;
-- session MCP Docker réelle ;
-- Docker daemon arrêté = erreur explicite ;
-- exact HEAD/worktree clean.
+Résultats :
 
-Tant que ces preuves ne sont pas exécutées, S1 reste 🟨.
+```text
+mvnw.cmd clean verify      BUILD SUCCESS
+13/13 modules             SUCCESS
+McpBackendRouterTest      6/6 PASS
+suite totale              417 PASS, 0 failure, 0 error, 0 skipped
+check-current-docs.py     SUCCESS
+```
+
+Le défaut de compilation initial sur le contrat `NativeMcpRunner` a été corrigé avant cette qualification ; le test de propagation checked failure fait partie des 6 cas S1.
+
+**Disposition S1 : ✅ PASS pour le contrat backend et sa qualification locale.** Les handshakes comparatifs natif/Docker complets restent couverts par les gates S3/S6/S8 et ne constituent pas encore une claim de parité.
 
 ---
 
 ## M29-S2 — Project identity, path mapping & portable persistence
 
-### Implémentation présente
+### Contrat implémenté
 
 Un mapping runtime typé/versionné a été introduit :
 
@@ -183,7 +201,7 @@ Le mapping physique vit sous :
 <MINOS_HOME>/runtime/project-paths.properties
 ```
 
-Le registre projet, lorsqu'un mapping est actif, persiste désormais :
+Le registre projet, lorsqu'un mapping est actif, persiste :
 
 ```text
 rootRelativePath=<racine-relative-portable>
@@ -199,32 +217,83 @@ Un ancien enregistrement `rootPath=<absolu>` :
 4. est remplacé atomiquement par `rootRelativePath` ;
 5. peut être relu idempotemment.
 
-Le runtime courant est explicite via `minos.runtime.location` / `MINOS_RUNTIME_LOCATION` (`native` par défaut, `docker` dans le conteneur cible).
+Le runtime courant est explicite via `minos.runtime.location` / `MINOS_RUNTIME_LOCATION` (`native` par défaut, `docker` dans le conteneur).
 
-### Tests ajoutés
+### Preuve exact-head
 
-- mapping lexical Windows `N:\...` ↔ Linux `/workspace/...` ;
-- rejet d'un chemin hors racine ;
-- même fichier registre lu en natif et Docker ;
-- même `projectId` et même workspace association ;
-- migration legacy idempotente ;
-- backup de rollback ;
-- absence de chemin hôte absolu dans l'enregistrement portable.
+Sur le même HEAD `c7a4e944...` :
 
-### Travail/gates encore requis avant ✅
+```text
+ProjectPathMappingTest    4/4 PASS
+Minos Application         161/161 PASS
+Storage                    42/42 PASS
+build reactor              BUILD SUCCESS
+```
 
-- exécuter les tests exact-head sous JDK 24 ;
-- qualifier les surfaces source/Git/architecture/impact/ProgramGraph/runtime observations avec racine résolue ;
-- qualifier snapshots/index-state/vector store sur le home partagé ;
-- vérifier migration réelle d'un home 1.0.1 ;
-- vérifier rollback depuis `.m29-v1.bak` ;
-- prouver même projectId/workspaceId dans des processus natif et Docker réels.
+Ces tests couvrent mapping lexical Windows/Linux, rejet hors racine, même fichier registre lu selon le runtime, conservation projectId/workspaceId, migration legacy idempotente et backup.
+
+**Disposition S2 : ✅ PASS pour le contrat de portabilité implémenté.** La preuve process native↔Docker et la persistance réelle après recreate restent des preuves d'intégration S3/S5/S8.
 
 ---
 
 ## M29-S3 — Autonomous Docker administration plane
 
-Docker doit pouvoir exécuter seul :
+### Implémentation présente
+
+Le Compose de production sépare désormais trois services :
+
+```text
+minos-mcp        persistent query plane
+minos-admin      ephemeral administration/indexing plane
+minos-bootstrap  ephemeral path-mapping bootstrap
+```
+
+`minos-mcp` :
+
+- `/var/lib/minos` read-only ;
+- `/workspace/projects` read-only ;
+- filesystem read-only ;
+- `network_mode: none` ;
+- `cap_drop: ALL` ;
+- `no-new-privileges:true` ;
+- session MCP via `docker exec -i`.
+
+`minos-admin` :
+
+- exécute `com.minos.cli.MinosLauncher` ;
+- `/var/lib/minos` writable explicitement ;
+- projets toujours read-only ;
+- filesystem conteneur read-only + tmpfs borné ;
+- même `network_mode: none`, `cap_drop: ALL`, `no-new-privileges:true` ;
+- conteneur éphémère via `docker compose run --rm --no-deps`.
+
+`minos-bootstrap` :
+
+- exécute `DockerRuntimeBootstrap` avant les opérations métier ;
+- crée `project-paths.properties` via le store Java versionné ;
+- est idempotent ;
+- refuse de remplacer implicitement un mapping existant différent.
+
+Le workflow packagé ajoute :
+
+```text
+-Action Admin -MinosArguments <...>
+```
+
+et valide pendant `Install`/`Validate` :
+
+```text
+docker compose config
+Java image
+bootstrap mapping
+MinosLauncher --help dans minos-admin
+```
+
+Un wrapper source `docker/scripts/minos-docker.ps1` simplifie l'usage opérateur.
+
+### Surface admin requise
+
+Le plan Docker peut maintenant appeler le CLI stable pour :
 
 ```text
 minos doctor
@@ -235,13 +304,38 @@ minos project list
 minos project inspect
 minos index
 minos index-status
-minos semantic/hybrid status
+minos semantic status
+minos hybrid status
 minos mcp
 ```
 
-Le plan d'administration/indexation peut écrire explicitement `/var/lib/minos`; le serveur MCP destiné aux agents reste query-only et durci.
+M29 ajoute `semantic status` et `hybrid status` au CLI. Le premier expose l'état du vector store (`DISABLED|NO_ACTIVE_SNAPSHOT|MISSING|STALE|READY`). Le second expose `NO_ACTIVE_SNAPSHOT|READY_STRUCTURED_FALLBACK|READY_WITH_SEMANTIC` sans transformer le signal vectoriel `HEURISTIC` en fait structurel.
 
-Gate : projet neuf -> Docker seulement -> `project add` -> `index` -> `READY`, puis restart/recreate avec registre, snapshots, index state et vector store persistants.
+Documentation opérateur : `docs/user/docker-runtime.md`.
+
+### Tests ajoutés
+
+- `DockerRuntimeBootstrapTest` : création, idempotence, refus de remplacement implicite, usage invalide ;
+- `RetrievalStatusCommandTest` : semantic READY, hybrid structured fallback, no-active-snapshot, aide stateless ;
+- `M29DockerAdministrationContractTest` : séparation query/admin, data RO/RW, projets RO, sécurité Docker, bootstrap et workflow packagé.
+
+### Gate S3 restant
+
+Le code S3 n'est **pas encore PASS**. Il faut exécuter sur son HEAD exact :
+
+```text
+mvnw.cmd clean verify
+check-current-docs.py
+docker version
+docker compose config
+Install / Validate
+projet neuf -> Docker seulement -> project add -> index -> READY
+semantic status / hybrid status
+Start -> MCP initialize/tools/list
+restart/recreate -> état persistant
+```
+
+Le daemon Docker `desktop-linux` était arrêté lors de la dernière preuve reçue ; le CLI Docker 29.6.2 était présent mais le pipe `dockerDesktopLinuxEngine` était absent. Ce blocage est environnemental et interdit de déclarer S3 PASS tant qu'une preuve Docker réelle n'est pas fournie.
 
 ---
 
@@ -342,13 +436,23 @@ Aucun claim de parité avant PASS.
 
 ## Gate bloquant courant
 
-Le code S1/S2 est présent sur la branche, mais aucune preuve Maven/JDK24/Docker exact-head n'a encore été exécutée sur le SHA courant. Conformément à la méthode M29 :
+S1/S2 ont une preuve locale exact-head et sont PASS. S3 est désormais implémenté mais n'a encore aucune preuve Maven/Docker sur son nouveau HEAD.
+
+Le dernier diagnostic Docker fourni est :
 
 ```text
-pas de preuve → pas de PASS → pas de passage à S3
+Docker CLI 29.6.2 présent
+context desktop-linux
+Docker daemon indisponible : dockerDesktopLinuxEngine pipe absent
 ```
 
-La prochaine action autorisée est une qualification locale exact-head sur une machine disposant du worktree, de Java 24/Maven et de Docker Desktop. Aucune PR/CI ne doit être créée ou déclenchée pour contourner ce gate.
+Conformément à la méthode M29 :
+
+```text
+S3 sans preuve exact-head Maven + Docker réel -> pas de PASS -> pas de S4
+```
+
+La prochaine action est donc une qualification locale exact-head avec Docker Desktop démarré. Aucune PR/CI ne doit être créée ou déclenchée pour contourner ce gate.
 
 ## Définition de terminé
 
