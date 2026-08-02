@@ -40,7 +40,7 @@ ENV MINOS_HOME=/var/lib/minos \
     CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
     COURSIER_CACHE=/opt/minos/coursier-cache \
-    PATH=/usr/local/cargo/bin:/usr/local/go/bin:/usr/share/dotnet:/usr/local/bin:/opt/java/openjdk/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/usr/local/bin:/usr/local/cargo/bin:/usr/local/go/bin:/usr/share/dotnet:/opt/java/openjdk/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 USER root
 RUN test "${TARGETARCH}" = "amd64" || (echo "MINOS M29 provider-complete image is qualified only for linux/amd64" >&2; exit 1)
