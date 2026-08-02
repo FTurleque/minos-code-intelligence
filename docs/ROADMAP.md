@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3/S4 PASS exact-head `3df1b40...`, S5 PASS exact-head `0959fb9...`, S6 backend-agnostic MCP client integration implémenté sur un HEAD plus récent et en attente de qualification exact-head, sans claim de parité.**
+Statut au **2 août 2026** : **C0 → M28 terminés et intégrés sur `main`; MINOS 1.0.0 publié; maintenance Windows 1.0.1 en préparation et non publiée; M29 en cours avec S1/S2 qualifiés, S3/S4 PASS exact-head `3df1b40...`, S5 PASS exact-head `0959fb9...`, S6 PASS exact-head `f7ef0e3...`, S7 installer/switching/lifecycle implémenté sur un HEAD plus récent et en attente de qualification exact-head, sans claim de parité.**
 
 L'état courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -77,7 +77,7 @@ Tant que M29 n'est pas qualifié, **1.0.1 ne présente pas Docker comme fonction
 ## M29 — Autonomous Docker Runtime & Native Parity
 
 Issue : **#107**  
-Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 backend-agnostic MCP client integration implémenté et en attente de `run-s6.ps1`.**  
+Statut : **EN COURS depuis le 2 août 2026 — branche `m29-autonomous-docker-runtime`; S1/S2 PASS ; S3/S4 PASS exact-head `3df1b40...`; S5 PASS exact-head `0959fb9...`; S6 PASS exact-head `f7ef0e3...`; S7 installer/switching/lifecycle implémenté et en attente de `run-s7.ps1`.**  
 Baseline : **`db33cae87b37f9c2c36e536c96a4ccb6e24df3e5` (`fix/v1.0.1-release-hardening`)**.  
 Roadmap opérationnelle : [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
 
@@ -123,8 +123,8 @@ M29 ne crée pas de nouvelle base vectorielle externe par défaut et n'introduit
 | M29-S3 | Autonomous Docker administration plane | ✅ PASS exact-head `3df1b40...` |
 | M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...` |
 | M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...` |
-| M29-S6 | Backend-agnostic MCP client integration | 🟨 implémenté ; qualification exact-head requise |
-| M29-S7 | Installer, switching & lifecycle | ⬜ |
+| M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...` |
+| M29-S7 | Installer, switching & lifecycle | 🟨 implémenté ; qualification exact-head requise |
 | M29-S8 | Native/Docker parity qualification | ⬜ |
 
 ### S1/S2 — fondations qualifiées
@@ -224,7 +224,7 @@ M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS
 
 Le store reste `index-v2.bin`, float32 exact scan ; aucune base vectorielle externe n'est introduite.
 
-### S6 — clients MCP backend-agnostic — 🟨
+### S6 — clients MCP backend-agnostic — ✅
 
 Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop gardent tous le même contrat :
 
@@ -236,18 +236,79 @@ env     = MINOS_HOME=<dataRoot>
 
 Le choix backend est lu dans `<MINOS_HOME>/runtime/backend.properties` par `McpBackendRouter`. Les clients n'embarquent ni `docker exec`, ni nom de conteneur, ni Compose.
 
-`verify-mcp-client-backend-routing.ps1` configure toutes les familles clientes dans un environnement Windows isolé, bascule `native -> docker` et vérifie que leurs fichiers restent byte-identical. Le verifier est chaîné au preflight de construction Windows. `M29McpClientBackendAgnosticContractTest` verrouille le contrat côté Maven.
+Qualification exact-head `f7ef0e3dbe820253decd83a1dc27bf2651ef6de9` :
+
+```text
+13/13 modules Maven                                 SUCCESS
+check-current-docs.py                               SUCCESS
+MCP client integration                              SUCCESS
+MCP client preflight                                SUCCESS
+Codex Desktop lifecycle                             SUCCESS
+backend-routing native -> docker                    SUCCESS
+client configs                                      byte-identical
+installer template                                  SUCCESS
+M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
+```
+
+Rapport :
+
+```text
+target/m29/s6-qualification-f7ef0e3dbe820253decd83a1dc27bf2651ef6de9.json
+```
+
+### S7 — installer / switching — 🟨
+
+Le switching natif↔Docker est implémenté comme une transaction :
+
+```text
+prepare -> validate -> handshake -> commit backend.properties -> retire old backend
+```
+
+`scripts/install/switch-mcp-backend.ps1` ne commit jamais le nouveau choix avant que `scripts/install/probe-mcp-backend.ps1` ait validé `initialize` puis `tools/list` via le point d'entrée stable. Un échec restaure la configuration précédente. Un vrai upgrade Docker sauvegarde aussi le runtime/marker précédent et le redémarre si le candidat échoue.
+
+Un runtime Docker géré correspondant exactement à la version/commit, racines et identité container/Compose courants est réutilisé avec `Start + Validate + handshake`, sans seconde construction d'image.
+
+Le setup expose trois modes exclusifs :
+
+```text
+MCP natif Windows — recommandé
+MCP Docker — isolation renforcée
+Ne pas configurer maintenant
+```
+
+Le backend existant est présélectionné lors d'un upgrade. Les clients IA sont communs aux deux backends. Docker explicitement choisi mais indisponible bloque le wizard ; aucun fallback silencieux vers le natif.
+
+Le ZIP `install.ps1` utilise le même switcher, possède des backups collision-safe et restaure le payload précédent si l'installation/validation échoue.
 
 Gate exact-head :
 
 ```text
-scripts/m29/run-s6.ps1
-M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
+scripts/m29/run-s7.ps1
 ```
 
-### S7 — installer / switching
+Le runner exige :
 
-Le switching natif↔Docker doit être transactionnel : prepare → validate → handshake → commit config → retrait ancien backend ; rollback en cas d'échec.
+```text
+Maven + docs + AST                       SUCCESS
+fault-injected lifecycle verifier        SUCCESS
+backend-agnostic client routing          SUCCESS
+installer template contract              SUCCESS
+Windows distribution                     SUCCESS
+Inno smoke setup compile                 SUCCESS
+native-only install                      SUCCESS
+native upgrade                           SUCCESS
+Docker-only install                      SUCCESS
+Docker -> native                         SUCCESS
+native -> Docker reuse                   SUCCESS
+runtime uninstall preserves data         SUCCESS
+explicit isolated purge                  SUCCESS
+```
+
+Marqueur requis :
+
+```text
+M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS
+```
 
 ### S8 — parité
 
@@ -268,9 +329,8 @@ aux seules différences explicitement permises de chemin/provenance/runtime prè
 ## Séquence de travail courante
 
 1. tirer le HEAD courant de `m29-autonomous-docker-runtime` ;
-2. exécuter `check-current-docs.py` ;
-3. exécuter `mvnw.cmd clean verify` ;
-4. exécuter `run-s6.ps1 -ExpectedHead <HEAD> -SkipMavenVerify` ;
-5. si et seulement si le marqueur S6 SUCCESS est obtenu, réconcilier S6 puis démarrer S7 ;
-6. aucune PR/CI/merge M29 sans autorisation explicite ;
-7. aucun claim de parité avant S8.
+2. exécuter `run-s7.ps1 -ExpectedHead <HEAD>` ;
+3. ne promouvoir S7 qu'avec le marqueur exact-head SUCCESS et le rapport `target/m29/s7-qualification-<HEAD>.json` ;
+4. démarrer ensuite S8 ;
+5. aucune PR/CI/merge M29 sans autorisation explicite ;
+6. aucun claim de parité avant S8.
