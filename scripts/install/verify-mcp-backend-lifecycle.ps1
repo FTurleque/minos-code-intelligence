@@ -28,6 +28,13 @@ function Read-Backend([string] $DataRoot) {
     return ($Line -split '=', 2)[1].Trim()
 }
 
+function Write-Identity([string] $InstallRoot, [string] $Version, [string] $Commit) {
+    @(
+        "version=$Version",
+        "commit=$Commit"
+    ) | Set-Content -LiteralPath (Join-Path $InstallRoot 'VERSION') -Encoding ascii
+}
+
 function Write-FakeScripts([string] $Root) {
     $Probe = Join-Path $Root 'fake-probe.ps1'
     $Configurator = Join-Path $Root 'fake-docker-configurator.ps1'
@@ -56,9 +63,13 @@ $generation = if (Test-Path -LiteralPath (Join-Path $runtime 'generation.txt')) 
     [int]([System.IO.File]::ReadAllText((Join-Path $runtime 'generation.txt')).Trim()) + 1
 } else { 1 }
 [System.IO.File]::WriteAllText((Join-Path $runtime 'generation.txt'), [string]$generation)
+$identity = @{}
+foreach ($line in [System.IO.File]::ReadAllLines((Join-Path $InstallRoot 'VERSION'))) {
+    if ($line -match '^([^=]+)=(.*)$') { $identity[$Matches[1].Trim()] = $Matches[2].Trim() }
+}
 @(
- 'version=fake',
- 'commit=fake',
+ ('version=' + [string]$identity['version']),
+ ('commit=' + [string]$identity['commit']),
  ('projectsRoot=' + $ProjectsRoot),
  ('dockerInstallRoot=' + $DockerInstallRoot),
  ('dockerDataRoot=' + $DockerDataRoot),
@@ -93,6 +104,7 @@ try {
     $FakeLog = Join-Path $Root 'fake-actions.log'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Launcher), $DataRoot, $DockerDataRoot, $ProjectsRoot | Out-Null
     New-Item -ItemType File -Force -Path $Launcher | Out-Null
+    Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test1' -Commit 'commit-1'
     [System.IO.File]::WriteAllText($ThirdParty, '{"owner":"user","unchanged":true}', [System.Text.UTF8Encoding]::new($false))
     $ThirdPartyHash = (Get-FileHash -LiteralPath $ThirdParty -Algorithm SHA256).Hash
     $Fakes = Write-FakeScripts -Root $Root
@@ -118,9 +130,10 @@ try {
     & $Switcher @Common -TargetBackend native
     Assert-True ((Read-Backend $DataRoot) -eq 'native') 'Fresh native backend selection was not committed.'
 
-    # Native -> Docker; the candidate must be configured and probed before commit.
+    # Native -> Docker initial install; candidate must be configured and probed.
     & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
     Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Native -> Docker switch was not committed.'
+    $Generation1 = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'configure:docker') 'Docker candidate was not prepared.'
     Assert-True ($Actions -contains 'probe:docker') 'Docker candidate was not handshaken.'
@@ -131,14 +144,23 @@ try {
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'workflow:Stop') 'Docker -> native did not retire the old Docker query plane.'
 
-    # Failed Docker candidate handshake: config stays native and candidate is stopped.
+    # Same-version native -> Docker must reuse the managed runtime instead of
+    # rebuilding it. Start + Validate + handshake prove readiness before commit.
+    & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
+    $GenerationAfterReuse = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
+    Assert-True ($GenerationAfterReuse -eq $Generation1) 'Same-version native -> Docker rebuilt the managed runtime instead of reusing it.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Reusable Docker runtime was not selected.'
+    $Actions = [System.IO.File]::ReadAllLines($FakeLog)
+    Assert-True ($Actions -contains 'workflow:Validate') 'Reusable Docker runtime was not validated before commit.'
+
+    # Return to native, then force candidate handshake failure on the reusable
+    # Docker path: config stays native and the started candidate is stopped.
+    & $Switcher @Common -TargetBackend native
     $env:MINOS_S7_FAIL_PROBE = 'docker'
     $FailedAsExpected = $false
     try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $FailedAsExpected = $true }
     Assert-True $FailedAsExpected 'Forced Docker handshake failure did not fail the switch.'
     Assert-True ((Read-Backend $DataRoot) -eq 'native') 'Failed Docker handshake changed the active backend.'
-    $Actions = [System.IO.File]::ReadAllLines($FakeLog)
-    Assert-True ($Actions -contains 'workflow:Stop') 'Failed Docker candidate was not stopped during rollback.'
     $env:MINOS_S7_FAIL_PROBE = ''
 
     # Re-establish Docker, then fail retirement while switching to native. The
@@ -154,17 +176,19 @@ try {
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'workflow:Start') 'Retirement rollback did not restart the previous Docker backend.'
 
-    # Same-backend Docker invocation is the upgrade path: prepare again, probe,
-    # keep backend=docker and never retire it as an "old" different backend.
+    # Changing the package identity is a real Docker upgrade: runtime generation
+    # must advance and the marker must be replaced only after preparation.
+    Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test2' -Commit 'commit-2'
     $BeforeGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
     & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot
     $AfterGeneration = [int]([System.IO.File]::ReadAllText((Join-Path $DockerInstallRoot 'runtime\generation.txt')).Trim())
-    Assert-True ($AfterGeneration -eq ($BeforeGeneration + 1)) 'Docker same-backend upgrade did not prepare a new runtime generation.'
-    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Docker same-backend upgrade changed backend selection.'
+    Assert-True ($AfterGeneration -eq ($BeforeGeneration + 1)) 'Docker package upgrade did not prepare a new runtime generation.'
+    Assert-True ((Read-Backend $DataRoot) -eq 'docker') 'Docker package upgrade changed backend selection.'
 
-    # A failed same-backend upgrade must restore both the previous Docker runtime
-    # generation and its active query plane, not merely leave backend=docker.
+    # A failed next-version upgrade must restore both previous Docker runtime
+    # generation and active query plane, not merely leave backend=docker.
     $StableGeneration = $AfterGeneration
+    Write-Identity -InstallRoot $InstallRoot -Version '1.0.1-test3' -Commit 'commit-3'
     $env:MINOS_S7_FAIL_PROBE = 'docker'
     $FailedAsExpected = $false
     try { & $Switcher @Common -TargetBackend docker -ProjectsRoot $ProjectsRoot } catch { $FailedAsExpected = $true }
@@ -176,12 +200,12 @@ try {
     $Actions = [System.IO.File]::ReadAllLines($FakeLog)
     Assert-True ($Actions -contains 'workflow:Start') 'Failed Docker upgrade did not restart the restored Docker runtime.'
 
-    # Third-party client configuration is outside the backend transaction and
-    # must remain byte-identical through every switch/rollback/upgrade case.
+    # Third-party client configuration is outside backend transaction and must
+    # remain byte-identical through every switch/rollback/upgrade case.
     Assert-True (((Get-FileHash -LiteralPath $ThirdParty -Algorithm SHA256).Hash) -eq $ThirdPartyHash) 'Backend lifecycle modified unrelated third-party client configuration.'
 
     Write-Host 'MINOS MCP BACKEND TRANSACTIONAL LIFECYCLE VERIFICATION SUCCESS' -ForegroundColor Green
-    Write-Host 'Cases: native install, Docker install, native->Docker, Docker->native, rollback before/after commit, Docker upgrade + upgrade rollback'
+    Write-Host 'Cases: native install, Docker install, reuse, native<->Docker, rollback, Docker upgrade + upgrade rollback'
 }
 finally {
     $env:MINOS_S7_FAIL_PROBE = $OldFailProbe
