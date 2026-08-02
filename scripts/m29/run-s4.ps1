@@ -23,8 +23,9 @@ function Invoke-NativeCapture {
     $Previous = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $Output = ((& $File @Arguments 2>&1) | Out-String).Trim()
+        $Captured = @(& $File @Arguments 2>&1)
         $ExitCode = $LASTEXITCODE
+        $Output = (($Captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
     }
     finally { $ErrorActionPreference = $Previous }
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
@@ -62,18 +63,19 @@ foreach ($RelativeRunner in @('scripts\m29\run-s3.ps1', 'scripts\m29\run-s5.ps1'
     Write-Host "M29-S4 PowerShell parse preflight: $([System.IO.Path]::GetFileName($Runner)) OK" -ForegroundColor Cyan
 }
 
-if (-not $SkipMavenVerify) {
-    Push-Location $RepoRoot
-    try {
+# Documentation consistency remains mandatory even when Maven was already qualified separately.
+Push-Location $RepoRoot
+try {
+    if (-not $SkipMavenVerify) {
         & '.\mvnw.cmd' clean verify
         if ($LASTEXITCODE -ne 0) { throw "M29-S4 Maven qualification failed with exit code $LASTEXITCODE" }
-        $Python = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $Python) { $Python = Get-Command python3 -ErrorAction Stop }
-        & $Python.Source '.\scripts\docs\check-current-docs.py'
-        if ($LASTEXITCODE -ne 0) { throw "M29-S4 documentation consistency failed with exit code $LASTEXITCODE" }
     }
-    finally { Pop-Location }
+    $Python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $Python) { $Python = Get-Command python3 -ErrorAction Stop }
+    & $Python.Source '.\scripts\docs\check-current-docs.py'
+    if ($LASTEXITCODE -ne 0) { throw "M29-S4 documentation consistency failed with exit code $LASTEXITCODE" }
 }
+finally { Pop-Location }
 
 $Docker = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $Docker) { throw 'M29-S4 BLOCKED: docker.exe is not installed or not present in PATH.' }
