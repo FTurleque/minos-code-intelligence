@@ -62,8 +62,7 @@ function Assert-NativeSuccess {
 
 function Resolve-PowerShellHost {
     $Current = Get-Process -Id $PID -ErrorAction SilentlyContinue
-    if ($Current -and -not [string]::IsNullOrWhiteSpace($Current.Path)
-            -and (Test-Path -LiteralPath $Current.Path -PathType Leaf)) {
+    if ($Current -and -not [string]::IsNullOrWhiteSpace($Current.Path) -and (Test-Path -LiteralPath $Current.Path -PathType Leaf)) {
         return $Current.Path
     }
 
