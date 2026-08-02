@@ -10,8 +10,8 @@ $Builder = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) { throw "Installer template not found: $Template" }
 if (-not (Test-Path -LiteralPath $Builder -PathType Leaf)) { throw "Installer builder not found: $Builder" }
 
-$Text = [System.IO.File]::ReadAllText($Template, [System.Text.Encoding]::UTF8)
-$BuilderText = [System.IO.File]::ReadAllText($Builder, [System.Text.Encoding]::UTF8)
+$Text = [System.IO.File]::ReadAllText($Template, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
+$BuilderText = [System.IO.File]::ReadAllText($Builder, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
 
 function Require([string] $Needle, [string] $Message) {
     if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) { throw $Message }

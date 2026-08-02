@@ -105,28 +105,16 @@ end;
 function ExistingMcpBackend(): String;
 var
   ConfigPath: String;
-  Lines: TArrayOfString;
-  I: Integer;
-  Line: String;
+  ConfigText: AnsiString;
 begin
   Result := '';
   ConfigPath := ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties');
-  if FileExists(ConfigPath) and LoadStringsFromFile(ConfigPath, Lines) then
+  if FileExists(ConfigPath) and LoadStringFromFile(ConfigPath, ConfigText) then
   begin
-    for I := 0 to GetArrayLength(Lines) - 1 do
-    begin
-      Line := Lowercase(Trim(Lines[I]));
-      if Line = 'backend=docker' then
-      begin
-        Result := 'docker';
-        exit;
-      end
-      else if Line = 'backend=native' then
-      begin
-        Result := 'native';
-        exit;
-      end;
-    end;
+    if Pos('backend=docker', LowerCase(ConfigText)) > 0 then
+      Result := 'docker'
+    else if Pos('backend=native', LowerCase(ConfigText)) > 0 then
+      Result := 'native';
   end;
 end;
 
@@ -409,7 +397,15 @@ begin
     Parameters := Parameters + ' -ProjectsRoot "' + DockerProjectsPage.Values[0] + '"';
 
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    MsgBox(
+      'Le backend MCP sélectionné n''a pas atteint son gate de validation/handshake.' + #13#10 + #13#10 +
+      'La configuration précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué.' + #13#10 +
+      'Diagnostic : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log',
+      mbError,
+      MB_OK);
     Result := False;
+  end;
 end;
 
 procedure InitializeWizard;
@@ -532,12 +528,8 @@ begin
   if CurStep = ssPostInstall then
   begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
-    if not ConfigureSelectedMcpBackend() then
-      RaiseException(
-        'Le backend MCP sélectionné n''a pas atteint son gate de validation/handshake. ' +
-        'La configuration précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué. ' +
-        'Diagnostic : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log');
-    ConfigureMcpClients;
+    if ConfigureSelectedMcpBackend() then
+      ConfigureMcpClients;
   end;
 end;
 

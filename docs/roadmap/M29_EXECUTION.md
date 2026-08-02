@@ -366,11 +366,7 @@ scripts/install/switch-mcp-backend.ps1
 Transaction :
 
 ```text
-prepare
-→ validate
-→ handshake
-→ commit backend.properties
-→ retire ancien backend
+prepare -> validate -> handshake -> commit backend.properties -> retire ancien backend
 ```
 
 Le handshake candidat est exécuté par :
