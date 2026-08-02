@@ -37,6 +37,31 @@ final class ScipSymbolNormalizer {
             String providerVersion,
             String indexRunId,
             boolean generated) {
+        return normalize(
+                fact,
+                projectId,
+                moduleId,
+                fileId,
+                fact == null ? null : fact.relativePath(),
+                declarationLocation,
+                providerId,
+                providerVersion,
+                indexRunId,
+                generated
+        );
+    }
+
+    Optional<Symbol> normalize(
+            ScipSymbolFact fact,
+            String projectId,
+            String moduleId,
+            String fileId,
+            String projectRelativePath,
+            SymbolLocation declarationLocation,
+            String providerId,
+            String providerVersion,
+            String indexRunId,
+            boolean generated) {
         requireText(projectId, "projectId");
         requireText(providerId, "providerId");
 
@@ -57,7 +82,8 @@ final class ScipSymbolNormalizer {
                     fact,
                     kind,
                     declarationLocation,
-                    qualifiedName
+                    qualifiedName,
+                    projectRelativePath
             );
         } else {
             identityQuality = SymbolIdentityQuality.PROVIDER_SCOPED_FALLBACK;
@@ -110,7 +136,8 @@ final class ScipSymbolNormalizer {
             ScipSymbolFact fact,
             SymbolKind kind,
             SymbolLocation location,
-            String qualifiedName) {
+            String qualifiedName,
+            String projectRelativePath) {
         String locationPart = location == null
                 ? ""
                 : location.startLine() + ":" + location.startColumn()
@@ -127,11 +154,14 @@ final class ScipSymbolNormalizer {
             );
         }
 
+        String structuralPath = projectRelativePath == null || projectRelativePath.isBlank()
+                ? fact.relativePath()
+                : projectRelativePath;
         return String.join("\u001F",
                 projectId,
                 fact.language(),
                 kind.name(),
-                fact.relativePath(),
+                structuralPath,
                 fact.displayName(),
                 fact.signature(),
                 locationPart
