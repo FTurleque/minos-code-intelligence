@@ -23,8 +23,9 @@ import java.util.Set;
  * project root is not itself a valid TypeScript, Go, Rust, .NET, CMake, ... build root.</p>
  *
  * <p>The absolute {@code registeredProjectRoot} remains owned by the execution request;
- * this resolver returns only project-relative roots so the lifecycle can derive each
- * concrete provider root without losing the registered-project identity.</p>
+ * each path returned here becomes that request's {@code projectRelativeRoot}, allowing
+ * the lifecycle to derive the concrete provider root without losing registered-project
+ * identity.</p>
  */
 public final class IndexerExecutionScopeResolver {
 
