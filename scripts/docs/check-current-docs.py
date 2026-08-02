@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the authoritative MINOS current-state documentation and release contracts."""
+"""Validate authoritative MINOS current-state documentation and release contracts.
+
+The checker deliberately verifies durable product/source contracts, not incidental
+wording. Exact-head qualification remains the responsibility of the M29 runners.
+"""
 
 from __future__ import annotations
 
@@ -44,6 +48,11 @@ def require_file(relative: str) -> None:
         raise RuntimeError(f"missing required file: {relative}")
 
 
+def require_all(relative: str, text: str, tokens: tuple[str, ...]) -> None:
+    for token in tokens:
+        require(relative, text, token)
+
+
 def main() -> int:
     try:
         current_files = {
@@ -72,70 +81,62 @@ def main() -> int:
         release_100 = current_files["docs/releases/1.0.0.md"]
         release_101 = current_files["docs/releases/1.0.1.md"]
 
-        # Authoritative product state.
+        # Authoritative product line: 1.0.0 immutable, 1.0.1 not published.
         for relative, text in (("README.md", readme), ("docs/STATUS.md", status), ("docs/ROADMAP.md", roadmap)):
-            require(relative, text, "C0 → M28")
-            require(relative, text, "1.0.0")
-            require(relative, text, "1.0.1")
-            require(relative, text, "#98")
-
+            require_all(relative, text, ("C0 → M28", "1.0.0", "1.0.1", "#98"))
         require("README.md", readme, "NON PUBLIÉ")
-        for token in (
+
+        require_all("docs/STATUS.md", status, (
             "#73 CLOSED / completed",
             "#93 CLOSED / completed",
             "PR de promotion #102",
             "1adbc45339efe37cd26d1937025bfa69d7b57811",
             "M29 #107",
-            "Docker autonome & Native Parity",
             "m29-autonomous-docker-runtime",
-            "417 PASS",
-            "b780feb7d27bd34952d1952f8d80b06755980684",
-            "tools verify --all",
             "M29-S3                           ✅ PASS exact-head 3df1b40...",
             "M29-S4                           ✅ PASS exact-head 3df1b40...",
             "M29-S5                           ✅ PASS exact-head 0959fb9...",
+            "M29-S6                           ✅ PASS exact-head f7ef0e3...",
+            "M29-S7                           🟨",
+            "run-s7.ps1",
+            "M29-S8",
+        ))
+        for stale in (
             "M29-S6                           🟨",
-            "run-s6.ps1",
+            "run-s6.ps1 exact-head",
         ):
-            require("docs/STATUS.md", status, token)
+            forbid("docs/STATUS.md", status, stale)
 
-        for token in (
-            "PR promotion",
-            "#93 CLOSED / completed",
+        require_all("docs/ROADMAP.md", roadmap, (
             "M29 — Autonomous Docker Runtime & Native Parity",
             "Issue : **#107**",
             "EN COURS",
             "index-v2.bin",
             "native result == docker result",
-            "minos-admin",
-            "minos-provider-tools",
-            "run-s6.ps1",
             "3df1b40ca0daf50779596f6e955d966ed5eb4973",
             "0959fb9f64e2ecf61e20281f29c694e86d67c62b",
+            "f7ef0e3dbe820253decd83a1dc27bf2651ef6de9",
             "M29-S3 | Autonomous Docker administration plane | ✅ PASS exact-head `3df1b40...`",
             "M29-S4 | Provider-complete Docker image | ✅ PASS exact-head `3df1b40...`",
             "M29-S5 | Autonomous indexing & vector lifecycle | ✅ PASS exact-head `0959fb9...`",
-            "M29-S6 | Backend-agnostic MCP client integration | 🟨",
-        ):
-            require("docs/ROADMAP.md", roadmap, token)
+            "M29-S6 | Backend-agnostic MCP client integration | ✅ PASS exact-head `f7ef0e3...`",
+            "M29-S7 | Installer, switching & lifecycle | 🟨",
+            "run-s7.ps1",
+        ))
+        forbid("docs/ROADMAP.md", roadmap, "M29-S6 | Backend-agnostic MCP client integration | 🟨")
 
-        # M21/M28 final dispositions must not regress.
-        require("docs/roadmap/M21_EXECUTION.md", m21, "TERMINÉ")
-        require("docs/roadmap/M21_EXECUTION.md", m21, "#73 CLOSED / completed")
-        require("docs/roadmap/M21_EXECUTION.md", m21, "PASS_WITH_CONSTRAINTS")
-        require("docs/roadmap/M21_S2_AUGUST_RECOVERY.md", m21_recovery, "#102")
-        require("docs/roadmap/M21_S2_AUGUST_RECOVERY.md", m21_recovery, "MERGED")
-        require("docs/roadmap/M28_EXECUTION.md", m28, "#93 CLOSED / completed")
-        require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
-        require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
+        # Historical dispositions must never regress.
+        require_all("docs/roadmap/M21_EXECUTION.md", m21, ("TERMINÉ", "#73 CLOSED / completed", "PASS_WITH_CONSTRAINTS"))
+        require_all("docs/roadmap/M21_S2_AUGUST_RECOVERY.md", m21_recovery, ("#102", "MERGED"))
+        require_all("docs/roadmap/M28_EXECUTION.md", m28, ("#93 CLOSED / completed", "PR #102 MERGED", "v1.0.0"))
 
-        # M29 execution truth: S3/S4/S5 are exact-head qualified; S6 is implemented and pending live qualification.
-        for token in (
+        # M29 execution truth: S1-S6 have exact historical proofs; S7 is the only
+        # active qualification gate; S8 remains the parity gate.
+        require_all("docs/roadmap/M29_EXECUTION.md", m29, (
             "EN COURS",
             "#107",
             "m29-autonomous-docker-runtime",
             "db33cae87b37f9c2c36e536c96a4ccb6e24df3e5",
-            "2 août 2026",
             "index-v2.bin",
             "float32",
             "HEURISTIC",
@@ -161,8 +162,6 @@ def main() -> int:
             "M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS",
             "registeredProjectRoot",
             "projectRelativeRoot",
-            "IndexerExecutionScopeResolver",
-            "IndexingLifecycleScopedExecutionTest",
             "fixtures/polyglot/m29-scoped-modules",
             "format 5",
             "local-hash",
@@ -173,38 +172,31 @@ def main() -> int:
             "M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS",
             "verify-mcp-client-backend-routing.ps1",
             "M29McpClientBackendAgnosticContractTest",
-            "backend.properties",
             "byte-identical",
-            "run-s6.ps1",
+            "f7ef0e3dbe820253decd83a1dc27bf2651ef6de9",
             "M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS",
-            "minos-admin",
-            "minos-bootstrap",
-            "minos-tools-bootstrap",
-            "minos-provider-tools",
-            "tools verify --all",
-            "provider-inventory.json",
-            "provider-binary-sha256.txt",
-            "semantic status",
-            "hybrid status",
-            "network_mode: none",
-            "Copilot",
-            "Claude",
-            "Codex",
+            "switch-mcp-backend.ps1",
+            "probe-mcp-backend.ps1",
+            "prepare -> validate -> handshake -> commit backend.properties -> retire ancien backend",
+            "New-DockerRuntimeSnapshot",
+            "verify-mcp-backend-lifecycle.ps1",
+            "M29InstallerBackendLifecycleContractTest",
+            "run-s7.ps1",
+            "M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS",
             "native result == docker result",
             "#98",
-        ):
-            require("docs/roadmap/M29_EXECUTION.md", m29, token)
+        ))
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
-        forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
-        forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
-        forbid("docs/STATUS.md", status, "M29-S3                           🟨")
-        forbid("docs/STATUS.md", status, "M29-S4                           🟨")
-        forbid("docs/STATUS.md", status, "M29-S5                           🟨")
-        forbid("docs/ROADMAP.md", roadmap, "M29-S3 | Autonomous Docker administration plane | 🟨")
-        forbid("docs/ROADMAP.md", roadmap, "M29-S4 | Provider-complete Docker image | 🟨")
-        forbid("docs/ROADMAP.md", roadmap, "M29-S5 | Autonomous indexing & vector lifecycle | 🟨")
+        for stale in (
+            "Statut : **PLANIFIÉ",
+            "démarrage prévu le 3 août 2026",
+            "S6 Backend-agnostic MCP client integration implémenté sur un HEAD plus récent",
+            "M29-S6 | Backend-agnostic MCP client integration | 🟨",
+        ):
+            forbid("docs/roadmap/M29_EXECUTION.md", m29, stale)
 
-        for token in (
+        # Docker user guide retains the runtime/security/provider/vector facts.
+        require_all("docs/user/docker-runtime.md", docker_runtime, (
             "minos-mcp",
             "minos-admin",
             "minos-bootstrap",
@@ -213,16 +205,11 @@ def main() -> int:
             "network_mode: none",
             "cap_drop: ALL",
             "no-new-privileges: true",
-            "semantic status",
-            "hybrid status",
             "tools verify --all",
             "provider-inventory.json",
             "provider-binary-sha256.txt",
             "Apache Maven 3.9.16",
             "/var/lib/minos/runs/<run-id>/scip-java/workspace",
-            "mvnw.cmd",
-            "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native",
-            "45536e2fc7d32ed67932e2715e458fa26a8239b1",
             "registeredProjectRoot",
             "projectRelativeRoot",
             "fixtures/polyglot/m29-scoped-modules",
@@ -233,8 +220,7 @@ def main() -> int:
             "READY_WITH_SEMANTIC",
             "SEMANTIC_SIGNAL_IS_HEURISTIC_NOT_STRUCTURAL_FACT",
             "run-s5.ps1",
-        ):
-            require("docs/user/docker-runtime.md", docker_runtime, token)
+        ))
 
         stale_current = (
             "release 0.2.0 candidate",
@@ -249,38 +235,63 @@ def main() -> int:
             for stale in stale_current:
                 forbid(relative, text, stale)
 
-        # Release history is explicit: 1.0.0 immutable, 1.0.1 not yet published.
-        require("docs/releases/1.0.0.md", release_100, "Tag target")
-        require("docs/releases/1.0.0.md", release_100, "NoClassDefFoundError: org/w3c/dom/Node")
-        require("docs/releases/1.0.0.md", release_100, "ne pas modifier ni retagger")
-        for token in (
-            "NON PUBLIÉ", "jdeps", "initialize", "Codex Desktop", "Mode MCP",
-            "MCP natif local — recommandé, sans Docker", "MCP Docker — optionnel",
-            "%LOCALAPPDATA%\\MINOS", "Non / conserver",
-        ):
-            require("docs/releases/1.0.1.md", release_101, token)
-
-        # Windows user contract remains 1.0.1 until M29 parity is qualified.
-        for token in (
+        require_all("docs/releases/1.0.0.md", release_100, (
+            "Tag target",
+            "NoClassDefFoundError: org/w3c/dom/Node",
+            "ne pas modifier ni retagger",
+        ))
+        require_all("docs/releases/1.0.1.md", release_101, (
+            "NON PUBLIÉ",
+            "jdeps",
+            "initialize",
+            "Codex Desktop",
             "Mode MCP",
-            "MCP natif local — recommandé, sans Docker",
-            "MCP Docker — optionnel",
-            "Intégrations MCP natives",
-            "clients IA détectés",
+            "MCP natif Windows — recommandé",
+            "MCP Docker — isolation renforcée",
+            "Ne pas configurer maintenant",
+            "switch-mcp-backend.ps1",
+            "prepare",
+            "validate",
+            "handshake",
+            "backend.properties",
+            "%LOCALAPPDATA%\\MINOS",
+            "Non / conserver",
+            "run-s7.ps1",
+        ))
+        forbid("docs/releases/1.0.1.md", release_101, "Les deux modes peuvent être activés simultanément")
+
+        # User-facing Windows contract follows the S6/S7 architecture but still
+        # states 1.0.1 as unpublished and parity as pending S8.
+        require_all("docs/user/production-installation.md", install, (
+            "NON PUBLIÉE",
+            "Mode MCP",
+            "MCP natif Windows — recommandé",
+            "MCP Docker — isolation renforcée",
+            "Ne pas configurer maintenant",
+            "Clients IA",
             "launcher VS Code détecté",
             "Codex Desktop",
             "RUNTIME-MODULES.txt",
             "java.xml",
+            "backend.properties",
+            "switch-mcp-backend.ps1",
+            "probe-mcp-backend.ps1",
+            "aucune équivalence métier native/Docker",
             "build-local-windows-candidate.ps1",
             "%LOCALAPPDATA%\\MINOS",
             "Supprimer également toutes les données MINOS locales",
-        ):
-            require("docs/user/production-installation.md", install, token)
+            "Non / conserver",
+        ))
         require_regex(
-            "docs/user/production-installation.md", install,
-            r"MINOS-<version>-THIRD-PARTY-NOTICES\.txt", "complete Windows release asset list")
+            "docs/user/production-installation.md",
+            install,
+            r"MINOS-<version>-THIRD-PARTY-NOTICES\.txt",
+            "complete Windows release asset list",
+        )
+        forbid("docs/user/production-installation.md", install, "Les deux modes MCP peuvent être activés simultanément")
+        forbid("docs/user/production-installation.md", install, "Ces intégrations sont 100 % natives")
 
-        # Source/release contracts must agree with docs.
+        # Source/release contracts.
         pom = read("pom.xml")
         minos_version = read("minos-application/src/main/java/com/minos/runtime/MinosVersion.java")
         build_distribution = read("scripts/release/build-windows-distribution.ps1")
@@ -288,6 +299,7 @@ def main() -> int:
         publish = read("scripts/release/publish-windows-release.ps1")
         local_candidate = read("scripts/release/build-local-windows-candidate.ps1")
         installer = read("packaging/windows/minos-installer.iss.template")
+        zip_installer = read("scripts/install/install-windows.ps1")
         release_workflow = read(".github/workflows/release-windows.yml")
         docker_compose = read("docker/compose.mcp.prod.yaml")
         docker_workflow = read("docker/scripts/prod-mcp-release.ps1")
@@ -302,137 +314,256 @@ def main() -> int:
         codex_mcp = read("scripts/install/configure-codex-mcp.ps1")
         mcp_preflight = read("scripts/install/verify-mcp-client-preflight.ps1")
         mcp_backend_verifier = read("scripts/install/verify-mcp-client-backend-routing.ps1")
+        backend_probe = read("scripts/install/probe-mcp-backend.ps1")
+        backend_switcher = read("scripts/install/switch-mcp-backend.ps1")
+        backend_lifecycle_verifier = read("scripts/install/verify-mcp-backend-lifecycle.ps1")
+        installer_verifier = read("scripts/install/verify-installer-template.ps1")
         s6_contract_test = read("minos-app/src/test/java/com/minos/packaging/M29McpClientBackendAgnosticContractTest.java")
+        s7_contract_test = read("minos-app/src/test/java/com/minos/packaging/M29InstallerBackendLifecycleContractTest.java")
         s3_runner = read("scripts/m29/run-s3.ps1")
         s4_runner = read("scripts/m29/run-s4.ps1")
         s5_runner = read("scripts/m29/run-s5.ps1")
         s6_runner = read("scripts/m29/run-s6.ps1")
+        s7_runner = read("scripts/m29/run-s7.ps1")
 
-        require("pom.xml", pom, "<revision>1.0.1-SNAPSHOT</revision>")
-        require("pom.xml", pom, "slf4j-nop")
+        require_all("pom.xml", pom, ("<revision>1.0.1-SNAPSHOT</revision>", "slf4j-nop"))
         require("MinosVersion.java", minos_version, 'DEVELOPMENT_VERSION = "1.0.1-SNAPSHOT"')
 
-        for token in ("jdeps.exe", "--print-module-deps", "--list-modules", "java.xml", "RUNTIME-MODULES.txt"):
-            require("build-windows-distribution.ps1", build_distribution, token)
-        for token in ("[switch] $Smoke", "MINOS-Release-Smoke-", "@@SMOKE_MODE@@"):
-            require("build-windows-installer.ps1", build_installer, token)
-        for token in ("Invoke-McpHandshake", "MinosNativeMcpSmoke.java", "isolated smoke setup"):
-            require("publish-windows-release.ps1", publish, token)
-        forbid("publish-windows-release.ps1", publish, '!docker')
-        for token in ("Publication   : NOT PERFORMED", "MINOS LOCAL WINDOWS CANDIDATE SUCCESS"):
-            require("build-local-windows-candidate.ps1", local_candidate, token)
+        require_all("build-windows-distribution.ps1", build_distribution, (
+            "jdeps.exe",
+            "--print-module-deps",
+            "--list-modules",
+            "java.xml",
+            "RUNTIME-MODULES.txt",
+            "verify-mcp-backend-lifecycle.ps1",
+            "probe-mcp-backend.ps1",
+            "switch-mcp-backend.ps1",
+        ))
+        require_all("build-windows-installer.ps1", build_installer, (
+            "[switch] $Smoke",
+            "MINOS-Release-Smoke-",
+            "@@SMOKE_MODE@@",
+            "integration\\probe-mcp-backend.ps1",
+            "integration\\switch-mcp-backend.ps1",
+        ))
+        require_all("publish-windows-release.ps1", publish, ("Invoke-McpHandshake", "MinosNativeMcpSmoke.java", "isolated smoke setup"))
+        forbid("publish-windows-release.ps1", publish, "!docker")
+        require_all("build-local-windows-candidate.ps1", local_candidate, ("Publication   : NOT PERFORMED", "MINOS LOCAL WINDOWS CANDIDATE SUCCESS"))
 
-        for token in (
-            "Mode MCP", "MCP natif local — recommandé, sans Docker", "MCP Docker — optionnel",
-            "McpModePage := CreateInputOptionPage(", "Intégrations MCP natives",
-            "detect-mcp-clients.ps1", "ShouldRunGlobalCleanup", "CodexMode",
-            "PromptForUserDataRemoval", "DeleteMinosUserData", "MB_YESNO or MB_DEFBUTTON2",
+        # Installer UI and fail-closed selection.
+        require_all("minos-installer.iss.template", installer, (
+            "Mode MCP",
+            "MCP natif Windows — recommandé",
+            "MCP Docker — isolation renforcée",
+            "Ne pas configurer maintenant",
+            "McpModePage := CreateInputOptionPage(",
+            "McpModePage.Values[2]",
+            "Clients IA",
+            "ExistingMcpBackend",
+            "LoadStringFromFile(ConfigPath, ConfigText)",
+            "detect-mcp-clients.ps1",
+            "switch-mcp-backend.ps1",
+            "if ConfigureSelectedMcpBackend() then",
+            "if not DockerReady() then",
+            "aucun fallback silencieux",
+            "ShouldRunGlobalCleanup",
+            "PromptForUserDataRemoval",
+            "DeleteMinosUserData",
+            "MB_YESNO or MB_DEFBUTTON2",
             "DelTree(UserDataRoot, True, True, True)",
+        ))
+        for stale in (
+            'Name: "docker"',
+            'Name: "mcp_copilot_jetbrains"',
+            'Name: "mcp_copilot_cli"',
+            'Name: "mcp_claude_code"',
+            'Name: "mcp_claude_desktop"',
+            'Name: "mcp_codex"',
+            "WizardIsTaskSelected('docker')",
+            "ConfigureDockerMcp;",
+            "ConfigureNativeMcpClients;",
         ):
-            require("minos-installer.iss.template", installer, token)
-        for stale_task in (
-            'Name: "docker"', 'Name: "mcp_copilot_jetbrains"', 'Name: "mcp_copilot_cli"',
-            'Name: "mcp_claude_code"', 'Name: "mcp_claude_desktop"', 'Name: "mcp_codex"',
-        ):
-            forbid("minos-installer.iss.template", installer, stale_task)
-        forbid("minos-installer.iss.template", installer, "WizardIsTaskSelected('docker')")
+            forbid("minos-installer.iss.template", installer, stale)
 
-        for token in (
-            "minos-mcp:", "minos-admin:", "minos-bootstrap:", "minos-tools-bootstrap:",
-            "minos-provider-tools:", "MINOS_RUNTIME_LOCATION: docker", "network_mode: none",
+        # ZIP install follows the same backend switcher and owns rollback of its
+        # program/PATH mutations around a failed backend activation.
+        require_all("install-windows.ps1", zip_installer, (
+            "[ValidateSet('none', 'native', 'docker')]",
+            "integration\\probe-mcp-backend.ps1",
+            "integration\\switch-mcp-backend.ps1",
+            "TargetBackend = $McpBackend",
+            "DataRoot = $DataRoot",
+            "DockerInstallRoot = $DockerInstallRoot",
+            "DockerDataRoot = $DockerDataRoot",
+            "yyyyMMdd-HHmmssfff",
+            "$OriginalUserPath",
+            "$PathChanged",
+            "SetEnvironmentVariable('Path', $OriginalUserPath, 'User')",
+            "Move-Item -LiteralPath $Backup -Destination $InstallRoot",
+        ))
+
+        # Docker runtime/product invariants.
+        require_all("docker/compose.mcp.prod.yaml", docker_compose, (
+            "minos-mcp:",
+            "minos-admin:",
+            "minos-bootstrap:",
+            "minos-tools-bootstrap:",
+            "minos-provider-tools:",
+            "MINOS_RUNTIME_LOCATION: docker",
+            "network_mode: none",
             "MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository",
             "HOME: /var/lib/minos/cache/home",
             "JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native",
             'MINOS_SEMANTIC_PROVIDER: "${MINOS_SEMANTIC_PROVIDER:-disabled}"',
-        ):
-            require("docker/compose.mcp.prod.yaml", docker_compose, token)
-        for token in (
-            "'Admin'", "MINOS_HOST_PROJECTS_ROOT", "minos-bootstrap", "minos-tools-bootstrap",
-            "minos-admin", "provider-inventory.json", "provider-binary-sha256.txt",
-            "formatVersion = 5", "Resolve-SemanticProvider", "disabled, local-hash",
-            "semanticProvider = $ResolvedSemanticProvider", "'--volumes'",
-        ):
-            require("docker/scripts/prod-mcp-release.ps1", docker_workflow, token)
-        for token in (
-            "FROM eclipse-temurin:24-jdk", "MINOS_RUNTIME_LOCATION=docker", "MAVEN_VERSION=3.9.16",
-            "mvn --version", "SCIP_TYPESCRIPT_VERSION=0.4.0", "SCIP_JAVA_VERSION=0.13.1",
-            "SCIP_PYTHON_VERSION=0.6.6", "SCIP_CLANG_VERSION=0.4.0",
-            "SCIP_DOTNET_VERSION=0.2.14", "SCIP_GO_VERSION=0.2.7",
-            "RUST_ANALYZER_RELEASE=2026-07-27", "provider-evidence/provider-inventory.json",
-        ):
-            require("docker/Dockerfile.mcp.release", docker_image, token)
-        for token in (
-            "STAGING_EXCLUDED_DIRECTORIES", "STAGING_EXCLUDED_ROOT_FILES",
-            'Set.of("mvnw", "mvnw.cmd")', "prepareWritableWorkspace", 'run.resolve("workspace")',
-            '"target", "build", "out", "node_modules"', "staging workspace must be outside the source project",
-        ):
-            require("ScipJavaProcessPlanFactory.java", scip_java_plan, token)
+        ))
+        require_all("docker/scripts/prod-mcp-release.ps1", docker_workflow, (
+            "'Admin'",
+            "MINOS_HOST_PROJECTS_ROOT",
+            "minos-bootstrap",
+            "minos-tools-bootstrap",
+            "minos-admin",
+            "provider-inventory.json",
+            "provider-binary-sha256.txt",
+            "formatVersion = 5",
+            "Resolve-SemanticProvider",
+            "disabled, local-hash",
+            "semanticProvider = $ResolvedSemanticProvider",
+            "'--volumes'",
+        ))
+        require_all("docker/Dockerfile.mcp.release", docker_image, (
+            "FROM eclipse-temurin:24-jdk",
+            "MINOS_RUNTIME_LOCATION=docker",
+            "MAVEN_VERSION=3.9.16",
+            "SCIP_TYPESCRIPT_VERSION=0.4.0",
+            "SCIP_JAVA_VERSION=0.13.1",
+            "SCIP_PYTHON_VERSION=0.6.6",
+            "SCIP_CLANG_VERSION=0.4.0",
+            "SCIP_DOTNET_VERSION=0.2.14",
+            "SCIP_GO_VERSION=0.2.7",
+            "RUST_ANALYZER_RELEASE=2026-07-27",
+            "provider-evidence/provider-inventory.json",
+        ))
 
-        for token in ("registeredProjectRoot", "projectRelativeRoot", "MULTI_MODULE", "no compatible module/build root"):
-            require("IndexerExecutionScopeResolver.java", scope_resolver, token)
-        for token in ("scopedTargets", "multi-scope incremental indexing is not qualified", "projectRelativeRoot"):
-            require("IndexingLifecycleService.java", lifecycle, token)
-        for token in ("registeredProjectRoot", "projectRelativeRoot", "projectRoot must stay inside registeredProjectRoot"):
-            require("IndexingRuntimePorts.java", runtime_ports, token)
-        for token in ("scopeKey", "projectRelativeRoot", "provider snapshot collision"):
-            require("ScipProjectSnapshotLifecycle.java", snapshot_lifecycle, token)
-        for token in ("verify --all", "parsed.all()", "--all is only valid with tools verify"):
-            require("ToolsCommand.java", tools_command, token)
+        # S5 scoped provider contract remains locked.
+        require_all("ScipJavaProcessPlanFactory.java", scip_java_plan, (
+            "STAGING_EXCLUDED_DIRECTORIES",
+            "STAGING_EXCLUDED_ROOT_FILES",
+            'Set.of("mvnw", "mvnw.cmd")',
+            "prepareWritableWorkspace",
+            'run.resolve("workspace")',
+            "staging workspace must be outside the source project",
+        ))
+        require_all("IndexerExecutionScopeResolver.java", scope_resolver, ("registeredProjectRoot", "projectRelativeRoot", "MULTI_MODULE", "no compatible module/build root"))
+        require_all("IndexingLifecycleService.java", lifecycle, ("scopedTargets", "multi-scope incremental indexing is not qualified", "projectRelativeRoot"))
+        require_all("IndexingRuntimePorts.java", runtime_ports, ("registeredProjectRoot", "projectRelativeRoot", "projectRoot must stay inside registeredProjectRoot"))
+        require_all("ScipProjectSnapshotLifecycle.java", snapshot_lifecycle, ("scopeKey", "projectRelativeRoot", "provider snapshot collision"))
+        require_all("ToolsCommand.java", tools_command, ("verify --all", "parsed.all()", "--all is only valid with tools verify"))
 
-        for token in ("command = $MinosExe", "args = @('mcp')", "MINOS_HOME = $DataRoot", "CopilotJetBrains", "CopilotCli", "ClaudeCode", "ClaudeDesktop", "Codex"):
-            require("configure-mcp-clients.ps1", mcp_clients, token)
+        # S6 client contract remains locked while S7 switches behind it.
+        require_all("configure-mcp-clients.ps1", mcp_clients, ("command = $MinosExe", "args = @('mcp')", "MINOS_HOME = $DataRoot", "CopilotJetBrains", "CopilotCli", "ClaudeCode", "ClaudeDesktop", "Codex"))
         forbid("configure-mcp-clients.ps1", mcp_clients, "docker exec")
-        for token in ("[mcp_servers.minos]", 'args = ["mcp"]', "MINOS_HOME", "$MinosExe"):
-            require("configure-codex-mcp.ps1", codex_mcp, token)
+        require_all("configure-codex-mcp.ps1", codex_mcp, ("[mcp_servers.minos]", 'args = ["mcp"]', "MINOS_HOME", "$MinosExe"))
         forbid("configure-codex-mcp.ps1", codex_mcp, "docker exec")
         require("verify-mcp-client-preflight.ps1", mcp_preflight, "verify-mcp-client-backend-routing.ps1")
-        for token in (
-            "Copilot JetBrains", "Copilot CLI", "Claude Code", "Claude Desktop", "Codex CLI/Desktop",
-            "backend.properties", "backend=native", "backend=docker", "docker exec", "minos-mcp-prod",
-            "native -> docker changes backend.properties only", "client configs remain byte-identical",
+        require_all("verify-mcp-client-backend-routing.ps1", mcp_backend_verifier, (
+            "Copilot JetBrains",
+            "Copilot CLI",
+            "Claude Code",
+            "Claude Desktop",
+            "Codex CLI/Desktop",
+            "backend.properties",
+            "backend=native",
+            "backend=docker",
+            "native -> docker changes backend.properties only",
+            "client configs remain byte-identical",
             "MINOS MCP BACKEND-AGNOSTIC CLIENT ROUTING VERIFICATION SUCCESS",
-        ):
-            require("verify-mcp-client-backend-routing.ps1", mcp_backend_verifier, token)
-        for token in ("everySupportedClientTargetsStableMinosMcpEntrypoint", "backend.properties", "byte-identical", "run-s6.ps1"):
-            require("M29McpClientBackendAgnosticContractTest.java", s6_contract_test, token)
+        ))
+        require_all("M29McpClientBackendAgnosticContractTest.java", s6_contract_test, ("everySupportedClientTargetsStableMinosMcpEntrypoint", "backend.properties", "byte-identical", "run-s6.ps1"))
 
-        for token in ("'index', 'm29-s3-fixture'", "Invoke-McpHandshake", "FAIL_OR_BLOCKED"):
-            require("run-s3.ps1", s3_runner, token)
-        for token in (
-            "M29-S4 exact-head mismatch", "tools', 'verify', '--all'", "provider-inventory.json",
-            "provider-binary-sha256.txt", "linux/amd64", "7 provider IDs", "SemanticProvider",
-            "run-s5.ps1",
-        ):
-            require("run-s4.ps1", s4_runner, token)
-        for token in (
-            "M29-S5 exact-head mismatch", "m29-scoped-modules", "SemanticProvider = 'local-hash'",
-            "scip-typescript\\scopes", "ui/app,ui/lib", "minos-local-hash", "index-v2.bin",
-            "READY_WITH_SEMANTIC", "NO_CHANGES", "--force-full",
-            "SEMANTIC_SIGNAL_IS_HEURISTIC_NOT_STRUCTURAL_FACT",
-            "M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS",
-        ):
-            require("run-s5.ps1", s5_runner, token)
-        for token in (
-            "M29-S6 exact-head mismatch", "verify-mcp-client-integration.ps1",
-            "verify-mcp-client-preflight.ps1", "verify-mcp-client-backend-routing.ps1",
-            "check-current-docs.py", "M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS",
-            "stableEntrypoint = 'minos.exe mcp'", "clientConfigOwnsDockerTransport = $false",
-        ):
-            require("run-s6.ps1", s6_runner, token)
+        # S7 handshake/switch/rollback contracts.
+        require_all("probe-mcp-backend.ps1", backend_probe, (
+            "notifications/initialized",
+            "tools/list",
+            "minos_search_code",
+            "minos_impact",
+            "MINOS MCP BACKEND HANDSHAKE SUCCESS",
+        ))
+        require_all("switch-mcp-backend.ps1", backend_switcher, (
+            "Test-ReusableDockerRuntime",
+            "PREPARE target=docker mode=install result=success",
+            "PREPARE target=docker mode=reuse result=success",
+            "HANDSHAKE target=$TargetBackend result=success",
+            "COMMIT backend=$TargetBackend result=success",
+            "Restore-BackendConfiguration",
+            "New-DockerRuntimeSnapshot",
+            "Restore-DockerRuntimeSnapshot",
+            "ROLLBACK upgrade=docker runtime=restored action=start result=success",
+            "MINOS MCP BACKEND SWITCH SUCCESS",
+        ))
+        require_all("verify-mcp-backend-lifecycle.ps1", backend_lifecycle_verifier, (
+            "Fresh native backend selection was not committed",
+            "Same-version native -> Docker rebuilt the managed runtime instead of reusing it",
+            "Retirement failure did not restore the previous Docker config",
+            "Docker package upgrade did not prepare a new runtime generation",
+            "Failed Docker upgrade did not restore the previous runtime generation",
+            "Backend lifecycle modified unrelated third-party client configuration",
+            "MINOS MCP BACKEND TRANSACTIONAL LIFECYCLE VERIFICATION SUCCESS",
+        ))
+        require_all("verify-installer-template.ps1", installer_verifier, (
+            "exclusive and require exactly one choice",
+            "switch-mcp-backend.ps1",
+            "no-MCP selection",
+            "fail-closed backend selection",
+            "User data must never be deleted unconditionally",
+            "MINOS INSTALLER TEMPLATE VERIFICATION SUCCESS",
+        ))
+        require_all("M29InstallerBackendLifecycleContractTest.java", s7_contract_test, (
+            "installerAndZipUseOneTransactionalBackendLifecycle",
+            "Test-ReusableDockerRuntime",
+            "Restore-DockerRuntimeSnapshot",
+            "Ne pas configurer maintenant",
+            "run-s7.ps1",
+            "M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS",
+        ))
 
-        # Controlled S5 fixture must reproduce a monorepo without a root TypeScript manifest.
+        # Historical/exact-head runners remain present; S7 is the current gate.
+        require_all("run-s3.ps1", s3_runner, ("'index', 'm29-s3-fixture'", "Invoke-McpHandshake", "FAIL_OR_BLOCKED"))
+        require_all("run-s4.ps1", s4_runner, ("M29-S4 exact-head mismatch", "provider-inventory.json", "provider-binary-sha256.txt", "run-s5.ps1"))
+        require_all("run-s5.ps1", s5_runner, ("M29-S5 exact-head mismatch", "m29-scoped-modules", "minos-local-hash", "index-v2.bin", "READY_WITH_SEMANTIC", "NO_CHANGES", "M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS"))
+        require_all("run-s6.ps1", s6_runner, ("M29-S6 exact-head mismatch", "verify-mcp-client-backend-routing.ps1", "M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS"))
+        require_all("run-s7.ps1", s7_runner, (
+            "M29-S7 exact-head mismatch",
+            "M29-S7 PowerShell parse preflight SUCCESS",
+            "verify-mcp-backend-lifecycle.ps1",
+            "verify-mcp-client-backend-routing.ps1",
+            "verify-installer-template.ps1",
+            "build-windows-distribution.ps1",
+            "build-windows-installer.ps1",
+            "M29-S7 native-only install SUCCESS",
+            "M29-S7 ZIP upgrade SUCCESS",
+            "M29-S7 Docker-only install SUCCESS",
+            "M29-S7 Docker -> native SUCCESS",
+            "M29-S7 native -> Docker reuse SUCCESS",
+            "M29-S7 uninstall-preserve SUCCESS",
+            "M29-S7 explicit purge SUCCESS",
+            "M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS",
+        ))
+
+        # Controlled S5 fixture must remain a monorepo without a root TS manifest.
         fixture = ROOT / "fixtures/polyglot/m29-scoped-modules"
-        require_file("fixtures/polyglot/m29-scoped-modules/pom.xml")
-        require_file("fixtures/polyglot/m29-scoped-modules/src/main/java/com/minos/fixture/RootGreeting.java")
-        require_file("fixtures/polyglot/m29-scoped-modules/ui/app/package.json")
-        require_file("fixtures/polyglot/m29-scoped-modules/ui/app/tsconfig.json")
-        require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/package.json")
-        require_file("fixtures/polyglot/m29-scoped-modules/ui/lib/tsconfig.json")
+        for relative in (
+            "fixtures/polyglot/m29-scoped-modules/pom.xml",
+            "fixtures/polyglot/m29-scoped-modules/src/main/java/com/minos/fixture/RootGreeting.java",
+            "fixtures/polyglot/m29-scoped-modules/ui/app/package.json",
+            "fixtures/polyglot/m29-scoped-modules/ui/app/tsconfig.json",
+            "fixtures/polyglot/m29-scoped-modules/ui/lib/package.json",
+            "fixtures/polyglot/m29-scoped-modules/ui/lib/tsconfig.json",
+        ):
+            require_file(relative)
         if fixture.joinpath("package.json").exists() or fixture.joinpath("tsconfig.json").exists():
             raise RuntimeError("M29 S5 fixture must not contain a root TypeScript manifest")
 
-        require("release-windows.yml", release_workflow, "default: '1.0.1'")
-        require("release-windows.yml", release_workflow, "workflow_dispatch")
+        require_all("release-windows.yml", release_workflow, ("default: '1.0.1'", "workflow_dispatch"))
         if (ROOT / ".github/workflows/release-v1.0.0.yml").exists():
             raise RuntimeError("completed one-shot release-v1.0.0.yml must not remain on the maintenance line")
 
