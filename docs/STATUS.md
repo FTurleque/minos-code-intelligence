@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés, S3 Docker autonome implémenté en attente de gate Docker réel.**
+Dernière mise à jour : **2 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1/S2 qualifiés, S3 atteint le vrai lifecycle Docker puis est bloqué par les runtimes providers ; S4 provider-complete implémenté et à qualifier exact-head.**
 
 Ce fichier est la synthèse autoritative de l'état courant. Les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
@@ -22,14 +22,15 @@ branche M29                      m29-autonomous-docker-runtime
 baseline M29                     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
 M29-S1                           ✅ PASS exact-head c7a4e944...
 M29-S2                           ✅ PASS exact-head c7a4e944...
-M29-S3                           🟨 implémenté / qualification Maven+Docker pending
-M29-S4 → S8                      non démarrés tant que le gate S3 n'est pas prouvé
+M29-S3                           🟨 plan admin prouvé ; index bloqué par provider image
+M29-S4                           🟨 provider-complete image implémentée ; qualification pending
+M29-S5 → S8                      non démarrés / non qualifiés
 PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
 `main` et `develop` représentent encore la ligne produit 1.0.0 publiée. La branche de maintenance `fix/v1.0.1-release-hardening` porte le candidat de correction Windows 1.0.1 ; elle n'est pas une release et aucun tag `v1.0.1` n'existe au démarrage M29.
 
-M29 a été démarré le **2 août 2026** à la demande du mainteneur depuis la branche 1.0.1, car celle-ci contient les prérequis installer/MCP nécessaires. Cette dépendance ne permet pas de contourner #106 : M29 ne devra pas être intégré en réécrivant ou en sautant l'historique 1.0.x.
+M29 a été démarré le **2 août 2026** depuis la branche 1.0.1, car celle-ci contient les prérequis installer/MCP nécessaires. Cette dépendance ne permet pas de contourner #106 : M29 ne devra pas être intégré en réécrivant ou en sautant l'historique 1.0.x.
 
 ## Release 1.0.0
 
@@ -91,7 +92,7 @@ M29 n'altère pas ce contrat.
 | M26 — Runtime & Dynamic Intelligence | terminé |
 | M27 — Team / Hosted Mode | terminé avec frontières local-first/no-SaaS explicites |
 | M28 — Production Convergence | terminé ; #93 CLOSED / completed ; PR #102 merged |
-| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS, S3 implémenté en attente de preuve** |
+| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN ; S1/S2 PASS ; S3 runtime atteint ; S4 implémenté en attente de qualification** |
 
 ## M29 — Docker autonome & Native Parity
 
@@ -154,31 +155,77 @@ Storage                       42/42 PASS
 
 La preuve process native↔Docker réelle est volontairement reportée aux gates d'intégration S3/S5/S8 ; elle n'est pas utilisée pour revendiquer une parité prématurée.
 
-### M29-S3 — administration Docker autonome — 🟨 IMPLÉMENTÉ
+### M29-S3 — administration Docker autonome — 🟨 PLAN PROUVÉ, GATE FINAL BLOQUÉ PAR S4
 
-Le runtime Compose possède maintenant trois plans :
+Le runtime Compose possède les plans `minos-mcp`, `minos-admin` et `minos-bootstrap`. Les projets restent read-only ; seul le plan admin peut écrire l'état métier `/var/lib/minos`. Tous conservent `network_mode: none`, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs borné.
 
-- `minos-mcp` : persistant, projets et `/var/lib/minos` read-only ;
-- `minos-admin` : éphémère, projets read-only, `/var/lib/minos` writable ;
-- `minos-bootstrap` : éphémère, initialise le mapping portable avant toute opération métier.
-
-Tous conservent `network_mode: none`, filesystem read-only, `cap_drop: ALL`, `no-new-privileges:true` et tmpfs borné.
-
-Le workflow packagé expose `-Action Admin -MinosArguments ...`, et les commandes Docker peuvent atteindre `doctor`, `tools`, `project`, `index`, `index-status`, ainsi que les nouveaux diagnostics `semantic status` / `hybrid status`. Le MCP reste attaché au plan query-only.
-
-Tests ajoutés :
+Preuve Docker réelle sur `b780feb7d27bd34952d1952f8d80b06755980684` :
 
 ```text
-DockerRuntimeBootstrapTest
-RetrievalStatusCommandTest
-M29DockerAdministrationContractTest
+mvnw.cmd clean verify                   BUILD SUCCESS — 13/13
+check-current-docs.py                   SUCCESS
+Docker server / Compose                 29.6.2 / 5.3.1
+Install + Validate                      PASS
+mapping N:/workspace-dev ↔ /workspace/projects   PASS / idempotent
+project list sur home neuf              0 projet
+project add / inspect                   PASS
+index réel                              BLOQUÉ
 ```
 
-Documentation : [`user/docker-runtime.md`](user/docker-runtime.md).
+Blocage reproduit :
 
-**S3 n'est pas encore PASS.** Son nouveau HEAD doit encore passer Maven puis un gate Docker réel : install/validate, projet neuf, `project add`, index, READY, status semantic/hybrid, MCP, restart/recreate et persistance.
+```text
+provider runtime is not ready: rust-analyzer-scip
+missing Rust runtime requirements: cargo, rustc, rust-analyzer
+```
 
-Le dernier diagnostic hôte reçu est : Docker CLI 29.6.2 présent, contexte `desktop-linux`, mais daemon indisponible car le pipe `dockerDesktopLinuxEngine` n'existe pas.
+Cette preuve confirme que le plan S3 atteint bien le vrai lifecycle Docker. **S3 reste néanmoins non-PASS** tant que l'image S4 ne permet pas `index → READY`, puis handshake MCP et recreate/persistance.
+
+### M29-S4 — provider-complete Docker image — 🟨 IMPLÉMENTÉ, QUALIFICATION EXACT-HEAD REQUISE
+
+L'image M29 prépare maintenant pendant BUILD les runtimes/providers revendiqués par le catalogue M24 :
+
+```text
+scip-java            0.13.1
+scip-typescript      0.4.0
+scip-python          0.6.6
+scip-clang           0.4.0
+scip-dotnet          0.2.14
+scip-go              0.2.7
+rust-analyzer-scip   0.3.2989 / 2026-07-27 / 12c3381
+```
+
+Toolchains Docker préparées : JDK 24, Node 20.20.2, Python 3/pip, .NET SDK 10.0.302, Go 1.26.5, Rust 1.97.1, Coursier et runtimes associés. Le Node 20 est conservé explicitement pour compatibilité avec `scip-typescript 0.4.0`; cette dépendance est enregistrée comme limitation et ne doit pas être masquée.
+
+Les téléchargements sont limités au BUILD. En RUN, `network_mode: none` reste obligatoire. Les outils providers sont copiés depuis l'image dans un volume Linux Compose `minos-provider-tools`, monté read-only dans `minos-mcp` et `minos-admin`; le business data reste le bind host séparé.
+
+L'image produit aussi :
+
+```text
+provider-inventory.json
+provider-binary-sha256.txt
+```
+
+Le workflow `Install`/`Validate` initialise le volume providers et exécute les probes MINOS. La CLI possède désormais `tools verify --all`, qui échoue si **n'importe quel provider annoncé** n'est pas `READY`, sans modifier le comportement historique de `tools verify` côté natif.
+
+Le gate exact-head S4 est `scripts/m29/run-s4.ps1`. Il exige notamment :
+
+```text
+Maven + docs PASS
+Docker linux/amd64
+build image provider-complete
+Install / Validate
+network_mode:none
+minos tools verify --all
+provider inventory = 7 providers attendus
+checksums non vides
+```
+
+Aucune disposition PASS S4 n'est enregistrée avant exécution réelle de ce runner.
+
+### Sources projet read-only
+
+M29 interdit aux providers de déposer `index.scip` dans la racine source. Les process plans Java, TypeScript, C/C++, C#, Go et Rust routent maintenant l'artefact dans le run directory MINOS ; Python le faisait déjà. Rust redirige également `CARGO_TARGET_DIR` hors du projet. Cette propriété est couverte par les tests M24 et packaging M29.
 
 ### Vector store
 
@@ -193,22 +240,20 @@ Les snapshots structurés restent autoritatifs et les résultats sémantiques re
 
 ### Gate courant
 
-S1/S2 sont prouvés. S3 est le gate courant :
+Le gate courant est S4, puis retour immédiat au gate S3 sur le **même HEAD** si S4 passe :
 
 ```text
-nouveau HEAD exact
-→ mvnw.cmd clean verify
-→ check-current-docs.py
-→ Docker Desktop démarré
-→ Install / Validate
+run-s4.ps1 exact-head
+→ providers offline READY
+→ run-s3.ps1 exact-head
 → projet neuf Docker-only
 → project add / index / READY
 → semantic + hybrid status
-→ MCP
+→ MCP initialize/tools-list
 → restart/recreate + persistance
 ```
 
-Aucun passage à S4 sans cette preuve. La roadmap détaillée est [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md).
+S5 ne sera déclaré commencé qu'après ces preuves.
 
 ## Limite explicitement ouverte — #98
 
