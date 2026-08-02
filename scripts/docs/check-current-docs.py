@@ -108,8 +108,10 @@ def main() -> int:
         require("docs/roadmap/M28_EXECUTION.md", m28, "PR #102 MERGED")
         require("docs/roadmap/M28_EXECUTION.md", m28, "v1.0.0")
 
-        # M29 is in progress. S1/S2 are exact-head qualified. S3 has reached real Docker indexing;
-        # S4 has a historical exact-head PASS, but any modified current HEAD must be requalified.
+        # M29 is in progress. S1/S2 are exact-head qualified. S4 most recently passed on
+        # 45536e2..., while the subsequent S3 failure proves writable staging and exposes a
+        # host Maven-wrapper launch defect. The remediation changes the current HEAD and therefore
+        # requires a new S4 -> S3 exact-head sequence before any current PASS claim.
         for token in (
             "EN COURS",
             "#107",
@@ -152,8 +154,12 @@ def main() -> int:
         require("docs/roadmap/M29_EXECUTION.md", m29, "ne crée pas une nouvelle base vectorielle externe")
         require("docs/roadmap/M29_EXECUTION.md", m29, "sans état natif")
         require("docs/roadmap/M29_EXECUTION.md", m29, "2 août 2026")
-        require("docs/roadmap/M29_EXECUTION.md", m29, "PASS HISTORIQUE / REQUALIFICATION COURANTE REQUISE")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "PASS QUALIFIÉ `45536e2...` / REQUALIFICATION COURANTE REQUISE")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "45536e2fc7d32ed67932e2715e458fa26a8239b1")
         require("docs/roadmap/M29_EXECUTION.md", m29, "f39802e966370f0934436163eecc180e4d76a271")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "workspace/mvnw")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "error=2, No such file or directory")
+        require("docs/roadmap/M29_EXECUTION.md", m29, "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Statut : **PLANIFIÉ")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "démarrage prévu le 3 août 2026")
         forbid("docs/roadmap/M29_EXECUTION.md", m29, "Le daemon Docker `desktop-linux` était arrêté")
@@ -182,6 +188,9 @@ def main() -> int:
             "probe `minos-provider-probe` reste le gate explicite",
             "Apache Maven 3.9.16",
             "/var/lib/minos/runs/<run-id>/scip-java/workspace",
+            "mvnw.cmd",
+            "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native",
+            "45536e2fc7d32ed67932e2715e458fa26a8239b1",
         ):
             require("docs/user/docker-runtime.md", docker_runtime, token)
 
@@ -301,6 +310,7 @@ def main() -> int:
             "network_mode: none",
             "MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository",
             "HOME: /var/lib/minos/cache/home",
+            "JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native",
         ):
             require("docker/compose.mcp.prod.yaml", docker_compose, token)
         for token in (
@@ -332,6 +342,8 @@ def main() -> int:
             require("docker/Dockerfile.mcp.release", docker_image, token)
         for token in (
             "STAGING_EXCLUDED_DIRECTORIES",
+            "STAGING_EXCLUDED_ROOT_FILES",
+            'Set.of("mvnw", "mvnw.cmd")',
             "prepareWritableWorkspace",
             'run.resolve("workspace")',
             '"target", "build", "out", "node_modules"',
