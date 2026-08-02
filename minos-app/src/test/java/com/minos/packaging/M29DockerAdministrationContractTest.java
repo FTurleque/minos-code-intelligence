@@ -57,6 +57,23 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("MINOS_RUNTIME_LOCATION=docker"));
     }
 
+    @Test
+    void s3RunnerFailsFastOnDockerAndExercisesRealLifecycleWhenAvailable() throws Exception {
+        String runner = normalizedText(repoRoot().resolve("scripts/m29/run-s3.ps1"));
+
+        assertTrue(runner.contains("M29-S3 exact-head mismatch"));
+        assertTrue(runner.contains("status', '--porcelain"));
+        assertTrue(runner.contains("Docker Desktop Linux daemon is unavailable"));
+        assertTrue(runner.contains("'project', 'add'"));
+        assertTrue(runner.contains("'index', 'm29-s3-fixture'"));
+        assertFalse(runner.contains("'index', 'm29-s3-fixture', '--dry-run'"),
+                "S3 gate must exercise a real provider/index lifecycle rather than only planning it");
+        assertTrue(runner.contains("MinosNativeMcpSmoke.java"));
+        assertTrue(runner.contains("Invoke-McpHandshake"));
+        assertTrue(runner.contains("Invoke-Workflow -Action Start"));
+        assertTrue(runner.contains("result = if ($Passed) { 'PASS' } else { 'FAIL_OR_BLOCKED' }"));
+    }
+
     private static String normalizedText(Path path) throws IOException {
         return Files.readString(path).replace("\r\n", "\n").replace('\r', '\n');
     }
