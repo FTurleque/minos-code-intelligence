@@ -28,6 +28,9 @@ final class DockerMcpTransport {
         this.processes = Objects.requireNonNull(processes, "processes");
     }
 
+    // dockerContainerName is validated to [A-Za-z0-9][A-Za-z0-9_.-]+ before any command is built.
+    // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
+    @SuppressWarnings("java:S2076")
     int run(McpBackendConfiguration configuration) throws IOException, InterruptedException {
         Objects.requireNonNull(configuration, "configuration");
         if (configuration.backend() != McpBackend.DOCKER) {
