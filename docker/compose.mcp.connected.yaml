@@ -1,0 +1,265 @@
+name: "${MINOS_COMPOSE_PROJECT}"
+
+services:
+  minos-mcp:
+    image: "${MINOS_IMAGE}"
+    container_name: "${MINOS_CONTAINER_NAME}"
+    entrypoint: [sleep, infinity]
+    init: true
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+      MINOS_SEMANTIC_PROVIDER: "${MINOS_SEMANTIC_PROVIDER:-disabled}"
+      MINOS_SEMANTIC_MODEL: "${MINOS_SEMANTIC_MODEL:-}"
+      MINOS_SEMANTIC_DIMENSIONS: "${MINOS_SEMANTIC_DIMENSIONS:-}"
+      MINOS_SEMANTIC_ENDPOINT: "${MINOS_SEMANTIC_ENDPOINT:-}"
+      MINOS_SEMANTIC_TIMEOUT_SECONDS: "${MINOS_SEMANTIC_TIMEOUT_SECONDS:-}"
+    working_dir: /workspace/projects
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+        read_only: true
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
+      - type: bind
+        source: "${MINOS_PROJECTS_DIR}"
+        target: /workspace/projects
+        read_only: true
+    networks: [minos-runtime]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 10s
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: query
+      io.minos.network-policy: internal-services-only
+
+  minos-admin:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.MinosLauncher]
+    init: true
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+      MINOS_SEMANTIC_PROVIDER: "${MINOS_SEMANTIC_PROVIDER:-disabled}"
+      MINOS_SEMANTIC_MODEL: "${MINOS_SEMANTIC_MODEL:-}"
+      MINOS_SEMANTIC_DIMENSIONS: "${MINOS_SEMANTIC_DIMENSIONS:-}"
+      MINOS_SEMANTIC_ENDPOINT: "${MINOS_SEMANTIC_ENDPOINT:-}"
+      MINOS_SEMANTIC_TIMEOUT_SECONDS: "${MINOS_SEMANTIC_TIMEOUT_SECONDS:-}"
+      HOME: /var/lib/minos/cache/home
+      COURSIER_CACHE: /var/lib/minos/cache/coursier
+      MAVEN_OPTS: -Dmaven.repo.local=/var/lib/minos/cache/maven/repository
+      JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
+      DOTNET_CLI_HOME: /var/lib/minos/cache/dotnet-home
+      NUGET_PACKAGES: /var/lib/minos/cache/nuget
+    working_dir: /workspace/projects
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
+      - type: bind
+        source: "${MINOS_PROJECTS_DIR}"
+        target: /workspace/projects
+        read_only: true
+    networks: [minos-runtime, minos-admin-egress]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+      - /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: admin
+
+  minos-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [java, -cp, /opt/minos/minos.jar, com.minos.cli.DockerRuntimeBootstrap]
+    command: [configure-project-paths, "${MINOS_HOST_PROJECTS_ROOT}", /workspace/projects]
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  minos-tools-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        marker=/var/lib/minos/tools/.minos-image-revision
+        if [ -f "$$marker" ] && [ "$$(cat "$$marker")" = "$${MINOS_GIT_COMMIT}" ]; then
+          echo "MINOS Docker provider tools already match image revision $${MINOS_GIT_COMMIT}."
+          exit 0
+        fi
+        find /var/lib/minos/tools -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        cp -a /opt/minos/provider-tools/. /var/lib/minos/tools/
+        printf '%s\n' "$${MINOS_GIT_COMMIT}" > "$$marker"
+    user: "0:0"
+    init: true
+    network_mode: none
+    environment:
+      MINOS_GIT_COMMIT: "${MINOS_GIT_COMMIT}"
+    volumes:
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  minos-provider-probe:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        java -version
+        javac -version
+        mvn --version
+        scip-java --version >/dev/null
+        /var/lib/minos/tools/scip-typescript/0.4.0/node_modules/.bin/scip-typescript --help >/dev/null
+        /var/lib/minos/tools/scip-python/0.6.6/node_modules/.bin/scip-python --help >/dev/null
+        scip-clang --version >/dev/null 2>&1
+        dotnet --version
+        /var/lib/minos/tools/scip-dotnet/0.2.14/scip-dotnet --help >/dev/null
+        go version
+        /var/lib/minos/tools/scip-go/0.2.7/scip-go --help >/dev/null
+        rustc --version
+        cargo --version
+        rust-analyzer --version >/dev/null 2>&1
+        echo "MINOS Docker offline provider probe SUCCESS"
+    user: "10001:10001"
+    init: true
+    network_mode: none
+    environment:
+      MINOS_HOME: /var/lib/minos
+      MINOS_RUNTIME_LOCATION: docker
+      COURSIER_CACHE: /tmp/minos-coursier-cache
+      JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=/run/minos-native -Djna.tmpdir=/run/minos-native
+      DOTNET_CLI_HOME: /tmp/minos-dotnet-home
+      NUGET_PACKAGES: /tmp/minos-nuget
+    volumes:
+      - type: volume
+        source: minos-provider-tools
+        target: /var/lib/minos/tools
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+      - /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  minos-postgres:
+    profiles: [postgresql]
+    image: "${MINOS_POSTGRES_IMAGE:-pgvector/pgvector:0.8.2-pg17}"
+    environment:
+      POSTGRES_DB: "${MINOS_POSTGRES_DATABASE:-minos}"
+      POSTGRES_USER: "${MINOS_POSTGRES_USER:-minos}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/minos-postgres-password
+    volumes:
+      - type: volume
+        source: minos-postgres-data
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: "${MINOS_POSTGRES_PASSWORD_FILE}"
+        target: /run/secrets/minos-postgres-password
+        read_only: true
+    networks: [minos-runtime]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: storage
+
+  minos-ollama:
+    profiles: [ollama]
+    image: "${MINOS_OLLAMA_IMAGE:-ollama/ollama:0.32.0}"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - type: volume
+        source: minos-ollama-models
+        target: /root/.ollama
+    networks: [minos-runtime]
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: semantic
+
+networks:
+  minos-runtime:
+    internal: true
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.network-policy: internal-only
+  minos-admin-egress:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.network-policy: admin-dependency-egress
+
+volumes:
+  minos-provider-tools:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: provider-tools
+  minos-postgres-data:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: storage
+  minos-ollama-models:
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.runtime-plane: semantic
