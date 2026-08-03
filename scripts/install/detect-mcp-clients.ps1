@@ -40,6 +40,19 @@ function Test-VsCodeCopilotShim([string] $Path) {
     return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\.vscode\\|vscode)'
 }
 
+function Find-EmbeddedClaudeCli {
+    # Claude Code Desktop ships its own claude.exe under
+    # %APPDATA%\Claude\claude-code\<version>\claude.exe -- never on PATH.
+    $ClaudeCodeDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Claude\claude-code'
+    if (-not (Test-Path -LiteralPath $ClaudeCodeDir -PathType Container)) { return '' }
+    foreach ($Dir in @(Get-ChildItem -LiteralPath $ClaudeCodeDir -Directory -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)) {
+        $Exe = Join-Path $Dir.FullName 'claude.exe'
+        if (Test-Path -LiteralPath $Exe -PathType Leaf) { return $Exe }
+    }
+    return ''
+}
+
 function Resolve-ProbePowerShell([string] $ToolPath) {
     # npm/global CLIs are commonly exposed as .ps1 shims. Use PowerShell 7 for
     # those launchers, matching the actual integration manager; Windows
@@ -156,11 +169,31 @@ function Test-JetBrainsCopilot {
     return $false
 }
 
+function Test-ClaudeCodeDesktop {
+    # Claude Code Desktop (claude.ai/code app) creates ~/.claude/ with these marker files.
+    $UserProfile = [Environment]::GetFolderPath('UserProfile')
+    foreach ($Marker in @('.claude\settings.json', '.claude\.credentials.json')) {
+        if (Test-Path -LiteralPath (Join-Path $UserProfile $Marker) -PathType Leaf) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Test-ClaudeDesktop {
     $Roaming = [Environment]::GetFolderPath('ApplicationData')
     $Local = [Environment]::GetFolderPath('LocalApplicationData')
-    return (Test-Path -LiteralPath (Join-Path $Roaming 'Claude')) -or
-        (Test-Path -LiteralPath (Join-Path $Local 'Programs\Claude\Claude.exe') -PathType Leaf)
+    # Traditional Claude Desktop standalone exe path.
+    if (Test-Path -LiteralPath (Join-Path $Local 'Programs\Claude\Claude.exe') -PathType Leaf) {
+        return $true
+    }
+    # %APPDATA%\Claude exists but only counts as traditional Claude Desktop when the
+    # Claude Code Desktop markers are absent — both apps write to %APPDATA%\Claude.
+    if ((Test-Path -LiteralPath (Join-Path $Roaming 'Claude') -PathType Container) -and
+        -not (Test-ClaudeCodeDesktop)) {
+        return $true
+    }
+    return $false
 }
 
 function Test-CodexDesktop {
@@ -202,11 +235,14 @@ if ([string]::IsNullOrWhiteSpace($Copilot)) {
 
 $Claude = Resolve-CommandPath 'claude'
 if ([string]::IsNullOrWhiteSpace($Claude)) {
-    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande introuvable')
-} elseif (Test-Capability $Claude @('mcp', '--help')) {
+    $Claude = Find-EmbeddedClaudeCli
+}
+if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('mcp', '--help'))) {
     $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
-} else {
+} elseif (-not [string]::IsNullOrWhiteSpace($Claude)) {
     $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande claude d{e}tect{e}e mais interface MCP incompatible')
+} else {
+    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande introuvable')
 }
 
 if (Test-ClaudeDesktop) {

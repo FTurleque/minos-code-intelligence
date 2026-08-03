@@ -151,15 +151,17 @@ function Toml-String([string] $Value) {
 $BeginMarker = '# BEGIN MINOS MANAGED MCP SERVER'
 $EndMarker = '# END MINOS MANAGED MCP SERVER'
 function New-TomlBlock {
+    $CmdLine = 'command = ' + (Toml-String $MinosExe)
+    $HomeLine = 'MINOS_HOME = ' + (Toml-String $DataRoot)
     return @(
         $BeginMarker,
         '[mcp_servers.minos]',
-        'command = ' + (Toml-String $MinosExe),
+        $CmdLine,
         'args = ["mcp"]',
         'enabled = true',
         '',
         '[mcp_servers.minos.env]',
-        'MINOS_HOME = ' + (Toml-String $DataRoot),
+        $HomeLine,
         $EndMarker
     ) -join [Environment]::NewLine
 }
