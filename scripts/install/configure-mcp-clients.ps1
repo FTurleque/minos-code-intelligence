@@ -57,7 +57,25 @@ if ([string]::IsNullOrWhiteSpace($CopilotJetBrainsConfigPath)) {
     $CopilotJetBrainsConfigPath = Join-Path $LocalAppData 'github-copilot\intellij\mcp.json'
 }
 if ([string]::IsNullOrWhiteSpace($ClaudeDesktopConfigPath)) {
-    $ClaudeDesktopConfigPath = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    # Prefer the Windows Store (MSIX) sandboxed config path when present;
+    # fall back to the traditional standalone-installer path.
+    $PackagesDir = Join-Path $LocalAppData 'Packages'
+    $MsixConfig = ''
+    if (Test-Path -LiteralPath $PackagesDir -PathType Container) {
+        foreach ($PkgDir in @(Get-ChildItem -LiteralPath $PackagesDir -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending)) {
+            $Candidate = Join-Path $PkgDir.FullName 'LocalCache\Roaming\Claude\claude_desktop_config.json'
+            if (Test-Path -LiteralPath (Split-Path -Parent $Candidate) -PathType Container) {
+                $MsixConfig = $Candidate
+                break
+            }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($MsixConfig)) {
+        $ClaudeDesktopConfigPath = $MsixConfig
+    } else {
+        $ClaudeDesktopConfigPath = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    }
 }
 
 $StatePath = [System.IO.Path]::GetFullPath($StatePath)

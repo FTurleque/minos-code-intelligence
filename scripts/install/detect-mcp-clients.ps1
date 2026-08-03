@@ -180,9 +180,28 @@ function Test-ClaudeCodeDesktop {
     return $false
 }
 
+function Find-ClaudeDesktopMsixDir {
+    # Claude Desktop installed from the Windows Store (MSIX) uses a sandboxed
+    # LocalCache path instead of %APPDATA%\Claude.
+    # Pattern: %LOCALAPPDATA%\Packages\Claude_<publisher>\LocalCache\Roaming\Claude
+    $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    $PackagesDir = Join-Path $Local 'Packages'
+    if (-not (Test-Path -LiteralPath $PackagesDir -PathType Container)) { return '' }
+    foreach ($Dir in @(Get-ChildItem -LiteralPath $PackagesDir -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)) {
+        $CandidateDir = Join-Path $Dir.FullName 'LocalCache\Roaming\Claude'
+        if (Test-Path -LiteralPath $CandidateDir -PathType Container) { return $CandidateDir }
+    }
+    return ''
+}
+
 function Test-ClaudeDesktop {
     $Roaming = [Environment]::GetFolderPath('ApplicationData')
     $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    # Windows Store (MSIX) installation — sandboxed LocalCache path.
+    if (-not [string]::IsNullOrWhiteSpace((Find-ClaudeDesktopMsixDir))) {
+        return $true
+    }
     # Traditional Claude Desktop standalone exe path.
     if (Test-Path -LiteralPath (Join-Path $Local 'Programs\Claude\Claude.exe') -PathType Leaf) {
         return $true
