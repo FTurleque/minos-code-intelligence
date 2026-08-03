@@ -705,7 +705,9 @@ begin
 
   McpModePage := CreateInputOptionPage(McpNamePage.ID,
     'Mode MCP', 'Choisissez le backend du serveur MCP MINOS',
-    'Un seul backend est actif à la fois. Les clients IA utilisent toujours le même point d''entrée minos.exe mcp.', True, True);
+    'Un seul backend est actif à la fois. Les clients IA utilisent toujours le même point d''entrée minos.exe mcp.',
+    True,
+    True);
   McpModePage.Add('MCP natif Windows — recommandé');
   McpModePage.Add('MCP Docker — isolation renforcée');
   McpModePage.Add('Ne pas configurer maintenant');
@@ -965,7 +967,8 @@ begin
     if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
     if not ConfigureRuntimeSettings() then exit;
     PersistInstallerRegistry;
-    if ConfigureSelectedMcpBackend() then ConfigureMcpClients;
+    if ConfigureSelectedMcpBackend() then
+      ConfigureMcpClients;
   end;
 end;
 

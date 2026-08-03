@@ -36,6 +36,12 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $DockerInstanceName = 'minos-mcp-prod',
 
+    [string] $DockerDataRoot = '',
+
+    [switch] $ManagedDockerPostgres,
+
+    [switch] $ProvisionOllamaModel,
+
     [string] $InstallerStatePath = ''
 )
 
@@ -100,28 +106,34 @@ $Configuration = [ordered]@{
 }
 
 if ($StorageBackend -eq 'postgresql') {
-    if ([string]::IsNullOrWhiteSpace($PostgresUrl) -or -not $PostgresUrl.StartsWith('jdbc:postgresql://')) {
-        throw 'PostgresUrl must use jdbc:postgresql:// when PostgreSQL storage is selected.'
+    if ($ManagedDockerPostgres.IsPresent) {
+        # Managed Docker PostgreSQL: connection settings are written by configure-m30-docker-services.ps1.
+        # Record the backend selection only; do not validate external URL/credentials here.
+        $Configuration['minos.postgres.managed'] = 'true'
+    } else {
+        if ([string]::IsNullOrWhiteSpace($PostgresUrl) -or -not $PostgresUrl.StartsWith('jdbc:postgresql://')) {
+            throw 'PostgresUrl must use jdbc:postgresql:// when PostgreSQL storage is selected.'
+        }
+        Require-Identifier $PostgresUser 'PostgreSQL user'
+        Require-Identifier $PostgresSchema 'PostgreSQL schema'
+        if ([string]::IsNullOrWhiteSpace($PostgresPasswordSourcePath)) {
+            throw 'PostgresPasswordSourcePath is required when PostgreSQL storage is selected.'
+        }
+        $SourceSecret = [System.IO.Path]::GetFullPath($PostgresPasswordSourcePath)
+        if (-not (Test-Path -LiteralPath $SourceSecret -PathType Leaf)) {
+            throw "PostgreSQL password source file does not exist: $SourceSecret"
+        }
+        $Secret = [System.IO.File]::ReadAllText($SourceSecret, [System.Text.Encoding]::UTF8).Trim()
+        if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
+        $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
+        [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+        Restrict-FileToCurrentUser $SecretPath
+        $Configuration['minos.postgres.url'] = $PostgresUrl
+        $Configuration['minos.postgres.user'] = $PostgresUser
+        $Configuration['minos.postgres.passwordFile'] = 'secrets/postgres.password'
+        $Configuration['minos.postgres.schema'] = $PostgresSchema
     }
-    Require-Identifier $PostgresUser 'PostgreSQL user'
-    Require-Identifier $PostgresSchema 'PostgreSQL schema'
-    if ([string]::IsNullOrWhiteSpace($PostgresPasswordSourcePath)) {
-        throw 'PostgresPasswordSourcePath is required when PostgreSQL storage is selected.'
-    }
-    $SourceSecret = [System.IO.Path]::GetFullPath($PostgresPasswordSourcePath)
-    if (-not (Test-Path -LiteralPath $SourceSecret -PathType Leaf)) {
-        throw "PostgreSQL password source file does not exist: $SourceSecret"
-    }
-    $Secret = [System.IO.File]::ReadAllText($SourceSecret, [System.Text.Encoding]::UTF8).Trim()
-    if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
-    $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
-    [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-    Restrict-FileToCurrentUser $SecretPath
-    $Configuration['minos.postgres.url'] = $PostgresUrl
-    $Configuration['minos.postgres.user'] = $PostgresUser
-    $Configuration['minos.postgres.passwordFile'] = 'secrets/postgres.password'
-    $Configuration['minos.postgres.schema'] = $PostgresSchema
 }
 
 if ($SemanticProvider -eq 'ollama') {
@@ -137,6 +149,7 @@ if ($SemanticProvider -eq 'ollama') {
     $Configuration['minos.semantic.timeoutSeconds'] = [string]$SemanticTimeoutSeconds
 }
 
+$SecretPath = $null
 $ConfigurationPath = Join-Path $DataRoot 'config\minos.properties'
 Write-Properties -Path $ConfigurationPath -Values $Configuration
 
@@ -145,14 +158,17 @@ $State = [ordered]@{
     updatedAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     setupMode = $SetupMode
     dataRoot = $DataRoot
+    dockerDataRoot = if (-not [string]::IsNullOrWhiteSpace($DockerDataRoot)) { [System.IO.Path]::GetFullPath($DockerDataRoot) } else { $null }
     mcpServerName = $McpServerName
     mcpBackend = $McpBackend
     storageBackend = $StorageBackend
+    managedDockerPostgres = $ManagedDockerPostgres.IsPresent
+    provisionOllamaModel = $ProvisionOllamaModel.IsPresent
     postgres = [ordered]@{
-        url = if ($StorageBackend -eq 'postgresql') { $PostgresUrl } else { $null }
-        user = if ($StorageBackend -eq 'postgresql') { $PostgresUser } else { $null }
-        schema = if ($StorageBackend -eq 'postgresql') { $PostgresSchema } else { $null }
-        passwordFile = if ($StorageBackend -eq 'postgresql') { $SecretPath } else { $null }
+        url = if ($StorageBackend -eq 'postgresql' -and -not $ManagedDockerPostgres.IsPresent) { $PostgresUrl } else { $null }
+        user = if ($StorageBackend -eq 'postgresql' -and -not $ManagedDockerPostgres.IsPresent) { $PostgresUser } else { $null }
+        schema = if ($StorageBackend -eq 'postgresql' -and -not $ManagedDockerPostgres.IsPresent) { $PostgresSchema } else { $null }
+        passwordFile = if ($StorageBackend -eq 'postgresql' -and -not $ManagedDockerPostgres.IsPresent) { $SecretPath } else { $null }
     }
     semantic = [ordered]@{
         provider = $SemanticProvider
@@ -169,6 +185,7 @@ Write-Json -Path $InstallerStatePath -Value $State
 Write-Host 'MINOS runtime settings configured.' -ForegroundColor Green
 Write-Host "Mode     : $SetupMode"
 Write-Host "Data     : $DataRoot"
+if (-not [string]::IsNullOrWhiteSpace($DockerDataRoot)) { Write-Host "Docker   : $DockerDataRoot" }
 Write-Host "MCP      : $McpBackend / $McpServerName"
-Write-Host "Storage  : $StorageBackend"
-Write-Host "Semantic : $SemanticProvider"
+Write-Host "Storage  : $StorageBackend$(if ($ManagedDockerPostgres.IsPresent) { ' (managed Docker)' })"
+Write-Host "Semantic : $SemanticProvider$(if ($ProvisionOllamaModel.IsPresent) { ' (provision model)' })"
