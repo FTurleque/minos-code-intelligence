@@ -28,9 +28,6 @@ final class DockerMcpTransport {
         this.processes = Objects.requireNonNull(processes, "processes");
     }
 
-    // dockerContainerName is validated to [A-Za-z0-9][A-Za-z0-9_.-]+ before any command is built.
-    // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
-    @SuppressWarnings("java:S2076")
     int run(McpBackendConfiguration configuration) throws IOException, InterruptedException {
         Objects.requireNonNull(configuration, "configuration");
         if (configuration.backend() != McpBackend.DOCKER) {
@@ -69,16 +66,15 @@ final class DockerMcpTransport {
     }
 
     private static final class SystemProcessExecutor implements ProcessExecutor {
-        // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
-        // dockerContainerName is validated to [A-Za-z0-9][A-Za-z0-9_.-]+ before reaching this executor.
         @Override
-        @SuppressWarnings("java:S2076")
         public ProcessResult probe(List<String> command, Duration timeout) throws IOException, InterruptedException {
-            ProcessBuilder builder = new ProcessBuilder(command);
+            // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
+            // dockerContainerName is validated to [A-Za-z0-9][A-Za-z0-9_.-]+ by McpBackendConfiguration.
+            ProcessBuilder builder = new ProcessBuilder(command); // NOSONAR
             builder.redirectErrorStream(true);
             Process process;
             try {
-                process = builder.start();
+                process = builder.start(); // NOSONAR
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker executable cannot be started", exception);
             }
@@ -107,11 +103,10 @@ final class DockerMcpTransport {
         }
 
         @Override
-        @SuppressWarnings("java:S2076")
         public int attach(List<String> command) throws IOException, InterruptedException {
             Process process;
             try {
-                process = new ProcessBuilder(command).inheritIO().start();
+                process = new ProcessBuilder(command).inheritIO().start(); // NOSONAR
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker MCP session cannot be started", exception);
             }
