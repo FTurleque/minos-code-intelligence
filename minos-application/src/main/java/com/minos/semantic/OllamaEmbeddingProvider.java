@@ -12,16 +12,18 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Local learned embedding provider backed by an explicitly configured loopback Ollama endpoint.
+ * Local learned embedding provider backed by an explicitly configured trusted Ollama endpoint.
  *
- * <p>MINOS never downloads a model and never permits this provider to target a non-loopback host.
- * The configured model is therefore an operator-controlled local dependency. Quality promotion is
- * handled separately by the M23 learned-model evaluation gate.</p>
+ * <p>MINOS permits loopback endpoints for native execution and the fixed {@code minos-ollama}
+ * service name used by the managed internal Docker network. Arbitrary remote hosts remain
+ * rejected. MINOS never downloads a model from this Java provider.</p>
  */
 public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     public static final URI DEFAULT_ENDPOINT = URI.create("http://127.0.0.1:11434/api/embed");
+    public static final URI MANAGED_DOCKER_ENDPOINT = URI.create("http://minos-ollama:11434/api/embed");
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+    private static final String MANAGED_DOCKER_HOST = "minos-ollama";
     private static final int MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
     private final URI endpoint;
@@ -48,24 +50,10 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
         this.timeoutMillis = Math.toIntExact(Math.max(1L, millis));
     }
 
-    @Override
-    public String id() {
-        return "minos-local-ollama";
-    }
-
-    @Override
-    public String modelId() {
-        return model;
-    }
-
-    @Override
-    public int dimensions() {
-        return dimensions;
-    }
-
-    public URI endpoint() {
-        return endpoint;
-    }
+    @Override public String id() { return "minos-local-ollama"; }
+    @Override public String modelId() { return model; }
+    @Override public int dimensions() { return dimensions; }
+    public URI endpoint() { return endpoint; }
 
     @Override
     public SemanticVector embed(String stableKey, String text) throws IOException {
@@ -84,13 +72,9 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
         byte[] request = requestBody(model, text).getBytes(StandardCharsets.UTF_8);
         connection.setFixedLengthStreamingMode(request.length);
         try {
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(request);
-            }
+            try (OutputStream output = connection.getOutputStream()) { output.write(request); }
             int status = connection.getResponseCode();
-            InputStream stream = status >= 200 && status < 300
-                    ? connection.getInputStream()
-                    : connection.getErrorStream();
+            InputStream stream = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();
             String response = readBounded(stream);
             if (status < 200 || status >= 300) {
                 throw new IOException("local Ollama embedding request failed with HTTP " + status
@@ -112,8 +96,8 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             throw new IllegalArgumentException("Ollama endpoint must not contain user-info or fragment");
         }
         String host = endpoint.getHost();
-        if (host == null || !isLoopbackHost(host)) {
-            throw new IllegalArgumentException("Ollama endpoint must be loopback-only");
+        if (host == null || !isTrustedHost(host)) {
+            throw new IllegalArgumentException("Ollama endpoint must use loopback or the managed Docker service minos-ollama");
         }
         if (endpoint.getPath() == null || endpoint.getPath().isBlank()) {
             throw new IllegalArgumentException("Ollama endpoint must contain an API path");
@@ -138,16 +122,12 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
         if (body.isEmpty()) throw new IOException("Ollama embedding vector is empty");
         String[] parts = body.split(",");
         if (parts.length != expectedDimensions) {
-            throw new IOException("Ollama embedding dimensions mismatch: expected "
-                    + expectedDimensions + " but got " + parts.length);
+            throw new IOException("Ollama embedding dimensions mismatch: expected " + expectedDimensions + " but got " + parts.length);
         }
         double[] values = new double[parts.length];
         for (int index = 0; index < parts.length; index++) {
-            try {
-                values[index] = Double.parseDouble(parts[index].trim());
-            } catch (NumberFormatException exception) {
-                throw new IOException("Ollama embedding contains a non-numeric value", exception);
-            }
+            try { values[index] = Double.parseDouble(parts[index].trim()); }
+            catch (NumberFormatException exception) { throw new IOException("Ollama embedding contains a non-numeric value", exception); }
             if (!Double.isFinite(values[index])) throw new IOException("Ollama embedding contains a non-finite value");
         }
         return values;
@@ -159,24 +139,18 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
                 + "\",\"truncate\":true}";
     }
 
-    private static boolean isLoopbackHost(String host) {
+    private static boolean isTrustedHost(String host) {
         String value = host.toLowerCase(Locale.ROOT);
-        if ("localhost".equals(value) || "::1".equals(value) || "[::1]".equals(value)) {
-            return true;
-        }
+        if (MANAGED_DOCKER_HOST.equals(value)) return true;
+        if ("localhost".equals(value) || "::1".equals(value) || "[::1]".equals(value)) return true;
         String[] octets = value.split("\\.", -1);
         if (octets.length != 4) return false;
         for (String octet : octets) {
             if (octet.isEmpty() || octet.length() > 3) return false;
-            for (int index = 0; index < octet.length(); index++) {
-                if (!Character.isDigit(octet.charAt(index))) return false;
-            }
+            for (int index = 0; index < octet.length(); index++) if (!Character.isDigit(octet.charAt(index))) return false;
             int numeric;
-            try {
-                numeric = Integer.parseInt(octet);
-            } catch (NumberFormatException exception) {
-                return false;
-            }
+            try { numeric = Integer.parseInt(octet); }
+            catch (NumberFormatException exception) { return false; }
             if (numeric < 0 || numeric > 255) return false;
         }
         return Integer.parseInt(octets[0]) == 127;
