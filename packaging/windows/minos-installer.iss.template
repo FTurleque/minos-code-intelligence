@@ -220,7 +220,9 @@ begin
   Result := ReadInstallerValue('McpBackend', '');
   if (Result = 'native') or (Result = 'docker') then exit;
   Result := '';
-  ConfigPath := AddBackslash(ReadInstallerValue('DataRoot', DefaultDataRoot())) + 'runtime\backend.properties';
+  ConfigPath := ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties');
+  if not FileExists(ConfigPath) then
+    ConfigPath := AddBackslash(ReadInstallerValue('DataRoot', DefaultDataRoot())) + 'runtime\backend.properties';
   if FileExists(ConfigPath) and LoadStringFromFile(ConfigPath, ConfigText) then
   begin
     if Pos('backend=docker', LowerCase(ConfigText)) > 0 then Result := 'docker'
@@ -945,17 +947,17 @@ end;
 
 procedure DeleteMinosUserData;
 var
-  DataRoot: String;
+  UserDataRoot: String;
   DockerRoot: String;
   DefaultRoot: String;
 begin
   if IsSmokeBuild() or (not DeleteUserDataOnUninstall) then exit;
-  DataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
+  UserDataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
   DockerRoot := ReadInstallerValue('DockerDataRoot', DefaultDockerDataRoot());
   DefaultRoot := ExpandConstant('{localappdata}\MINOS');
   PurgeManagedDockerVolumes;
-  DeleteRootIfPresent(DataRoot);
-  if CompareText(DockerRoot, DataRoot) <> 0 then DeleteRootIfPresent(DockerRoot);
+  if (UserDataRoot <> '') and DirExists(UserDataRoot) then DelTree(UserDataRoot, True, True, True);
+  if (CompareText(DockerRoot, UserDataRoot) <> 0) then DeleteRootIfPresent(DockerRoot);
   DeleteRootIfPresent(DefaultRoot);
   RegDeleteKeyIncludingSubkeys(HKCU, InstallerRegistryPath());
 end;
