@@ -1,12 +1,13 @@
 package com.minos.storage;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
-/** Storage selection and provider-neutral configuration resolved from properties/environment. */
+/** Storage selection and provider-neutral configuration resolved from durable MINOS settings. */
 public record StorageBackendConfiguration(
         String backend,
         Path home,
@@ -23,6 +24,8 @@ public record StorageBackendConfiguration(
     public static final String POSTGRES_USER_PROPERTY = "minos.postgres.user";
     public static final String POSTGRES_PASSWORD_ENV = "MINOS_POSTGRES_PASSWORD";
     public static final String POSTGRES_PASSWORD_PROPERTY = "minos.postgres.password";
+    public static final String POSTGRES_PASSWORD_FILE_ENV = "MINOS_POSTGRES_PASSWORD_FILE";
+    public static final String POSTGRES_PASSWORD_FILE_PROPERTY = "minos.postgres.passwordFile";
     public static final String POSTGRES_SCHEMA_ENV = "MINOS_POSTGRES_SCHEMA";
     public static final String POSTGRES_SCHEMA_PROPERTY = "minos.postgres.schema";
 
@@ -32,34 +35,36 @@ public record StorageBackendConfiguration(
         postgresSchema = normalizeSchema(postgresSchema);
     }
 
-    public static StorageBackendConfiguration resolve(Path home) {
-        return resolve(home, System.getenv(), System.getProperties());
+    public static StorageBackendConfiguration resolve(Path home) throws IOException {
+        return resolve(MinosRuntimeSettings.load(home));
     }
 
-    static StorageBackendConfiguration resolve(Path home, Map<String, String> environment, Properties properties) {
-        Objects.requireNonNull(environment, "environment");
-        Objects.requireNonNull(properties, "properties");
-        String backend = setting(properties, environment, BACKEND_PROPERTY, BACKEND_ENV);
+    static StorageBackendConfiguration resolve(Path home, Map<String, String> environment, Properties properties)
+            throws IOException {
+        return resolve(MinosRuntimeSettings.testing(home, new Properties(), environment, properties));
+    }
+
+    static StorageBackendConfiguration resolve(MinosRuntimeSettings settings) throws IOException {
+        Objects.requireNonNull(settings, "settings");
+        String backend = settings.value(BACKEND_PROPERTY, BACKEND_ENV);
         if (backend == null || backend.isBlank()) backend = "local";
+        String password = settings.secret(
+                POSTGRES_PASSWORD_PROPERTY,
+                POSTGRES_PASSWORD_ENV,
+                POSTGRES_PASSWORD_FILE_PROPERTY,
+                POSTGRES_PASSWORD_FILE_ENV
+        );
         return new StorageBackendConfiguration(
                 backend,
-                home,
-                setting(properties, environment, POSTGRES_URL_PROPERTY, POSTGRES_URL_ENV),
-                setting(properties, environment, POSTGRES_USER_PROPERTY, POSTGRES_USER_ENV),
-                setting(properties, environment, POSTGRES_PASSWORD_PROPERTY, POSTGRES_PASSWORD_ENV),
-                setting(properties, environment, POSTGRES_SCHEMA_PROPERTY, POSTGRES_SCHEMA_ENV)
+                settings.home(),
+                settings.value(POSTGRES_URL_PROPERTY, POSTGRES_URL_ENV),
+                settings.value(POSTGRES_USER_PROPERTY, POSTGRES_USER_ENV),
+                password,
+                settings.value(POSTGRES_SCHEMA_PROPERTY, POSTGRES_SCHEMA_ENV)
         );
     }
 
-    public boolean postgresql() {
-        return "postgresql".equals(backend);
-    }
-
-    private static String setting(Properties properties, Map<String, String> environment, String property, String env) {
-        String value = properties.getProperty(property);
-        if (value == null || value.isBlank()) value = environment.get(env);
-        return value == null || value.isBlank() ? null : value.trim();
-    }
+    public boolean postgresql() { return "postgresql".equals(backend); }
 
     private static String requireBackend(String value) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException("storage backend must not be blank");
