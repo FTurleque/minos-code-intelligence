@@ -11,7 +11,8 @@ Set-StrictMode -Version Latest
 
 $Manager = Join-Path $PSScriptRoot 'configure-mcp-clients.ps1'
 $CodexManager = Join-Path $PSScriptRoot 'configure-codex-mcp.ps1'
-foreach ($Required in @($Manager, $CodexManager)) {
+$NamedInvoker = Join-Path $PSScriptRoot 'invoke-named-mcp-script.ps1'
+foreach ($Required in @($Manager, $CodexManager, $NamedInvoker)) {
     if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
         if ($Strict) { throw "MINOS MCP uninstall helper not found: $Required" }
         Write-Warning "MINOS MCP uninstall helper not found: $Required"
@@ -19,12 +20,34 @@ foreach ($Required in @($Manager, $CodexManager)) {
     }
 }
 
-# The historical manager resolved CLI tools again through PATH during uninstall.
-# Rehydrate PATH from the exact toolPath values captured at installation time so
-# an IDE/CLI update cannot strand a MINOS-managed MCP entry merely because the
-# user's PATH changed between installation and removal.
 $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
 $StatePath = Join-Path $LocalAppData 'MINOS\mcp-client-integrations.json'
+$InstallerStatePath = Join-Path $LocalAppData 'MINOS\installer-state.json'
+$McpServerName = 'minos'
+$DataRoot = ''
+
+if (Test-Path -LiteralPath $InstallerStatePath -PathType Leaf) {
+    try {
+        $InstallerState = Get-Content -Raw -LiteralPath $InstallerStatePath | ConvertFrom-Json
+        $CandidateName = [string]$InstallerState.mcpServerName
+        if (-not [string]::IsNullOrWhiteSpace($CandidateName)) {
+            if ($CandidateName -notmatch '^[A-Za-z][A-Za-z0-9_-]{0,63}$') {
+                throw "Invalid MCP server name in installer state: $CandidateName"
+            }
+            $McpServerName = $CandidateName
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$InstallerState.dataRoot)) {
+            $DataRoot = [System.IO.Path]::GetFullPath([string]$InstallerState.dataRoot)
+        }
+    }
+    catch {
+        if ($Strict) { throw "Unable to read MINOS installer state before MCP uninstall: $($_.Exception.Message)" }
+        Write-Warning "Unable to read MINOS installer state before MCP uninstall: $($_.Exception.Message)"
+    }
+}
+
+# Rehydrate PATH from exact CLI tool paths captured at install time. This keeps
+# uninstall ownership-safe after IDE/CLI upgrades or user PATH changes.
 $SavedDirectories = @()
 if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
     try {
@@ -50,8 +73,23 @@ try {
         }
     }
 
-    & $CodexManager -InstallRoot $InstallRoot -Action Uninstall -Strict:$Strict
-    & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict:$Strict
+    $ManagerParameters = @{ InstallRoot = $InstallRoot; Action = 'Uninstall' }
+    if ($Strict) { $ManagerParameters['Strict'] = $true }
+    if (-not [string]::IsNullOrWhiteSpace($DataRoot)) { $ManagerParameters['DataRoot'] = $DataRoot }
+    & $NamedInvoker -SourcePath $Manager -McpServerName $McpServerName -Parameters $ManagerParameters
+
+    $CodexStatePath = Join-Path $LocalAppData 'MINOS\codex-mcp-integration.json'
+    if (Test-Path -LiteralPath $CodexStatePath -PathType Leaf) {
+        $CodexParameters = @{ InstallRoot = $InstallRoot; Action = 'Uninstall'; Mode = 'auto' }
+        if ($Strict) { $CodexParameters['Strict'] = $true }
+        if (-not [string]::IsNullOrWhiteSpace($DataRoot)) { $CodexParameters['DataRoot'] = $DataRoot }
+        & $NamedInvoker -SourcePath $CodexManager -McpServerName $McpServerName `
+            -Parameters $CodexParameters -CodexScript
+    }
+}
+catch {
+    if ($Strict) { throw }
+    Write-Warning "MINOS MCP client cleanup completed with warnings: $($_.Exception.Message)"
 }
 finally {
     $env:Path = $OldPath
