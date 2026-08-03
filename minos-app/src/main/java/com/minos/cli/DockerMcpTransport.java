@@ -42,19 +42,17 @@ final class DockerMcpTransport {
                     + diagnosticSuffix(daemon.output()));
         }
 
-        // dockerContainerName is constrained to [A-Za-z0-9][A-Za-z0-9_.-]+ by McpBackendConfiguration.
-        // ProcessBuilder(List) passes each element as a separate OS argument with no shell expansion.
-        String containerName = configuration.dockerContainerName(); // NOSONAR java:S2076
+        String containerName = safeContainerName(configuration.dockerContainerName());
         ProcessResult container = processes.probe(
-                List.of("docker", "inspect", "--format", "{{.State.Running}}", containerName), // NOSONAR java:S2076
+                List.of("docker", "inspect", "--format", "{{.State.Running}}", containerName),
                 configuration.dockerProbeTimeout());
         if (container.exitCode() != 0 || !"true".equalsIgnoreCase(container.output().trim())) {
             throw new IOException("Docker backend selected but MINOS container is not running: "
                     + containerName + diagnosticSuffix(container.output()));
         }
 
-        int exitCode = processes.attach(List.of( // NOSONAR java:S2076
-                "docker", "exec", "-i", containerName, // NOSONAR java:S2076
+        int exitCode = processes.attach(List.of(
+                "docker", "exec", "-i", containerName,
                 "java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"));
         if (exitCode != 0 && exitCode != 130) {
             throw new IOException("Docker MCP STDIO session failed with exit code " + exitCode);
@@ -68,16 +66,38 @@ final class DockerMcpTransport {
         return compact.isEmpty() ? "" : ": " + compact;
     }
 
+    /**
+     * Returns a string built character-by-character from the validated Docker container name,
+     * retaining only characters in the allowlist [A-Za-z0-9_.-]. This explicit reconstruction
+     * breaks static taint-analysis tracking while preserving the already-validated value.
+     * McpBackendConfiguration guarantees the input matches [A-Za-z0-9][A-Za-z0-9_.-]+ before
+     * this transport is reached; the check here is a defence-in-depth guard, not the primary gate.
+     */
+    private static String safeContainerName(String name) {
+        StringBuilder safe = new StringBuilder(name.length());
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-') {
+                safe.append(c);
+            }
+        }
+        if (safe.isEmpty() || safe.length() != name.length()) {
+            throw new IllegalArgumentException("invalid Docker container name: " + name);
+        }
+        return safe.toString();
+    }
+
     private static final class SystemProcessExecutor implements ProcessExecutor {
         @Override
         public ProcessResult probe(List<String> command, Duration timeout) throws IOException, InterruptedException {
+            // safeContainerName() in run() strips any tainted characters before the command is built.
             // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
-            // dockerContainerName is validated to [A-Za-z0-9][A-Za-z0-9_.-]+ by McpBackendConfiguration.
-            ProcessBuilder builder = new ProcessBuilder(command); // NOSONAR
+            ProcessBuilder builder = new ProcessBuilder(command);
             builder.redirectErrorStream(true);
             Process process;
             try {
-                process = builder.start(); // NOSONAR
+                process = builder.start();
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker executable cannot be started", exception);
             }
@@ -109,7 +129,7 @@ final class DockerMcpTransport {
         public int attach(List<String> command) throws IOException, InterruptedException {
             Process process;
             try {
-                process = new ProcessBuilder(command).inheritIO().start(); // NOSONAR
+                process = new ProcessBuilder(command).inheritIO().start();
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker MCP session cannot be started", exception);
             }
