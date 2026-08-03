@@ -35,4 +35,14 @@ public final class SnapshotCodecV2 implements SnapshotCodec {
         Objects.requireNonNull(file, "file");
         return SnapshotBinaryCodecSupport.readKnowledgeSnapshotV2(file);
     }
+
+    public byte[] encodeToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
+        Objects.requireNonNull(snapshot, "snapshot");
+        return SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV2ToBytes(snapshot);
+    }
+
+    public CodeKnowledgeSnapshot decodeFromBytes(byte[] payload) throws IOException {
+        Objects.requireNonNull(payload, "payload");
+        return SnapshotBinaryCodecSupport.readKnowledgeSnapshotV2FromBytes(payload);
+    }
 }
