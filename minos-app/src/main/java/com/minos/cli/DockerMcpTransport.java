@@ -42,16 +42,19 @@ final class DockerMcpTransport {
                     + diagnosticSuffix(daemon.output()));
         }
 
+        // dockerContainerName is constrained to [A-Za-z0-9][A-Za-z0-9_.-]+ by McpBackendConfiguration.
+        // ProcessBuilder(List) passes each element as a separate OS argument with no shell expansion.
+        String containerName = configuration.dockerContainerName(); // NOSONAR java:S2076
         ProcessResult container = processes.probe(
-                List.of("docker", "inspect", "--format", "{{.State.Running}}", configuration.dockerContainerName()),
+                List.of("docker", "inspect", "--format", "{{.State.Running}}", containerName), // NOSONAR java:S2076
                 configuration.dockerProbeTimeout());
         if (container.exitCode() != 0 || !"true".equalsIgnoreCase(container.output().trim())) {
             throw new IOException("Docker backend selected but MINOS container is not running: "
-                    + configuration.dockerContainerName() + diagnosticSuffix(container.output()));
+                    + containerName + diagnosticSuffix(container.output()));
         }
 
-        int exitCode = processes.attach(List.of(
-                "docker", "exec", "-i", configuration.dockerContainerName(),
+        int exitCode = processes.attach(List.of( // NOSONAR java:S2076
+                "docker", "exec", "-i", containerName, // NOSONAR java:S2076
                 "java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"));
         if (exitCode != 0 && exitCode != 130) {
             throw new IOException("Docker MCP STDIO session failed with exit code " + exitCode);
