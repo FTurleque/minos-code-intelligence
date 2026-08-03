@@ -99,6 +99,11 @@ var
   SummaryMemo: TNewMemo;
   DeleteUserDataOnUninstall: Boolean;
 
+function IfThen(Condition: Boolean; TrueValue, FalseValue: String): String;
+begin
+  if Condition then Result := TrueValue else Result := FalseValue;
+end;
+
 function IsSmokeBuild(): Boolean;
 begin
   Result := {#MinosSmokeMode} = 1;
