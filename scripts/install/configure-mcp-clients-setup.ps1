@@ -10,7 +10,12 @@ param(
     [switch] $Codex,
 
     [ValidateSet('auto', 'cli', 'desktop')]
-    [string] $CodexMode = 'auto'
+    [string] $CodexMode = 'auto',
+
+    [ValidatePattern('^[A-Za-z][A-Za-z0-9_-]{0,63}$')]
+    [string] $McpServerName = 'minos',
+
+    [string] $DataRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,13 +23,15 @@ Set-StrictMode -Version Latest
 
 $Manager = Join-Path $PSScriptRoot 'configure-mcp-clients.ps1'
 $CodexManager = Join-Path $PSScriptRoot 'configure-codex-mcp.ps1'
-foreach ($Required in @($Manager, $CodexManager)) {
+$NamedInvoker = Join-Path $PSScriptRoot 'invoke-named-mcp-script.ps1'
+foreach ($Required in @($Manager, $CodexManager, $NamedInvoker)) {
     if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
         throw "MINOS MCP client integration helper not found: $Required"
     }
 }
 
 $Parameters = @{ InstallRoot = $InstallRoot }
+if (-not [string]::IsNullOrWhiteSpace($DataRoot)) { $Parameters['DataRoot'] = $DataRoot }
 if ($CopilotJetBrains) { $Parameters['CopilotJetBrains'] = $true }
 if ($CopilotCli) { $Parameters['CopilotCli'] = $true }
 if ($ClaudeCode) { $Parameters['ClaudeCode'] = $true }
@@ -32,10 +39,17 @@ if ($ClaudeDesktop) { $Parameters['ClaudeDesktop'] = $true }
 
 $ManagerSelected = $CopilotJetBrains -or $CopilotCli -or $ClaudeCode -or $ClaudeDesktop
 if ($ManagerSelected) {
-    & $Manager @Parameters
+    & $NamedInvoker -SourcePath $Manager -McpServerName $McpServerName -Parameters $Parameters
 }
 if ($Codex) {
-    & $CodexManager -InstallRoot $InstallRoot -Action Install -Mode $CodexMode -Strict
+    $CodexParameters = @{
+        InstallRoot = $InstallRoot
+        Action = 'Install'
+        Mode = $CodexMode
+        Strict = $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($DataRoot)) { $CodexParameters['DataRoot'] = $DataRoot }
+    & $NamedInvoker -SourcePath $CodexManager -McpServerName $McpServerName -Parameters $CodexParameters -CodexScript
 }
 
 $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
@@ -78,5 +92,5 @@ if ($Codex) {
 $AllSelected = @($Selected)
 if ($Codex) { $AllSelected += "codex:$CodexMode" }
 if ($AllSelected.Count -gt 0) {
-    Write-Host "MINOS setup MCP client selection SUCCESS: $($AllSelected -join ', ')" -ForegroundColor Green
+    Write-Host "MINOS setup MCP client selection SUCCESS ($McpServerName): $($AllSelected -join ', ')" -ForegroundColor Green
 }
