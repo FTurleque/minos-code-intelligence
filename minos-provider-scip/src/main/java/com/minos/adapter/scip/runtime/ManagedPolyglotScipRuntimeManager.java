@@ -346,9 +346,9 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    private static Probe probe(List<String> command) {
+    private Probe probe(List<String> command) {
         try {
-            CommandResult result = run(command, Path.of("."), PROBE_TIMEOUT, null, null);
+            CommandResult result = run(command, home, PROBE_TIMEOUT, null, null);
             return new Probe(result.success(), result.output());
         } catch (Exception exception) {
             return new Probe(false, exception.getMessage() == null
@@ -364,7 +364,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             String environmentKey,
             String environmentValue
     ) throws Exception {
-        Path outputFile = Files.createTempFile("minos-m24-command-", ".log");
+        Path outputFile = Files.createTempFile(workingDirectory.toAbsolutePath().normalize(), "minos-m24-command-", ".log");
         try {
             ProcessBuilder builder = new ProcessBuilder(safeCommand(command));
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
