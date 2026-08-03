@@ -34,8 +34,8 @@ class ProjectPathMappingTest {
     @Test
     void samePortableRegistryResolvesSameProjectIdInNativeAndDocker(@TempDir Path temp) throws Exception {
         Path home = Files.createDirectories(temp.resolve("home"));
-        Path hostRoot = Files.createDirectories(temp.resolve("host-projects"));
-        Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects"));
+        Path hostRoot = Files.createDirectories(temp.resolve("host-projects")).toRealPath();
+        Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         Path hostProject = Files.createDirectories(hostRoot.resolve("demo"));
         Path dockerProject = Files.createDirectories(dockerRoot.resolve("demo"));
         ProjectPathMapping mapping = new ProjectPathMapping(hostRoot.toString(), dockerRoot.toString());
@@ -64,8 +64,8 @@ class ProjectPathMappingTest {
     @Test
     void legacyAbsoluteRegistryMigratesIdempotentlyWithRollbackBackup(@TempDir Path temp) throws Exception {
         Path home = Files.createDirectories(temp.resolve("home"));
-        Path hostRoot = Files.createDirectories(temp.resolve("host-projects"));
-        Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects"));
+        Path hostRoot = Files.createDirectories(temp.resolve("host-projects")).toRealPath();
+        Path dockerRoot = Files.createDirectories(temp.resolve("docker-projects")).toRealPath();
         Path projectRoot = Files.createDirectories(hostRoot.resolve("legacy"));
 
         LocalProjectRegistry legacy = new LocalProjectRegistry(home.resolve("registry"));
