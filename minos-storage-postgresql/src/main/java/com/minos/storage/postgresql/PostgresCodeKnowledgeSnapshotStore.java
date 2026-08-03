@@ -59,29 +59,24 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
 
     @Override
     public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException {
-        return activeRow(projectId).map(row -> {
-            try { return decodeVerified(projectId, row); }
-            catch (IOException e) { throw new SnapshotReadRuntimeException(e); }
-        }).map(value -> value);
+        Optional<Row> row = activeRow(projectId);
+        if (row.isEmpty()) return Optional.empty();
+        return Optional.of(decodeVerified(projectId, row.orElseThrow()));
     }
 
     @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
-        try {
-            Optional<Row> row = activeRow(projectId);
-            if (row.isEmpty()) return Optional.empty();
-            Row value = row.orElseThrow();
-            CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
-            long started = System.nanoTime();
-            InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
-            long buildNanos = System.nanoTime() - started;
-            SnapshotDescriptor descriptor = new SnapshotDescriptor(2, snapshot.snapshotId(),
-                    "postgresql:" + snapshot.snapshotId(), value.sha256(), snapshot.symbols().size(),
-                    snapshot.occurrences().size(), snapshot.relationships().size());
-            return Optional.of(new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos));
-        } catch (SnapshotReadRuntimeException e) {
-            throw e.io;
-        }
+        Optional<Row> row = activeRow(projectId);
+        if (row.isEmpty()) return Optional.empty();
+        Row value = row.orElseThrow();
+        CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
+        long started = System.nanoTime();
+        InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
+        long buildNanos = System.nanoTime() - started;
+        SnapshotDescriptor descriptor = new SnapshotDescriptor(2, snapshot.snapshotId(),
+                "postgresql:" + snapshot.snapshotId(), value.sha256(), snapshot.symbols().size(),
+                snapshot.occurrences().size(), snapshot.relationships().size());
+        return Optional.of(new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos));
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -148,8 +143,4 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private record Row(String snapshotId, byte[] payload, String sha256) { }
-    private static final class SnapshotReadRuntimeException extends RuntimeException {
-        private final IOException io;
-        private SnapshotReadRuntimeException(IOException io) { super(io); this.io = io; }
-    }
 }
