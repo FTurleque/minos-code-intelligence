@@ -1,6 +1,6 @@
 package com.minos.application;
 
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 
 import java.io.IOException;
@@ -13,8 +13,8 @@ import java.util.UUID;
  *
  * <p>A generic reference is interpreted as a UUID when it is syntactically valid;
  * otherwise it is matched exactly against the persisted display name. Duplicate
- * display names are intentionally reported as ambiguous because the local registry
- * does not require display-name uniqueness.</p>
+ * display names are intentionally reported as ambiguous because the registry does
+ * not require display-name uniqueness.</p>
  */
 public final class ProjectResolver {
 
@@ -41,26 +41,17 @@ public final class ProjectResolver {
             this.candidateIds = List.copyOf(Objects.requireNonNull(candidateIds, "candidateIds"));
         }
 
-        public ErrorCode code() {
-            return code;
-        }
-
-        public String reference() {
-            return reference;
-        }
-
-        public List<UUID> candidateIds() {
-            return candidateIds;
-        }
+        public ErrorCode code() { return code; }
+        public String reference() { return reference; }
+        public List<UUID> candidateIds() { return candidateIds; }
     }
 
-    private final LocalProjectRegistry registry;
+    private final ProjectRegistry registry;
 
-    public ProjectResolver(LocalProjectRegistry registry) {
+    public ProjectResolver(ProjectRegistry registry) {
         this.registry = Objects.requireNonNull(registry, "registry");
     }
 
-    /** Resolves either an exact UUID or an exact persisted display name. */
     public RegisteredProject resolve(String reference) throws IOException {
         requireReference(reference);
         UUID projectId = parseUuid(reference);
@@ -69,72 +60,47 @@ public final class ProjectResolver {
 
     public RegisteredProject resolveById(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        return registry.findProject(projectId)
-                .orElseThrow(() -> notFound(projectId.toString()));
+        return registry.findProject(projectId).orElseThrow(() -> notFound(projectId.toString()));
     }
 
     public RegisteredProject resolveByName(String displayName) throws IOException {
         requireReference(displayName);
         List<RegisteredProject> candidates = candidatesByName(displayName);
-        if (candidates.isEmpty()) {
-            throw notFound(displayName);
-        }
-        if (candidates.size() > 1) {
-            throw ambiguous(displayName, candidates);
-        }
+        if (candidates.isEmpty()) throw notFound(displayName);
+        if (candidates.size() > 1) throw ambiguous(displayName, candidates);
         return candidates.getFirst();
     }
 
-    /** Returns the deterministic exact-match candidates represented by a user reference. */
     public List<RegisteredProject> listCandidates(String reference) throws IOException {
         requireReference(reference);
         UUID projectId = parseUuid(reference);
-        if (projectId != null) {
-            return registry.findProject(projectId).map(List::of).orElseGet(List::of);
-        }
+        if (projectId != null) return registry.findProject(projectId).map(List::of).orElseGet(List::of);
         return candidatesByName(reference);
     }
 
     private List<RegisteredProject> candidatesByName(String displayName) throws IOException {
-        return registry.listProjects().stream()
-                .filter(project -> displayName.equals(project.displayName()))
-                .toList();
+        return registry.listProjects().stream().filter(project -> displayName.equals(project.displayName())).toList();
     }
 
     private static void requireReference(String reference) {
         if (reference == null || reference.isBlank()) {
-            throw new ResolutionException(
-                    ErrorCode.INVALID_PROJECT_REFERENCE,
-                    reference,
-                    List.of(),
-                    "project identifier must not be blank"
-            );
+            throw new ResolutionException(ErrorCode.INVALID_PROJECT_REFERENCE, reference, List.of(),
+                    "project identifier must not be blank");
         }
     }
 
     private static ResolutionException notFound(String reference) {
-        return new ResolutionException(
-                ErrorCode.PROJECT_NOT_FOUND,
-                reference,
-                List.of(),
-                "unknown project: " + reference
-        );
+        return new ResolutionException(ErrorCode.PROJECT_NOT_FOUND, reference, List.of(), "unknown project: " + reference);
     }
 
     private static ResolutionException ambiguous(String reference, List<RegisteredProject> candidates) {
-        return new ResolutionException(
-                ErrorCode.PROJECT_REFERENCE_AMBIGUOUS,
-                reference,
+        return new ResolutionException(ErrorCode.PROJECT_REFERENCE_AMBIGUOUS, reference,
                 candidates.stream().map(RegisteredProject::id).toList(),
-                "ambiguous project name, use its UUID: " + reference
-        );
+                "ambiguous project name, use its UUID: " + reference);
     }
 
     private static UUID parseUuid(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
+        try { return UUID.fromString(value); }
+        catch (IllegalArgumentException exception) { return null; }
     }
 }
