@@ -87,11 +87,19 @@ function New-ManagedPassword([string] $Path) {
     [System.Security.Cryptography.RandomNumberGenerator]::Fill($Bytes)
     $Password = [Convert]::ToBase64String($Bytes).TrimEnd('=')
     [System.IO.File]::WriteAllText($Path, $Password + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-
-    $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $Sid = $Identity.User.Value
+    $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict PostgreSQL secret ACL: $Path" }
+}
+
+function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
+    & docker volume inspect $Name *> $null
+    if ($LASTEXITCODE -eq 0) { return }
+    & docker volume create `
+        --label "io.minos.installation=$ComposeProject" `
+        --label "io.minos.runtime-plane=$Plane" `
+        $Name | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to create managed Docker volume: $Name" }
 }
 
 function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
@@ -146,12 +154,18 @@ if (-not $NeedsConnectedRuntime) {
 Copy-Item -LiteralPath $ConnectedTemplate -Destination $ComposeFile -Force
 New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
 
+$PostgresVolume = "$ComposeProject-postgres-data"
+$OllamaVolume = "$ComposeProject-ollama-models"
+$Environment['MINOS_POSTGRES_VOLUME'] = $PostgresVolume
+$Environment['MINOS_OLLAMA_VOLUME'] = $OllamaVolume
+
 $Configuration = [ordered]@{
     'minos.storage.backend' = $StorageBackend
     'minos.semantic.provider' = $SemanticProvider
 }
 
 if ($StorageBackend -eq 'postgresql') {
+    Ensure-ManagedVolume -Name $PostgresVolume -Plane 'storage'
     $SecretFile = Join-Path $DataRoot 'secrets\postgres.password'
     New-ManagedPassword $SecretFile
     $Configuration['minos.postgres.url'] = "jdbc:postgresql://minos-postgres:5432/$PostgresDatabase"
@@ -165,6 +179,7 @@ if ($StorageBackend -eq 'postgresql') {
 }
 
 if ($SemanticProvider -eq 'ollama') {
+    Ensure-ManagedVolume -Name $OllamaVolume -Plane 'semantic'
     if ([string]::IsNullOrWhiteSpace($SemanticModel)) { throw 'SemanticModel must not be blank for Ollama.' }
     $Configuration['minos.semantic.model'] = $SemanticModel
     $Configuration['minos.semantic.dimensions'] = [string]$SemanticDimensions
