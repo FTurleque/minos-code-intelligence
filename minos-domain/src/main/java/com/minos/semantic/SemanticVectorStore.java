@@ -12,10 +12,11 @@ import java.util.PriorityQueue;
 public interface SemanticVectorStore {
 
     Optional<IndexSnapshot> load(String projectId) throws IOException;
-
     void replace(IndexSnapshot snapshot) throws IOException;
-
     void delete(String projectId) throws IOException;
+
+    /** Stable diagnostic identifier for the vector ranking engine. */
+    default String searchEngine() { return "exact-linear"; }
 
     /**
      * Executes vector ranking for one already-embedded query. The local backend keeps the
@@ -48,8 +49,7 @@ public interface SemanticVectorStore {
             VectorHit candidate = new VectorHit(value.document(), score);
             if (top.size() < limit) top.add(candidate);
             else if (bestFirst.compare(candidate, top.peek()) < 0) {
-                top.poll();
-                top.add(candidate);
+                top.poll(); top.add(candidate);
             }
         }
         List<VectorHit> hits = new ArrayList<>(top);
@@ -57,7 +57,6 @@ public interface SemanticVectorStore {
         return List.copyOf(hits);
     }
 
-    /** Approximate storage footprint used for diagnostics; providers may return exact database bytes. */
     default long sizeBytes(String projectId) throws IOException {
         Optional<IndexSnapshot> value = load(projectId);
         if (value.isEmpty()) return 0L;
@@ -72,36 +71,22 @@ public interface SemanticVectorStore {
     record VectorHit(SemanticDocument document, double score) {
         public VectorHit {
             Objects.requireNonNull(document, "document");
-            if (!Double.isFinite(score) || score < -1.0 || score > 1.0) {
-                throw new IllegalArgumentException("score must be finite and between -1 and 1");
-            }
+            if (!Double.isFinite(score) || score < -1.0 || score > 1.0) throw new IllegalArgumentException("score must be finite and between -1 and 1");
         }
     }
 
     record IndexedDocument(SemanticDocument document, SemanticVector vector) {
         public IndexedDocument {
-            Objects.requireNonNull(document, "document");
-            Objects.requireNonNull(vector, "vector");
-            if (!document.stableKey().equals(vector.stableKey())) {
-                throw new IllegalArgumentException("document/vector stableKey mismatch");
-            }
+            Objects.requireNonNull(document, "document"); Objects.requireNonNull(vector, "vector");
+            if (!document.stableKey().equals(vector.stableKey())) throw new IllegalArgumentException("document/vector stableKey mismatch");
         }
     }
 
-    record IndexSnapshot(
-            String projectId,
-            String snapshotId,
-            String providerId,
-            String modelId,
-            int dimensions,
-            long builtAtEpochMilli,
-            List<IndexedDocument> documents
-    ) {
+    record IndexSnapshot(String projectId, String snapshotId, String providerId, String modelId,
+                         int dimensions, long builtAtEpochMilli, List<IndexedDocument> documents) {
         public IndexSnapshot {
-            requireText(projectId, "projectId");
-            requireText(snapshotId, "snapshotId");
-            requireText(providerId, "providerId");
-            requireText(modelId, "modelId");
+            requireText(projectId, "projectId"); requireText(snapshotId, "snapshotId");
+            requireText(providerId, "providerId"); requireText(modelId, "modelId");
             if (dimensions < 1) throw new IllegalArgumentException("dimensions must be greater than zero");
             if (builtAtEpochMilli < 0) throw new IllegalArgumentException("builtAtEpochMilli must not be negative");
             documents = List.copyOf(Objects.requireNonNull(documents, "documents"));
@@ -111,7 +96,6 @@ public interface SemanticVectorStore {
                 if (value.vector().dimensions() != dimensions) throw new IllegalArgumentException("semantic vector dimensions mismatch");
             }
         }
-
         private static void requireText(String value, String name) {
             if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
         }
