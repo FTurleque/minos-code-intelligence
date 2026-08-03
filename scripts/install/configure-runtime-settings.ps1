@@ -1,0 +1,174 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [string] $DataRoot,
+
+    [ValidateSet('standard', 'advanced')]
+    [string] $SetupMode = 'standard',
+
+    [ValidateSet('native', 'docker', 'none')]
+    [string] $McpBackend = 'native',
+
+    [ValidatePattern('^[A-Za-z][A-Za-z0-9_-]{0,63}$')]
+    [string] $McpServerName = 'minos',
+
+    [ValidateSet('local', 'postgresql')]
+    [string] $StorageBackend = 'local',
+
+    [string] $PostgresUrl = '',
+    [string] $PostgresUser = '',
+    [string] $PostgresPasswordSourcePath = '',
+    [string] $PostgresSchema = 'minos',
+
+    [ValidateSet('disabled', 'local-hash', 'ollama')]
+    [string] $SemanticProvider = 'disabled',
+
+    [string] $SemanticModel = 'nomic-embed-text',
+
+    [ValidateRange(32, 16384)]
+    [int] $SemanticDimensions = 768,
+
+    [string] $SemanticEndpoint = 'http://127.0.0.1:11434/api/embed',
+
+    [ValidateRange(1, 300)]
+    [int] $SemanticTimeoutSeconds = 30,
+
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
+    [string] $DockerInstanceName = 'minos-mcp-prod',
+
+    [string] $InstallerStatePath = ''
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+if ($env:OS -ne 'Windows_NT') {
+    throw 'MINOS installer runtime settings currently target Windows hosts.'
+}
+
+function Require-Identifier([string] $Value, [string] $Name) {
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,62}$') {
+        throw "$Name must be a safe identifier."
+    }
+}
+
+function Write-Properties([string] $Path, [System.Collections.IDictionary] $Values) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+    $Lines = @('# MINOS runtime configuration managed by installer')
+    foreach ($Key in $Values.Keys) {
+        $Value = ([string]$Values[$Key]).Replace('\', '\\')
+        $Lines += "$Key=$Value"
+    }
+    [System.IO.File]::WriteAllLines($Path, $Lines, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Restrict-FileToCurrentUser([string] $Path) {
+    $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $Sid = $Identity.User.Value
+    & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to restrict file ACL: $Path" }
+}
+
+function Write-Json([string] $Path, [object] $Value) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+    $Json = $Value | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText($Path, $Json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Test-LoopbackOllamaEndpoint([string] $Endpoint) {
+    try { $Uri = [Uri]$Endpoint } catch { return $false }
+    if ($Uri.Scheme -notin @('http', 'https') -or [string]::IsNullOrWhiteSpace($Uri.AbsolutePath)) { return $false }
+    $HostValue = $Uri.DnsSafeHost.ToLowerInvariant()
+    if ($HostValue -in @('localhost', '::1')) { return $true }
+    $Address = $null
+    if ([System.Net.IPAddress]::TryParse($HostValue, [ref]$Address)) {
+        return [System.Net.IPAddress]::IsLoopback($Address)
+    }
+    return $false
+}
+
+$DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
+if ([string]::IsNullOrWhiteSpace($InstallerStatePath)) {
+    $InstallerStatePath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'MINOS\installer-state.json'
+}
+$InstallerStatePath = [System.IO.Path]::GetFullPath($InstallerStatePath)
+New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
+
+$Configuration = [ordered]@{
+    'minos.storage.backend' = $StorageBackend
+    'minos.semantic.provider' = $SemanticProvider
+}
+
+if ($StorageBackend -eq 'postgresql') {
+    if ([string]::IsNullOrWhiteSpace($PostgresUrl) -or -not $PostgresUrl.StartsWith('jdbc:postgresql://')) {
+        throw 'PostgresUrl must use jdbc:postgresql:// when PostgreSQL storage is selected.'
+    }
+    Require-Identifier $PostgresUser 'PostgreSQL user'
+    Require-Identifier $PostgresSchema 'PostgreSQL schema'
+    if ([string]::IsNullOrWhiteSpace($PostgresPasswordSourcePath)) {
+        throw 'PostgresPasswordSourcePath is required when PostgreSQL storage is selected.'
+    }
+    $SourceSecret = [System.IO.Path]::GetFullPath($PostgresPasswordSourcePath)
+    if (-not (Test-Path -LiteralPath $SourceSecret -PathType Leaf)) {
+        throw "PostgreSQL password source file does not exist: $SourceSecret"
+    }
+    $Secret = [System.IO.File]::ReadAllText($SourceSecret, [System.Text.Encoding]::UTF8).Trim()
+    if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
+    $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
+    [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+    Restrict-FileToCurrentUser $SecretPath
+    $Configuration['minos.postgres.url'] = $PostgresUrl
+    $Configuration['minos.postgres.user'] = $PostgresUser
+    $Configuration['minos.postgres.passwordFile'] = 'secrets/postgres.password'
+    $Configuration['minos.postgres.schema'] = $PostgresSchema
+}
+
+if ($SemanticProvider -eq 'ollama') {
+    if ([string]::IsNullOrWhiteSpace($SemanticModel)) { throw 'SemanticModel must not be blank for Ollama.' }
+    if ($McpBackend -eq 'docker') {
+        $SemanticEndpoint = 'http://minos-ollama:11434/api/embed'
+    } elseif (-not (Test-LoopbackOllamaEndpoint $SemanticEndpoint)) {
+        throw 'Native Ollama endpoint must be loopback-only (localhost/127.0.0.0/8/::1).'
+    }
+    $Configuration['minos.semantic.model'] = $SemanticModel
+    $Configuration['minos.semantic.dimensions'] = [string]$SemanticDimensions
+    $Configuration['minos.semantic.endpoint'] = $SemanticEndpoint
+    $Configuration['minos.semantic.timeoutSeconds'] = [string]$SemanticTimeoutSeconds
+}
+
+$ConfigurationPath = Join-Path $DataRoot 'config\minos.properties'
+Write-Properties -Path $ConfigurationPath -Values $Configuration
+
+$State = [ordered]@{
+    formatVersion = 1
+    updatedAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    setupMode = $SetupMode
+    dataRoot = $DataRoot
+    mcpServerName = $McpServerName
+    mcpBackend = $McpBackend
+    storageBackend = $StorageBackend
+    postgres = [ordered]@{
+        url = if ($StorageBackend -eq 'postgresql') { $PostgresUrl } else { $null }
+        user = if ($StorageBackend -eq 'postgresql') { $PostgresUser } else { $null }
+        schema = if ($StorageBackend -eq 'postgresql') { $PostgresSchema } else { $null }
+        passwordFile = if ($StorageBackend -eq 'postgresql') { $SecretPath } else { $null }
+    }
+    semantic = [ordered]@{
+        provider = $SemanticProvider
+        model = if ($SemanticProvider -eq 'ollama') { $SemanticModel } else { $null }
+        dimensions = if ($SemanticProvider -eq 'ollama') { $SemanticDimensions } else { $null }
+        endpoint = if ($SemanticProvider -eq 'ollama') { $SemanticEndpoint } else { $null }
+        timeoutSeconds = if ($SemanticProvider -eq 'ollama') { $SemanticTimeoutSeconds } else { $null }
+    }
+    dockerInstanceName = $DockerInstanceName
+    configurationFile = $ConfigurationPath
+}
+Write-Json -Path $InstallerStatePath -Value $State
+
+Write-Host 'MINOS runtime settings configured.' -ForegroundColor Green
+Write-Host "Mode     : $SetupMode"
+Write-Host "Data     : $DataRoot"
+Write-Host "MCP      : $McpBackend / $McpServerName"
+Write-Host "Storage  : $StorageBackend"
+Write-Host "Semantic : $SemanticProvider"
