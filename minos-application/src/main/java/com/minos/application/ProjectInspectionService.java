@@ -2,14 +2,14 @@ package com.minos.application;
 
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,39 +30,31 @@ import java.util.stream.Collectors;
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {
 
-    private final LocalProjectRegistry registry;
+    private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
-    private final FileSymbolSnapshotStore snapshotStore;
-    private final FileIndexStateStore stateStore;
+    private final CodeKnowledgeSnapshotStore snapshotStore;
+    private final IndexStateStore stateStore;
     private final ProjectDiscoveryService discoveryService;
     private final Path historyDirectory;
     private final Map<String, IndexerDescriptor> knownProviders;
 
     public ProjectInspectionService(
             Path home,
-            LocalProjectRegistry registry,
-            FileSymbolSnapshotStore snapshotStore,
-            FileIndexStateStore stateStore,
+            ProjectRegistry registry,
+            CodeKnowledgeSnapshotStore snapshotStore,
+            IndexStateStore stateStore,
             ProjectDiscoveryService discoveryService,
             List<IndexerDescriptor> indexerDescriptors
     ) {
-        this(
-                home,
-                registry,
-                new ProjectResolver(registry),
-                snapshotStore,
-                stateStore,
-                discoveryService,
-                indexerDescriptors
-        );
+        this(home, registry, new ProjectResolver(registry), snapshotStore, stateStore, discoveryService, indexerDescriptors);
     }
 
     public ProjectInspectionService(
             Path home,
-            LocalProjectRegistry registry,
+            ProjectRegistry registry,
             ProjectResolver projectResolver,
-            FileSymbolSnapshotStore snapshotStore,
-            FileIndexStateStore stateStore,
+            CodeKnowledgeSnapshotStore snapshotStore,
+            IndexStateStore stateStore,
             ProjectDiscoveryService discoveryService,
             List<IndexerDescriptor> indexerDescriptors
     ) {
@@ -79,9 +71,7 @@ public final class ProjectInspectionService {
 
     public List<ProjectView> listProjects() throws IOException {
         List<ProjectView> projects = new ArrayList<>();
-        for (RegisteredProject project : registry.listProjects()) {
-            projects.add(view(project));
-        }
+        for (RegisteredProject project : registry.listProjects()) projects.add(view(project));
         return List.copyOf(projects);
     }
 
@@ -119,126 +109,65 @@ public final class ProjectInspectionService {
 
         Optional<IndexHistory> manualHistory = readHistory(project.id()).filter(candidate ->
                 activeSnapshotId != null && activeSnapshotId.equals(candidate.snapshotId()));
-        String lastSuccessfulIndexAt = activeRun
-                .flatMap(IndexingRun::completedAt)
-                .map(Instant::toString)
+        String lastSuccessfulIndexAt = activeRun.flatMap(IndexingRun::completedAt).map(Instant::toString)
                 .orElseGet(() -> manualHistory.map(value -> value.completedAt().toString()).orElse(null));
-        String providerId = activeRun
-                .map(ProjectInspectionService::providerIds)
-                .filter(value -> !value.isBlank())
+        String providerId = activeRun.map(ProjectInspectionService::providerIds).filter(value -> !value.isBlank())
                 .orElseGet(() -> manualHistory.map(IndexHistory::providerId).orElse(null));
-        String providerVersion = activeRun
-                .map(this::providerVersions)
-                .filter(value -> !value.isBlank())
+        String providerVersion = activeRun.map(this::providerVersions).filter(value -> !value.isBlank())
                 .orElseGet(() -> manualHistory.map(IndexHistory::providerVersion).orElse(null));
 
-        return new ProjectView(
-                project.id().toString(),
-                project.displayName(),
-                project.rootPath().toString(),
-                rootAvailable,
-                languages,
-                buildSystems,
-                moduleCount,
-                indexState,
-                activeSnapshotId,
-                lastSuccessfulIndexAt,
-                providerId,
-                providerVersion
-        );
+        return new ProjectView(project.id().toString(), project.displayName(), project.rootPath().toString(), rootAvailable,
+                languages, buildSystems, moduleCount, indexState, activeSnapshotId, lastSuccessfulIndexAt,
+                providerId, providerVersion);
     }
 
     private static String providerIds(IndexingRun run) {
-        return run.executions().stream()
-                .map(IndexingRun.IndexerExecution::indexerId)
-                .distinct()
-                .sorted()
+        return run.executions().stream().map(IndexingRun.IndexerExecution::indexerId).distinct().sorted()
                 .collect(Collectors.joining(","));
     }
 
     private String providerVersions(IndexingRun run) {
-        return run.executions().stream()
-                .map(IndexingRun.IndexerExecution::indexerId)
-                .distinct()
-                .sorted()
-                .map(id -> Optional.ofNullable(knownProviders.get(id))
-                        .map(IndexerDescriptor::version)
-                        .map(version -> id + "@" + version)
-                        .orElse(id + "@unknown"))
+        return run.executions().stream().map(IndexingRun.IndexerExecution::indexerId).distinct().sorted()
+                .map(id -> Optional.ofNullable(knownProviders.get(id)).map(IndexerDescriptor::version)
+                        .map(version -> id + "@" + version).orElse(id + "@unknown"))
                 .collect(Collectors.joining(","));
     }
 
     private Optional<IndexHistory> readHistory(UUID projectId) throws IOException {
         Path file = historyDirectory.resolve(projectId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
-        }
+        if (!Files.isRegularFile(file)) return Optional.empty();
         Properties properties = new Properties();
-        try (InputStream input = Files.newInputStream(file)) {
-            properties.load(input);
-        }
-        return Optional.of(new IndexHistory(
-                required(properties, "snapshotId", file),
-                required(properties, "providerId", file),
-                blankToNull(properties.getProperty("providerVersion")),
-                Instant.parse(required(properties, "completedAt", file))
-        ));
+        try (InputStream input = Files.newInputStream(file)) { properties.load(input); }
+        return Optional.of(new IndexHistory(required(properties, "snapshotId", file), required(properties, "providerId", file),
+                blankToNull(properties.getProperty("providerVersion")), Instant.parse(required(properties, "completedAt", file))));
     }
 
     private static String required(Properties properties, String key, Path file) {
         String value = properties.getProperty(key);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("missing index property '" + key + "' in " + file);
-        }
+        if (value == null || value.isBlank()) throw new IllegalStateException("missing index property '" + key + "' in " + file);
         return value;
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
-
+    private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
     private static void requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
     }
 
-    public record ProjectView(
-            String id,
-            String name,
-            String rootPath,
-            boolean rootAvailable,
-            List<String> languages,
-            List<String> buildSystems,
-            int moduleCount,
-            String indexState,
-            String activeSnapshotId,
-            String lastSuccessfulIndexAt,
-            String providerId,
-            String providerVersion
-    ) {
+    public record ProjectView(String id, String name, String rootPath, boolean rootAvailable, List<String> languages,
+                              List<String> buildSystems, int moduleCount, String indexState, String activeSnapshotId,
+                              String lastSuccessfulIndexAt, String providerId, String providerVersion) {
         public ProjectView {
-            requireText(id, "id");
-            requireText(name, "name");
-            requireText(rootPath, "rootPath");
+            requireText(id, "id"); requireText(name, "name"); requireText(rootPath, "rootPath");
             languages = List.copyOf(Objects.requireNonNull(languages, "languages"));
             buildSystems = List.copyOf(Objects.requireNonNull(buildSystems, "buildSystems"));
-            if (moduleCount < 0) {
-                throw new IllegalArgumentException("moduleCount must not be negative");
-            }
+            if (moduleCount < 0) throw new IllegalArgumentException("moduleCount must not be negative");
             requireText(indexState, "indexState");
         }
     }
 
-    private record IndexHistory(
-            String snapshotId,
-            String providerId,
-            String providerVersion,
-            Instant completedAt
-    ) {
+    private record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
         private IndexHistory {
-            requireText(snapshotId, "snapshotId");
-            requireText(providerId, "providerId");
+            requireText(snapshotId, "snapshotId"); requireText(providerId, "providerId");
             Objects.requireNonNull(completedAt, "completedAt");
         }
     }
