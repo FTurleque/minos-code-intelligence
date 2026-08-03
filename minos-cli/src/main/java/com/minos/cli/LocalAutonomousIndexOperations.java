@@ -3,17 +3,17 @@ package com.minos.cli;
 import com.minos.application.MinosApplication;
 import com.minos.application.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
-import com.minos.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.IncrementalIndexingPlan;
 import com.minos.incremental.IncrementalIndexingPlanner;
 import com.minos.incremental.ProjectFingerprint;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshot;
+import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectInvalidationAssessment;
 import com.minos.incremental.ProjectInvalidationReason;
 import com.minos.incremental.ProjectInvalidationScope;
 import com.minos.incremental.ProjectInvalidationService;
-import com.minos.orchestration.FileIndexStateStore;
+import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerNegotiationResult;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
@@ -28,7 +28,7 @@ import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -40,13 +40,13 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
-/** Local implementation of the autonomous indexing path. */
+/** Autonomous indexing adapter over the selected MINOS storage backend. */
 public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
     private final MinosApplication application;
     private final ProjectResolver projectResolver;
-    private final FileSymbolSnapshotStore snapshotStore;
-    private final FileIndexStateStore stateStore;
-    private final FileProjectFingerprintSnapshotStore fingerprintStore;
+    private final CodeKnowledgeSnapshotStore snapshotStore;
+    private final IndexStateStore stateStore;
+    private final ProjectFingerprintSnapshotStore fingerprintStore;
     private final ProviderRuntimeManager runtimeManager;
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
