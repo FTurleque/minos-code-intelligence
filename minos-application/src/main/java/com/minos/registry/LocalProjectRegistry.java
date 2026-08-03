@@ -25,7 +25,7 @@ import java.util.UUID;
  * autoritatives et le registre persiste uniquement une racine projet relative portable.
  * Le chemin physique est résolu à l'ouverture pour le runtime natif ou Docker courant.</p>
  */
-public final class LocalProjectRegistry {
+public final class LocalProjectRegistry implements ProjectRegistry {
 
     private static final String PROJECTS_DIRECTORY = "projects";
     private static final String WORKSPACES_DIRECTORY = "workspaces";
@@ -68,6 +68,7 @@ public final class LocalProjectRegistry {
         Files.createDirectories(workspacesDirectory);
     }
 
+    @Override
     public synchronized RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
         Path canonicalRoot = canonicalExistingDirectory(rootPath);
         validateName(displayName, "displayName");
@@ -84,6 +85,7 @@ public final class LocalProjectRegistry {
         return project;
     }
 
+    @Override
     public synchronized RegisteredWorkspace createWorkspace(String name) throws IOException {
         validateName(name, "name");
         Instant now = Instant.now();
@@ -93,6 +95,7 @@ public final class LocalProjectRegistry {
         return workspace;
     }
 
+    @Override
     public synchronized RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(workspaceId, "workspaceId");
@@ -108,6 +111,7 @@ public final class LocalProjectRegistry {
         return updated;
     }
 
+    @Override
     public synchronized RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         RegisteredProject project = findProject(projectId)
@@ -120,6 +124,7 @@ public final class LocalProjectRegistry {
         return updated;
     }
 
+    @Override
     public synchronized Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         Path file = projectsDirectory.resolve(projectId + ".properties");
@@ -127,6 +132,7 @@ public final class LocalProjectRegistry {
         return Optional.of(readProject(file));
     }
 
+    @Override
     public synchronized Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Path file = workspacesDirectory.resolve(workspaceId + ".properties");
@@ -140,6 +146,7 @@ public final class LocalProjectRegistry {
                 metadata.id(), metadata.name(), projectIds, metadata.createdAt(), metadata.updatedAt()));
     }
 
+    @Override
     public synchronized List<RegisteredProject> listProjects() throws IOException {
         List<RegisteredProject> projects = new ArrayList<>();
         for (Path file : propertyFiles(projectsDirectory)) projects.add(readProject(file));
@@ -147,6 +154,7 @@ public final class LocalProjectRegistry {
         return List.copyOf(projects);
     }
 
+    @Override
     public synchronized List<RegisteredWorkspace> listWorkspaces() throws IOException {
         List<RegisteredProject> projects = listProjects();
         List<RegisteredWorkspace> workspaces = new ArrayList<>();
