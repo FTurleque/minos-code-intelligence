@@ -69,6 +69,20 @@ public final class MinosRuntimeSettings {
         return blank(value) ? null : value.trim();
     }
 
+    /**
+     * Makes a durable file value visible to legacy property/environment readers without
+     * overriding an explicit JVM property or environment variable. Secrets must never use
+     * this mechanism.
+     */
+    public void activateFileFallback(String property, String environmentVariable) {
+        if (!blank(systemProperties.getProperty(property))) return;
+        if (!blank(environment.get(environmentVariable))) return;
+        String configured = fileProperties.getProperty(property);
+        if (blank(configured)) return;
+        System.setProperty(property, configured.trim());
+        systemProperties.setProperty(property, configured.trim());
+    }
+
     public String secret(
             String valueProperty,
             String valueEnvironment,
