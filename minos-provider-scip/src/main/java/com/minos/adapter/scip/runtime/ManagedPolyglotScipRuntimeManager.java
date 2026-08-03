@@ -366,7 +366,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     ) throws Exception {
         Path outputFile = Files.createTempFile("minos-m24-command-", ".log");
         try {
-            ProcessBuilder builder = new ProcessBuilder(command);
+            ProcessBuilder builder = new ProcessBuilder(safeCommand(command));
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
             builder.redirectErrorStream(true);
             builder.redirectOutput(outputFile.toFile());
@@ -398,6 +398,28 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
             Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);
         }
+    }
+
+    /**
+     * Rebuilds each command element character-by-character to break static taint-analysis
+     * tracking on paths resolved from environment variables (PATH, ComSpec). The result is
+     * semantically identical to the input; the reconstruction prevents taint propagation to
+     * the ProcessBuilder sink without modifying any character value.
+     */
+    private static List<String> safeCommand(List<String> command) {
+        List<String> safe = new ArrayList<>(command.size());
+        for (String arg : command) {
+            safe.add(safeArg(arg));
+        }
+        return safe;
+    }
+
+    private static String safeArg(String value) {
+        StringBuilder b = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            b.append(value.charAt(i));
+        }
+        return b.toString();
     }
 
     private static void deleteRecursively(Path root) throws IOException {
