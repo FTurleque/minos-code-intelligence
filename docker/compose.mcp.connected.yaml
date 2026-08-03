@@ -208,6 +208,7 @@ services:
       - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
       - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
     labels:
@@ -256,10 +257,8 @@ volumes:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
       io.minos.runtime-plane: provider-tools
   minos-postgres-data:
-    labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.runtime-plane: storage
+    external: true
+    name: "${MINOS_POSTGRES_VOLUME}"
   minos-ollama-models:
-    labels:
-      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.runtime-plane: semantic
+    external: true
+    name: "${MINOS_OLLAMA_VOLUME}"
