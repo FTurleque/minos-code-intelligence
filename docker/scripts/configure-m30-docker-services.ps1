@@ -53,7 +53,7 @@ function Read-KeyValueFile([string] $Path) {
     return $Values
 }
 
-function Write-EnvironmentFile([string] $Path, [hashtable] $Values) {
+function Write-EnvironmentFile([string] $Path, [System.Collections.IDictionary] $Values) {
     $Lines = foreach ($Key in $Values.Keys) {
         $Value = [string]$Values[$Key]
         if ($Value.Contains(' ') -or $Value.Contains(':\') -or $Value.Contains('/')) {
@@ -66,7 +66,7 @@ function Write-EnvironmentFile([string] $Path, [hashtable] $Values) {
     [System.IO.File]::WriteAllLines($Path, $Lines, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Write-MinosProperties([string] $Path, [ordered] $Values) {
+function Write-MinosProperties([string] $Path, [System.Collections.IDictionary] $Values) {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
     $Lines = @('# MINOS runtime configuration managed by the Windows installer')
     foreach ($Key in $Values.Keys) {
@@ -88,11 +88,9 @@ function New-ManagedPassword([string] $Path) {
     $Password = [Convert]::ToBase64String($Bytes).TrimEnd('=')
     [System.IO.File]::WriteAllText($Path, $Password + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
-    # Restrict the secret to the current Windows identity. Failure is fatal: do not
-    # silently continue with a broadly-readable database credential.
     $Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $Sid = $Identity.User.Value
-    & icacls.exe $Path /inheritance:r /grant:r "*$Sid`:F" | Out-Null
+    & icacls.exe $Path /inheritance:r /grant:r "*${Sid}:F" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict PostgreSQL secret ACL: $Path" }
 }
 
@@ -180,36 +178,44 @@ if ($SemanticProvider -eq 'ollama') {
     $Environment['MINOS_SEMANTIC_PROVIDER'] = $SemanticProvider
 }
 
-Write-MinosProperties (Join-Path $DataRoot 'config\minos.properties') $Configuration
-Write-EnvironmentFile $EnvironmentFile $Environment
-Invoke-Compose @('config', '--quiet')
+Write-MinosProperties -Path (Join-Path $DataRoot 'config\minos.properties') -Values $Configuration
+Write-EnvironmentFile -Path $EnvironmentFile -Values $Environment
+Invoke-Compose -Arguments @('config', '--quiet')
 
 $Profiles = @()
 if ($StorageBackend -eq 'postgresql') {
     $Profiles += 'postgresql'
-    Invoke-Compose @('up', '-d', '--wait', 'minos-postgres') @('postgresql')
+    Invoke-Compose -Arguments @('up', '-d', '--wait', 'minos-postgres') -Profiles @('postgresql')
 }
 if ($SemanticProvider -eq 'ollama') {
     $Profiles += 'ollama'
-    Invoke-Compose @('up', '-d', '--wait', 'minos-ollama') @('ollama')
+    Invoke-Compose -Arguments @('up', '-d', '--wait', 'minos-ollama') -Profiles @('ollama')
     if ($ProvisionOllamaModel) {
-        $OllamaContainer = ((Invoke-Expression "docker compose --project-directory `"$RuntimeRoot`" --env-file `"$EnvironmentFile`" -f `"$ComposeFile`" --profile ollama ps -q minos-ollama") | Out-String).Trim()
-        if ([string]::IsNullOrWhiteSpace($OllamaContainer)) { throw 'Unable to resolve managed Ollama container.' }
+        $ComposeBase = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
+            '-f', $ComposeFile, '--profile', 'ollama', 'ps', '-q', 'minos-ollama')
+        $OllamaContainer = ((& docker @ComposeBase) | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($OllamaContainer)) {
+            throw 'Unable to resolve managed Ollama container.'
+        }
         $EgressNetwork = Find-Network 'admin-dependency-egress'
+        $ConnectedForProvisioning = $false
         try {
             & docker network connect $EgressNetwork $OllamaContainer
             if ($LASTEXITCODE -ne 0) { throw 'Unable to attach temporary Ollama provisioning egress.' }
+            $ConnectedForProvisioning = $true
             & docker exec $OllamaContainer ollama pull $SemanticModel
             if ($LASTEXITCODE -ne 0) { throw "Ollama model provisioning failed: $SemanticModel" }
         }
         finally {
-            & docker network disconnect $EgressNetwork $OllamaContainer 2>$null | Out-Null
+            if ($ConnectedForProvisioning) {
+                & docker network disconnect $EgressNetwork $OllamaContainer 2>$null | Out-Null
+            }
         }
     }
 }
 
 if ($Start) {
-    Invoke-Compose @('up', '-d', '--force-recreate', 'minos-mcp') $Profiles
+    Invoke-Compose -Arguments @('up', '-d', '--force-recreate', 'minos-mcp') -Profiles $Profiles
 }
 
 Write-Host 'MINOS M30 managed Docker services configured.' -ForegroundColor Green
