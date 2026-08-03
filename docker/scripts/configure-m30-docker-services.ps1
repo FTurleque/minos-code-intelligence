@@ -220,6 +220,10 @@ if ($SemanticProvider -eq 'ollama') {
             $ConnectedForProvisioning = $true
             & docker exec $OllamaContainer ollama pull $SemanticModel
             if ($LASTEXITCODE -ne 0) { throw "Ollama model provisioning failed: $SemanticModel" }
+            $ModelLines = @(& docker exec $OllamaContainer ollama list)
+            if ($LASTEXITCODE -ne 0) { throw "Unable to list Ollama models after provisioning: $SemanticModel" }
+            $ModelPresent = $ModelLines | Select-Object -Skip 1 | Where-Object { $_ -match "^$([regex]::Escape($SemanticModel))" }
+            if (-not $ModelPresent) { throw "Ollama model '$SemanticModel' not found after pull — provisioning incomplete." }
         }
         finally {
             if ($ConnectedForProvisioning) {

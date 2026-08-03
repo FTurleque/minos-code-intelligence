@@ -6,6 +6,13 @@ services:
     container_name: "${MINOS_CONTAINER_NAME}"
     entrypoint: [sleep, infinity]
     init: true
+    depends_on:
+      minos-postgres:
+        condition: service_healthy
+        required: false
+      minos-ollama:
+        condition: service_healthy
+        required: false
     environment:
       MINOS_HOME: /var/lib/minos
       MINOS_RUNTIME_LOCATION: docker
