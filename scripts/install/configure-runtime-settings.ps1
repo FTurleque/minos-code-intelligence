@@ -100,6 +100,21 @@ if ([string]::IsNullOrWhiteSpace($InstallerStatePath)) {
 $InstallerStatePath = [System.IO.Path]::GetFullPath($InstallerStatePath)
 New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
 
+# Seed backend.properties before any AI client can invoke minos.exe mcp and trigger
+# McpBackendConfigurationStore.loadOrMigrate(), which would create a native default.
+# switch-mcp-backend.ps1 unconditionally overwrites this seed with the committed backend.
+$RuntimeDirectory = Join-Path $DataRoot 'runtime'
+$SeedBackendFile = Join-Path $RuntimeDirectory 'backend.properties'
+if (-not (Test-Path -LiteralPath $SeedBackendFile -PathType Leaf)) {
+    New-Item -ItemType Directory -Force -Path $RuntimeDirectory | Out-Null
+    [System.IO.File]::WriteAllLines(
+        $SeedBackendFile,
+        [string[]]@('# MINOS MCP backend configuration v1', 'formatVersion=1',
+            'backend=native', "docker.containerName=$DockerInstanceName",
+            'docker.probeTimeoutMillis=20000'),
+        [System.Text.UTF8Encoding]::new($false))
+}
+
 $Configuration = [ordered]@{
     'minos.storage.backend' = $StorageBackend
     'minos.semantic.provider' = $SemanticProvider
