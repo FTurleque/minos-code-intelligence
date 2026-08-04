@@ -5,7 +5,7 @@ Issue : **#109**
 PR : **#110 (DRAFT)**  
 Branche : **`m30-advanced-installer-postgres-ollama`**  
 Baseline : **M29 / PR #108, HEAD initial `fc1243d74b20d1198cf32c0ee380142c6aa6848b`**  
-HEAD local : **`2045e10`** (fix(m30): create /var/lib/minos in Dockerfile.mcp before USER 10001)
+HEAD local : **`49ab40d`** (docs(m30): record qualification results and artifact SHA-256)
 
 ## Objectif produit
 
@@ -117,9 +117,9 @@ Gates supplémentaires : migration local→PostgreSQL, exact identities, pgvecto
 
 | Artefact | SHA-256 |
 |---|---|
-| `MINOS-1.0.1-windows-x64-setup.exe` | `b8d7e8877f72d68b836b34ebe9a28baf1f1d3b06c65ba34d40c2f1da05559aba` |
-| `minos-1.0.1-windows-x64.zip` | `4c73cec83158ba7a36affcf3fd7ef5740989f7e3f017800877aab887571eb2f8` |
-| `minos-1.0.1.cdx.json` (SBOM) | `ed2dd15b197e7e25c00770faf0bb18a167ed1c16bc7cb06f3da4dba02554f413` |
+| `MINOS-1.0.1-windows-x64-setup.exe` | `b907928f3274783d3a68ec6308c47c44588bdea12564568ab07e9a583f05301a` |
+| `minos-1.0.1-windows-x64.zip` | `ffa4b3b37b358da16812d410708e5788041df002409dafc960d85fb47be8f5ae` |
+| `minos-1.0.1.cdx.json` (SBOM) | `a928517ec764da0f4521a0c5daa3d14edf27e365d2229a56ae8ebde2f8df1af6` |
 
 ### Limitations connues (scope V1)
 
