@@ -17,6 +17,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -142,5 +143,13 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         return value;
     }
 
-    private record Row(String snapshotId, byte[] payload, String sha256) { }
+    private record Row(String snapshotId, byte[] payload, String sha256) {
+        @Override public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Row r)) return false;
+            return Objects.equals(snapshotId, r.snapshotId) && Arrays.equals(payload, r.payload) && Objects.equals(sha256, r.sha256);
+        }
+        @Override public int hashCode() { return Objects.hash(snapshotId, Arrays.hashCode(payload), sha256); }
+        @Override public String toString() { return "Row[snapshotId=" + snapshotId + ", payload=byte[" + payload.length + "], sha256=" + sha256 + "]"; }
+    }
 }
