@@ -21,6 +21,9 @@ public final class MinosCliRunner {
     public static final String HOME_ENVIRONMENT_VARIABLE = MinosHome.ENVIRONMENT_VARIABLE;
     public static final String HOME_SYSTEM_PROPERTY = MinosHome.SYSTEM_PROPERTY;
 
+    private static final String SEMANTIC_COMMAND = "semantic";
+    private static final String HYBRID_COMMAND = "hybrid";
+
     private static final Set<String> STATELESS_HELP_COMMANDS = Set.of(
             ProjectCommand.NAME,
             "inspect",
@@ -46,7 +49,9 @@ public final class MinosCliRunner {
             NexusExportCommand.NAME,
             RemoteIndexCommand.NAME,
             RuntimeCommand.NAME,
-            TeamCommand.NAME
+            TeamCommand.NAME,
+            SEMANTIC_COMMAND,
+            HYBRID_COMMAND
     );
 
     private MinosCliRunner() { }
@@ -71,6 +76,10 @@ public final class MinosCliRunner {
         if (isIdeIntelligenceRequest(arguments)) {
             return new IdeIntelligenceCommand(app).run(slice(arguments, 1), output, error);
         }
+        if (isRetrievalStatusRequest(arguments)) {
+            return new RetrievalStatusCommand(retrievalMode(arguments[0]), app.semanticIndexService())
+                    .run(slice(arguments, 1), output, error);
+        }
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
@@ -94,6 +103,12 @@ public final class MinosCliRunner {
         Objects.requireNonNull(arguments, "arguments");
         if (isHelp(arguments)) return true;
         if (arguments.length == 2 && isHelpToken(arguments[1])) return STATELESS_HELP_COMMANDS.contains(arguments[0]);
+        if (arguments.length == 3
+                && isRetrievalCommand(arguments[0])
+                && "status".equals(arguments[1])
+                && isHelpToken(arguments[2])) {
+            return true;
+        }
         return arguments.length == 3
                 && ProjectCommand.NAME.equals(arguments[0])
                 && Set.of("add", "list", "inspect").contains(arguments[1])
@@ -106,6 +121,10 @@ public final class MinosCliRunner {
         Objects.requireNonNull(error, "error");
         if (!isStatelessHelpRequest(arguments)) {
             throw new IllegalArgumentException("arguments are not a stateless CLI help request");
+        }
+        if ((arguments.length == 2 || arguments.length == 3) && isRetrievalCommand(arguments[0])) {
+            output.append(RetrievalStatusCommand.usage(retrievalMode(arguments[0]))).append('\n');
+            return FindSymbolCommand.SUCCESS;
         }
         if (arguments.length == 2 && ProviderCommand.NAME.equals(arguments[0]) && isHelpToken(arguments[1])) {
             output.append(ProviderCommand.usage()).append('\n');
@@ -158,6 +177,22 @@ public final class MinosCliRunner {
 
     public static Path resolveHome(Map<String, String> environment, Properties properties) {
         return MinosHome.resolve(environment, properties);
+    }
+
+    private static boolean isRetrievalStatusRequest(String[] arguments) {
+        return arguments.length >= 1 && isRetrievalCommand(arguments[0]);
+    }
+
+    private static boolean isRetrievalCommand(String command) {
+        return SEMANTIC_COMMAND.equals(command) || HYBRID_COMMAND.equals(command);
+    }
+
+    private static RetrievalStatusCommand.Mode retrievalMode(String command) {
+        return switch (command) {
+            case SEMANTIC_COMMAND -> RetrievalStatusCommand.Mode.SEMANTIC;
+            case HYBRID_COMMAND -> RetrievalStatusCommand.Mode.HYBRID;
+            default -> throw new IllegalArgumentException("unsupported retrieval command: " + command);
+        };
     }
 
     private static MinosCli statelessHelpCli() {

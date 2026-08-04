@@ -57,7 +57,25 @@ if ([string]::IsNullOrWhiteSpace($CopilotJetBrainsConfigPath)) {
     $CopilotJetBrainsConfigPath = Join-Path $LocalAppData 'github-copilot\intellij\mcp.json'
 }
 if ([string]::IsNullOrWhiteSpace($ClaudeDesktopConfigPath)) {
-    $ClaudeDesktopConfigPath = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    # Prefer the Windows Store (MSIX) sandboxed config path when present;
+    # fall back to the traditional standalone-installer path.
+    $PackagesDir = Join-Path $LocalAppData 'Packages'
+    $MsixConfig = ''
+    if (Test-Path -LiteralPath $PackagesDir -PathType Container) {
+        foreach ($PkgDir in @(Get-ChildItem -LiteralPath $PackagesDir -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending)) {
+            $Candidate = Join-Path $PkgDir.FullName 'LocalCache\Roaming\Claude\claude_desktop_config.json'
+            if (Test-Path -LiteralPath (Split-Path -Parent $Candidate) -PathType Container) {
+                $MsixConfig = $Candidate
+                break
+            }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($MsixConfig)) {
+        $ClaudeDesktopConfigPath = $MsixConfig
+    } else {
+        $ClaudeDesktopConfigPath = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    }
 }
 
 $StatePath = [System.IO.Path]::GetFullPath($StatePath)
@@ -472,6 +490,19 @@ function Resolve-CommandPath([string] $Name) {
     return $Command.Name
 }
 
+function Find-EmbeddedClaudeCli {
+    # Claude Code Desktop ships its own claude.exe under
+    # %APPDATA%\Claude\claude-code\<version>\claude.exe -- never on PATH.
+    $ClaudeCodeDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Claude\claude-code'
+    if (-not (Test-Path -LiteralPath $ClaudeCodeDir -PathType Container)) { return '' }
+    foreach ($Dir in @(Get-ChildItem -LiteralPath $ClaudeCodeDir -Directory -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending)) {
+        $Exe = Join-Path $Dir.FullName 'claude.exe'
+        if (Test-Path -LiteralPath $Exe -PathType Leaf) { return $Exe }
+    }
+    return ''
+}
+
 function Stop-NativeProcessTree([System.Diagnostics.Process] $Process) {
     if ($null -eq $Process) {
         return
@@ -727,7 +758,12 @@ function Uninstall-CliClient([object] $Entry) {
     }
 
     try {
-        $ToolPath = Resolve-CommandPath -Name ([string]$Entry.toolName)
+        $StoredPath = if ($Entry.PSObject.Properties['toolPath']) { [string]$Entry.toolPath } else { '' }
+        $ToolPath = if (-not [string]::IsNullOrWhiteSpace($StoredPath) -and (Test-Path -LiteralPath $StoredPath -PathType Leaf)) {
+            $StoredPath
+        } else {
+            Resolve-CommandPath -Name ([string]$Entry.toolName)
+        }
         if ([string]::IsNullOrWhiteSpace($ToolPath)) {
             Fail-Or-Warn "Cannot remove MINOS from $($Entry.displayName): '$($Entry.toolName)' is no longer available in PATH."
             return
@@ -775,10 +811,29 @@ if ($Action -eq 'Install') {
             -RemoveArguments @('mcp', 'remove', 'minos')
     }
     if ($ClaudeCode) {
-        Install-CliClient -Id 'claude-code' -DisplayName 'Claude Code' -ToolName 'claude' `
-            -GetArguments @('mcp', 'get', 'minos') `
-            -AddArguments @('mcp', 'add', '--scope', 'user', '--env', "MINOS_HOME=$DataRoot", 'minos', '--', $MinosExe, 'mcp') `
-            -RemoveArguments @('mcp', 'remove', 'minos')
+        $ClaudeBin = Resolve-CommandPath -Name 'claude'
+        if ([string]::IsNullOrWhiteSpace($ClaudeBin)) {
+            $ClaudeBin = Find-EmbeddedClaudeCli
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ClaudeBin)) {
+            $OldClaudePath = $env:Path
+            try {
+                $ClaudeDir = Split-Path -Parent $ClaudeBin
+                if (-not ($env:Path -split [IO.Path]::PathSeparator | Where-Object { $_ -ieq $ClaudeDir })) {
+                    $env:Path = $ClaudeDir + [IO.Path]::PathSeparator + $env:Path
+                }
+                Install-CliClient -Id 'claude-code' -DisplayName 'Claude Code' -ToolName 'claude' `
+                    -GetArguments @('mcp', 'get', 'minos') `
+                    -AddArguments @('mcp', 'add', 'minos', '--scope', 'user', '-e', "MINOS_HOME=$DataRoot", '--', $MinosExe, 'mcp') `
+                    -RemoveArguments @('mcp', 'remove', 'minos')
+            }
+            finally {
+                $env:Path = $OldClaudePath
+            }
+        }
+        else {
+            Fail-Or-Warn 'Claude Code was selected but neither the claude CLI nor the Claude Code Desktop embedded CLI could be found.'
+        }
     }
     if ($Codex) {
         Install-CliClient -Id 'codex' -DisplayName 'OpenAI Codex' -ToolName 'codex' `

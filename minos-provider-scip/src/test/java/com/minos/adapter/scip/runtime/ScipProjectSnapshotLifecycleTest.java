@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipProjectSnapshotLifecycleTest {
@@ -70,6 +71,48 @@ class ScipProjectSnapshotLifecycleTest {
         assertEquals(2, snapshot.symbols().size());
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "JavaService".equals(symbol.name())));
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "TsService".equals(symbol.name())));
+    }
+
+    @Test
+    void mergesSameQualifiedNameFromTwoScopesWithoutPathOrIdentityCollision() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Path appIndex = root.resolve("app.scip");
+        Path libIndex = root.resolve("lib.scip");
+        writeIndex(
+                appIndex,
+                "typescript",
+                "src/Shared.ts",
+                "scip-typescript npm app 1.0.0 src/`Shared.ts`/Shared#",
+                "Shared"
+        );
+        writeIndex(
+                libIndex,
+                "typescript",
+                "src/Shared.ts",
+                "scip-typescript npm lib 1.0.0 src/`Shared.ts`/Shared#",
+                "Shared"
+        );
+
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("scoped-home"));
+        FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(root.resolve("scoped-home/symbol-snapshots"));
+        String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(
+                runId,
+                projectId,
+                List.of(
+                        new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", appIndex, Path.of("ui/app")),
+                        new IndexingArtifact(Language.TYPESCRIPT, "scip-typescript", libIndex, Path.of("ui/lib"))
+                )
+        ));
+        lifecycle.promote(projectId, runId, stagedId);
+
+        var symbols = active.loadActiveKnowledge(projectId).orElseThrow().symbols();
+        assertEquals(2, symbols.size());
+        assertEquals(List.of("Shared", "Shared"), symbols.stream().map(symbol -> symbol.name()).sorted().toList());
+        assertEquals(2, symbols.stream().map(symbol -> symbol.id()).distinct().count());
+        assertNotEquals(symbols.get(0).fileId(), symbols.get(1).fileId());
+        assertTrue(symbols.stream().anyMatch(symbol -> "ui/app/src/Shared.ts".equals(symbol.fileId())));
+        assertTrue(symbols.stream().anyMatch(symbol -> "ui/lib/src/Shared.ts".equals(symbol.fileId())));
     }
 
     private static void writeIndex(

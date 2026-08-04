@@ -9,6 +9,7 @@ import org.scip_code.scip.SymbolInformation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipSymbolNormalizerTest {
@@ -138,6 +139,79 @@ class ScipSymbolNormalizerTest {
         assertEquals(SymbolIdentityQuality.STRUCTURAL_FALLBACK, first.identityQuality());
         assertEquals(first.symbolKey(), second.symbolKey());
         assertEquals(first.id(), second.id());
+    }
+
+    @Test
+    void disambiguatesSameQualifiedSymbolAcrossNestedProviderScopesWithoutChangingRootContract() {
+        ScipSymbolFact fact = new ScipSymbolFact(
+                "scip-java maven example 1.0 io/example/UserService#",
+                "UserService",
+                SymbolInformation.Kind.Class,
+                "final class UserService",
+                "",
+                "src/main/java/io/example/UserService.java",
+                "java",
+                false
+        );
+
+        var app = normalizer.normalize(
+                fact,
+                "project-1",
+                null,
+                "file-app",
+                "ui/app/src/main/java/io/example/UserService.java",
+                "ui/app",
+                new SymbolLocation("file-app", 8, 0, 40, 1, PositionEncoding.UTF16_CODE_UNITS),
+                "scip-java",
+                "0.13.1",
+                "run-1:scip-java",
+                false
+        ).orElseThrow();
+        var lib = normalizer.normalize(
+                fact,
+                "project-1",
+                null,
+                "file-lib",
+                "ui/lib/src/main/java/io/example/UserService.java",
+                "ui/lib",
+                new SymbolLocation("file-lib", 8, 0, 40, 1, PositionEncoding.UTF16_CODE_UNITS),
+                "scip-java",
+                "0.13.1",
+                "run-1:scip-java",
+                false
+        ).orElseThrow();
+        var root = normalizer.normalize(
+                fact,
+                "project-1",
+                null,
+                "file-root",
+                "src/main/java/io/example/UserService.java",
+                "",
+                new SymbolLocation("file-root", 8, 0, 40, 1, PositionEncoding.UTF16_CODE_UNITS),
+                "scip-java",
+                "0.13.1",
+                "run-1:scip-java",
+                false
+        ).orElseThrow();
+        var historicalRoot = normalizer.normalize(
+                fact,
+                "project-1",
+                null,
+                "file-root",
+                new SymbolLocation("file-root", 8, 0, 40, 1, PositionEncoding.UTF16_CODE_UNITS),
+                "scip-java",
+                "0.13.1",
+                "run-1:scip-java",
+                false
+        ).orElseThrow();
+
+        assertEquals("io.example.UserService", app.qualifiedName());
+        assertEquals(app.qualifiedName(), lib.qualifiedName());
+        assertNotEquals(app.id(), lib.id());
+        assertNotEquals(app.symbolKey(), lib.symbolKey());
+        assertEquals(historicalRoot.id(), root.id(),
+                "empty provider scope must preserve historical root-level identities");
+        assertEquals(historicalRoot.symbolKey(), root.symbolKey());
     }
 
     @Test

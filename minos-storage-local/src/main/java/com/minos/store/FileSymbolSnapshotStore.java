@@ -27,7 +27,7 @@ import java.util.function.Function;
  * retention to dedicated components. M15-S7/S8 add a bounded in-process cache of
  * immutable, indexed query views keyed by {@code (projectId, snapshotId)}.</p>
  */
-public final class FileSymbolSnapshotStore {
+public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore {
 
     /** Entry-count bound. Snapshot sizes remain measured separately for M16 sizing decisions. */
     public static final int DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32;
@@ -67,6 +67,7 @@ public final class FileSymbolSnapshotStore {
         this.maxQueryCacheEntries = maxQueryCacheEntries;
     }
 
+    @Override
     public SymbolSnapshot publish(
             UUID projectId,
             String snapshotId,
@@ -91,6 +92,7 @@ public final class FileSymbolSnapshotStore {
     }
 
     /** Publishes atomically a complete M3 snapshot using the historical v2 format. */
+    @Override
     public CodeKnowledgeSnapshot publish(
             UUID projectId,
             String snapshotId,
@@ -129,6 +131,7 @@ public final class FileSymbolSnapshotStore {
         return snapshot;
     }
 
+    @Override
     public Optional<SymbolSnapshot> loadActive(UUID projectId) throws IOException {
         return loadActiveKnowledge(projectId).map(snapshot -> new SymbolSnapshot(
                 snapshot.projectId(),
@@ -138,6 +141,7 @@ public final class FileSymbolSnapshotStore {
     }
 
     /** Loads the active immutable snapshot, reusing the same cached query view when possible. */
+    @Override
     public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException {
         return loadActiveQueryView(projectId).map(SnapshotQueryView::snapshot);
     }
@@ -149,6 +153,7 @@ public final class FileSymbolSnapshotStore {
      * read again before publication of the view. If promotion happened concurrently, the
      * build is discarded and resolution restarts from the new active descriptor.</p>
      */
+    @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         while (true) {
@@ -182,8 +187,6 @@ public final class FileSymbolSnapshotStore {
                     return Optional.of(raced);
                 }
 
-                // Keep only the active view for this project. This is memory hygiene, not a
-                // correctness requirement: descriptor comparison above protects repromotion.
                 queryCache.entrySet().removeIf(entry ->
                         entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
                 queryCache.put(key, built);

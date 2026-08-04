@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,43 +24,65 @@ class M24PolyglotProcessPlanFactoryTest {
     void clangRequiresCompilationDatabaseAndPinsGeneratedArtifact(@TempDir Path temp) throws Exception {
         Path executable = Files.createFile(temp.resolve("scip-clang"));
         Path project = Files.createDirectories(temp.resolve("clang-project"));
+        Path run = temp.resolve("clang-run");
         Path compdb = Files.writeString(project.resolve("compile_commands.json"), "[]");
-        var plan = new ScipClangProcessPlanFactory(executable).create(request(project), temp.resolve("run"));
-        assertEquals(project.resolve("index.scip").toAbsolutePath().normalize(), plan.generatedArtifact());
+        var plan = new ScipClangProcessPlanFactory(executable).create(request(project), run);
+        Path output = run.resolve("index.scip").toAbsolutePath().normalize();
+        assertEquals(output, plan.generatedArtifact());
+        assertFalse(plan.generatedArtifact().startsWith(project));
         assertTrue(plan.command().stream().anyMatch(value -> value.equals("--compdb-path=" + compdb.toAbsolutePath().normalize())));
+        assertTrue(plan.command().contains("--index-output-path=" + output));
     }
 
     @Test
-    void dotnetRequiresProjectMarkerAndUsesIndexSubcommand(@TempDir Path temp) throws Exception {
+    void dotnetRequiresProjectMarkerAndUsesExternalOutput(@TempDir Path temp) throws Exception {
         Path executable = Files.createFile(temp.resolve("scip-dotnet"));
         Path project = Files.createDirectories(temp.resolve("dotnet-project"));
+        Path run = temp.resolve("dotnet-run");
         Files.writeString(project.resolve("fixture.csproj"), "<Project />");
-        var plan = new ScipDotnetProcessPlanFactory(executable).create(request(project), temp.resolve("run"));
+        var plan = new ScipDotnetProcessPlanFactory(executable).create(request(project), run);
+        Path output = run.resolve("index.scip").toAbsolutePath().normalize();
+        assertEquals(output, plan.generatedArtifact());
+        assertFalse(plan.generatedArtifact().startsWith(project));
         assertTrue(plan.command().contains("index"));
+        assertTrue(plan.command().contains("--output"));
+        assertTrue(plan.command().contains(output.toString()));
     }
 
     @Test
     void goQualificationRejectsGoWorkWithoutCanonicalGoMod(@TempDir Path temp) throws Exception {
         Path executable = Files.createFile(temp.resolve("scip-go"));
         Path project = Files.createDirectories(temp.resolve("go-project"));
+        Path run = temp.resolve("go-run");
         Files.writeString(project.resolve("go.work"), "go 1.22");
         ScipGoProcessPlanFactory factory = new ScipGoProcessPlanFactory(executable);
-        assertThrows(IllegalArgumentException.class, () -> factory.create(request(project), temp.resolve("run")));
+        assertThrows(IllegalArgumentException.class, () -> factory.create(request(project), run));
         Files.writeString(project.resolve("go.mod"), "module example.com/test\ngo 1.22\n");
-        assertEquals(project.resolve("index.scip").toAbsolutePath().normalize(),
-                factory.create(request(project), temp.resolve("run")).generatedArtifact());
+        var plan = factory.create(request(project), run);
+        Path output = run.resolve("index.scip").toAbsolutePath().normalize();
+        assertEquals(output, plan.generatedArtifact());
+        assertFalse(plan.generatedArtifact().startsWith(project));
+        assertTrue(plan.command().contains("--output"));
+        assertTrue(plan.command().contains(output.toString()));
     }
 
     @Test
     void rustUsesNativeScipSubcommandAndRequiresCargoToml(@TempDir Path temp) throws Exception {
         Path executable = Files.createFile(temp.resolve("rust-analyzer"));
         Path project = Files.createDirectories(temp.resolve("rust-project"));
+        Path run = temp.resolve("rust-run");
         RustAnalyzerScipProcessPlanFactory factory = new RustAnalyzerScipProcessPlanFactory(executable);
-        assertThrows(IllegalArgumentException.class, () -> factory.create(request(project), temp.resolve("run")));
+        assertThrows(IllegalArgumentException.class, () -> factory.create(request(project), run));
         Files.writeString(project.resolve("Cargo.toml"), "[package]\nname='fixture'\nversion='0.1.0'\n");
-        List<String> command = factory.create(request(project), temp.resolve("run")).command();
-        assertTrue(command.contains("scip"));
-        assertEquals(".", command.getLast());
+        var plan = factory.create(request(project), run);
+        Path output = run.resolve("index.scip").toAbsolutePath().normalize();
+        assertEquals(output, plan.generatedArtifact());
+        assertFalse(plan.generatedArtifact().startsWith(project));
+        assertTrue(plan.command().contains("scip"));
+        assertTrue(plan.command().contains("--output"));
+        assertTrue(plan.command().contains(output.toString()));
+        assertEquals(run.resolve("cargo-target").toAbsolutePath().normalize().toString(),
+                plan.environment().get("CARGO_TARGET_DIR"));
     }
 
     @Test

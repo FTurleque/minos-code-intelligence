@@ -48,18 +48,94 @@ function Invoke-NativeChecked {
     if ($Exit -ne 0) { throw "$Failure (exit=$Exit)" }
 }
 
-# The setup modifies third-party MCP client configuration. Qualify this lifecycle
-# on every Windows distribution build so local -ValidateOnly runs provide the
-# same safety gate even when GitHub Actions is unavailable.
-$McpClientVerifier = Join-Path $RepoRoot 'scripts\install\verify-mcp-client-integration.ps1'
-if (-not (Test-Path -LiteralPath $McpClientVerifier -PathType Leaf)) {
-    throw "MINOS MCP client integration verifier not found: $McpClientVerifier"
+function Resolve-JdkModules {
+    param(
+        [Parameter(Mandatory = $true)][string] $Jdeps,
+        [Parameter(Mandatory = $true)][string] $Jar
+    )
+
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $Output = @(& $Jdeps '--multi-release' '24' '--ignore-missing-deps' '--print-module-deps' $Jar 2>&1 |
+            ForEach-Object { $_.ToString().Trim() })
+        $Exit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
+    if ($Exit -ne 0) {
+        throw "jdeps failed while deriving the packaged runtime modules (exit=$Exit): $($Output -join [Environment]::NewLine)"
+    }
+
+    $ModuleLine = $Output |
+        Where-Object { $_ -match '^[A-Za-z0-9_.]+(?:,[A-Za-z0-9_.]+)*$' } |
+        Select-Object -Last 1
+    if ([string]::IsNullOrWhiteSpace($ModuleLine)) {
+        throw "jdeps did not return a module dependency list: $($Output -join [Environment]::NewLine)"
+    }
+
+    $Modules = @($ModuleLine -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object -Unique)
+    # MINOS embeds a source provider based on the public compiler tree API. Keep
+    # jdk.compiler explicit even if a future jdeps implementation reports only
+    # the java.compiler surface used by a specific fixture.
+    if ($Modules -notcontains 'jdk.compiler') {
+        $Modules += 'jdk.compiler'
+    }
+    return @($Modules | Sort-Object -Unique)
 }
-try {
-    & $McpClientVerifier
+
+function Assert-PackagedRuntimeModules {
+    param(
+        [Parameter(Mandatory = $true)][string] $RuntimeJava,
+        [Parameter(Mandatory = $true)][string[]] $RequiredModules
+    )
+
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $Lines = @(& $RuntimeJava '--list-modules' 2>&1 | ForEach-Object { $_.ToString().Trim() })
+        $Exit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
+    if ($Exit -ne 0) {
+        throw "Packaged runtime could not enumerate modules (exit=$Exit): $($Lines -join [Environment]::NewLine)"
+    }
+
+    $Present = @($Lines |
+        Where-Object { $_ -match '^[A-Za-z0-9_.]+@' } |
+        ForEach-Object { ($_ -split '@', 2)[0] } |
+        Sort-Object -Unique)
+    $Missing = @($RequiredModules | Where-Object { $_ -notin $Present })
+    if ($Missing.Count -gt 0) {
+        throw "Packaged runtime is missing modules required by the release JAR: $($Missing -join ', ')"
+    }
+    if ('java.xml' -notin $Present) {
+        throw 'Packaged runtime regression: java.xml is absent; MCP/Jackson requires org.w3c.dom.Node during schema initialization.'
+    }
+    return $Present
 }
-catch {
-    throw "MINOS native MCP client integration verification failed: $($_.Exception.Message)"
+
+# The setup modifies third-party MCP client configuration and now owns the
+# transactional native/docker backend lifecycle. Qualify both on every Windows
+# distribution build without contacting GitHub or publishing anything.
+foreach ($Verifier in @(
+    'scripts\install\verify-mcp-client-integration.ps1',
+    'scripts\install\verify-mcp-client-preflight.ps1',
+    'scripts\install\verify-mcp-backend-lifecycle.ps1'
+)) {
+    $VerifierPath = Join-Path $RepoRoot $Verifier
+    if (-not (Test-Path -LiteralPath $VerifierPath -PathType Leaf)) {
+        throw "MINOS MCP integration/lifecycle verifier not found: $VerifierPath"
+    }
+    try {
+        & $VerifierPath
+    }
+    catch {
+        throw "MINOS MCP integration/lifecycle verification failed ($Verifier): $($_.Exception.Message)"
+    }
 }
 
 $JavaHome = $env:JAVA_HOME
@@ -68,9 +144,11 @@ if ([string]::IsNullOrWhiteSpace($JavaHome)) {
 }
 $Java = Join-Path $JavaHome 'bin\java.exe'
 $Jpackage = Join-Path $JavaHome 'bin\jpackage.exe'
-if (-not (Test-Path -LiteralPath $Java -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $Jpackage -PathType Leaf)) {
-    throw "JAVA_HOME does not expose java.exe and jpackage.exe: $JavaHome"
+$Jdeps = Join-Path $JavaHome 'bin\jdeps.exe'
+foreach ($RequiredJdkTool in @($Java, $Jpackage, $Jdeps)) {
+    if (-not (Test-Path -LiteralPath $RequiredJdkTool -PathType Leaf)) {
+        throw "JAVA_HOME does not expose the required JDK 24 tool: $RequiredJdkTool"
+    }
 }
 
 # `java -version` writes its version banner to stderr even on success. Windows
@@ -100,8 +178,6 @@ Push-Location $RepoRoot
 try {
     $MavenArgs = @("-Drevision=$Version")
     if ($SkipVerify) {
-        # M21-S5 calls this only after the full exact-head core qualification.
-        # Avoid rerunning Surefire while still rebuilding the release binaries.
         $MavenArgs += '-DskipTests'
     }
     $MavenArgs += 'clean'
@@ -111,10 +187,6 @@ try {
         throw "MINOS Maven build failed with exit code $LASTEXITCODE"
     }
 
-    # makeAggregateBom is an aggregator goal and must execute from the Maven
-    # execution root. Binding it in minos-app caused CycloneDX 2.9.2 to skip it
-    # as a non-execution root. Generate the release SBOM explicitly here, after
-    # the reactor build, so all module artifacts/dependencies are available.
     $RootPomContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'pom.xml') -Raw
     if ($RootPomContent -notmatch '<cyclonedx\.maven\.plugin\.version>\s*([^<]+)\s*</cyclonedx\.maven\.plugin\.version>') {
         throw 'Unable to resolve cyclonedx.maven.plugin.version from root pom.xml.'
@@ -150,6 +222,9 @@ $Jar = Join-Path $RepoRoot "target\minos-code-intelligence-$Version-all.jar"
 if (-not (Test-Path -LiteralPath $Jar -PathType Leaf)) {
     throw "Shaded MINOS JAR not found: $Jar"
 }
+$JdkModules = Resolve-JdkModules -Jdeps $Jdeps -Jar $Jar
+$JdkModuleList = $JdkModules -join ','
+Write-Host "jpackage runtime roots (jdeps): $JdkModuleList" -ForegroundColor Cyan
 
 $SbomSource = Join-Path $RepoRoot 'target\sbom\minos-cyclonedx.json'
 if (-not (Test-Path -LiteralPath $SbomSource -PathType Leaf)) {
@@ -177,6 +252,10 @@ New-Item -ItemType Directory -Force -Path $Stage, $AppImages, $Distribution | Ou
 
 Copy-Item -LiteralPath $Jar -Destination (Join-Path $Stage 'minos.jar')
 $AppVersion = ($Version -split '[-+]')[0]
+# jpackage normally asks jlink to strip native commands from the bundled runtime.
+# MINOS intentionally retains java.exe so release qualification can inspect the
+# exact packaged image with `java --list-modules` instead of inferring its content.
+$JlinkOptions = '--strip-debug --no-man-pages --no-header-files'
 & $Jpackage @(
     '--type', 'app-image',
     '--name', 'minos',
@@ -184,7 +263,8 @@ $AppVersion = ($Version -split '[-+]')[0]
     '--input', $Stage,
     '--main-jar', 'minos.jar',
     '--main-class', 'com.minos.cli.MinosLauncher',
-    '--add-modules', 'jdk.compiler',
+    '--add-modules', $JdkModuleList,
+    '--jlink-options', $JlinkOptions,
     '--dest', $AppImages,
     '--win-console'
 )
@@ -193,9 +273,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $AppImage = Join-Path $AppImages 'minos'
-if (-not (Test-Path -LiteralPath (Join-Path $AppImage 'minos.exe') -PathType Leaf)) {
-    throw "jpackage app image is incomplete: $AppImage"
+$PackagedLauncher = Join-Path $AppImage 'minos.exe'
+$PackagedRuntimeJava = Join-Path $AppImage 'runtime\bin\java.exe'
+if (-not (Test-Path -LiteralPath $PackagedLauncher -PathType Leaf)) {
+    throw "jpackage app image is missing the MINOS launcher: $PackagedLauncher"
 }
+if (-not (Test-Path -LiteralPath $PackagedRuntimeJava -PathType Leaf)) {
+    throw "jpackage app image is missing the auditable runtime java launcher: $PackagedRuntimeJava"
+}
+$ResolvedRuntimeModules = Assert-PackagedRuntimeModules -RuntimeJava $PackagedRuntimeJava -RequiredModules $JdkModules
+$ResolvedRuntimeModuleList = $ResolvedRuntimeModules -join ','
+Write-Host "jpackage runtime modules (resolved): $ResolvedRuntimeModuleList" -ForegroundColor Cyan
 Move-Item -LiteralPath $AppImage -Destination (Join-Path $Distribution 'app')
 
 $LibDirectory = Join-Path $Distribution 'lib'
@@ -213,10 +301,20 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1
     -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
     -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients.ps1') `
-    -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\configure-mcp-clients-setup.ps1') `
-    -Destination (Join-Path $IntegrationDirectory 'configure-mcp-clients-setup.ps1') -Force
+foreach ($IntegrationScript in @(
+    'configure-runtime-settings.ps1',
+    'invoke-named-mcp-script.ps1',
+    'configure-mcp-clients.ps1',
+    'configure-mcp-clients-setup.ps1',
+    'configure-codex-mcp.ps1',
+    'detect-mcp-clients.ps1',
+    'uninstall-mcp-clients.ps1',
+    'probe-mcp-backend.ps1',
+    'switch-mcp-backend.ps1'
+)) {
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts\install\$IntegrationScript") `
+        -Destination (Join-Path $IntegrationDirectory $IntegrationScript) -Force
+}
 
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'scripts\install\install-windows.ps1') `
     -Destination (Join-Path $Distribution 'install.ps1')
@@ -237,6 +335,8 @@ if not defined MINOS_HOME set "MINOS_HOME=%LOCALAPPDATA%\MINOS\data"
 exit /b %ERRORLEVEL%
 '@ | Set-Content -LiteralPath (Join-Path $Distribution 'minos-mcp.cmd') -Encoding ascii
 
+$ResolvedRuntimeModules | Set-Content -LiteralPath (Join-Path $Distribution 'RUNTIME-MODULES.txt') -Encoding ascii
+
 @"
 MINOS Code Intelligence $Version
 
@@ -250,35 +350,30 @@ Quick start:
 Default data directory:
   %LOCALAPPDATA%\MINOS\data
 
-MCP native:
+Stable MCP entrypoint (native or Docker):
   command = <installation>\app\minos.exe
   args    = mcp
   env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 
-The Windows setup can register this native MCP server in:
+Backend selection:
+  integration\switch-mcp-backend.ps1
+  native | docker
+  Docker selection is fail-closed when Docker Desktop is unavailable.
+
+The Windows setup detects supported clients before offering integration:
   - GitHub Copilot for JetBrains / IntelliJ
-  - GitHub Copilot CLI
+  - GitHub Copilot CLI (capability-probed; editor shims are rejected)
   - Claude Code
   - Claude Desktop
-  - OpenAI Codex
+  - OpenAI Codex CLI / Codex Desktop user configuration
 
-Portable/manual client integration:
-  & "<installation>\integration\configure-mcp-clients.ps1" `
-    -InstallRoot "<installation>" `
-    -CopilotJetBrains -ClaudeCode -ClaudeDesktop -Codex
-
-Optional hardened Docker MCP:
-  & "<installation>\docker\scripts\configure-docker-mcp.ps1" `
-    -InstallRoot "<installation>" `
-    -ProjectsRoot N:\workspace-dev `
-    -Start
-
-Docker Desktop must already be installed and running. Docker is optional and is not required by the native MCP integrations above.
+Client configuration is backend-agnostic; switching changes MINOS backend state, not client files.
 
 Supply-chain evidence:
   supply-chain\minos.cdx.json
   supply-chain\THIRD-PARTY-NOTICES.txt
   RELEASE-MANIFEST.json
+  RUNTIME-MODULES.txt
 "@ | Set-Content -LiteralPath (Join-Path $Distribution 'README.txt') -Encoding utf8
 
 $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
@@ -286,6 +381,8 @@ $Commit = (& git -C $RepoRoot rev-parse HEAD | Select-Object -First 1).Trim()
 version=$Version
 commit=$Commit
 java=$JavaVersion
+runtimeModuleRoots=$JdkModuleList
+runtimeModules=$ResolvedRuntimeModuleList
 builtAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 sbom=supply-chain/minos.cdx.json
 manifest=RELEASE-MANIFEST.json
@@ -335,6 +432,8 @@ Remove-Item -LiteralPath $AppImages -Recurse -Force -ErrorAction SilentlyContinu
 Write-Host ''
 Write-Host 'MINOS Windows distribution SUCCESS' -ForegroundColor Green
 Write-Host "Distribution : $Distribution"
+Write-Host "Runtime roots : $JdkModuleList"
+Write-Host "Runtime count : $($ResolvedRuntimeModules.Count)"
 Write-Host "ZIP          : $Zip"
 Write-Host "SHA-256      : $Hash"
 Write-Host "SBOM         : $SbomSidecar"

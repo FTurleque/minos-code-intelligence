@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OllamaEmbeddingProviderTest {
 
     @Test
-    void requiresNumericLoopbackOrLocalhostAndExplicitModelIdentity() {
+    void acceptsLoopbackAndManagedDockerServiceButRejectsArbitraryRemoteHosts() {
         OllamaEmbeddingProvider provider = new OllamaEmbeddingProvider(
                 URI.create("http://localhost:11434/api/embed"), "fixture-code-model", 384, Duration.ofSeconds(2));
         assertEquals("minos-local-ollama", provider.id());
@@ -36,9 +36,14 @@ class OllamaEmbeddingProviderTest {
                 URI.create("http://127.255.0.1:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2));
         new OllamaEmbeddingProvider(
                 URI.create("http://[::1]:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2));
+        OllamaEmbeddingProvider docker = new OllamaEmbeddingProvider(
+                OllamaEmbeddingProvider.MANAGED_DOCKER_ENDPOINT, "fixture", 384, Duration.ofSeconds(2));
+        assertEquals("minos-ollama", docker.endpoint().getHost());
 
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("https://example.com/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
+        assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
+                URI.create("http://host.docker.internal:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(
                 URI.create("http://127.example.com:11434/api/embed"), "fixture", 384, Duration.ofSeconds(2)));
         assertThrows(IllegalArgumentException.class, () -> new OllamaEmbeddingProvider(

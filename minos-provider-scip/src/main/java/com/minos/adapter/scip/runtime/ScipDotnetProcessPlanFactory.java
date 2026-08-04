@@ -33,11 +33,13 @@ public final class ScipDotnetProcessPlanFactory implements IndexerProcessPlanFac
         if (!Files.isRegularFile(executable)) {
             throw new IllegalStateException("scip-dotnet executable is missing: " + executable);
         }
+        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Files.createDirectories(output.getParent());
         return new IndexerProcessPlan(
-                CommandLocator.invocation(executable, "index"),
+                CommandLocator.invocation(executable, "index", "--output", output.toString()),
                 root,
                 Map.of(),
-                root.resolve("index.scip"),
+                output,
                 Duration.ofMinutes(30)
         );
     }

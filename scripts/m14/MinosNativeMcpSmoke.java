@@ -12,7 +12,7 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Smoke MCP natif utilisé par la qualification M14.
+ * Smoke MCP natif utilisé par les qualifications Windows packagées.
  *
  * Usage:
  *   java MinosNativeMcpSmoke.java <minos-launcher> <minos-home>
@@ -37,11 +37,12 @@ public final class MinosNativeMcpSmoke {
         Path stderr = Files.createTempFile("minos-native-mcp-", ".stderr.log");
         builder.redirectError(stderr.toFile());
         Process process = builder.start();
+        String stderrText = "";
         try (BufferedWriter stdin = new BufferedWriter(new OutputStreamWriter(
                     process.getOutputStream(), StandardCharsets.UTF_8));
              BufferedReader stdout = new BufferedReader(new InputStreamReader(
                     process.getInputStream(), StandardCharsets.UTF_8))) {
-            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-m14-smoke\",\"version\":\"1\"}}}");
+            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-mcp-smoke\",\"version\":\"1\"}}}");
             String initialize = awaitResponse(stdout, "\"id\":1");
             requireContains(initialize, "minos-code-intelligence", "initialize server name");
 
@@ -50,17 +51,27 @@ public final class MinosNativeMcpSmoke {
             String tools = awaitResponse(stdout, "\"id\":2");
             requireContains(tools, "minos_search_code", "tools/list search tool");
             requireContains(tools, "minos_impact", "tools/list impact tool");
-
-            System.out.println("MINOS native MCP handshake SUCCESS");
         } finally {
             stopProcessTree(process);
-            if (process.exitValue() != 0 && process.exitValue() != 143) {
-                String error = Files.exists(stderr) ? Files.readString(stderr) : "";
-                if (!error.isBlank()) {
-                    System.err.println(error);
-                }
+            if (Files.exists(stderr)) {
+                stderrText = Files.readString(stderr, StandardCharsets.UTF_8);
             }
             deleteWithRetry(stderr);
+        }
+
+        requireStderrClean(stderrText);
+        System.out.println("MINOS native MCP handshake SUCCESS");
+    }
+
+    private static void requireStderrClean(String stderr) {
+        if (stderr.contains("NoClassDefFoundError")) {
+            throw new IllegalStateException("packaged MCP emitted NoClassDefFoundError: " + stderr);
+        }
+        if (stderr.contains("SLF4J(W): No SLF4J providers were found")) {
+            throw new IllegalStateException("packaged MCP has no SLF4J provider: " + stderr);
+        }
+        if (stderr.contains("Exception in thread \"main\"")) {
+            throw new IllegalStateException("packaged MCP emitted an uncaught main-thread exception: " + stderr);
         }
     }
 

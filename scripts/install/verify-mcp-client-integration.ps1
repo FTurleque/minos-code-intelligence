@@ -218,7 +218,7 @@ try {
     Assert-True ($CopilotState -match '^runner=([6-9]|\d{2,}) ') 'Copilot CLI PowerShell launcher was not invoked through pwsh.exe.'
     Assert-True ($CopilotState.Contains('nonInteractive=True')) 'Copilot CLI PowerShell launcher was not invoked non-interactively.'
     Assert-True ($ClaudeState.Contains($ExpectedExe) -and $ClaudeState.Contains($DataRoot)) 'Claude Code did not receive the MINOS command/environment.'
-    Assert-True ($ClaudeState -match 'mcp add --scope user --env .* minos -- ') 'Claude Code options are not placed before the server name.'
+    Assert-True ($ClaudeState -match 'mcp add minos .*--scope user') 'Claude Code server name must precede scope and env options.'
     Assert-True ($CodexState.Contains($ExpectedExe) -and $CodexState.Contains($DataRoot)) 'Codex did not receive the MINOS command/environment.'
     Assert-True ((Get-ChildItem -LiteralPath $BackupRoot -File -Recurse).Count -ge 2) 'Expected JSON configuration backups.'
 

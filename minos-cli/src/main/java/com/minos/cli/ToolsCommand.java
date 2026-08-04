@@ -14,10 +14,11 @@ public final class ToolsCommand {
 
     public static final String NAME = "tools";
     private static final String USAGE = """
-            Usage: minos tools <list|install|verify> [provider] [--format <text|json>]
+            Usage: minos tools <list|install|verify> [provider] [--all] [--format <text|json>]
 
               list                  List managed providers and runtime state
               verify                Verify baseline-required provider runtimes
+              verify --all          Verify every provider runtime advertised by MINOS
               install <provider>    Install or bootstrap a managed provider
             """.stripTrailing();
 
@@ -45,11 +46,13 @@ public final class ToolsCommand {
             }
             List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
             output.append(render(providers, parsed.format())).append('\n');
-            if ("verify".equals(parsed.action())
-                    && providers.stream()
-                    .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
-                    .anyMatch(provider -> !"READY".equals(provider.state()))) {
-                return FindSymbolCommand.EXECUTION_ERROR;
+            if ("verify".equals(parsed.action())) {
+                boolean notReady = providers.stream()
+                        .filter(provider -> parsed.all() || provider.requiredByDefault())
+                        .anyMatch(provider -> !"READY".equals(provider.state()));
+                if (notReady) {
+                    return FindSymbolCommand.EXECUTION_ERROR;
+                }
             }
             return FindSymbolCommand.SUCCESS;
         } catch (IllegalArgumentException exception) {
@@ -91,13 +94,14 @@ public final class ToolsCommand {
         return String.join("\n", lines);
     }
 
-    private record Parsed(String action, String provider, SymbolOutputFormat format) {
+    private record Parsed(String action, String provider, boolean all, SymbolOutputFormat format) {
         private static Parsed parse(String[] arguments) {
             String action = arguments[0];
             if (!List.of("list", "verify", "install").contains(action)) {
                 throw new IllegalArgumentException("unknown tools action: " + action);
             }
             String provider = null;
+            boolean all = false;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             int index = 1;
             if ("install".equals(action)) {
@@ -107,13 +111,25 @@ public final class ToolsCommand {
                 provider = arguments[index++];
             }
             while (index < arguments.length) {
-                if (!"--format".equals(arguments[index]) || index + 1 >= arguments.length) {
-                    throw new IllegalArgumentException("unexpected tools option: " + arguments[index]);
+                String option = arguments[index];
+                if ("--all".equals(option)) {
+                    if (!"verify".equals(action)) {
+                        throw new IllegalArgumentException("--all is only valid with tools verify");
+                    }
+                    if (all) {
+                        throw new IllegalArgumentException("--all may only be specified once");
+                    }
+                    all = true;
+                    index++;
+                    continue;
+                }
+                if (!"--format".equals(option) || index + 1 >= arguments.length) {
+                    throw new IllegalArgumentException("unexpected tools option: " + option);
                 }
                 format = SymbolOutputFormat.parse(arguments[index + 1]);
                 index += 2;
             }
-            return new Parsed(action, provider, format);
+            return new Parsed(action, provider, all, format);
         }
     }
 }

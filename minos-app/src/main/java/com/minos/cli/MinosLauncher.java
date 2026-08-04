@@ -1,7 +1,6 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.mcp.MinosMcpServer;
 import com.minos.runtime.MinosVersion;
 
 import java.io.IOException;
@@ -34,11 +33,12 @@ public final class MinosLauncher {
                 exitCode = MinosCliRunner.runIdeHandshake(arguments, System.out, System.err);
             } else {
                 Path home = resolveHome(System.getenv(), System.getProperties());
-                MinosApplication application = MinosApplication.open(home);
                 if (arguments.length == 1 && "mcp".equals(arguments[0])) {
-                    MinosMcpServer.run(application);
-                    exitCode = FindSymbolCommand.SUCCESS;
+                    // M29: route before opening MinosApplication. A Docker MCP session must not
+                    // touch or create native registry/snapshot/vector-store state as a side effect.
+                    exitCode = new McpBackendRouter().run(home);
                 } else {
+                    MinosApplication application = MinosApplication.open(home);
                     exitCode = run(application, arguments, System.out, System.err);
                 }
             }
