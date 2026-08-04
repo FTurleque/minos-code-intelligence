@@ -139,10 +139,12 @@ final class RetrievalStatusCommand {
             }
             String project = null;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
-            for (int i = 1; i < arguments.length; i++) {
+            int i = 1;
+            while (i < arguments.length) {
                 String argument = arguments[i];
                 if ("--format".equals(argument)) {
-                    if (++i >= arguments.length) throw new IllegalArgumentException("--format requires a value");
+                    i++;
+                    if (i >= arguments.length) throw new IllegalArgumentException("--format requires a value");
                     format = switch (arguments[i].toLowerCase()) {
                         case "text" -> SymbolOutputFormat.TEXT;
                         case "json" -> SymbolOutputFormat.JSON;
@@ -155,6 +157,7 @@ final class RetrievalStatusCommand {
                 } else {
                     throw new IllegalArgumentException("unexpected argument: " + argument);
                 }
+                i++;
             }
             if (project == null || project.isBlank()) throw new IllegalArgumentException("project reference is required");
             return new Options(project, format);

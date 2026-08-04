@@ -131,11 +131,17 @@ public final class HybridSearchService {
 
     static double lexicalScore(String query, String content) { return LexicalQuery.compile(query).score(content); }
     private static Set<String> terms(String normalized) {
-        Set<String> terms = new HashSet<>(); if (normalized.isBlank()) return terms;
-        for (String term : normalized.split("\\s+")) if (term.length() >= 2) terms.add(term); return terms;
+        Set<String> terms = new HashSet<>();
+        if (normalized.isBlank()) return terms;
+        for (String term : normalized.split("\\s+")) {
+            if (term.length() >= 2) terms.add(term);
+        }
+        return terms;
     }
     private static String normalize(String value) {
-        if (value == null) return ""; String lower = value.toLowerCase(Locale.ROOT); StringBuilder normalized = new StringBuilder(lower.length());
+        if (value == null) return "";
+        String lower = value.toLowerCase(Locale.ROOT);
+        StringBuilder normalized = new StringBuilder(lower.length());
         boolean separating = false;
         for (int offset = 0; offset < lower.length();) {
             int codePoint = lower.codePointAt(offset); offset += Character.charCount(codePoint);

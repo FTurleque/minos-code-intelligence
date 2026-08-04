@@ -207,7 +207,8 @@ public final class MinosApplication {
         catch (NumberFormatException exception) { throw new IllegalArgumentException(label + " must be a positive integer", exception); }
     }
     private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank"); return value;
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
+        return value;
     }
 
     public static Builder builder(Path home) { return new Builder(home); }
