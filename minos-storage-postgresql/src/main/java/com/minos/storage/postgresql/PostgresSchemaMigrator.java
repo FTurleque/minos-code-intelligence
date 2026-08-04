@@ -16,7 +16,7 @@ final class PostgresSchemaMigrator {
     }
 
     void migrate() throws IOException {
-        String schema = connections.schema();
+        String schema = connections.quotedSchema();
         try (Connection connection = connections.open(); Statement statement = connection.createStatement()) {
             connection.setAutoCommit(false);
             try {

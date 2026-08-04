@@ -6,9 +6,11 @@ import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -128,18 +130,21 @@ class PostgresSemanticVectorStoreTest extends PostgresTestSupport {
     @SafeVarargs
     private static SemanticVectorStore.IndexSnapshot indexSnapshot(
             String projectId, String snapshotId,
-            SemanticVectorStore.IndexedDocument... documents) {
+            BiFunction<String, String, SemanticVectorStore.IndexedDocument>... factories) {
         return new SemanticVectorStore.IndexSnapshot(
                 projectId, snapshotId, "test-provider", "nomic-embed-test", DIMS, 1L,
-                List.of(documents));
+                Arrays.stream(factories).map(f -> f.apply(projectId, snapshotId)).toList());
     }
 
-    private static SemanticVectorStore.IndexedDocument indexed(String stableKey, double d0, double d1, double d2) {
-        SemanticDocument document = new SemanticDocument(
-                stableKey + "-id", stableKey, "project-unused", "snap-1",
-                SemanticDocumentKind.SYMBOL, "Service.java", "Service.java",
-                1, 10, "public void " + stableKey + "()", "chk-" + stableKey);
-        SemanticVector vector = SemanticVector.fromArray(stableKey, new double[]{d0, d1, d2});
-        return new SemanticVectorStore.IndexedDocument(document, vector);
+    private static BiFunction<String, String, SemanticVectorStore.IndexedDocument> indexed(
+            String stableKey, double d0, double d1, double d2) {
+        return (projectId, snapshotId) -> {
+            SemanticDocument document = new SemanticDocument(
+                    stableKey + "-id", stableKey, projectId, snapshotId,
+                    SemanticDocumentKind.SYMBOL, "Service.java", "Service.java",
+                    1, 10, "public void " + stableKey + "()", "chk-" + stableKey);
+            SemanticVector vector = SemanticVector.fromArray(stableKey, new double[]{d0, d1, d2});
+            return new SemanticVectorStore.IndexedDocument(document, vector);
+        };
     }
 }
