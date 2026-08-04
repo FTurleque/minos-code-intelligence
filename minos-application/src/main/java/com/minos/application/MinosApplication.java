@@ -203,8 +203,13 @@ public final class MinosApplication {
         return value.trim();
     }
     private static int parsePositiveInt(String value, String label) {
-        try { int parsed = Integer.parseInt(value.trim()); if (parsed < 1) throw new NumberFormatException("not positive"); return parsed; }
-        catch (NumberFormatException exception) { throw new IllegalArgumentException(label + " must be a positive integer", exception); }
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            if (parsed < 1) throw new NumberFormatException("not positive");
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(label + " must be a positive integer", exception);
+        }
     }
     private static String requireText(String value, String label) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");

@@ -159,10 +159,13 @@ public final class HybridSearchService {
     private static boolean containsTerm(String normalizedContent, String term) {
         int from = 0;
         while (from <= normalizedContent.length() - term.length()) {
-            int index = normalizedContent.indexOf(term, from); if (index < 0) return false; int end = index + term.length();
+            int index = normalizedContent.indexOf(term, from);
+            if (index < 0) return false;
+            int end = index + term.length();
             boolean leftBoundary = index == 0 || normalizedContent.charAt(index - 1) == ' ';
             boolean rightBoundary = end == normalizedContent.length() || normalizedContent.charAt(end) == ' ';
-            if (leftBoundary && rightBoundary) return true; from = index + 1;
+            if (leftBoundary && rightBoundary) return true;
+            from = index + 1;
         }
         return false;
     }
