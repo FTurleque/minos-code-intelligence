@@ -5,7 +5,7 @@ Issue : **#109**
 PR : **#110 (DRAFT)**  
 Branche : **`m30-advanced-installer-postgres-ollama`**  
 Baseline : **M29 / PR #108, HEAD initial `fc1243d74b20d1198cf32c0ee380142c6aa6848b`**  
-HEAD local : **`49ab40d`** (docs(m30): record qualification results and artifact SHA-256)
+HEAD local : **`d3b34a3`** (fix(m30): seed backend.properties before switch to prevent loadOrMigrate() race)
 
 ## Objectif produit
 
@@ -117,9 +117,9 @@ Gates supplémentaires : migration local→PostgreSQL, exact identities, pgvecto
 
 | Artefact | SHA-256 |
 |---|---|
-| `MINOS-1.0.1-windows-x64-setup.exe` | `49a7830fbae99eff3ee6f53017a0df66c871f2baf846af7c125e1083fd69ebe6` |
-| `minos-1.0.1-windows-x64.zip` | `5dd341cc0601c03c9be8aeee4edd4130ce4f6ef3fc957aedbc2dbe61a918151c` |
-| `minos-1.0.1.cdx.json` (SBOM) | `cfb390569171e9aa7f96da1319a0ab8c67c51a457787fb0f24087f39064731a3` |
+| `MINOS-1.0.1-windows-x64-setup.exe` | `82d4f36b519c0f7a63a5a9b2941c5833c279164c449579fa82f728367abb75be` |
+| `minos-1.0.1-windows-x64.zip` | `7c4c99c29b89e59d65c5ced8d1a5ab2d2b02b56a2144728368b0ed5b4620f9da` |
+| `minos-1.0.1.cdx.json` (SBOM) | `ed6bb5610e861168bb45c9d1b9daf9baa4ecd8bc64b6abbdc22bd66c4d9d70b5` |
 
 ### Limitations connues (scope V1)
 
