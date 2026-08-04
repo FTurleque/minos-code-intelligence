@@ -1,189 +1,320 @@
 # État courant — MINOS
 
-Dernière mise à jour documentaire : **1er août 2026 — M21-S2 CI recovery exécutée (CI PASS / branch-protection BLOCKED plan) ; M28 S1→S8 mergés + S9 gouvernance terminée ; PR #102 prête pour merge main ; release 0.2.0 candidate.**
+Dernière mise à jour : **3 août 2026 — MINOS 1.0.0 publié ; correctif Windows 1.0.1 en préparation et non publié ; M29 S1–S8 PASS ; candidat Windows 1.0.1 à construire.**
 
-Ce fichier est la synthèse autoritative de l’état courant. Les contrats détaillés et les preuves historiques restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
+Ce fichier est la synthèse autoritative de l'état courant. Les preuves détaillées restent dans [`roadmap/M29_EXECUTION.md`](roadmap/M29_EXECUTION.md), [`history/milestones/`](history/milestones/) et [`adr/`](adr/README.md).
 
 ## Synthèse
 
 ```text
-C0→M20                                TERMINÉS, VALIDÉS ET LIVRÉS sur main
-M21 — Production Integrity           S2 DISPOSITION AOÛT 2026 (CI PASS / branch-protection BLOCKED plan) — #73 OPEN
-M22 — Advanced Provider Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
-M23 — Semantic Retrieval 2.0         TERMINÉ, VALIDÉ, MERGÉ develop
-M24 — Polyglot Expansion             TERMINÉ, VALIDÉ, MERGÉ develop
-M25 — Remote & Distributed Indexing  TERMINÉ, VALIDÉ, MERGÉ develop
-M26 — Runtime & Dynamic Intelligence TERMINÉ, VALIDÉ, MERGÉ develop
-M27 — Team / Hosted Mode             TERMINÉ, VALIDÉ, MERGÉ develop
-M28 — Production Convergence         S1→S8 MERGÉS develop / S9 GOUVERNANCE TERMINÉE — PR #102 OPEN/READY
+C0 → M28                         TERMINÉS / INTÉGRÉS sur main
+M21 #73                          CLOSED / completed
+M28 #93                          CLOSED / completed
+PR de promotion #102             MERGED
+main / develop                   1adbc45339efe37cd26d1937025bfa69d7b57811
+tag v1.0.0                       1adbc45339efe37cd26d1937025bfa69d7b57811
+GitHub Release v1.0.0            PUBLIÉE
+#98 sandbox OS réelle            OPEN — travail futur explicite
+v1.0.1 Windows                   EN PRÉPARATION — NON PUBLIÉE
+fix/v1.0.1-release-hardening     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5 au démarrage M29
+M29 #107                         EN COURS — Docker autonome & Native Parity
+branche M29                      m29-autonomous-docker-runtime
+baseline M29                     db33cae87b37f9c2c36e536c96a4ccb6e24df3e5
+M29-S1                           ✅ PASS exact-head c7a4e944...
+M29-S2                           ✅ PASS exact-head c7a4e944...
+M29-S3                           ✅ PASS exact-head 3df1b40...
+M29-S4                           ✅ PASS exact-head 3df1b40...
+M29-S5                           ✅ PASS exact-head 0959fb9...
+M29-S6                           ✅ PASS exact-head f7ef0e3...
+M29-S7                           ✅ PASS exact-head 50b462f...
+M29-S8                           ✅ PASS exact-head da6a76f...
+PR / CI M29                      AUCUNE — autorisation explicite requise
 ```
 
-**État livré sur `main` : C0→M20.**
+`main` et `develop` représentent encore la ligne produit 1.0.0 publiée. La branche de maintenance `fix/v1.0.1-release-hardening` porte le candidat 1.0.1 ; aucun tag `v1.0.1` n'est publié.
 
-`develop` contient le tree M21 localement qualifié et M22→M28 S1→S8 fusionnés. M28 est défini par l'issue #93 et [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md). Le gel CI de juillet 2026 a pris fin le 1er août 2026 ; M21-S2 CI recovery est terminée (disposition explicite : CI PASS, branch-protection BLOCKED par contrainte de plan) ; PR #102 est candidate de production pour la promotion `develop → main`.
+M29 a été démarré le **2 août 2026** depuis la branche 1.0.1 afin de réutiliser les prérequis installer/MCP. Cette dépendance ne permet pas de contourner #106.
 
-## M21 — Production Integrity & Surface Convergence
+## Release 1.0.0
 
-Issue : **#73 OPEN**. Roadmap : [`roadmap/M21_EXECUTION.md`](roadmap/M21_EXECUTION.md).
+MINOS 1.0.0 est la première release stable après convergence C0→M28 et PR de promotion #102.
 
 ```text
-S1   governance + docs + runner local                 VALIDÉ
-S2   CI recovery + readiness branch protection        EN PAUSE jusqu’en août 2026
-S3   quality gates M19/M20                            VALIDÉ
-S4   Maven module-boundary hardening                  VALIDÉ
-S5   supply-chain + release hardening                 VALIDÉ
-S6   IntelliJ parity M19/M20                          VALIDÉ
-S7   advanced provider productionization              VALIDÉ
-S8   semantic scale qualification                     VALIDÉ
-S9   final production integrity gate                  VALIDÉ exact-head
+main/tag v1.0.0 : 1adbc45339efe37cd26d1937025bfa69d7b57811
+M21 #73          : CLOSED / completed
+M28 #93          : CLOSED / completed
 ```
+
+La release est immuable. Le défaut Windows `NoClassDefFoundError: org/w3c/dom/Node` est corrigé uniquement par 1.0.1 ; `v1.0.0` ne doit jamais être retaggé.
+
+## Candidat 1.0.1
+
+État : **EN PRÉPARATION — NON PUBLIÉE**.
+
+Le candidat 1.0.1 porte notamment : runtime Windows dérivé du JAR final avec `jdeps`, contrôle `java.xml`, vrais handshakes MCP, setup smoke isolé, détection Copilot/Claude/Codex, ownership/backups/désinstallation sélective et `slf4j-nop` pour stderr MCP propre.
+
+Tant que M29 n'a pas passé S8, le natif reste le parcours MCP recommandé ; Docker ne doit pas être présenté comme équivalent fonctionnel.
+
+## État des jalons
+
+| Jalons | État |
+|---|---|
+| C0 → M20 | terminés, validés et livrés |
+| M21 — Production Integrity | terminé ; #73 CLOSED / completed |
+| M22 — Advanced Provider Intelligence | terminé |
+| M23 — Semantic Retrieval 2.0 | terminé |
+| M24 — Polyglot Expansion | terminé |
+| M25 — Remote & Distributed Indexing | terminé avec contraintes sandbox explicites |
+| M26 — Runtime & Dynamic Intelligence | terminé |
+| M27 — Team / Hosted Mode | terminé |
+| M28 — Production Convergence | terminé ; #93 CLOSED / completed ; PR #102 merged |
+| M29 — Autonomous Docker Runtime & Native Parity | **EN COURS ; #107 OPEN** |
+
+## M29 — Docker autonome & Native Parity
+
+### S1 / S2 — ✅ PASS
+
+Preuve fondatrice :
 
 ```text
-M21 qualified tree : 60c1aba43e2d005991152cc4f3fe0b0dadef1c2d
-develop merge      : 4222706502c54e10f0bf0400a18360fb99e6208c
-M21 S8 STANDARD MEASUREMENT status=PASS decision=KEEP_CURRENT_M20_BACKEND
+HEAD                         c7a4e94414f4e2b6e3a2a23beacd303ca740387e
+mvnw.cmd clean verify        BUILD SUCCESS
+13/13 modules                SUCCESS
+suite totale                 417 PASS
+McpBackendRouterTest         6/6 PASS
+ProjectPathMappingTest       4/4 PASS
 ```
 
-Scopes conservés : `semantic-learned-provider`, provider avancé, persistance, API/MCP, remote, runtime et hosted.
+Le contrat reste : backend `native|docker`, fail-closed, `minos.exe mcp` stable, mapping portable host/container et aucun fallback Docker→native.
 
-**M21-S2 — Disposition 1er août 2026** :
+### S3 — administration Docker autonome — ✅ PASS exact-head `3df1b40...`
+
+Le plan runtime sépare `minos-mcp`, `minos-admin`, `minos-bootstrap`, `minos-tools-bootstrap`, `minos-provider-probe` et le volume `minos-provider-tools`. Le query plane, les bootstraps et le probe sont `network_mode: none`; les projets restent read-only. L'admin éphémère peut résoudre les dépendances du projet et écrit seulement sous `/var/lib/minos`.
+
+Historique des vrais défauts corrigés :
 
 ```text
-CI Recovery     : PASS — GitHub Actions gates tous PASS sur 96dc60af936d6df6ce8d40245039fe170554df74
-  PR Validation Ubuntu                  PASS
-  PR Validation Windows                 PASS
-  M28 final Linux exact-head gate       PASS
-  M28 final Windows exact-head gate     PASS
-  M19 Advanced Code Intelligence        PASS
-  M20 Semantic Hybrid                   PASS
-  IntelliJ Plugin Validation            PASS
-Branch protection readiness : BLOCKED — dépôt privé plan gratuit ; API /branches/main/protection retourne HTTP 403 ; branch protection non configurable/vérifiable par API ; aucun required check GitHub-enforced configuré ; mergeable_state=unstable (non blocked)
-Disposition M21-S2 : PASS_WITH_CONSTRAINTS — CI recovery terminée, branch protection platform-blocked (contrainte plan)
-Promotion candidate HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
-PR de promotion : #102 OPEN / candidate de production
+b780feb7d27bd34952d1952f8d80b06755980684  missing Rust runtime requirements: cargo, rustc, rust-analyzer
+f39802e...                                source RO target/scip-targetroot
+45536e2...                                workspace/mvnw / error=2, No such file or directory
+0f5668f...                                monorepo polyglotte routé à tort depuis la racine projet
 ```
 
-## M22 — Advanced Provider Intelligence
+La qualification finale S3 sur `3df1b40ca0daf50779596f6e955d966ed5eb4973` prouve : fixture Java Maven contrôlée, index réel `SUCCEEDED`, `index-status=READY`, fingerprint promu, hybrid structured fallback capability-honest, handshake MCP avant recreate, persistance project/snapshot après recreate et second handshake MCP.
 
-**TERMINÉ, VALIDÉ exact-head, MERGÉ dans `develop`.**
+Marqueur exact :
 
 ```text
-Issue          : #76 CLOSED / completed
-PR             : #77 MERGED
-Qualified HEAD : 75d6169be6d46d4e60ca19e781ff61704ca1613c
-Merge develop  : 37a3c904fd92c25b343344a26991531c75ebc4b6
+M29-S3 DOCKER ADMINISTRATION QUALIFICATION SUCCESS
 ```
 
-Contrat : `minos-java-source-v1`, CFG, def-use local, argument/return flow borné, sécurité explicite, provenance et confiance sans confusion entre capability moteur et fait provider.
+### S4 — provider-complete image — ✅ PASS exact-head `3df1b40...`
 
-## M23 — Semantic Retrieval 2.0
-
-**TERMINÉ, VALIDÉ exact-head, MERGÉ dans `develop`.**
+Image préparée :
 
 ```text
-Issue          : #78 CLOSED / completed
-PR             : #79 MERGED
-Qualified HEAD : 7a5fe2b96480a21e063b8ffa537009e5bdf99bc0
-Merge develop  : ffe12d95ac46c25026661dca51949fb0d39626b4
-Decision       : KEEP_CURRENT_M20_BACKEND
+scip-java            0.13.1
+scip-typescript      0.4.0
+scip-python          0.6.6
+scip-clang           0.4.0
+scip-dotnet          0.2.14
+scip-go              0.2.7
+rust-analyzer-scip   0.3.2989
+Apache Maven         3.9.16
 ```
 
-Le provider learned local reste opt-in et loopback-only. L’ANN demeure measurement-gated.
+Preuve exacte sur `3df1b40ca0daf50779596f6e955d966ed5eb4973` : 13/13 modules Maven SUCCESS, tests + shaded smoke PASS, checker docs SUCCESS, Docker 31/31, probe offline SUCCESS, `tools verify --all`, 7/7 providers READY et `doctor.ready=true`.
 
-## M24 — Polyglot Expansion
-
-**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
+Marqueur exact :
 
 ```text
-Base           : 8dbe34cb9e524acb62becda4faa263d74b90b9a9
-Issue          : #81 CLOSED / completed
-PR             : #82 MERGED
-Qualified HEAD : 927f57768a79af162e2cdc765d0f54d274cbe02e
-Merge develop  : 2a499a7aedd71b7cf4c5fb8339c5b914e3dd46fa
+M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-| Provider | Version / preuve | Disposition | Plateformes |
-|---|---|---|---|
-| scip-clang | 0.4.0 | QUALIFIED_WITH_CONSTRAINTS | Linux x86_64 |
-| scip-dotnet | 0.2.14 | QUALIFIED_WITH_CONSTRAINTS | Linux x86_64 |
-| scip-go | 0.2.7 | QUALIFIED_WITH_CONSTRAINTS | Windows x86_64, Linux x86_64 |
-| rust-analyzer | scip 2026-07-27 / v0.3.2989 / commit 12c3381 | QUALIFIED_WITH_CONSTRAINTS | Windows x86_64, Linux x86_64 |
+### S5 — Autonomous Indexing & Vector Lifecycle — ✅ PASS exact-head `0959fb9...`
 
-## M25 — Remote & Distributed Indexing
-
-**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
+Le défaut provider→module root est traité par une distinction explicite :
 
 ```text
-Issue          : #84 CLOSED / completed
-PR             : #85 MERGED
-Qualified tree : b17631de59871848351a4139b12be6e0354989bc
-Qualified HEAD : fc395d189cf7fc5a0e06130210a3dc763fc48637
-Merge develop  : 1a82f18115184606cbc13a9070b7cc78643ebb35
-Decision       : ADR-0033
+registeredProjectRoot
+→ provider execution/build root
+→ projectRelativeRoot
+→ provider artifact
+→ project snapshot staging
 ```
 
-Le worker natif est qualifié avec contraintes pour workspace/process et `ALLOW`. M28 formalise que `DENY` reste fail-closed et qu’aucun claim sandbox pour code non fiable n’est permis.
+Un provider est exécuté sur la racine de module/build réellement découverte. Les chemins SCIP issus d'un sous-module sont préfixés jusqu'à la racine projet pour préserver file IDs, identités structurelles et source lookup. Plusieurs scopes du même provider utilisent des répertoires de run séparés et les faits externes strictement identiques sont dédupliqués sans masquer une collision divergente.
 
-## M26 — Runtime & Dynamic Intelligence
+Le lifecycle conserve la promotion projet atomique. Un échec sur un scope imbriqué conserve le snapshot actif précédent ; le test `IndexingLifecycleScopedExecutionTest` verrouille ce rollback. Le planner `NONE|FULL|INCREMENTAL` reste capability-honest : l'incrémental multi-scope n'est pas revendiqué tant qu'un provider qualifié ne le supporte pas.
 
-**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
+Fixture qualifiée :
 
 ```text
-Issue          : #87 CLOSED / completed
-PR             : #88 MERGED
-Qualified HEAD : bf702990125a485646b9b31817c7787086a1dbb3
-Merge develop  : 9b6395ce9bcf6a7fe942d1f6c687a8ba97cbceef
+fixtures/polyglot/m29-scoped-modules
 ```
 
-Les observations restent `PARTIAL` / `OBSERVED_PARTIAL`; l’absence d’observation n’est jamais une preuve d’absence runtime.
+Elle combine une racine Maven Java et deux modules TypeScript `ui/app` / `ui/lib`, sans `package.json` ni `tsconfig.json` à la racine globale.
 
-## M27 — Team / Hosted Mode
-
-**TERMINÉ, VALIDÉ exact-head Windows + Linux, MERGÉ dans `develop`.**
+Preuve exacte sur `0959fb9f64e2ecf61e20281f29c694e86d67c62b` :
 
 ```text
-Issue          : #90 CLOSED / completed
-PR             : #91 MERGED
-Qualified HEAD : d4bd51ef52cb329ab75b70b32bc22e2b236bd65d
-Merge develop  : ee22c3b39b9cd891c18cb61188eb8e973fc7e822
+13/13 Maven                     SUCCESS
+S4 provider-complete            SUCCESS
+JAVA + TYPESCRIPT               détectés
+MAVEN + NPM                     détectés
+scip-java                       racine projet
+scip-typescript                 ui/app + ui/lib
+first FULL                      SUCCEEDED / READY
+semantic                        READY / minos-local-hash / 384 dimensions / 19 documents
+index-v2.bin                    persistant / non vide
+hybrid                          READY_WITH_SEMANTIC / HEURISTIC
+second index                    NONE / NO_CHANGES / même snapshot
+forced FULL                     nouveau snapshot / semantic réaligné
+query recreate                  semantic READY / hybrid READY_WITH_SEMANTIC
 ```
 
-Le contrôle tenant embarqué reste opt-in, local-first, RBAC fail-closed, chiffré AES-256-GCM et audité par HMAC chaîné. Il ne vaut pas SaaS opéré.
-
-## M28 — Production Convergence & Architectural Hardening
-
-**S1→S8 IMPLÉMENTÉS ET MERGÉS DANS `develop` — S9 PARTIEL / PENDING — qualification locale exact-head en cours.**
+Marqueur exact :
 
 ```text
-Issue          : #93 OPEN
-PR             : #96 MERGED
-Branch         : pre-m28-audit-remediation
-Base develop   : cfbb495fbca8ddaf2b4bd529985e702e02106505
-Merge develop  : 53d6faa41579d3d01e7900c5c4b65fdcc42c5868
-Qualified HEAD : 96dc60af936d6df6ce8d40245039fe170554df74
-Promotion main : PR #102 OPEN — governance terminée — en attente merge
+M29-S5 AUTONOMOUS INDEXING AND VECTOR LIFECYCLE QUALIFICATION SUCCESS
 ```
 
-État :
+Le vector store reste celui existant : `index-v2.bin`, composants `float32`, scan exact. Aucune base vectorielle externe, ANN ou HNSW n'est introduite.
 
-- S1/S2 : wiring M22 réel et tests verticaux application/API/CLI-IDE/MCP — IMPLÉMENTÉS, MERGÉS ;
-- S3 : catalogue Product Facts des sept providers et cohérence sémantique — IMPLÉMENTÉ, MERGÉ ;
-- S4 : graphe de dépendances Maven et fitness functions — IMPLÉMENTÉ, MERGÉ ;
-- S5 : provider Java décomposé et profil performance ProgramGraph — IMPLÉMENTÉ, MERGÉ ;
-- S6 : disposition remote explicite — `DENY` non OS-enforced, Windows/Linux `BLOCKED`, code non fiable non supporté — IMPLÉMENTÉ, MERGÉ ;
-- S7 : façade hosted décomposée, ports opérateur et frontière no-SaaS — IMPLÉMENTÉ, MERGÉ ;
-- S8 : gates structurels, négatifs, JaCoCo et runners exact-head — IMPLÉMENTÉS, MERGÉS ;
-- S9 : GOUVERNANCE TERMINÉE — M21-S2 CI PASS / branch-protection BLOCKED (plan) ; develop qualifié ; PR #102 candidate production (CI DEFERRED levé le 1er août 2026).
+### S6 — Backend-agnostic MCP client integration — ✅ PASS exact-head `f7ef0e3...`
 
-Le gel CI de juillet 2026 a pris fin le **1er août 2026**. M21-S2 CI recovery est terminée (CI PASS, branch-protection BLOCKED par contrainte de plan GitHub gratuit). `develop` est qualifié sur `96dc60af936d6df6ce8d40245039fe170554df74`. PR #102 est prête pour promotion vers `main`.
+Les intégrations Copilot JetBrains/IntelliJ, Copilot CLI, Claude Code, Claude Desktop et Codex CLI/Desktop ciblent toutes :
 
-Les commandes autoritatives sont dans [`roadmap/M28_EXECUTION.md`](roadmap/M28_EXECUTION.md).
+```text
+command = <installation>\app\minos.exe
+args    = mcp
+env     = MINOS_HOME=<dataRoot>
+```
 
-## Règle de promotion
+Aucun client ne possède de logique `docker exec`, de nom de conteneur ou de configuration Compose. Le choix `native|docker` reste exclusivement dans `<MINOS_HOME>/runtime/backend.properties`, lu par `McpBackendRouter`.
 
-- aucun claim sandbox OS ou SaaS sans preuve dédiée ;
-- aucune promotion vers `main` avant vérification réelle des gates requis ;
-- tout nouveau commit invalide les preuves exact-head antérieures.
+Qualification exacte sur `f7ef0e3dbe820253decd83a1dc27bf2651ef6de9` :
 
-**Disposition effective 1er août 2026** : tous les GitHub Actions gates requis PASS sur `96dc60af936d6df6ce8d40245039fe170554df74` ; branch protection platform-blocked (plan gratuit, API 403) ; PR #102 candidate de production.
+```text
+PowerShell parse preflight                   SUCCESS
+Maven 13/13                                  SUCCESS
+check-current-docs.py                        SUCCESS
+MCP client integration                       SUCCESS
+MCP client preflight                         SUCCESS
+Codex Desktop lifecycle                      SUCCESS
+backend-routing verifier                     SUCCESS
+installer template verifier                  SUCCESS
+client configs native -> docker              byte-identical
+```
 
+Marqueur exact :
+
+```text
+M29-S6 BACKEND-AGNOSTIC MCP CLIENT QUALIFICATION SUCCESS
+```
+
+Rapport :
+
+```text
+target/m29/s6-qualification-f7ef0e3dbe820253decd83a1dc27bf2651ef6de9.json
+```
+
+### S7 — Installer, switching & lifecycle — 🟨 implémenté / à qualifier
+
+S7 introduit un orchestrateur unique :
+
+```text
+scripts/install/switch-mcp-backend.ps1
+```
+
+La transaction est :
+
+```text
+prepare -> validate -> handshake -> commit backend.properties -> retire ancien backend
+```
+
+Le handshake candidat utilise `scripts/install/probe-mcp-backend.ps1` et le point d'entrée stable `minos.exe mcp` dans un `MINOS_HOME` isolé. `backend.properties` n'est committé qu'après `initialize` + `tools/list` réussis. En cas d'échec, la configuration précédente est restaurée ; un upgrade Docker→Docker sauvegarde/restaure aussi le runtime Docker précédent puis le redémarre.
+
+Un runtime Docker déjà géré avec le même `VERSION`, commit, `ProjectsRoot`, racines Docker et identité container/Compose est réutilisé par `Start + Validate + handshake` au lieu de reconstruire l'image.
+
+Le setup Windows propose exactement trois choix exclusifs :
+
+```text
+MCP natif Windows — recommandé
+MCP Docker — isolation renforcée
+Ne pas configurer maintenant
+```
+
+Lors d'un upgrade, le backend déjà persisté dans `%LOCALAPPDATA%\MINOS\data\runtime\backend.properties` est présélectionné. Les clients IA sont communs aux deux backends et restent configurés uniquement sur `minos.exe mcp + MINOS_HOME`. Docker explicitement sélectionné mais indisponible bloque le wizard : aucun fallback natif silencieux.
+
+Le ZIP `install.ps1` accepte aussi `none|native|docker`, sauvegarde l'installation précédente avant remplacement et restaure ce backup si la validation du nouveau payload/backend échoue. Les racines data/Docker sont surchargeables pour qualification isolée.
+
+Verifiers :
+
+```text
+scripts/install/verify-mcp-backend-lifecycle.ps1
+scripts/install/verify-installer-template.ps1
+M29InstallerBackendLifecycleContractTest
+```
+
+Le verifier transactionnel injecte des échecs avant et après commit, prouve le rollback, la réutilisation du runtime Docker, l'upgrade et le rollback d'upgrade, et vérifie qu'une configuration tierce reste byte-identical.
+
+Gate exact-head :
+
+```text
+scripts/m29/run-s7.ps1
+```
+
+Le gate construit une vraie distribution Windows et compile un setup Inno smoke, puis utilise des racines temporaires pour qualifier : native-only, upgrade native, Docker-only, Docker→native, native→Docker reuse, uninstall avec conservation des données Docker puis purge explicite.
+
+Marqueur requis :
+
+```text
+M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS
+```
+
+### S8 — Native/Docker parity qualification — ⬜
+
+Même corpus, même configuration métier, rapport machine-readable. Gate final :
+
+```text
+native result == docker result
+```
+
+Aucun claim de parité avant S8.
+
+## Limite explicitement ouverte — #98
+
+#98 reste OPEN. La sandbox OS réelle du worker distant est indépendante de M29 et ne doit pas être revendiquée implicitement.
+
+## Gate courant
+
+```text
+pull HEAD courant
+→ run-s7.ps1 exact-head
+   → PowerShell parser preflight
+   → Maven clean verify
+   → check-current-docs.py
+   → lifecycle transactionnel avec fault injection
+   → backend-agnostic client routing
+   → installer template contract
+   → vraie distribution Windows + compilation setup Inno smoke
+   → native-only + upgrade
+   → Docker-only
+   → Docker -> native -> Docker(reuse) -> native
+   → uninstall preserve
+   → purge explicite isolée
+→ seulement après SUCCESS : S7 peut passer ✅
+```
+
+Aucune PR, GitHub Actions ou merge M29 sans autorisation explicite.
+
+## Sources de vérité
+
+- état produit : `docs/STATUS.md` ;
+- roadmap : `docs/ROADMAP.md` ;
+- exécution M29 : `docs/roadmap/M29_EXECUTION.md` et issue #107 ;
+- ADR : `docs/adr/0037-first-class-native-and-docker-runtime-backends.md` ;
+- guide Docker : `docs/user/docker-runtime.md` ;
+- release 1.0.0 : `docs/releases/1.0.0.md` ;
+- candidat 1.0.1 : `docs/releases/1.0.1.md`.

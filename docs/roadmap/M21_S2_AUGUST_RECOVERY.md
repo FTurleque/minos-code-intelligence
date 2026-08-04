@@ -1,128 +1,58 @@
-# M21-S2 — Runbook de reprise août 2026
+# M21-S2 — Reprise août 2026 — disposition finale
 
-Statut : **EXÉCUTÉ — 1er août 2026.**
+Statut : **EXÉCUTÉ / TERMINÉ — 1er août 2026.**
 
-Ce runbook prépare la reprise de M21-S2 sans contourner le gel explicite de juillet 2026. Aucune étape GitHub Actions, required checks ou branch protection ne doit être exécutée avant le **1er août 2026**.
+Ce document conserve la disposition finale de la reprise M21-S2 après le gel de juillet 2026.
 
-## Préconditions bloquantes
-
-1. le lot P0–P2 #95 est intégré dans `develop` après qualification locale exacte Windows + Linux ;
-2. `develop` est propre, sans divergence documentaire ni Product Facts stale ;
-3. aucun changement opportuniste de fonctionnalité n’est inclus ;
-4. la disposition sandbox M25 reste honnête : backend OS réellement prouvé ou `DENY` fail-closed ;
-5. l’issue #73 reste ouverte jusqu’à fermeture effective de S2.
-
-## Séquence de reprise
-
-### A. Établir la baseline exacte
-
-- enregistrer le SHA exact de `develop` ;
-- exécuter les gates locaux consolidés Windows + Linux sur ce même SHA ;
-- exécuter `scripts/remediation/run-final.ps1` et `scripts/remediation/run-final.sh` ;
-- vérifier worktrees propres et absence de diff `.github/workflows` hérité du lot de remédiation.
-
-### B. Reprendre l’analyse CI
-
-À partir du 1er août uniquement :
-
-- inspecter les workflows existants et l’historique des échecs M21-S2 ;
-- distinguer défaut produit, défaut workflow, indisponibilité runner et limite de permissions ;
-- corriger uniquement les workflows nécessaires à la qualification du produit ;
-- conserver Java/Maven/OS/pins explicites ;
-- produire des diagnostics exploitables et des artefacts de preuve bornés ;
-- ne jamais utiliser un rerun isolé comme unique preuve de correction.
-
-### C. Required checks et branch protection readiness
-
-- définir les checks réellement bloquants pour `develop` et `main` ;
-- vérifier leur stabilité sur plusieurs exécutions propres ;
-- documenter les checks locaux qui restent nécessaires en complément ;
-- vérifier que les permissions GitHub permettent la configuration cible ;
-- si une protection ne peut pas être configurée, conserver une disposition `BLOCKED` explicite au lieu d’un faux PASS.
-
-### D. Qualification finale M21-S2
-
-La preuve doit inclure :
-
-- SHA exact ;
-- exécutions Windows/Linux applicables ;
-- résultats Maven, tests, JaCoCo, module boundaries, Product Facts, supply chain et surfaces ;
-- état de chaque workflow/check requis ;
-- absence de secrets dans logs/artefacts ;
-- worktree propre ;
-- décision `PASS`, `PASS_WITH_CONSTRAINTS` ou `BLOCKED` motivée.
-
-### E. Convergence `develop` → `main`
-
-Uniquement si M21-S2 et les gates du lot #95 sont fermés :
-
-1. geler les changements fonctionnels ;
-2. comparer `main...develop` et inventorier tous les jalons M21→M27 + remédiations ;
-3. ouvrir une PR de promotion dédiée ;
-4. exécuter les required checks sur le SHA de promotion ;
-5. fusionner avec protection contre déplacement du HEAD ;
-6. produire release/SBOM/notices/checksums et smoke install selon le contrat courant ;
-7. réconcilier README, STATUS, ROADMAP, #73, #95, #93 et les ADR ;
-8. fermer #73 seulement après preuve de promotion ou décision explicite séparant clôture S2 et release.
-
-## Critères de refus
-
-La promotion est interdite si :
-
-- un check obligatoire est absent, neutralisé ou flaky sans disposition ;
-- Windows et Linux ne portent pas le même exact HEAD lorsqu’ils sont requis ;
-- un Product Fact est codé en dur ou divergent du runtime ;
-- le provider Java avancé n’est pas prouvé depuis `MinosApplication.open()` ;
-- `DENY` réseau est déclaré sans backend OS qualifié ;
-- une incohérence documentaire ou une issue de gouvernance reste masquée.
-
-## Sortie attendue
+## Résultat
 
 ```text
-M21-S2 CI RECOVERY VALIDATION SUCCESS
-Required checks: PASS
-Branch protection readiness: PASS or explicit BLOCKED
-Promotion candidate HEAD: <sha>
+CI recovery                 : PASS
+Required checks observés    : PASS
+Branch protection readiness : BLOCKED — contrainte plan/API du dépôt privé
+Disposition                 : PASS_WITH_CONSTRAINTS
+Issue M21 #73               : CLOSED / completed
+PR promotion #102           : MERGED
+Release v1.0.0              : PUBLIÉE
 ```
 
-Ce texte est un plan de reprise, pas une preuve d'exécution. Toute preuve finale doit être ajoutée à `M21_EXECUTION.md`, `STATUS.md` et l'issue #73 après le 1er août 2026.
+Le blocage branch protection n'a jamais été transformé en faux PASS : l'API GitHub ne permettait pas de configurer/vérifier la protection cible dans les conditions de plan du dépôt. La contrainte plateforme a donc été enregistrée explicitement.
 
----
+## Séquence réellement fermée
 
-## Résultats d'exécution — 1er août 2026
+1. reprise après le 1er août 2026 ;
+2. diagnostic des workflows/permissions ;
+3. récupération des gates Windows/Linux requis ;
+4. qualification du candidat `develop` ;
+5. disposition `PASS_WITH_CONSTRAINTS` pour M21-S2 ;
+6. fermeture de #73 ;
+7. promotion `develop → main` via #102 ;
+8. publication stable 1.0.0.
+
+## Historique de preuve
+
+Le candidat final de promotion de `develop` était :
 
 ```text
-Date                    : 2026-08-01
-Executor HEAD           : 96dc60af936d6df6ce8d40245039fe170554df74
-
-A — Baseline exacte
-  develop HEAD              : 96dc60af936d6df6ce8d40245039fe170554df74
-  Worktree                  : clean
-  diff .github/workflows    : VIDE
-
-B — Analyse CI
-  Workflows inspectés       : PR Validation, M19, M20, IntelliJ Plugin Validation
-  Historique                : tous PASS sur HEAD 96dc60a (runs 30699982335, 30699982338, 30699982379, 30699982411)
-
-C — Required checks et branch protection readiness
-  API /branches/main/protection : HTTP 403 — dépôt privé plan gratuit ; branch protection non configurable
-  API /rulesets                 : HTTP 403 — même cause
-  API /rules/branches/main      : HTTP 403 — même cause
-  mergeable_state (PR #102)     : unstable (non blocked) — aucun required check configuré ne bloque le merge
-  SonarCloud                    : FAILURE (non-required ; mergeable_state=unstable confirme non-bloquant)
-  Disposition branch protection : BLOCKED — contrainte de plan GitHub gratuit, documentation explicite
-
-D — Qualification finale M21-S2
-  CI Recovery             : PASS
-  Required checks         : PASS (GitHub Actions gates tous verts sur 96dc60a)
-  Branch protection       : BLOCKED (plateforme, API 403, plan gratuit)
-  Promotion candidate     : 96dc60af936d6df6ce8d40245039fe170554df74
-  mergeable               : true
-  mergeable_state         : unstable (aucun required check GitHub-enforced configuré)
-  PR #102                 : OPEN / candidate de production
-
-M21-S2 CI RECOVERY VALIDATION SUCCESS
-Required checks: PASS
-Branch protection readiness: BLOCKED — platform constraint, free private plan, API 403
-Promotion candidate HEAD: 96dc60af936d6df6ce8d40245039fe170554df74
+ce4b6ba5f28ecbe3273919318cd950adcf6a0d80
 ```
+
+La promotion vers `main` a produit :
+
+```text
+71738c1d65cc0aae9fd5c5b34e898d72e164a4f4
+```
+
+La release 1.0.0 a ensuite été publiée sur :
+
+```text
+1adbc45339efe37cd26d1937025bfa69d7b57811
+```
+
+## État courant
+
+Ce runbook n'est plus une liste de travaux en attente. **#73 est fermé et #102 est mergée.**
+
+Le seul reliquat produit explicitement ouvert dans cette zone de gouvernance est #98, qui suit l'implémentation future d'une vraie sandbox OS Windows/Linux. Il ne doit pas être confondu avec M21-S2.
+
+Le défaut de packaging Windows MCP découvert après la publication 1.0.0 est traité séparément par la maintenance 1.0.1 ; il ne rouvre pas M21-S2.

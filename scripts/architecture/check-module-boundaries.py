@@ -14,6 +14,7 @@ MODULES = (
     "minos-engine",
     "minos-runtime-local",
     "minos-storage-local",
+    "minos-storage-postgresql",
     "minos-provider-scip",
     "minos-integration-git",
     "minos-application",
@@ -31,6 +32,9 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-engine": frozenset({"minos-domain"}),
     "minos-runtime-local": frozenset({"minos-engine"}),
     "minos-storage-local": frozenset({"minos-engine"}),
+    "minos-storage-postgresql": frozenset({
+        "minos-domain", "minos-engine", "minos-storage-local", "minos-application"
+    }),
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
     }),
@@ -53,8 +57,8 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-mcp": frozenset({"minos-application"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
-        "minos-provider-scip", "minos-integration-git", "minos-application", "minos-nexus",
-        "minos-cli", "minos-api", "minos-mcp"
+        "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git",
+        "minos-application", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
     }),
 }
 
@@ -65,6 +69,7 @@ ARTIFACT_TO_MODULE = {
     "minos-engine": "minos-engine",
     "minos-runtime-local": "minos-runtime-local",
     "minos-storage-local": "minos-storage-local",
+    "minos-storage-postgresql": "minos-storage-postgresql",
     "minos-provider-scip": "minos-provider-scip",
     "minos-integration-git": "minos-integration-git",
     "minos-application": "minos-application",

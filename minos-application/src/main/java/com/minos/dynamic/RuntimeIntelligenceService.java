@@ -2,10 +2,10 @@ package com.minos.dynamic;
 
 import com.minos.application.ProjectResolver;
 import com.minos.domain.Symbol;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
-import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.time.Clock;
@@ -38,21 +38,21 @@ public final class RuntimeIntelligenceService {
     );
 
     private final ProjectResolver projects;
-    private final FileSymbolSnapshotStore snapshots;
+    private final CodeKnowledgeSnapshotStore snapshots;
     private final RuntimeObservationStore store;
     private final Clock clock;
 
     public RuntimeIntelligenceService(
-            LocalProjectRegistry registry,
-            FileSymbolSnapshotStore snapshots,
+            ProjectRegistry registry,
+            CodeKnowledgeSnapshotStore snapshots,
             RuntimeObservationStore store
     ) {
         this(registry, snapshots, store, Clock.systemUTC());
     }
 
     RuntimeIntelligenceService(
-            LocalProjectRegistry registry,
-            FileSymbolSnapshotStore snapshots,
+            ProjectRegistry registry,
+            CodeKnowledgeSnapshotStore snapshots,
             RuntimeObservationStore store,
             Clock clock
     ) {

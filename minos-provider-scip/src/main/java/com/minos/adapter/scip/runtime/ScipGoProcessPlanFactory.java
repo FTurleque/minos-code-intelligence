@@ -6,6 +6,7 @@ import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -21,7 +22,7 @@ public final class ScipGoProcessPlanFactory implements IndexerProcessPlanFactory
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) {
+    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("scip-go incremental execution is not qualified by MINOS M24");
@@ -32,11 +33,13 @@ public final class ScipGoProcessPlanFactory implements IndexerProcessPlanFactory
         if (!Files.isRegularFile(executable)) {
             throw new IllegalStateException("scip-go executable is missing: " + executable);
         }
+        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
+        Files.createDirectories(output.getParent());
         return new IndexerProcessPlan(
-                CommandLocator.invocation(executable),
+                CommandLocator.invocation(executable, "--output", output.toString()),
                 root,
                 Map.of(),
-                root.resolve("index.scip"),
+                output,
                 Duration.ofMinutes(30)
         );
     }

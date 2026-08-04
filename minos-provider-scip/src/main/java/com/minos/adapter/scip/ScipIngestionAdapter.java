@@ -81,6 +81,8 @@ final class ScipIngestionAdapter {
                     request.projectId(),
                     request.moduleId(),
                     fileId,
+                    request.projectRelativePath(fact.relativePath()),
+                    request.projectRelativeRoot(),
                     declarationLocation,
                     request.providerId(),
                     request.providerVersion(),
@@ -339,7 +341,7 @@ final class ScipIngestionAdapter {
         if (explicit != null && !explicit.isBlank()) {
             return explicit;
         }
-        return "file:" + sha256(request.projectId() + "\u001F" + relativePath);
+        return "file:" + sha256(request.projectId() + "\u001F" + request.projectRelativePath(relativePath));
     }
 
     private String occurrenceId(

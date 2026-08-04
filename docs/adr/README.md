@@ -35,7 +35,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0018](0018-versioned-public-java-api.md) | Versionner une API Java publique indépendante des modèles internes | Accepted | M11 |
 | [0019](0019-cross-repository-identity-and-git-facts.md) | Résoudre les relations cross-repository uniquement par identité exacte et séparer les faits Git | Accepted | M12 |
 | [0020](0020-minos-nexus-json-boundary.md) | Intégrer NEXUS par un contrat JSON local versionné | Accepted | M13 |
-| [0021](0021-native-runtime-autonomous-indexing.md) | Utiliser un runtime MINOS natif pour l’indexation autonome et conserver Docker MCP comme mode durci optionnel | Accepted | M14 |
+| [0021](0021-native-runtime-autonomous-indexing.md) | Utiliser un runtime MINOS natif pour l’indexation autonome et conserver Docker MCP comme mode durci optionnel | Partially superseded by ADR-0037 | M14 |
 | [0022](0022-maven-reactor-and-module-boundaries.md) | Imposer les frontières MINOS par un reactor Maven progressif | Accepted | M15-S2 |
 | [0023](0023-decomposed-local-snapshot-persistence.md) | Décomposer la persistance locale des snapshots sans changer le format disque | Accepted | M15-S6 |
 | [0024](0024-active-snapshot-query-view-and-rebuildable-indexes.md) | Mettre en cache une vue de snapshot actif et reconstruire ses indexes en mémoire | Accepted | M15-S7/S8 |
@@ -51,6 +51,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0034](0034-partial-runtime-observations-with-explicit-static-correlation.md) | Conserver les observations runtime partielles séparées des faits statiques et corrélées à un snapshot exact | Accepted | M26 |
 | [0035](0035-opt-in-tenant-control-plane-with-external-keys.md) | Ajouter un contrôle tenant opt-in, chiffré, audité et alimenté par des clés externes | Accepted | M27 |
 | [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
+| [0037](0037-first-class-native-and-docker-runtime-backends.md) | Router `minos mcp` vers un backend natif ou Docker explicite, versionné et fail-closed | Accepted — parity pending | M29-S1 |
 
 ## Règle de rédaction
 

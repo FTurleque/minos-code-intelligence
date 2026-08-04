@@ -1,12 +1,14 @@
 #define MinosName "MINOS Code Intelligence"
 #define MinosVersion "@@VERSION@@"
 #define MinosAppVersion "@@APP_VERSION@@"
+#define MinosAppId "@@APP_ID@@"
+#define MinosSmokeMode @@SMOKE_MODE@@
 #define MinosSourceDir "@@SOURCE_DIR@@"
 #define MinosOutputDir "@@OUTPUT_DIR@@"
 #define MinosOutputBaseFilename "@@OUTPUT_BASENAME@@"
 
 [Setup]
-AppId={{7B91F355-0B8A-4D28-A6C6-5CE4B1C5F62B}
+AppId={#MinosAppId}
 AppName={#MinosName}
 AppVersion={#MinosVersion}
 AppPublisher=FTurleque
@@ -33,32 +35,205 @@ VersionInfoProductTextVersion={#MinosVersion}
 
 [Tasks]
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
-Name: "mcp_copilot_jetbrains"; Description: "GitHub Copilot — JetBrains / IntelliJ"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_copilot_cli"; Description: "GitHub Copilot CLI"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_claude_code"; Description: "Claude Code"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_claude_desktop"; Description: "Claude Desktop"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "mcp_codex"; Description: "OpenAI Codex"; GroupDescription: "Connecter le MCP natif MINOS à :"; Flags: unchecked
-Name: "docker"; Description: "Configurer et démarrer le MCP Docker (Docker Desktop requis)"; GroupDescription: "MCP Docker optionnel :"; Flags: unchecked
 
 [Files]
 Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MinosSourceDir}\integration\detect-mcp-clients.ps1"; Flags: dontcopy
 
 [Icons]
 Name: "{userprograms}\MINOS\Dossier d'installation MINOS"; Filename: "{app}"
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\integration\configure-mcp-clients.ps1"" -InstallRoot ""{app}"" -Action Uninstall"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMinosNativeMcpClients"
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\integration\uninstall-mcp-clients.ps1"" -InstallRoot ""{app}"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMinosNativeMcpClients"; Check: ShouldRunGlobalCleanup
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\docker\scripts\configure-docker-mcp.ps1"" -InstallRoot ""{app}"" -Stop"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMinosDockerMcp"; Check: ShouldRunGlobalCleanup
 
 [UninstallDelete]
-; The setup-owned Docker marker must not keep {app} behind when Docker is unavailable.
-; Runtime state and persistent MINOS data live outside {app} and are managed separately.
 Type: files; Name: "{app}\.docker-mcp-managed"
 
 [Code]
 var
+  SetupTypePage: TInputOptionWizardPage;
+  DataRootPage: TInputDirWizardPage;
+  McpNamePage: TInputQueryWizardPage;
+  McpModePage: TInputOptionWizardPage;
+  StoragePage: TInputOptionWizardPage;
+  PostgresPage: TWizardPage;
+  PostgresUrlLabel: TNewStaticText;
+  PostgresUrlEdit: TNewEdit;
+  PostgresUserLabel: TNewStaticText;
+  PostgresUserEdit: TNewEdit;
+  PostgresPasswordLabel: TNewStaticText;
+  PostgresPasswordEdit: TNewEdit;
+  PostgresSchemaLabel: TNewStaticText;
+  PostgresSchemaEdit: TNewEdit;
+  SemanticPage: TInputOptionWizardPage;
+  OllamaPage: TWizardPage;
+  OllamaModeText: TNewStaticText;
+  OllamaModelLabel: TNewStaticText;
+  OllamaModelEdit: TNewEdit;
+  OllamaDimensionsLabel: TNewStaticText;
+  OllamaDimensionsEdit: TNewEdit;
+  OllamaEndpointLabel: TNewStaticText;
+  OllamaEndpointEdit: TNewEdit;
+  OllamaProvisionCheck: TNewCheckBox;
+  McpClientsPage: TWizardPage;
+  McpCopilotJetBrains: TNewCheckBox;
+  McpCopilotJetBrainsStatus: TNewStaticText;
+  McpCopilotCli: TNewCheckBox;
+  McpCopilotCliStatus: TNewStaticText;
+  McpClaudeCode: TNewCheckBox;
+  McpClaudeCodeStatus: TNewStaticText;
+  McpClaudeDesktop: TNewCheckBox;
+  McpClaudeDesktopStatus: TNewStaticText;
+  McpCodex: TNewCheckBox;
+  McpCodexStatus: TNewStaticText;
+  McpCodexMode: String;
+  McpPreflightIni: String;
+  McpPreflightCompleted: Boolean;
   DockerProjectsPage: TInputDirWizardPage;
-  DockerWarningShown: Boolean;
+  DockerInstanceLabel: TNewStaticText;
+  DockerInstanceEdit: TNewEdit;
+  DockerDataRootLabel: TNewStaticText;
+  DockerDataRootEdit: TNewEdit;
+  SummaryPage: TWizardPage;
+  SummaryMemo: TNewMemo;
+  DeleteUserDataOnUninstall: Boolean;
+
+function IfThen(Condition: Boolean; TrueValue, FalseValue: String): String;
+begin
+  if Condition then Result := TrueValue else Result := FalseValue;
+end;
+
+function IsSmokeBuild(): Boolean;
+begin
+  Result := {#MinosSmokeMode} = 1;
+end;
+
+function ShouldRunGlobalCleanup(): Boolean;
+begin
+  Result := not IsSmokeBuild();
+end;
+
+function AdvancedSetupSelected(): Boolean;
+begin
+  Result := SetupTypePage.Values[1];
+end;
+
+function NativeMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[0];
+end;
+
+function DockerMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[1];
+end;
+
+function NoMcpSelected(): Boolean;
+begin
+  Result := McpModePage.Values[2];
+end;
+
+function McpBackendSelected(): Boolean;
+begin
+  Result := NativeMcpSelected() or DockerMcpSelected();
+end;
+
+function PostgreSqlSelected(): Boolean;
+begin
+  Result := AdvancedSetupSelected() and StoragePage.Values[1];
+end;
+
+function OllamaSelected(): Boolean;
+begin
+  Result := AdvancedSetupSelected() and SemanticPage.Values[2];
+end;
+
+function LocalHashSelected(): Boolean;
+begin
+  Result := AdvancedSetupSelected() and SemanticPage.Values[1];
+end;
+
+function InstallerRegistryPath(): String;
+begin
+  Result := 'Software\FTurleque\MINOS';
+end;
+
+function ReadInstallerValue(Name: String; DefaultValue: String): String;
+var
+  Value: String;
+begin
+  if RegQueryStringValue(HKCU, InstallerRegistryPath(), Name, Value) and (Value <> '') then
+    Result := Value
+  else
+    Result := DefaultValue;
+end;
+
+function DefaultDataRoot(): String;
+begin
+  Result := ExpandConstant('{localappdata}\MINOS\data');
+end;
+
+function DefaultDockerDataRoot(): String;
+begin
+  Result := ExpandConstant('{localappdata}\MINOS\docker-data');
+end;
+
+function EffectiveDataRoot(): String;
+begin
+  if AdvancedSetupSelected() then Result := DataRootPage.Values[0]
+  else Result := DefaultDataRoot();
+end;
+
+function EffectiveDockerDataRoot(): String;
+begin
+  if AdvancedSetupSelected() then Result := DockerDataRootEdit.Text
+  else Result := DefaultDockerDataRoot();
+end;
+
+function EffectiveMcpServerName(): String;
+begin
+  if AdvancedSetupSelected() then Result := McpNamePage.Values[0]
+  else Result := 'minos';
+end;
+
+function EffectiveStorageBackend(): String;
+begin
+  if PostgreSqlSelected() then Result := 'postgresql'
+  else Result := 'local';
+end;
+
+function EffectiveSemanticProvider(): String;
+begin
+  if OllamaSelected() then Result := 'ollama'
+  else if LocalHashSelected() then Result := 'local-hash'
+  else Result := 'disabled';
+end;
+
+function EffectiveMcpBackend(): String;
+begin
+  if NativeMcpSelected() then Result := 'native'
+  else if DockerMcpSelected() then Result := 'docker'
+  else Result := 'none';
+end;
+
+function ExistingMcpBackend(): String;
+var
+  ConfigPath: String;
+  ConfigText: AnsiString;
+begin
+  Result := ReadInstallerValue('McpBackend', '');
+  if (Result = 'native') or (Result = 'docker') then exit;
+  Result := '';
+  ConfigPath := ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties');
+  if not FileExists(ConfigPath) then
+    ConfigPath := AddBackslash(ReadInstallerValue('DataRoot', DefaultDataRoot())) + 'runtime\backend.properties';
+  if FileExists(ConfigPath) and LoadStringFromFile(ConfigPath, ConfigText) then
+  begin
+    if Pos('backend=docker', LowerCase(ConfigText)) > 0 then Result := 'docker'
+    else if Pos('backend=native', LowerCase(ConfigText)) > 0 then Result := 'native';
+  end;
+end;
 
 function TrimTrailingBackslash(Value: String): String;
 begin
@@ -82,24 +257,18 @@ var
   CurrentPath: String;
   AppPath: String;
 begin
+  if IsSmokeBuild() then exit;
   AppPath := TrimTrailingBackslash(ExpandConstant('{app}'));
-  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
-    CurrentPath := '';
-
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then CurrentPath := '';
   if not PathContainsEntry(CurrentPath, AppPath) then
   begin
     if CurrentPath <> '' then
     begin
-      if CurrentPath[Length(CurrentPath)] <> ';' then
-        CurrentPath := CurrentPath + ';';
+      if CurrentPath[Length(CurrentPath)] <> ';' then CurrentPath := CurrentPath + ';';
     end;
     CurrentPath := CurrentPath + AppPath;
     RegWriteExpandStringValue(HKCU, 'Environment', 'Path', CurrentPath);
-    RegWriteStringValue(
-      HKCU,
-      'Software\FTurleque\MINOS',
-      'ManagedPath',
-      AppPath);
+    RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ManagedPath', AppPath);
   end;
 end;
 
@@ -111,192 +280,715 @@ var
   Needle: String;
   ManagedPath: String;
 begin
-  if not RegQueryStringValue(
-    HKCU,
-    'Software\FTurleque\MINOS',
-    'ManagedPath',
-    ManagedPath) then
-    exit;
-
+  if IsSmokeBuild() then exit;
+  if not RegQueryStringValue(HKCU, InstallerRegistryPath(), 'ManagedPath', ManagedPath) then exit;
   if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
   begin
-    RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
+    RegDeleteValue(HKCU, InstallerRegistryPath(), 'ManagedPath');
     exit;
   end;
-
   AppPath := TrimTrailingBackslash(ManagedPath);
   PaddedPath := ';' + CurrentPath + ';';
   Needle := ';' + AppPath + ';';
   StringChangeEx(PaddedPath, Needle, ';', True);
-
-  while (Length(PaddedPath) > 0) and (PaddedPath[1] = ';') do
-    Delete(PaddedPath, 1, 1);
-  while (Length(PaddedPath) > 0) and (PaddedPath[Length(PaddedPath)] = ';') do
-    Delete(PaddedPath, Length(PaddedPath), 1);
-
+  while (Length(PaddedPath) > 0) and (PaddedPath[1] = ';') do Delete(PaddedPath, 1, 1);
+  while (Length(PaddedPath) > 0) and (PaddedPath[Length(PaddedPath)] = ';') do Delete(PaddedPath, Length(PaddedPath), 1);
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', PaddedPath);
-  RegDeleteValue(HKCU, 'Software\FTurleque\MINOS', 'ManagedPath');
+  RegDeleteValue(HKCU, InstallerRegistryPath(), 'ManagedPath');
+end;
+
+function IsAbsoluteWindowsPath(Value: String): Boolean;
+begin
+  Result := ((Length(Value) >= 3) and (Value[2] = ':') and ((Value[3] = '\') or (Value[3] = '/'))) or
+            ((Length(Value) >= 2) and (Copy(Value, 1, 2) = '\\'));
+end;
+
+function IsSafeIdentifier(Value: String): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := False;
+  if (Length(Value) < 1) or (Length(Value) > 63) then exit;
+  C := Value[1];
+  if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or (C = '_')) then exit;
+  for I := 2 to Length(Value) do
+  begin
+    C := Value[I];
+    if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+            ((C >= '0') and (C <= '9')) or (C = '_')) then exit;
+  end;
+  Result := True;
+end;
+
+function IsSafeMcpName(Value: String): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := False;
+  if (Length(Value) < 1) or (Length(Value) > 64) then exit;
+  C := Value[1];
+  if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z'))) then exit;
+  for I := 2 to Length(Value) do
+  begin
+    C := Value[I];
+    if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+            ((C >= '0') and (C <= '9')) or (C = '_') or (C = '-')) then exit;
+  end;
+  Result := True;
+end;
+
+function IsSafeDockerName(Value: String): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := False;
+  if (Length(Value) < 2) or (Length(Value) > 64) then exit;
+  for I := 1 to Length(Value) do
+  begin
+    C := Value[I];
+    if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+            ((C >= '0') and (C <= '9')) or (C = '_') or (C = '-') or (C = '.')) then exit;
+  end;
+  Result := True;
+end;
+
+function ContainsUnsafeCommandText(Value: String): Boolean;
+begin
+  Result := (Pos('"', Value) > 0) or (Pos(#13, Value) > 0) or (Pos(#10, Value) > 0);
+end;
+
+procedure ConfigureMcpRow(CheckBox: TNewCheckBox; Status: TNewStaticText; Top: Integer; Caption: String);
+begin
+  CheckBox.Parent := McpClientsPage.Surface;
+  CheckBox.Left := 0;
+  CheckBox.Top := Top;
+  CheckBox.Width := McpClientsPage.SurfaceWidth;
+  CheckBox.Caption := Caption;
+  CheckBox.Checked := False;
+  Status.Parent := McpClientsPage.Surface;
+  Status.Left := ScaleX(13);
+  Status.Top := Top + ScaleY(21);
+  Status.Width := McpClientsPage.SurfaceWidth - ScaleX(13);
+  Status.AutoSize := False;
+  Status.Height := ScaleY(28);
+  Status.WordWrap := True;
+end;
+
+procedure SetMcpAvailability(CheckBox: TNewCheckBox; Status: TNewStaticText; Section: String);
+var
+  Available: Boolean;
+  Reason: String;
+begin
+  Available := GetIniString(Section, 'Available', '0', McpPreflightIni) = '1';
+  Reason := GetIniString(Section, 'Reason', 'Détection indisponible', McpPreflightIni);
+  CheckBox.Enabled := Available;
+  CheckBox.Checked := False;
+  Status.Caption := Reason;
+end;
+
+procedure DisableAllMcpRows(Reason: String);
+begin
+  McpCodexMode := 'auto';
+  McpCopilotJetBrains.Enabled := False; McpCopilotJetBrains.Checked := False; McpCopilotJetBrainsStatus.Caption := Reason;
+  McpCopilotCli.Enabled := False; McpCopilotCli.Checked := False; McpCopilotCliStatus.Caption := Reason;
+  McpClaudeCode.Enabled := False; McpClaudeCode.Checked := False; McpClaudeCodeStatus.Caption := Reason;
+  McpClaudeDesktop.Enabled := False; McpClaudeDesktop.Checked := False; McpClaudeDesktopStatus.Caption := Reason;
+  McpCodex.Enabled := False; McpCodex.Checked := False; McpCodexStatus.Caption := Reason;
+end;
+
+procedure RunMcpPreflight;
+var
+  PowerShell: String;
+  Detector: String;
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  McpPreflightIni := ExpandConstant('{tmp}\minos-mcp-preflight.ini');
+  DeleteFile(McpPreflightIni);
+  McpCodexMode := 'auto';
+  try ExtractTemporaryFile('detect-mcp-clients.ps1');
+  except
+    DisableAllMcpRows('Détection indisponible — helper MINOS introuvable');
+    exit;
+  end;
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Detector := ExpandConstant('{tmp}\detect-mcp-clients.ps1');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Detector + '" -OutputPath "' + McpPreflightIni + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
+     (ResultCode <> 0) or (not FileExists(McpPreflightIni)) then
+  begin
+    DisableAllMcpRows('Détection indisponible — le préflight MINOS a échoué');
+    exit;
+  end;
+  SetMcpAvailability(McpCopilotJetBrains, McpCopilotJetBrainsStatus, 'CopilotJetBrains');
+  SetMcpAvailability(McpCopilotCli, McpCopilotCliStatus, 'CopilotCli');
+  SetMcpAvailability(McpClaudeCode, McpClaudeCodeStatus, 'ClaudeCode');
+  SetMcpAvailability(McpClaudeDesktop, McpClaudeDesktopStatus, 'ClaudeDesktop');
+  SetMcpAvailability(McpCodex, McpCodexStatus, 'Codex');
+  McpCodexMode := Lowercase(GetIniString('Codex', 'Mode', 'auto', McpPreflightIni));
+  if (McpCodexMode <> 'cli') and (McpCodexMode <> 'desktop') then McpCodexMode := 'auto';
 end;
 
 function DockerReady(): Boolean;
 var
   ResultCode: Integer;
 begin
-  Result := Exec(
-    ExpandConstant('{cmd}'),
-    '/C docker version >NUL 2>&1',
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode) and (ResultCode = 0);
+  Result := Exec(ExpandConstant('{cmd}'), '/C docker version >NUL 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
-function GetDockerProjectsRoot(Param: String): String;
-begin
-  Result := DockerProjectsPage.Values[0];
-end;
-
-function NativeMcpClientSelected(): Boolean;
+function McpClientSelected(): Boolean;
 begin
   Result :=
-    WizardIsTaskSelected('mcp_copilot_jetbrains') or
-    WizardIsTaskSelected('mcp_copilot_cli') or
-    WizardIsTaskSelected('mcp_claude_code') or
-    WizardIsTaskSelected('mcp_claude_desktop') or
-    WizardIsTaskSelected('mcp_codex');
+    (McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked) or
+    (McpCopilotCli.Enabled and McpCopilotCli.Checked) or
+    (McpClaudeCode.Enabled and McpClaudeCode.Checked) or
+    (McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked) or
+    (McpCodex.Enabled and McpCodex.Checked);
 end;
 
-procedure ConfigureNativeMcpClients;
+procedure PersistInstallerRegistry;
+begin
+  if IsSmokeBuild() then exit;
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'SetupMode', IfThen(AdvancedSetupSelected(), 'advanced', 'standard'));
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'DataRoot', EffectiveDataRoot());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'DockerDataRoot', EffectiveDockerDataRoot());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'McpServerName', EffectiveMcpServerName());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'McpBackend', EffectiveMcpBackend());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'StorageBackend', EffectiveStorageBackend());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'SemanticProvider', EffectiveSemanticProvider());
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'DockerInstanceName', DockerInstanceEdit.Text);
+end;
+
+function ConfigureRuntimeSettings(): Boolean;
 var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
+  PasswordFile: String;
+  SetupMode: String;
 begin
-  if not NativeMcpClientSelected() then
-    exit;
-
+  Result := True;
+  if IsSmokeBuild() then exit;
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{app}\integration\configure-mcp-clients-setup.ps1') +
-    '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+  if AdvancedSetupSelected() then SetupMode := 'advanced' else SetupMode := 'standard';
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\configure-runtime-settings.ps1') +
+    '" -DataRoot "' + EffectiveDataRoot() +
+    '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
+    '" -SetupMode ' + SetupMode +
+    ' -McpBackend ' + EffectiveMcpBackend() +
+    ' -McpServerName "' + EffectiveMcpServerName() +
+    '" -StorageBackend ' + EffectiveStorageBackend() +
+    ' -SemanticProvider ' + EffectiveSemanticProvider() +
+    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"';
 
-  if WizardIsTaskSelected('mcp_copilot_jetbrains') then
-    Parameters := Parameters + ' -CopilotJetBrains';
-  if WizardIsTaskSelected('mcp_copilot_cli') then
-    Parameters := Parameters + ' -CopilotCli';
-  if WizardIsTaskSelected('mcp_claude_code') then
-    Parameters := Parameters + ' -ClaudeCode';
-  if WizardIsTaskSelected('mcp_claude_desktop') then
-    Parameters := Parameters + ' -ClaudeDesktop';
-  if WizardIsTaskSelected('mcp_codex') then
-    Parameters := Parameters + ' -Codex';
+  PasswordFile := '';
+  if PostgreSqlSelected() then
+  begin
+    if DockerMcpSelected() then
+      Parameters := Parameters + ' -ManagedDockerPostgres'
+    else
+    begin
+      PasswordFile := ExpandConstant('{tmp}\minos-postgres-password.txt');
+      DeleteFile(PasswordFile);
+      SaveStringToFile(PasswordFile, PostgresPasswordEdit.Text + #13#10, False);
+      Parameters := Parameters +
+        ' -PostgresUrl "' + PostgresUrlEdit.Text +
+        '" -PostgresUser "' + PostgresUserEdit.Text +
+        '" -PostgresPasswordSourcePath "' + PasswordFile +
+        '" -PostgresSchema "' + PostgresSchemaEdit.Text + '"';
+    end;
+  end;
 
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
-     (ResultCode <> 0) then
+  if OllamaSelected() then
+  begin
+    Parameters := Parameters +
+      ' -SemanticModel "' + OllamaModelEdit.Text +
+      '" -SemanticDimensions ' + OllamaDimensionsEdit.Text;
+    if DockerMcpSelected() then
+    begin
+      if OllamaProvisionCheck.Checked then Parameters := Parameters + ' -ProvisionOllamaModel';
+    end
+    else
+      Parameters := Parameters + ' -SemanticEndpoint "' + OllamaEndpointEdit.Text + '"';
+  end;
+
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
-      'MINOS est installé, mais une ou plusieurs intégrations MCP natives n''ont pas pu être configurées.' + #13#10 + #13#10 +
-      'Le CLI et le MCP natif restent utilisables directement.' + #13#10 +
-      'Diagnostic : %LOCALAPPDATA%\MINOS\mcp-clients.log',
-      mbError,
-      MB_OK);
+      'La configuration avancée MINOS n''a pas pu être appliquée.' + #13#10 + #13#10 +
+      'Aucun fallback silencieux n''a été utilisé. Consultez le journal de l''installateur.',
+      mbError, MB_OK);
+    Result := False;
   end;
+  if PasswordFile <> '' then DeleteFile(PasswordFile);
 end;
 
-procedure ConfigureDockerMcp;
+function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
+  TargetBackend: String;
 begin
+  Result := True;
+  if IsSmokeBuild() or NoMcpSelected() then exit;
+  if NativeMcpSelected() then TargetBackend := 'native' else TargetBackend := 'docker';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{app}\docker\scripts\configure-docker-mcp.ps1') +
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\switch-mcp-backend.ps1') +
     '" -InstallRoot "' + ExpandConstant('{app}') +
-    '" -ProjectsRoot "' + DockerProjectsPage.Values[0] +
-    '" -Start -Strict';
-
-  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
-     (ResultCode <> 0) then
+    '" -TargetBackend ' + TargetBackend +
+    ' -DataRoot "' + EffectiveDataRoot() + '"';
+  if DockerMcpSelected() then
+    Parameters := Parameters +
+      ' -ProjectsRoot "' + DockerProjectsPage.Values[0] +
+      '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
+      '" -DockerContainerName "' + DockerInstanceEdit.Text +
+      '" -DockerComposeProject "' + DockerInstanceEdit.Text + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
-      'MINOS est installé, mais la configuration du MCP Docker a échoué.' + #13#10 + #13#10 +
-      'Le CLI et le MCP natif restent utilisables.' + #13#10 +
-      'Diagnostic : %LOCALAPPDATA%\MINOS\docker-setup.log',
-      mbError,
-      MB_OK);
+      'Le backend MCP sélectionné n''a pas atteint son gate de validation/handshake.' + #13#10 + #13#10 +
+      'La configuration précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué.' + #13#10 +
+      'Diagnostic : ' + EffectiveDataRoot() + '\runtime\backend-switch.log',
+      mbError, MB_OK);
+    Result := False;
   end;
+end;
+
+procedure ConfigureMcpClients;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShell: String;
+begin
+  if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then exit;
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\configure-mcp-clients-setup.ps1') +
+    '" -InstallRoot "' + ExpandConstant('{app}') +
+    '" -McpServerName "' + EffectiveMcpServerName() +
+    '" -DataRoot "' + EffectiveDataRoot() + '"';
+  if McpCopilotJetBrains.Enabled and McpCopilotJetBrains.Checked then Parameters := Parameters + ' -CopilotJetBrains';
+  if McpCopilotCli.Enabled and McpCopilotCli.Checked then Parameters := Parameters + ' -CopilotCli';
+  if McpClaudeCode.Enabled and McpClaudeCode.Checked then Parameters := Parameters + ' -ClaudeCode';
+  if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then Parameters := Parameters + ' -ClaudeDesktop';
+  if McpCodex.Enabled and McpCodex.Checked then Parameters := Parameters + ' -Codex -CodexMode "' + McpCodexMode + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+  begin
+    MsgBox(
+      'MINOS est installé et le backend MCP a été validé, mais une ou plusieurs intégrations clientes n''ont pas pu être configurées.' + #13#10 + #13#10 +
+      'Le point d''entrée stable minos.exe mcp reste utilisable directement.' + #13#10 +
+      'Diagnostic : %LOCALAPPDATA%\MINOS\mcp-clients.log', mbError, MB_OK);
+  end;
+end;
+
+procedure ConfigurePostgresControls;
+begin
+  PostgresUrlLabel.Parent := PostgresPage.Surface;
+  PostgresUrlLabel.Caption := 'URL JDBC PostgreSQL :';
+  PostgresUrlLabel.Top := ScaleY(8); PostgresUrlLabel.Left := 0;
+  PostgresUrlEdit.Parent := PostgresPage.Surface;
+  PostgresUrlEdit.Top := ScaleY(28); PostgresUrlEdit.Left := 0; PostgresUrlEdit.Width := PostgresPage.SurfaceWidth;
+  PostgresUserLabel.Parent := PostgresPage.Surface;
+  PostgresUserLabel.Caption := 'Utilisateur :';
+  PostgresUserLabel.Top := ScaleY(62); PostgresUserLabel.Left := 0;
+  PostgresUserEdit.Parent := PostgresPage.Surface;
+  PostgresUserEdit.Top := ScaleY(82); PostgresUserEdit.Left := 0; PostgresUserEdit.Width := PostgresPage.SurfaceWidth;
+  PostgresPasswordLabel.Parent := PostgresPage.Surface;
+  PostgresPasswordLabel.Caption := 'Mot de passe :';
+  PostgresPasswordLabel.Top := ScaleY(116); PostgresPasswordLabel.Left := 0;
+  PostgresPasswordEdit.Parent := PostgresPage.Surface;
+  PostgresPasswordEdit.Top := ScaleY(136); PostgresPasswordEdit.Left := 0; PostgresPasswordEdit.Width := PostgresPage.SurfaceWidth;
+  PostgresPasswordEdit.PasswordChar := '*';
+  PostgresSchemaLabel.Parent := PostgresPage.Surface;
+  PostgresSchemaLabel.Caption := 'Schéma MINOS :';
+  PostgresSchemaLabel.Top := ScaleY(170); PostgresSchemaLabel.Left := 0;
+  PostgresSchemaEdit.Parent := PostgresPage.Surface;
+  PostgresSchemaEdit.Top := ScaleY(190); PostgresSchemaEdit.Left := 0; PostgresSchemaEdit.Width := PostgresPage.SurfaceWidth;
+end;
+
+procedure ConfigureOllamaControls;
+begin
+  OllamaModeText.Parent := OllamaPage.Surface;
+  OllamaModeText.Top := ScaleY(4); OllamaModeText.Left := 0;
+  OllamaModeText.Width := OllamaPage.SurfaceWidth; OllamaModeText.AutoSize := False; OllamaModeText.Height := ScaleY(42); OllamaModeText.WordWrap := True;
+  OllamaModelLabel.Parent := OllamaPage.Surface; OllamaModelLabel.Caption := 'Modèle :'; OllamaModelLabel.Top := ScaleY(52); OllamaModelLabel.Left := 0;
+  OllamaModelEdit.Parent := OllamaPage.Surface; OllamaModelEdit.Top := ScaleY(72); OllamaModelEdit.Left := 0; OllamaModelEdit.Width := OllamaPage.SurfaceWidth;
+  OllamaDimensionsLabel.Parent := OllamaPage.Surface; OllamaDimensionsLabel.Caption := 'Dimensions :'; OllamaDimensionsLabel.Top := ScaleY(106); OllamaDimensionsLabel.Left := 0;
+  OllamaDimensionsEdit.Parent := OllamaPage.Surface; OllamaDimensionsEdit.Top := ScaleY(126); OllamaDimensionsEdit.Left := 0; OllamaDimensionsEdit.Width := ScaleX(120);
+  OllamaEndpointLabel.Parent := OllamaPage.Surface; OllamaEndpointLabel.Caption := 'Endpoint Ollama :'; OllamaEndpointLabel.Top := ScaleY(160); OllamaEndpointLabel.Left := 0;
+  OllamaEndpointEdit.Parent := OllamaPage.Surface; OllamaEndpointEdit.Top := ScaleY(180); OllamaEndpointEdit.Left := 0; OllamaEndpointEdit.Width := OllamaPage.SurfaceWidth;
+  OllamaProvisionCheck.Parent := OllamaPage.Surface; OllamaProvisionCheck.Top := ScaleY(218); OllamaProvisionCheck.Left := 0;
+  OllamaProvisionCheck.Width := OllamaPage.SurfaceWidth; OllamaProvisionCheck.Caption := 'Télécharger/provisionner le modèle dans le sidecar Docker'; OllamaProvisionCheck.Checked := True;
+end;
+
+procedure UpdateOllamaPageMode;
+begin
+  if DockerMcpSelected() then
+  begin
+    OllamaModeText.Caption := 'Docker : MINOS utilise un sidecar Ollama géré sur un réseau interne sans port public. Un egress temporaire est ouvert uniquement pendant le téléchargement du modèle.';
+    OllamaEndpointLabel.Visible := False;
+    OllamaEndpointEdit.Visible := False;
+    OllamaProvisionCheck.Visible := True;
+  end
+  else
+  begin
+    OllamaModeText.Caption := 'Natif : MINOS se connecte à une instance Ollama locale existante. Pour des raisons de sécurité, l''endpoint doit être loopback.';
+    OllamaEndpointLabel.Visible := True;
+    OllamaEndpointEdit.Visible := True;
+    OllamaProvisionCheck.Visible := False;
+  end;
+end;
+
+procedure UpdateSummary;
+var
+  Text: String;
+  Clients: String;
+begin
+  Clients := '';
+  if McpCopilotJetBrains.Checked then Clients := Clients + 'Copilot JetBrains, ';
+  if McpCopilotCli.Checked then Clients := Clients + 'Copilot CLI, ';
+  if McpClaudeCode.Checked then Clients := Clients + 'Claude Code, ';
+  if McpClaudeDesktop.Checked then Clients := Clients + 'Claude Desktop, ';
+  if McpCodex.Checked then Clients := Clients + 'Codex, ';
+  if Clients = '' then Clients := 'aucun'
+  else Delete(Clients, Length(Clients) - 1, 2);
+
+  Text :=
+    'Type d''installation : ' + IfThen(AdvancedSetupSelected(), 'Avancée', 'Standard') + #13#10 +
+    'Programme : ' + ExpandConstant('{app}') + #13#10 +
+    'Données natives / contrôle : ' + EffectiveDataRoot() + #13#10 +
+    'Backend MCP : ' + EffectiveMcpBackend() + #13#10 +
+    'Nom serveur MCP : ' + EffectiveMcpServerName() + #13#10 +
+    'Stockage : ' + EffectiveStorageBackend() + #13#10 +
+    'Recherche sémantique : ' + EffectiveSemanticProvider() + #13#10 +
+    'Clients IA : ' + Clients;
+  if DockerMcpSelected() then
+  begin
+    Text := Text + #13#10 +
+      'Racine projets Docker : ' + DockerProjectsPage.Values[0] + #13#10 +
+      'Données Docker : ' + EffectiveDockerDataRoot() + #13#10 +
+      'Instance Docker : ' + DockerInstanceEdit.Text;
+    if PostgreSqlSelected() then Text := Text + #13#10 + 'PostgreSQL : géré par MINOS dans Docker (pgvector)';
+    if OllamaSelected() then Text := Text + #13#10 + 'Ollama : sidecar Docker géré, modèle ' + OllamaModelEdit.Text;
+  end
+  else if PostgreSqlSelected() then
+    Text := Text + #13#10 + 'PostgreSQL : externe — ' + PostgresUrlEdit.Text;
+  SummaryMemo.Text := Text;
 end;
 
 procedure InitializeWizard;
 var
-  RequestedRoot: String;
+  ExistingBackend: String;
+  ExistingSetupMode: String;
+  ExistingStorage: String;
+  ExistingSemantic: String;
 begin
-  DockerWarningShown := False;
-  DockerProjectsPage := CreateInputDirPage(
-    wpSelectTasks,
-    'MCP Docker MINOS',
-    'Choisissez la racine des projets exposés au MCP Docker',
-    'Les projets de cette racine seront montés en lecture seule dans le conteneur MINOS.',
-    False,
-    '');
-  DockerProjectsPage.Add('Racine des projets :');
+  SetupTypePage := CreateInputOptionPage(wpSelectTasks,
+    'Type d''installation', 'Choisissez le niveau de personnalisation',
+    'Le mode Standard conserve le comportement MINOS recommandé. Le mode Avancé expose stockage, sémantique et identités runtime.', True, True);
+  SetupTypePage.Add('Standard — recommandé');
+  SetupTypePage.Add('Avancée');
+  ExistingSetupMode := Lowercase(ReadInstallerValue('SetupMode', 'standard'));
+  SetupTypePage.Values[0] := ExistingSetupMode <> 'advanced';
+  SetupTypePage.Values[1] := ExistingSetupMode = 'advanced';
 
-  RequestedRoot := ExpandConstant('{param:DOCKERPROJECTSROOT|}');
-  if RequestedRoot <> '' then
-    DockerProjectsPage.Values[0] := RequestedRoot
-  else
-    DockerProjectsPage.Values[0] := ExpandConstant('{%USERPROFILE}');
+  DataRootPage := CreateInputDirPage(SetupTypePage.ID,
+    'Données MINOS (MINOS_HOME)', 'Choisissez la racine des données natives et de contrôle',
+    'MINOS y stocke registre local, configuration runtime, états, index locaux, logs et métadonnées de contrôle.', False, '');
+  DataRootPage.Add('Données MINOS :');
+  DataRootPage.Values[0] := ReadInstallerValue('DataRoot', DefaultDataRoot());
+
+  McpNamePage := CreateInputQueryPage(DataRootPage.ID,
+    'Nom du serveur MCP', 'Identifiant MINOS dans les configurations des clients IA',
+    'Utilisez un nom stable. Il sera suivi par l''état d''ownership afin que upgrades et désinstallation ciblent exactement l''entrée créée par MINOS.');
+  McpNamePage.Add('Nom du serveur :', False);
+  McpNamePage.Values[0] := ReadInstallerValue('McpServerName', 'minos');
+
+  McpModePage := CreateInputOptionPage(McpNamePage.ID,
+    'Mode MCP', 'Choisissez le backend du serveur MCP MINOS',
+    'Un seul backend est actif à la fois. Les clients IA utilisent toujours le même point d''entrée minos.exe mcp.',
+    True,
+    True);
+  McpModePage.Add('MCP natif Windows — recommandé');
+  McpModePage.Add('MCP Docker — isolation renforcée');
+  McpModePage.Add('Ne pas configurer maintenant');
+  ExistingBackend := ExistingMcpBackend();
+  McpModePage.Values[0] := ExistingBackend <> 'docker';
+  McpModePage.Values[1] := ExistingBackend = 'docker';
+  McpModePage.Values[2] := False;
+
+  StoragePage := CreateInputOptionPage(McpModePage.ID,
+    'Stockage MINOS', 'Choisissez le backend de persistance',
+    'Local conserve les stores MINOS historiques. PostgreSQL active le backend relationnel et pgvector réel.', True, True);
+  StoragePage.Add('Local intégré — recommandé');
+  StoragePage.Add('PostgreSQL + pgvector');
+  ExistingStorage := Lowercase(ReadInstallerValue('StorageBackend', 'local'));
+  StoragePage.Values[0] := ExistingStorage <> 'postgresql';
+  StoragePage.Values[1] := ExistingStorage = 'postgresql';
+
+  PostgresPage := CreateCustomPage(StoragePage.ID,
+    'PostgreSQL externe', 'Configuration PostgreSQL utilisée par le runtime natif');
+  PostgresUrlLabel := TNewStaticText.Create(PostgresPage);
+  PostgresUrlEdit := TNewEdit.Create(PostgresPage);
+  PostgresUserLabel := TNewStaticText.Create(PostgresPage);
+  PostgresUserEdit := TNewEdit.Create(PostgresPage);
+  PostgresPasswordLabel := TNewStaticText.Create(PostgresPage);
+  PostgresPasswordEdit := TNewEdit.Create(PostgresPage);
+  PostgresSchemaLabel := TNewStaticText.Create(PostgresPage);
+  PostgresSchemaEdit := TNewEdit.Create(PostgresPage);
+  ConfigurePostgresControls;
+  PostgresUrlEdit.Text := 'jdbc:postgresql://127.0.0.1:5432/minos';
+  PostgresUserEdit.Text := 'minos';
+  PostgresSchemaEdit.Text := 'minos';
+
+  SemanticPage := CreateInputOptionPage(PostgresPage.ID,
+    'Recherche sémantique', 'Choisissez le fournisseur d''embeddings',
+    'La recherche structurée reste autoritative. Les signaux sémantiques sont heuristiques.', True, True);
+  SemanticPage.Add('Désactivée — recommandé');
+  SemanticPage.Add('Hash local — déterministe, sans modèle IA');
+  SemanticPage.Add('Ollama — modèle local');
+  ExistingSemantic := Lowercase(ReadInstallerValue('SemanticProvider', 'disabled'));
+  SemanticPage.Values[0] := (ExistingSemantic <> 'local-hash') and (ExistingSemantic <> 'ollama');
+  SemanticPage.Values[1] := ExistingSemantic = 'local-hash';
+  SemanticPage.Values[2] := ExistingSemantic = 'ollama';
+
+  OllamaPage := CreateCustomPage(SemanticPage.ID,
+    'Ollama', 'Configurez le modèle d''embeddings local');
+  OllamaModeText := TNewStaticText.Create(OllamaPage);
+  OllamaModelLabel := TNewStaticText.Create(OllamaPage);
+  OllamaModelEdit := TNewEdit.Create(OllamaPage);
+  OllamaDimensionsLabel := TNewStaticText.Create(OllamaPage);
+  OllamaDimensionsEdit := TNewEdit.Create(OllamaPage);
+  OllamaEndpointLabel := TNewStaticText.Create(OllamaPage);
+  OllamaEndpointEdit := TNewEdit.Create(OllamaPage);
+  OllamaProvisionCheck := TNewCheckBox.Create(OllamaPage);
+  ConfigureOllamaControls;
+  OllamaModelEdit.Text := 'nomic-embed-text';
+  OllamaDimensionsEdit.Text := '768';
+  OllamaEndpointEdit.Text := 'http://127.0.0.1:11434/api/embed';
+
+  McpClientsPage := CreateCustomPage(OllamaPage.ID,
+    'Clients IA', 'Connecter le point d''entrée MCP MINOS stable aux clients IA détectés');
+  McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage);
+  McpCopilotJetBrainsStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCopilotJetBrains, McpCopilotJetBrainsStatus, ScaleY(8), 'GitHub Copilot — JetBrains / IntelliJ');
+  McpCopilotCli := TNewCheckBox.Create(McpClientsPage);
+  McpCopilotCliStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCopilotCli, McpCopilotCliStatus, ScaleY(62), 'GitHub Copilot CLI');
+  McpClaudeCode := TNewCheckBox.Create(McpClientsPage);
+  McpClaudeCodeStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpClaudeCode, McpClaudeCodeStatus, ScaleY(116), 'Claude Code');
+  McpClaudeDesktop := TNewCheckBox.Create(McpClientsPage);
+  McpClaudeDesktopStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpClaudeDesktop, McpClaudeDesktopStatus, ScaleY(170), 'Claude Desktop');
+  McpCodex := TNewCheckBox.Create(McpClientsPage);
+  McpCodexStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCodex, McpCodexStatus, ScaleY(224), 'OpenAI Codex');
+  McpPreflightCompleted := False;
+  DisableAllMcpRows('Détection en attente');
+
+  DockerProjectsPage := CreateInputDirPage(McpClientsPage.ID,
+    'MCP Docker MINOS', 'Configurez les données et projets exposés au runtime Docker',
+    'Les projets sont montés en lecture seule. PostgreSQL/Ollama gérés ne publient aucun port réseau sur l''hôte.', False, '');
+  DockerProjectsPage.Add('Racine des projets :');
+  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ExpandConstant('{%USERPROFILE}') + '}');
+  DockerDataRootLabel := TNewStaticText.Create(DockerProjectsPage);
+  DockerDataRootLabel.Parent := DockerProjectsPage.Surface;
+  DockerDataRootLabel.Caption := 'Données Docker persistantes :';
+  DockerDataRootLabel.Left := 0; DockerDataRootLabel.Top := ScaleY(112);
+  DockerDataRootEdit := TNewEdit.Create(DockerProjectsPage);
+  DockerDataRootEdit.Parent := DockerProjectsPage.Surface;
+  DockerDataRootEdit.Left := 0; DockerDataRootEdit.Top := ScaleY(132); DockerDataRootEdit.Width := DockerProjectsPage.SurfaceWidth;
+  DockerDataRootEdit.Text := ReadInstallerValue('DockerDataRoot', DefaultDockerDataRoot());
+  DockerInstanceLabel := TNewStaticText.Create(DockerProjectsPage);
+  DockerInstanceLabel.Parent := DockerProjectsPage.Surface;
+  DockerInstanceLabel.Caption := 'Nom de l''instance Docker :';
+  DockerInstanceLabel.Left := 0; DockerInstanceLabel.Top := ScaleY(166);
+  DockerInstanceEdit := TNewEdit.Create(DockerProjectsPage);
+  DockerInstanceEdit.Parent := DockerProjectsPage.Surface;
+  DockerInstanceEdit.Left := 0; DockerInstanceEdit.Top := ScaleY(186); DockerInstanceEdit.Width := DockerProjectsPage.SurfaceWidth;
+  DockerInstanceEdit.Text := ReadInstallerValue('DockerInstanceName', 'minos-mcp-prod');
+
+  SummaryPage := CreateCustomPage(DockerProjectsPage.ID,
+    'Résumé de l''installation', 'Vérifiez les choix avant installation');
+  SummaryMemo := TNewMemo.Create(SummaryPage);
+  SummaryMemo.Parent := SummaryPage.Surface;
+  SummaryMemo.Left := 0; SummaryMemo.Top := ScaleY(8);
+  SummaryMemo.Width := SummaryPage.SurfaceWidth; SummaryMemo.Height := SummaryPage.SurfaceHeight - ScaleY(16);
+  SummaryMemo.ReadOnly := True; SummaryMemo.ScrollBars := ssVertical;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = DockerProjectsPage.ID) and (not WizardIsTaskSelected('docker'));
+  Result := False;
+  if (PageID = DataRootPage.ID) or (PageID = McpNamePage.ID) or (PageID = StoragePage.ID) or
+     (PageID = SemanticPage.ID) then
+    Result := not AdvancedSetupSelected()
+  else if PageID = PostgresPage.ID then
+    Result := (not AdvancedSetupSelected()) or (not PostgreSqlSelected()) or DockerMcpSelected()
+  else if PageID = OllamaPage.ID then
+    Result := (not AdvancedSetupSelected()) or (not OllamaSelected())
+  else if PageID = McpClientsPage.ID then
+    Result := NoMcpSelected()
+  else if PageID = DockerProjectsPage.ID then
+    Result := not DockerMcpSelected();
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = OllamaPage.ID then UpdateOllamaPageMode;
+  if CurPageID = SummaryPage.ID then UpdateSummary;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Dimensions: Integer;
 begin
   Result := True;
-  if (CurPageID = DockerProjectsPage.ID) and WizardIsTaskSelected('docker') then
+
+  if (CurPageID = DataRootPage.ID) and AdvancedSetupSelected() then
+  begin
+    if (DataRootPage.Values[0] = '') or (not IsAbsoluteWindowsPath(DataRootPage.Values[0])) then
+    begin MsgBox('Choisissez un chemin absolu valide pour MINOS_HOME.', mbError, MB_OK); Result := False; exit; end;
+  end;
+
+  if (CurPageID = McpNamePage.ID) and AdvancedSetupSelected() then
+  begin
+    if not IsSafeMcpName(McpNamePage.Values[0]) then
+    begin MsgBox('Le nom MCP doit commencer par une lettre et contenir uniquement lettres, chiffres, _ ou - (64 caractères maximum).', mbError, MB_OK); Result := False; exit; end;
+  end;
+
+  if (CurPageID = PostgresPage.ID) and PostgreSqlSelected() and (not DockerMcpSelected()) then
+  begin
+    if Pos('jdbc:postgresql://', Lowercase(PostgresUrlEdit.Text)) <> 1 then
+    begin MsgBox('L''URL PostgreSQL doit commencer par jdbc:postgresql://', mbError, MB_OK); Result := False; exit; end;
+    if ContainsUnsafeCommandText(PostgresUrlEdit.Text) then
+    begin MsgBox('L''URL PostgreSQL contient un caractère non autorisé.', mbError, MB_OK); Result := False; exit; end;
+    if not IsSafeIdentifier(PostgresUserEdit.Text) then
+    begin MsgBox('L''utilisateur PostgreSQL doit être un identifiant sûr.', mbError, MB_OK); Result := False; exit; end;
+    if PostgresPasswordEdit.Text = '' then
+    begin MsgBox('Le mot de passe PostgreSQL est requis.', mbError, MB_OK); Result := False; exit; end;
+    if not IsSafeIdentifier(PostgresSchemaEdit.Text) then
+    begin MsgBox('Le schéma PostgreSQL doit être un identifiant sûr.', mbError, MB_OK); Result := False; exit; end;
+  end;
+
+  if (CurPageID = OllamaPage.ID) and OllamaSelected() then
+  begin
+    if (OllamaModelEdit.Text = '') or ContainsUnsafeCommandText(OllamaModelEdit.Text) then
+    begin MsgBox('Le nom du modèle Ollama est invalide.', mbError, MB_OK); Result := False; exit; end;
+    Dimensions := StrToIntDef(OllamaDimensionsEdit.Text, 0);
+    if (Dimensions < 32) or (Dimensions > 16384) then
+    begin MsgBox('Les dimensions Ollama doivent être comprises entre 32 et 16384.', mbError, MB_OK); Result := False; exit; end;
+    if (not DockerMcpSelected()) and ((OllamaEndpointEdit.Text = '') or ContainsUnsafeCommandText(OllamaEndpointEdit.Text)) then
+    begin MsgBox('L''endpoint Ollama est invalide.', mbError, MB_OK); Result := False; exit; end;
+  end;
+
+  if (CurPageID = McpModePage.ID) and McpBackendSelected() and (not McpPreflightCompleted) then
+  begin
+    RunMcpPreflight;
+    McpPreflightCompleted := True;
+  end;
+
+  if (CurPageID = DockerProjectsPage.ID) and DockerMcpSelected() then
   begin
     if not DirExists(DockerProjectsPage.Values[0]) then
+    begin MsgBox('La racine des projets n''existe pas. Choisissez un dossier existant.', mbError, MB_OK); Result := False; exit; end;
+    if (DockerDataRootEdit.Text = '') or (not IsAbsoluteWindowsPath(DockerDataRootEdit.Text)) then
+    begin MsgBox('Choisissez un chemin absolu valide pour les données Docker.', mbError, MB_OK); Result := False; exit; end;
+    if not IsSafeDockerName(DockerInstanceEdit.Text) then
+    begin MsgBox('Le nom de l''instance Docker contient un caractère non autorisé.', mbError, MB_OK); Result := False; exit; end;
+    if not DockerReady() then
     begin
-      MsgBox('La racine des projets n''existe pas. Choisissez un dossier existant.', mbError, MB_OK);
-      Result := False;
-      exit;
-    end;
-
-    if (not DockerReady()) and (not DockerWarningShown) then
-    begin
-      DockerWarningShown := True;
       MsgBox(
         'Docker Desktop n''est pas disponible ou son daemon n''est pas démarré.' + #13#10 + #13#10 +
-        'MINOS sera installé normalement, mais la configuration du MCP Docker sera ignorée. ' +
-        'Vous pourrez la lancer plus tard depuis les scripts installés.',
-        mbInformation,
-        MB_OK);
+        'Le backend Docker a été explicitement sélectionné : l''installation ne basculera pas silencieusement vers le backend natif.' + #13#10 +
+        'Démarrez Docker Desktop puis réessayez, ou revenez en arrière pour sélectionner un autre mode.', mbError, MB_OK);
+      Result := False; exit;
     end;
   end;
+end;
+
+procedure PromptForUserDataRemoval;
+var
+  DataRoot: String;
+  DockerRoot: String;
+  MessageText: String;
+begin
+  DeleteUserDataOnUninstall := False;
+  if IsSmokeBuild() or UninstallSilent() then exit;
+  DataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
+  DockerRoot := ReadInstallerValue('DockerDataRoot', DefaultDockerDataRoot());
+  if (not DirExists(DataRoot)) and (not DirExists(DockerRoot)) then exit;
+  MessageText :=
+    'Supprimer également toutes les données MINOS locales ?' + #13#10 + #13#10 +
+    'Données natives / contrôle :' + #13#10 + DataRoot + #13#10 + #13#10 +
+    'Données Docker :' + #13#10 + DockerRoot + #13#10 + #13#10 +
+    'Oui supprime aussi les volumes PostgreSQL/Ollama gérés par MINOS. Une base PostgreSQL externe n''est jamais supprimée.' + #13#10 + #13#10 +
+    'Cette opération est irréversible. Choisissez Non pour conserver les données.';
+  DeleteUserDataOnUninstall := MsgBox(MessageText, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+end;
+
+procedure PurgeManagedDockerVolumes;
+var
+  InstanceName: String;
+  ResultCode: Integer;
+begin
+  if IsSmokeBuild() or (not DeleteUserDataOnUninstall) then exit;
+  InstanceName := ReadInstallerValue('DockerInstanceName', 'minos-mcp-prod');
+  if not IsSafeDockerName(InstanceName) then exit;
+  Exec(ExpandConstant('{cmd}'), '/C docker volume rm "' + InstanceName + '-postgres-data" "' + InstanceName + '-ollama-models" >NUL 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure DeleteRootIfPresent(PathValue: String);
+begin
+  if (PathValue <> '') and DirExists(PathValue) then DelTree(PathValue, True, True, True);
+end;
+
+procedure DeleteMinosUserData;
+var
+  UserDataRoot: String;
+  DockerRoot: String;
+  DefaultRoot: String;
+begin
+  if IsSmokeBuild() or (not DeleteUserDataOnUninstall) then exit;
+  UserDataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
+  DockerRoot := ReadInstallerValue('DockerDataRoot', DefaultDockerDataRoot());
+  DefaultRoot := ExpandConstant('{localappdata}\MINOS');
+  PurgeManagedDockerVolumes;
+  if (UserDataRoot <> '') and DirExists(UserDataRoot) then DelTree(UserDataRoot, True, True, True);
+  if (CompareText(DockerRoot, UserDataRoot) <> 0) then DeleteRootIfPresent(DockerRoot);
+  DeleteRootIfPresent(DefaultRoot);
+  RegDeleteKeyIncludingSubkeys(HKCU, InstallerRegistryPath());
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-    if WizardIsTaskSelected('addtopath') then
-      AddMinosToUserPath;
-
-    ConfigureNativeMcpClients;
-
-    if WizardIsTaskSelected('docker') and DockerReady() then
-      ConfigureDockerMcp;
+    if WizardIsTaskSelected('addtopath') then AddMinosToUserPath;
+    if not ConfigureRuntimeSettings() then exit;
+    PersistInstallerRegistry;
+    if ConfigureSelectedMcpBackend() then
+      ConfigureMcpClients;
   end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
-    RemoveMinosFromUserPath;
+  begin
+    if not IsSmokeBuild() then
+    begin
+      RemoveMinosFromUserPath;
+      PromptForUserDataRemoval;
+    end;
+  end
+  else if CurUninstallStep = usPostUninstall then
+    DeleteMinosUserData;
 end;

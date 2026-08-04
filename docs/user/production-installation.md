@@ -2,9 +2,9 @@
 
 Ce guide décrit le parcours **utilisateur** de MINOS sous Windows.
 
-Le parcours normal ne nécessite **ni clone Git de MINOS, ni Maven, ni JDK pour exécuter MINOS**. Une release Windows contient son propre runtime Java.
+Le parcours normal ne nécessite **ni clone Git de MINOS, ni Maven, ni JDK pour exécuter MINOS**. Une release Windows contient son propre runtime Java. Le JDK, Maven, Node/npm ou d'autres toolchains peuvent en revanche être nécessaires au **projet analysé** et à son provider.
 
-> Le JDK, Maven, Node ou npm peuvent toutefois être nécessaires au **projet analysé** et à son provider d'indexation. Ils ne servent pas à démarrer MINOS lui-même.
+> État au **2 août 2026** : `v1.0.0` est publiée. `1.0.1` reste **NON PUBLIÉE**. Le runtime Windows/MCP est durci et M29 ajoute un backend Docker autonome, mais aucune équivalence métier native/Docker n'est revendiquée avant M29-S8.
 
 ---
 
@@ -23,76 +23,69 @@ vérifier SHA-256
         ↓
 lancer setup.exe
         ↓
-%LOCALAPPDATA%\Programs\MINOS
+dossier d'installation
         ↓
-CLI + MCP natif + PATH optionnel
+tâches Windows (PATH)
         ↓
-intégrations MCP natives optionnelles
+Mode MCP — un seul choix
+  ├── MCP natif Windows — recommandé
+  ├── MCP Docker — isolation renforcée
+  └── Ne pas configurer maintenant
+        ↓
+si un backend est choisi : Clients IA détectés
   ├── GitHub Copilot — JetBrains / IntelliJ
   ├── GitHub Copilot CLI
   ├── Claude Code
   ├── Claude Desktop
-  └── OpenAI Codex
+  └── OpenAI Codex CLI / Desktop
         ↓
-MCP Docker optionnel et séparé
+si Docker : racine des projets exposés
         ↓
-minos.cmd doctor
+validation + handshake du backend candidat
         ↓
-provider → project add → index → search / architecture / MCP
+commit de backend.properties
+        ↓
+%LOCALAPPDATA%\Programs\MINOS
 ```
 
-Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**.
+**Un seul backend MCP est actif à la fois.** Le point d'entrée des clients ne change jamais : `app\minos.exe mcp` avec `MINOS_HOME=%LOCALAPPDATA%\MINOS\data`.
 
-Le checkout source est un troisième parcours, réservé au développement de MINOS : [Installation depuis les sources](installation.md).
+Le natif reste le choix recommandé tant que M29-S8 n'a pas qualifié la parité métier complète.
+
+Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**. Le checkout source est réservé au développement : [Installation depuis les sources](installation.md).
 
 ---
 
-## 2. Télécharger une GitHub Release
+## 2. Télécharger et vérifier une release
 
-Ouvrir la page **Releases** du dépôt GitHub MINOS.
-
-Le dépôt étant privé, GitHub peut demander une authentification avant d'afficher ou télécharger les assets.
-
-Une release Windows complète publie quatre assets :
+Une release Windows complète publie huit assets :
 
 ```text
 MINOS-<version>-windows-x64-setup.exe
 MINOS-<version>-windows-x64-setup.exe.sha256
-
 minos-<version>-windows-x64.zip
 minos-<version>-windows-x64.zip.sha256
+minos-<version>.cdx.json
+minos-<version>.cdx.json.sha256
+MINOS-<version>-THIRD-PARTY-NOTICES.txt
+MINOS-<version>-THIRD-PARTY-NOTICES.txt.sha256
 ```
 
-Une version avec suffixe comme `-rc4` est une **pre-release**. Une version comme `0.2.0` est une release stable.
+Le dépôt étant privé, GitHub peut demander une authentification.
 
----
-
-## 3. Vérifier le SHA-256 du setup
-
-Depuis le répertoire de téléchargement :
+Vérification du setup :
 
 ```powershell
-$Version = '0.2.0-rc4'
-
+$Version = '1.0.1'
 Get-FileHash ".\MINOS-$Version-windows-x64-setup.exe" -Algorithm SHA256
 Get-Content ".\MINOS-$Version-windows-x64-setup.exe.sha256"
 ```
 
-Les 64 caractères hexadécimaux doivent être identiques. La casse n'a pas d'importance.
-
-**Ne pas lancer l'installateur si les deux empreintes diffèrent.**
+Les 64 caractères hexadécimaux doivent être identiques. **Ne pas lancer l'installateur si les empreintes diffèrent.**
 
 ---
 
-## 4. Installer avec `setup.exe`
-
-Lancer :
-
-```text
-MINOS-<version>-windows-x64-setup.exe
-```
-
-L'installation est conçue pour l'utilisateur courant et ne demande normalement pas de droits administrateur.
+## 3. Contenu installé
 
 Emplacement par défaut :
 
@@ -100,53 +93,111 @@ Emplacement par défaut :
 %LOCALAPPDATA%\Programs\MINOS
 ```
 
-Le setup installe :
+Le setup installe notamment :
 
 ```text
 MINOS
-├── app\                         runtime Java + minos.exe
+├── app\
+│   ├── minos.exe
+│   └── runtime\
 ├── lib\minos.jar
 ├── integration\
-│   └── configure-mcp-clients.ps1
-├── minos.cmd                    CLI + entrée MCP native
+│   ├── detect-mcp-clients.ps1
+│   ├── configure-mcp-clients.ps1
+│   ├── configure-mcp-clients-setup.ps1
+│   ├── configure-codex-mcp.ps1
+│   ├── uninstall-mcp-clients.ps1
+│   ├── probe-mcp-backend.ps1
+│   └── switch-mcp-backend.ps1
+├── docker\
+│   ├── Dockerfile.mcp.release
+│   ├── compose.mcp.prod.yaml
+│   └── scripts\
+├── minos.cmd
 ├── minos-mcp.cmd
-├── docker\                      assets MCP Docker optionnels
 ├── VERSION
+├── RUNTIME-MODULES.txt
+├── RELEASE-MANIFEST.json
+├── supply-chain\
+│   ├── minos.cdx.json
+│   └── THIRD-PARTY-NOTICES.txt
 └── désinstalleur Windows
 ```
 
-### 4.1 PATH utilisateur
+À partir de 1.0.1, `RUNTIME-MODULES.txt` matérialise les modules réellement présents dans le runtime Java produit. Ils sont dérivés du JAR final avec `jdeps`, puis vérifiés avec `runtime\bin\java --list-modules`, avec assertion explicite de `java.xml`.
 
-La tâche :
+---
 
-```text
-Ajouter MINOS au PATH de l'utilisateur
-```
+## 4. Wizard Windows
 
-est proposée par le setup.
+### 4.1 Tâches Windows / PATH
 
-Après installation, ouvrir un **nouveau terminal** avant d'utiliser :
-
-```powershell
-minos.cmd --version
-```
-
-### 4.2 Choisir les clients MCP natifs
-
-Le setup propose un groupe indépendant :
+La page standard **Select Additional Tasks** contient uniquement les tâches Windows indépendantes :
 
 ```text
-Connecter le MCP natif MINOS à :
-  ☐ GitHub Copilot — JetBrains / IntelliJ
-  ☐ GitHub Copilot CLI
-  ☐ Claude Code
-  ☐ Claude Desktop
-  ☐ OpenAI Codex
+☑ Ajouter MINOS au PATH de l'utilisateur
 ```
 
-Toutes ces cases sont **décochées par défaut**. Modifier la configuration d'un logiciel tiers reste donc un choix explicite.
+Après installation, ouvrir un **nouveau terminal** avant d'utiliser `minos.cmd` par son nom.
 
-Ces intégrations sont **100 % natives** et n'utilisent pas Docker. Elles pointent vers :
+### 4.2 Page « Mode MCP »
+
+Le Wizard propose exactement :
+
+```text
+Mode MCP
+Choisissez le backend du serveur MCP MINOS
+
+( ) MCP natif Windows — recommandé
+( ) MCP Docker — isolation renforcée
+( ) Ne pas configurer maintenant
+```
+
+Les choix sont **exclusifs**. Lors d'une mise à niveau, le backend déjà persisté dans :
+
+```text
+%LOCALAPPDATA%\MINOS\data\runtime\backend.properties
+```
+
+est présélectionné lorsqu'il est reconnu.
+
+Si **Ne pas configurer maintenant** est choisi, le programme est installé mais aucun backend MCP ni aucun client IA n'est configuré automatiquement.
+
+### 4.3 Page « Clients IA »
+
+Cette page apparaît lorsque **native ou Docker** est choisi.
+
+Chaque client reçoit :
+
+- une case activée uniquement si son mode d'intégration est réellement détecté ;
+- un diagnostic visible ;
+- aucune sélection par défaut ;
+- aucune écriture dans un logiciel tiers sans choix explicite.
+
+Exemple :
+
+```text
+☐ GitHub Copilot — JetBrains / IntelliJ
+  Détecté
+
+☐ GitHub Copilot CLI
+  Non disponible — launcher VS Code détecté, vrai CLI absent
+
+☐ Claude Code
+  Détecté — CLI MCP compatible
+
+☐ Claude Desktop
+  Détecté
+
+☐ OpenAI Codex
+  Détecté — Codex CLI ou Codex Desktop
+```
+
+Le préflight est borné et non interactif. Pour les CLI, un simple `Get-Command` ne suffit pas : MINOS vérifie la capability MCP. Un launcher/shim VS Code est rejeté avant le probe pour ne pas le confondre avec le vrai Copilot CLI.
+
+### 4.4 Contrat client backend-agnostic
+
+Tous les clients utilisent le même contrat :
 
 ```text
 command = %LOCALAPPDATA%\Programs\MINOS\app\minos.exe
@@ -154,18 +205,24 @@ args    = mcp
 env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
 ```
 
-Le gestionnaire applique des règles de sécurité :
+Les configurations clientes **ne contiennent ni `docker exec`, ni nom de conteneur, ni Compose**. Le choix réel est lu derrière le launcher dans `backend.properties`.
 
-- ne jamais écraser une entrée MCP `minos` existante qu'il n'a pas créée ;
-- sauvegarder un fichier JSON avant de le modifier ;
-- conserver tous les autres serveurs/propriétés du client ;
-- enregistrer les intégrations gérées pour permettre leur suppression sélective ;
-- préserver une entrée si l'utilisateur l'a modifiée après l'installation.
+Changer `native ↔ docker` ne nécessite donc pas de réécrire Copilot, Claude ou Codex.
+
+Règles d'ownership :
+
+- ne jamais écraser une entrée MCP `minos` étrangère ;
+- sauvegarder les fichiers utilisateur avant modification ;
+- conserver tous les autres serveurs/propriétés ;
+- enregistrer l'ownership MINOS ;
+- préserver une entrée gérée si l'utilisateur l'a modifiée ;
+- supprimer sélectivement uniquement ce qui appartient encore à MINOS.
 
 État et diagnostics :
 
 ```text
 %LOCALAPPDATA%\MINOS\mcp-client-integrations.json
+%LOCALAPPDATA%\MINOS\codex-mcp-integration.json
 %LOCALAPPDATA%\MINOS\mcp-clients.log
 %LOCALAPPDATA%\MINOS\backups\mcp-clients\...
 ```
@@ -178,13 +235,11 @@ Le setup fusionne `servers.minos` dans :
 %LOCALAPPDATA%\github-copilot\intellij\mcp.json
 ```
 
-Après installation, ouvrir Copilot Chat en mode **Agent** et vérifier la liste des tools MCP.
+Ouvrir ensuite Copilot Chat en mode Agent et vérifier que `minos` est connecté.
 
 #### GitHub Copilot CLI
 
-Si la commande `copilot` est disponible dans le `PATH`, le setup utilise l'interface MCP du client pour ajouter le serveur utilisateur `minos`.
-
-Contrôle :
+Lorsqu'un vrai CLI compatible est disponible :
 
 ```powershell
 copilot mcp get minos --json
@@ -193,197 +248,117 @@ copilot mcp list --json
 
 #### Claude Code
 
-Si `claude` est disponible dans le `PATH`, le setup ajoute MINOS au scope `user`.
-
-Contrôle :
-
 ```powershell
 claude mcp get minos
 claude mcp list
 ```
 
-Puis dans Claude Code :
-
-```text
-/mcp
-```
+Puis `/mcp` dans Claude Code.
 
 #### Claude Desktop
 
-Le setup fusionne `mcpServers.minos` dans :
+Le setup fusionne `mcpServers.minos` dans `%APPDATA%\Claude\claude_desktop_config.json`. Quitter complètement puis relancer Claude Desktop après modification.
+
+#### OpenAI Codex / Codex Desktop
+
+Codex CLI est utilisé si sa capability MCP est prouvée. Pour Codex Desktop, MINOS gère un bloc marqué dans :
 
 ```text
-%APPDATA%\Claude\claude_desktop_config.json
+%USERPROFILE%\.codex\config.toml
 ```
 
-Quitter complètement puis relancer Claude Desktop pour recharger la configuration.
+Une section `[mcp_servers.minos]` non gérée par MINOS n'est jamais écrasée.
 
-#### OpenAI Codex
+### 4.5 Backend Docker pendant le setup
 
-Si `codex` est disponible dans le `PATH`, le setup utilise l'interface MCP du client.
+Si **MCP Docker — isolation renforcée** est choisi, le setup demande une racine projets, par exemple `N:\workspace-dev`. Cette racine est montée read-only.
 
-Contrôle :
+Docker Desktop doit déjà être installé et son daemon Linux démarré. **Docker explicitement choisi mais indisponible bloque le Wizard. MINOS ne bascule jamais silencieusement vers le natif.**
 
-```powershell
-codex mcp get minos
-codex mcp list
-```
-
-Voir [Utiliser MINOS via MCP](mcp.md) pour les configurations manuelles et le catalogue des tools.
-
-### 4.3 MCP Docker pendant le setup
-
-Le setup propose séparément :
+Le parcours est transactionnel :
 
 ```text
-Configurer et démarrer le MCP Docker
+prepare Docker
+→ validate
+→ handshake MCP candidat
+→ commit backend.properties
+→ retire ancien backend si nécessaire
 ```
 
-**Docker n'est pas requis pour le MCP natif ni pour les intégrations ci-dessus.**
-
-Si l'option Docker est sélectionnée, le setup demande la **racine des projets** à exposer au conteneur, par exemple :
+Le handshake exige :
 
 ```text
-N:\workspace-dev
+initialize
+→ notifications/initialized
+→ tools/list
+→ minos_search_code
+→ minos_impact
 ```
 
-Cette racine est montée en lecture seule dans le conteneur.
-
-Le setup exécute alors :
-
-```text
-construction de l'image MINOS de la release
-→ génération de la configuration Docker
-→ montage des projets read-only
-→ démarrage du conteneur
-→ validation du runtime Docker MCP
-```
-
-Docker Desktop doit déjà être installé et démarré. MINOS n'installe pas Docker Desktop.
+Un échec conserve ou restaure le backend précédent.
 
 Journal :
 
 ```text
-%LOCALAPPDATA%\MINOS\docker-setup.log
+%LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log
 ```
 
 ---
 
 ## 5. Programme et données persistantes
 
-Installation par défaut :
-
 ```text
 programme          : %LOCALAPPDATA%\Programs\MINOS
 MINOS_HOME         : %LOCALAPPDATA%\MINOS\data
+backend config     : %LOCALAPPDATA%\MINOS\data\runtime\backend.properties
+switch state/log   : %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.*
 intégrations MCP   : %LOCALAPPDATA%\MINOS\mcp-client-integrations.json
+Codex MCP state    : %LOCALAPPDATA%\MINOS\codex-mcp-integration.json
 backups MCP        : %LOCALAPPDATA%\MINOS\backups\mcp-clients
-Docker config      : %LOCALAPPDATA%\MINOS\docker
+Docker runtime     : %LOCALAPPDATA%\MINOS\docker
 Docker data        : %LOCALAPPDATA%\MINOS\docker-data
 ```
 
-Le home se remplit progressivement :
-
-```text
-%LOCALAPPDATA%\MINOS\data\
-├── registry\
-├── symbol-snapshots\
-├── fingerprint-snapshots\
-├── index-state\
-├── staged-snapshots\
-├── runs\
-└── tools\
-```
-
-Cette séparation est volontaire : mettre à jour ou désinstaller le programme ne doit pas supprimer automatiquement les snapshots, projets enregistrés ou providers.
-
-Pour utiliser temporairement un autre home :
-
-```powershell
-$env:MINOS_HOME = 'N:\minos-data'
-minos.cmd project list
-```
+Le programme et les données sont séparés. Une mise à jour ou une désinstallation standard ne doit pas supprimer automatiquement projets enregistrés, snapshots ou index.
 
 ---
 
 ## 6. Vérifier l'installation
-
-Dans un nouveau terminal :
 
 ```powershell
 minos.cmd --version
 minos.cmd doctor
 ```
 
-`doctor` distingue notamment :
-
-- le runtime Java embarqué utilisé par MINOS ;
-- les commandes projet disponibles (`java`, `javac`, `mvn`, `node`, `npm`) ;
-- Docker, qui reste optionnel ;
-- l'état des providers gérés ;
-- les actions nécessaires lorsqu'un provider est absent ou bloqué.
-
-Le code de sortie de `doctor` peut être `1` lorsqu'une action provider reste nécessaire. Cela ne signifie pas que l'installation native est corrompue.
-
-Pour contrôler les intégrations MCP sélectionnées, consulter aussi :
+Pour vérifier les intégrations :
 
 ```powershell
 Get-Content "$env:LOCALAPPDATA\MINOS\mcp-clients.log" -Tail 100
 ```
 
+Pour le MCP, la preuve réelle reste un handshake `initialize → tools/list`; après installation, vérifier aussi depuis le client réellement utilisé que `minos` est `Connected`.
+
 ---
 
-## 7. Installer le provider du projet
+## 7. Providers et premier projet
 
-Lister :
+Lister les providers :
 
 ```powershell
 minos.cmd tools list
 ```
 
-### 7.1 Java / Maven
+Java/Maven qualifié : `scip-java 0.13.1`. MINOS embarque son runtime Java, mais `scip-java` utilise le JDK du projet.
 
-Provider qualifié :
-
-```text
-scip-java 0.13.1
-```
-
-MINOS embarque son propre runtime Java, mais `scip-java` utilise le **JDK du projet**.
-
-Exemple :
-
-```powershell
-$env:JAVA_HOME = 'C:\path\to\project-jdk'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-
-java -version
-javac -version
-minos.cmd tools install scip-java
-```
-
-MINOS n'installe pas un Maven global. Il utilise en priorité le Maven Wrapper du projet.
-
-### 7.2 TypeScript
-
-Préconditions :
+TypeScript :
 
 ```powershell
 node --version
 npm --version
-```
-
-Puis :
-
-```powershell
 minos.cmd tools install scip-typescript
 ```
 
-MINOS installe le provider sous `MINOS_HOME\tools`, mais n'exécute pas silencieusement `npm install`, `yarn install` ou `pnpm install` pour les dépendances métier du projet.
-
----
-
-## 8. Premier projet
+Premier projet :
 
 ```powershell
 minos.cmd project add N:\workspace-dev\my-project --name my-project
@@ -394,181 +369,115 @@ minos.cmd index-status my-project --format json
 minos.cmd search my-project SearchService --format json
 ```
 
-### Visualiser son architecture
-
-JSON détaillé :
-
-```powershell
-minos.cmd architecture my-project --format json
-```
-
-Le champ `moduleDependencies` contient les arêtes du graphe inter-modules.
-
-Mermaid :
-
-```powershell
-minos.cmd architecture my-project --format mermaid |
-  Set-Content .\architecture.mmd -Encoding utf8
-```
-
-Graphviz DOT :
-
-```powershell
-minos.cmd architecture my-project --format dot |
-  Set-Content .\architecture.dot -Encoding utf8
-```
-
-Voisinage d'un seul module :
-
-```powershell
-minos.cmd architecture my-project --module packages/api --format mermaid
-```
-
-Voir [Référence CLI](cli.md) pour les formats et exemples détaillés.
+Voir [Référence CLI](cli.md) et [Providers polyglottes](polyglot-providers.md).
 
 ---
 
-## 9. MCP natif — mode recommandé
+## 8. MCP natif
 
-Le serveur natif installé est :
+Le natif utilise le point d'entrée stable `minos.exe mcp`. Le wrapper `minos.cmd mcp` reste disponible. Le catalogue courant expose 31 tools read-only.
+
+### Pourquoi 1.0.1 corrige `org/w3c/dom/Node`
+
+1.0.0 avait une image Java `jpackage` trop réduite. `org.w3c.dom.Node` appartient à `java.xml`. Le correctif utilise :
 
 ```text
-command = %LOCALAPPDATA%\Programs\MINOS\app\minos.exe
-args    = mcp
-env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+JAR final
+→ jdeps --print-module-deps
+→ jpackage --add-modules <liste calculée>
+→ runtime/bin/java --list-modules
+→ assertion java.xml
+→ handshake MCP réel
 ```
-
-Le wrapper suivant reste disponible :
-
-```powershell
-minos.cmd mcp
-```
-
-CLI et MCP natif utilisent le même `MINOS_HOME` et les mêmes snapshots.
-
-Le MCP expose **16 tools read-only**, dont `minos_architecture_graph` pour obtenir le graphe en `json`, `mermaid` ou `dot`.
-
-Voir [MCP](mcp.md).
 
 ---
 
-## 10. MCP Docker — mode durci optionnel
+## 9. MCP Docker et switching
 
-Le mode Docker conserve les invariants :
+Le query plane Docker conserve :
 
 ```text
 network_mode: none
 filesystem conteneur: read-only
 projets: read-only
-capabilities: dropped
+cap_drop: ALL
+no-new-privileges: true
 ```
 
-Il utilise un home distinct :
-
-```text
-%LOCALAPPDATA%\MINOS\docker-data
-```
-
-### 10.1 Configuration après installation
-
-Si l'option Docker n'a pas été sélectionnée pendant le setup :
+Pour basculer après installation, utiliser le switcher autoritatif :
 
 ```powershell
 $Minos = "$env:LOCALAPPDATA\Programs\MINOS"
 
-& "$Minos\docker\scripts\configure-docker-mcp.ps1" `
+& "$Minos\integration\switch-mcp-backend.ps1" `
   -InstallRoot $Minos `
-  -ProjectsRoot N:\workspace-dev `
-  -Start
+  -TargetBackend docker `
+  -ProjectsRoot N:\workspace-dev
 ```
 
-### 10.2 État / démarrage / arrêt
+Retour natif :
 
 ```powershell
-$DockerMcp = "$env:LOCALAPPDATA\Programs\MINOS\docker\scripts\prod-mcp-release.ps1"
-
-& $DockerMcp -Action Status
-& $DockerMcp -Action Start
-& $DockerMcp -Action Validate
-& $DockerMcp -Action Stop
+& "$Minos\integration\switch-mcp-backend.ps1" `
+  -InstallRoot $Minos `
+  -TargetBackend native
 ```
 
-Ne pas partager le registre natif avec Docker : les racines ne sont pas représentées avec les mêmes chemins (`N:\...` côté Windows, `/workspace/projects/...` côté conteneur).
+Un runtime Docker de même version/commit/racines est **réutilisé** avec Start + Validate + handshake. Un vrai upgrade prépare un nouveau runtime et possède un rollback du runtime précédent.
 
 ---
 
-## 11. Distribution ZIP portable
+## 10. Distribution ZIP portable
 
-Le ZIP est utile pour l'automatisation, le diagnostic ou une installation sans setup Windows.
+Le ZIP est autonome : aucun checkout Git de MINOS n'est nécessaire.
 
-### 11.1 Vérifier le ZIP
+Vérification :
 
 ```powershell
-$Version = '0.2.0-rc4'
-
+$Version = '1.0.1'
 Get-FileHash ".\minos-$Version-windows-x64.zip" -Algorithm SHA256
 Get-Content ".\minos-$Version-windows-x64.zip.sha256"
 ```
 
-### 11.2 Installer le ZIP
-
-Le ZIP est autonome : **aucun checkout Git de MINOS n'est nécessaire**.
+Installation sans MCP :
 
 ```powershell
-$Version = '0.2.0-rc4'
-$Zip = (Resolve-Path ".\minos-$Version-windows-x64.zip").Path
-$ExtractRoot = Join-Path $PWD "minos-$Version-extracted"
-$Distribution = Join-Path $ExtractRoot "minos-$Version-windows-x64"
-
-Expand-Archive -LiteralPath $Zip -DestinationPath $ExtractRoot -Force
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-& "$Distribution\install.ps1" `
-  -Package $Distribution `
+& ".\minos-1.0.1-windows-x64\install.ps1" `
+  -Package ".\minos-1.0.1-windows-x64" `
+  -McpBackend none `
   -AddToPath
 ```
 
-Le chemin par défaut reste :
-
-```text
-%LOCALAPPDATA%\Programs\MINOS
-```
-
-### 11.3 Configurer les clients MCP après une installation ZIP
-
-Le gestionnaire est livré dans la distribution :
+Installation native :
 
 ```powershell
-$Minos = "$env:LOCALAPPDATA\Programs\MINOS"
-
-& "$Minos\integration\configure-mcp-clients.ps1" `
-  -InstallRoot $Minos `
-  -CopilotJetBrains `
-  -CopilotCli `
-  -ClaudeCode `
-  -ClaudeDesktop `
-  -Codex
+& ".\minos-1.0.1-windows-x64\install.ps1" `
+  -Package ".\minos-1.0.1-windows-x64" `
+  -McpBackend native `
+  -AddToPath
 ```
+
+Installation Docker :
+
+```powershell
+& ".\minos-1.0.1-windows-x64\install.ps1" `
+  -Package ".\minos-1.0.1-windows-x64" `
+  -McpBackend docker `
+  -ProjectsRoot N:\workspace-dev `
+  -AddToPath
+```
+
+Le ZIP sauvegarde le répertoire programme précédent avant remplacement. Si la validation du nouveau payload/backend échoue, l'ancien répertoire est restauré. Les données restent séparées du programme.
 
 ---
 
-## 12. Mettre MINOS à jour
+## 11. Mettre MINOS à jour
 
 MINOS n'a pas encore d'auto-updater.
 
-### 12.1 Mise à jour avec setup.exe
+Avec le setup, l'AppId Windows stable retrouve l'installation précédente et le backend persisté est présélectionné. Le candidat backend n'est committé qu'après validation/handshake.
 
-Télécharger le nouveau setup + checksum, vérifier le SHA-256, puis lancer le nouveau setup.
-
-Le setup utilise un **AppId Windows stable**, retrouve l'installation précédente et réutilise son répertoire.
-
-Les données restent dans :
-
-```text
-%LOCALAPPDATA%\MINOS\data
-%LOCALAPPDATA%\MINOS\docker-data
-```
-
-Les cases d'intégration MCP peuvent être sélectionnées à nouveau. Une entrée déjà gérée par MINOS est actualisée ; une entrée `minos` étrangère ou modifiée n'est pas écrasée.
+Avec le ZIP, `install.ps1` sauvegarde le payload précédent avec un nom collision-safe, installe le nouveau payload puis valide le backend demandé. Un échec restaure le backup programme.
 
 Après mise à jour :
 
@@ -578,178 +487,73 @@ minos.cmd doctor
 minos.cmd project list
 ```
 
-### 12.2 Mise à jour ZIP
+---
 
-Le parcours PowerShell conserve le backup automatique de l'ancienne installation programme.
+## 12. Désinstaller MINOS
+
+Utiliser **Paramètres Windows → Applications → Applications installées → MINOS Code Intelligence → Désinstaller**.
+
+Le cleanup standard retire le programme, le PATH géré, les intégrations MCP encore détenues par MINOS et le runtime/conteneur/image Docker gérés lorsque présents. Il préserve les configurations tierces non détenues et les données persistantes.
+
+### Choix de suppression des données locales
+
+En désinstallation interactive :
+
+```text
+Supprimer également toutes les données MINOS locales ?
+
+%LOCALAPPDATA%\MINOS
+
+[Oui] [Non]
+```
+
+Le choix par défaut est **Non / conserver**.
+
+Si **Non** est choisi, `%LOCALAPPDATA%\MINOS` est conservé. Si **Oui** est choisi, le cleanup normal se termine d'abord puis l'arborescence est supprimée : registre, snapshots, index, runs, providers/outils gérés, logs, backups et `docker-data`.
+
+Cette suppression est **irréversible**. Les désinstallations silencieuses et les setups de smoke conservent les données et n'affichent jamais le prompt.
 
 ---
 
-## 13. Désinstaller MINOS
+## 13. Publication — mainteneurs uniquement
 
-Avec le `setup.exe`, utiliser **Paramètres Windows → Applications → Applications installées → MINOS Code Intelligence → Désinstaller**.
-
-Le désinstalleur :
-
-- retire le programme ;
-- retire le chemin MINOS ajouté au `PATH` ;
-- retire, lorsqu'elles correspondent encore aux entrées gérées, les intégrations MCP natives créées par le setup ;
-- ne touche pas aux autres serveurs MCP des clients ;
-- retire le conteneur et la configuration runtime du MCP Docker géré par le setup ;
-- tente de supprimer l'image Docker MINOS correspondante ;
-- **ne supprime pas automatiquement les données persistantes MINOS**.
-
-Sont notamment conservés :
-
-```text
-%LOCALAPPDATA%\MINOS\data
-%LOCALAPPDATA%\MINOS\docker-data
-%LOCALAPPDATA%\MINOS\backups
-%LOCALAPPDATA%\MINOS\*.log
-```
-
-La configuration runtime `%LOCALAPPDATA%\MINOS\docker` est supprimée lors de la désinstallation d'un MCP Docker géré ; `docker-data` reste conservé.
-
-Si une entrée MCP créée par MINOS a été modifiée manuellement après l'installation, elle est volontairement **préservée**. Consulter `mcp-clients.log` pour la retirer manuellement si nécessaire.
-
-### 13.1 Suppression complète des données
-
-Cette opération est irréversible :
+Candidat local sûr :
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\MINOS" -Recurse -Force
+.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
 ```
 
-Elle supprime registre, snapshots, états d'indexation, providers gérés, logs, backups et données Docker MINOS.
+Ce runner construit la distribution, le setup, SBOM/notices/manifest, exerce les handshakes MCP et **ne publie rien**.
 
----
+Le mainteneur vérifie notamment :
 
-## 14. Revenir à une version précédente
+1. la page **Mode MCP** et ses trois choix exclusifs ;
+2. le parcours natif ;
+3. le parcours Docker fail-closed ;
+4. la page **Clients IA** pour les deux backends ;
+5. Codex Desktop et le rejet du `launcher VS Code détecté` comme faux Copilot CLI ;
+6. le switching native↔Docker ;
+7. la conservation des données à la désinstallation ;
+8. la purge uniquement quand elle est explicitement demandée ;
+9. un client réel, notamment Copilot, avant toute publication.
 
-Les releases publiées restent versionnées dans GitHub Releases.
-
-Pour revenir à une version antérieure :
-
-1. fermer les clients MCP utilisant MINOS ;
-2. télécharger le setup ou le ZIP de la version souhaitée ;
-3. vérifier son SHA-256 ;
-4. réinstaller cette version ;
-5. vérifier `minos.cmd --version` et `minos.cmd doctor`.
-
-`MINOS_HOME` reste séparé du programme. Avant un rollback important, sauvegarder `%LOCALAPPDATA%\MINOS` si les données sont critiques.
-
----
-
-## 15. Publication d'une release — mainteneurs uniquement
-
-Un utilisateur normal **ne doit pas exécuter cette section**.
-
-Une release complète doit produire :
-
-```text
-MINOS-<version>-windows-x64-setup.exe
-MINOS-<version>-windows-x64-setup.exe.sha256
-minos-<version>-windows-x64.zip
-minos-<version>-windows-x64.zip.sha256
-```
-
-### 15.1 Qualification locale Windows
-
-Le parcours recommandé avant publication est :
+Qualification sans publication :
 
 ```powershell
 .\scripts\release\publish-windows-release.ps1 `
-  -Version 0.2.0-rc4 `
+  -Version 1.0.1 `
   -ValidateOnly
 ```
 
-Le build de distribution exécute aussi :
-
-```text
-scripts\install\verify-mcp-client-integration.ps1
-```
-
-Ce smoke-test utilise des configurations temporaires et de faux exécutables clients pour valider :
-
-```text
-Copilot JetBrains JSON : fusion + sauvegarde + uninstall sélectif
-Claude Desktop JSON    : fusion + sauvegarde + uninstall sélectif
-Copilot CLI            : add/get/remove
-Claude Code            : add/get/remove
-Codex                   : add/get/remove
-collision minos        : préservation obligatoire
-```
-
-### 15.2 GitHub Actions
-
-Dans **Actions → Publish Windows Release → Run workflow**, sélectionner `main` et fournir la version.
-
-Le workflow :
-
-```text
-Java 24
-→ validation intégrations MCP natives
-→ clean verify
-→ jpackage app-image
-→ ZIP + SHA-256
-→ installation d'Inno Setup
-→ setup.exe + SHA-256
-→ smoke install ZIP
-→ smoke install setup.exe
-→ vérification MINOS <version>
-→ désinstallation silencieuse du setup
-→ création du tag v<version>
-→ création GitHub Release
-→ upload des quatre assets
-```
-
-Une release/tag déjà existante est refusée.
-
-### 15.3 Poste Windows mainteneur
-
-Prérequis supplémentaires au build du setup : **Inno Setup avec `ISCC.exe`**.
-
-```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 0.2.0-rc4
-.\scripts\release\build-windows-installer.ps1 -Version 0.2.0-rc4
-```
-
-Publier avec `gh` authentifié :
-
-```powershell
-gh auth status
-.\scripts\release\publish-windows-release.ps1 -Version 0.2.0-rc4
-```
+`.github/workflows/release-windows.yml` reste `workflow_dispatch`. M29 ne doit déclencher aucune GitHub Actions, PR ou publication sans autorisation explicite.
 
 ---
 
-## 16. Dépannage
+## Références
 
-Commencer par :
-
-```powershell
-minos.cmd --version
-minos.cmd doctor --format json
-```
-
-Pour les intégrations MCP natives :
-
-```powershell
-Get-Content "$env:LOCALAPPDATA\MINOS\mcp-clients.log" -Tail 200
-Get-Content "$env:LOCALAPPDATA\MINOS\mcp-client-integrations.json"
-```
-
-Pour Docker :
-
-```powershell
-docker version
-Get-Content "$env:LOCALAPPDATA\MINOS\docker-setup.log" -Tail 200
-```
-
-Pour le graphe :
-
-```powershell
-minos.cmd architecture <project> --format json
-minos.cmd architecture <project> --format mermaid
-```
-
-Puis consulter [Dépannage](troubleshooting.md).
+- [MCP](mcp.md)
+- [Docker runtime](docker-runtime.md)
+- [CLI](cli.md)
+- [Providers polyglottes](polyglot-providers.md)
+- [`docs/releases/1.0.1.md`](../releases/1.0.1.md)
+- [`docs/roadmap/M29_EXECUTION.md`](../roadmap/M29_EXECUTION.md)

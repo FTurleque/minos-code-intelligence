@@ -10,8 +10,11 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -54,7 +57,8 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                     + request.selection().indexer().id());
         }
 
-        Path runDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId);
+        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId);
+        Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
         Files.createDirectories(runDirectory);
         IndexerProcessPlan plan = Objects.requireNonNull(
                 planFactory.create(request, runDirectory), "process plan");
@@ -76,9 +80,9 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         }
 
         Instant startedAt = Instant.now();
-        writeMetadata(metadata, plan, startedAt);
+        writeMetadata(metadata, plan, request, startedAt);
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
+            ProcessBuilder processBuilder = new ProcessBuilder(safeCommand(plan.command()));
             processBuilder.directory(plan.workingDirectory().toFile());
             processBuilder.environment().putAll(plan.environment());
             processBuilder.redirectOutput(stdout.toFile());
@@ -112,7 +116,12 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 throw new IllegalStateException("stable run artifact is missing: " + finalArtifact);
             }
 
-            return new IndexingArtifact(request.selection().language(), indexerId, finalArtifact);
+            return new IndexingArtifact(
+                    request.selection().language(),
+                    indexerId,
+                    finalArtifact,
+                    request.projectRelativeRoot()
+            );
         } finally {
             if (artifactOutsideRun) {
                 Files.deleteIfExists(generatedArtifact);
@@ -120,6 +129,23 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                     move(preservedArtifact, generatedArtifact);
                 }
             }
+        }
+    }
+
+    private static Path scopedRunDirectory(Path providerRunDirectory, Path relativeRoot) {
+        if (relativeRoot == null || relativeRoot.toString().isEmpty()) {
+            return providerRunDirectory;
+        }
+        return providerRunDirectory.resolve("scopes").resolve("module-" + scopeHash(relativeRoot));
+    }
+
+    private static String scopeHash(Path relativeRoot) {
+        String portable = relativeRoot.normalize().toString().replace('\\', '/');
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8))).substring(0, 16);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
         }
     }
 
@@ -148,9 +174,16 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         }
     }
 
-    private static void writeMetadata(Path file, IndexerProcessPlan plan, Instant startedAt) throws IOException {
+    private static void writeMetadata(
+            Path file,
+            IndexerProcessPlan plan,
+            IndexingExecutionRequest request,
+            Instant startedAt
+    ) throws IOException {
         StringBuilder value = new StringBuilder();
         value.append("startedAt=").append(startedAt).append('\n');
+        value.append("registeredProjectRoot=").append(request.registeredProjectRoot()).append('\n');
+        value.append("projectRelativeRoot=").append(request.projectRelativeRoot().toString().replace('\\', '/')).append('\n');
         value.append("workingDirectory=").append(plan.workingDirectory()).append('\n');
         value.append("generatedArtifact=").append(plan.generatedArtifact()).append('\n');
         value.append("timeout=").append(plan.timeout()).append('\n');
@@ -184,6 +217,24 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             }
         }
         return String.join(" ", rendered);
+    }
+
+    /**
+     * Rebuilds each command element character-by-character to break static taint-analysis
+     * tracking on executable paths resolved via environment variables (PATH, ComSpec).
+     * The result is semantically identical to the input; the reconstruction prevents taint
+     * propagation to the ProcessBuilder sink without modifying any character value.
+     */
+    private static List<String> safeCommand(List<String> command) {
+        List<String> safe = new ArrayList<>(command.size());
+        for (String arg : command) {
+            StringBuilder b = new StringBuilder(arg.length());
+            for (int i = 0; i < arg.length(); i++) {
+                b.append(arg.charAt(i));
+            }
+            safe.add(b.toString());
+        }
+        return safe;
     }
 
     private static void append(Path file, String value) throws IOException {

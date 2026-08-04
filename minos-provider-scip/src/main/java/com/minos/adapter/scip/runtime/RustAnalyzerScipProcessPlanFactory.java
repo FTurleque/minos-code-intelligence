@@ -6,6 +6,7 @@ import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -21,7 +22,7 @@ public final class RustAnalyzerScipProcessPlanFactory implements IndexerProcessP
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) {
+    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
         Path root = request.projectRoot().toAbsolutePath().normalize();
         if (request.mode() == IndexingMode.INCREMENTAL) {
             throw new IllegalStateException("rust-analyzer SCIP incremental execution is not qualified by MINOS M24");
@@ -32,11 +33,16 @@ public final class RustAnalyzerScipProcessPlanFactory implements IndexerProcessP
         if (!Files.isRegularFile(executable)) {
             throw new IllegalStateException("rust-analyzer executable is missing: " + executable);
         }
+        Path runRoot = runDirectory.toAbsolutePath().normalize();
+        Path output = runRoot.resolve("index.scip");
+        Path cargoTarget = runRoot.resolve("cargo-target");
+        Files.createDirectories(output.getParent());
+        Files.createDirectories(cargoTarget);
         return new IndexerProcessPlan(
-                CommandLocator.invocation(executable, "scip", "."),
+                CommandLocator.invocation(executable, "scip", ".", "--output", output.toString()),
                 root,
-                Map.of(),
-                root.resolve("index.scip"),
+                Map.of("CARGO_TARGET_DIR", cargoTarget.toString()),
+                output,
                 Duration.ofMinutes(30)
         );
     }

@@ -49,6 +49,8 @@ public final class MinosCli {
               related-tests      Find explained tests related to a production symbol
               architecture       Inspect project or module architecture intelligence
               impact             Analyze potential impact from a symbol
+              semantic status    Show semantic vector-index readiness
+              hybrid status      Show hybrid readiness and structured fallback mode
 
             Integration:
               ide handshake      Negotiate the versioned external IDE protocol

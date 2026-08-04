@@ -24,6 +24,8 @@ import com.minos.domain.UnresolvedSymbolReference;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -118,65 +120,91 @@ final class SnapshotBinaryCodecSupport {
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
-            output.writeInt(SNAPSHOT_MAGIC);
-            output.writeInt(FORMAT_VERSION_V2);
-            output.writeLong(snapshot.projectId().getMostSignificantBits());
-            output.writeLong(snapshot.projectId().getLeastSignificantBits());
-            writeString(output, snapshot.snapshotId());
-            output.writeInt(snapshot.symbols().size());
-            for (Symbol symbol : snapshot.symbols()) {
-                writeSymbol(output, symbol);
-            }
-            output.writeInt(snapshot.occurrences().size());
-            for (SymbolOccurrence occurrence : snapshot.occurrences()) {
-                writeOccurrence(output, occurrence);
-            }
-            output.writeInt(snapshot.relationships().size());
-            for (Relationship relationship : snapshot.relationships()) {
-                writeRelationship(output, relationship);
-            }
+            writeKnowledgeSnapshotV2Body(output, snapshot);
         }
         return HEX.formatHex(digest.digest());
+    }
+
+    static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos))) {
+            writeKnowledgeSnapshotV2Body(output, snapshot);
+        }
+        return baos.toByteArray();
+    }
+
+    private static void writeKnowledgeSnapshotV2Body(DataOutputStream output, CodeKnowledgeSnapshot snapshot) throws IOException {
+        output.writeInt(SNAPSHOT_MAGIC);
+        output.writeInt(FORMAT_VERSION_V2);
+        output.writeLong(snapshot.projectId().getMostSignificantBits());
+        output.writeLong(snapshot.projectId().getLeastSignificantBits());
+        writeString(output, snapshot.snapshotId());
+        output.writeInt(snapshot.symbols().size());
+        for (Symbol symbol : snapshot.symbols()) {
+            writeSymbol(output, symbol);
+        }
+        output.writeInt(snapshot.occurrences().size());
+        for (SymbolOccurrence occurrence : snapshot.occurrences()) {
+            writeOccurrence(output, occurrence);
+        }
+        output.writeInt(snapshot.relationships().size());
+        for (Relationship relationship : snapshot.relationships()) {
+            writeRelationship(output, relationship);
+        }
     }
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
-            requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, "knowledge snapshot");
-            UUID projectId = new UUID(input.readLong(), input.readLong());
-            String snapshotId = readRequiredString(input, "snapshotId");
-            int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
-            List<Symbol> symbols = new ArrayList<>(symbolCount);
-            for (int index = 0; index < symbolCount; index++) {
-                symbols.add(readSymbol(input));
-            }
-            int occurrenceCount = readCount(input, MAX_OCCURRENCES, "occurrence count");
-            List<SymbolOccurrence> occurrences = new ArrayList<>(occurrenceCount);
-            for (int index = 0; index < occurrenceCount; index++) {
-                occurrences.add(readOccurrence(input));
-            }
-            int relationshipCount = readCount(input, MAX_RELATIONSHIPS, "relationship count");
-            List<Relationship> relationships = new ArrayList<>(relationshipCount);
-            for (int index = 0; index < relationshipCount; index++) {
-                relationships.add(readRelationship(input));
-            }
-            if (input.read() != -1) {
-                throw new IOException("unexpected trailing data in knowledge snapshot");
-            }
-            try {
-                return new CodeKnowledgeSnapshot(
-                        projectId,
-                        snapshotId,
-                        symbols,
-                        occurrences,
-                        relationships
-                );
-            } catch (IllegalArgumentException exception) {
-                throw new IOException("invalid knowledge snapshot: " + exception.getMessage(), exception);
-            }
+            return readKnowledgeSnapshotV2Body(input);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
+        }
+    }
+
+    static CodeKnowledgeSnapshot readKnowledgeSnapshotV2FromBytes(byte[] payload) throws IOException {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                new ByteArrayInputStream(payload)
+        ))) {
+            return readKnowledgeSnapshotV2Body(input);
+        } catch (EOFException exception) {
+            throw new IOException("truncated knowledge snapshot", exception);
+        }
+    }
+
+    private static CodeKnowledgeSnapshot readKnowledgeSnapshotV2Body(DataInputStream input) throws IOException {
+        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, "knowledge snapshot");
+        UUID projectId = new UUID(input.readLong(), input.readLong());
+        String snapshotId = readRequiredString(input, "snapshotId");
+        int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
+        List<Symbol> symbols = new ArrayList<>(symbolCount);
+        for (int index = 0; index < symbolCount; index++) {
+            symbols.add(readSymbol(input));
+        }
+        int occurrenceCount = readCount(input, MAX_OCCURRENCES, "occurrence count");
+        List<SymbolOccurrence> occurrences = new ArrayList<>(occurrenceCount);
+        for (int index = 0; index < occurrenceCount; index++) {
+            occurrences.add(readOccurrence(input));
+        }
+        int relationshipCount = readCount(input, MAX_RELATIONSHIPS, "relationship count");
+        List<Relationship> relationships = new ArrayList<>(relationshipCount);
+        for (int index = 0; index < relationshipCount; index++) {
+            relationships.add(readRelationship(input));
+        }
+        if (input.read() != -1) {
+            throw new IOException("unexpected trailing data in knowledge snapshot");
+        }
+        try {
+            return new CodeKnowledgeSnapshot(
+                    projectId,
+                    snapshotId,
+                    symbols,
+                    occurrences,
+                    relationships
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("invalid knowledge snapshot: " + exception.getMessage(), exception);
         }
     }
 
