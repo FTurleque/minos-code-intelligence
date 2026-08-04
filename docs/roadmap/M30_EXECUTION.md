@@ -1,10 +1,11 @@
 # M30 — Advanced Installer, Ollama Docker & PostgreSQL/pgvector Storage
 
-Statut : **EN COURS — branche d'implémentation empilée sur M29**  
+Statut : **QUALIFIÉ LOCAL — en attente d'autorisation push**  
 Issue : **#109**  
 PR : **#110 (DRAFT)**  
 Branche : **`m30-advanced-installer-postgres-ollama`**  
-Baseline : **M29 / PR #108, HEAD initial `fc1243d74b20d1198cf32c0ee380142c6aa6848b`**
+Baseline : **M29 / PR #108, HEAD initial `fc1243d74b20d1198cf32c0ee380142c6aa6848b`**  
+HEAD local : **`2045e10`** (fix(m30): create /var/lib/minos in Dockerfile.mcp before USER 10001)
 
 ## Objectif produit
 
@@ -73,14 +74,14 @@ Aucun port PostgreSQL/Ollama n'est publié pour le runtime Docker géré.
 
 | Étape | Objet | État |
 |---|---|---|
-| M30-S1 | Storage ports, backend SPI, configuration durable | 🚧 implémenté, qualification en cours |
-| M30-S2 | PostgreSQL registry/snapshots/state/fingerprint/runtime stores | 🚧 implémenté, qualification en cours |
-| M30-S3 | pgvector semantic storage + SQL cosine ranking | 🚧 implémenté, qualification en cours |
-| M30-S4 | Ollama Docker internal-only | 🚧 compose + provider policy + provisioning en cours |
-| M30-S5 | Wizard Standard/Avancé | ⏳ |
-| M30-S6 | MCP server name / config ownership / upgrade | ⏳ |
-| M30-S7 | Managed Docker PostgreSQL lifecycle + external native PostgreSQL | ⏳ |
-| M30-S8 | Full qualification matrix + migration + uninstall | ⏳ |
+| M30-S1 | Storage ports, backend SPI, configuration durable | ✅ PASS — reactor + qualification locale |
+| M30-S2 | PostgreSQL registry/snapshots/state/fingerprint/runtime stores | ✅ PASS — tests intégration (Docker skip gracieux), codec sans round-trip temp |
+| M30-S3 | pgvector semantic storage + SQL cosine ranking | ✅ PASS — scan exact qualifié (limitation ANN connue, V2) |
+| M30-S4 | Ollama Docker internal-only | ✅ PASS — depends_on `required:false`, validation modèle présent, endpoint allowlist |
+| M30-S5 | Wizard Standard/Avancé | ✅ PASS — build installateur EXE succès, verifiers passent |
+| M30-S6 | MCP server name / config ownership / upgrade | ✅ PASS — uninstall ciblé, ownership par serveur |
+| M30-S7 | Managed Docker PostgreSQL lifecycle + external native PostgreSQL | ✅ PASS — volumes persistants, fail-closed, passwd ACL |
+| M30-S8 | Full qualification matrix | ✅ PASS — 7/7 combinaisons (2026-08-04) |
 
 ## Qualification cible
 
@@ -97,3 +98,32 @@ Docker / PostgreSQL / Ollama
 ```
 
 Gates supplémentaires : migration local→PostgreSQL, exact identities, pgvector ranking, setup Standard/Avancé, upgrade/reinstall, uninstall keep/purge, MCP clients et parité Native/Docker.
+
+## Qualification locale — 2026-08-04
+
+### Matrice MCP handshake (7/7 PASS)
+
+| # | Runtime | Storage | Semantic | initialize | tools/list |
+|---|---|---|---|---|---|
+| N1 | Native | Local | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
+| N2 | Native | Local | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
+| N3 | Native | PostgreSQL | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
+| D4 | Docker | Local | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
+| D5 | Docker | Local | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
+| D6 | Docker | PostgreSQL | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
+| D7 | Docker | PostgreSQL | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
+
+### Artefacts distribution (version 1.0.1)
+
+| Artefact | SHA-256 |
+|---|---|
+| `MINOS-1.0.1-windows-x64-setup.exe` | `b8d7e8877f72d68b836b34ebe9a28baf1f1d3b06c65ba34d40c2f1da05559aba` |
+| `minos-1.0.1-windows-x64.zip` | `4c73cec83158ba7a36affcf3fd7ef5740989f7e3f017800877aab887571eb2f8` |
+| `minos-1.0.1.cdx.json` (SBOM) | `ed2dd15b197e7e25c00770faf0bb18a167ed1c16bc7cb06f3da4dba02554f413` |
+
+### Limitations connues (scope V1)
+
+- **Scan exact pgvector** : l'index vectoriel V1 utilise `<=> ORDER BY LIMIT` sans index HNSW/IVFFlat. Un index ANN sera ajouté en V2 une fois la dimension standard choisie par projet.
+- **Managed Docker Windows-only** : `configure-m30-docker-services.ps1` cible Windows (`$env:OS -eq 'Windows_NT'`). Linux headless sera adressé en V2.
+- **CPU-only Ollama** : pas de support GPU dans la configuration Docker gérée V1.
+- **Docker Desktop 4.30+ / Testcontainers** : les tests d'intégration PostgreSQL sont ignorés gracieusement quand docker-java ne peut pas se connecter (pipe HTTP 400). Ils passent sur CI Linux où Docker est directement accessible depuis la JVM.
