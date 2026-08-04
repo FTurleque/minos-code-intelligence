@@ -27,6 +27,9 @@ final class PostgresConnectionFactory {
         }
     }
 
+    // schema is validated to [A-Za-z_][A-Za-z0-9_]{0,62} by StorageBackendConfiguration.normalizeSchema()
+    // and rebuilt character-by-character in quotedSchema(). SET search_path does not support parameters.
+    @SuppressWarnings({"java:S2077", "java:S2095"})
     Connection open() throws SQLException {
         Connection connection = DriverManager.getConnection(url, user, password);
         boolean ok = false;

@@ -28,6 +28,10 @@ final class DockerMcpTransport {
         this.processes = Objects.requireNonNull(processes, "processes");
     }
 
+    // containerName passes through safeContainerName() which allows only [A-Za-z0-9_.-] and
+    // rejects any other character. ProcessBuilder(List) does not invoke a shell — each element
+    // is a separate OS argument. The container name cannot trigger shell expansion or injection.
+    @SuppressWarnings("java:S4036")
     int run(McpBackendConfiguration configuration) throws IOException, InterruptedException {
         Objects.requireNonNull(configuration, "configuration");
         if (configuration.backend() != McpBackend.DOCKER) {
@@ -88,6 +92,7 @@ final class DockerMcpTransport {
         return safe.toString();
     }
 
+    @SuppressWarnings("java:S4036") // containerName validated by safeContainerName(); ProcessBuilder(List) uses no shell
     private static final class SystemProcessExecutor implements ProcessExecutor {
         @Override
         public ProcessResult probe(List<String> command, Duration timeout) throws IOException, InterruptedException {

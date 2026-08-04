@@ -15,6 +15,9 @@ final class PostgresSchemaMigrator {
         this.connections = connections;
     }
 
+    // schema identifier is validated by StorageBackendConfiguration and rebuilt char-by-char in
+    // quotedSchema(). DDL statements (CREATE SCHEMA, SET search_path) do not accept parameters.
+    @SuppressWarnings("java:S2077")
     void migrate() throws IOException {
         String schema = connections.quotedSchema();
         try (Connection connection = connections.open(); Statement statement = connection.createStatement()) {
