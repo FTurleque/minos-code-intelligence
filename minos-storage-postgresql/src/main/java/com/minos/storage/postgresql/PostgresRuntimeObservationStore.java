@@ -48,7 +48,8 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
                 }
                 c.commit(); return new SaveResult(session, false);
             } catch (Exception e) {
-                c.rollback(); if (e instanceof IOException io) throw io;
+                c.rollback();
+                if (e instanceof IOException io) throw io;
                 throw new IOException("unable to save PostgreSQL runtime session", e);
             }
         } catch (SQLException e) { throw new IOException("unable to save PostgreSQL runtime session", e); }

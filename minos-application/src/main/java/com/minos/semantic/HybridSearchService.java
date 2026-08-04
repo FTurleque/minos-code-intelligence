@@ -150,7 +150,8 @@ public final class HybridSearchService {
             if (isTermCodePoint(codePoint)) { normalized.appendCodePoint(codePoint); separating = false; }
             else if (!separating && !normalized.isEmpty()) { normalized.append(' '); separating = true; }
         }
-        int length = normalized.length(); if (length > 0 && normalized.charAt(length - 1) == ' ') normalized.setLength(length - 1);
+        int length = normalized.length();
+        if (length > 0 && normalized.charAt(length - 1) == ' ') normalized.setLength(length - 1);
         return normalized.toString();
     }
     private static boolean isTermCodePoint(int codePoint) {

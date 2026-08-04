@@ -119,7 +119,8 @@ public final class NexusExportService {
                 .filter(Objects::nonNull).forEach(requiredFileIds::add);
         Map<String, String> resolved = new HashMap<>();
         for (String fileId : requiredFileIds) {
-            String direct = directRelativePath(root, fileId); if (direct != null) resolved.put(fileId, direct);
+            String direct = directRelativePath(root, fileId);
+            if (direct != null) resolved.put(fileId, direct);
         }
         Set<String> unresolvedStableIds = requiredFileIds.stream().filter(fileId -> !resolved.containsKey(fileId))
                 .filter(fileId -> fileId.startsWith("file:"))
@@ -130,7 +131,10 @@ public final class NexusExportService {
             var iterator = paths.filter(Files::isRegularFile).iterator();
             while (iterator.hasNext() && !unresolvedStableIds.isEmpty()) {
                 if (scanned >= MAX_FILE_PATH_CANDIDATES) { limitations.add("FILE_PATH_DISCOVERY_TRUNCATED"); break; }
-                Path file = iterator.next(); scanned++; Path canonical = file.toRealPath(); if (!canonical.startsWith(root)) continue;
+                Path file = iterator.next();
+                scanned++;
+                Path canonical = file.toRealPath();
+                if (!canonical.startsWith(root)) continue;
                 String relativePath = root.relativize(file).toString().replace('\\', '/');
                 String stableId = stableFileId(projectId, relativePath);
                 if (unresolvedStableIds.remove(stableId)) resolved.put(stableId, relativePath);
@@ -145,7 +149,8 @@ public final class NexusExportService {
         try {
             Path raw = Path.of(fileId); Path resolved = raw.isAbsolute() ? raw.normalize() : root.resolve(raw).normalize();
             if (!resolved.startsWith(root) || resolved.equals(root) || !Files.isRegularFile(resolved)) return null;
-            Path canonical = resolved.toRealPath(); if (!canonical.startsWith(root)) return null;
+            Path canonical = resolved.toRealPath();
+            if (!canonical.startsWith(root)) return null;
             return root.relativize(resolved).toString().replace('\\', '/');
         } catch (InvalidPathException | IOException exception) { return null; }
     }

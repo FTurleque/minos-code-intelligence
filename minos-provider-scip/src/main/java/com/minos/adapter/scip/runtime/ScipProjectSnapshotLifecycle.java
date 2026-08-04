@@ -106,7 +106,8 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
         return descriptor;
     }
     private static String scopeKey(Path relativeRoot) {
-        String portable = portable(relativeRoot); if (portable.isBlank()) return "root";
+        String portable = portable(relativeRoot);
+        if (portable.isBlank()) return "root";
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             String hash = HexFormat.of().formatHex(digest.digest(portable.getBytes(StandardCharsets.UTF_8)));

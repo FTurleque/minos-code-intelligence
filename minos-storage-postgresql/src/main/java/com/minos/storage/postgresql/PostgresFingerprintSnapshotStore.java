@@ -45,7 +45,8 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
                 }
                 c.commit(); return snapshot;
             } catch (Exception e) {
-                c.rollback(); if (e instanceof IOException io) throw io;
+                c.rollback();
+                if (e instanceof IOException io) throw io;
                 throw new IOException("unable to publish PostgreSQL fingerprint snapshot", e);
             }
         } catch (SQLException e) { throw new IOException("unable to publish PostgreSQL fingerprint snapshot", e); }
