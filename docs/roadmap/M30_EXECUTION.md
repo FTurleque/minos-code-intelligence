@@ -117,9 +117,9 @@ Gates supplémentaires : migration local→PostgreSQL, exact identities, pgvecto
 
 | Artefact | SHA-256 |
 |---|---|
-| `MINOS-1.0.1-windows-x64-setup.exe` | `e69187e6b6dde3d9577e086eff2ef55a9556de354dd8d5b54d527dd48e68aff0` |
-| `minos-1.0.1-windows-x64.zip` | `ce817ec2353544ecd37f0394b703fa104c4fc0c425665b04fdcdc1a567bfaaa2` |
-| `minos-1.0.1.cdx.json` (SBOM) | `c1bed3923c029958b4a15dc55dde1d09ef4944d565e28e78b872ddcda16e9fa5` |
+| `MINOS-1.0.1-windows-x64-setup.exe` | `49a7830fbae99eff3ee6f53017a0df66c871f2baf846af7c125e1083fd69ebe6` |
+| `minos-1.0.1-windows-x64.zip` | `5dd341cc0601c03c9be8aeee4edd4130ce4f6ef3fc957aedbc2dbe61a918151c` |
+| `minos-1.0.1.cdx.json` (SBOM) | `cfb390569171e9aa7f96da1319a0ab8c67c51a457787fb0f24087f39064731a3` |
 
 ### Limitations connues (scope V1)
 

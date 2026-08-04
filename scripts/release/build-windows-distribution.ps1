@@ -303,6 +303,7 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp
     -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
 foreach ($IntegrationScript in @(
     'configure-runtime-settings.ps1',
+    'invoke-named-mcp-script.ps1',
     'configure-mcp-clients.ps1',
     'configure-mcp-clients-setup.ps1',
     'configure-codex-mcp.ps1',
