@@ -80,11 +80,11 @@ function Invoke-MinosVersion {
 function Invoke-McpHandshake {
     param(
         [Parameter(Mandatory = $true)][string] $Launcher,
-        [Parameter(Mandatory = $true)][string] $Home,
+        [Parameter(Mandatory = $true)][string] $McpHome,
         [Parameter(Mandatory = $true)][string] $Context
     )
-    New-Item -ItemType Directory -Force -Path $Home | Out-Null
-    Invoke-NativeChecked -File $script:Java -Arguments @($script:McpSmokeSource, $Launcher, $Home) `
+    New-Item -ItemType Directory -Force -Path $McpHome | Out-Null
+    Invoke-NativeChecked -File $script:Java -Arguments @($script:McpSmokeSource, $Launcher, $McpHome) `
         -Failure "$Context native MCP initialize/tools-list handshake failed"
 }
 
