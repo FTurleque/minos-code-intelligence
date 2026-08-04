@@ -127,9 +127,9 @@ final class SnapshotBinaryCodecSupport {
 
     static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos));
-        writeKnowledgeSnapshotV2Body(output, snapshot);
-        output.flush();
+        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos))) {
+            writeKnowledgeSnapshotV2Body(output, snapshot);
+        }
         return baos.toByteArray();
     }
 
