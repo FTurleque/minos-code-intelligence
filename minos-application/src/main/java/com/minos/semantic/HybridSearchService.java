@@ -143,8 +143,10 @@ public final class HybridSearchService {
         String lower = value.toLowerCase(Locale.ROOT);
         StringBuilder normalized = new StringBuilder(lower.length());
         boolean separating = false;
-        for (int offset = 0; offset < lower.length();) {
-            int codePoint = lower.codePointAt(offset); offset += Character.charCount(codePoint);
+        int offset = 0;
+        while (offset < lower.length()) {
+            int codePoint = lower.codePointAt(offset);
+            offset += Character.charCount(codePoint);
             if (isTermCodePoint(codePoint)) { normalized.appendCodePoint(codePoint); separating = false; }
             else if (!separating && !normalized.isEmpty()) { normalized.append(' '); separating = true; }
         }
@@ -179,7 +181,9 @@ public final class HybridSearchService {
     private record LexicalQuery(Set<String> terms, String normalizedQuery) {
         static LexicalQuery compile(String query) { String normalized = normalize(query); return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized); }
         double score(String content) {
-            if (terms.isEmpty()) return 0.0; String normalizedContent = normalize(content); int matched = 0;
+            if (terms.isEmpty()) return 0.0;
+            String normalizedContent = normalize(content);
+            int matched = 0;
             for (String term : terms) if (containsTerm(normalizedContent, term)) matched++;
             double overlap = matched / (double) terms.size();
             double phraseBonus = !normalizedQuery.isBlank() && normalizedContent.contains(normalizedQuery) ? 0.25 : 0.0;
@@ -198,7 +202,8 @@ public final class HybridSearchService {
     public record RankingSignal(String type, double score, InformationNature nature) {
         public RankingSignal {
             if (type == null || type.isBlank()) throw new IllegalArgumentException("type must not be blank");
-            if (!Double.isFinite(score)) throw new IllegalArgumentException("score must be finite"); Objects.requireNonNull(nature, "nature");
+            if (!Double.isFinite(score)) throw new IllegalArgumentException("score must be finite");
+            Objects.requireNonNull(nature, "nature");
         }
     }
     public record HybridHit(SemanticDocument document, double score, double lexicalScore, double graphScore,
