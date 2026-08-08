@@ -14,7 +14,7 @@ M30                              ✅ PR #110 + promotion #111 merged
 hardening #113                   ✅ merged
 CI Windows M28 #117              ✅ merged
 promotion develop → main #112    ✅ merged
-main qualifié                    c2593ad7f9efa3d14a6fcfe7062811f64da425b3
+readiness 1.0.1 #118/#119        ✅ merged / qualifiée
 #98 sandbox OS worker réelle     🚧 OPEN
 MINOS 1.0.1                      🚧 pré-publication — NON PUBLIÉE
 ```

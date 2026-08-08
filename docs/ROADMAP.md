@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **8 août 2026** : **C0 → M30 terminés et intégrés ; hardening #113/#117 intégré et promu par #112 ; MINOS 1.0.0 publié ; 1.0.1 en pré-publication et non publiée.**
+Statut au **8 août 2026** : **C0 → M30 terminés et intégrés ; hardening #113/#117 et readiness #118/#119 intégrés ; MINOS 1.0.0 publié ; 1.0.1 en pré-publication et non publiée.**
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -36,6 +36,7 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ terminé — issue #107 closed / PR #108 merged |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ livré — PR #110 + promotion #111 |
 | Hardening post-audit | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113 + #117 + #112 |
+| Readiness 1.0.1 | Plugin Verifier, preflight release, docs et smoke MCP stabilisé | ✅ #118 + #119 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
@@ -53,9 +54,9 @@ semantic          disabled | local-hash | ollama
 
 Le wizard Windows propose Standard/Avancé, les intégrations MCP détectées, la configuration PostgreSQL/Ollama/Docker applicable, puis un résumé avant installation. PostgreSQL/pgvector est un backend réel et versionné ; PostgreSQL et Ollama peuvent être gérés dans le runtime Docker.
 
-## Hardening post-audit — terminé
+## Hardening et readiness — terminés
 
-Le hardening porté par **#113**, corrigé par **#117** puis promu sur `main` par **#112**, est terminé.
+Les PR **#113/#117/#118** et les promotions **#112/#119** sont intégrées.
 
 Gates acquis :
 
@@ -68,42 +69,36 @@ Gates acquis :
 - M28 exact-head Linux/Windows ;
 - M19/M20 ;
 - SonarCloud Quality Gate ;
+- IntelliJ unit/build/structure + Plugin Verifier ;
 - build jpackage + ZIP/SBOM/notices/checksums ;
 - handshake MCP SDK sur runtime packagé ;
+- timeout d'initialisation MCP SDK explicite ;
 - compilation Inno Setup ;
 - installation ZIP + handshake ;
 - installation setup + handshake ;
 - désinstallation isolée ;
-- vérification des artefacts durables.
+- vérification des artefacts durables ;
+- préflight exact-head/tag/release avant publication.
 
-Le Plugin Verifier IntelliJ est désormais qualifié sur PR/push pertinents et fait également partie du workflow manuel de publication.
+Le workflow manuel de publication rejoue les gates IntelliJ puis reconstruit et qualifie les artefacts Windows sur le SHA exact de `main`.
 
 ## Release 1.0.1 — phase de décision
 
 1.0.1 reste **NON PUBLIÉE**. Aucun ancien setup/ZIP n'est un candidat final.
 
-Le candidat final doit provenir du `main` post-hardening et satisfaire :
+Les validations automatisables sont acquises sur la readiness. Les trois décisions/gates qui restent avant publication sont :
 
 ```text
-HEAD candidat
-→ Maven Windows + Linux
-→ PostgreSQL/pgvector réel obligatoire sur Linux
-→ JaCoCo M0–M30
-→ OSV
-→ SonarCloud
-→ IntelliJ build/tests/Plugin Verifier
-→ MCP initialize/tools-list
-→ lifecycle M29/M30
-→ build + install + handshake + uninstall setup Windows
-→ validation utilisateur finale du wizard et des clients réels
-→ résolution explicite de tout conflit tag/release
+validation utilisateur réelle du wizard et des clients installés
+→ résolution explicite du conflit de tag v1.0.1
 → autorisation explicite de publication
-→ seulement ensuite GitHub Release
 ```
+
+Le workflow de publication reconstruira ensuite sur le `main` exact et vérifiera de nouveau Plugin Verifier, runtime, setup, handshakes, checksums et supply-chain avant création de la GitHub Release.
 
 ### Blocage de gouvernance actuel
 
-Un tag Git historique `v1.0.1` existe sur `2de847bdc6bc39e63715f20987a30f07731cc717`, alors que le `main` post-hardening est plus récent. Ce tag ne doit pas être déplacé ou supprimé implicitement. Le workflow de release le détecte avant le build et échoue volontairement tant que la situation n'a pas été résolue explicitement.
+Un tag Git historique `v1.0.1` existe sur `2de847bdc6bc39e63715f20987a30f07731cc717`, antérieur à la readiness finale. Ce tag ne doit pas être déplacé ou supprimé implicitement. Le workflow de release le détecte avant les builds lourds et échoue volontairement tant que la situation n'a pas été résolue explicitement.
 
 ## Priorité ouverte — #98
 
