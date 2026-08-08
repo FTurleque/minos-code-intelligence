@@ -60,7 +60,7 @@ public final class MinosMcpHandshakeProbe {
     private static void runHandshake(Path launcher, Path home, int timeoutSeconds) {
         ServerParameters parameters = serverParameters(launcher, home);
         StdioClientTransport transport = new StdioClientTransport(parameters, McpJsonDefaults.getMapper());
-        Duration timeout = Duration.ofSeconds(timeoutSeconds);
+        var timeout = Duration.ofSeconds(timeoutSeconds);
         McpSyncClient client = McpClient.sync(transport)
                 .requestTimeout(timeout)
                 .initializationTimeout(timeout)
