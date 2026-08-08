@@ -100,6 +100,21 @@ class M29McpClientBackendAgnosticContractTest {
         assertTrue(localCandidate.contains("MINOS_GIT_COMMIT=$Head"));
         assertTrue(localCandidate.contains("Installer Docker build: SKIPPED"));
         assertTrue(localCandidate.contains("minos-code-intelligence:$SafeVersion-$ShortCommit"));
+
+        assertTrue(localCandidate.contains("function Get-LocalCandidateStagingProcesses"));
+        assertTrue(localCandidate.contains("function Clear-LocalCandidateStaging"));
+        assertTrue(localCandidate.contains("$Process.Id -eq $PID"),
+                "the staging cleanup must never terminate the current PowerShell host");
+        assertTrue(localCandidate.contains("$FullExecutablePath.StartsWith($RootPrefix, [StringComparison]::OrdinalIgnoreCase)"),
+                "only executables physically located under target\\dist may be terminated");
+        assertTrue(localCandidate.contains("Remove-Item -LiteralPath $StagingRoot -Recurse -Force -ErrorAction Stop"));
+        assertTrue(localCandidate.contains("Start-Sleep -Milliseconds 500"),
+                "Windows file-lock cleanup must retry transient jpackage/runtime locks");
+        assertTrue(localCandidate.contains("Clear-LocalCandidateStaging -StagingRoot $ReleaseStagingRoot"));
+        assertFalse(localCandidate.contains("Stop-Process -Name java"),
+                "local release cleanup must never kill unrelated Java workloads");
+        assertFalse(localCandidate.contains("taskkill.exe /IM java"),
+                "local release cleanup must never issue a machine-wide Java taskkill");
     }
 
     private static String text(Path path) throws IOException {
