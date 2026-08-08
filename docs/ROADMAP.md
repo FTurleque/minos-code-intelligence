@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **8 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.0 publié ; 1.0.1 Windows en préparation et non publiée ; hardening post-audit en cours sur PR #113.**
+Statut au **8 août 2026** : **C0 → M30 terminés et intégrés ; hardening #113/#117 intégré et promu par #112 ; MINOS 1.0.0 publié ; 1.0.1 en pré-publication et non publiée.**
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -15,7 +15,7 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 - une release publiée est immuable ;
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - un backend Docker n'est équivalent au natif qu'après qualification de parité métier, données, providers, MCP et lifecycle ;
-- la publication est bloquée par les vulnérabilités de dépendances connues et par l'absence de qualification exacte du candidat.
+- la publication est bloquée par les vulnérabilités connues, l'absence de qualification exacte du candidat ou un conflit de tag/release.
 
 ## Trajectoire livrée
 
@@ -35,29 +35,15 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | M28 | Production Convergence | ✅ terminé — issue #93 closed / PR #102 merged |
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ terminé — issue #107 closed / PR #108 merged |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ livré — PR #110 + promotion #111 |
+| Hardening post-audit | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113 + #117 + #112 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
-M29 est **TERMINÉ**. Les huit sous-étapes ont des preuves exact-head et l'issue **#107** est fermée.
-
-| Sous-étape | Résultat |
-|---|---|
-| M29-S1 — Backend contract & ADR | ✅ PASS `c7a4e944...` |
-| M29-S2 — Project identity / portable persistence | ✅ PASS `c7a4e944...` |
-| M29-S3 — Autonomous Docker administration | ✅ PASS `3df1b40...` |
-| M29-S4 — Provider-complete Docker image | ✅ PASS `3df1b40...` |
-| M29-S5 — Autonomous indexing & vector lifecycle | ✅ PASS `0959fb9...` |
-| M29-S6 — Backend-agnostic MCP integration | ✅ PASS `f7ef0e3...` |
-| M29-S7 — Installer / switching / lifecycle | ✅ PASS `50b462f...` |
-| M29-S8 — Native/Docker parity | ✅ PASS `da6a76f...` |
-
-Contrat durable : `minos.exe mcp` reste le point d'entrée unique des clients et route vers `native|docker`; les configurations clientes ne contiennent pas de commandes Docker spécifiques.
+M29 est **TERMINÉ**. Le point d'entrée client durable reste `minos.exe mcp`, qui route vers `native|docker` sans logique Docker dans les configurations clientes et sans fallback silencieux.
 
 ## M30 — Advanced Installer, Ollama Docker & PostgreSQL/pgvector
 
-M30 est **LIVRÉ** par PR #110 puis promu sur `main` par PR #111.
-
-Les axes sont indépendants :
+M30 est **LIVRÉ**. Les axes restent indépendants :
 
 ```text
 runtime MCP       native | docker | none
@@ -65,46 +51,64 @@ storage           local | postgresql
 semantic          disabled | local-hash | ollama
 ```
 
-Le wizard Windows propose Standard/Avancé, les intégrations MCP détectées, la configuration PostgreSQL/Ollama/Docker applicable, puis un résumé avant installation. Le backend PostgreSQL/pgvector est réel, versionné et testé ; PostgreSQL et Ollama peuvent être gérés dans le runtime Docker sans exposer de port public au query plane.
+Le wizard Windows propose Standard/Avancé, les intégrations MCP détectées, la configuration PostgreSQL/Ollama/Docker applicable, puis un résumé avant installation. PostgreSQL/pgvector est un backend réel et versionné ; PostgreSQL et Ollama peuvent être gérés dans le runtime Docker.
 
-## Hardening post-audit — PR #113
+## Hardening post-audit — terminé
 
-Avant le prochain candidat 1.0.1, la branche `audit/release-installer-hardening` doit converger sur :
+Le hardening porté par **#113**, corrigé par **#117** puis promu sur `main` par **#112**, est terminé.
 
-- Jackson 2 et Jackson 3 corrigés ;
-- gate OSV Scanner bloquant ;
-- PostgreSQL/pgvector fail-closed en CI ;
+Gates acquis :
+
+- Jackson 2/3 corrigés ;
+- OSV Scanner bloquant ;
+- PostgreSQL/pgvector fail-closed sur Linux ;
 - Testcontainers portable Windows/Linux ;
-- CI sur PR **et** push `develop/main` ;
-- couverture JaCoCo M29/M30 ;
-- documentation current-state non figée sur d'anciens HEAD ;
-- wizard Windows harmonisé avec les patterns utiles du Windows deployment wizard de NEXUS Context Engine ;
-- nouveau candidat 1.0.1 construit uniquement après qualification exacte.
+- CI sur PR et push `develop/main` ;
+- JaCoCo M29/M30 ;
+- M28 exact-head Linux/Windows ;
+- M19/M20 ;
+- SonarCloud Quality Gate ;
+- build jpackage + ZIP/SBOM/notices/checksums ;
+- handshake MCP SDK sur runtime packagé ;
+- compilation Inno Setup ;
+- installation ZIP + handshake ;
+- installation setup + handshake ;
+- désinstallation isolée ;
+- vérification des artefacts durables.
 
-## Release 1.0.1
+Le Plugin Verifier IntelliJ est désormais qualifié sur PR/push pertinents et fait également partie du workflow manuel de publication.
 
-1.0.1 reste **NON PUBLIÉE**. Aucun ancien setup/ZIP n'est un candidat final après les changements de M29/M30 et le hardening post-audit.
+## Release 1.0.1 — phase de décision
 
-Gate de publication attendu :
+1.0.1 reste **NON PUBLIÉE**. Aucun ancien setup/ZIP n'est un candidat final.
+
+Le candidat final doit provenir du `main` post-hardening et satisfaire :
 
 ```text
 HEAD candidat
-→ build Maven Windows + Linux
-→ PostgreSQL/pgvector réel obligatoire
+→ Maven Windows + Linux
+→ PostgreSQL/pgvector réel obligatoire sur Linux
 → JaCoCo M0–M30
-→ scan vulnérabilités
-→ IntelliJ Plugin Verifier
-→ MCP handshake / tools
-→ M29/M30 lifecycle et Docker
-→ build + smoke setup Windows
-→ validation utilisateur finale
-→ seulement ensuite tag/release v1.0.1
+→ OSV
+→ SonarCloud
+→ IntelliJ build/tests/Plugin Verifier
+→ MCP initialize/tools-list
+→ lifecycle M29/M30
+→ build + install + handshake + uninstall setup Windows
+→ validation utilisateur finale du wizard et des clients réels
+→ résolution explicite de tout conflit tag/release
+→ autorisation explicite de publication
+→ seulement ensuite GitHub Release
 ```
+
+### Blocage de gouvernance actuel
+
+Un tag Git historique `v1.0.1` existe sur `2de847bdc6bc39e63715f20987a30f07731cc717`, alors que le `main` post-hardening est plus récent. Ce tag ne doit pas être déplacé ou supprimé implicitement. Le workflow de release le détecte avant le build et échoue volontairement tant que la situation n'a pas été résolue explicitement.
 
 ## Priorité ouverte — #98
 
-**#98 — Real OS worker sandbox** reste ouverte et indépendante de M29/M30. Aucun claim d'isolation hostile ne doit être fait tant qu'un backend sandbox Windows/Linux réel n'est pas implémenté et qualifié.
+**#98 — Real OS worker sandbox** reste ouverte et indépendante de 1.0.1. Aucun claim d'isolation hostile ne doit être fait tant qu'un backend sandbox Windows/Linux réel n'est pas implémenté et qualifié.
 
 ## Prochaine planification fonctionnelle
 
-Aucun nouveau jalon M31 n'est déclaré comme engagé dans cette synthèse. La priorité immédiate est de terminer PR #113, reconstruire un candidat 1.0.1 exact-head et fermer les incohérences de gouvernance associées à M30/release.
+Aucun nouveau jalon M31 n'est engagé avant la décision de publication 1.0.1. Après la release, la prochaine priorité structurante connue reste #98, sauf décision contraire de roadmap.

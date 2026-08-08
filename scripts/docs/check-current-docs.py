@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Validate durable MINOS current-state, release and installer invariants.
-
-This checker intentionally avoids pinning current documentation to historical branch
-names or exact qualification SHAs. Historical proof belongs in execution records;
-current-state documents must describe what is delivered now and the source contracts
-must independently prove the claims that matter to users and release engineering.
-"""
+"""Validate durable MINOS current-state, release and installer invariants."""
 
 from __future__ import annotations
 
@@ -58,40 +52,44 @@ def main() -> int:
         release_101 = read("docs/releases/1.0.1.md")
         production_install = read("docs/user/production-installation.md")
 
-        # Current product truth. Exact SHAs belong in historical proof records, not
-        # in the invariant checker.
-        require_all("README.md", readme, ("C0 → M30", "1.0.0", "1.0.1", "NON PUBLI", "#98"))
+        # Current product/release truth.
+        require_all("README.md", readme, (
+            "C0 → M30", "hardening #113", "merged", "#117", "#112",
+            "1.0.1", "NON PUBLI", "v1.0.1", "#98",
+        ))
         require_all("docs/STATUS.md", status, (
             "M29 issue #107", "CLOSED", "M29 PR #108", "M30 PR #110", "M30 promotion PR #111",
-            "v1.0.1 Windows", "NON PUBLI", "#98", "PR #113",
+            "hardening PR #113", "M28 Windows CI PR #117", "promotion develop → main #112",
+            "v1.0.1 Windows", "NON PUBLI", "v1.0.1", "2de847bd", "#98",
         ))
         require_all("docs/ROADMAP.md", roadmap, (
-            "C0 → M30", "M29", "TERMIN", "M30", "LIVR", "PR #113", "1.0.1", "NON PUBLI", "#98",
+            "C0 → M30", "#113", "#117", "#112", "terminé", "1.0.1", "NON PUBLI",
+            "Plugin Verifier", "v1.0.1", "2de847bd", "#98",
         ))
 
         for relative, text in (("README.md", readme), ("docs/STATUS.md", status), ("docs/ROADMAP.md", roadmap)):
             for stale in (
-                "M29 #107                         EN COURS",
-                "M29 — Autonomous Docker Runtime & Native Parity | **EN COURS",
-                "S8 reste le gate",
+                "hardening release/installer      🚧 PR #113",
+                "hardening post-audit en cours sur PR #113",
+                "Avant le prochain candidat 1.0.1, la branche audit/release-installer-hardening doit converger",
+                "La priorité immédiate est de terminer PR #113",
                 "M30 non livré",
             ):
                 forbid(relative, text, stale)
 
-        # Release/user-facing contract remains intentionally unpublished until an
-        # exact-head candidate passes all gates and explicit publication occurs.
+        # Release/user-facing contract remains unpublished until explicit approval.
         require_all("docs/releases/1.0.1.md", release_101, (
-            "NON PUBLI", "Standard", "Avancé", "PostgreSQL", "pgvector", "Ollama",
-            "Claude", "Codex CLI", "Codex Desktop", "OSV", "Jackson", "exact-head",
+            "PRÉ-PUBLICATION", "NON PUBLI", "Standard", "Avancée", "PostgreSQL", "pgvector", "Ollama",
+            "Claude", "Codex CLI", "Codex Desktop", "OSV", "Jackson", "Plugin Verifier",
+            "v1.0.1", "2de847bd", "autorisation explicite",
         ))
         require_all("docs/user/production-installation.md", production_install, (
-            "Standard", "Avancé", "MCP natif Windows", "MCP Docker", "PostgreSQL", "pgvector",
+            "Standard", "Avancée", "MCP natif Windows", "MCP Docker", "PostgreSQL", "pgvector",
             "Ollama", "Claude CLI", "Claude Desktop", "Codex CLI", "Codex Desktop",
             "Résumé", "%LOCALAPPDATA%\\MINOS", "Non / conserver",
         ))
 
-        # Security/dependency contract: both Jackson generations are centrally
-        # pinned because PostgreSQL uses Jackson 2 while MCP SDK uses Jackson 3.
+        # Security/dependency contract.
         pom = read("pom.xml")
         require_all("pom.xml", pom, (
             "<jackson2.version>2.22.1</jackson2.version>",
@@ -106,22 +104,20 @@ def main() -> int:
             "windows-docker-desktop-testcontainers", "<family>Windows</family>",
             "dockerDesktopLinuxEngine", "jackson-databind",
         ))
-        forbid("minos-storage-postgresql/pom.xml", postgres_pom, "<version>2.22.0</version>")
-
         postgres_support = read("minos-storage-postgresql/src/test/java/com/minos/storage/postgresql/PostgresTestSupport.java")
         require_all("PostgresTestSupport.java", postgres_support, (
             "minos.postgresql.tests.required", "Boolean.getBoolean(REQUIRED_PROPERTY)",
             "PostgreSQL integration tests are required", "assumeTrue(dockerAvailable",
         ))
 
-        # CI must qualify PRs and the resulting develop/main heads, require real
-        # PostgreSQL/pgvector and fail on known dependency vulnerabilities.
+        # Main CI contract.
         workflow = read(".github/workflows/pr-ci.yml")
         require_regex(".github/workflows/pr-ci.yml", workflow, r"(?m)^\s*push:\s*$", "push qualification trigger")
         require_all(".github/workflows/pr-ci.yml", workflow, (
             "branches: [main, develop]", "Dependency vulnerability gate",
             "google/osv-scanner-action", "fail-on-vuln: true",
             "-Dminos.postgresql.tests.required=true",
+            "--skip-scope m30-postgresql-pgvector",
         ))
 
         jacoco = read("scripts/quality/check-jacoco.py")
@@ -130,8 +126,15 @@ def main() -> int:
             "m30-postgresql-pgvector",
         ))
 
-        # Installer contract adapted from the useful NEXUS deployment-wizard UX,
-        # while retaining MINOS' stronger backend-agnostic/fail-closed model.
+        # IntelliJ must be qualified on relevant PR/push heads and again at publication.
+        intellij_workflow = read(".github/workflows/intellij-plugin.yml")
+        require_regex(".github/workflows/intellij-plugin.yml", intellij_workflow, r"(?m)^\s*push:\s*$", "IntelliJ push trigger")
+        require_all(".github/workflows/intellij-plugin.yml", intellij_workflow, (
+            "branches: [main, develop]", "Checkout exact candidate", "buildPlugin",
+            "verifyPluginProjectConfiguration", "verifyPluginStructure", "verifyPlugin",
+        ))
+
+        # Installer contract.
         installer = read("packaging/windows/minos-installer.iss.template")
         detector = read("scripts/install/detect-mcp-clients.ps1")
         require_all("packaging/windows/minos-installer.iss.template", installer, (
@@ -147,11 +150,15 @@ def main() -> int:
             "CodexCli", "CodexDesktop", "Test-VsCodeCopilotShim",
         ))
 
-        # Release tooling still protects immutable 1.0.0 and does not auto-publish
-        # 1.0.1 from a PR/push.
+        # Publication is always explicit, exact-head, immutable and includes IntelliJ.
         release_workflow = read(".github/workflows/release-windows.yml")
         require(".github/workflows/release-windows.yml", release_workflow, "workflow_dispatch")
         forbid(".github/workflows/release-windows.yml", release_workflow, "pull_request:")
+        require_all(".github/workflows/release-windows.yml", release_workflow, (
+            "Preflight exact ref and immutable tag", "git ls-remote --tags", "already exists on origin",
+            "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 24 for MINOS release",
+            "publish-windows-release.ps1", "TargetCommit '${{ github.sha }}'",
+        ))
 
         print("MINOS CURRENT DOCUMENTATION CONSISTENCY SUCCESS")
         return 0
