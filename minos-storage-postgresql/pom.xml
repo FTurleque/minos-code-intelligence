@@ -94,9 +94,12 @@
 
     <profiles>
         <!--
-          Docker Desktop exposes the Linux engine through a Windows named pipe.
-          Keep that override Windows-only: Linux CI must discover /var/run/docker.sock
-          normally rather than first attempting a non-existent Windows endpoint.
+          Docker Desktop exposes its Linux engine through Windows named pipes. Keep
+          Windows-only connection hints isolated from Linux/macOS. Recent hosted
+          Windows runners use a Docker daemon whose minimum API is 1.44, while the
+          docker-java version shaded by Testcontainers 1.20.5 defaults to an older
+          API. Pin only the API level here; do not force a deprecated provider
+          strategy, so Npipe discovery can still select the available Windows pipe.
         -->
         <profile>
             <id>windows-docker-desktop-testcontainers</id>
@@ -109,6 +112,9 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
+                            <systemPropertyVariables>
+                                <api.version>1.44</api.version>
+                            </systemPropertyVariables>
                             <environmentVariables>
                                 <DOCKER_HOST>npipe:////./pipe/dockerDesktopLinuxEngine</DOCKER_HOST>
                                 <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>//./pipe/dockerDesktopLinuxEngine</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
