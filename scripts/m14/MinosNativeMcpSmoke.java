@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public final class MinosNativeMcpSmoke {
 
     private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(20);
+    private static final String MCP_PROTOCOL_VERSION = "2025-11-25";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
@@ -44,7 +45,9 @@ public final class MinosNativeMcpSmoke {
                     process.getOutputStream(), StandardCharsets.UTF_8));
              BufferedReader stdout = new BufferedReader(new InputStreamReader(
                     process.getInputStream(), StandardCharsets.UTF_8))) {
-            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-mcp-smoke\",\"version\":\"1\"}}}");
+            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\""
+                    + MCP_PROTOCOL_VERSION
+                    + "\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-mcp-smoke\",\"version\":\"1\"}}}");
             String initialize = awaitResponse(stdout, "\"id\":1");
             requireContains(initialize, "minos-code-intelligence", "initialize server name");
 
@@ -148,9 +151,6 @@ public final class MinosNativeMcpSmoke {
         if (comspec == null || comspec.isBlank()) {
             comspec = "cmd.exe";
         }
-        // cmd.exe /s /c requires an extra quote pair when the command itself starts
-        // with a quoted executable path. Match the PowerShell M29 probe contract:
-        //   /d /s /c ""C:\...\minos.cmd" mcp"
         String commandLine = "\"\"" + launcher + "\" mcp\"";
         return new String[]{comspec, "/d", "/s", "/c", commandLine};
     }
