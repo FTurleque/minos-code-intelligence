@@ -176,8 +176,12 @@ configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 "@ | Set-Content -LiteralPath $ManagedMarker -Encoding ascii
 
     if ($Start -and -not $NeedsM30Services) {
+        # Install already validates Java, provider evidence, provider tools and the
+        # bootstrap/admin planes. Do not repeat the same expensive provider probe
+        # immediately after a fresh install; the backend switcher performs the MCP
+        # initialize/tools-list handshake before committing the backend selection.
         Invoke-DockerWorkflow -Action Start
-        Invoke-DockerWorkflow -Action Validate
+        Write-Host 'Fresh Docker runtime validation already completed during image installation; duplicate validation skipped.'
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
