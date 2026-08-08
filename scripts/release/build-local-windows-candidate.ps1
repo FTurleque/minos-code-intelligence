@@ -77,6 +77,73 @@ function Test-ExactDockerImage([string] $DockerPath, [string] $Image, [string] $
         [string]$PreparedLabel.Value -eq 'true'
 }
 
+function Get-LocalCandidateStagingProcesses([string] $StagingRoot) {
+    $RootPrefix = [System.IO.Path]::GetFullPath($StagingRoot).TrimEnd('\') + '\'
+    $Matches = @()
+    foreach ($Process in @(Get-Process -ErrorAction SilentlyContinue)) {
+        if ($Process.Id -eq $PID) { continue }
+        try { $ExecutablePath = [string] $Process.Path }
+        catch { continue }
+        if ([string]::IsNullOrWhiteSpace($ExecutablePath)) { continue }
+
+        try { $FullExecutablePath = [System.IO.Path]::GetFullPath($ExecutablePath) }
+        catch { continue }
+        if ($FullExecutablePath.StartsWith($RootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            $Matches += $Process
+        }
+    }
+    return @($Matches)
+}
+
+function Clear-LocalCandidateStaging([string] $StagingRoot) {
+    if (-not (Test-Path -LiteralPath $StagingRoot -PathType Container)) { return }
+
+    # A previous smoke/installer process can retain jpackage's runtime/lib/modules
+    # on Windows and make the next Maven clean fail. target\dist is disposable
+    # release staging, so terminate only executables that physically live below
+    # that staging root; never issue a broad java.exe/taskkill operation.
+    $StaleProcesses = @(Get-LocalCandidateStagingProcesses -StagingRoot $StagingRoot)
+    foreach ($Process in $StaleProcesses) {
+        $ProcessPath = '<unavailable>'
+        try { $ProcessPath = [string] $Process.Path } catch { }
+        Write-Host "Stopping stale MINOS candidate process PID=$($Process.Id): $ProcessPath" -ForegroundColor DarkYellow
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($Process in $StaleProcesses) {
+        try { $Process.WaitForExit(5000) | Out-Null } catch { }
+    }
+
+    $LastFailure = $null
+    for ($Attempt = 1; $Attempt -le 10; $Attempt++) {
+        try {
+            Remove-Item -LiteralPath $StagingRoot -Recurse -Force -ErrorAction Stop
+            Write-Host "Previous local candidate staging removed: $StagingRoot" -ForegroundColor DarkGray
+            return
+        }
+        catch [System.IO.IOException] {
+            $LastFailure = $_.Exception
+        }
+        catch [System.UnauthorizedAccessException] {
+            $LastFailure = $_.Exception
+        }
+
+        if ($Attempt -lt 10) { Start-Sleep -Milliseconds 500 }
+    }
+
+    $Remaining = @(Get-LocalCandidateStagingProcesses -StagingRoot $StagingRoot)
+    $RemainingEvidence = if ($Remaining.Count -eq 0) {
+        '<no executable under target\dist; an external Windows process may still hold the file>'
+    }
+    else {
+        ($Remaining | ForEach-Object {
+            $Path = '<unavailable>'
+            try { $Path = [string] $_.Path } catch { }
+            "PID=$($_.Id) path=$Path"
+        }) -join [Environment]::NewLine
+    }
+    throw "Unable to clean previous MINOS candidate staging after retries: $StagingRoot`nLast error: $($LastFailure.Message)`nRemaining candidate processes:`n$RemainingEvidence"
+}
+
 Write-Host '=== MINOS local Windows candidate ===' -ForegroundColor Cyan
 Write-Host "Version : $Version"
 Write-Host "HEAD    : $Head"
@@ -93,6 +160,9 @@ try {
 finally {
     Pop-Location
 }
+
+$ReleaseStagingRoot = Join-Path $RepoRoot 'target\dist'
+Clear-LocalCandidateStaging -StagingRoot $ReleaseStagingRoot
 
 $DistributionParameters = @{ Version = $Version }
 if ($SkipMavenVerify) { $DistributionParameters['SkipVerify'] = $true }
