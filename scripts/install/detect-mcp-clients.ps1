@@ -37,7 +37,10 @@ function Resolve-CommandPath([string] $Name) {
 
 function Test-VsCodeCopilotShim([string] $Path) {
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\.vscode\\|vscode)'
+    # Reject both the public VS Code launcher and the Copilot Chat extension's
+    # private embedded CLI under %APPDATA%\Code\User\globalStorage. The latter
+    # can answer `mcp --help` but is not a standalone user-installed Copilot CLI.
+    return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\Code\\User\\globalStorage\\github\.copilot-chat\\|\\.vscode\\|vscode)'
 }
 
 function Find-EmbeddedClaudeCli {
