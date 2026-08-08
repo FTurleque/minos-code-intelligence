@@ -99,14 +99,27 @@ function Test-ExactPreparedImage([string] $Image, [string] $ExpectedVersion, [st
     return $Parts[0] -eq $ExpectedVersion -and $Parts[1] -eq $ExpectedCommit -and $Parts[2] -eq 'true'
 }
 
-function Ensure-ReleaseImage([string] $JarPath, [string] $RequestedVersion, [string] $RequestedCommit, [string] $RequestedImageTag) {
+function Test-LocalCandidatePreparedImage([string] $Image) {
+    $Format = '{{ index .Config.Labels "io.minos.image.prepared-by" }}'
+    $Inspect = Invoke-DockerAllowFailure -Arguments @('image', 'inspect', '--format', $Format, $Image)
+    return $Inspect.ExitCode -eq 0 -and ([string]$Inspect.Output).Trim() -eq 'local-candidate'
+}
+
+function Ensure-ReleaseImage(
+    [string] $JarPath,
+    [string] $RequestedVersion,
+    [string] $RequestedCommit,
+    [string] $RequestedImageTag,
+    [switch] $MarkAsLocalCandidate
+) {
     if ([string]::IsNullOrWhiteSpace($JarPath)) { throw '-Jar is required to prepare the MINOS Docker release image.' }
     $ResolvedJar = (Resolve-Path -LiteralPath $JarPath).Path
     if ([string]::IsNullOrWhiteSpace($RequestedVersion)) { throw '-Version is required to prepare the MINOS Docker release image.' }
     if ([string]::IsNullOrWhiteSpace($RequestedCommit)) { $RequestedCommit = 'unknown' }
 
     $Image = Resolve-ReleaseImage -RequestedVersion $RequestedVersion -RequestedCommit $RequestedCommit -RequestedImageTag $RequestedImageTag
-    if (Test-ExactPreparedImage -Image $Image -ExpectedVersion $RequestedVersion -ExpectedCommit $RequestedCommit) {
+    $ExactImageExists = Test-ExactPreparedImage -Image $Image -ExpectedVersion $RequestedVersion -ExpectedCommit $RequestedCommit
+    if ($ExactImageExists -and ((-not $MarkAsLocalCandidate) -or (Test-LocalCandidatePreparedImage -Image $Image))) {
         Write-Host "MINOS Docker image reuse: $Image already matches version=$RequestedVersion commit=$RequestedCommit." -ForegroundColor Green
         return $Image
     }
@@ -118,10 +131,17 @@ function Ensure-ReleaseImage([string] $JarPath, [string] $RequestedVersion, [str
         New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
         Copy-Item -LiteralPath $ResolvedJar -Destination (Join-Path $BuildContext 'minos.jar')
         Write-Host "Preparing MINOS Docker image locally: $Image" -ForegroundColor Cyan
-        & $DockerCommand.Source build --file $Dockerfile --tag $Image `
-            --build-arg "MINOS_VERSION=$RequestedVersion" `
-            --build-arg "MINOS_GIT_COMMIT=$RequestedCommit" `
-            --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext | Out-Host
+        $BuildArguments = @(
+            'build', '--file', $Dockerfile, '--tag', $Image,
+            '--build-arg', "MINOS_VERSION=$RequestedVersion",
+            '--build-arg', "MINOS_GIT_COMMIT=$RequestedCommit",
+            '--build-arg', "MINOS_BUILD_TIMESTAMP=$Timestamp"
+        )
+        if ($MarkAsLocalCandidate) {
+            $BuildArguments += @('--label', 'io.minos.image.prepared-by=local-candidate')
+        }
+        $BuildArguments += $BuildContext
+        & $DockerCommand.Source @BuildArguments | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
     }
     finally {
@@ -130,6 +150,9 @@ function Ensure-ReleaseImage([string] $JarPath, [string] $RequestedVersion, [str
 
     if (-not (Test-ExactPreparedImage -Image $Image -ExpectedVersion $RequestedVersion -ExpectedCommit $RequestedCommit)) {
         throw "MINOS Docker image '$Image' was built but its release labels do not match version=$RequestedVersion commit=$RequestedCommit."
+    }
+    if ($MarkAsLocalCandidate -and -not (Test-LocalCandidatePreparedImage -Image $Image)) {
+        throw "MINOS Docker image '$Image' was built for local candidate reuse but its cache-ownership label is missing."
     }
     return $Image
 }
@@ -183,7 +206,7 @@ function Initialize-And-VerifyProviderTools {
 
 switch ($Action) {
     'PrepareImage' {
-        $PreparedImage = Ensure-ReleaseImage -JarPath $Jar -RequestedVersion $Version -RequestedCommit $Commit -RequestedImageTag $ImageTag
+        $PreparedImage = Ensure-ReleaseImage -JarPath $Jar -RequestedVersion $Version -RequestedCommit $Commit -RequestedImageTag $ImageTag -MarkAsLocalCandidate
         Write-Host "MINOS Docker release image PREPARED: $PreparedImage" -ForegroundColor Green
         Write-Output $PreparedImage
     }
@@ -203,6 +226,7 @@ switch ($Action) {
 
         $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         $Image = Ensure-ReleaseImage -JarPath $Jar -RequestedVersion $Version -RequestedCommit $Commit -RequestedImageTag $ImageTag
+        $ImageOwnedByInstallation = -not (Test-LocalCandidatePreparedImage -Image $Image)
 
         Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
         @"
@@ -227,9 +251,10 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
 
         [ordered]@{
-            formatVersion = 5
+            formatVersion = 6
             installedAt = $Timestamp
             image = $Image
+            imageOwnedByInstallation = $ImageOwnedByInstallation
             version = $Version
             gitCommit = $Commit
             dataRoot = $DataRoot
@@ -248,6 +273,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
 
         Write-Host 'MINOS packaged Docker installation SUCCESS' -ForegroundColor Green
         Write-Host "Image     : $Image"
+        Write-Host "Image own : $(if ($ImageOwnedByInstallation) { 'installation-managed' } else { 'external local-candidate cache (preserved on uninstall)' })"
         Write-Host "Data      : $DataRoot -> /var/lib/minos"
         Write-Host "Projects  : $ProjectsRoot -> /workspace/projects (read-only)"
         Write-Host "Semantic  : $ResolvedSemanticProvider"
@@ -297,10 +323,17 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Require-Installed
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         $ManagedImage = [string] $Metadata.image
+        $RemoveManagedImage = $true
+        if ($Metadata.PSObject.Properties['imageOwnedByInstallation']) {
+            $RemoveManagedImage = [bool] $Metadata.imageOwnedByInstallation
+        }
         Compose @('down', '--timeout', '10', '--remove-orphans', '--volumes')
-        if (-not [string]::IsNullOrWhiteSpace($ManagedImage)) {
+        if ($RemoveManagedImage -and -not [string]::IsNullOrWhiteSpace($ManagedImage)) {
             $ImageRemoval = Invoke-DockerAllowFailure -Arguments @('image', 'rm', $ManagedImage)
             if ($ImageRemoval.ExitCode -ne 0) { Write-Warning "MINOS Docker containers/provider volume were removed, but image '$ManagedImage' could not be removed: $($ImageRemoval.Output)" }
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($ManagedImage)) {
+            Write-Host "Preserved externally prepared local candidate image for iterative validation: $ManagedImage"
         }
         Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host 'MINOS Docker MCP/admin/provider runtime configuration removed.' -ForegroundColor Green
