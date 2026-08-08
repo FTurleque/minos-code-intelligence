@@ -173,29 +173,61 @@ function Get-ManagedBlock([string] $Text) {
     return $Match.Value.Trim()
 }
 
+function Remove-ManagedBlock([string] $Text) {
+    return [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '\s*', '')
+}
+
 function Install-Toml {
     $State = Read-State
     $Text = if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
         [System.IO.File]::ReadAllText($ConfigPath, [System.Text.Encoding]::UTF8)
     } else { '' }
     $Expected = New-TomlBlock
+    $ExpectedHash = Text-Hash $Expected
+    $BeginCount = [regex]::Matches($Text, '(?m)^\s*' + [regex]::Escape($BeginMarker) + '\s*$').Count
+    $EndCount = [regex]::Matches($Text, '(?m)^\s*' + [regex]::Escape($EndMarker) + '\s*$').Count
     $CurrentManaged = Get-ManagedBlock $Text
 
+    if (($BeginCount -ne $EndCount) -or ($BeginCount -gt 1) -or (($BeginCount -gt 0) -and [string]::IsNullOrWhiteSpace($CurrentManaged))) {
+        Fail-Or-Warn 'Codex config contains malformed or duplicate MINOS-managed marker blocks; preserving the file unchanged.'
+        return
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($CurrentManaged)) {
-        if ((Text-Hash $CurrentManaged) -eq (Text-Hash $Expected)) {
+        $CurrentHash = Text-Hash $CurrentManaged
+        if ($CurrentHash -eq $ExpectedHash) {
             if ($null -eq $State) {
-                Write-State ([pscustomobject][ordered]@{ mode='toml'; ownership='preexisting'; configPath=$ConfigPath; blockHash=(Text-Hash $Expected); command=$MinosExe; dataRoot=$DataRoot })
+                Write-State ([pscustomobject][ordered]@{ mode='toml'; ownership='preexisting'; configPath=$ConfigPath; blockHash=$ExpectedHash; command=$MinosExe; dataRoot=$DataRoot })
             }
             Write-Log "KEEP client=codex mode=toml reason=already-compatible"
             Write-Host 'MINOS MCP already configured for Codex Desktop' -ForegroundColor Green
             return
         }
-        if ($null -eq $State -or [string]$State.mode -ne 'toml' -or [string]$State.blockHash -ne (Text-Hash $CurrentManaged)) {
-            Fail-Or-Warn 'Codex config contains a MINOS-managed marker block that no longer matches MINOS state; preserving it.'
-            return
+
+        if ($null -ne $State -and [string]$State.mode -eq 'toml') {
+            if ([string]$State.ownership -eq 'preexisting') {
+                Fail-Or-Warn 'Codex contains a preexisting MINOS marker block that differs from the requested configuration; preserving it.'
+                return
+            }
+            if ([string]$State.blockHash -ne $CurrentHash) {
+                Fail-Or-Warn 'Codex MINOS block was modified after installation; preserving the current user configuration.'
+                return
+            }
+            Backup-File $ConfigPath | Out-Null
+            $Text = Remove-ManagedBlock $Text
+            Write-Log "UPGRADE client=codex mode=toml reason=managed-block-update"
         }
-        Backup-File $ConfigPath | Out-Null
-        $Text = [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '\s*', '')
+        else {
+            # The block is explicitly bounded by MINOS ownership markers but the
+            # sidecar state is missing or refers to another Codex integration mode.
+            # This is an orphaned/stale MINOS block left by a previous install. Back
+            # up the whole file, reclaim only the bounded block, and leave all other
+            # TOML untouched. Unmanaged [mcp_servers.minos] sections remain fail-closed.
+            $PreviousMode = if ($null -eq $State) { 'missing' } else { [string]$State.mode }
+            Backup-File $ConfigPath | Out-Null
+            $Text = Remove-ManagedBlock $Text
+            Write-Log "RECOVER client=codex mode=toml reason=orphaned-minos-managed-block previousStateMode='$PreviousMode'"
+        }
     } elseif ($Text -match '(?m)^\s*\[mcp_servers\.minos\]\s*$') {
         Fail-Or-Warn "Codex config already contains an unmanaged [mcp_servers.minos] section; MINOS did not overwrite it."
         return
@@ -208,7 +240,7 @@ function Install-Toml {
     $Prefix = $Text.TrimEnd()
     $NewText = if ([string]::IsNullOrWhiteSpace($Prefix)) { $Expected + [Environment]::NewLine } else { $Prefix + [Environment]::NewLine + [Environment]::NewLine + $Expected + [Environment]::NewLine }
     [System.IO.File]::WriteAllText($ConfigPath, $NewText, [System.Text.UTF8Encoding]::new($false))
-    Write-State ([pscustomobject][ordered]@{ mode='toml'; ownership='managed'; configPath=$ConfigPath; blockHash=(Text-Hash $Expected); command=$MinosExe; dataRoot=$DataRoot })
+    Write-State ([pscustomobject][ordered]@{ mode='toml'; ownership='managed'; configPath=$ConfigPath; blockHash=$ExpectedHash; command=$MinosExe; dataRoot=$DataRoot })
     Write-Log "INSTALL client=codex mode=toml path='$ConfigPath'"
     Write-Host 'MINOS MCP configured for Codex Desktop' -ForegroundColor Green
 }
@@ -225,7 +257,8 @@ function Uninstall-Toml([object] $State) {
         return
     }
     Backup-File $Path | Out-Null
-    $NewText = [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '\s*', '').TrimEnd()
+    $NewText = Remove-ManagedBlock $Text
+    $NewText = $NewText.TrimEnd()
     if ([string]::IsNullOrWhiteSpace($NewText)) { [System.IO.File]::WriteAllText($Path, '', [System.Text.UTF8Encoding]::new($false)) }
     else { [System.IO.File]::WriteAllText($Path, $NewText + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false)) }
     Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
