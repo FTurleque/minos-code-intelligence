@@ -152,6 +152,15 @@
                     <execution>
                         <id>jacoco-prepare-agent</id>
                         <goals><goal>prepare-agent</goal></goals>
+                        <configuration>
+                            <!--
+                              minos-app runs both Surefire and Failsafe against the same
+                              execution-data file. Append keeps unit-test coverage when
+                              Failsafe starts so the aggregate report measures the full
+                              verify lifecycle instead of only the final integration test.
+                            -->
+                            <append>true</append>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>jacoco-module-report</id>
