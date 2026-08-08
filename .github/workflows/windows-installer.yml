@@ -99,13 +99,18 @@ jobs:
       - name: Verify candidate artifacts
         shell: powershell
         run: |
+          # ValidateOnly intentionally removes the isolated .smoke setup after it
+          # has been installed, handshaken and uninstalled. Only durable release
+          # artifacts and their checksums must remain after successful validation.
           $expected = @(
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe',
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe.sha256',
-            'target\dist\.smoke\MINOS-1.0.1-windows-x64-smoke-setup.exe',
             'target\dist\minos-1.0.1-windows-x64.zip',
+            'target\dist\minos-1.0.1-windows-x64.zip.sha256',
             'target\dist\minos-1.0.1.cdx.json',
-            'target\dist\MINOS-1.0.1-THIRD-PARTY-NOTICES.txt'
+            'target\dist\minos-1.0.1.cdx.json.sha256',
+            'target\dist\MINOS-1.0.1-THIRD-PARTY-NOTICES.txt',
+            'target\dist\MINOS-1.0.1-THIRD-PARTY-NOTICES.txt.sha256'
           )
           $missing = @($expected | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
           if ($missing.Count -gt 0) { throw "Missing Windows candidate artifacts: $($missing -join ', ')" }
@@ -121,8 +126,6 @@ jobs:
           path: |
             target/dist/MINOS-1.0.1-windows-x64-setup.exe
             target/dist/MINOS-1.0.1-windows-x64-setup.exe.sha256
-            target/dist/.smoke/MINOS-1.0.1-windows-x64-smoke-setup.exe
-            target/dist/.smoke/MINOS-1.0.1-windows-x64-smoke-setup.exe.sha256
             target/dist/minos-1.0.1-windows-x64.zip
             target/dist/minos-1.0.1-windows-x64.zip.sha256
             target/dist/minos-1.0.1.cdx.json
