@@ -56,7 +56,15 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'targeted Maven tests failed' }
     }
 
-    python scripts/quality/check-jacoco.py
+    # GitHub-hosted Windows runners expose a Windows-container Docker daemon and
+    # cannot execute the Linux pgvector image used by Testcontainers. PostgreSQL /
+    # pgvector coverage is therefore authoritative on the Linux gate. Keep every
+    # other targeted scope mandatory on Windows, matching PR Validation policy.
+    if ($env:OS -eq 'Windows_NT') {
+        python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
+    } else {
+        python scripts/quality/check-jacoco.py
+    }
     if ($LASTEXITCODE -ne 0) { throw 'JaCoCo gate failed' }
 
     $ProgramGraphRunner = Join-Path $Root 'scripts\m28\run-program-graph-performance.ps1'
