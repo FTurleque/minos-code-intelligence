@@ -6,6 +6,7 @@ import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -50,7 +51,7 @@ public final class MinosMcpHandshakeProbe {
 
         try {
             Files.createDirectories(home);
-        } catch (Exception exception) {
+        } catch (IOException exception) {
             throw new IllegalStateException("Unable to create MINOS_HOME: " + home, exception);
         }
 
