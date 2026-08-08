@@ -30,6 +30,26 @@ foreach ($Required in @($Manager, $CodexManager, $NamedInvoker)) {
     }
 }
 
+function Resolve-CommandPath([string] $Name) {
+    $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $Command) { return '' }
+    if (-not [string]::IsNullOrWhiteSpace([string]$Command.Source)) { return [string]$Command.Source }
+    if ($Command.PSObject.Properties['Path'] -and -not [string]::IsNullOrWhiteSpace([string]$Command.Path)) { return [string]$Command.Path }
+    return [string]$Command.Name
+}
+
+function Test-VsCodeCopilotShim([string] $Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    return $Path -match '(?i)(Microsoft VS Code|\\Code\\bin\\|\\Code\\User\\globalStorage\\github\.copilot-chat\\|\\.vscode\\|vscode)'
+}
+
+if ($CopilotCli) {
+    $ResolvedCopilot = Resolve-CommandPath 'copilot'
+    if (Test-VsCodeCopilotShim $ResolvedCopilot) {
+        throw "GitHub Copilot CLI was selected, but the resolved launcher belongs to VS Code/Copilot Chat rather than a standalone CLI: $ResolvedCopilot"
+    }
+}
+
 $Parameters = @{ InstallRoot = $InstallRoot }
 if (-not [string]::IsNullOrWhiteSpace($DataRoot)) { $Parameters['DataRoot'] = $DataRoot }
 if ($CopilotJetBrains) { $Parameters['CopilotJetBrains'] = $true }
