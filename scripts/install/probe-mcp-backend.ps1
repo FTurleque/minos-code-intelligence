@@ -55,14 +55,29 @@ function Stop-ProbeProcessTree([System.Diagnostics.Process] $Process) {
 }
 
 function Read-ProbeEvidence([string] $Path) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        return '<empty>'
+    $LastFailure = $null
+    for ($Attempt = 0; $Attempt -lt 20; $Attempt++) {
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            Start-Sleep -Milliseconds 100
+            continue
+        }
+        try {
+            $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8).Trim()
+            if ([string]::IsNullOrWhiteSpace($Text)) {
+                return '<empty>'
+            }
+            return $Text
+        }
+        catch [System.IO.IOException] {
+            $LastFailure = $_.Exception
+            Start-Sleep -Milliseconds 100
+        }
     }
-    $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8).Trim()
-    if ([string]::IsNullOrWhiteSpace($Text)) {
-        return '<empty>'
+
+    if ($null -ne $LastFailure) {
+        throw "Unable to read MCP probe evidence after retries: $Path`: $($LastFailure.Message)"
     }
-    return $Text
+    return '<empty>'
 }
 
 function Test-HandshakeSuccess([string] $StdoutEvidence) {
@@ -105,18 +120,19 @@ $ProbeProcess = Start-Process `
 
 $ProcessDeadlineSeconds = $TimeoutSeconds + 15
 $Completed = $ProbeProcess.WaitForExit($ProcessDeadlineSeconds * 1000)
-$StdoutEvidence = Read-ProbeEvidence -Path $ProbeStdout
-$StderrEvidence = Read-ProbeEvidence -Path $ProbeStderr
-$HandshakeSucceeded = Test-HandshakeSuccess -StdoutEvidence $StdoutEvidence
 
 if (-not $Completed) {
     # A MINOS MCP server is intentionally long-lived. The SDK client can prove
     # initialize + tools/list successfully and then remain blocked while performing
     # graceful transport shutdown against the still-running packaged launcher.
-    # Once the unique success marker exists, the release gate has its protocol proof;
-    # terminate the short-lived smoke process tree and accept that proof. Without the
-    # marker, keep the timeout fail-closed and expose the captured diagnostics.
+    # Terminate the smoke process tree first so redirected log handles are released,
+    # then inspect the durable evidence. Once the unique success marker exists, the
+    # release gate has its protocol proof. Without it, keep the timeout fail-closed.
     Stop-ProbeProcessTree -Process $ProbeProcess
+    $StdoutEvidence = Read-ProbeEvidence -Path $ProbeStdout
+    $StderrEvidence = Read-ProbeEvidence -Path $ProbeStderr
+    $HandshakeSucceeded = Test-HandshakeSuccess -StdoutEvidence $StdoutEvidence
+
     if ($HandshakeSucceeded) {
         Write-Host "MINOS MCP SDK handshake proved before ${ProcessDeadlineSeconds}s teardown; smoke process tree terminated." -ForegroundColor DarkGray
         Write-Host 'MINOS MCP BACKEND HANDSHAKE SUCCESS' -ForegroundColor Green
@@ -137,6 +153,9 @@ $StderrEvidence
 }
 
 $ProbeExit = $ProbeProcess.ExitCode
+$StdoutEvidence = Read-ProbeEvidence -Path $ProbeStdout
+$StderrEvidence = Read-ProbeEvidence -Path $ProbeStderr
+$HandshakeSucceeded = Test-HandshakeSuccess -StdoutEvidence $StdoutEvidence
 $ProbeOutput = @()
 if ($StdoutEvidence -ne '<empty>') { $ProbeOutput += $StdoutEvidence }
 if ($StderrEvidence -ne '<empty>') { $ProbeOutput += $StderrEvidence }
