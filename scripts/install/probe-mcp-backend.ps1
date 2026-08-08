@@ -24,131 +24,70 @@ if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) {
 }
 New-Item -ItemType Directory -Force -Path $CandidateHome | Out-Null
 
-function New-ProcessStartInfo([string] $Launcher, [string] $MinosHome) {
-    $Info = New-Object System.Diagnostics.ProcessStartInfo
-    if ([System.IO.Path]::GetExtension($Launcher) -ieq '.cmd' -or
-        [System.IO.Path]::GetExtension($Launcher) -ieq '.bat') {
-        $Info.FileName = $env:ComSpec
-        $EscapedLauncher = $Launcher.Replace('"', '""')
-        $Info.Arguments = '/d /s /c ""{0}" mcp"' -f $EscapedLauncher
+function Resolve-InstallRoot([string] $Launcher) {
+    $Parent = [System.IO.Path]::GetFullPath((Split-Path -Parent $Launcher))
+    if ([System.IO.Path]::GetFileName($Parent) -ieq 'app') {
+        return [System.IO.Path]::GetFullPath((Split-Path -Parent $Parent))
     }
-    else {
-        $Info.FileName = $Launcher
-        $Info.Arguments = 'mcp'
-    }
-    $Info.WorkingDirectory = Split-Path -Parent $Launcher
-    $Info.UseShellExecute = $false
-    $Info.CreateNoWindow = $true
-    $Info.RedirectStandardInput = $true
-    $Info.RedirectStandardOutput = $true
-    $Info.RedirectStandardError = $true
-    $Info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $Info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    $Info.EnvironmentVariables['MINOS_HOME'] = $MinosHome
-    return $Info
+    return $Parent
 }
 
-function Write-McpLine([System.IO.StreamWriter] $Writer, [string] $Json) {
-    $Writer.WriteLine($Json)
-    $Writer.Flush()
-}
-
-function Await-McpResponse(
-    [System.IO.StreamReader] $Reader,
-    [string] $Marker,
-    [int] $TimeoutMilliseconds
-) {
-    $Deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
-    while ([DateTime]::UtcNow -lt $Deadline) {
-        $Remaining = [int][Math]::Max(1, ($Deadline - [DateTime]::UtcNow).TotalMilliseconds)
-        $Task = $Reader.ReadLineAsync()
-        if (-not $Task.Wait($Remaining)) {
-            throw "Timed out waiting for MCP response $Marker"
-        }
-        $Line = $Task.Result
-        if ($null -eq $Line) {
-            throw "MCP server closed stdout before response $Marker"
-        }
-        if ($Line.IndexOf($Marker, [StringComparison]::Ordinal) -ge 0) {
-            return $Line
-        }
+$InstallRoot = Resolve-InstallRoot -Launcher $LauncherPath
+$RuntimeJava = Join-Path $InstallRoot 'app\runtime\bin\java.exe'
+$ProbeClasspath = Join-Path $InstallRoot 'lib\minos.jar'
+foreach ($Required in @($RuntimeJava, $ProbeClasspath)) {
+    if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) {
+        throw "MINOS packaged handshake dependency is missing: $Required"
     }
-    throw "Timed out waiting for MCP response $Marker"
 }
 
-$Process = New-Object System.Diagnostics.Process
-$Process.StartInfo = New-ProcessStartInfo -Launcher $LauncherPath -MinosHome $CandidateHome
-$ErrorTask = $null
-$Failure = $null
-$Initialize = ''
-$Tools = ''
+# The release/install probe deliberately delegates MCP framing, protocol
+# negotiation and STDIO lifecycle to the same MCP Java SDK client used by MINOS'
+# integration tests. The child process remains the real packaged launcher, so a
+# broken jpackage runtime or MCP entry point still fails this gate.
+$PreviousErrorActionPreference = $ErrorActionPreference
 try {
-    if (-not $Process.Start()) {
-        throw 'MINOS MCP backend probe process did not start.'
-    }
-    $ErrorTask = $Process.StandardError.ReadToEndAsync()
-    try {
-        # MCP Java SDK 2.0.0 tracks the 2025-11-25 specification. Keep raw
-        # release probes aligned with the same protocol negotiated by the SDK client.
-        Write-McpLine -Writer $Process.StandardInput -Json '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"minos-release-handshake-probe","version":"1"}}}'
-        $Initialize = Await-McpResponse -Reader $Process.StandardOutput -Marker '"id":1' -TimeoutMilliseconds ($TimeoutSeconds * 1000)
-        if ($Initialize.IndexOf('minos-code-intelligence', [StringComparison]::OrdinalIgnoreCase) -lt 0) {
-            throw "MCP initialize response does not identify MINOS: $Initialize"
-        }
-
-        Write-McpLine -Writer $Process.StandardInput -Json '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}'
-        Write-McpLine -Writer $Process.StandardInput -Json '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
-        $Tools = Await-McpResponse -Reader $Process.StandardOutput -Marker '"id":2' -TimeoutMilliseconds ($TimeoutSeconds * 1000)
-        foreach ($RequiredTool in @('minos_search_code', 'minos_impact')) {
-            if ($Tools.IndexOf($RequiredTool, [StringComparison]::Ordinal) -lt 0) {
-                throw "MCP tools/list response is missing $RequiredTool"
-            }
-        }
-    }
-    catch {
-        $Failure = $_
-    }
-    finally {
-        try { $Process.StandardInput.Close() } catch { }
-        if (-not $Process.WaitForExit(3000)) {
-            try { $Process.Kill() } catch { }
-            $Process.WaitForExit(5000) | Out-Null
-        }
-    }
-
-    $Stderr = if ($null -ne $ErrorTask -and $ErrorTask.IsCompleted) { [string]$ErrorTask.Result } else { '' }
-    $BackendFile = Join-Path $CandidateHome 'runtime\backend.properties'
-    $BackendEvidence = if (Test-Path -LiteralPath $BackendFile -PathType Leaf) {
-        [System.IO.File]::ReadAllText($BackendFile, [System.Text.Encoding]::UTF8).Trim()
-    }
-    else {
-        '<backend.properties not created>'
-    }
-
-    if ($null -ne $Failure) {
-        $ExitEvidence = if ($Process.HasExited) { [string]$Process.ExitCode } else { '<still running>' }
-        $StderrEvidence = if ([string]::IsNullOrWhiteSpace($Stderr)) { '<empty>' } else { $Stderr.Trim() }
-        throw @"
-MINOS MCP backend handshake failed: $($Failure.Exception.Message)
-launcher: $LauncherPath
-MINOS_HOME: $CandidateHome
-process exit: $ExitEvidence
-initialize response: $(if ([string]::IsNullOrWhiteSpace($Initialize)) { '<none>' } else { $Initialize })
-tools response: $(if ([string]::IsNullOrWhiteSpace($Tools)) { '<none>' } else { $Tools })
-backend.properties:
-$BackendEvidence
-stderr:
-$StderrEvidence
-"@
-    }
-
-    foreach ($Fatal in @('NoClassDefFoundError', 'Exception in thread "main"')) {
-        if ($Stderr.IndexOf($Fatal, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            throw "MCP backend probe emitted fatal stderr: $Stderr"
-        }
-    }
-    Write-Host 'MINOS MCP BACKEND HANDSHAKE SUCCESS' -ForegroundColor Green
+    $ErrorActionPreference = 'Continue'
+    $ProbeOutput = @(
+        & $RuntimeJava `
+            '-cp' $ProbeClasspath `
+            'com.minos.mcp.MinosMcpHandshakeProbe' `
+            $LauncherPath `
+            $CandidateHome `
+            ([string]$TimeoutSeconds) 2>&1 |
+            ForEach-Object { $_.ToString() }
+    )
+    $ProbeExit = $LASTEXITCODE
 }
 finally {
-    $Process.Dispose()
+    $ErrorActionPreference = $PreviousErrorActionPreference
 }
+
+$BackendFile = Join-Path $CandidateHome 'runtime\backend.properties'
+$BackendEvidence = if (Test-Path -LiteralPath $BackendFile -PathType Leaf) {
+    [System.IO.File]::ReadAllText($BackendFile, [System.Text.Encoding]::UTF8).Trim()
+}
+else {
+    '<backend.properties not created>'
+}
+
+if ($ProbeExit -ne 0) {
+    $OutputEvidence = if ($ProbeOutput.Count -eq 0) { '<empty>' } else { $ProbeOutput -join [Environment]::NewLine }
+    throw @"
+MINOS MCP backend handshake failed (SDK probe exit=$ProbeExit)
+launcher: $LauncherPath
+MINOS_HOME: $CandidateHome
+runtime java: $RuntimeJava
+probe classpath: $ProbeClasspath
+backend.properties:
+$BackendEvidence
+probe output:
+$OutputEvidence
+"@
+}
+
+if (($ProbeOutput -join "`n").IndexOf('MINOS MCP SDK HANDSHAKE SUCCESS', [StringComparison]::Ordinal) -lt 0) {
+    throw "MCP SDK probe exited successfully without its success marker: $($ProbeOutput -join [Environment]::NewLine)"
+}
+
+Write-Host 'MINOS MCP BACKEND HANDSHAKE SUCCESS' -ForegroundColor Green
