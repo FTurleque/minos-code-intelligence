@@ -135,16 +135,26 @@ function Resolve-Image([string] $RequestedTag, [string] $RequestedVersion, [stri
 }
 
 function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit) {
-    $Inspect = Invoke-DockerAllowFailure -Arguments @(
-        'image', 'inspect', $Image,
-        '--format', '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}|{{ index .Config.Labels "io.minos.providers.prepared" }}'
-    )
-    if ($Inspect.ExitCode -ne 0) { return $false }
-    $Parts = @(([string]$Inspect.Output).Trim() -split '\|', 3)
-    return $Parts.Count -eq 3 -and
-        $Parts[0] -eq $ExpectedVersion -and
-        $Parts[1] -eq $ExpectedCommit -and
-        $Parts[2] -eq 'true'
+    # Read the inspect document as JSON instead of embedding quoted label keys in
+    # a Docker Go template. Windows PowerShell 5.1 rewrites those native argument
+    # quotes and can make Docker interpret "org" as a template function.
+    $Inspect = Invoke-DockerAllowFailure -Arguments @('image', 'inspect', $Image)
+    if ($Inspect.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace([string]$Inspect.Output)) { return $false }
+
+    try { $Images = @(([string]$Inspect.Output) | ConvertFrom-Json) }
+    catch { return $false }
+    if ($Images.Count -eq 0 -or $null -eq $Images[0].Config -or $null -eq $Images[0].Config.Labels) { return $false }
+
+    $Labels = $Images[0].Config.Labels
+    $VersionLabel = $Labels.PSObject.Properties['org.opencontainers.image.version']
+    $RevisionLabel = $Labels.PSObject.Properties['org.opencontainers.image.revision']
+    $PreparedLabel = $Labels.PSObject.Properties['io.minos.providers.prepared']
+    return $null -ne $VersionLabel -and
+        $null -ne $RevisionLabel -and
+        $null -ne $PreparedLabel -and
+        [string]$VersionLabel.Value -eq $ExpectedVersion -and
+        [string]$RevisionLabel.Value -eq $ExpectedCommit -and
+        [string]$PreparedLabel.Value -eq 'true'
 }
 
 switch ($Action) {
