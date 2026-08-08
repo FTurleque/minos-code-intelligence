@@ -12,12 +12,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * SDK-backed end-to-end handshake probe for an installed/packaged MINOS launcher.
@@ -33,7 +27,6 @@ public final class MinosMcpHandshakeProbe {
             "minos_search_code",
             "minos_impact"
     );
-    private static final int SHUTDOWN_GRACE_SECONDS = 10;
 
     private MinosMcpHandshakeProbe() {
     }
@@ -61,39 +54,7 @@ public final class MinosMcpHandshakeProbe {
             throw new IllegalStateException("Unable to create MINOS_HOME: " + home, exception);
         }
 
-        // The MCP SDK has request-level timeouts, but release qualification must
-        // also remain bounded if transport startup or graceful close itself stalls.
-        // Run the whole lifecycle behind an independent wall-clock deadline and
-        // terminate this short-lived probe JVM on timeout so CI cannot hang until
-        // the workflow's 75-minute job timeout.
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<?> handshake = executor.submit(() -> runHandshake(launcher, home, timeoutSeconds));
-        try {
-            handshake.get(timeoutSeconds + SHUTDOWN_GRACE_SECONDS, TimeUnit.SECONDS);
-        } catch (TimeoutException exception) {
-            handshake.cancel(true);
-            System.err.printf(
-                    "MINOS MCP SDK HANDSHAKE TIMEOUT launcher=%s home=%s deadline=%ds%n",
-                    launcher,
-                    home,
-                    timeoutSeconds + SHUTDOWN_GRACE_SECONDS
-            );
-            System.exit(124);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("MINOS MCP SDK handshake probe was interrupted", exception);
-        } catch (ExecutionException exception) {
-            Throwable cause = exception.getCause();
-            if (cause instanceof RuntimeException runtimeException) {
-                throw runtimeException;
-            }
-            if (cause instanceof Error error) {
-                throw error;
-            }
-            throw new IllegalStateException("MINOS MCP SDK handshake failed", cause);
-        } finally {
-            executor.shutdownNow();
-        }
+        runHandshake(launcher, home, timeoutSeconds);
     }
 
     private static void runHandshake(Path launcher, Path home, int timeoutSeconds) {
