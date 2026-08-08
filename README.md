@@ -257,3 +257,11 @@ La vérification visuelle du Wizard et la connexion réelle du MCP dans Copilot 
 - facts générés : [`docs/generated/product-facts.md`](docs/generated/product-facts.md).
 
 Les documents de `docs/history/` et les roadmaps d'exécution anciennes peuvent contenir des versions/états historiques. Ils ne constituent pas l'état courant du produit.
+
+## Licence
+
+MINOS Code Intelligence est un logiciel **propriétaire source-available**. La visibilité publique du dépôt donne accès au code source mais ne transforme pas MINOS en logiciel open source, libre ou dans le domaine public.
+
+Aucun droit général d'utilisation, d'exécution, de déploiement, de modification, de redistribution ou de commercialisation n'est accordé sans autorisation écrite préalable du titulaire des droits, sous réserve des droits imposés par la loi ou les conditions contraignantes de GitHub.
+
+Voir [`LICENSE`](LICENSE) pour les conditions complètes et [`CONTRIBUTING.md`](CONTRIBUTING.md) pour la politique de contribution.
