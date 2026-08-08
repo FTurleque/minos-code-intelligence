@@ -33,11 +33,13 @@ public final class MinosNativeMcpSmoke {
         Files.createDirectories(home);
 
         ProcessBuilder builder = new ProcessBuilder(command(launcher));
+        builder.directory(launcher.getParent().toFile());
         builder.environment().put("MINOS_HOME", home.toString());
         Path stderr = Files.createTempFile("minos-native-mcp-", ".stderr.log");
         builder.redirectError(stderr.toFile());
         Process process = builder.start();
         String stderrText = "";
+        Exception failure = null;
         try (BufferedWriter stdin = new BufferedWriter(new OutputStreamWriter(
                     process.getOutputStream(), StandardCharsets.UTF_8));
              BufferedReader stdout = new BufferedReader(new InputStreamReader(
@@ -51,6 +53,8 @@ public final class MinosNativeMcpSmoke {
             String tools = awaitResponse(stdout, "\"id\":2");
             requireContains(tools, "minos_search_code", "tools/list search tool");
             requireContains(tools, "minos_impact", "tools/list impact tool");
+        } catch (Exception exception) {
+            failure = exception;
         } finally {
             stopProcessTree(process);
             if (Files.exists(stderr)) {
@@ -59,6 +63,17 @@ public final class MinosNativeMcpSmoke {
             deleteWithRetry(stderr);
         }
 
+        if (failure != null) {
+            String diagnostics = stderrText.isBlank()
+                    ? "<empty>"
+                    : stderrText;
+            throw new IllegalStateException(
+                    failure.getMessage() + System.lineSeparator()
+                            + "packaged MCP stderr:" + System.lineSeparator()
+                            + diagnostics,
+                    failure
+            );
+        }
         requireStderrClean(stderrText);
         System.out.println("MINOS native MCP handshake SUCCESS");
     }
@@ -133,7 +148,10 @@ public final class MinosNativeMcpSmoke {
         if (comspec == null || comspec.isBlank()) {
             comspec = "cmd.exe";
         }
-        String commandLine = "\"" + launcher + "\" mcp";
+        // cmd.exe /s /c requires an extra quote pair when the command itself starts
+        // with a quoted executable path. Match the PowerShell M29 probe contract:
+        //   /d /s /c ""C:\...\minos.cmd" mcp"
+        String commandLine = "\"\"" + launcher + "\" mcp\"";
         return new String[]{comspec, "/d", "/s", "/c", commandLine};
     }
 
