@@ -1,11 +1,11 @@
 package com.minos.mcp;
 
 import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -50,7 +50,7 @@ public final class MinosMcpHandshakeProbe {
 
         try {
             Files.createDirectories(home);
-        } catch (Exception exception) {
+        } catch (IOException exception) {
             throw new IllegalStateException("Unable to create MINOS_HOME: " + home, exception);
         }
 
@@ -60,11 +60,12 @@ public final class MinosMcpHandshakeProbe {
     private static void runHandshake(Path launcher, Path home, int timeoutSeconds) {
         ServerParameters parameters = serverParameters(launcher, home);
         StdioClientTransport transport = new StdioClientTransport(parameters, McpJsonDefaults.getMapper());
-        McpSyncClient client = McpClient.sync(transport)
-                .requestTimeout(Duration.ofSeconds(timeoutSeconds))
-                .build();
+        var timeout = Duration.ofSeconds(timeoutSeconds);
 
-        try {
+        try (var client = McpClient.sync(transport)
+                .requestTimeout(timeout)
+                .initializationTimeout(timeout)
+                .build()) {
             client.initialize();
             var listed = client.listTools();
             List<String> names = listed.tools().stream().map(tool -> tool.name()).toList();
@@ -78,8 +79,6 @@ public final class MinosMcpHandshakeProbe {
                     launcher,
                     names.size()
             );
-        } finally {
-            client.closeGracefully();
         }
     }
 
