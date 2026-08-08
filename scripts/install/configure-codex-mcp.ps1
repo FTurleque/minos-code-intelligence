@@ -190,11 +190,13 @@ function Install-Toml {
             Write-Host 'MINOS MCP already configured for Codex Desktop' -ForegroundColor Green
             return
         }
-        if ($null -eq $State -or [string]$State.mode -ne 'toml' -or [string]$State.blockHash -ne (Text-Hash $CurrentManaged)) {
-            Fail-Or-Warn 'Codex config contains a MINOS-managed marker block that no longer matches MINOS state; preserving it.'
-            return
-        }
+
+        # The marker pair is the ownership boundary. A stale or missing state file
+        # must not strand an old MINOS block forever: back up the complete config,
+        # replace only the explicitly managed block and establish fresh ownership.
         Backup-File $ConfigPath | Out-Null
+        $RepairReason = if ($null -eq $State) { 'missing-state' } elseif ([string]$State.mode -ne 'toml') { 'mode-mismatch' } elseif ([string]$State.blockHash -ne (Text-Hash $CurrentManaged)) { 'hash-mismatch' } else { 'upgrade' }
+        Write-Log "REPAIR client=codex mode=toml reason=$RepairReason path='$ConfigPath'"
         $Text = [regex]::Replace($Text, '(?ms)^\s*' + [regex]::Escape($BeginMarker) + '.*?' + [regex]::Escape($EndMarker) + '\s*', '')
     } elseif ($Text -match '(?m)^\s*\[mcp_servers\.minos\]\s*$') {
         Fail-Or-Warn "Codex config already contains an unmanaged [mcp_servers.minos] section; MINOS did not overwrite it."
