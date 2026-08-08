@@ -46,6 +46,37 @@ if ($Dirty.Count -gt 0) {
     throw "Local candidate build requires a clean worktree so VERSION provenance is unambiguous. Dirty entries:`n$($Dirty -join "`n")"
 }
 
+function Test-ExactDockerImage([string] $DockerPath, [string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit) {
+    # Avoid Docker Go-template quoting here. Windows PowerShell 5.1 rewrites
+    # embedded quotes in native arguments and can turn a label key such as
+    # "org.opencontainers.image.version" into an invalid template token.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $InspectText = ((& $DockerPath image inspect $Image 2>&1) | Out-String).Trim()
+        $InspectExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    if ($InspectExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($InspectText)) { return $false }
+
+    try { $Images = @($InspectText | ConvertFrom-Json) }
+    catch { return $false }
+    if ($Images.Count -eq 0 -or $null -eq $Images[0].Config -or $null -eq $Images[0].Config.Labels) { return $false }
+
+    $Labels = $Images[0].Config.Labels
+    $VersionLabel = $Labels.PSObject.Properties['org.opencontainers.image.version']
+    $RevisionLabel = $Labels.PSObject.Properties['org.opencontainers.image.revision']
+    $PreparedLabel = $Labels.PSObject.Properties['io.minos.providers.prepared']
+    return $null -ne $VersionLabel -and
+        $null -ne $RevisionLabel -and
+        $null -ne $PreparedLabel -and
+        [string]$VersionLabel.Value -eq $ExpectedVersion -and
+        [string]$RevisionLabel.Value -eq $ExpectedCommit -and
+        [string]$PreparedLabel.Value -eq 'true'
+}
+
 Write-Host '=== MINOS local Windows candidate ===' -ForegroundColor Cyan
 Write-Host "Version : $Version"
 Write-Host "HEAD    : $Head"
@@ -101,8 +132,7 @@ if ($PrepareDockerImage) {
     $SafeVersion = $Version.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
     $ShortCommit = $Head.Substring(0, [Math]::Min(12, $Head.Length))
     $PreparedImage = "minos-code-intelligence:$SafeVersion-$ShortCommit"
-    $Inspect = & $Docker.Source image inspect $PreparedImage --format '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}|{{ index .Config.Labels "io.minos.providers.prepared" }}' 2>$null
-    $ExactImageExists = $LASTEXITCODE -eq 0 -and ([string]$Inspect).Trim() -eq "$Version|$Head|true"
+    $ExactImageExists = Test-ExactDockerImage -DockerPath $Docker.Source -Image $PreparedImage -ExpectedVersion $Version -ExpectedCommit $Head
     if ($ExactImageExists) {
         Write-Host "Exact Docker image already prepared: $PreparedImage" -ForegroundColor Cyan
     }
