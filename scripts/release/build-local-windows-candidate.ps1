@@ -3,7 +3,9 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$')]
     [string] $Version = '1.0.1',
 
-    [switch] $SkipMavenVerify
+    [switch] $SkipMavenVerify,
+
+    [switch] $PrebuildDockerImage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,7 +19,8 @@ $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $BuildDistribution = Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1'
 $BuildInstaller = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
 $McpProbe = Join-Path $RepoRoot 'scripts\install\probe-mcp-backend.ps1'
-foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpProbe)) {
+$DockerWorkflow = Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'
+foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpProbe, $DockerWorkflow)) {
     if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing candidate-build input: $Required" }
 }
 
@@ -44,6 +47,7 @@ if ($Dirty.Count -gt 0) {
 Write-Host '=== MINOS local Windows candidate ===' -ForegroundColor Cyan
 Write-Host "Version : $Version"
 Write-Host "HEAD    : $Head"
+Write-Host "Docker  : $(if ($PrebuildDockerImage) { 'prebuild exact release image before setup generation' } else { 'not prebuilt' })"
 Write-Host 'Network publication: DISABLED (this script never creates tags/releases or invokes GitHub Actions).'
 
 Push-Location $RepoRoot
@@ -68,6 +72,22 @@ if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) { throw "Candidate l
 if (-not (Test-Path -LiteralPath $RuntimeModules -PathType Leaf)) { throw "Runtime module evidence missing: $RuntimeModules" }
 $Modules = @([System.IO.File]::ReadAllLines($RuntimeModules, [System.Text.Encoding]::ASCII))
 if ($Modules -notcontains 'java.xml') { throw 'Candidate runtime does not contain java.xml.' }
+
+$PreparedDockerImage = ''
+if ($PrebuildDockerImage) {
+    $ReleaseJar = Join-Path $DistRoot 'lib\minos.jar'
+    if (-not (Test-Path -LiteralPath $ReleaseJar -PathType Leaf)) {
+        throw "Candidate shaded JAR required for Docker prebuild is missing: $ReleaseJar"
+    }
+    Write-Host ''
+    Write-Host '=== Prebuild exact MINOS Docker image ===' -ForegroundColor Cyan
+    $PrepareOutput = @(& $DockerWorkflow -Action PrepareImage -Jar $ReleaseJar -Version $Version -Commit $Head)
+    if ($PrepareOutput.Count -eq 0) { throw 'Docker image prebuild did not return the prepared image name.' }
+    $PreparedDockerImage = [string]$PrepareOutput[$PrepareOutput.Count - 1]
+    if ([string]::IsNullOrWhiteSpace($PreparedDockerImage)) { throw 'Docker image prebuild returned an empty image name.' }
+    Write-Host "Prepared Docker image: $PreparedDockerImage" -ForegroundColor Green
+    Write-Host 'The generated setup will reuse this exact image on this workstation after checking its version/commit labels.' -ForegroundColor Green
+}
 
 # Use the same canonical backend handshake probe that the native/docker switcher
 # and M29 qualification use. This avoids maintaining a second Windows cmd.exe
@@ -104,6 +124,7 @@ Write-Host "Setup         : $Setup"
 Write-Host "Setup SHA-256 : $((Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant())"
 Write-Host "ZIP           : $Zip"
 Write-Host "ZIP SHA-256   : $((Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant())"
+if ($PrebuildDockerImage) { Write-Host "Docker image  : $PreparedDockerImage (prebuilt/reusable by setup on this workstation)" }
 Write-Host 'Publication   : NOT PERFORMED'
 Write-Host ''
-Write-Host 'Next human gate: launch the setup.exe above, inspect the MCP detection page, then verify Copilot connects to MINOS before any v1.0.1 release.' -ForegroundColor Yellow
+Write-Host 'Next human gate: launch the setup.exe above, inspect the MCP detection page, then verify a real client connects to MINOS before any v1.0.1 release.' -ForegroundColor Yellow
