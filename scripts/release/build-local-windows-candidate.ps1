@@ -3,7 +3,12 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$')]
     [string] $Version = '1.0.1',
 
-    [switch] $SkipMavenVerify
+    [switch] $SkipMavenVerify,
+
+    # Build the provider-complete image once on the maintainer workstation. The
+    # setup then reuses the exact version/commit-labelled image instead of
+    # downloading four toolchains and rebuilding it during installation.
+    [switch] $PrepareDockerImage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,6 +49,7 @@ if ($Dirty.Count -gt 0) {
 Write-Host '=== MINOS local Windows candidate ===' -ForegroundColor Cyan
 Write-Host "Version : $Version"
 Write-Host "HEAD    : $Head"
+Write-Host "Docker  : $(if ($PrepareDockerImage) { 'prebuild exact image' } else { 'not prebuilt' })"
 Write-Host 'Network publication: DISABLED (this script never creates tags/releases or invokes GitHub Actions).'
 
 Push-Location $RepoRoot
@@ -69,10 +75,6 @@ if (-not (Test-Path -LiteralPath $RuntimeModules -PathType Leaf)) { throw "Runti
 $Modules = @([System.IO.File]::ReadAllLines($RuntimeModules, [System.Text.Encoding]::ASCII))
 if ($Modules -notcontains 'java.xml') { throw 'Candidate runtime does not contain java.xml.' }
 
-# Use the same canonical backend handshake probe that the native/docker switcher
-# and M29 qualification use. This avoids maintaining a second Windows cmd.exe
-# invocation contract in the release path while still exercising the packaged
-# minos.cmd -> app\minos.exe -> MCP STDIO path end-to-end.
 $SmokeHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-candidate-mcp-' + [Guid]::NewGuid())
 try {
     New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
@@ -83,9 +85,45 @@ finally {
     Remove-Item -LiteralPath $SmokeHome -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Build the real user-facing installer but do NOT install it automatically on the
-# maintainer workstation. Visual and real-client verification is intentionally a
-# human gate before v1.0.1 publication.
+$PreparedImage = ''
+if ($PrepareDockerImage) {
+    $Docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $Docker) { throw 'Docker Desktop is required by -PrepareDockerImage.' }
+    & $Docker.Source version --format '{{.Server.Version}}' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop is installed but its daemon does not respond.' }
+
+    $Jar = Join-Path $DistRoot 'lib\minos.jar'
+    $Dockerfile = Join-Path $DistRoot 'docker\Dockerfile.mcp.release'
+    foreach ($Required in @($Jar, $Dockerfile)) {
+        if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Docker prebuild input missing: $Required" }
+    }
+
+    $SafeVersion = $Version.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
+    $ShortCommit = $Head.Substring(0, [Math]::Min(12, $Head.Length))
+    $PreparedImage = "minos-code-intelligence:$SafeVersion-$ShortCommit"
+    $Inspect = & $Docker.Source image inspect $PreparedImage --format '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}|{{ index .Config.Labels "io.minos.providers.prepared" }}' 2>$null
+    $ExactImageExists = $LASTEXITCODE -eq 0 -and ([string]$Inspect).Trim() -eq "$Version|$Head|true"
+    if ($ExactImageExists) {
+        Write-Host "Exact Docker image already prepared: $PreparedImage" -ForegroundColor Cyan
+    }
+    else {
+        $Context = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-docker-image-' + [Guid]::NewGuid())
+        try {
+            New-Item -ItemType Directory -Force -Path $Context | Out-Null
+            Copy-Item -LiteralPath $Jar -Destination (Join-Path $Context 'minos.jar') -Force
+            $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            & $Docker.Source build --file $Dockerfile --tag $PreparedImage `
+                --build-arg "MINOS_VERSION=$Version" `
+                --build-arg "MINOS_GIT_COMMIT=$Head" `
+                --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $Context
+            if ($LASTEXITCODE -ne 0) { throw 'Local MINOS Docker image prebuild failed.' }
+        }
+        finally {
+            Remove-Item -LiteralPath $Context -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 & $BuildInstaller -Version $Version
 
 $Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
@@ -104,6 +142,10 @@ Write-Host "Setup         : $Setup"
 Write-Host "Setup SHA-256 : $((Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant())"
 Write-Host "ZIP           : $Zip"
 Write-Host "ZIP SHA-256   : $((Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant())"
+if (-not [string]::IsNullOrWhiteSpace($PreparedImage)) {
+    Write-Host "Docker image  : $PreparedImage"
+    Write-Host 'Installer Docker build: SKIPPED when this exact image remains in Docker Desktop.'
+}
 Write-Host 'Publication   : NOT PERFORMED'
 Write-Host ''
-Write-Host 'Next human gate: launch the setup.exe above, inspect the MCP detection page, then verify Copilot connects to MINOS before any v1.0.1 release.' -ForegroundColor Yellow
+Write-Host 'Next human gate: launch the setup.exe above, inspect the MCP detection page, then verify a real client connects to MINOS before publication.' -ForegroundColor Yellow
