@@ -74,8 +74,17 @@ jobs:
         shell: powershell
         run: .\mvnw.cmd -B -ntp clean verify
 
-      - name: Targeted JaCoCo gate
+      - name: Targeted JaCoCo gate (full)
+        if: runner.os != 'Windows'
         run: python scripts/quality/check-jacoco.py
+
+      # PostgreSQL/pgvector coverage comes from the Linux Testcontainers gate above.
+      # Keep every other targeted coverage scope mandatory on Windows rather than
+      # failing a coverage threshold for integration tests the hosted Windows daemon
+      # cannot execute.
+      - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
+        if: runner.os == 'Windows'
+        run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
 
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
