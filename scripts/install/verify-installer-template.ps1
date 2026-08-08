@@ -61,12 +61,15 @@ Require '-Codex -CodexMode desktop' 'Installer does not configure explicit Codex
 
 # NEXUS-aligned review page: the user must see exactly what MINOS manages before
 # installation, including managed PostgreSQL/pgvector and Ollama provisioning.
+# Unicode labels are checked by scripts/docs/check-current-docs.py; keep the
+# Windows PowerShell 5.1 verifier on ASCII structural invariants only.
 Require 'SummaryPage := CreateCustomPage(' 'Installer is missing the pre-install summary page.'
-Require 'Composants gérés par MINOS' 'Installer summary does not enumerate managed components.'
+Require "ManagedComponents := 'runtime MINOS';" 'Installer summary does not initialize its managed-components inventory.'
 Require 'PostgreSQL/pgvector Docker' 'Installer summary does not identify managed PostgreSQL/pgvector.'
 Require 'Ollama Docker' 'Installer summary does not identify managed Ollama.'
-Require 'téléchargement/provisionnement demandé' 'Installer summary does not disclose requested Ollama model provisioning.'
-Require 'aucun binaire Ollama installé par MINOS' 'Installer does not distinguish native external Ollama from managed Docker Ollama.'
+Require 'if OllamaProvisionCheck.Checked then ManagedComponents := ManagedComponents +' 'Installer summary does not disclose requested Ollama model provisioning.'
+Require 'Ollama : instance locale/externe existante' 'Installer does not distinguish native external Ollama from managed Docker Ollama.'
+Require 'SummaryMemo.Text := Text;' 'Installer summary is not rendered to the review page.'
 
 # S7 backend lifecycle: a selected backend is prepared/validated/handshaken by
 # one transactional helper before client integration is attempted. Docker is
