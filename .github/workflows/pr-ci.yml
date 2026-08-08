@@ -58,14 +58,21 @@ jobs:
         shell: bash
         run: chmod +x mvnw
 
-      - name: Maven clean verify (Unix)
+      # The Linux hosted runner provides a Linux Docker daemon capable of running
+      # the pgvector image. Make PostgreSQL fail-closed there so the storage backend
+      # cannot silently disappear from CI qualification.
+      - name: Maven clean verify (Unix, PostgreSQL required)
         if: runner.os != 'Windows'
         run: ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
 
+      # GitHub's Windows hosted runner currently exposes a Windows-container daemon.
+      # Testcontainers cannot run the Linux pgvector image on that daemon, so Windows
+      # validates the complete Java/Windows surface while PostgreSQL integration is
+      # authoritatively required by the Linux matrix leg above.
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\mvnw.cmd -B -ntp "-Dminos.postgresql.tests.required=true" clean verify
+        run: .\mvnw.cmd -B -ntp clean verify
 
       - name: Targeted JaCoCo gate
         run: python scripts/quality/check-jacoco.py
