@@ -1,7 +1,6 @@
 package com.minos.mcp;
 
 import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonDefaults;
@@ -62,12 +61,11 @@ public final class MinosMcpHandshakeProbe {
         ServerParameters parameters = serverParameters(launcher, home);
         StdioClientTransport transport = new StdioClientTransport(parameters, McpJsonDefaults.getMapper());
         var timeout = Duration.ofSeconds(timeoutSeconds);
-        McpSyncClient client = McpClient.sync(transport)
+
+        try (var client = McpClient.sync(transport)
                 .requestTimeout(timeout)
                 .initializationTimeout(timeout)
-                .build();
-
-        try {
+                .build()) {
             client.initialize();
             var listed = client.listTools();
             List<String> names = listed.tools().stream().map(tool -> tool.name()).toList();
@@ -81,8 +79,6 @@ public final class MinosMcpHandshakeProbe {
                     launcher,
                     names.size()
             );
-        } finally {
-            client.closeGracefully();
         }
     }
 
