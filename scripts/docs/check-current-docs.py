@@ -139,7 +139,7 @@ def main() -> int:
             "MCP Docker — isolation renforcée", "Ne pas configurer maintenant",
             "GitHub Copilot — JetBrains / IntelliJ", "GitHub Copilot CLI",
             "Claude CLI / Claude Code", "Claude Desktop", "OpenAI Codex CLI", "OpenAI Codex Desktop",
-            "Résumé de l'installation", "Composants gérés par MINOS",
+            "Résumé de l''installation", "Composants gérés par MINOS",
             "PostgreSQL/pgvector Docker", "Ollama Docker", "aucun fallback silencieux",
         ))
         require_all("scripts/install/detect-mcp-clients.ps1", detector, (
