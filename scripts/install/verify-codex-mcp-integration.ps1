@@ -54,6 +54,45 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $State -PathType Leaf)) 'Codex managed state remained after uninstall.'
     Assert-True ((Get-ChildItem -LiteralPath $Backups -File -Recurse -ErrorAction SilentlyContinue).Count -ge 2) 'Codex install/uninstall did not create configuration backups.'
 
+    # A complete block explicitly bounded by MINOS markers may survive an older
+    # installation after its sidecar state was removed or changed. The installer
+    # must back up the file and reclaim only that bounded block instead of failing.
+    $OldExe = Join-Path $Root 'old MINOS\app\minos.exe'
+    $OldData = Join-Path $Root 'old-data'
+    $OldExeToml = $OldExe.Replace('\', '\\')
+    $OldDataToml = $OldData.Replace('\', '\\')
+    $OrphanedManaged = @(
+        'model = "gpt-5.6"',
+        '',
+        '# BEGIN MINOS MANAGED MCP SERVER',
+        '[mcp_servers.minos]',
+        ('command = "' + $OldExeToml + '"'),
+        'args = ["mcp"]',
+        'enabled = true',
+        '',
+        '[mcp_servers.minos.env]',
+        ('MINOS_HOME = "' + $OldDataToml + '"'),
+        '# END MINOS MANAGED MCP SERVER',
+        ''
+    ) -join [Environment]::NewLine
+    [System.IO.File]::WriteAllText($Config, $OrphanedManaged, [System.Text.UTF8Encoding]::new($false))
+    Remove-Item -LiteralPath $State -Force -ErrorAction SilentlyContinue
+
+    & $Manager -InstallRoot $InstallRoot -Action Install -Mode desktop -Strict `
+        -DataRoot $DataRoot -ConfigPath $Config -StatePath $State -LogPath $Log -BackupRoot $Backups
+
+    $Recovered = [System.IO.File]::ReadAllText($Config, [System.Text.Encoding]::UTF8)
+    Assert-True ($Recovered.Contains('model = "gpt-5.6"')) 'Codex recovery changed unrelated TOML content.'
+    Assert-True (-not $Recovered.Contains($OldExeToml)) 'Codex recovery left the stale MINOS executable in the managed block.'
+    Assert-True ($Recovered.Contains($InstallRoot.Replace('\', '\\'))) 'Codex recovery did not install the current MINOS executable.'
+    $RecoveredState = Get-Content -Raw -LiteralPath $State | ConvertFrom-Json
+    Assert-True ([string]$RecoveredState.mode -eq 'toml') 'Codex recovered state mode should be toml.'
+    Assert-True ([string]$RecoveredState.ownership -eq 'managed') 'Codex recovered block should be MINOS-managed.'
+    Assert-True ((Get-Content -Raw -LiteralPath $Log).Contains('RECOVER client=codex mode=toml reason=orphaned-minos-managed-block')) 'Codex recovery was not recorded in the integration log.'
+
+    & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict `
+        -DataRoot $DataRoot -ConfigPath $Config -StatePath $State -LogPath $Log -BackupRoot $Backups
+
     # An unmanaged MINOS section must never be overwritten.
     [System.IO.File]::WriteAllText($Config, "[mcp_servers.minos]`r`ncommand = `"other.exe`"`r`n", [System.Text.UTF8Encoding]::new($false))
     $FailedAsExpected = $false
