@@ -65,7 +65,7 @@ jobs:
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\mvnw.cmd -B -ntp -Dminos.postgresql.tests.required=true clean verify
+        run: .\mvnw.cmd -B -ntp "-Dminos.postgresql.tests.required=true" clean verify
 
       - name: Targeted JaCoCo gate
         run: python scripts/quality/check-jacoco.py
