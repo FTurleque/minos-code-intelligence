@@ -65,6 +65,35 @@ class M29McpClientBackendAgnosticContractTest {
                 "unbraced variable interpolation before ':' does not parse on Windows PowerShell 5.1");
     }
 
+    @Test
+    void installerRepairsOwnedCodexBlocksAndReusesExactLocalDockerImages() throws Exception {
+        Path root = repoRoot();
+        String codex = text(root.resolve("scripts/install/configure-codex-mcp.ps1"));
+        String docker = text(root.resolve("docker/scripts/prod-mcp-release.ps1"));
+        String localCandidate = text(root.resolve("scripts/release/build-local-windows-candidate.ps1"));
+
+        assertTrue(codex.contains("The marker pair is the ownership boundary"));
+        assertTrue(codex.contains("REPAIR client=codex mode=toml"));
+        assertTrue(codex.contains("Backup-File $ConfigPath"));
+        assertFalse(codex.contains("MINOS-managed marker block that no longer matches MINOS state; preserving it"),
+                "an explicitly MINOS-managed stale block must be backed up and repaired, not strand installation");
+        assertTrue(codex.contains("unmanaged [mcp_servers.minos] section"),
+                "unmarked user-owned Codex entries must still fail closed");
+
+        assertTrue(docker.contains("function Test-ExactImage"));
+        assertTrue(docker.contains("org.opencontainers.image.version"));
+        assertTrue(docker.contains("org.opencontainers.image.revision"));
+        assertTrue(docker.contains("io.minos.providers.prepared"));
+        assertTrue(docker.contains("skipping provider-complete rebuild"));
+        assertTrue(docker.contains("docker build"),
+                "the installer must retain a build fallback when no exact local image exists");
+
+        assertTrue(localCandidate.contains("[switch] $PrepareDockerImage"));
+        assertTrue(localCandidate.contains("MINOS_GIT_COMMIT=$Head"));
+        assertTrue(localCandidate.contains("Installer Docker build: SKIPPED"));
+        assertTrue(localCandidate.contains("minos-code-intelligence:$SafeVersion-$ShortCommit"));
+    }
+
     private static String text(Path path) throws IOException {
         return Files.readString(path).replace("\r\n", "\n").replace('\r', '\n');
     }
