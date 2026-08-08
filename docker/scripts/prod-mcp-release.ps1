@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')]
+    [ValidateSet('PrepareImage', 'Install', 'Start', 'Attach', 'Admin', 'Status', 'Validate', 'Stop', 'Uninstall')]
     [string] $Action,
 
     [string] $Jar = '',
@@ -80,6 +80,60 @@ function Invoke-DockerAllowFailure([string[]] $Arguments) {
     return [pscustomobject]@{ ExitCode = $ExitCode; Output = $Output }
 }
 
+function Resolve-ReleaseImage([string] $RequestedVersion, [string] $RequestedCommit, [string] $RequestedImageTag) {
+    $ResolvedTag = $RequestedImageTag
+    if ([string]::IsNullOrWhiteSpace($ResolvedTag)) {
+        $SafeVersion = $RequestedVersion.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
+        $ShortCommit = $RequestedCommit.Substring(0, [Math]::Min(12, $RequestedCommit.Length))
+        $ResolvedTag = "$SafeVersion-$ShortCommit"
+    }
+    return "minos-code-intelligence:$ResolvedTag"
+}
+
+function Test-ExactPreparedImage([string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit) {
+    $Format = '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}|{{ index .Config.Labels "io.minos.providers.prepared" }}'
+    $Inspect = Invoke-DockerAllowFailure -Arguments @('image', 'inspect', '--format', $Format, $Image)
+    if ($Inspect.ExitCode -ne 0) { return $false }
+    $Parts = @(([string]$Inspect.Output).Trim().Split('|'))
+    if ($Parts.Count -ne 3) { return $false }
+    return $Parts[0] -eq $ExpectedVersion -and $Parts[1] -eq $ExpectedCommit -and $Parts[2] -eq 'true'
+}
+
+function Ensure-ReleaseImage([string] $JarPath, [string] $RequestedVersion, [string] $RequestedCommit, [string] $RequestedImageTag) {
+    if ([string]::IsNullOrWhiteSpace($JarPath)) { throw '-Jar is required to prepare the MINOS Docker release image.' }
+    $ResolvedJar = (Resolve-Path -LiteralPath $JarPath).Path
+    if ([string]::IsNullOrWhiteSpace($RequestedVersion)) { throw '-Version is required to prepare the MINOS Docker release image.' }
+    if ([string]::IsNullOrWhiteSpace($RequestedCommit)) { $RequestedCommit = 'unknown' }
+
+    $Image = Resolve-ReleaseImage -RequestedVersion $RequestedVersion -RequestedCommit $RequestedCommit -RequestedImageTag $RequestedImageTag
+    if (Test-ExactPreparedImage -Image $Image -ExpectedVersion $RequestedVersion -ExpectedCommit $RequestedCommit) {
+        Write-Host "MINOS Docker image reuse: $Image already matches version=$RequestedVersion commit=$RequestedCommit." -ForegroundColor Green
+        return $Image
+    }
+
+    $BuildContext = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-docker-release-build-' + [Guid]::NewGuid())
+    $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
+    $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    try {
+        New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
+        Copy-Item -LiteralPath $ResolvedJar -Destination (Join-Path $BuildContext 'minos.jar')
+        Write-Host "Preparing MINOS Docker image locally: $Image" -ForegroundColor Cyan
+        & $DockerCommand.Source build --file $Dockerfile --tag $Image `
+            --build-arg "MINOS_VERSION=$RequestedVersion" `
+            --build-arg "MINOS_GIT_COMMIT=$RequestedCommit" `
+            --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
+    }
+    finally {
+        Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-ExactPreparedImage -Image $Image -ExpectedVersion $RequestedVersion -ExpectedCommit $RequestedCommit)) {
+        throw "MINOS Docker image '$Image' was built but its release labels do not match version=$RequestedVersion commit=$RequestedCommit."
+    }
+    return $Image
+}
+
 function Read-ImageFile([string] $Image, [string] $Path) {
     $Result = Invoke-DockerAllowFailure -Arguments @('run', '--rm', '--network', 'none', '--entrypoint', 'cat', $Image, $Path)
     if ($Result.ExitCode -ne 0) {
@@ -128,6 +182,11 @@ function Initialize-And-VerifyProviderTools {
 }
 
 switch ($Action) {
+    'PrepareImage' {
+        $PreparedImage = Ensure-ReleaseImage -JarPath $Jar -RequestedVersion $Version -RequestedCommit $Commit -RequestedImageTag $ImageTag
+        Write-Host "MINOS Docker release image PREPARED: $PreparedImage" -ForegroundColor Green
+        Write-Output $PreparedImage
+    }
     'Install' {
         if ([string]::IsNullOrWhiteSpace($Jar)) { throw '-Jar is required for Install. Use the shaded JAR from the same MINOS release.' }
         $Jar = (Resolve-Path -LiteralPath $Jar).Path
@@ -142,24 +201,8 @@ switch ($Action) {
             if (Test-Path -LiteralPath $RuntimeRoot) { Copy-Item -LiteralPath $RuntimeRoot -Destination (Join-Path $Backup 'runtime') -Recurse }
         }
 
-        $BuildContext = Join-Path $RuntimeRoot 'build'
-        Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
-        Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
-        $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
         $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-        if ([string]::IsNullOrWhiteSpace($ImageTag)) {
-            $SafeVersion = $Version.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
-            $ShortCommit = $Commit.Substring(0, [Math]::Min(12, $Commit.Length))
-            $ImageTag = "$SafeVersion-$ShortCommit"
-        }
-        $Image = "minos-code-intelligence:$ImageTag"
-        & docker build --file $Dockerfile --tag $Image `
-            --build-arg "MINOS_VERSION=$Version" `
-            --build-arg "MINOS_GIT_COMMIT=$Commit" `
-            --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext
-        if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
-        Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
+        $Image = Ensure-ReleaseImage -JarPath $Jar -RequestedVersion $Version -RequestedCommit $Commit -RequestedImageTag $ImageTag
 
         Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
         @"
