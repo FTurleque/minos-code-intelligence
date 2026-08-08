@@ -19,7 +19,7 @@ v1.0.1 Windows                  EN PRÉPARATION — NON PUBLIÉE
 #98 sandbox OS réelle           OPEN — limitation explicite
 ```
 
-Le code produit courant contient donc M29 et M30. Les anciennes mentions « M29 en cours », « S7 à qualifier », « S8 pending » ou « M30 non livré » ne décrivent plus l'état courant et doivent être lues uniquement comme historique lorsqu'elles apparaissent dans des journaux d'exécution datés.
+Le code produit courant contient donc M29 et M30. Les anciennes mentions « M29 en cours », « S7 à qualifier », « S8 pending » ou les anciennes assertions indiquant que M30 n'était pas livré ne décrivent plus l'état courant et doivent être lues uniquement comme historique lorsqu'elles apparaissent dans des journaux d'exécution datés.
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
