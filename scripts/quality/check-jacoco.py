@@ -11,202 +11,97 @@ import xml.etree.ElementTree as ET
 
 
 SCOPES = {
-    "domain-invariants": {
-        "prefixes": ("com/minos/domain/",),
-        "line": 0.35,
-        "branch": 0.20,
-    },
+    "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.35, "branch": 0.20},
     "persistence-cache-indexes": {
         "prefixes": (
-            "com/minos/store/FileSymbolSnapshotStore",
-            "com/minos/store/ActiveSnapshotRepository",
-            "com/minos/store/SnapshotCodec",
-            "com/minos/store/SnapshotIntegrityService",
-            "com/minos/store/InMemoryCodeKnowledgeStore",
-            "com/minos/store/SnapshotQueryView",
-        ),
-        "line": 0.50,
-        "branch": 0.35,
+            "com/minos/store/FileSymbolSnapshotStore", "com/minos/store/ActiveSnapshotRepository",
+            "com/minos/store/SnapshotCodec", "com/minos/store/SnapshotIntegrityService",
+            "com/minos/store/InMemoryCodeKnowledgeStore", "com/minos/store/SnapshotQueryView",
+        ), "line": 0.50, "branch": 0.35,
     },
-    "project-resolution": {
-        "prefixes": ("com/minos/application/ProjectResolver",),
-        "line": 0.70,
-        "branch": 0.50,
-    },
-    "public-api": {
-        "prefixes": ("com/minos/api/",),
-        "line": 0.30,
-        "branch": 0.20,
-    },
-    "mcp-mapping": {
-        "prefixes": ("com/minos/mcp/",),
-        "line": 0.30,
-        "branch": 0.20,
-    },
+    "project-resolution": {"prefixes": ("com/minos/application/ProjectResolver",), "line": 0.70, "branch": 0.50},
+    "public-api": {"prefixes": ("com/minos/api/",), "line": 0.30, "branch": 0.20},
+    "mcp-mapping": {"prefixes": ("com/minos/mcp/",), "line": 0.30, "branch": 0.20},
     "program-graph-analysis": {
         "prefixes": (
-            "com/minos/program/analysis/ProgramGraphService",
-            "com/minos/program/analysis/ProgramGraphComposer",
-            "com/minos/program/analysis/RelationshipProgramGraphProvider",
-            "com/minos/program/analysis/FileProgramGraphProvider",
-            "com/minos/program/analysis/ProgramGraphEvaluator",
-            "com/minos/program/analysis/InterproceduralFlowService",
-        ),
-        "line": 0.50,
-        "branch": 0.30,
+            "com/minos/program/analysis/ProgramGraphService", "com/minos/program/analysis/ProgramGraphComposer",
+            "com/minos/program/analysis/RelationshipProgramGraphProvider", "com/minos/program/analysis/FileProgramGraphProvider",
+            "com/minos/program/analysis/ProgramGraphEvaluator", "com/minos/program/analysis/InterproceduralFlowService",
+        ), "line": 0.50, "branch": 0.30,
     },
     "java-advanced-provider": {
         "prefixes": (
-            "com/minos/program/analysis/JavaSourceProgramGraphProvider",
-            "com/minos/program/analysis/JavaSourceWorkspace",
-            "com/minos/program/analysis/JavaAstParser",
-            "com/minos/program/analysis/JavaAstSupport",
-            "com/minos/program/analysis/JavaProgramModel",
-            "com/minos/program/analysis/JavaSecurityRules",
-            "com/minos/program/analysis/JavaProgramGraphContext",
-            "com/minos/program/analysis/JavaDefUseAnalyzer",
-            "com/minos/program/analysis/JavaControlFlowAnalyzer",
-            "com/minos/program/analysis/JavaInterproceduralFlowResolver",
-            "com/minos/program/analysis/JavaTaintAnalyzer",
-            "com/minos/program/analysis/JavaProgramGraphAssembler",
-            "com/minos/program/analysis/JavaProgramGraphEngine",
-            "com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider",
-        ),
-        "line": 0.45,
-        "branch": 0.25,
+            "com/minos/program/analysis/JavaSourceProgramGraphProvider", "com/minos/program/analysis/JavaSourceWorkspace",
+            "com/minos/program/analysis/JavaAstParser", "com/minos/program/analysis/JavaAstSupport",
+            "com/minos/program/analysis/JavaProgramModel", "com/minos/program/analysis/JavaSecurityRules",
+            "com/minos/program/analysis/JavaProgramGraphContext", "com/minos/program/analysis/JavaDefUseAnalyzer",
+            "com/minos/program/analysis/JavaControlFlowAnalyzer", "com/minos/program/analysis/JavaInterproceduralFlowResolver",
+            "com/minos/program/analysis/JavaTaintAnalyzer", "com/minos/program/analysis/JavaProgramGraphAssembler",
+            "com/minos/program/analysis/JavaProgramGraphEngine", "com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider",
+        ), "line": 0.45, "branch": 0.25,
     },
     "advanced-impact-security": {
-        "prefixes": (
-            "com/minos/program/analysis/AdvancedImpactService",
-            "com/minos/program/analysis/SecurityAnalysisService",
-        ),
-        "line": 0.45,
-        "branch": 0.25,
+        "prefixes": ("com/minos/program/analysis/AdvancedImpactService", "com/minos/program/analysis/SecurityAnalysisService"),
+        "line": 0.45, "branch": 0.25,
     },
-    "semantic-vector-store": {
-        "prefixes": ("com/minos/store/FileSemanticVectorStore",),
-        "line": 0.45,
-        "branch": 0.20,
-    },
-    "semantic-learned-provider": {
-        "prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",),
-        "line": 0.50,
-        "branch": 0.30,
-    },
+    "semantic-vector-store": {"prefixes": ("com/minos/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
+    "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.50, "branch": 0.30},
     "semantic-hybrid-retrieval": {
         "prefixes": (
-            "com/minos/semantic/SemanticDocumentFactory",
-            "com/minos/semantic/SemanticIndexService",
-            "com/minos/semantic/SemanticSearchService",
-            "com/minos/semantic/HybridSearchService",
-            "com/minos/semantic/HybridContextBuilder",
-            "com/minos/semantic/SemanticSearchEvaluator",
-        ),
-        "line": 0.50,
-        "branch": 0.30,
+            "com/minos/semantic/SemanticDocumentFactory", "com/minos/semantic/SemanticIndexService",
+            "com/minos/semantic/SemanticSearchService", "com/minos/semantic/HybridSearchService",
+            "com/minos/semantic/HybridContextBuilder", "com/minos/semantic/SemanticSearchEvaluator",
+        ), "line": 0.50, "branch": 0.30,
     },
     "advanced-public-api": {
         "prefixes": (
-            "com/minos/api/AdvancedCodeIntelligenceApi",
-            "com/minos/api/LocalAdvancedCodeIntelligenceApi",
-            "com/minos/api/SemanticCodeIntelligenceApi",
-            "com/minos/api/LocalSemanticCodeIntelligenceApi",
-        ),
-        "line": 0.45,
-        "branch": 0.25,
+            "com/minos/api/AdvancedCodeIntelligenceApi", "com/minos/api/LocalAdvancedCodeIntelligenceApi",
+            "com/minos/api/SemanticCodeIntelligenceApi", "com/minos/api/LocalSemanticCodeIntelligenceApi",
+        ), "line": 0.45, "branch": 0.25,
     },
-    "m19-m20-mcp-catalogue": {
-        "prefixes": ("com/minos/mcp/MinosMcpTools",),
-        "line": 0.50,
-        "branch": 0.30,
-    },
+    "m19-m20-mcp-catalogue": {"prefixes": ("com/minos/mcp/MinosMcpTools",), "line": 0.50, "branch": 0.30},
     "m24-polyglot-provider-platform": {
         "prefixes": (
-            "com/minos/orchestration/ProviderConformanceKit",
-            "com/minos/orchestration/ProviderOperationalProfile",
-            "com/minos/adapter/scip/ScipIndexerCatalog",
-            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
-            "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory",
-            "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
-        ),
-        "line": 0.30,
-        "branch": 0.15,
+            "com/minos/orchestration/ProviderConformanceKit", "com/minos/orchestration/ProviderOperationalProfile",
+            "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
+            "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
+            "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
+        ), "line": 0.30, "branch": 0.15,
     },
     "m25-remote-distributed-indexing": {
         "prefixes": (
-            "com/minos/remote/",
-            "com/minos/git/JGitRemoteRepositoryMaterializer",
-            "com/minos/git/RemoteRepositoryCachePolicy",
-            "com/minos/runtime/DistributedArtifactBundleStore",
-            "com/minos/runtime/DistributedArtifactCachePolicy",
-            "com/minos/runtime/DistributedIndexerExecutor",
-            "com/minos/runtime/LocalIsolatedIndexWorker",
-            "com/minos/runtime/WorkerSandboxBackend",
-            "com/minos/runtime/WorkerSandboxQualification",
-            "com/minos/cli/LocalRemoteIndexOperations",
-            "com/minos/cli/RemoteIndexCommand",
-        ),
-        "line": 0.45,
-        "branch": 0.25,
+            "com/minos/remote/", "com/minos/git/JGitRemoteRepositoryMaterializer", "com/minos/git/RemoteRepositoryCachePolicy",
+            "com/minos/runtime/DistributedArtifactBundleStore", "com/minos/runtime/DistributedArtifactCachePolicy",
+            "com/minos/runtime/DistributedIndexerExecutor", "com/minos/runtime/LocalIsolatedIndexWorker",
+            "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
+            "com/minos/cli/LocalRemoteIndexOperations", "com/minos/cli/RemoteIndexCommand",
+        ), "line": 0.45, "branch": 0.25,
     },
     "m26-runtime-dynamic-intelligence": {
-        "prefixes": (
-            "com/minos/dynamic/",
-            "com/minos/store/FileRuntimeObservationStore",
-            "com/minos/cli/RuntimeCommand",
-            "com/minos/output/RuntimeIntelligenceRenderer",
-        ),
-        "line": 0.55,
-        "branch": 0.35,
+        "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
+        "line": 0.55, "branch": 0.35,
     },
     "m27-team-hosted-control-plane": {
         "prefixes": (
-            "com/minos/hosted/",
-            "com/minos/store/FileHostedControlPlaneStore",
-            "com/minos/store/EnvironmentHostedTenantKeyProvider",
-            "com/minos/cli/TeamCommand",
-            "com/minos/api/LocalMinosTeamApi",
-            "com/minos/output/HostedControlPlaneRenderer",
-        ),
-        "line": 0.45,
-        "branch": 0.25,
+            "com/minos/hosted/", "com/minos/store/FileHostedControlPlaneStore", "com/minos/store/EnvironmentHostedTenantKeyProvider",
+            "com/minos/cli/TeamCommand", "com/minos/api/LocalMinosTeamApi", "com/minos/output/HostedControlPlaneRenderer",
+        ), "line": 0.45, "branch": 0.25,
     },
     "m29-backend-routing": {
         "prefixes": (
-            "com/minos/cli/McpBackend",
-            "com/minos/cli/McpBackendConfiguration",
-            "com/minos/cli/McpBackendConfigurationStore",
-            "com/minos/cli/McpBackendRouter",
-            "com/minos/cli/DockerRuntimeBootstrap",
+            "com/minos/cli/McpBackend", "com/minos/cli/McpBackendConfiguration", "com/minos/cli/McpBackendConfigurationStore",
+            "com/minos/cli/McpBackendRouter", "com/minos/cli/DockerRuntimeBootstrap",
         ),
-        # The aggregate report is generated by minos-app itself. With JaCoCo
-        # 0.8.15 it analyzes the current project's classes but does not load the
-        # current project's target/jacoco.exec, leaving those classes at 0% even
-        # though their Surefire tests ran. The module report does load that exec
-        # file, so M29 must be measured against the module report.
         "report": "target/site/jacoco/jacoco.xml",
-        "line": 0.55,
-        "branch": 0.30,
+        "line": 0.55, "branch": 0.30,
     },
     "m30-storage-backend-selection": {
         "prefixes": (
-            "com/minos/storage/StorageBackend",
-            "com/minos/storage/StorageBackendConfiguration",
-            "com/minos/storage/StorageBackendProvider",
-            "com/minos/storage/StorageBackends",
-            "com/minos/storage/LocalStorageBackend",
-            "com/minos/storage/MinosRuntimeSettings",
-        ),
-        "line": 0.50,
-        "branch": 0.30,
+            "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
+            "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
+        ), "line": 0.50, "branch": 0.30,
     },
-    "m30-postgresql-pgvector": {
-        "prefixes": ("com/minos/storage/postgresql/",),
-        "line": 0.45,
-        "branch": 0.25,
-    },
+    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.45, "branch": 0.25},
 }
 
 
@@ -237,16 +132,11 @@ def load_classes(report: Path, cache: dict[Path, list[ET.Element]]) -> list[ET.E
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("xml", nargs="?", default="target/site/jacoco-aggregate/jacoco.xml", help="JaCoCo aggregate XML report")
+    parser.add_argument("--output", default="target/m21-quality/jacoco-gate.json", help="machine-readable gate result")
     parser.add_argument(
-        "xml",
-        nargs="?",
-        default="target/site/jacoco-aggregate/jacoco.xml",
-        help="JaCoCo aggregate XML report",
-    )
-    parser.add_argument(
-        "--output",
-        default="target/m21-quality/jacoco-gate.json",
-        help="machine-readable gate result",
+        "--skip-scope", action="append", default=[], choices=sorted(SCOPES),
+        help="Skip one environment-inapplicable scope. May be repeated.",
     )
     args = parser.parse_args()
 
@@ -255,32 +145,30 @@ def main() -> int:
         print(f"ERROR: JaCoCo aggregate report not found: {default_report}", file=sys.stderr)
         return 2
 
+    skipped = set(args.skip_scope)
     cache: dict[Path, list[ET.Element]] = {}
     results: dict[str, object] = {"report": str(default_report), "scopes": {}}
     failures: list[str] = []
 
     for name, config in SCOPES.items():
+        if name in skipped:
+            results["scopes"][name] = {"classes": 0, "status": "SKIPPED", "reason": "explicit environment-specific exclusion"}
+            print(f"JaCoCo {name}: SKIPPED (explicit environment-specific exclusion)")
+            continue
+
         report = Path(str(config.get("report", default_report)))
         try:
             all_classes = load_classes(report, cache)
         except FileNotFoundError:
             failures.append(f"{name}: JaCoCo report not found: {report}")
-            results["scopes"][name] = {
-                "classes": 0,
-                "report": str(report),
-                "status": "FAIL",
-            }
+            results["scopes"][name] = {"classes": 0, "report": str(report), "status": "FAIL"}
             continue
 
         prefixes = tuple(config["prefixes"])
         classes = [clazz for clazz in all_classes if clazz.attrib.get("name", "").startswith(prefixes)]
         if not classes:
             failures.append(f"{name}: no classes matched {prefixes} in {report}")
-            results["scopes"][name] = {
-                "classes": 0,
-                "report": str(report),
-                "status": "FAIL",
-            }
+            results["scopes"][name] = {"classes": 0, "report": str(report), "status": "FAIL"}
             continue
 
         counters = counters_for(classes)
@@ -290,18 +178,10 @@ def main() -> int:
         branch_min = float(config["branch"])
         passed = line >= line_min and branch >= branch_min
         if not passed:
-            failures.append(
-                f"{name}: line={line:.3f} (min {line_min:.3f}), "
-                f"branch={branch:.3f} (min {branch_min:.3f})"
-            )
+            failures.append(f"{name}: line={line:.3f} (min {line_min:.3f}), branch={branch:.3f} (min {branch_min:.3f})")
         results["scopes"][name] = {
-            "classes": len(classes),
-            "report": str(report),
-            "line": round(line, 6),
-            "lineMinimum": line_min,
-            "branch": round(branch, 6),
-            "branchMinimum": branch_min,
-            "status": "PASS" if passed else "FAIL",
+            "classes": len(classes), "report": str(report), "line": round(line, 6), "lineMinimum": line_min,
+            "branch": round(branch, 6), "branchMinimum": branch_min, "status": "PASS" if passed else "FAIL",
         }
 
     output = Path(args.output)
@@ -309,10 +189,11 @@ def main() -> int:
     output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 
     for name, result in results["scopes"].items():
+        if result.get("status") == "SKIPPED":
+            continue
         print(
-            f"JaCoCo {name}: {result.get('status')} "
-            f"line={result.get('line', 'n/a')} branch={result.get('branch', 'n/a')} "
-            f"classes={result.get('classes')} report={result.get('report')}"
+            f"JaCoCo {name}: {result.get('status')} line={result.get('line', 'n/a')} "
+            f"branch={result.get('branch', 'n/a')} classes={result.get('classes')} report={result.get('report')}"
         )
 
     if failures:
