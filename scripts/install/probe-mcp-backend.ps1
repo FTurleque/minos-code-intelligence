@@ -32,6 +32,39 @@ function Resolve-InstallRoot([string] $Launcher) {
     return $Parent
 }
 
+function Stop-ProbeProcessTree([System.Diagnostics.Process] $Process) {
+    if ($null -eq $Process -or $Process.HasExited) {
+        return
+    }
+
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & taskkill.exe /PID $Process.Id /T /F | Out-Null
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+
+    try {
+        $Process.WaitForExit(5000) | Out-Null
+    }
+    catch {
+        # Best effort only. The caller will still fail the probe after the deadline.
+    }
+}
+
+function Read-ProbeEvidence([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return '<empty>'
+    }
+    $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8).Trim()
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return '<empty>'
+    }
+    return $Text
+}
+
 $InstallRoot = Resolve-InstallRoot -Launcher $LauncherPath
 $RuntimeJava = Join-Path $InstallRoot 'app\runtime\bin\java.exe'
 $ProbeClasspath = Join-Path $InstallRoot 'lib\minos.jar'
@@ -41,27 +74,56 @@ foreach ($Required in @($RuntimeJava, $ProbeClasspath)) {
     }
 }
 
-# The release/install probe deliberately delegates MCP framing, protocol
-# negotiation and STDIO lifecycle to the same MCP Java SDK client used by MINOS'
-# integration tests. The child process remains the real packaged launcher, so a
-# broken jpackage runtime or MCP entry point still fails this gate.
-$PreviousErrorActionPreference = $ErrorActionPreference
-try {
-    $ErrorActionPreference = 'Continue'
-    $ProbeOutput = @(
-        & $RuntimeJava `
-            '-cp' $ProbeClasspath `
-            'com.minos.mcp.MinosMcpHandshakeProbe' `
-            $LauncherPath `
-            $CandidateHome `
-            ([string]$TimeoutSeconds) 2>&1 |
-            ForEach-Object { $_.ToString() }
-    )
-    $ProbeExit = $LASTEXITCODE
+# Delegate MCP framing, protocol negotiation and STDIO lifecycle to the same MCP
+# Java SDK client used by MINOS integration tests. Do not pipe the child process
+# output through PowerShell: descendants can inherit those pipe handles and keep
+# the pipeline open after the probe JVM exits. Redirect to files instead and own
+# an independent wall-clock deadline for the entire Java + launcher process tree.
+$ProbeStdout = Join-Path $CandidateHome 'mcp-probe.stdout.log'
+$ProbeStderr = Join-Path $CandidateHome 'mcp-probe.stderr.log'
+Remove-Item -LiteralPath $ProbeStdout, $ProbeStderr -Force -ErrorAction SilentlyContinue
+
+$ProbeArguments = @(
+    '-cp',
+    ('"' + $ProbeClasspath + '"'),
+    'com.minos.mcp.MinosMcpHandshakeProbe',
+    ('"' + $LauncherPath + '"'),
+    ('"' + $CandidateHome + '"'),
+    ([string]$TimeoutSeconds)
+)
+$ProbeProcess = Start-Process `
+    -FilePath $RuntimeJava `
+    -ArgumentList $ProbeArguments `
+    -PassThru `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $ProbeStdout `
+    -RedirectStandardError $ProbeStderr
+
+$ProcessDeadlineSeconds = $TimeoutSeconds + 15
+$Completed = $ProbeProcess.WaitForExit($ProcessDeadlineSeconds * 1000)
+if (-not $Completed) {
+    Stop-ProbeProcessTree -Process $ProbeProcess
+    $StdoutEvidence = Read-ProbeEvidence -Path $ProbeStdout
+    $StderrEvidence = Read-ProbeEvidence -Path $ProbeStderr
+    throw @"
+MINOS MCP backend handshake timed out after ${ProcessDeadlineSeconds}s
+launcher: $LauncherPath
+MINOS_HOME: $CandidateHome
+runtime java: $RuntimeJava
+probe classpath: $ProbeClasspath
+stdout:
+$StdoutEvidence
+stderr:
+$StderrEvidence
+"@
 }
-finally {
-    $ErrorActionPreference = $PreviousErrorActionPreference
-}
+
+$ProbeExit = $ProbeProcess.ExitCode
+$StdoutEvidence = Read-ProbeEvidence -Path $ProbeStdout
+$StderrEvidence = Read-ProbeEvidence -Path $ProbeStderr
+$ProbeOutput = @()
+if ($StdoutEvidence -ne '<empty>') { $ProbeOutput += $StdoutEvidence }
+if ($StderrEvidence -ne '<empty>') { $ProbeOutput += $StderrEvidence }
 
 $BackendFile = Join-Path $CandidateHome 'runtime\backend.properties'
 $BackendEvidence = if (Test-Path -LiteralPath $BackendFile -PathType Leaf) {
