@@ -11,14 +11,19 @@ C0 → M30                         ✅ terminés / intégrés
 MINOS 1.0.0                      ✅ publiée le 1er août 2026 / immuable
 M29 #107                         ✅ CLOSED / PR #108 merged
 M30                              ✅ PR #110 + promotion #111 merged
+hardening #113                   ✅ merged
+CI Windows M28 #117              ✅ merged
+promotion develop → main #112    ✅ merged
+main qualifié                    c2593ad7f9efa3d14a6fcfe7062811f64da425b3
 #98 sandbox OS worker réelle     🚧 OPEN
-MINOS 1.0.1                      🚧 en préparation — NON PUBLIÉE
-hardening release/installer      🚧 PR #113
+MINOS 1.0.1                      🚧 pré-publication — NON PUBLIÉE
 ```
 
-La ligne 1.0.1 corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening post-audit avant construction d'un nouveau candidat exact-head.
+La ligne 1.0.1 corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
 
-Voir [`docs/STATUS.md`](docs/STATUS.md) et [`docs/ROADMAP.md`](docs/ROADMAP.md).
+> **Important :** un ancien tag Git `v1.0.1` existe encore sur un commit antérieur au hardening final. Il ne constitue **pas** le candidat final 1.0.1 et ne doit pas être utilisé comme release. Le workflow de publication refuse explicitement de déplacer ou d'écraser un tag existant.
+
+Voir [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) et [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
 
 ## Capacités principales
 
@@ -149,12 +154,13 @@ Le hardening post-audit impose notamment :
 
 - Jackson 2 et Jackson 3 sur des versions corrigées ;
 - scan OSV bloquant sur les dépendances ;
-- PostgreSQL/pgvector réel obligatoire dans la CI de qualification ;
-- CI sur PR puis sur le HEAD résultant de `develop`/`main` ;
+- PostgreSQL/pgvector réel obligatoire sur le gate Linux ;
+- CI sur PR puis sur les HEAD intégrés de `develop`/`main` ;
 - JaCoCo étendu aux responsabilités M29/M30 ;
-- handshake MCP réel ;
-- vérification dédiée du plugin IntelliJ ;
-- smoke du runtime et de l'installateur Windows.
+- handshake MCP réel sur ZIP et setup installé ;
+- build + Plugin Verifier IntelliJ ;
+- smoke install/handshake/uninstall du setup Windows ;
+- préflight de publication qui refuse un tag/release déjà existant.
 
 Aucun ancien setup/ZIP 1.0.1 construit avant cette convergence ne constitue le candidat final.
 
@@ -172,7 +178,7 @@ Sur Linux/macOS :
 ./mvnw clean verify
 ```
 
-La qualification CI exige en plus un Docker utilisable pour les tests PostgreSQL/pgvector.
+La qualification Linux exige en plus un Docker utilisable pour les tests PostgreSQL/pgvector.
 
 ## Documentation
 
