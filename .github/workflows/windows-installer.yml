@@ -7,6 +7,7 @@ on:
       - 'packaging/windows/**'
       - 'scripts/install/**'
       - 'scripts/release/**'
+      - 'scripts/m14/MinosNativeMcpSmoke.java'
       - 'docker/**'
       - 'pom.xml'
       - 'minos-*/pom.xml'
@@ -19,6 +20,7 @@ on:
       - 'packaging/windows/**'
       - 'scripts/install/**'
       - 'scripts/release/**'
+      - 'scripts/m14/MinosNativeMcpSmoke.java'
       - 'docker/**'
       - 'pom.xml'
       - 'minos-*/pom.xml'
@@ -81,10 +83,18 @@ jobs:
         run: |
           .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify
 
-      - name: Compile isolated smoke setup
+      - name: Install, handshake and uninstall isolated candidate
         shell: powershell
         run: |
-          .\scripts\release\build-windows-installer.ps1 -Version 1.0.1 -Smoke
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne '${{ github.event.pull_request.head.sha || github.sha }}') {
+            throw "Exact-head mismatch before smoke validation: checkout=$head expected=${{ github.event.pull_request.head.sha || github.sha }}"
+          }
+          .\scripts\release\publish-windows-release.ps1 `
+            -Version 1.0.1 `
+            -TargetCommit $head `
+            -SkipBuild `
+            -ValidateOnly
 
       - name: Verify candidate artifacts
         shell: powershell
