@@ -44,6 +44,9 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@v7
         with:
+          # PR workflows normally checkout GitHub's synthetic merge ref. Release
+          # provenance must instead identify the exact branch HEAD being qualified.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Java 24
@@ -102,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: minos-windows-installer-${{ github.sha }}-${{ github.run_attempt }}
+          name: minos-windows-installer-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 14
           path: |
