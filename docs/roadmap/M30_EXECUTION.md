@@ -1,38 +1,39 @@
 # M30 — Advanced Installer, Ollama Docker & PostgreSQL/pgvector Storage
 
-Statut : **QUALIFIÉ LOCAL — en attente d'autorisation push**  
-Issue : **#109**  
-PR : **#110 (DRAFT)**  
-Branche : **`m30-advanced-installer-postgres-ollama`**  
-Baseline : **M29 / PR #108, HEAD initial `fc1243d74b20d1198cf32c0ee380142c6aa6848b`**  
-HEAD local : **`d3b34a3`** (fix(m30): seed backend.properties before switch to prevent loadOrMigrate() race)
+Statut : **TERMINÉ / INTÉGRÉ**  
+Issue : **#109 — CLOSED / completed**  
+PR d'implémentation : **#110 — MERGED vers `develop`**  
+PR de promotion : **#111 — MERGED vers `main`**  
+Branche historique : **`m30-advanced-installer-postgres-ollama`**
 
-## Objectif produit
+Ce document est désormais un **registre historique d'exécution**. L'état produit courant est dans [`../STATUS.md`](../STATUS.md).
 
-Rendre indépendants les trois axes de configuration MINOS :
+## Objectif livré
+
+M30 a rendu indépendants les trois axes de configuration :
 
 ```text
-runtime   : native | docker
-storage   : local | postgresql
-semantic  : disabled | local-hash | ollama
+runtime MCP  : native | docker | none
+storage      : local | postgresql
+semantic     : disabled | local-hash | ollama
 ```
 
-Le wizard Windows doit offrir un mode Standard rétrocompatible et un mode Avancé réellement fonctionnel. Aucun placeholder PostgreSQL/H2 n'est présenté comme une fonctionnalité livrée.
+Le wizard Windows fournit un mode Standard rétrocompatible et un mode Avancé fonctionnel, sans faux label H2 ni placeholder PostgreSQL.
 
-## Invariants
+## Invariants livrés
 
-1. Le backend historique est nommé `local`, jamais `H2`.
-2. `MINOS_HOME` est une racine de données/configuration, pas une base de données.
-3. `local` reste le défaut sans régression.
-4. `postgresql` est fail-closed : aucun fallback silencieux vers `local`.
-5. pgvector est utilisé comme moteur vectoriel réel quand PostgreSQL est sélectionné ; le backend local conserve `index-v2.bin` et son scan exact historique.
-6. Les UUID projet/workspace et les snapshot IDs restent les identités autoritatives entre backends.
-7. Les mots de passe ne sont ni journalisés, ni stockés dans les configs MCP tierces ; un fichier secret ACL-isolé est utilisé pour le PostgreSQL géré.
-8. Le query plane Docker connecté n'obtient aucun egress Internet : PostgreSQL/Ollama sont accessibles via un réseau Docker `internal` dédié.
-9. L'admin plane conserve seul l'egress requis pour les dépendances projet.
-10. Ollama Docker n'autorise que le service géré `minos-ollama`; les endpoints réseau arbitraires restent refusés par le provider Java.
-11. Copilot/Claude/Codex continuent d'appeler le point d'entrée stable `minos.exe mcp`.
-12. Upgrade, reinstall, ownership et uninstall doivent préserver les données/configurations tierces par défaut.
+1. Le backend historique s'appelle `local`.
+2. `MINOS_HOME` est une racine de données/configuration.
+3. `local` reste le défaut rétrocompatible.
+4. `postgresql` est fail-closed ; aucun fallback silencieux vers `local`.
+5. pgvector est utilisé lorsque PostgreSQL est sélectionné ; le store local reste disponible.
+6. Les identités projet/workspace/snapshot restent stables entre backends.
+7. Les secrets PostgreSQL ne sont pas placés dans les configs MCP tierces ni exposés dans les diagnostics sûrs.
+8. PostgreSQL/Ollama gérés sont derrière un réseau Docker interne.
+9. Le query plane n'obtient pas un egress Internet général.
+10. Ollama n'accepte pas des endpoints distants arbitraires.
+11. Copilot/Claude/Codex continuent d'appeler `minos.exe mcp`.
+12. Upgrade/reinstall/uninstall préservent les données et configurations tierces par défaut.
 
 ## Architecture storage
 
@@ -48,7 +49,7 @@ File*       JDBC stores
 index-v2   pgvector
 ```
 
-Le provider PostgreSQL est chargé via `ServiceLoader`, ce qui maintient `minos-application` indépendant du driver JDBC.
+Le provider PostgreSQL est chargé comme backend de stockage de premier rang et fournit registry, snapshots, index state, fingerprints, observations runtime et vecteurs sémantiques nécessaires.
 
 ## Architecture Docker connectée
 
@@ -68,62 +69,73 @@ Le provider PostgreSQL est chargé via `ServiceLoader`, ce qui maintient `minos-
 minos-admin -> internal network + dependency-egress network
 ```
 
-Aucun port PostgreSQL/Ollama n'est publié pour le runtime Docker géré.
+Aucun port PostgreSQL/Ollama n'est requis sur l'hôte pour le runtime Docker géré.
 
-## Sous-étapes
+## Sous-étapes livrées
 
-| Étape | Objet | État |
+| Étape | Objet | Résultat |
 |---|---|---|
-| M30-S1 | Storage ports, backend SPI, configuration durable | ✅ PASS — reactor + qualification locale |
-| M30-S2 | PostgreSQL registry/snapshots/state/fingerprint/runtime stores | ✅ PASS — tests intégration (Docker skip gracieux), codec sans round-trip temp |
-| M30-S3 | pgvector semantic storage + SQL cosine ranking | ✅ PASS — scan exact qualifié (limitation ANN connue, V2) |
-| M30-S4 | Ollama Docker internal-only | ✅ PASS — depends_on `required:false`, validation modèle présent, endpoint allowlist |
-| M30-S5 | Wizard Standard/Avancé | ✅ PASS — build installateur EXE succès, verifiers passent |
-| M30-S6 | MCP server name / config ownership / upgrade | ✅ PASS — uninstall ciblé, ownership par serveur |
-| M30-S7 | Managed Docker PostgreSQL lifecycle + external native PostgreSQL | ✅ PASS — volumes persistants, fail-closed, passwd ACL |
-| M30-S8 | Full qualification matrix | ✅ PASS — 7/7 combinaisons (2026-08-04) |
+| M30-S1 | Storage SPI & configuration durable | ✅ livré |
+| M30-S2 | PostgreSQL stores | ✅ livré / testé |
+| M30-S3 | pgvector semantic store / ranking | ✅ livré / testé |
+| M30-S4 | Ollama Docker internal-only | ✅ livré |
+| M30-S5 | Wizard Standard / Avancé | ✅ livré |
+| M30-S6 | Intégrations MCP nommées | ✅ livré |
+| M30-S7 | PostgreSQL/pgvector Docker géré | ✅ livré |
+| M30-S8 | Matrice de qualification | ✅ qualification locale + promotion CI PR #111 |
 
-## Qualification cible
+La PR #111 décrit le dernier HEAD qualifié avant promotion et les artefacts de qualification M30 de l'époque.
 
-Matrice minimale :
+## Wizard livré
+
+Le setup distingue :
 
 ```text
-Native / Local      / local-hash
-Native / Local      / Ollama
-Native / PostgreSQL / Ollama
-Docker / Local      / local-hash
-Docker / Local      / Ollama
-Docker / PostgreSQL / local-hash
-Docker / PostgreSQL / Ollama
+Standard — recommandé
+Avancée
 ```
 
-Gates supplémentaires : migration local→PostgreSQL, exact identities, pgvector ranking, setup Standard/Avancé, upgrade/reinstall, uninstall keep/purge, MCP clients et parité Native/Docker.
+Le mode Avancé expose data root, nom MCP, runtime, stockage, sémantique, paramètres PostgreSQL/Ollama et identité Docker. Les clients IA restent backend-agnostic.
 
-## Qualification locale — 2026-08-04
+Le hardening post-audit PR #113 améliore encore cette surface en distinguant explicitement Claude CLI/Code, Codex CLI et Codex Desktop et en renforçant le récapitulatif des composants réellement gérés. Ces ajustements sont postérieurs à la livraison M30 et ne constituent pas une réouverture du jalon.
 
-### Matrice MCP handshake (7/7 PASS)
+## PostgreSQL / pgvector
 
-| # | Runtime | Storage | Semantic | initialize | tools/list |
-|---|---|---|---|---|---|
-| N1 | Native | Local | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
-| N2 | Native | Local | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
-| N3 | Native | PostgreSQL | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
-| D4 | Docker | Local | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
-| D5 | Docker | Local | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
-| D6 | Docker | PostgreSQL | local-hash | ✅ | minos_search_code ✅ minos_impact ✅ |
-| D7 | Docker | PostgreSQL | Ollama | ✅ | minos_search_code ✅ minos_impact ✅ |
+Le backend PostgreSQL dispose de migrations idempotentes et d'un store pgvector réel. Le ranking qualifié reste exact à cette étape ; les index ANN/HNSW/IVFFlat restent une optimisation future, pas un claim M30.
 
-### Artefacts distribution (version 1.0.1)
+## Ollama
 
-| Artefact | SHA-256 |
-|---|---|
-| `MINOS-1.0.1-windows-x64-setup.exe` | `82d4f36b519c0f7a63a5a9b2941c5833c279164c449579fa82f728367abb75be` |
-| `minos-1.0.1-windows-x64.zip` | `7c4c99c29b89e59d65c5ced8d1a5ab2d2b02b56a2144728368b0ed5b4620f9da` |
-| `minos-1.0.1.cdx.json` (SBOM) | `ed6bb5610e861168bb45c9d1b9daf9baa4ecd8bc64b6abbdc22bd66c4d9d70b5` |
+Deux modes sont supportés :
 
-### Limitations connues (scope V1)
+- runtime natif → instance locale/loopback existante ;
+- runtime Docker → sidecar Ollama géré sur réseau interne.
 
-- **Scan exact pgvector** : l'index vectoriel V1 utilise `<=> ORDER BY LIMIT` sans index HNSW/IVFFlat. Un index ANN sera ajouté en V2 une fois la dimension standard choisie par projet.
-- **Managed Docker Windows-only** : `configure-m30-docker-services.ps1` cible Windows (`$env:OS -eq 'Windows_NT'`). Linux headless sera adressé en V2.
-- **CPU-only Ollama** : pas de support GPU dans la configuration Docker gérée V1.
-- **Docker Desktop 4.30+ / Testcontainers** : les tests d'intégration PostgreSQL sont ignorés gracieusement quand docker-java ne peut pas se connecter (pipe HTTP 400). Ils passent sur CI Linux où Docker est directement accessible depuis la JVM.
+Le provisioning d'un modèle géré utilise seulement l'egress temporaire nécessaire au pull puis retire cet accès.
+
+## Intégrations MCP
+
+Le nom du serveur MCP est configurable et propagé avec ownership/backups dans les intégrations supportées. Le point d'entrée reste :
+
+```text
+<installation>\app\minos.exe mcp
+MINOS_HOME=<data-root>
+```
+
+## Qualification et hardening ultérieur
+
+Les tests M30 initiaux autorisaient un skip local des tests PostgreSQL lorsque Docker n'était pas disponible. Le hardening PR #113 renforce ce contrat : en CI/release, PostgreSQL/pgvector devient obligatoire et une indisponibilité Docker fait échouer le gate.
+
+PR #113 ajoute également :
+
+- versions Jackson 2/3 corrigées ;
+- OSV Scanner bloquant ;
+- JaCoCo explicite M29/M30 ;
+- qualification sur push des HEAD intégrés ;
+- wizard harmonisé avec les patterns UX utiles du Windows deployment wizard de NEXUS Context Engine.
+
+## Limites explicites
+
+- PostgreSQL/pgvector géré et Ollama géré ciblent Windows/Docker pour le parcours V1 ;
+- le vector ranking pgvector reste exact dans M30 ;
+- le managed Ollama est CPU-first dans le scope M30 ;
+- #98 reste indépendante et ouverte.

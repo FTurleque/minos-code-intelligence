@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo gates for critical MINOS responsibilities through M28."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M30."""
 
 from __future__ import annotations
 
@@ -173,6 +173,34 @@ SCOPES = {
         "line": 0.45,
         "branch": 0.25,
     },
+    "m29-backend-routing": {
+        "prefixes": (
+            "com/minos/cli/McpBackend",
+            "com/minos/cli/McpBackendConfiguration",
+            "com/minos/cli/McpBackendConfigurationStore",
+            "com/minos/cli/McpBackendRouter",
+            "com/minos/cli/DockerRuntimeBootstrap",
+        ),
+        "line": 0.55,
+        "branch": 0.30,
+    },
+    "m30-storage-backend-selection": {
+        "prefixes": (
+            "com/minos/storage/StorageBackend",
+            "com/minos/storage/StorageBackendConfiguration",
+            "com/minos/storage/StorageBackendProvider",
+            "com/minos/storage/StorageBackends",
+            "com/minos/storage/LocalStorageBackend",
+            "com/minos/storage/MinosRuntimeSettings",
+        ),
+        "line": 0.50,
+        "branch": 0.30,
+    },
+    "m30-postgresql-pgvector": {
+        "prefixes": ("com/minos/storage/postgresql/",),
+        "line": 0.45,
+        "branch": 0.25,
+    },
 }
 
 
@@ -258,12 +286,12 @@ def main() -> int:
         )
 
     if failures:
-        print("M21 JACOCO GATE FAILED", file=sys.stderr)
+        print("MINOS JACOCO GATE FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
 
-    print("M21 JACOCO GATE SUCCESS")
+    print("MINOS JACOCO GATE SUCCESS")
     return 0
 
 

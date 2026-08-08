@@ -85,9 +85,10 @@ var
   McpClaudeCodeStatus: TNewStaticText;
   McpClaudeDesktop: TNewCheckBox;
   McpClaudeDesktopStatus: TNewStaticText;
-  McpCodex: TNewCheckBox;
-  McpCodexStatus: TNewStaticText;
-  McpCodexMode: String;
+  McpCodexCli: TNewCheckBox;
+  McpCodexCliStatus: TNewStaticText;
+  McpCodexDesktop: TNewCheckBox;
+  McpCodexDesktopStatus: TNewStaticText;
   McpPreflightIni: String;
   McpPreflightCompleted: Boolean;
   DockerProjectsPage: TInputDirWizardPage;
@@ -370,10 +371,10 @@ begin
   CheckBox.Checked := False;
   Status.Parent := McpClientsPage.Surface;
   Status.Left := ScaleX(13);
-  Status.Top := Top + ScaleY(21);
+  Status.Top := Top + ScaleY(19);
   Status.Width := McpClientsPage.SurfaceWidth - ScaleX(13);
   Status.AutoSize := False;
-  Status.Height := ScaleY(28);
+  Status.Height := ScaleY(22);
   Status.WordWrap := True;
 end;
 
@@ -391,12 +392,12 @@ end;
 
 procedure DisableAllMcpRows(Reason: String);
 begin
-  McpCodexMode := 'auto';
   McpCopilotJetBrains.Enabled := False; McpCopilotJetBrains.Checked := False; McpCopilotJetBrainsStatus.Caption := Reason;
   McpCopilotCli.Enabled := False; McpCopilotCli.Checked := False; McpCopilotCliStatus.Caption := Reason;
   McpClaudeCode.Enabled := False; McpClaudeCode.Checked := False; McpClaudeCodeStatus.Caption := Reason;
   McpClaudeDesktop.Enabled := False; McpClaudeDesktop.Checked := False; McpClaudeDesktopStatus.Caption := Reason;
-  McpCodex.Enabled := False; McpCodex.Checked := False; McpCodexStatus.Caption := Reason;
+  McpCodexCli.Enabled := False; McpCodexCli.Checked := False; McpCodexCliStatus.Caption := Reason;
+  McpCodexDesktop.Enabled := False; McpCodexDesktop.Checked := False; McpCodexDesktopStatus.Caption := Reason;
 end;
 
 procedure RunMcpPreflight;
@@ -408,7 +409,6 @@ var
 begin
   McpPreflightIni := ExpandConstant('{tmp}\minos-mcp-preflight.ini');
   DeleteFile(McpPreflightIni);
-  McpCodexMode := 'auto';
   try ExtractTemporaryFile('detect-mcp-clients.ps1');
   except
     DisableAllMcpRows('Détection indisponible — helper MINOS introuvable');
@@ -427,9 +427,8 @@ begin
   SetMcpAvailability(McpCopilotCli, McpCopilotCliStatus, 'CopilotCli');
   SetMcpAvailability(McpClaudeCode, McpClaudeCodeStatus, 'ClaudeCode');
   SetMcpAvailability(McpClaudeDesktop, McpClaudeDesktopStatus, 'ClaudeDesktop');
-  SetMcpAvailability(McpCodex, McpCodexStatus, 'Codex');
-  McpCodexMode := Lowercase(GetIniString('Codex', 'Mode', 'auto', McpPreflightIni));
-  if (McpCodexMode <> 'cli') and (McpCodexMode <> 'desktop') then McpCodexMode := 'auto';
+  SetMcpAvailability(McpCodexCli, McpCodexCliStatus, 'CodexCli');
+  SetMcpAvailability(McpCodexDesktop, McpCodexDesktopStatus, 'CodexDesktop');
 end;
 
 function DockerReady(): Boolean;
@@ -446,7 +445,8 @@ begin
     (McpCopilotCli.Enabled and McpCopilotCli.Checked) or
     (McpClaudeCode.Enabled and McpClaudeCode.Checked) or
     (McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked) or
-    (McpCodex.Enabled and McpCodex.Checked);
+    (McpCodexCli.Enabled and McpCodexCli.Checked) or
+    (McpCodexDesktop.Enabled and McpCodexDesktop.Checked);
 end;
 
 procedure PersistInstallerRegistry;
@@ -577,7 +577,8 @@ begin
   if McpCopilotCli.Enabled and McpCopilotCli.Checked then Parameters := Parameters + ' -CopilotCli';
   if McpClaudeCode.Enabled and McpClaudeCode.Checked then Parameters := Parameters + ' -ClaudeCode';
   if McpClaudeDesktop.Enabled and McpClaudeDesktop.Checked then Parameters := Parameters + ' -ClaudeDesktop';
-  if McpCodex.Enabled and McpCodex.Checked then Parameters := Parameters + ' -Codex -CodexMode "' + McpCodexMode + '"';
+  if McpCodexCli.Enabled and McpCodexCli.Checked then Parameters := Parameters + ' -Codex -CodexMode cli'
+  else if McpCodexDesktop.Enabled and McpCodexDesktop.Checked then Parameters := Parameters + ' -Codex -CodexMode desktop';
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
@@ -638,7 +639,7 @@ begin
   end
   else
   begin
-    OllamaModeText.Caption := 'Natif : MINOS se connecte à une instance Ollama locale existante. Pour des raisons de sécurité, l''endpoint doit être loopback.';
+    OllamaModeText.Caption := 'Natif : MINOS se connecte à une instance Ollama locale existante. Pour des raisons de sécurité, l''endpoint doit être loopback. Le setup MINOS n''installe pas Ollama en mode natif.';
     OllamaEndpointLabel.Visible := True;
     OllamaEndpointEdit.Visible := True;
     OllamaProvisionCheck.Visible := False;
@@ -649,15 +650,26 @@ procedure UpdateSummary;
 var
   Text: String;
   Clients: String;
+  ManagedComponents: String;
 begin
   Clients := '';
   if McpCopilotJetBrains.Checked then Clients := Clients + 'Copilot JetBrains, ';
   if McpCopilotCli.Checked then Clients := Clients + 'Copilot CLI, ';
-  if McpClaudeCode.Checked then Clients := Clients + 'Claude Code, ';
+  if McpClaudeCode.Checked then Clients := Clients + 'Claude CLI / Code, ';
   if McpClaudeDesktop.Checked then Clients := Clients + 'Claude Desktop, ';
-  if McpCodex.Checked then Clients := Clients + 'Codex, ';
+  if McpCodexCli.Checked then Clients := Clients + 'Codex CLI, ';
+  if McpCodexDesktop.Checked then Clients := Clients + 'Codex Desktop, ';
   if Clients = '' then Clients := 'aucun'
   else Delete(Clients, Length(Clients) - 1, 2);
+
+  ManagedComponents := 'runtime MINOS';
+  if DockerMcpSelected() then ManagedComponents := ManagedComponents + ', runtime MCP Docker';
+  if DockerMcpSelected() and PostgreSqlSelected() then ManagedComponents := ManagedComponents + ', PostgreSQL/pgvector Docker';
+  if DockerMcpSelected() and OllamaSelected() then
+  begin
+    ManagedComponents := ManagedComponents + ', Ollama Docker';
+    if OllamaProvisionCheck.Checked then ManagedComponents := ManagedComponents + ' + modèle ' + OllamaModelEdit.Text;
+  end;
 
   Text :=
     'Type d''installation : ' + IfThen(AdvancedSetupSelected(), 'Avancée', 'Standard') + #13#10 +
@@ -667,7 +679,8 @@ begin
     'Nom serveur MCP : ' + EffectiveMcpServerName() + #13#10 +
     'Stockage : ' + EffectiveStorageBackend() + #13#10 +
     'Recherche sémantique : ' + EffectiveSemanticProvider() + #13#10 +
-    'Clients IA : ' + Clients;
+    'Clients IA : ' + Clients + #13#10 +
+    'Composants gérés par MINOS : ' + ManagedComponents;
   if DockerMcpSelected() then
   begin
     Text := Text + #13#10 +
@@ -675,10 +688,18 @@ begin
       'Données Docker : ' + EffectiveDockerDataRoot() + #13#10 +
       'Instance Docker : ' + DockerInstanceEdit.Text;
     if PostgreSqlSelected() then Text := Text + #13#10 + 'PostgreSQL : géré par MINOS dans Docker (pgvector)';
-    if OllamaSelected() then Text := Text + #13#10 + 'Ollama : sidecar Docker géré, modèle ' + OllamaModelEdit.Text;
+    if OllamaSelected() then
+    begin
+      Text := Text + #13#10 + 'Ollama : sidecar Docker géré, modèle ' + OllamaModelEdit.Text;
+      if OllamaProvisionCheck.Checked then Text := Text + ' — téléchargement/provisionnement demandé'
+      else Text := Text + ' — modèle déjà présent attendu';
+    end;
   end
-  else if PostgreSqlSelected() then
-    Text := Text + #13#10 + 'PostgreSQL : externe — ' + PostgresUrlEdit.Text;
+  else
+  begin
+    if PostgreSqlSelected() then Text := Text + #13#10 + 'PostgreSQL : externe — ' + PostgresUrlEdit.Text;
+    if OllamaSelected() then Text := Text + #13#10 + 'Ollama : instance locale/externe existante — aucun binaire Ollama installé par MINOS';
+  end;
   SummaryMemo.Text := Text;
 end;
 
@@ -777,19 +798,22 @@ begin
     'Clients IA', 'Connecter le point d''entrée MCP MINOS stable aux clients IA détectés');
   McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage);
   McpCopilotJetBrainsStatus := TNewStaticText.Create(McpClientsPage);
-  ConfigureMcpRow(McpCopilotJetBrains, McpCopilotJetBrainsStatus, ScaleY(8), 'GitHub Copilot — JetBrains / IntelliJ');
+  ConfigureMcpRow(McpCopilotJetBrains, McpCopilotJetBrainsStatus, ScaleY(4), 'GitHub Copilot — JetBrains / IntelliJ');
   McpCopilotCli := TNewCheckBox.Create(McpClientsPage);
   McpCopilotCliStatus := TNewStaticText.Create(McpClientsPage);
-  ConfigureMcpRow(McpCopilotCli, McpCopilotCliStatus, ScaleY(62), 'GitHub Copilot CLI');
+  ConfigureMcpRow(McpCopilotCli, McpCopilotCliStatus, ScaleY(48), 'GitHub Copilot CLI');
   McpClaudeCode := TNewCheckBox.Create(McpClientsPage);
   McpClaudeCodeStatus := TNewStaticText.Create(McpClientsPage);
-  ConfigureMcpRow(McpClaudeCode, McpClaudeCodeStatus, ScaleY(116), 'Claude Code');
+  ConfigureMcpRow(McpClaudeCode, McpClaudeCodeStatus, ScaleY(92), 'Claude CLI / Claude Code');
   McpClaudeDesktop := TNewCheckBox.Create(McpClientsPage);
   McpClaudeDesktopStatus := TNewStaticText.Create(McpClientsPage);
-  ConfigureMcpRow(McpClaudeDesktop, McpClaudeDesktopStatus, ScaleY(170), 'Claude Desktop');
-  McpCodex := TNewCheckBox.Create(McpClientsPage);
-  McpCodexStatus := TNewStaticText.Create(McpClientsPage);
-  ConfigureMcpRow(McpCodex, McpCodexStatus, ScaleY(224), 'OpenAI Codex');
+  ConfigureMcpRow(McpClaudeDesktop, McpClaudeDesktopStatus, ScaleY(136), 'Claude Desktop');
+  McpCodexCli := TNewCheckBox.Create(McpClientsPage);
+  McpCodexCliStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCodexCli, McpCodexCliStatus, ScaleY(180), 'OpenAI Codex CLI');
+  McpCodexDesktop := TNewCheckBox.Create(McpClientsPage);
+  McpCodexDesktopStatus := TNewStaticText.Create(McpClientsPage);
+  ConfigureMcpRow(McpCodexDesktop, McpCodexDesktopStatus, ScaleY(224), 'OpenAI Codex Desktop');
   McpPreflightCompleted := False;
   DisableAllMcpRows('Détection en attente');
 
@@ -816,7 +840,7 @@ begin
   DockerInstanceEdit.Text := ReadInstallerValue('DockerInstanceName', 'minos-mcp-prod');
 
   SummaryPage := CreateCustomPage(DockerProjectsPage.ID,
-    'Résumé de l''installation', 'Vérifiez les choix avant installation');
+    'Résumé de l''installation', 'Vérifiez exactement ce qui sera installé et configuré');
   SummaryMemo := TNewMemo.Create(SummaryPage);
   SummaryMemo.Parent := SummaryPage.Surface;
   SummaryMemo.Left := 0; SummaryMemo.Top := ScaleY(8);
@@ -893,6 +917,18 @@ begin
   begin
     RunMcpPreflight;
     McpPreflightCompleted := True;
+  end;
+
+  if CurPageID = McpClientsPage.ID then
+  begin
+    if McpCodexCli.Checked and McpCodexDesktop.Checked then
+    begin
+      MsgBox(
+        'Codex CLI et Codex Desktop utilisent la même intégration MINOS nommée.' + #13#10 + #13#10 +
+        'Sélectionnez un seul mode Codex. Le choix peut être modifié plus tard sans changer le backend MCP.',
+        mbError, MB_OK);
+      Result := False; exit;
+    end;
   end;
 
   if (CurPageID = DockerProjectsPage.ID) and DockerMcpSelected() then
