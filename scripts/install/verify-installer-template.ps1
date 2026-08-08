@@ -38,19 +38,38 @@ Require 'LoadStringFromFile(ConfigPath, ConfigText)' 'Installer does not inspect
 Require "ExpandConstant('{localappdata}\MINOS\data\runtime\backend.properties')" 'Installer does not read the canonical backend configuration.'
 Require "Result := 'docker'" 'Installer cannot restore a persisted Docker selection during upgrade.'
 Require 'McpClientsPage := CreateCustomPage(' 'Installer is missing the shared MCP client integration page.'
-Require 'McpModePage.ID,' 'MCP client integration page must follow MCP mode selection.'
 Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Docker projects page.'
 Require 'McpClientsPage.ID,' 'Docker projects page must follow client integration.'
 Require 'Result := NoMcpSelected()' 'Shared MCP client page must be skipped only when MCP configuration is disabled.'
 Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
-Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude Code MCP row.'
+Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude CLI / Code MCP row.'
 Require 'McpClaudeDesktop := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude Desktop MCP row.'
-Require 'McpCodex := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Codex MCP row.'
+Require 'McpCodexCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the explicit Codex CLI MCP row.'
+Require 'McpCodexDesktop := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the explicit Codex Desktop MCP row.'
+Require 'Claude CLI / Claude Code' 'Installer does not expose Claude CLI / Code explicitly.'
+Require 'OpenAI Codex CLI' 'Installer does not expose Codex CLI explicitly.'
+Require 'OpenAI Codex Desktop' 'Installer does not expose Codex Desktop explicitly.'
 Require "ExtractTemporaryFile('detect-mcp-clients.ps1')" 'Installer does not run the packaged MCP client detector.'
 Require "GetIniString(Section, 'Available'" 'Installer does not consume preflight availability.'
-Require "GetIniString('Codex', 'Mode'" 'Installer does not consume deterministic Codex preflight mode.'
+Require "'CodexCli'" 'Installer does not consume the explicit Codex CLI preflight section.'
+Require "'CodexDesktop'" 'Installer does not consume the explicit Codex Desktop preflight section.'
+Require 'McpCodexCli.Checked and McpCodexDesktop.Checked' 'Installer does not reject an ambiguous dual Codex selection.'
+Require '-Codex -CodexMode cli' 'Installer does not configure explicit Codex CLI mode.'
+Require '-Codex -CodexMode desktop' 'Installer does not configure explicit Codex Desktop mode.'
+
+# NEXUS-aligned review page: the user must see exactly what MINOS manages before
+# installation, including managed PostgreSQL/pgvector and Ollama provisioning.
+# Unicode labels are checked by scripts/docs/check-current-docs.py; keep the
+# Windows PowerShell 5.1 verifier on ASCII structural invariants only.
+Require 'SummaryPage := CreateCustomPage(' 'Installer is missing the pre-install summary page.'
+Require "ManagedComponents := 'runtime MINOS';" 'Installer summary does not initialize its managed-components inventory.'
+Require 'PostgreSQL/pgvector Docker' 'Installer summary does not identify managed PostgreSQL/pgvector.'
+Require 'Ollama Docker' 'Installer summary does not identify managed Ollama.'
+Require 'if OllamaProvisionCheck.Checked then ManagedComponents := ManagedComponents +' 'Installer summary does not disclose requested Ollama model provisioning.'
+Require 'Ollama : instance locale/externe existante' 'Installer does not distinguish native external Ollama from managed Docker Ollama.'
+Require 'SummaryMemo.Text := Text;' 'Installer summary is not rendered to the review page.'
 
 # S7 backend lifecycle: a selected backend is prepared/validated/handshaken by
 # one transactional helper before client integration is attempted. Docker is

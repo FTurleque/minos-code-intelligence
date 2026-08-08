@@ -64,10 +64,13 @@ exit /b 1
     Assert-True ($CopilotReason -match 'launcher VS Code') 'Copilot shim diagnostic is not explicit.'
     Assert-True ($CopilotReason.IndexOf([char]0x00E9) -ge 0) 'Copilot shim diagnostic lost its Unicode accented character.'
     Assert-True ($CopilotReason.IndexOf([char]0x2014) -ge 0) 'Copilot shim diagnostic lost its Unicode em dash.'
-    Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Available') -eq '1') 'Compatible Claude Code CLI was not detected.'
-    Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Mode') -eq 'cli') 'Claude Code mode should be cli.'
-    Assert-True ((Read-IniValue $Output 'Codex' 'Available') -eq '1') 'Compatible Codex CLI was not detected.'
-    Assert-True ((Read-IniValue $Output 'Codex' 'Mode') -eq 'cli') 'Codex mode should be cli when a compatible CLI is present.'
+    Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Available') -eq '1') 'Compatible Claude CLI / Code was not detected.'
+    Assert-True ((Read-IniValue $Output 'ClaudeCode' 'Mode') -eq 'cli') 'Claude CLI / Code mode should be cli.'
+    Assert-True ((Read-IniValue $Output 'CodexCli' 'Available') -eq '1') 'Compatible Codex CLI was not exposed on the explicit CodexCli surface.'
+    Assert-True ((Read-IniValue $Output 'CodexCli' 'Mode') -eq 'cli') 'Explicit CodexCli mode should be cli.'
+    Assert-True ((Read-IniValue $Output 'CodexDesktop' 'Available') -in @('0', '1')) 'CodexDesktop section is missing from the preflight contract.'
+    Assert-True ((Read-IniValue $Output 'Codex' 'Available') -eq '1') 'Backward-compatible aggregate Codex surface was not detected.'
+    Assert-True ((Read-IniValue $Output 'Codex' 'Mode') -eq 'cli') 'Aggregate Codex mode should prefer cli when a compatible CLI is present.'
 
     $Bytes = [System.IO.File]::ReadAllBytes($Output)
     $HasUtf16LeBom = $Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE

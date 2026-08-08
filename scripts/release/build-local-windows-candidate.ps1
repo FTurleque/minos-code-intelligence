@@ -16,8 +16,8 @@ if ($env:OS -ne 'Windows_NT') {
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $BuildDistribution = Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1'
 $BuildInstaller = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
-$McpSmoke = Join-Path $RepoRoot 'scripts\m14\MinosNativeMcpSmoke.java'
-foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpSmoke)) {
+$McpProbe = Join-Path $RepoRoot 'scripts\install\probe-mcp-backend.ps1'
+foreach ($Required in @($BuildDistribution, $BuildInstaller, $McpProbe)) {
     if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing candidate-build input: $Required" }
 }
 
@@ -69,10 +69,14 @@ if (-not (Test-Path -LiteralPath $RuntimeModules -PathType Leaf)) { throw "Runti
 $Modules = @([System.IO.File]::ReadAllLines($RuntimeModules, [System.Text.Encoding]::ASCII))
 if ($Modules -notcontains 'java.xml') { throw 'Candidate runtime does not contain java.xml.' }
 
+# Use the same canonical backend handshake probe that the native/docker switcher
+# and M29 qualification use. This avoids maintaining a second Windows cmd.exe
+# invocation contract in the release path while still exercising the packaged
+# minos.cmd -> app\minos.exe -> MCP STDIO path end-to-end.
 $SmokeHome = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-local-candidate-mcp-' + [Guid]::NewGuid())
 try {
     New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
-    & $Java $McpSmoke $Launcher $SmokeHome
+    & $McpProbe -LauncherPath $Launcher -CandidateHome $SmokeHome -TimeoutSeconds 30
     if ($LASTEXITCODE -ne 0) { throw "Native MCP handshake failed for local candidate (exit=$LASTEXITCODE)." }
 }
 finally {

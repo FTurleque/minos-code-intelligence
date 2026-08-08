@@ -15,14 +15,18 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Base class for PostgreSQL integration tests.
  *
- * Tests are skipped automatically when Docker is not reachable from the JVM
- * (e.g. Docker Desktop 4.30+ without the Testcontainers Desktop extension on Windows).
- * They run on Linux CI where Docker is always available.
+ * <p>Developer workstations may skip these tests when Docker is unavailable. CI and
+ * release qualification set {@code -Dminos.postgresql.tests.required=true}, which
+ * turns an unavailable Docker/PostgreSQL runtime into a hard failure so the storage
+ * gate can never disappear silently.</p>
  */
 abstract class PostgresTestSupport {
 
+    static final String REQUIRED_PROPERTY = "minos.postgresql.tests.required";
+
     private static PostgreSQLContainer<?> POSTGRES;
     private static boolean dockerAvailable = false;
+    private static Throwable dockerFailure;
 
     @BeforeAll
     static void startPostgres() {
@@ -33,8 +37,16 @@ abstract class PostgresTestSupport {
                     .withPassword("test-secret");
             POSTGRES.start();
             dockerAvailable = true;
-        } catch (Exception e) {
+            dockerFailure = null;
+        } catch (Exception exception) {
             dockerAvailable = false;
+            dockerFailure = exception;
+            if (Boolean.getBoolean(REQUIRED_PROPERTY)) {
+                throw new IllegalStateException(
+                        "PostgreSQL integration tests are required but Docker/pgvector could not start",
+                        exception
+                );
+            }
         }
     }
 
@@ -49,7 +61,11 @@ abstract class PostgresTestSupport {
 
     @BeforeEach
     void setUpSchema() throws Exception {
-        assumeTrue(dockerAvailable, "Docker not accessible from JVM — skipping PostgreSQL integration tests");
+        String reason = "Docker not accessible from JVM — skipping PostgreSQL integration tests";
+        if (dockerFailure != null && dockerFailure.getMessage() != null) {
+            reason += ": " + dockerFailure.getMessage();
+        }
+        assumeTrue(dockerAvailable, reason);
         connections = createFactory("minos");
         new PostgresSchemaMigrator(connections).migrate();
         truncateData();

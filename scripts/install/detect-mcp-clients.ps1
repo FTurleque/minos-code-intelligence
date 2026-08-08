@@ -257,11 +257,11 @@ if ([string]::IsNullOrWhiteSpace($Claude)) {
     $Claude = Find-EmbeddedClaudeCli
 }
 if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('mcp', '--help'))) {
-    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
+    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} Claude CLI / Code compatible MCP') 'cli'
 } elseif (-not [string]::IsNullOrWhiteSpace($Claude)) {
     $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande claude d{e}tect{e}e mais interface MCP incompatible')
 } else {
-    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande introuvable')
+    $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} Claude CLI / Code introuvable')
 }
 
 if (Test-ClaudeDesktop) {
@@ -271,9 +271,27 @@ if (Test-ClaudeDesktop) {
 }
 
 $Codex = Resolve-CommandPath 'codex'
-if (-not [string]::IsNullOrWhiteSpace($Codex) -and (Test-Capability $Codex @('mcp', '--help'))) {
+$CodexCliAvailable = -not [string]::IsNullOrWhiteSpace($Codex) -and (Test-Capability $Codex @('mcp', '--help'))
+if ($CodexCliAvailable) {
+    $Results['CodexCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI MCP compatible') 'cli'
+} elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
+    $Results['CodexCli'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
+} else {
+    $Results['CodexCli'] = New-Result $false (Ui 'Non disponible {dash} Codex CLI introuvable')
+}
+
+$CodexDesktopAvailable = Test-CodexDesktop
+if ($CodexDesktopAvailable) {
+    $Results['CodexDesktop'] = New-Result $true (Ui 'D{e}tect{e} {dash} configuration Codex Desktop disponible') 'desktop'
+} else {
+    $Results['CodexDesktop'] = New-Result $false (Ui 'Non disponible {dash} Codex Desktop / config utilisateur non d{e}tect{e}')
+}
+
+# Backward-compatible aggregate section retained for existing verifier fixtures and
+# non-wizard consumers. New installer UI uses CodexCli and CodexDesktop explicitly.
+if ($CodexCliAvailable) {
     $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli'
-} elseif (Test-CodexDesktop) {
+} elseif ($CodexDesktopAvailable) {
     $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop'
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
     $Results['Codex'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')

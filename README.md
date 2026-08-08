@@ -2,261 +2,191 @@
 
 **MINOS** construit une connaissance structurée, persistante, interrogeable et explicable d'un codebase pour les développeurs, outils et agents IA.
 
-MINOS est **local-first**, agnostique du langage, indépendant des fournisseurs d'IA et capability-honest : une capacité absente ou non qualifiée n'est jamais présentée comme acquise.
+MINOS est **local-first**, multi-langages, indépendant des fournisseurs d'IA et capability-honest : une capacité absente ou non qualifiée n'est jamais présentée comme acquise.
 
 ## État courant
 
 ```text
-C0 → M28                         ✅ terminés / intégrés sur main
-MINOS 1.0.0                      ✅ publiée le 1er août 2026
-main/tag v1.0.0                  1adbc45339efe37cd26d1937025bfa69d7b57811
-M21 #73                          ✅ CLOSED / completed
-M28 #93                          ✅ CLOSED / completed
-PR de promotion #102             ✅ MERGED
+C0 → M30                         ✅ terminés / intégrés
+MINOS 1.0.0                      ✅ publiée le 1er août 2026 / immuable
+M29 #107                         ✅ CLOSED / PR #108 merged
+M30                              ✅ PR #110 + promotion #111 merged
 #98 sandbox OS worker réelle     🚧 OPEN
-MINOS 1.0.1                      🚧 correctif Windows en préparation, NON PUBLIÉ
+MINOS 1.0.1                      🚧 en préparation — NON PUBLIÉE
+hardening release/installer      🚧 PR #113
 ```
 
-La release 1.0.0 reste immuable. Un défaut du runtime Java embarqué Windows a été découvert après publication : le MCP natif peut échouer avec `NoClassDefFoundError: org/w3c/dom/Node` parce que l'image `jpackage` 1.0.0 ne contient pas tous les modules JDK requis.
+La ligne 1.0.1 corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening post-audit avant construction d'un nouveau candidat exact-head.
 
-Le candidat **1.0.1** corrige le packaging via `jdeps`, ajoute un handshake MCP réel aux gates de release, restaure le Wizard de détection des clients MCP et isole les smoke tests du setup. Voir [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
+Voir [`docs/STATUS.md`](docs/STATUS.md) et [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Ce que MINOS sait faire
+## Capacités principales
+
+MINOS sait notamment :
 
 - découvrir projets, modules, langages et systèmes de build ;
 - négocier et exécuter des providers/indexeurs qualifiés ;
 - maintenir des snapshots structurés persistants ;
 - rechercher symboles, occurrences, références et relations ;
-- analyser architecture, dépendances et impact ;
-- relier des tests par signaux explicables ;
+- analyser architecture, dépendances, impact, tests liés et ProgramGraph ;
 - exploiter Git et des workspaces multi-dépôts ;
-- fournir un `ProgramGraph` avancé lorsque le provider le prouve : CFG, def-use, flux interprocéduraux bornés et primitives de sécurité ;
 - proposer un retrieval sémantique/hybride local optionnel ;
-- indexer des révisions distantes immuables avec provenance ;
 - importer des observations runtime partielles ;
-- offrir un contrôle Team/Hosted embarqué, local-first et explicitement non-SaaS ;
-- exposer le moteur via CLI, API Java, MCP STDIO, IntelliJ et export NEXUS.
+- exposer le moteur via CLI, API Java, MCP STDIO, IntelliJ et export NEXUS ;
+- exécuter le MCP en natif Windows ou dans le backend Docker autonome M29 ;
+- stocker localement ou dans PostgreSQL/pgvector ;
+- utiliser `disabled | local-hash | ollama` comme provider sémantique.
 
 ## Architecture
 
+Le reactor Maven contient les modules métier, runtime/provider/storage et surfaces publiques, avec `minos-app` comme composition root. La documentation architecture détaillée est sous [`docs/architecture/`](docs/architecture/README.md).
+
 ```mermaid
 flowchart TB
-    SRC[Projet local] --> DISC[Discovery / negotiation]
-    REMOTE[GitHub/GitLab + SHA exact] --> CACHE[Cache source contrôlé]
-    CACHE --> DISC
+    SRC[Projet / dépôt] --> DISC[Discovery & provider negotiation]
     DISC --> IDX[Providers / indexeurs]
     IDX --> SNAP[Snapshots structurés]
-    GIT[Git] --> MINOS[MINOS]
-    SNAP --> MINOS
-    MINOS --> CLI[CLI]
-    MINOS --> API[API Java]
-    MINOS --> MCP[MCP STDIO]
-    MINOS --> IDE[IntelliJ]
-    MINOS --> NEXUS[NEXUS export]
+    SNAP --> APP[MINOS application services]
+    APP --> CLI[CLI]
+    APP --> API[API Java]
+    APP --> MCP[MCP STDIO]
+    APP --> IDE[IntelliJ]
+    APP --> NEXUS[NEXUS export]
+    APP --> LOCAL[(Local storage)]
+    APP --> PG[(PostgreSQL / pgvector)]
 ```
 
-## Installation Windows
+## Installation Windows 1.0.1
 
-Le parcours utilisateur normal ne nécessite pas de cloner le dépôt MINOS.
+Le parcours utilisateur normal ne nécessite pas de cloner le dépôt, ni d'installer Java pour exécuter MINOS. Le setup embarque son runtime Java.
 
-Une release complète publie :
+Le wizard propose deux niveaux :
 
 ```text
-MINOS-<version>-windows-x64-setup.exe
-MINOS-<version>-windows-x64-setup.exe.sha256
-minos-<version>-windows-x64.zip
-minos-<version>-windows-x64.zip.sha256
-minos-<version>.cdx.json
-minos-<version>.cdx.json.sha256
-MINOS-<version>-THIRD-PARTY-NOTICES.txt
-MINOS-<version>-THIRD-PARTY-NOTICES.txt.sha256
+Standard — recommandé
+Avancée
 ```
 
-Le guide utilisateur autoritatif est : **[Installation PROD Windows](docs/user/production-installation.md)**.
-
-### Candidat Windows 1.0.1
-
-À partir du candidat 1.0.1, le setup affiche une page dédiée :
+En mode avancé, trois axes restent indépendants :
 
 ```text
-Intégrations MCP natives
-Connecter le MCP natif MINOS à vos clients IA détectés
+runtime MCP   : native | docker | none
+stockage      : local | postgresql
+sémantique    : disabled | local-hash | ollama
 ```
 
-Clients pris en compte :
+### Mode MCP
 
-- GitHub Copilot — JetBrains / IntelliJ ;
-- GitHub Copilot CLI, uniquement si sa capability MCP est réellement disponible ;
-- Claude Code ;
-- Claude Desktop ;
-- OpenAI Codex CLI ou Codex Desktop/config utilisateur.
-
-Un faux launcher `copilot` provenant de VS Code ne suffit plus à rendre la case disponible.
-
-## Correctif runtime 1.0.1
-
-Le runtime Windows est maintenant calculé depuis le JAR final :
+Le choix est exclusif :
 
 ```text
-fat JAR
-→ JDK 24 jdeps --print-module-deps
-→ modules racines calculés
-→ jpackage --add-modules <liste>
-→ runtime/bin/java --list-modules
-→ contrôle des modules + assertion java.xml
+MCP natif Windows — recommandé
+MCP Docker — isolation renforcée
+Ne pas configurer maintenant
 ```
 
-La release ne se contente plus de vérifier `minos --version`. Elle exige un vrai handshake MCP sur les artefacts Windows :
+Si Docker est explicitement sélectionné mais indisponible, le wizard bloque. Il n'existe aucun fallback silencieux vers le natif.
 
-```text
-initialize
-→ notifications/initialized
-→ tools/list
-→ tools MINOS attendus
-```
-
-Le setup automatisé de smoke utilise un AppId distinct et ne doit pas toucher le PATH, Docker ni les états MCP d'une installation MINOS réelle.
-
-## Utilisation rapide
-
-Après installation :
-
-```powershell
-minos.cmd --version
-minos.cmd doctor
-minos.cmd providers --format json
-minos.cmd tools install scip-java
-minos.cmd project add C:\workspace\my-project --name my-project
-minos.cmd index my-project
-minos.cmd search my-project GreetingPort --format json
-minos.cmd architecture my-project --format mermaid
-```
-
-Le parcours d'indexation normal est :
-
-```text
-discovery
-→ provider negotiation
-→ runtime check
-→ indexation
-→ normalisation
-→ staging
-→ promotion du snapshot
-```
-
-## MCP natif
-
-Le MCP Windows natif est lancé par :
+Tous les clients IA utilisent toujours le même point d'entrée :
 
 ```text
 command = <installation>\app\minos.exe
 args    = mcp
-env     = MINOS_HOME=%LOCALAPPDATA%\MINOS\data
+env     = MINOS_HOME=<data-root>
 ```
 
-Les intégrations installées par MINOS conservent un état d'ownership et des sauvegardes afin de ne pas écraser ou supprimer les configurations tierces qu'elles ne possèdent pas.
+Le routage `native|docker` reste derrière `minos.exe mcp` ; changer de backend ne réécrit pas les clients.
 
-Guide : [`docs/user/mcp.md`](docs/user/mcp.md).
+### Clients IA détectés
 
-## Providers polyglottes
+La page d'intégration expose séparément :
 
-M24 a ajouté des providers C/C++, C#, Go et Rust derrière les mêmes contrats de discovery/capabilities. Leur présence ne signifie pas que toutes les capacités avancées M22 sont disponibles : les claims restent provider-specific et evidence-gated.
+- GitHub Copilot — JetBrains / IntelliJ ;
+- GitHub Copilot CLI ;
+- Claude CLI / Claude Code ;
+- Claude Desktop ;
+- OpenAI Codex CLI ;
+- OpenAI Codex Desktop.
 
-Guide : [`docs/user/polyglot-providers.md`](docs/user/polyglot-providers.md).
+Une case n'est activable que lorsque son intégration est réellement détectée. Le faux launcher `copilot` de VS Code est rejeté. Codex CLI et Codex Desktop sont présentés séparément mais utilisent une seule intégration MINOS nommée : le wizard interdit de sélectionner les deux simultanément.
 
-## Remote / Distributed Indexing
+### PostgreSQL / pgvector et Ollama
 
-M25 matérialise et indexe des révisions distantes immuables avec SHA complet, provenance et bundle vérifié.
+En Docker, MINOS peut gérer PostgreSQL/pgvector et Ollama sur le réseau interne du runtime avec volumes persistants. Aucun port public n'est nécessaire au query plane.
 
-La disposition sécurité reste explicite :
+En mode natif, PostgreSQL et Ollama sont des services externes/localement existants fournis par l'utilisateur. MINOS ne prétend pas installer un binaire Ollama natif.
+
+La page **Résumé de l'installation** indique avant le lancement :
+
+- programme et data roots ;
+- backend MCP ;
+- stockage ;
+- provider sémantique ;
+- clients IA sélectionnés ;
+- composants Docker réellement gérés ;
+- éventuel téléchargement/provisionnement du modèle Ollama.
+
+Guide complet : [`docs/user/production-installation.md`](docs/user/production-installation.md).
+
+## Runtime Windows corrigé
+
+Le runtime 1.0.1 est calculé depuis le fat JAR final :
 
 ```text
-network DENY sans backend OS prouvé → fail-closed
-untrusted code                      → unsupported
-sandbox OS claim                    → prohibited
+fat JAR
+→ jdeps JDK 24
+→ modules racines
+→ jpackage
+→ runtime/bin/java --list-modules
+→ assertion java.xml
 ```
 
-La vraie sandbox OS Windows/Linux reste suivie par **#98**.
+Cela corrige le défaut 1.0.0 `NoClassDefFoundError: org/w3c/dom/Node` sans retagger la release publiée.
 
-Guide : [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
+## Sécurité et gates de release
 
-## Runtime Intelligence
+Le hardening post-audit impose notamment :
 
-M26 accepte des observations runtime partielles corrélées au snapshot statique exact. Leur absence ne prouve jamais l'absence d'exécution.
+- Jackson 2 et Jackson 3 sur des versions corrigées ;
+- scan OSV bloquant sur les dépendances ;
+- PostgreSQL/pgvector réel obligatoire dans la CI de qualification ;
+- CI sur PR puis sur le HEAD résultant de `develop`/`main` ;
+- JaCoCo étendu aux responsabilités M29/M30 ;
+- handshake MCP réel ;
+- vérification dédiée du plugin IntelliJ ;
+- smoke du runtime et de l'installateur Windows.
 
-Guide : [`docs/user/runtime-intelligence.md`](docs/user/runtime-intelligence.md).
+Aucun ancien setup/ZIP 1.0.1 construit avant cette convergence ne constitue le candidat final.
 
-## Team / Hosted Mode
+## Développement
 
-M27 apporte un contrôle tenant embarqué et opt-in : RBAC, workspaces partagés, chiffrement AES-256-GCM, audit chaîné, rétention et rotation de clés.
-
-Cela reste une capacité **EMBEDDED_LOCAL_FIRST**, pas un SaaS opéré.
-
-Guide : [`docs/user/team-hosted-mode.md`](docs/user/team-hosted-mode.md).
-
-## Développement depuis les sources
-
-Prérequis principaux :
-
-```text
-JDK 24
-Maven Wrapper du dépôt
-Git
-Python 3 pour plusieurs gates/outils
-```
-
-Build Maven :
+Pré-requis principaux : JDK 24 et Maven Wrapper du dépôt.
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-La version de développement courante est :
+Sur Linux/macOS :
 
-```text
-1.0.1-SNAPSHOT
+```bash
+./mvnw clean verify
 ```
 
-### Construire localement le candidat Windows 1.0.1
-
-Le runner prévu pour la validation avant publication est :
-
-```powershell
-.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
-```
-
-Il :
-
-- exige un worktree propre ;
-- construit la distribution ;
-- vérifie les intégrations/preflight ;
-- dérive et contrôle le runtime Java ;
-- lance un handshake MCP réel sur la distribution ;
-- produit le ZIP et le `setup.exe` de production ;
-- n'installe pas automatiquement le setup de production ;
-- ne crée aucun tag ;
-- ne publie aucune release ;
-- ne déclenche aucun workflow GitHub Actions.
-
-Artefact attendu :
-
-```text
-target\dist\MINOS-1.0.1-windows-x64-setup.exe
-```
-
-La vérification visuelle du Wizard et la connexion réelle du MCP dans Copilot restent obligatoires avant autorisation de publication.
+La qualification CI exige en plus un Docker utilisable pour les tests PostgreSQL/pgvector.
 
 ## Documentation
 
-- état courant : [`docs/STATUS.md`](docs/STATUS.md) ;
-- roadmap : [`docs/ROADMAP.md`](docs/ROADMAP.md) ;
-- M28 final : [`docs/roadmap/M28_EXECUTION.md`](docs/roadmap/M28_EXECUTION.md) ;
-- release 1.0.0 : [`docs/releases/1.0.0.md`](docs/releases/1.0.0.md) ;
-- candidat 1.0.1 : [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md) ;
-- installation Windows : [`docs/user/production-installation.md`](docs/user/production-installation.md) ;
-- facts générés : [`docs/generated/product-facts.md`](docs/generated/product-facts.md).
+- état : [`docs/STATUS.md`](docs/STATUS.md)
+- roadmap : [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- architecture : [`docs/architecture/README.md`](docs/architecture/README.md)
+- ADR : [`docs/adr/README.md`](docs/adr/README.md)
+- installation Windows : [`docs/user/production-installation.md`](docs/user/production-installation.md)
+- Docker runtime : [`docs/user/docker-runtime.md`](docs/user/docker-runtime.md)
+- release 1.0.1 : [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md)
 
-Les documents de `docs/history/` et les roadmaps d'exécution anciennes peuvent contenir des versions/états historiques. Ils ne constituent pas l'état courant du produit.
+## Limitation explicitement ouverte
+
+L'issue **#98** reste ouverte : MINOS ne revendique pas de sandbox OS réelle pour l'exécution hostile des workers distants tant qu'un backend Windows/Linux réellement isolé n'est pas implémenté et qualifié.
 
 ## Licence
 
