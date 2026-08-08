@@ -11,6 +11,15 @@
     <name>MINOS Parent</name>
     <description>Parent reactor for MINOS Code Intelligence.</description>
 
+    <licenses>
+        <license>
+            <name>MINOS Proprietary Source-Available License - All Rights Reserved</name>
+            <url>https://github.com/FTurleque/minos-code-intelligence/blob/main/LICENSE</url>
+            <distribution>repo</distribution>
+            <comments>Copyright (c) 2026 Fabrice Turleque. No general use, execution, modification, distribution or commercial license is granted.</comments>
+        </license>
+    </licenses>
+
     <modules>
         <module>minos-domain</module>
         <module>minos-engine</module>
