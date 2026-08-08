@@ -16,6 +16,7 @@ class M29InstallerBackendLifecycleContractTest {
         Path root = repoRoot();
         String switcher = text(root.resolve("scripts/install/switch-mcp-backend.ps1"));
         String probe = text(root.resolve("scripts/install/probe-mcp-backend.ps1"));
+        String probeClient = text(root.resolve("minos-mcp/src/main/java/com/minos/mcp/MinosMcpHandshakeProbe.java"));
         String lifecycle = text(root.resolve("scripts/install/verify-mcp-backend-lifecycle.ps1"));
         String installer = text(root.resolve("packaging/windows/minos-installer.iss.template"));
         String distribution = text(root.resolve("scripts/release/build-windows-distribution.ps1"));
@@ -38,11 +39,20 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(switcher.contains("MINOS MCP BACKEND SWITCH SUCCESS"));
         assertFalse(switcher.toLowerCase().contains("fallback to native"));
 
-        assertTrue(probe.contains("notifications/initialized"));
-        assertTrue(probe.contains("tools/list"));
-        assertTrue(probe.contains("minos_search_code"));
-        assertTrue(probe.contains("minos_impact"));
+        // The release probe must not maintain its own raw JSON-RPC framing. It
+        // launches an SDK-backed probe with the Java runtime and fat JAR that are
+        // actually shipped, while that Java probe negotiates initialize/tools/list
+        // through the same MCP SDK client stack as production integration tests.
+        assertTrue(probe.contains("app\\runtime\\bin\\java.exe"));
+        assertTrue(probe.contains("lib\\minos.jar"));
+        assertTrue(probe.contains("com.minos.mcp.MinosMcpHandshakeProbe"));
         assertTrue(probe.contains("MINOS MCP BACKEND HANDSHAKE SUCCESS"));
+        assertTrue(probeClient.contains("McpClient.sync(transport)"));
+        assertTrue(probeClient.contains("client.initialize();"));
+        assertTrue(probeClient.contains("client.listTools();"));
+        assertTrue(probeClient.contains("minos_search_code"));
+        assertTrue(probeClient.contains("minos_impact"));
+        assertTrue(probeClient.contains("MINOS MCP SDK HANDSHAKE SUCCESS"));
 
         for (String proof : new String[]{
                 "Fresh native backend selection was not committed",

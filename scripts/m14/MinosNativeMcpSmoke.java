@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public final class MinosNativeMcpSmoke {
 
     private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(20);
+    private static final String MCP_PROTOCOL_VERSION = "2025-11-25";
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
@@ -33,16 +34,20 @@ public final class MinosNativeMcpSmoke {
         Files.createDirectories(home);
 
         ProcessBuilder builder = new ProcessBuilder(command(launcher));
+        builder.directory(launcher.getParent().toFile());
         builder.environment().put("MINOS_HOME", home.toString());
         Path stderr = Files.createTempFile("minos-native-mcp-", ".stderr.log");
         builder.redirectError(stderr.toFile());
         Process process = builder.start();
         String stderrText = "";
+        Exception failure = null;
         try (BufferedWriter stdin = new BufferedWriter(new OutputStreamWriter(
                     process.getOutputStream(), StandardCharsets.UTF_8));
              BufferedReader stdout = new BufferedReader(new InputStreamReader(
                     process.getInputStream(), StandardCharsets.UTF_8))) {
-            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-mcp-smoke\",\"version\":\"1\"}}}");
+            write(stdin, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\""
+                    + MCP_PROTOCOL_VERSION
+                    + "\",\"capabilities\":{},\"clientInfo\":{\"name\":\"minos-mcp-smoke\",\"version\":\"1\"}}}");
             String initialize = awaitResponse(stdout, "\"id\":1");
             requireContains(initialize, "minos-code-intelligence", "initialize server name");
 
@@ -51,6 +56,8 @@ public final class MinosNativeMcpSmoke {
             String tools = awaitResponse(stdout, "\"id\":2");
             requireContains(tools, "minos_search_code", "tools/list search tool");
             requireContains(tools, "minos_impact", "tools/list impact tool");
+        } catch (Exception exception) {
+            failure = exception;
         } finally {
             stopProcessTree(process);
             if (Files.exists(stderr)) {
@@ -59,6 +66,17 @@ public final class MinosNativeMcpSmoke {
             deleteWithRetry(stderr);
         }
 
+        if (failure != null) {
+            String diagnostics = stderrText.isBlank()
+                    ? "<empty>"
+                    : stderrText;
+            throw new IllegalStateException(
+                    failure.getMessage() + System.lineSeparator()
+                            + "packaged MCP stderr:" + System.lineSeparator()
+                            + diagnostics,
+                    failure
+            );
+        }
         requireStderrClean(stderrText);
         System.out.println("MINOS native MCP handshake SUCCESS");
     }
@@ -133,7 +151,7 @@ public final class MinosNativeMcpSmoke {
         if (comspec == null || comspec.isBlank()) {
             comspec = "cmd.exe";
         }
-        String commandLine = "\"" + launcher + "\" mcp";
+        String commandLine = "\"\"" + launcher + "\" mcp\"";
         return new String[]{comspec, "/d", "/s", "/c", commandLine};
     }
 
