@@ -120,11 +120,31 @@ function Require-Installed {
 
 function Initialize-And-VerifyProviderTools {
     Compose @('run', '--rm', '--no-deps', 'minos-tools-bootstrap')
-    # This probe is the offline provider payload gate: network none, read-only rootfs and tools RO.
     Compose @('run', '--rm', '--no-deps', 'minos-provider-probe')
-    # Capability checks are local inspections; the admin plane itself may use dependency egress for real indexing.
     Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'list', '--format', 'json')
     Compose @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'verify', '--all', '--format', 'json')
+}
+
+function Resolve-Image([string] $RequestedTag, [string] $RequestedVersion, [string] $RequestedCommit) {
+    if ([string]::IsNullOrWhiteSpace($RequestedTag)) {
+        $SafeVersion = $RequestedVersion.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
+        $ShortCommit = $RequestedCommit.Substring(0, [Math]::Min(12, $RequestedCommit.Length))
+        $RequestedTag = "$SafeVersion-$ShortCommit"
+    }
+    return "minos-code-intelligence:$RequestedTag"
+}
+
+function Test-ExactImage([string] $Image, [string] $ExpectedVersion, [string] $ExpectedCommit) {
+    $Inspect = Invoke-DockerAllowFailure -Arguments @(
+        'image', 'inspect', $Image,
+        '--format', '{{ index .Config.Labels "org.opencontainers.image.version" }}|{{ index .Config.Labels "org.opencontainers.image.revision" }}|{{ index .Config.Labels "io.minos.providers.prepared" }}'
+    )
+    if ($Inspect.ExitCode -ne 0) { return $false }
+    $Parts = @(([string]$Inspect.Output).Trim() -split '\|', 3)
+    return $Parts.Count -eq 3 -and
+        $Parts[0] -eq $ExpectedVersion -and
+        $Parts[1] -eq $ExpectedCommit -and
+        $Parts[2] -eq 'true'
 }
 
 switch ($Action) {
@@ -142,24 +162,24 @@ switch ($Action) {
             if (Test-Path -LiteralPath $RuntimeRoot) { Copy-Item -LiteralPath $RuntimeRoot -Destination (Join-Path $Backup 'runtime') -Recurse }
         }
 
-        $BuildContext = Join-Path $RuntimeRoot 'build'
-        Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
-        Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
-        $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
         $Timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-        if ([string]::IsNullOrWhiteSpace($ImageTag)) {
-            $SafeVersion = $Version.ToLowerInvariant().Replace('+', '-').Replace('SNAPSHOT', 'snapshot')
-            $ShortCommit = $Commit.Substring(0, [Math]::Min(12, $Commit.Length))
-            $ImageTag = "$SafeVersion-$ShortCommit"
+        $Image = Resolve-Image -RequestedTag $ImageTag -RequestedVersion $Version -RequestedCommit $Commit
+        if (Test-ExactImage -Image $Image -ExpectedVersion $Version -ExpectedCommit $Commit) {
+            Write-Host "MINOS exact Docker image already exists; skipping provider-complete rebuild: $Image" -ForegroundColor Cyan
         }
-        $Image = "minos-code-intelligence:$ImageTag"
-        & docker build --file $Dockerfile --tag $Image `
-            --build-arg "MINOS_VERSION=$Version" `
-            --build-arg "MINOS_GIT_COMMIT=$Commit" `
-            --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext
-        if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
-        Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
+        else {
+            $BuildContext = Join-Path $RuntimeRoot 'build'
+            Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
+            Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
+            $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
+            & docker build --file $Dockerfile --tag $Image `
+                --build-arg "MINOS_VERSION=$Version" `
+                --build-arg "MINOS_GIT_COMMIT=$Commit" `
+                --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext
+            if ($LASTEXITCODE -ne 0) { throw 'MINOS Docker image build failed.' }
+            Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
+        }
 
         Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') -Destination $ComposeFile -Force
         @"
@@ -225,7 +245,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
     }
     'Admin' {
         Require-Installed
-        if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) { throw '-MinosArguments is required for Admin, for example -MinosArguments @(''project'',''list'').' }
+        if ($null -eq $MinosArguments -or $MinosArguments.Count -eq 0) { throw '-MinosArguments is required for Admin.' }
         $ComposeArguments = @('run', '--rm', '--no-deps', 'minos-admin') + $MinosArguments
         Compose $ComposeArguments
     }
