@@ -27,15 +27,23 @@ final class PostgresConnectionFactory {
         }
     }
 
-    Connection open() throws SQLException {
+    <T> T withConnection(ConnectionWork<T> work) throws SQLException, IOException {
+        Objects.requireNonNull(work, "work");
         Properties properties = new Properties();
         properties.setProperty("user", user);
         properties.setProperty("password", password);
         properties.setProperty("currentSchema", schema + ",public");
-        return DriverManager.getConnection(url, properties);
+        try (Connection connection = DriverManager.getConnection(url, properties)) {
+            return work.execute(connection);
+        }
     }
 
     String schema() { return schema; }
+
+    @FunctionalInterface
+    interface ConnectionWork<T> {
+        T execute(Connection connection) throws SQLException, IOException;
+    }
 
     private static String require(String value, String name) throws IOException {
         if (value == null || value.isBlank()) throw new IOException("missing required PostgreSQL setting: " + name);
