@@ -5,6 +5,7 @@ import com.minos.storage.StorageBackendConfiguration;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Objects;
 
@@ -29,8 +30,14 @@ final class PostgresConnectionFactory {
     Connection open() throws SQLException {
         Connection connection = DriverManager.getConnection(url, user, password);
         try {
-            // JDBC's typed schema API avoids constructing a SET search_path statement from configuration.
-            connection.setSchema(schema);
+            // search_path is a PostgreSQL setting value, not executable SQL. Binding it as data keeps
+            // both the configured MINOS schema and public (where pgvector is installed) without
+            // concatenating configuration into a statement.
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT set_config('search_path', ?, false)")) {
+                statement.setString(1, schema + ",public");
+                statement.executeQuery().close();
+            }
             return connection;
         } catch (SQLException | RuntimeException exception) {
             try {
