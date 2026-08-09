@@ -48,6 +48,7 @@ final class ProviderProcessEnvironment {
             "COMPUTERNAME",
             "ComSpec",
             "DriverData",
+            "HOME",
             "HOMEDRIVE",
             "HOMEPATH",
             "LOCALAPPDATA",
@@ -105,9 +106,18 @@ final class ProviderProcessEnvironment {
 
     private static boolean isSafeInheritedKey(String candidate) {
         if (CommandLocator.isWindows()) {
-            return COMMON_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate))
+            return isWindowsDriveCurrentDirectory(candidate)
+                    || COMMON_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate))
                     || WINDOWS_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate));
         }
         return COMMON_SAFE_INHERITED_KEYS.contains(candidate);
+    }
+
+    /** Windows environment blocks may contain per-drive current-directory pseudo variables such as =C:. */
+    private static boolean isWindowsDriveCurrentDirectory(String candidate) {
+        return candidate.length() == 3
+                && candidate.charAt(0) == '='
+                && Character.isLetter(candidate.charAt(1))
+                && candidate.charAt(2) == ':';
     }
 }
