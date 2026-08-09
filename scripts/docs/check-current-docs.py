@@ -24,6 +24,14 @@ JACOCO_CHECKER = "scripts/quality/check-jacoco.py"
 INSTALLER = "packaging/windows/minos-installer.iss.template"
 CLIENT_DETECTOR = "scripts/install/detect-mcp-clients.ps1"
 
+PUBLISHED_101_COMMIT = "f762025d66e33c40324c811079f1527d122f90f9"
+PUBLISHED_101_URL = "https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1"
+TEMP_PUBLICATION_WORKFLOWS = (
+    ".github/workflows/publish-v1.0.1-one-shot.yml",
+    ".github/workflows/publish-v1.0.1-final.yml",
+    ".github/workflows/report-v1.0.1-publication-status.yml",
+)
+
 
 def read(relative: str) -> str:
     path = ROOT / relative
@@ -59,6 +67,11 @@ def require_regex(relative: str, text: str, pattern: str, label: str) -> None:
         raise RuntimeError(f"{relative}: missing {label}")
 
 
+def require_absent(relative: str) -> None:
+    if (ROOT / relative).exists():
+        raise RuntimeError(f"temporary publication artifact must be absent after release: {relative}")
+
+
 def validate_current_state() -> None:
     documents = {
         README: read(README),
@@ -66,25 +79,30 @@ def validate_current_state() -> None:
         ROADMAP: read(ROADMAP),
     }
     require_all(README, documents[README], (
-        "C0 → M30", "hardening #113", "merged", "#117", "#112",
-        "1.0.1", "NON PUBLI", "v1.0.1", "#98",
+        "C0 → M30", "MINOS 1.0.1", "publiée", "immuable", PUBLISHED_101_COMMIT,
+        PUBLISHED_101_URL, "10 assets", "#98",
     ))
     require_all(STATUS, documents[STATUS], (
         "M29 issue #107", "CLOSED", "M29 PR #108", "M30 PR #110", "M30 promotion PR #111",
-        "hardening PR #113", "M28 Windows CI PR #117", "promotion develop → main #112",
-        "v1.0.1 Windows", "NON PUBLI", "v1.0.1", "2de847bd", "#98",
+        "hardening PR #113", "M28 Windows CI PR #117", "v1.0.1", "PUBLIÉE",
+        PUBLISHED_101_COMMIT, PUBLISHED_101_URL, "10 assets", "5 paires", "31288322126", "#98",
     ))
     require_all(ROADMAP, documents[ROADMAP], (
-        "C0 → M30", "#113", "#117", "#112", "terminé", "1.0.1", "NON PUBLI",
-        "Plugin Verifier", "v1.0.1", "2de847bd", "#98",
+        "C0 → M30", "#113", "#117", "terminé", "Release 1.0.1", "publiée",
+        PUBLISHED_101_COMMIT, PUBLISHED_101_URL, "10 assets", "Plugin Verifier", "#98",
     ))
 
     stale_markers = (
+        "PRÉ-PUBLICATION",
+        "NON PUBLIÉE",
+        "NON PUBLI",
         "hardening release/installer      🚧 PR #113",
         "hardening post-audit en cours sur PR #113",
         "Avant le prochain candidat 1.0.1, la branche audit/release-installer-hardening doit converger",
         "La priorité immédiate est de terminer PR #113",
         "M30 non livré",
+        "conflit du tag v1.0.1",
+        "2de847bdc6bc39e63715f20987a30f07731cc717",
     )
     for relative, text in documents.items():
         for stale in stale_markers:
@@ -94,10 +112,13 @@ def validate_current_state() -> None:
 def validate_release_documentation() -> None:
     release_text = read(RELEASE_101)
     require_all(RELEASE_101, release_text, (
-        "PRÉ-PUBLICATION", "NON PUBLI", "Standard", "Avancée", "PostgreSQL", "pgvector", "Ollama",
+        "PUBLIÉE", "IMMUTABLE", PUBLISHED_101_COMMIT, PUBLISHED_101_URL,
+        "10 assets", "5 paires", "31288322126",
+        "Standard", "Avancée", "PostgreSQL", "pgvector", "Ollama",
         "Claude", "Codex CLI", "Codex Desktop", "OSV", "Jackson", "Plugin Verifier",
-        "v1.0.1", "2de847bd", "autorisation explicite",
     ))
+    for stale in ("PRÉ-PUBLICATION", "NON PUBLI", "2de847bdc6bc39e63715f20987a30f07731cc717"):
+        forbid(RELEASE_101, release_text, stale)
 
     install_text = read(PRODUCTION_INSTALL)
     require_all(PRODUCTION_INSTALL, install_text, (
@@ -105,6 +126,9 @@ def validate_release_documentation() -> None:
         "Ollama", "Claude CLI", "Claude Desktop", "Codex CLI", "Codex Desktop",
         "Résumé", "%LOCALAPPDATA%\\MINOS", "Non / conserver",
     ))
+
+    for temporary in TEMP_PUBLICATION_WORKFLOWS:
+        require_absent(temporary)
 
 
 def validate_security_and_storage() -> None:
