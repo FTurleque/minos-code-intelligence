@@ -76,11 +76,14 @@ final class HostedTenantService {
                 safeRequestId,
                 safeKeyId,
                 0);
-        store.create(audited);
-        auditSink.publish(audited.auditEvents().getLast());
+
+        Duration safeLifetime = Objects.requireNonNull(tokenLifetime, "tokenLifetime");
         String token = identities.issue(
                 tenantId, ownerId, safeKeyId, now,
-                Objects.requireNonNull(tokenLifetime, "tokenLifetime"), UUID.randomUUID().toString());
+                safeLifetime, UUID.randomUUID().toString());
+
+        store.create(audited);
+        HostedAuditDelivery.publishAfterCommit(auditSink, audited.auditEvents().getLast());
         return new Bootstrap(audited, token);
     }
 
