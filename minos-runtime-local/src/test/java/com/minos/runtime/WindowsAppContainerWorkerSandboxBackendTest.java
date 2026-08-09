@@ -76,9 +76,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                         hostEscape.toString(),
                         artifact.toString()),
                 working,
+                Map.of(),
                 artifact,
-                Duration.ofSeconds(45),
-                Map.of());
+                Duration.ofSeconds(45));
 
         IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run);
         Process process = new ProcessBuilder(sandboxed.command())
