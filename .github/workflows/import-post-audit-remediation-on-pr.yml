@@ -1,0 +1,32 @@
+name: Import post-audit remediation on final PR
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.head_ref == 'agent/post-audit-remediation-final'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: agent/post-audit-remediation-final
+      SOURCE_BRANCH: agent/post-audit-remediation
+    steps:
+      - name: Import remediation while preserving qualified develop files on conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git config user.name 'MINOS Remediation Import'
+          git config user.email 'actions@users.noreply.github.com'
+          git config core.autocrlf false
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags origin "${TARGET_BRANCH}" "${SOURCE_BRANCH}"
+          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+          git merge -X ours --no-edit "origin/${SOURCE_BRANCH}"
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
