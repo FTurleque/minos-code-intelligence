@@ -131,6 +131,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact)
+                if ($env:MINOS_TEST_PROVIDER_EXPLICIT -ne 'allowed') { exit 51 }
+                if (-not [string]::IsNullOrEmpty($env:MAVEN_ARGS)) { exit 52 }
                 [System.IO.File]::WriteAllText($Artifact, 'process-sandbox-artifact')
                 exit 0
                 """, StandardCharsets.US_ASCII);
@@ -152,7 +154,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                                     providerScript.toString(),
                                     generated.toString()),
                             project,
-                            Map.of(),
+                            Map.of("MINOS_TEST_PROVIDER_EXPLICIT", "allowed"),
                             generated,
                             Duration.ofSeconds(20));
                 });

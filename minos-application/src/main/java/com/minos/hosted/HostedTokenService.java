@@ -4,6 +4,7 @@ import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -43,7 +44,14 @@ final class HostedTokenService {
         if (context.state().members().stream().noneMatch(member -> member.principalId().equals(target))) {
             throw new IllegalArgumentException("token target is not a tenant member");
         }
-        HostedTenantState saved = writer.saveAllowed(
+
+        Duration safeLifetime = Objects.requireNonNull(lifetime, "lifetime");
+        Instant issuedAt = clock.instant();
+        String token = identities.issue(
+                context.state().tenantId(), target, context.state().keyId(), issuedAt,
+                safeLifetime, UUID.randomUUID().toString());
+
+        writer.saveAllowed(
                 context,
                 context.state().members(),
                 context.state().workspaces(),
@@ -53,9 +61,7 @@ final class HostedTokenService {
                 context.state().auditEvents(),
                 context.state().auditSequence(),
                 "TOKEN_ISSUE", "PRINCIPAL", target);
-        return identities.issue(
-                saved.tenantId(), target, saved.keyId(), clock.instant(),
-                Objects.requireNonNull(lifetime, "lifetime"), UUID.randomUUID().toString());
+        return token;
     }
 
     Rotation rotate(
@@ -72,6 +78,17 @@ final class HostedTokenService {
             throw new IllegalArgumentException("new keyId matches current keyId");
         }
         requireKeys(context.state().tenantId(), safeNewKeyId);
+
+        Duration safeLifetime = Objects.requireNonNull(replacementTokenLifetime, "replacementTokenLifetime");
+        Instant issuedAt = clock.instant();
+        String replacement = identities.issue(
+                context.state().tenantId(),
+                context.claims().principalId(),
+                safeNewKeyId,
+                issuedAt,
+                safeLifetime,
+                UUID.randomUUID().toString());
+
         HostedTenantState saved = writer.saveAllowed(
                 context,
                 context.state().members(),
@@ -82,13 +99,6 @@ final class HostedTokenService {
                 context.state().auditEvents(),
                 context.state().auditSequence(),
                 "KEY_ROTATE", "TENANT", "key");
-        String replacement = identities.issue(
-                saved.tenantId(),
-                context.claims().principalId(),
-                safeNewKeyId,
-                clock.instant(),
-                Objects.requireNonNull(replacementTokenLifetime, "replacementTokenLifetime"),
-                UUID.randomUUID().toString());
         return new Rotation(saved, replacement);
     }
 
