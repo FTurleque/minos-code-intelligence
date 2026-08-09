@@ -24,9 +24,9 @@ jobs:
           repo="$GITHUB_REPOSITORY"
           runs="$(gh run list --repo "$repo" --workflow 'Publish MINOS v1.0.1 one-shot' --limit 5 --json databaseId,status,conclusion,headSha,url,createdAt,updatedAt 2>&1 || true)"
           tag="$(git ls-remote "https://github.com/$repo.git" refs/tags/v1.0.1 | awk '{print $1}' || true)"
-          release="$(gh release view v1.0.1 --repo "$repo" --json tagName,targetCommitish,url,isDraft,isPrerelease 2>&1 || true)"
+          release="$(gh release view v1.0.1 --repo "$repo" --json name,tagName,targetCommitish,url,isDraft,isPrerelease,createdAt,publishedAt,assets,body 2>&1 || true)"
           body=$(cat <<EOF
-          ## Publication v1.0.1 — diagnostic automatique
+          ## Publication v1.0.1 — diagnostic automatique détaillé
 
           Reporter run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
@@ -40,8 +40,8 @@ jobs:
           ${tag:-<absent>}
           \`\`\`
 
-          **GitHub Release v1.0.1**
-          \`\`\`
+          **GitHub Release v1.0.1 — métadonnées et assets avant remplacement éventuel**
+          \`\`\`json
           $release
           \`\`\`
           EOF
