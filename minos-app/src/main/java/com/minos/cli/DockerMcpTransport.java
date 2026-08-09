@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Docker STDIO transport used only after the Docker backend has been selected explicitly. */
 final class DockerMcpTransport {
@@ -117,7 +118,14 @@ final class DockerMcpTransport {
                 throw new IOException("Docker backend selected but Docker executable cannot be started", exception);
             }
             try (ByteArrayOutputStream output = new ByteArrayOutputStream(MAX_PROBE_OUTPUT_BYTES)) {
-                Thread reader = Thread.ofVirtual().start(() -> drainBounded(process.getInputStream(), output));
+                AtomicReference<IOException> readerFailure = new AtomicReference<>();
+                Thread reader = Thread.ofVirtual().start(() -> {
+                    try {
+                        drainBounded(process.getInputStream(), output);
+                    } catch (IOException exception) {
+                        readerFailure.set(exception);
+                    }
+                });
                 try {
                     boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
                     if (!completed) {
@@ -126,6 +134,10 @@ final class DockerMcpTransport {
                         throw new IOException("Docker backend probe timed out after " + timeout.toMillis() + " ms");
                     }
                     reader.join();
+                    IOException readFailure = readerFailure.get();
+                    if (readFailure != null) {
+                        throw new IOException("Docker backend probe output could not be read", readFailure);
+                    }
                     return new ProcessResult(process.exitValue(), output.toString(StandardCharsets.UTF_8).trim());
                 } catch (InterruptedException exception) {
                     process.destroyForcibly();
@@ -135,7 +147,7 @@ final class DockerMcpTransport {
             }
         }
 
-        private static void drainBounded(InputStream source, ByteArrayOutputStream captured) {
+        private static void drainBounded(InputStream source, ByteArrayOutputStream captured) throws IOException {
             try (InputStream input = source) {
                 byte[] buffer = new byte[PROBE_READ_BUFFER_BYTES];
                 int retained = 0;
@@ -149,8 +161,6 @@ final class DockerMcpTransport {
                     // Bytes beyond the capture limit are deliberately drained and discarded so the
                     // child cannot block on a full stdout pipe or grow MINOS memory without bound.
                 }
-            } catch (IOException ignored) {
-                // A read failure yields partial/blank probe output, which the caller treats fail-closed.
             }
         }
 
