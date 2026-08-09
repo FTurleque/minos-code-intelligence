@@ -25,9 +25,9 @@ import java.util.Objects;
 /**
  * Provider worker with copied ephemeral workspace and explicit sandbox backend.
  *
- * <p>The default native backend does not claim OS-level network denial. A DENY request therefore
- * fails closed unless an independently qualified backend actually executes the provider and exposes
- * an OS-enforced guarantee.</p>
+ * <p>The default backend is the strongest qualified implementation available on the current OS.
+ * If no qualified OS sandbox is available, MINOS falls back to the process-only backend and DENY
+ * remains fail-closed rather than pretending that network isolation was enforced.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
@@ -54,7 +54,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 minosHome,
                 delegate,
                 bundleStore,
-                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                WorkerSandboxBackends.strongestAvailable(minosHome),
                 DEFAULT_MAX_WORKSPACE_FILES,
                 DEFAULT_MAX_WORKSPACE_BYTES,
                 Clock.systemUTC());
