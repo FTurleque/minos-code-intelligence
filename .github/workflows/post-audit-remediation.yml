@@ -1,0 +1,94 @@
+name: Post-audit remediation
+
+on:
+  push:
+    branches: [agent/post-audit-remediation]
+    paths:
+      - '.github/workflows/post-audit-remediation.yml'
+      - 'scripts/remediation/apply-post-audit-remediation.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: post-audit-remediation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    name: Inventory exact remediation targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact branch head without third-party actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git config core.autocrlf false
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
+      - name: Inventory code and workflow targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== HEAD ==='
+          git rev-parse HEAD
+          echo '=== target files ==='
+          find . -type f \( \
+            -name 'StorageBackendConfiguration.java' -o \
+            -name 'MinosRuntimeSettings.java' -o \
+            -name 'MinosApplication.java' -o \
+            -name 'PostgresSchemaMigrator.java' -o \
+            -name 'PostgresProjectRegistry.java' -o \
+            -name 'ProcessIndexerExecutor.java' -o \
+            -name 'CommandLocator.java' -o \
+            -name 'LocalIsolatedIndexWorker.java' -o \
+            -name 'WorkerSandboxBackend.java' -o \
+            -name 'WorkerSandboxQualification.java' -o \
+            -name 'IndexerDescriptor.java' -o \
+            -name 'MinosCliClient.java' -o \
+            -name 'OllamaEmbeddingProvider.java' -o \
+            -name 'Dockerfile.mcp.release' -o \
+            -name 'check-jacoco.py' -o \
+            -name 'register.md' -o \
+            -name 'quality-gates.md' \
+          \) -print | sort
+
+          echo '=== minos-api -> cli usages ==='
+          grep -RIn --include='*.java' --include='pom.xml' -E 'minos-cli|com\.minos\.cli' minos-api || true
+
+          echo '=== application/cli shared candidates ==='
+          grep -RIn --include='*.java' -E 'Cli|Command|Json|Output|format' minos-api/src minos-cli/src | head -n 250 || true
+
+          echo '=== sandbox wiring ==='
+          grep -RIn --include='*.java' -E 'WorkerSandboxBackend|nativeEphemeralWorkspace|LocalIsolatedIndexWorker' . | head -n 300 || true
+
+          echo '=== process execution plans ==='
+          grep -RIn --include='*.java' -E 'new ProcessIndexerExecutor|CommandLocator\.invocation' . | head -n 300 || true
+
+          echo '=== docker provider downloads ==='
+          grep -nE '^(FROM|ARG)|curl|wget|github.com/.*/releases|sha256sum' docker/Dockerfile.mcp.release || true
+
+          echo '=== workflow action pins / inno ==='
+          grep -RIn --include='*.yml' --include='*.yaml' -E 'uses:|choco (install|upgrade) innosetup' .github/workflows | sort || true
+
+          echo '=== api pom ==='
+          cat minos-api/pom.xml
+
+          echo '=== module boundary api exception ==='
+          grep -n -C 5 -E 'minos-api|minos-cli' scripts/architecture/check-module-boundaries.py || true
+
+          echo '=== intellij stream reads ==='
+          grep -RIn --include='*.java' -E 'readAllBytes\(|MinosCliClient' minos-intellij | head -n 200 || true
+
+          echo '=== ollama parser ==='
+          grep -RIn --include='*.java' -E 'embeddings|OllamaEmbeddingProvider|ObjectMapper' minos-* | head -n 250 || true
+
+          echo '=== tests around targets ==='
+          find . -type f -path '*/src/test/*' | grep -E 'Storage|RuntimeSettings|Postgres|Sandbox|IndexerDescriptor|CommandLocator|ProcessIndexer|Ollama|MinosCli' | sort | head -n 300 || true
