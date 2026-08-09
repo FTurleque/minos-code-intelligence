@@ -9,7 +9,6 @@ import com.minos.registry.RegisteredWorkspace;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -48,24 +47,25 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         RootIdentity root = rootIdentity(canonical);
         Instant now = Instant.now();
         UUID candidateId = UUID.randomUUID();
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) "
-                        + "VALUES (?,?,?,?,NULL,?,?) "
-                        // Registration is idempotent by canonical root. The no-op conflict update is intentional:
-                        // PostgreSQL atomically waits for a concurrent inserter and RETURNING yields the authoritative
-                        // pre-existing project without changing its id, display name, membership or timestamps.
-                        + "ON CONFLICT(root_value,root_portable) DO UPDATE SET root_value=projects.root_value "
-                        + "RETURNING id,root_value,root_portable,display_name,workspace_id,created_at,updated_at")) {
-            s.setObject(1, candidateId);
-            s.setString(2, root.value());
-            s.setBoolean(3, root.portable());
-            s.setString(4, displayName);
-            s.setObject(5, sqlTimestamp(now));
-            s.setObject(6, sqlTimestamp(now));
-            try (ResultSet r = s.executeQuery()) {
-                if (!r.next()) throw new SQLException("project registration did not return a row");
-                return readProject(r);
-            }
+        try {
+            return connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) "
+                                + "VALUES (?,?,?,?,NULL,?,?) "
+                                + "ON CONFLICT(root_value,root_portable) DO UPDATE SET root_value=projects.root_value "
+                                + "RETURNING id,root_value,root_portable,display_name,workspace_id,created_at,updated_at")) {
+                    s.setObject(1, candidateId);
+                    s.setString(2, root.value());
+                    s.setBoolean(3, root.portable());
+                    s.setString(4, displayName);
+                    s.setObject(5, sqlTimestamp(now));
+                    s.setObject(6, sqlTimestamp(now));
+                    try (ResultSet r = s.executeQuery()) {
+                        if (!r.next()) throw new SQLException("project registration did not return a row");
+                        return readProject(r);
+                    }
+                }
+            });
         } catch (SQLException e) {
             throw io("register project", e);
         }
@@ -76,14 +76,18 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         if (name == null || name.isBlank()) throw new IllegalArgumentException("name must not be blank");
         Instant now = Instant.now();
         RegisteredWorkspace workspace = new RegisteredWorkspace(UUID.randomUUID(), name, List.of(), now, now);
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "INSERT INTO workspaces(id,name,created_at,updated_at) VALUES (?,?,?,?)")) {
-            s.setObject(1, workspace.id());
-            s.setString(2, workspace.name());
-            s.setObject(3, sqlTimestamp(workspace.createdAt()));
-            s.setObject(4, sqlTimestamp(workspace.updatedAt()));
-            s.executeUpdate();
-            return workspace;
+        try {
+            return connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        "INSERT INTO workspaces(id,name,created_at,updated_at) VALUES (?,?,?,?)")) {
+                    s.setObject(1, workspace.id());
+                    s.setString(2, workspace.name());
+                    s.setObject(3, sqlTimestamp(workspace.createdAt()));
+                    s.setObject(4, sqlTimestamp(workspace.updatedAt()));
+                    s.executeUpdate();
+                    return workspace;
+                }
+            });
         } catch (SQLException e) { throw io("create workspace", e); }
     }
 
@@ -110,54 +114,74 @@ final class PostgresProjectRegistry implements ProjectRegistry {
     @Override
     public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at FROM projects WHERE id=?")) {
-            s.setObject(1, projectId);
-            try (ResultSet r = s.executeQuery()) { return r.next() ? Optional.of(readProject(r)) : Optional.empty(); }
+        try {
+            return connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at FROM projects WHERE id=?")) {
+                    s.setObject(1, projectId);
+                    try (ResultSet r = s.executeQuery()) {
+                        return r.next() ? Optional.of(readProject(r)) : Optional.empty();
+                    }
+                }
+            });
         } catch (SQLException e) { throw io("find project", e); }
     }
 
     @Override
     public Optional<RegisteredWorkspace> findWorkspace(UUID workspaceId) throws IOException {
         Objects.requireNonNull(workspaceId, "workspaceId");
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                WORKSPACE_WITH_PROJECTS_SELECT + " WHERE w.id=? ORDER BY p.id")) {
-            s.setObject(1, workspaceId);
-            try (ResultSet r = s.executeQuery()) {
-                if (!r.next()) return Optional.empty();
-                MutableWorkspace workspace = workspace(r);
-                addProjectId(workspace, r);
-                while (r.next()) addProjectId(workspace, r);
-                return Optional.of(workspace.toRegistered());
-            }
+        try {
+            return connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        WORKSPACE_WITH_PROJECTS_SELECT + " WHERE w.id=? ORDER BY p.id")) {
+                    s.setObject(1, workspaceId);
+                    try (ResultSet r = s.executeQuery()) {
+                        if (!r.next()) return Optional.empty();
+                        MutableWorkspace workspace = workspace(r);
+                        addProjectId(workspace, r);
+                        while (r.next()) addProjectId(workspace, r);
+                        return Optional.of(workspace.toRegistered());
+                    }
+                }
+            });
         } catch (SQLException e) { throw io("find workspace", e); }
     }
 
     @Override
     public List<RegisteredProject> listProjects() throws IOException {
-        List<RegisteredProject> values = new ArrayList<>();
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at FROM projects ORDER BY id"); ResultSet r = s.executeQuery()) {
-            while (r.next()) values.add(readProject(r));
-            return List.copyOf(values);
+        try {
+            return connections.withConnection(c -> {
+                List<RegisteredProject> values = new ArrayList<>();
+                try (PreparedStatement s = c.prepareStatement(
+                        "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at FROM projects ORDER BY id");
+                     ResultSet r = s.executeQuery()) {
+                    while (r.next()) values.add(readProject(r));
+                }
+                return List.copyOf(values);
+            });
         } catch (SQLException e) { throw io("list projects", e); }
     }
 
     @Override
     public List<RegisteredWorkspace> listWorkspaces() throws IOException {
-        Map<UUID, MutableWorkspace> grouped = new LinkedHashMap<>();
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                WORKSPACE_WITH_PROJECTS_SELECT + " ORDER BY w.id,p.id"); ResultSet r = s.executeQuery()) {
-            while (r.next()) {
-                UUID id = (UUID) r.getObject(1);
-                MutableWorkspace workspace = grouped.get(id);
-                if (workspace == null) {
-                    workspace = workspace(r);
-                    grouped.put(id, workspace);
+        try {
+            return connections.withConnection(c -> {
+                Map<UUID, MutableWorkspace> grouped = new LinkedHashMap<>();
+                try (PreparedStatement s = c.prepareStatement(
+                        WORKSPACE_WITH_PROJECTS_SELECT + " ORDER BY w.id,p.id");
+                     ResultSet r = s.executeQuery()) {
+                    while (r.next()) {
+                        UUID id = (UUID) r.getObject(1);
+                        MutableWorkspace workspace = grouped.get(id);
+                        if (workspace == null) {
+                            workspace = workspace(r);
+                            grouped.put(id, workspace);
+                        }
+                        addProjectId(workspace, r);
+                    }
                 }
-                addProjectId(workspace, r);
-            }
-            return grouped.values().stream().map(MutableWorkspace::toRegistered).toList();
+                return grouped.values().stream().map(MutableWorkspace::toRegistered).toList();
+            });
         } catch (SQLException e) { throw io("list workspaces", e); }
     }
 
@@ -175,17 +199,22 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     private void writeProject(RegisteredProject project) throws IOException {
         RootIdentity root = rootIdentity(project.rootPath());
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?) " +
-                        "ON CONFLICT(id) DO UPDATE SET root_value=EXCLUDED.root_value,root_portable=EXCLUDED.root_portable,display_name=EXCLUDED.display_name,workspace_id=EXCLUDED.workspace_id,updated_at=EXCLUDED.updated_at")) {
-            s.setObject(1, project.id());
-            s.setString(2, root.value());
-            s.setBoolean(3, root.portable());
-            s.setString(4, project.displayName());
-            s.setObject(5, project.workspaceId().orElse(null));
-            s.setObject(6, sqlTimestamp(project.createdAt()));
-            s.setObject(7, sqlTimestamp(project.updatedAt()));
-            s.executeUpdate();
+        try {
+            connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?) " +
+                                "ON CONFLICT(id) DO UPDATE SET root_value=EXCLUDED.root_value,root_portable=EXCLUDED.root_portable,display_name=EXCLUDED.display_name,workspace_id=EXCLUDED.workspace_id,updated_at=EXCLUDED.updated_at")) {
+                    s.setObject(1, project.id());
+                    s.setString(2, root.value());
+                    s.setBoolean(3, root.portable());
+                    s.setString(4, project.displayName());
+                    s.setObject(5, project.workspaceId().orElse(null));
+                    s.setObject(6, sqlTimestamp(project.createdAt()));
+                    s.setObject(7, sqlTimestamp(project.updatedAt()));
+                    s.executeUpdate();
+                    return null;
+                }
+            });
         } catch (SQLException e) { throw io("write project", e); }
     }
 
