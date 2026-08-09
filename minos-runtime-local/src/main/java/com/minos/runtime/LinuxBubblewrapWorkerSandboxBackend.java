@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -179,7 +180,10 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             }
             process.getInputStream().readAllBytes();
             return process.exitValue() == 0;
-        } catch (Exception exception) {
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (IOException | RuntimeException exception) {
             return false;
         }
     }
