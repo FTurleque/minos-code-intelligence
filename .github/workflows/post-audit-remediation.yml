@@ -24,6 +24,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REMEDIATION_BRANCH: ${{ github.event.pull_request.head.ref }}
       SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Checkout exact pull request head without third-party actions
         shell: bash
@@ -91,7 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          python3 -B - <<'PY'
           from pathlib import Path
           import re, subprocess
 
@@ -125,25 +126,28 @@ jobs:
           printf '%s\n' 'INNOSETUP_CHOCO_VERSION=6.7.1' >> scripts/remediation/post-audit-provenance.env
           cat scripts/remediation/post-audit-provenance.env
 
-      - name: Apply captured provenance to product and CI
+      - name: Apply captured provenance to product runtime
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/remediation/apply-post-audit-remediation.py
-          python3 scripts/remediation/apply-post-audit-remediation.py
+          python3 -B scripts/remediation/apply-post-audit-remediation.py
           git diff --check
-          python3 scripts/architecture/check-module-boundaries.py
+          python3 -B scripts/architecture/check-module-boundaries.py
+          test -z "$(find scripts/remediation -type d -name __pycache__ -print -quit)"
 
-      - name: Commit hardened supply-chain candidate to exact source branch
+      - name: Commit hardened product supply-chain candidate
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'MINOS Remediation Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add -A
+          git add \
+            scripts/remediation/post-audit-provenance.env \
+            minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java \
+            docker/Dockerfile.mcp.release
           if git diff --cached --quiet; then
-            echo 'Supply-chain provenance and hardening are already current.'
+            echo 'Product supply-chain provenance is already current.'
             exit 0
           fi
-          git commit -m 'fix: pin post-audit supply-chain dependencies'
+          git commit -m 'fix: pin post-audit product supply-chain dependencies'
           git push origin "HEAD:refs/heads/${REMEDIATION_BRANCH}"
