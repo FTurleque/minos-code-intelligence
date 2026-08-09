@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,8 +60,8 @@ final class PostgresProjectRegistry implements ProjectRegistry {
             s.setString(2, root.value());
             s.setBoolean(3, root.portable());
             s.setString(4, displayName);
-            s.setObject(5, now);
-            s.setObject(6, now);
+            s.setObject(5, sqlTimestamp(now));
+            s.setObject(6, sqlTimestamp(now));
             try (ResultSet r = s.executeQuery()) {
                 if (!r.next()) throw new SQLException("project registration did not return a row");
                 return readProject(r);
@@ -77,8 +78,11 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         RegisteredWorkspace workspace = new RegisteredWorkspace(UUID.randomUUID(), name, List.of(), now, now);
         try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
                 "INSERT INTO workspaces(id,name,created_at,updated_at) VALUES (?,?,?,?)")) {
-            s.setObject(1, workspace.id()); s.setString(2, workspace.name());
-            s.setObject(3, workspace.createdAt()); s.setObject(4, workspace.updatedAt()); s.executeUpdate();
+            s.setObject(1, workspace.id());
+            s.setString(2, workspace.name());
+            s.setObject(3, sqlTimestamp(workspace.createdAt()));
+            s.setObject(4, sqlTimestamp(workspace.updatedAt()));
+            s.executeUpdate();
             return workspace;
         } catch (SQLException e) { throw io("create workspace", e); }
     }
@@ -146,18 +150,14 @@ final class PostgresProjectRegistry implements ProjectRegistry {
                 WORKSPACE_WITH_PROJECTS_SELECT + " ORDER BY w.id,p.id"); ResultSet r = s.executeQuery()) {
             while (r.next()) {
                 UUID id = (UUID) r.getObject(1);
-                MutableWorkspace workspace = grouped.computeIfAbsent(id, ignored -> {
-                    try {
-                        return workspace(r);
-                    } catch (SQLException exception) {
-                        throw new WorkspaceReadException(exception);
-                    }
-                });
+                MutableWorkspace workspace = grouped.get(id);
+                if (workspace == null) {
+                    workspace = workspace(r);
+                    grouped.put(id, workspace);
+                }
                 addProjectId(workspace, r);
             }
             return grouped.values().stream().map(MutableWorkspace::toRegistered).toList();
-        } catch (WorkspaceReadException e) {
-            throw io("list workspaces", e.sqlException());
         } catch (SQLException e) { throw io("list workspaces", e); }
     }
 
@@ -178,8 +178,14 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
                 "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?) " +
                         "ON CONFLICT(id) DO UPDATE SET root_value=EXCLUDED.root_value,root_portable=EXCLUDED.root_portable,display_name=EXCLUDED.display_name,workspace_id=EXCLUDED.workspace_id,updated_at=EXCLUDED.updated_at")) {
-            s.setObject(1, project.id()); s.setString(2, root.value()); s.setBoolean(3, root.portable()); s.setString(4, project.displayName());
-            s.setObject(5, project.workspaceId().orElse(null)); s.setObject(6, project.createdAt()); s.setObject(7, project.updatedAt()); s.executeUpdate();
+            s.setObject(1, project.id());
+            s.setString(2, root.value());
+            s.setBoolean(3, root.portable());
+            s.setString(4, project.displayName());
+            s.setObject(5, project.workspaceId().orElse(null));
+            s.setObject(6, sqlTimestamp(project.createdAt()));
+            s.setObject(7, sqlTimestamp(project.updatedAt()));
+            s.executeUpdate();
         } catch (SQLException e) { throw io("write project", e); }
     }
 
@@ -208,6 +214,10 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         if (projectId != null) workspace.projectIds.add(projectId);
     }
 
+    private static OffsetDateTime sqlTimestamp(Instant value) {
+        return Objects.requireNonNull(value, "timestamp").atOffset(ZoneOffset.UTC);
+    }
+
     private static Path canonicalExistingDirectory(Path rootPath) throws IOException {
         Objects.requireNonNull(rootPath, "rootPath"); Path canonical = rootPath.toRealPath();
         if (!Files.isDirectory(canonical)) throw new IllegalArgumentException("rootPath must be an existing directory: " + rootPath);
@@ -233,17 +243,6 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         private RegisteredWorkspace toRegistered() {
             return new RegisteredWorkspace(id, name, List.copyOf(projectIds), createdAt, updatedAt);
         }
-    }
-
-    private static final class WorkspaceReadException extends RuntimeException {
-        private final SQLException sqlException;
-
-        private WorkspaceReadException(SQLException sqlException) {
-            super(sqlException);
-            this.sqlException = sqlException;
-        }
-
-        private SQLException sqlException() { return sqlException; }
     }
 
     private static IOException io(String action, SQLException e) { return new IOException("PostgreSQL project registry failed to " + action, e); }
