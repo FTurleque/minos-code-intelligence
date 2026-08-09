@@ -1,8 +1,8 @@
-FROM rust:1.97.1-bookworm AS rust-toolchain
-FROM golang:1.26.5-bookworm AS go-toolchain
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS dotnet-toolchain
+FROM rust@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3 AS rust-toolchain # rust:1.97.1-bookworm
+FROM golang@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS go-toolchain # golang:1.26.5-bookworm
+FROM mcr.microsoft.com/dotnet/sdk@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS dotnet-toolchain # 10.0.302-noble
 
-FROM eclipse-temurin:24-jdk
+FROM eclipse-temurin@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e # eclipse-temurin:24-jdk
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
@@ -10,7 +10,10 @@ ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
 ARG NODE_VERSION=20.20.2
 ARG MAVEN_VERSION=3.9.16
-ARG COURSIER_VERSION=2.1.25-M26
+ARG COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61
+ARG COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b
+ARG SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784
+ARG RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115
 ARG SCIP_TYPESCRIPT_VERSION=0.4.0
 ARG SCIP_JAVA_VERSION=0.13.1
 ARG SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT
@@ -89,7 +92,8 @@ RUN set -eux; \
     node --version; npm --version
 
 RUN set -eux; \
-    curl -fsSLo /tmp/cs.gz "https://github.com/coursier/coursier/releases/download/v${COURSIER_VERSION}/cs-x86_64-pc-linux.gz"; \
+    curl -fsSLo /tmp/cs.gz "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_LAUNCHERS_COMMIT}/cs-x86_64-pc-linux.gz"; \
+    printf '%s  %s\n' "${COURSIER_LINUX_SHA256}" /tmp/cs.gz | sha256sum -c -; \
     gunzip /tmp/cs.gz; \
     install -m 0755 /tmp/cs /usr/local/bin/cs; \
     rm -f /tmp/cs; \
@@ -97,6 +101,7 @@ RUN set -eux; \
 
 RUN set -eux; \
     curl -fsSLo /tmp/scip-clang "https://github.com/sourcegraph/scip-clang/releases/download/v${SCIP_CLANG_VERSION}/scip-clang-x86_64-linux"; \
+    printf '%s  %s\n' "${SCIP_CLANG_LINUX_SHA256}" /tmp/scip-clang | sha256sum -c -; \
     install -m 0755 /tmp/scip-clang /usr/local/bin/scip-clang; \
     rm -f /tmp/scip-clang; \
     scip-clang --version | grep -F "${SCIP_CLANG_VERSION}"
@@ -105,6 +110,7 @@ RUN set -eux; \
 # commit are artifact provenance and remain pinned by the download URL + provider inventory.
 RUN set -eux; \
     curl -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
+    printf '%s  %s\n' "${RUST_ANALYZER_LINUX_GZ_SHA256}" /tmp/rust-analyzer.gz | sha256sum -c -; \
     gunzip /tmp/rust-analyzer.gz; \
     install -m 0755 /tmp/rust-analyzer /usr/local/bin/rust-analyzer; \
     rm -f /tmp/rust-analyzer; \
