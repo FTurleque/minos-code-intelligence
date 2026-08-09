@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **8 août 2026** : **C0 → M30 terminés et intégrés ; hardening #113/#117 et readiness #118/#119 intégrés ; MINOS 1.0.0 publié ; 1.0.1 en pré-publication et non publiée.**
+Statut au **9 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés.**
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -15,7 +15,7 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 - une release publiée est immuable ;
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - un backend Docker n'est équivalent au natif qu'après qualification de parité métier, données, providers, MCP et lifecycle ;
-- la publication est bloquée par les vulnérabilités connues, l'absence de qualification exacte du candidat ou un conflit de tag/release.
+- la publication est bloquée par les vulnérabilités connues, l'absence de qualification exacte du candidat ou un conflit de provenance/tag/release.
 
 ## Trajectoire livrée
 
@@ -35,8 +35,10 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | M28 | Production Convergence | ✅ terminé — issue #93 closed / PR #102 merged |
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ terminé — issue #107 closed / PR #108 merged |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ livré — PR #110 + promotion #111 |
-| Hardening post-audit | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113 + #117 + #112 |
-| Readiness 1.0.1 | Plugin Verifier, preflight release, docs et smoke MCP stabilisé | ✅ #118 + #119 |
+| Hardening post-audit | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113/#117/#112 |
+| Readiness 1.0.1 | Plugin Verifier, preflight release, docs et smoke MCP stabilisé | ✅ #118/#119 |
+| Correctifs validation réelle | Docker local, Codex, PowerShell 5.1, staging jpackage | ✅ #122–#127 |
+| Release 1.0.1 | setup Windows + supply-chain + plugin IntelliJ | ✅ publiée le 9 août 2026 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
@@ -54,11 +56,28 @@ semantic          disabled | local-hash | ollama
 
 Le wizard Windows propose Standard/Avancé, les intégrations MCP détectées, la configuration PostgreSQL/Ollama/Docker applicable, puis un résumé avant installation. PostgreSQL/pgvector est un backend réel et versionné ; PostgreSQL et Ollama peuvent être gérés dans le runtime Docker.
 
-## Hardening et readiness — terminés
+## Release 1.0.1 — livrée
 
-Les PR **#113/#117/#118** et les promotions **#112/#119** sont intégrées.
+La release **v1.0.1** est publiée et immuable sur :
 
-Gates acquis :
+```text
+f762025d66e33c40324c811079f1527d122f90f9
+```
+
+URL : <https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1>
+
+La livraison a convergé après validation utilisateur réelle et correction des derniers défauts Windows observés sur le poste mainteneur :
+
+- installation Docker accélérée par réutilisation d'une image exacte préconstruite ;
+- réparation ownership-aware d'un ancien bloc Codex MINOS ;
+- parsing `docker image inspect` compatible Windows PowerShell 5.1 ;
+- génération locale répétable malgré les handles conservés par un ancien runtime jpackage.
+
+La publication finale a rejoué le Plugin Verifier, la qualification Windows complète, remplacé l'ancien état `v1.0.1` uniquement après qualification, publié 10 assets et vérifié 5 paires SHA-256 après re-téléchargement.
+
+## Gates de release durables
+
+Les gates actuellement acquis comprennent :
 
 - Jackson 2/3 corrigés ;
 - OSV Scanner bloquant ;
@@ -72,33 +91,14 @@ Gates acquis :
 - IntelliJ unit/build/structure + Plugin Verifier ;
 - build jpackage + ZIP/SBOM/notices/checksums ;
 - handshake MCP SDK sur runtime packagé ;
-- timeout d'initialisation MCP SDK explicite ;
 - compilation Inno Setup ;
 - installation ZIP + handshake ;
 - installation setup + handshake ;
 - désinstallation isolée ;
 - vérification des artefacts durables ;
-- préflight exact-head/tag/release avant publication.
+- contrôle strict de provenance avant publication.
 
-Le workflow manuel de publication rejoue les gates IntelliJ puis reconstruit et qualifie les artefacts Windows sur le SHA exact de `main`.
-
-## Release 1.0.1 — phase de décision
-
-1.0.1 reste **NON PUBLIÉE**. Aucun ancien setup/ZIP n'est un candidat final.
-
-Les validations automatisables sont acquises sur la readiness. Les trois décisions/gates qui restent avant publication sont :
-
-```text
-validation utilisateur réelle du wizard et des clients installés
-→ résolution explicite du conflit de tag v1.0.1
-→ autorisation explicite de publication
-```
-
-Le workflow de publication reconstruira ensuite sur le `main` exact et vérifiera de nouveau Plugin Verifier, runtime, setup, handshakes, checksums et supply-chain avant création de la GitHub Release.
-
-### Blocage de gouvernance actuel
-
-Un tag Git historique `v1.0.1` existe sur `2de847bdc6bc39e63715f20987a30f07731cc717`, antérieur à la readiness finale. Ce tag ne doit pas être déplacé ou supprimé implicitement. Le workflow de release le détecte avant les builds lourds et échoue volontairement tant que la situation n'a pas été résolue explicitement.
+Le workflow manuel standard de publication reste disponible pour les releases futures ; les workflows one-shot créés uniquement pour la migration de l'ancien `v1.0.1` sont retirés après livraison.
 
 ## Priorité ouverte — #98
 
@@ -106,4 +106,4 @@ Un tag Git historique `v1.0.1` existe sur `2de847bdc6bc39e63715f20987a30f07731cc
 
 ## Prochaine planification fonctionnelle
 
-Aucun nouveau jalon M31 n'est engagé avant la décision de publication 1.0.1. Après la release, la prochaine priorité structurante connue reste #98, sauf décision contraire de roadmap.
+Aucun jalon **M31** n'est encore engagé. La prochaine priorité structurante connue reste #98, sauf décision contraire de roadmap.
