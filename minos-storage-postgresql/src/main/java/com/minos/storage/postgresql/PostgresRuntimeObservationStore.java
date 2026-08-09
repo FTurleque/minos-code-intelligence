@@ -65,7 +65,7 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
         }
     }
 
-    private static void insertSession(Connection connection, CorrelatedRuntimeSession session)
+    private void insertSession(Connection connection, CorrelatedRuntimeSession session)
             throws SQLException, IOException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO runtime_sessions(project_id,session_id,source_sha256,imported_at,payload) "
@@ -74,7 +74,7 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
             statement.setString(2, session.session().sessionId());
             statement.setString(3, session.sourceSha256());
             statement.setObject(4, OffsetDateTime.ofInstant(session.importedAt(), ZoneOffset.UTC));
-            statement.setString(5, new PostgresJsonCodec().write(session));
+            statement.setString(5, json.write(session));
             statement.executeUpdate();
         }
     }
