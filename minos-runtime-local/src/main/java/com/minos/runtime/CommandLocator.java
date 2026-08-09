@@ -38,10 +38,10 @@ public final class CommandLocator {
     }
 
     /**
-     * Builds a direct process invocation. Windows batch files necessarily require cmd.exe, but
-     * they are executed through one quoted command string with AutoRun and delayed expansion
-     * disabled. The renderer rejects percent expansion, embedded quotes and control newlines
-     * instead of trying to sanitize shell syntax after the fact.
+     * Builds a direct process invocation. Windows batch files necessarily require cmd.exe.
+     * The complete batch command is wrapped in cmd's required outer quote pair so /S cannot
+     * strip the executable's own quotes and expose shell metacharacters from paths/arguments.
+     * Percent expansion, embedded quotes and control newlines remain rejected fail-closed.
      */
     public static List<String> invocation(Path executable, String... arguments) {
         Objects.requireNonNull(executable, "executable");
@@ -72,7 +72,11 @@ public final class CommandLocator {
         }
         String comSpec = System.getenv("ComSpec");
         String commandProcessor = comSpec == null || comSpec.isBlank() ? "cmd.exe" : comSpec;
-        return List.of(commandProcessor, "/d", "/v:off", "/s", "/c", rendered.toString());
+        // With cmd /S /C, the conventional and required shape is:
+        //   ""C:\path with spaces\script.cmd" "arg" ..."
+        // The outer pair belongs to cmd; the inner quotes protect every individual token.
+        String commandLine = '"' + rendered.toString() + '"';
+        return List.of(commandProcessor, "/d", "/v:off", "/s", "/c", commandLine);
     }
 
     public static boolean isWindows() {
