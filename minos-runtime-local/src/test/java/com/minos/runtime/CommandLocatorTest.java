@@ -53,6 +53,15 @@ class CommandLocatorTest {
         Path directory = Files.createTempDirectory("minos-cmd space & caret^ paren() bang! unicode-é-");
         Path script = directory.resolve("provider test.cmd");
         Path marker = directory.resolve("result marker.txt");
+        Path unicodeCapture = directory.resolve("unicode capture.txt");
+        Path captureHelper = directory.resolve("capture-unicode.ps1");
+        Files.writeString(captureHelper, """
+                param([string] $Value, [string] $Target)
+                [System.IO.File]::WriteAllText(
+                    $Target,
+                    $Value,
+                    [System.Text.UTF8Encoding]::new($false))
+                """, StandardCharsets.US_ASCII);
         Files.writeString(script, """
                 @echo off
                 setlocal DisableDelayedExpansion
@@ -61,10 +70,11 @@ class CommandLocatorTest {
                 if not "%~4"=="x^y" exit /b 13
                 if not "%~5"=="(z)" exit /b 14
                 if not "%~6"=="bang!value" exit /b 15
-                if not "%~7"=="é漢字" exit /b 16
+                powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~8" "%~7" "%~9"
+                if errorlevel 1 exit /b 16
                 > "%~1" echo PASS
                 exit /b 0
-                """, StandardCharsets.UTF_8);
+                """, StandardCharsets.US_ASCII);
 
         Process process = new ProcessBuilder(CommandLocator.invocation(
                 script,
@@ -74,11 +84,14 @@ class CommandLocatorTest {
                 "x^y",
                 "(z)",
                 "bang!value",
-                "é漢字")).start();
+                "é漢字",
+                captureHelper.toString(),
+                unicodeCapture.toString())).start();
 
         assertTrue(process.waitFor(20, TimeUnit.SECONDS), "cmd.exe qualification process timed out");
         String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(0, process.exitValue(), stderr);
         assertEquals("PASS", Files.readString(marker, StandardCharsets.UTF_8).trim());
+        assertEquals("é漢字", Files.readString(unicodeCapture, StandardCharsets.UTF_8));
     }
 }
