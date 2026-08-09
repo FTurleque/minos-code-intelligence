@@ -1,8 +1,12 @@
 package com.minos.cli;
 
+import com.minos.runtime.CommandLocator;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -16,52 +20,70 @@ final class DockerMcpTransport {
         int attach(List<String> command) throws IOException, InterruptedException;
     }
 
+    @FunctionalInterface
+    interface DockerExecutableResolver {
+        Path resolve() throws IOException;
+    }
+
     record ProcessResult(int exitCode, String output) { }
 
     private final ProcessExecutor processes;
+    private final DockerExecutableResolver dockerExecutableResolver;
 
     DockerMcpTransport() {
-        this(new SystemProcessExecutor());
+        this(new SystemProcessExecutor(), DockerMcpTransport::resolveDockerExecutable);
     }
 
+    /** Test seam: fake executors receive the historical logical command name without touching PATH. */
     DockerMcpTransport(ProcessExecutor processes) {
-        this.processes = Objects.requireNonNull(processes, "processes");
+        this(processes, () -> Path.of("docker"));
     }
 
-    // containerName passes through safeContainerName() which allows only [A-Za-z0-9_.-] and
-    // rejects any other character. ProcessBuilder(List) does not invoke a shell — each element
-    // is a separate OS argument. The container name cannot trigger shell expansion or injection.
-    @SuppressWarnings("java:S4036")
+    DockerMcpTransport(ProcessExecutor processes, DockerExecutableResolver dockerExecutableResolver) {
+        this.processes = Objects.requireNonNull(processes, "processes");
+        this.dockerExecutableResolver = Objects.requireNonNull(dockerExecutableResolver, "dockerExecutableResolver");
+    }
+
     int run(McpBackendConfiguration configuration) throws IOException, InterruptedException {
         Objects.requireNonNull(configuration, "configuration");
         if (configuration.backend() != McpBackend.DOCKER) {
             throw new IllegalArgumentException("Docker MCP transport requires backend=docker");
         }
 
+        Path docker = Objects.requireNonNull(dockerExecutableResolver.resolve(), "docker executable");
         ProcessResult daemon = processes.probe(
-                List.of("docker", "version", "--format", "{{.Server.Version}}"),
+                dockerCommand(docker, "version", "--format", "{{.Server.Version}}"),
                 configuration.dockerProbeTimeout());
         if (daemon.exitCode() != 0 || daemon.output().isBlank()) {
             throw new IOException("Docker backend selected but Docker daemon is unavailable"
                     + diagnosticSuffix(daemon.output()));
         }
 
-        String containerName = safeContainerName(configuration.dockerContainerName());
+        String containerName = validatedContainerName(configuration.dockerContainerName());
         ProcessResult container = processes.probe(
-                List.of("docker", "inspect", "--format", "{{.State.Running}}", containerName),
+                dockerCommand(docker, "inspect", "--format", "{{.State.Running}}", containerName),
                 configuration.dockerProbeTimeout());
         if (container.exitCode() != 0 || !"true".equalsIgnoreCase(container.output().trim())) {
             throw new IOException("Docker backend selected but MINOS container is not running: "
                     + containerName + diagnosticSuffix(container.output()));
         }
 
-        int exitCode = processes.attach(List.of(
-                "docker", "exec", "-i", containerName,
+        int exitCode = processes.attach(dockerCommand(
+                docker, "exec", "-i", containerName,
                 "java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"));
         if (exitCode != 0 && exitCode != 130) {
             throw new IOException("Docker MCP STDIO session failed with exit code " + exitCode);
         }
         return exitCode == 130 ? FindSymbolCommand.SUCCESS : exitCode;
+    }
+
+    private static List<String> dockerCommand(Path executable, String... arguments) {
+        return CommandLocator.invocation(executable, arguments);
+    }
+
+    private static Path resolveDockerExecutable() throws IOException {
+        return CommandLocator.find("docker")
+                .orElseThrow(() -> new IOException("Docker backend selected but Docker executable is unavailable"));
     }
 
     private static String diagnosticSuffix(String output) {
@@ -70,34 +92,18 @@ final class DockerMcpTransport {
         return compact.isEmpty() ? "" : ": " + compact;
     }
 
-    /**
-     * Returns a string built character-by-character from the validated Docker container name,
-     * retaining only characters in the allowlist [A-Za-z0-9_.-]. This explicit reconstruction
-     * breaks static taint-analysis tracking while preserving the already-validated value.
-     * McpBackendConfiguration guarantees the input matches [A-Za-z0-9][A-Za-z0-9_.-]+ before
-     * this transport is reached; the check here is a defence-in-depth guard, not the primary gate.
-     */
-    private static String safeContainerName(String name) {
-        StringBuilder safe = new StringBuilder(name.length());
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
-                    || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-') {
-                safe.append(c);
-            }
-        }
-        if (safe.isEmpty() || safe.length() != name.length()) {
+    /** Defence-in-depth validation matching the configuration contract. */
+    private static String validatedContainerName(String name) {
+        if (name == null || !name.matches("[A-Za-z0-9][A-Za-z0-9_.-]+")) {
             throw new IllegalArgumentException("invalid Docker container name: " + name);
         }
-        return safe.toString();
+        return name;
     }
 
-    @SuppressWarnings("java:S4036") // containerName validated by safeContainerName(); ProcessBuilder(List) uses no shell
     private static final class SystemProcessExecutor implements ProcessExecutor {
         @Override
         public ProcessResult probe(List<String> command, Duration timeout) throws IOException, InterruptedException {
-            // safeContainerName() in run() strips any tainted characters before the command is built.
-            // ProcessBuilder(List) passes each element as a separate OS argument — no shell expansion.
+            requireAbsoluteExecutable(command);
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.redirectErrorStream(true);
             Process process;
@@ -132,6 +138,7 @@ final class DockerMcpTransport {
 
         @Override
         public int attach(List<String> command) throws IOException, InterruptedException {
+            requireAbsoluteExecutable(command);
             Process process;
             try {
                 process = new ProcessBuilder(command).inheritIO().start();
@@ -145,6 +152,16 @@ final class DockerMcpTransport {
                 if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
                 Thread.currentThread().interrupt();
                 throw exception;
+            }
+        }
+
+        private static void requireAbsoluteExecutable(List<String> command) throws IOException {
+            if (command == null || command.isEmpty() || command.getFirst() == null) {
+                throw new IOException("Docker process command is empty");
+            }
+            Path executable = Path.of(command.getFirst()).toAbsolutePath().normalize();
+            if (!Path.of(command.getFirst()).isAbsolute() || !Files.isRegularFile(executable)) {
+                throw new IOException("Docker process executable must be an existing absolute file");
             }
         }
     }
