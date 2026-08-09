@@ -15,19 +15,15 @@ final class PostgresSchemaMigrator {
         this.connections = connections;
     }
 
-    // schema identifier is validated by StorageBackendConfiguration and rebuilt char-by-char in
-    // quotedSchema(). DDL statements (CREATE SCHEMA, SET search_path) do not accept parameters.
-    @SuppressWarnings("java:S2077")
     void migrate() throws IOException {
-        String schema = connections.quotedSchema();
         try (Connection connection = connections.open(); Statement statement = connection.createStatement()) {
             connection.setAutoCommit(false);
             try {
+                String schema = statement.enquoteIdentifier(connections.schema(), true);
                 statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
                 statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
-                statement.execute("SET search_path TO " + schema + ", public");
-                // Serialize version inspection and DDL for this MINOS schema across concurrent
-                // application instances. The xact lock is released automatically on commit/rollback.
+                // connections.open() configures search_path as a bound setting value. Once the schema
+                // exists, the existing session path immediately resolves it before public.
                 statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
                 statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
                 int version = currentVersion(statement);
