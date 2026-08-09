@@ -44,7 +44,7 @@ jobs:
           chmod +x mvnw
           ./mvnw -B -ntp -pl minos-runtime-local -am \
             '-Dtest=LinuxBubblewrapWorkerSandboxBackendTest,LocalIsolatedIndexWorkerTest' \
-            -Dsurefire.failIfNoSpecifiedTests=false test
+            '-Dsurefire.failIfNoSpecifiedTests=false' test
           report='minos-runtime-local/target/surefire-reports/TEST-com.minos.runtime.LinuxBubblewrapWorkerSandboxBackendTest.xml'
           test -f "$report"
           python3 - "$report" <<'PY'
@@ -82,7 +82,7 @@ jobs:
         run: |
           .\mvnw.cmd -B -ntp -pl minos-runtime-local -am `
             '-Dtest=WindowsAppContainerWorkerSandboxBackendTest,CommandLocatorTest,LocalIsolatedIndexWorkerTest' `
-            -Dsurefire.failIfNoSpecifiedTests=false test
+            '-Dsurefire.failIfNoSpecifiedTests=false' test
           $report = 'minos-runtime-local\target\surefire-reports\TEST-com.minos.runtime.WindowsAppContainerWorkerSandboxBackendTest.xml'
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw 'Windows sandbox report missing' }
           [xml]$xml = Get-Content -LiteralPath $report -Raw
