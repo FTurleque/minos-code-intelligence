@@ -56,6 +56,9 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
+      - name: P0-P2 audit remediation consistency
+        run: python scripts/remediation/check-p0-p2.py
+
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
         shell: bash
