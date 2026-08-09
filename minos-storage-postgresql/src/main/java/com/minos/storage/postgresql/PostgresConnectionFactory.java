@@ -5,10 +5,9 @@ import com.minos.storage.StorageBackendConfiguration;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Objects;
+import java.util.Properties;
 
 final class PostgresConnectionFactory {
     private final String url;
@@ -29,26 +28,11 @@ final class PostgresConnectionFactory {
     }
 
     Connection open() throws SQLException {
-        Connection connection = DriverManager.getConnection(url, user, password);
-        try {
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT set_config('search_path', ?, false)")) {
-                statement.setString(1, schema + ",public");
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) {
-                        throw new SQLException("PostgreSQL did not acknowledge search_path configuration");
-                    }
-                }
-            }
-            return connection;
-        } catch (SQLException | RuntimeException exception) {
-            try {
-                connection.close();
-            } catch (SQLException closeFailure) {
-                exception.addSuppressed(closeFailure);
-            }
-            throw exception;
-        }
+        Properties properties = new Properties();
+        properties.setProperty("user", user);
+        properties.setProperty("password", password);
+        properties.setProperty("currentSchema", schema + ",public");
+        return DriverManager.getConnection(url, properties);
     }
 
     String schema() { return schema; }
