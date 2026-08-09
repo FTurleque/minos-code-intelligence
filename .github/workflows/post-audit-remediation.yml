@@ -56,9 +56,9 @@ jobs:
           }
 
           fetch_hash COURSIER_WINDOWS_SHA256 coursier-windows.exe \
-            'https://github.com/coursier/coursier/releases/download/v2.1.25-M26/cs-x86_64-pc-win32.exe'
+            'https://github.com/coursier/coursier/releases/download/v2.1.18/cs-x86_64-pc-win32.exe'
           fetch_hash COURSIER_LINUX_SHA256 coursier-linux.gz \
-            'https://github.com/coursier/coursier/releases/download/v2.1.25-M26/cs-x86_64-pc-linux.gz'
+            'https://github.com/coursier/coursier/releases/download/v2.1.18/cs-x86_64-pc-linux.gz'
           fetch_hash SCIP_CLANG_LINUX_SHA256 scip-clang \
             'https://github.com/sourcegraph/scip-clang/releases/download/v0.4.0/scip-clang-x86_64-linux'
           fetch_hash RUST_ANALYZER_LINUX_GZ_SHA256 rust-analyzer.gz \
