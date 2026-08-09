@@ -17,7 +17,7 @@ jobs:
       TARGET_BRANCH: agent/post-audit-remediation-final
       SOURCE_BRANCH: agent/post-audit-remediation
     steps:
-      - name: Import remediation while preserving qualified develop files on conflicts
+      - name: Import remediation while preserving qualified workflows
         shell: bash
         run: |
           set -euo pipefail
@@ -28,5 +28,22 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags origin "${TARGET_BRANCH}" "${SOURCE_BRANCH}"
           git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
-          git merge -X ours --no-edit "origin/${SOURCE_BRANCH}"
+
+          workflows_snapshot="${RUNNER_TEMP}/target-workflows"
+          mkdir -p "${workflows_snapshot}"
+          cp -a .github/workflows/. "${workflows_snapshot}/"
+
+          git merge -X ours --no-commit --no-ff "origin/${SOURCE_BRANCH}"
+
+          rm -rf .github/workflows
+          mkdir -p .github/workflows
+          cp -a "${workflows_snapshot}/." .github/workflows/
+          git add -A .github/workflows
+          if ! git diff --cached --quiet -- .github/workflows; then
+            echo 'Import attempted to alter qualified workflow files.' >&2
+            git diff --cached -- .github/workflows >&2
+            exit 1
+          fi
+
+          git commit -m 'Merge post-audit remediation onto qualified develop base'
           git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
