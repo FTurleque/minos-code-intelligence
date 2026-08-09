@@ -175,7 +175,8 @@ def main() -> int:
         require("DockerMcpTransport.java", docker_transport, "CommandLocator.find(\"docker\")")
         require("DockerMcpTransport.java", docker_transport, "CommandLocator.invocation")
         require("PostgresConnectionFactory.java", pg_connections,
-                "SELECT set_config('search_path', ?, false)")
+                'properties.setProperty("currentSchema", schema + ",public")')
+        forbid("PostgresConnectionFactory.java", pg_connections, "set_config('search_path'")
         require("PostgresSchemaMigrator.java", pg_migrator, "enquoteIdentifier")
         require("PostgresProjectRegistry.java", pg_registry,
                 "LEFT JOIN projects p ON p.workspace_id=w.id")
