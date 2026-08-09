@@ -1,5 +1,14 @@
 package com.minos.runtime;
 
+import com.minos.discovery.ProjectDiscovery.BuildSystem;
+import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.IndexerCapability;
+import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
+import com.minos.orchestration.IndexerQualification;
+import com.minos.orchestration.IndexingMode;
+import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
+import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +18,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -114,6 +124,34 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     }
 
     @Test
+    void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
+        LinuxBubblewrapWorkerSandboxBackend backend = LinuxBubblewrapWorkerSandboxBackend.discover()
+                .orElseThrow(() -> new AssertionError("qualified Linux sandbox backend is unavailable"));
+        Path home = Files.createTempDirectory("minos-linux-process-home-");
+        Path project = Files.createTempDirectory("minos-linux-process-project-");
+        IndexingExecutionRequest request = executionRequest(project);
+        ProcessIndexerExecutor executor = new ProcessIndexerExecutor(
+                "fixture-provider",
+                home,
+                (ignored, runDirectory) -> {
+                    Path generated = runDirectory.resolve("provider-generated.scip");
+                    return new IndexerProcessPlan(
+                            List.of("/bin/sh", "-c", "printf 'process-sandbox-artifact' > \"$1\"", "sh", generated.toString()),
+                            project,
+                            Map.of(),
+                            generated,
+                            Duration.ofSeconds(20));
+                });
+
+        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.DENY);
+
+        assertEquals("fixture-provider", artifact.indexerId());
+        assertTrue(Files.isRegularFile(artifact.finalArtifact()));
+        assertEquals("process-sandbox-artifact", Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
+    }
+
+    @Test
     void allowPlanSharesHostNetworkAndDropsCapabilities() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
@@ -127,5 +165,25 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(command.contains("--share-net"));
         assertTrue(command.contains("--cap-drop"));
         assertTrue(command.contains("ALL"));
+    }
+
+    private static IndexingExecutionRequest executionRequest(Path projectRoot) {
+        IndexerDescriptor descriptor = new IndexerDescriptor(
+                "fixture-provider",
+                "1.0.0",
+                "Fixture provider",
+                Set.of(Language.JAVA),
+                Set.of(BuildSystem.MAVEN),
+                Set.of(IndexerCapability.SYMBOLS),
+                IndexerQualification.QUALIFIED,
+                1,
+                List.of());
+        return new IndexingExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                projectRoot,
+                new IndexerSelection(Language.JAVA, descriptor),
+                IndexingMode.FULL,
+                List.of());
     }
 }
