@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 final class PostgresSchemaMigrator {
-    static final int CURRENT_VERSION = 1;
+    static final int CURRENT_VERSION = 2;
 
     private final PostgresConnectionFactory connections;
 
@@ -26,10 +26,14 @@ final class PostgresSchemaMigrator {
                 statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
                 statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
                 statement.execute("SET search_path TO " + schema + ", public");
+                // Serialize version inspection and DDL for this MINOS schema across concurrent
+                // application instances. The xact lock is released automatically on commit/rollback.
+                statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
                 statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
                 int version = currentVersion(statement);
                 if (version > CURRENT_VERSION) throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
                 if (version < 1) applyV1(statement);
+                if (version < 2) applyV2(statement);
                 connection.commit();
             } catch (Exception exception) {
                 connection.rollback();
@@ -71,5 +75,17 @@ final class PostgresSchemaMigrator {
         s.execute("CREATE INDEX semantic_documents_project_idx ON semantic_documents(project_id)");
 
         s.execute("INSERT INTO schema_version(version) VALUES (1)");
+    }
+
+    private static void applyV2(Statement s) throws SQLException {
+        try (ResultSet duplicates = s.executeQuery(
+                "SELECT root_value, root_portable, COUNT(*) FROM projects "
+                        + "GROUP BY root_value, root_portable HAVING COUNT(*) > 1 LIMIT 1")) {
+            if (duplicates.next()) {
+                throw new SQLException("duplicate project roots prevent schema v2 uniqueness migration");
+            }
+        }
+        s.execute("CREATE UNIQUE INDEX IF NOT EXISTS projects_root_identity_uq ON projects(root_value, root_portable)");
+        s.execute("INSERT INTO schema_version(version) VALUES (2) ON CONFLICT(version) DO NOTHING");
     }
 }

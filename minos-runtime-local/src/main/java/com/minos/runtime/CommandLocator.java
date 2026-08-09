@@ -6,9 +6,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
-/** Résolution et invocation locale de commandes sans shell implicite. */
+/** Résolution déterministe des exécutables externes sans passer par un shell implicite. */
 public final class CommandLocator {
 
     private CommandLocator() {
@@ -16,11 +17,7 @@ public final class CommandLocator {
 
     public static Optional<Path> find(String command) {
         if (command == null || command.isBlank()) {
-            return Optional.empty();
-        }
-        Path direct = Path.of(command);
-        if (direct.getNameCount() > 1 || direct.isAbsolute()) {
-            return executable(direct);
+            throw new IllegalArgumentException("command must not be blank");
         }
         String path = System.getenv("PATH");
         if (path == null || path.isBlank()) {
@@ -31,9 +28,9 @@ public final class CommandLocator {
                 continue;
             }
             for (String candidate : candidates(command)) {
-                Optional<Path> found = executable(Path.of(directory).resolve(candidate));
-                if (found.isPresent()) {
-                    return found;
+                Path executable = Path.of(directory).resolve(candidate).toAbsolutePath().normalize();
+                if (Files.isRegularFile(executable)) {
+                    return Optional.of(executable);
                 }
             }
         }
@@ -41,39 +38,72 @@ public final class CommandLocator {
     }
 
     /**
-     * Construit une invocation ProcessBuilder portable. Sous Windows, les
-     * launchers npm sont des .cmd/.bat et doivent passer explicitement par
-     * cmd.exe ; les exécutables natifs restent lancés directement.
+     * Builds a direct process invocation. Windows batch files necessarily require cmd.exe, but
+     * they are executed through one quoted command string with AutoRun and delayed expansion
+     * disabled. The renderer rejects percent expansion, embedded quotes and control newlines
+     * instead of trying to sanitize shell syntax after the fact.
      */
     public static List<String> invocation(Path executable, String... arguments) {
-        Path normalized = executable.toAbsolutePath().normalize();
-        String fileName = normalized.getFileName().toString().toLowerCase(Locale.ROOT);
-        List<String> values = new ArrayList<>();
-        if (isWindows() && (fileName.endsWith(".cmd") || fileName.endsWith(".bat"))) {
-            String commandProcessor = System.getenv("ComSpec");
-            values.add(commandProcessor == null || commandProcessor.isBlank() ? "cmd.exe" : commandProcessor);
-            values.add("/d");
-            values.add("/c");
-            values.add("call");
+        Objects.requireNonNull(executable, "executable");
+        String[] values = arguments == null ? new String[0] : arguments;
+        if (Arrays.stream(values).anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("arguments must not contain null values");
         }
-        values.add(normalized.toString());
-        values.addAll(Arrays.asList(arguments));
-        return List.copyOf(values);
+        if (isWindows() && isBatch(executable)) {
+            return windowsBatchInvocation(executable, values);
+        }
+        List<String> command = new ArrayList<>(values.length + 1);
+        command.add(executable.toString());
+        command.addAll(Arrays.asList(values));
+        return List.copyOf(command);
     }
 
-    private static List<String> candidates(String command) {
-        if (!isWindows() || command.contains(".")) {
-            return List.of(command);
+    static List<String> windowsBatchInvocation(Path executable, String... arguments) {
+        Objects.requireNonNull(executable, "executable");
+        String[] values = arguments == null ? new String[0] : arguments;
+        if (Arrays.stream(values).anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("arguments must not contain null values");
         }
-        return List.of(command + ".exe", command + ".cmd", command + ".bat", command);
-    }
-
-    private static Optional<Path> executable(Path path) {
-        Path normalized = path.toAbsolutePath().normalize();
-        return Files.isRegularFile(normalized) ? Optional.of(normalized) : Optional.empty();
+        StringBuilder rendered = new StringBuilder();
+        appendBatchToken(rendered, executable.toString(), "executable");
+        for (String argument : values) {
+            rendered.append(' ');
+            appendBatchToken(rendered, argument, "argument");
+        }
+        String comSpec = System.getenv("ComSpec");
+        String commandProcessor = comSpec == null || comSpec.isBlank() ? "cmd.exe" : comSpec;
+        return List.of(commandProcessor, "/d", "/v:off", "/s", "/c", rendered.toString());
     }
 
     public static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        return System.getProperty("os.name", "")
+                .toLowerCase(Locale.ROOT)
+                .contains("win");
+    }
+
+    private static void appendBatchToken(StringBuilder target, String value, String label) {
+        if (value.indexOf('\0') >= 0 || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException(label + " contains a forbidden control character");
+        }
+        if (value.indexOf('"') >= 0) {
+            throw new IllegalArgumentException(label + " contains an embedded quote that cannot be represented safely by cmd.exe");
+        }
+        if (value.indexOf('%') >= 0) {
+            throw new IllegalArgumentException(label + " contains '%' and would enable cmd.exe environment expansion");
+        }
+        target.append('"').append(value).append('"');
+    }
+
+    private static boolean isBatch(Path executable) {
+        String file = executable.getFileName().toString().toLowerCase(Locale.ROOT);
+        return file.endsWith(".cmd") || file.endsWith(".bat");
+    }
+
+    private static List<String> candidates(String command) {
+        String lower = command.toLowerCase(Locale.ROOT);
+        if (!isWindows() || lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
+            return List.of(command);
+        }
+        return List.of(command + ".exe", command + ".cmd", command + ".bat", command);
     }
 }

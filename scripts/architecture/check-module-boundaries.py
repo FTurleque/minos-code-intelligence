@@ -48,11 +48,9 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-application", "minos-integration-git",
         "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus"
     }),
-    # Historical LocalMinosApi wiring still consumes reusable CLI operations. The edge is explicit
-    # and cannot grow into additional surface-to-surface dependencies without a policy change.
     "minos-api": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-storage-local",
-        "minos-cli", "minos-integration-git"
+        "minos-integration-git"
     }),
     "minos-mcp": frozenset({"minos-application"}),
     "minos-app": frozenset({

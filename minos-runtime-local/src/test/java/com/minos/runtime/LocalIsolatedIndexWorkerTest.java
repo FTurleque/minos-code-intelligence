@@ -43,7 +43,7 @@ class LocalIsolatedIndexWorkerTest {
         AtomicReference<Path> delegateRoot = new AtomicReference<>();
         IndexerExecutor delegate = delegate(temp, delegateRoot);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+        LocalIsolatedIndexWorker worker = nativeWorker(
                 "worker-one", temp.resolve("home"), delegate, store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
                 "fixture-provider", "1.2.3", fixture.materialization(),
@@ -74,7 +74,7 @@ class LocalIsolatedIndexWorkerTest {
     void nativeWorkerFailsClosedWhenNetworkDenyIsRequired(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+        LocalIsolatedIndexWorker worker = nativeWorker(
                 "worker-one", temp.resolve("home"),
                 delegate(temp, new AtomicReference<>()), store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
@@ -133,6 +133,18 @@ class LocalIsolatedIndexWorkerTest {
     }
 
     @Test
+    void strongestAvailableSelectorNeverOverstatesNetworkGuarantee(@TempDir Path temp) {
+        WorkerSandboxBackend backend = WorkerSandboxBackends.strongestAvailable(temp.resolve("home"));
+        if (backend.networkGuarantee() == WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED) {
+            assertTrue(backend.qualification().qualifiedForCurrentPlatform());
+            assertTrue(backend.qualification().sandboxClaimPermitted());
+        } else {
+            assertEquals("native-process-ephemeral-workspace-v1", backend.id());
+            assertFalse(backend.enforcesNetworkDeny());
+        }
+    }
+
+    @Test
     void coordinatorRejectsCryptographicallyValidArtifactWithWrongProvenance(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
@@ -178,6 +190,23 @@ class LocalIsolatedIndexWorkerTest {
                 () -> executor.execute(fixture.execution()));
         assertTrue(failure.getMessage().contains("provenance"));
         assertFalse(Files.exists(bundle), "rejected transport envelopes must be removed");
+    }
+
+    private static LocalIsolatedIndexWorker nativeWorker(
+            String workerId,
+            Path home,
+            IndexerExecutor delegate,
+            DistributedArtifactBundleStore store
+    ) {
+        return new LocalIsolatedIndexWorker(
+                workerId,
+                home,
+                delegate,
+                store,
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                100_000,
+                2L * 1024L * 1024L * 1024L,
+                Clock.systemUTC());
     }
 
     private static IndexerExecutor delegate(Path temp, AtomicReference<Path> delegateRoot) {

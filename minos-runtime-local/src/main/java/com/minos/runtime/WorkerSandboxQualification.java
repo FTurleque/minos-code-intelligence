@@ -3,6 +3,7 @@ package com.minos.runtime;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -34,12 +35,28 @@ public record WorkerSandboxQualification(
                 && networkDeny != NetworkDenyDisposition.QUALIFIED) {
             throw new IllegalArgumentException("untrusted-code support requires qualified network denial");
         }
+        if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && platforms.values().stream().noneMatch(value -> value == PlatformDisposition.QUALIFIED)) {
+            throw new IllegalArgumentException("untrusted-code support requires at least one qualified platform");
+        }
     }
 
     public boolean sandboxClaimPermitted() {
         return trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && networkDeny == NetworkDenyDisposition.QUALIFIED
-                && platforms.values().stream().anyMatch(value -> value == PlatformDisposition.QUALIFIED);
+                && qualifiedForCurrentPlatform();
+    }
+
+    public boolean qualifiedForCurrentPlatform() {
+        return platforms.getOrDefault(currentPlatform(), PlatformDisposition.NOT_APPLICABLE)
+                == PlatformDisposition.QUALIFIED;
+    }
+
+    public static Platform currentPlatform() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) return Platform.WINDOWS;
+        if (os.contains("linux")) return Platform.LINUX;
+        return Platform.OTHER;
     }
 
     public static WorkerSandboxQualification nativeProcessOnly(String backendId, WorkerIsolation isolation) {

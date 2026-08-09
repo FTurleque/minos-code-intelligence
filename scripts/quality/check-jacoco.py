@@ -20,7 +20,7 @@ SCOPES = {
         ), "line": 0.50, "branch": 0.35,
     },
     "project-resolution": {"prefixes": ("com/minos/application/ProjectResolver",), "line": 0.70, "branch": 0.50},
-    "public-api": {"prefixes": ("com/minos/api/",), "line": 0.30, "branch": 0.20},
+    "public-api": {"prefixes": ("com/minos/api/",), "line": 0.32, "branch": 0.22},
     "mcp-mapping": {"prefixes": ("com/minos/mcp/",), "line": 0.30, "branch": 0.20},
     "program-graph-analysis": {
         "prefixes": (
@@ -42,10 +42,10 @@ SCOPES = {
     },
     "advanced-impact-security": {
         "prefixes": ("com/minos/program/analysis/AdvancedImpactService", "com/minos/program/analysis/SecurityAnalysisService"),
-        "line": 0.45, "branch": 0.25,
+        "line": 0.47, "branch": 0.27,
     },
     "semantic-vector-store": {"prefixes": ("com/minos/store/FileSemanticVectorStore",), "line": 0.45, "branch": 0.20},
-    "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.50, "branch": 0.30},
+    "semantic-learned-provider": {"prefixes": ("com/minos/semantic/OllamaEmbeddingProvider",), "line": 0.52, "branch": 0.32},
     "semantic-hybrid-retrieval": {
         "prefixes": (
             "com/minos/semantic/SemanticDocumentFactory", "com/minos/semantic/SemanticIndexService",
@@ -75,7 +75,7 @@ SCOPES = {
             "com/minos/runtime/DistributedIndexerExecutor", "com/minos/runtime/LocalIsolatedIndexWorker",
             "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/cli/LocalRemoteIndexOperations", "com/minos/cli/RemoteIndexCommand",
-        ), "line": 0.45, "branch": 0.25,
+        ), "line": 0.47, "branch": 0.27,
     },
     "m26-runtime-dynamic-intelligence": {
         "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
@@ -99,9 +99,9 @@ SCOPES = {
         "prefixes": (
             "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
             "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
-        ), "line": 0.50, "branch": 0.30,
+        ), "line": 0.52, "branch": 0.32,
     },
-    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.45, "branch": 0.25},
+    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.47, "branch": 0.27},
 }
 
 

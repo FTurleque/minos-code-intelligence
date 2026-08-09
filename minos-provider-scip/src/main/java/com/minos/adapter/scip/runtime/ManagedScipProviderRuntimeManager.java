@@ -16,9 +16,12 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,9 +44,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             "org.scip-code:scip-java:" + SCIP_JAVA_VERSION;
     static final String SCIP_JAVA_MAIN_CLASS = "org.scip_code.scip_java.ScipJava";
 
-    private static final String COURSIER_LAUNCHER_ID = "windows-x64-official-launcher";
+    private static final String COURSIER_LAUNCHERS_COMMIT = "15f36c167c30be237105f923151adaf177e7ee61";
+    private static final String COURSIER_LAUNCHER_ID = "windows-x64-" + COURSIER_LAUNCHERS_COMMIT.substring(0, 12);
+    private static final String COURSIER_WINDOWS_SHA256 = "d6b375ea3f1c58312912af96260cca0c975bc873dc430820e2d67d50b294be3a";
     private static final URI COURSIER_WINDOWS_URI = URI.create(
-            "https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-win32.zip");
+            "https://raw.githubusercontent.com/coursier/launchers/" + COURSIER_LAUNCHERS_COMMIT
+                    + "/cs-x86_64-pc-win32.zip");
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
@@ -299,26 +305,49 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Files.deleteIfExists(archivePartial);
             throw new IllegalStateException("Coursier launcher download failed with HTTP " + response.statusCode());
         }
+        String actualDigest = sha256(archivePartial);
+        if (!COURSIER_WINDOWS_SHA256.equals(actualDigest)) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Coursier launcher checksum mismatch: expected="
+                    + COURSIER_WINDOWS_SHA256 + " actual=" + actualDigest);
+        }
         move(archivePartial, archive);
 
-        boolean extracted = false;
+        int executableEntries = 0;
         try (InputStream input = Files.newInputStream(archive);
              ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".exe")) {
-                    Files.copy(zip, executablePartial, StandardCopyOption.REPLACE_EXISTING);
-                    extracted = true;
-                    break;
+                    executableEntries++;
+                    if (executableEntries == 1) {
+                        Files.copy(zip, executablePartial, StandardCopyOption.REPLACE_EXISTING);
+                    }
                 }
             }
         }
-        if (!extracted || !Files.isRegularFile(executablePartial) || Files.size(executablePartial) == 0L) {
+        if (executableEntries != 1 || !Files.isRegularFile(executablePartial) || Files.size(executablePartial) == 0L) {
             Files.deleteIfExists(executablePartial);
             throw new IllegalStateException("Coursier launcher ZIP did not contain a Windows executable");
         }
         move(executablePartial, destination);
         return destination;
+    }
+
+    private static String sha256(Path file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = Files.newInputStream(file)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read > 0) digest.update(buffer, 0, read);
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private Optional<Path> coursierExecutable() {
