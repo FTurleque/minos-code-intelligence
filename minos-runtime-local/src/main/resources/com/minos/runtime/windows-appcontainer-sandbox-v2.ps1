@@ -245,14 +245,17 @@ public static class MinosAppContainerNativeV2 {
     public static int RunSandbox(
         string profileName,
         string[] command,
+        string[] environment,
         string workingDirectory,
         ulong jobMemoryBytes,
         uint activeProcesses,
         uint cpuRate) {
         if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
+        if (environment == null) throw new ArgumentNullException("environment");
         IntPtr sid = IntPtr.Zero;
         IntPtr attributeList = IntPtr.Zero;
         IntPtr securityCapabilitiesPtr = IntPtr.Zero;
+        IntPtr environmentBlock = IntPtr.Zero;
         IntPtr job = IntPtr.Zero;
         PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
         try {
@@ -295,6 +298,7 @@ public static class MinosAppContainerNativeV2 {
             startup.lpAttributeList = attributeList;
 
             StringBuilder commandLine = new StringBuilder(BuildCommandLine(command));
+            environmentBlock = BuildEnvironmentBlock(environment);
             uint flags = EXTENDED_STARTUPINFO_PRESENT
                     | CREATE_UNICODE_ENVIRONMENT
                     | CREATE_SUSPENDED
@@ -306,7 +310,7 @@ public static class MinosAppContainerNativeV2 {
                     IntPtr.Zero,
                     true,
                     flags,
-                    IntPtr.Zero,
+                    environmentBlock,
                     workingDirectory,
                     ref startup,
                     out pi)) {
@@ -355,6 +359,7 @@ public static class MinosAppContainerNativeV2 {
             if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
             if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
             if (job != IntPtr.Zero) CloseHandle(job);
+            if (environmentBlock != IntPtr.Zero) Marshal.FreeHGlobal(environmentBlock);
             if (attributeList != IntPtr.Zero) {
                 DeleteProcThreadAttributeList(attributeList);
                 Marshal.FreeHGlobal(attributeList);
@@ -362,6 +367,19 @@ public static class MinosAppContainerNativeV2 {
             if (securityCapabilitiesPtr != IntPtr.Zero) Marshal.FreeHGlobal(securityCapabilitiesPtr);
             if (sid != IntPtr.Zero) FreeSid(sid);
         }
+    }
+
+    private static IntPtr BuildEnvironmentBlock(string[] environment) {
+        StringBuilder block = new StringBuilder();
+        foreach (string entry in environment) {
+            if (String.IsNullOrEmpty(entry) || entry.IndexOf('\0') >= 0) {
+                throw new ArgumentException("invalid environment entry");
+            }
+            block.Append(entry);
+            block.Append('\0');
+        }
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
     }
 
     private static void ConfigureJob(IntPtr job, ulong memoryBytes, uint activeProcesses, uint cpuRate) {
@@ -473,6 +491,20 @@ function Read-List($Values, [string] $Prefix) {
     return [string[]]$result.ToArray()
 }
 
+function Read-Environment($Values) {
+    $count = [int]$Values['environment.count']
+    $result = New-Object System.Collections.Generic.List[string]
+    for ($index = 0; $index -lt $count; $index++) {
+        $key = Decode ([string]$Values["environment.$index.key"])
+        $value = Decode ([string]$Values["environment.$index.value"])
+        if ([string]::IsNullOrEmpty($key) -or $key.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]0) -ge 0) {
+            throw 'Invalid provider environment entry in sandbox plan'
+        }
+        $result.Add($key + '=' + $value)
+    }
+    return [string[]]$result.ToArray()
+}
+
 function Grant-AppContainerPath([string] $Path, [string] $Sid, [string] $Rights) {
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
         throw "Sandbox ACL root is not a directory: $Path"
@@ -491,6 +523,7 @@ function Remove-AppContainerPath([string] $Path, [string] $Sid) {
 
 $values = Read-Plan $Plan
 $command = Read-List $values 'command'
+$environment = Read-Environment $values
 $readPaths = Read-List $values 'read'
 $writePaths = Read-List $values 'write'
 $workingDirectory = Decode ([string]$values['working'])
@@ -514,6 +547,7 @@ try {
     $exitCode = [MinosAppContainerNativeV2]::RunSandbox(
         $profile,
         $command,
+        $environment,
         $workingDirectory,
         $memoryBytes,
         $activeProcesses,
