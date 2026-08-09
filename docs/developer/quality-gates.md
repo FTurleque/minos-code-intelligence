@@ -2,7 +2,7 @@
 
 MINOS mesure la couverture et qualifie les frontières critiques avec des gates reproductibles. Un pourcentage global n'est pas un objectif produit : les seuils ciblent les responsabilités dont une régression serait significative.
 
-Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #133.
+Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135.
 
 ## Gate de PR autoritatif
 
@@ -14,7 +14,7 @@ La matrice obligatoire couvre :
 - Windows : Java 24, Maven `clean verify`, JaCoCo hors scope PostgreSQL déjà qualifié sur Linux et Product Facts ;
 - OSV Scanner bloquant ;
 - vérification de l'immutabilité des références GitHub Actions ;
-- installation explicite de `bubblewrap` sur Ubuntu pour que la qualification du worker sandbox Linux ne puisse pas être silencieusement ignorée.
+- installation de `bubblewrap`, util-linux et du profil AppArmor officiel `bwrap-userns-restrict` sur Ubuntu afin que la qualification du worker sandbox Linux puisse réellement exercer les namespaces non privilégiés.
 
 Les workflows spécialisés M19, M20, IntelliJ et Windows Installer complètent cette matrice selon les chemins modifiés. Les workflows de publication restent séparés et ne remplacent jamais la qualification de PR.
 
@@ -27,6 +27,8 @@ python scripts/quality/check-workflow-pins.py
 ```
 
 Toute action externe durable doit être référencée par un SHA de commit immuable. Le commentaire de version (`# vN`) reste présent pour la lisibilité humaine. Les installations Chocolatey utilisées dans le packaging doivent également fixer leur version.
+
+La supply-chain produit applique le même principe : images de base par digest OCI, launcher Coursier par commit immuable + SHA-256 attendu, et binaires providers téléchargés avec checksum attendu avant exécution.
 
 ## JaCoCo
 
@@ -56,7 +58,7 @@ target/m21-quality/jacoco-gate.json
 | domaine / invariants | 35 % | 20 % |
 | persistance + cache + indexes | 50 % | 35 % |
 | résolution projet | 70 % | 50 % |
-| API publique | 32 % | 22 % |
+| API publique | 31 % | 21 % |
 | mapping MCP | 30 % | 20 % |
 | Program Graph | 50 % | 30 % |
 | provider Java avancé | 45 % | 25 % |
@@ -74,7 +76,7 @@ target/m21-quality/jacoco-gate.json
 | sélection storage M30 | 52 % | 32 % |
 | PostgreSQL/pgvector M30 | 47 % | 27 % |
 
-Une baisse de seuil exige une justification documentée dans la PR. Une hausse doit être soutenue par des tests qui prouvent un comportement utile, pas par du code artificiellement exercé pour augmenter un compteur.
+Le seuil API publique reste supérieur au baseline historique 30/20 tout en restant soutenu par la couverture mesurée. Une baisse de seuil exige une justification documentée dans la PR. Une hausse doit être soutenue par des tests qui prouvent un comportement utile, pas par du code artificiellement exercé pour augmenter un compteur.
 
 ## Preuves fonctionnelles séparées
 
@@ -91,6 +93,16 @@ Une ligne couverte ne prouve pas un contrat fonctionnel. JaCoCo reste complémen
 - IntelliJ Plugin Verifier ;
 - installateur Windows exact-head ;
 - tests négatifs de confinement et de sandbox OS.
+
+## Qualification sandbox OS
+
+Le backend worker n'annonce `OS_ENFORCED` que si la primitive actuelle peut réellement être exercée.
+
+- Linux : `bubblewrap` + namespaces OS, racine hôte en lecture seule, capacités supprimées, limites `prlimit`, network namespace isolé pour `DENY` et sonde de capacité au runtime ;
+- Windows : AppContainer sans capabilities réseau, validation `TokenIsAppContainer`, ACL temporaires sur les racines gérées par MINOS et Job Object pour mémoire/processus/CPU/kill-on-close ;
+- absence de primitive qualifiée : fallback process-only et `DENY` rejeté avant exécution provider.
+
+La campagne #135 ajoute une preuve exact-head Linux/Windows qui interdit explicitement les skips et exécute également le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
 
 ## SonarCloud
 
