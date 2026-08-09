@@ -16,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 /** Docker STDIO transport used only after the Docker backend has been selected explicitly. */
 final class DockerMcpTransport {
 
+    private static final int MAX_PROBE_OUTPUT_BYTES = 64 * 1024;
+    private static final int PROBE_READ_BUFFER_BYTES = 4096;
+
     interface ProcessExecutor {
         ProcessResult probe(List<String> command, Duration timeout) throws IOException, InterruptedException;
         int attach(List<String> command) throws IOException, InterruptedException;
@@ -113,14 +116,8 @@ final class DockerMcpTransport {
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker executable cannot be started", exception);
             }
-            try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-                Thread reader = Thread.ofVirtual().start(() -> {
-                    try (InputStream input = process.getInputStream()) {
-                        input.transferTo(output);
-                    } catch (IOException ignored) {
-                        // The process result below remains authoritative.
-                    }
-                });
+            try (ByteArrayOutputStream output = new ByteArrayOutputStream(MAX_PROBE_OUTPUT_BYTES)) {
+                Thread reader = Thread.ofVirtual().start(() -> drainBounded(process.getInputStream(), output));
                 try {
                     boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
                     if (!completed) {
@@ -135,6 +132,25 @@ final class DockerMcpTransport {
                     Thread.currentThread().interrupt();
                     throw exception;
                 }
+            }
+        }
+
+        private static void drainBounded(InputStream source, ByteArrayOutputStream captured) {
+            try (InputStream input = source) {
+                byte[] buffer = new byte[PROBE_READ_BUFFER_BYTES];
+                int retained = 0;
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    if (retained < MAX_PROBE_OUTPUT_BYTES) {
+                        int keep = Math.min(read, MAX_PROBE_OUTPUT_BYTES - retained);
+                        captured.write(buffer, 0, keep);
+                        retained += keep;
+                    }
+                    // Bytes beyond the capture limit are deliberately drained and discarded so the
+                    // child cannot block on a full stdout pipe or grow MINOS memory without bound.
+                }
+            } catch (IOException ignored) {
+                // A read failure yields partial/blank probe output, which the caller treats fail-closed.
             }
         }
 
