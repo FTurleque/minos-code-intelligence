@@ -51,11 +51,17 @@ class WindowsAppContainerWorkerSandboxBackendTest {
 
         String childScript = """
                 $ErrorActionPreference = 'Stop'
+                $client = $null
+                $iar = $null
                 try {
-                  $client = New-Object System.Net.Sockets.TcpClient
+                  $client = [System.Net.Sockets.TcpClient]::new()
                   $iar = $client.BeginConnect('1.1.1.1', 53, $null, $null)
                   if ($iar.AsyncWaitHandle.WaitOne(1500) -and $client.Connected) { exit 41 }
                 } catch { }
+                finally {
+                  if ($iar -and $iar.AsyncWaitHandle) { $iar.AsyncWaitHandle.Dispose() }
+                  if ($client) { $client.Dispose() }
+                }
                 try {
                   [System.IO.File]::WriteAllText($args[0], 'escape')
                   exit 42
@@ -78,15 +84,21 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 working,
                 Map.of(),
                 artifact,
-                Duration.ofSeconds(45));
+                Duration.ofSeconds(30));
 
         IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run);
         Process process = new ProcessBuilder(sandboxed.command())
                 .directory(working.toFile())
                 .redirectErrorStream(true)
                 .start();
-        assertTrue(process.waitFor(45, TimeUnit.SECONDS), "AppContainer qualification process timed out");
+        boolean completed = process.waitFor(30, TimeUnit.SECONDS);
+        if (!completed) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            process.waitFor(5, TimeUnit.SECONDS);
+        }
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(completed, () -> "AppContainer qualification process timed out; output=" + output);
         assertEquals(0, process.exitValue(), output);
         assertFalse(Files.exists(hostEscape), "AppContainer child must not write outside granted roots");
         assertEquals("qualified-appcontainer-artifact", Files.readString(artifact, StandardCharsets.UTF_8));
