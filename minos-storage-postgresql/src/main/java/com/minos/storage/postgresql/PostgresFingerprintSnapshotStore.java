@@ -29,50 +29,54 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
         ProjectFingerprintSnapshot snapshot = new ProjectFingerprintSnapshot(projectId, indexSnapshotId, fingerprint);
         String payload = json.write(snapshot);
         try {
-            return connections.withConnection(connection -> {
-                connection.setAutoCommit(false);
-                try {
-                    try (PreparedStatement query = connection.prepareStatement(
-                            "SELECT payload::text FROM fingerprint_snapshots WHERE project_id=? AND snapshot_id=?")) {
-                        query.setObject(1, projectId);
-                        query.setString(2, indexSnapshotId);
-                        try (ResultSet result = query.executeQuery()) {
-                            if (result.next()) {
-                                ProjectFingerprintSnapshot existing = json.read(
-                                        result.getString(1), ProjectFingerprintSnapshot.class);
-                                if (!existing.equals(snapshot)) {
-                                    throw new IOException(
-                                            "fingerprint snapshot already exists with different content: "
-                                                    + indexSnapshotId);
-                                }
-                                connection.rollback();
-                                return existing;
-                            }
-                        }
+            return connections.inTransaction(connection -> {
+                Optional<ProjectFingerprintSnapshot> existing = findExisting(connection, projectId, indexSnapshotId);
+                if (existing.isPresent()) {
+                    ProjectFingerprintSnapshot value = existing.orElseThrow();
+                    if (!value.equals(snapshot)) {
+                        throw new IOException(
+                                "fingerprint snapshot already exists with different content: " + indexSnapshotId);
                     }
-                    try (PreparedStatement statement = connection.prepareStatement(
-                            "INSERT INTO fingerprint_snapshots(project_id,snapshot_id,payload) "
-                                    + "VALUES (?,?,CAST(? AS jsonb))")) {
-                        statement.setObject(1, projectId);
-                        statement.setString(2, indexSnapshotId);
-                        statement.setString(3, payload);
-                        statement.executeUpdate();
-                    }
-                    connection.commit();
-                    return snapshot;
-                } catch (Exception exception) {
-                    rollbackPreserving(connection, exception);
-                    if (exception instanceof IOException ioException) {
-                        throw ioException;
-                    }
-                    if (exception instanceof SQLException sqlException) {
-                        throw sqlException;
-                    }
-                    throw new IOException("unable to publish PostgreSQL fingerprint snapshot", exception);
+                    return value;
                 }
+                insertSnapshot(connection, projectId, indexSnapshotId, payload);
+                return snapshot;
             });
         } catch (SQLException exception) {
             throw new IOException("unable to publish PostgreSQL fingerprint snapshot", exception);
+        }
+    }
+
+    private Optional<ProjectFingerprintSnapshot> findExisting(
+            Connection connection,
+            UUID projectId,
+            String indexSnapshotId
+    ) throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT payload::text FROM fingerprint_snapshots WHERE project_id=? AND snapshot_id=?")) {
+            statement.setObject(1, projectId);
+            statement.setString(2, indexSnapshotId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(json.read(result.getString(1), ProjectFingerprintSnapshot.class));
+            }
+        }
+    }
+
+    private static void insertSnapshot(
+            Connection connection,
+            UUID projectId,
+            String indexSnapshotId,
+            String payload
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO fingerprint_snapshots(project_id,snapshot_id,payload) VALUES (?,?,CAST(? AS jsonb))")) {
+            statement.setObject(1, projectId);
+            statement.setString(2, indexSnapshotId);
+            statement.setString(3, payload);
+            statement.executeUpdate();
         }
     }
 
@@ -100,18 +104,7 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
     @Override
     public Optional<ProjectFingerprintSnapshot> load(UUID projectId, String indexSnapshotId) throws IOException {
         try {
-            return connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT payload::text FROM fingerprint_snapshots WHERE project_id=? AND snapshot_id=?")) {
-                    statement.setObject(1, projectId);
-                    statement.setString(2, indexSnapshotId);
-                    try (ResultSet result = statement.executeQuery()) {
-                        return result.next()
-                                ? Optional.of(json.read(result.getString(1), ProjectFingerprintSnapshot.class))
-                                : Optional.empty();
-                    }
-                }
-            });
+            return connections.withConnection(connection -> findExisting(connection, projectId, indexSnapshotId));
         } catch (SQLException exception) {
             throw new IOException("unable to load PostgreSQL fingerprint snapshot", exception);
         }
@@ -157,14 +150,6 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
             });
         } catch (SQLException exception) {
             throw new IOException("unable to list PostgreSQL fingerprint snapshots", exception);
-        }
-    }
-
-    private static void rollbackPreserving(Connection connection, Exception original) {
-        try {
-            connection.rollback();
-        } catch (SQLException rollbackFailure) {
-            original.addSuppressed(rollbackFailure);
         }
     }
 }
