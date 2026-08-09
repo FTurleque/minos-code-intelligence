@@ -176,16 +176,8 @@ final class DockerMcpTransport {
             try {
                 return process.waitFor();
             } catch (InterruptedException exception) {
-                process.destroy();
-                try {
-                    if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
-                } catch (InterruptedException cleanupInterrupted) {
-                    Thread.currentThread().interrupt();
-                    exception.addSuppressed(cleanupInterrupted);
-                    process.destroyForcibly();
-                } finally {
-                    Thread.currentThread().interrupt();
-                }
+                process.destroyForcibly();
+                Thread.currentThread().interrupt();
                 throw exception;
             }
         }
