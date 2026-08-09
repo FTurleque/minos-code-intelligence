@@ -76,7 +76,8 @@ class CommandLocatorTest {
                 "é漢字")).start();
 
         assertTrue(process.waitFor(20, TimeUnit.SECONDS), "cmd.exe qualification process timed out");
-        assertEquals(0, process.exitValue(), () -> new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
+        String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), stderr);
         assertEquals("PASS", Files.readString(marker, StandardCharsets.UTF_8).trim());
     }
 }
