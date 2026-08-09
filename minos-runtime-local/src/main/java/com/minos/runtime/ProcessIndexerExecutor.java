@@ -22,14 +22,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Exécuteur de processus fournisseur-indépendant.
- *
- * <p>Le provider décrit seulement la commande et l'artefact attendu. MINOS
- * sérialise le run par projet via {@code IndexingLifecycleService}, capture les
- * logs, préserve un éventuel artefact préexistant et ne retourne qu'une copie
- * stable conservée dans {@code MINOS_HOME/runs}.</p>
- */
+/** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
 public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private final String indexerId;
@@ -50,7 +43,12 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+        return executeSandboxed(request, (plan, runDirectory) -> plan);
+    }
+
+    IndexingArtifact executeSandboxed(IndexingExecutionRequest request, ProcessPlanTransformer transformer) throws Exception {
         Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(transformer, "transformer");
         if (!indexerId.equals(request.selection().indexer().id())) {
             throw new IllegalArgumentException("request selected another indexer: "
                     + request.selection().indexer().id());
@@ -66,8 +64,10 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             throw new IllegalStateException("provider scope directory escapes provider run root");
         }
         Files.createDirectories(runDirectory);
-        IndexerProcessPlan plan = Objects.requireNonNull(
+        IndexerProcessPlan original = Objects.requireNonNull(
                 planFactory.create(request, runDirectory), "process plan");
+        IndexerProcessPlan plan = Objects.requireNonNull(
+                transformer.transform(original, runDirectory), "transformed process plan");
         if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("provider command must contain non-null arguments");
         }
@@ -108,12 +108,10 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
             if (exitCode != 0) {
                 archiveFailedArtifact(generatedArtifact, runDirectory);
-                throw new IllegalStateException("provider exited with code " + exitCode
-                        + "; see " + stderr);
+                throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
             }
             if (!regularFileNoFollow(generatedArtifact) || Files.size(generatedArtifact) == 0L) {
-                throw new IllegalStateException("provider did not produce a non-empty regular SCIP artifact: "
-                        + generatedArtifact);
+                throw new IllegalStateException("provider did not produce a non-empty regular SCIP artifact: " + generatedArtifact);
             }
 
             if (!generatedArtifact.equals(finalArtifact)) {
@@ -126,11 +124,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             }
 
             return new IndexingArtifact(
-                    request.selection().language(),
-                    indexerId,
-                    finalArtifact,
-                    request.projectRelativeRoot()
-            );
+                    request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
         } finally {
             if (artifactOutsideRun) {
                 Files.deleteIfExists(generatedArtifact);
@@ -141,10 +135,13 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         }
     }
 
+    @FunctionalInterface
+    interface ProcessPlanTransformer {
+        IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception;
+    }
+
     private static Path scopedRunDirectory(Path providerRunDirectory, Path relativeRoot) {
-        if (relativeRoot == null || relativeRoot.toString().isEmpty()) {
-            return providerRunDirectory;
-        }
+        if (relativeRoot == null || relativeRoot.toString().isEmpty()) return providerRunDirectory;
         return providerRunDirectory.resolve("scopes").resolve("module-" + scopeHash(relativeRoot));
     }
 
@@ -159,9 +156,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
     }
 
     private static void archiveFailedArtifact(Path generatedArtifact, Path runDirectory) throws IOException {
-        if (!regularFileNoFollow(generatedArtifact)) {
-            return;
-        }
+        if (!regularFileNoFollow(generatedArtifact)) return;
         Path failed = runDirectory.resolve("failed-index.scip");
         Files.copy(generatedArtifact, failed, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
     }
@@ -172,27 +167,14 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private static void terminate(Process process) {
         List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
-        descendants.reversed().forEach(handle -> {
-            if (handle.isAlive()) {
-                handle.destroyForcibly();
-            }
-        });
-        if (process.isAlive()) {
-            process.destroyForcibly();
-        }
-        try {
-            process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-        }
+        descendants.reversed().forEach(handle -> { if (handle.isAlive()) handle.destroyForcibly(); });
+        if (process.isAlive()) process.destroyForcibly();
+        try { process.waitFor(10, TimeUnit.SECONDS); }
+        catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
     }
 
-    private static void writeMetadata(
-            Path file,
-            IndexerProcessPlan plan,
-            IndexingExecutionRequest request,
-            Instant startedAt
-    ) throws IOException {
+    private static void writeMetadata(Path file, IndexerProcessPlan plan, IndexingExecutionRequest request, Instant startedAt)
+            throws IOException {
         StringBuilder value = new StringBuilder();
         value.append("startedAt=").append(startedAt).append('\n');
         value.append("registeredProjectRoot=").append(request.registeredProjectRoot()).append('\n');
@@ -202,9 +184,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         value.append("timeout=").append(plan.timeout()).append('\n');
         value.append("command=").append(redactedCommand(plan.command())).append('\n');
         if (!plan.environment().isEmpty()) {
-            value.append("environmentKeys=")
-                    .append(String.join(",", plan.environment().keySet().stream().sorted().toList()))
-                    .append('\n');
+            value.append("environmentKeys=").append(String.join(",", plan.environment().keySet().stream().sorted().toList())).append('\n');
         }
         Files.writeString(file, value, StandardCharsets.UTF_8);
     }
@@ -213,11 +193,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         List<String> rendered = new ArrayList<>(command.size());
         boolean redactNext = false;
         for (String argument : command) {
-            if (redactNext) {
-                rendered.add("<redacted>");
-                redactNext = false;
-                continue;
-            }
+            if (redactNext) { rendered.add("<redacted>"); redactNext = false; continue; }
             String lower = argument.toLowerCase(Locale.ROOT);
             if (lower.contains("token=") || lower.contains("password=") || lower.contains("secret=")) {
                 int separator = argument.indexOf('=');
@@ -225,9 +201,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 continue;
             }
             rendered.add(argument);
-            if ("--token".equals(lower) || "--password".equals(lower) || "--secret".equals(lower)) {
-                redactNext = true;
-            }
+            if ("--token".equals(lower) || "--password".equals(lower) || "--secret".equals(lower)) redactNext = true;
         }
         return String.join(" ", rendered);
     }
@@ -238,10 +212,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private static void move(Path source, Path target) throws IOException {
         Files.createDirectories(target.toAbsolutePath().normalize().getParent());
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
+        try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+        catch (AtomicMoveNotSupportedException exception) { Files.move(source, target, StandardCopyOption.REPLACE_EXISTING); }
     }
 }
