@@ -12,11 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProviderProcessEnvironmentTest {
 
     @Test
-    void dropsParentSecretsAndHomeWhileKeepingOnlyRuntimeAllowlist() {
+    void dropsParentSecretsAndArbitraryVariablesWhileKeepingOnlyRuntimeAllowlist() {
         Map<String, String> inherited = new LinkedHashMap<>();
         inherited.put("PATH", "/usr/bin");
         inherited.put("JAVA_HOME", "/jdk");
         inherited.put("HOME", "/home/operator");
+        inherited.put("UNRELATED_PARENT_SETTING", "must-not-leak");
         inherited.put("MINOS_TEAM_TOKEN", "team-secret");
         inherited.put("MINOS_POSTGRES_PASSWORD", "db-secret");
         inherited.put("GITHUB_TOKEN", "github-secret");
@@ -26,7 +27,13 @@ class ProviderProcessEnvironmentTest {
 
         assertEquals("/usr/bin", sanitized.get("PATH"));
         assertEquals("/jdk", sanitized.get("JAVA_HOME"));
-        assertFalse(sanitized.containsKey("HOME"));
+        if (CommandLocator.isWindows()) {
+            assertEquals("/home/operator", sanitized.get("HOME"),
+                    "Windows PowerShell/AppContainer startup may inherit the non-secret HOME profile path");
+        } else {
+            assertFalse(sanitized.containsKey("HOME"));
+        }
+        assertFalse(sanitized.containsKey("UNRELATED_PARENT_SETTING"));
         assertFalse(sanitized.containsKey("MINOS_TEAM_TOKEN"));
         assertFalse(sanitized.containsKey("MINOS_POSTGRES_PASSWORD"));
         assertFalse(sanitized.containsKey("GITHUB_TOKEN"));
