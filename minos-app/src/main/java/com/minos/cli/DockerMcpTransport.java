@@ -119,13 +119,16 @@ final class DockerMcpTransport {
             }
             try (ByteArrayOutputStream output = new ByteArrayOutputStream(MAX_PROBE_OUTPUT_BYTES)) {
                 AtomicReference<IOException> readerFailure = new AtomicReference<>();
-                Thread reader = Thread.ofVirtual().start(() -> {
-                    try {
-                        drainBounded(process.getInputStream(), output);
-                    } catch (IOException exception) {
-                        readerFailure.set(exception);
-                    }
-                });
+                Thread reader = Thread.ofPlatform()
+                        .daemon(true)
+                        .name("minos-docker-probe-output")
+                        .start(() -> {
+                            try {
+                                drainBounded(process.getInputStream(), output);
+                            } catch (IOException exception) {
+                                readerFailure.set(exception);
+                            }
+                        });
                 try {
                     boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
                     if (!completed) {
