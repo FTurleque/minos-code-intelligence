@@ -25,9 +25,10 @@ import java.util.Objects;
 /**
  * Provider worker with copied ephemeral workspace and explicit sandbox backend.
  *
- * <p>The default backend is the strongest qualified implementation available on the current OS.
- * If no qualified OS sandbox is available, MINOS falls back to the process-only backend and DENY
- * remains fail-closed rather than pretending that network isolation was enforced.</p>
+ * <p>The public constructor selects the strongest qualified OS sandbox only when MINOS owns the
+ * actual provider process through {@link ProcessIndexerExecutor}. Other executor implementations
+ * fall back to the process-only backend: they cannot be truthfully wrapped by an OS process sandbox,
+ * and network {@code DENY} therefore remains fail-closed.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
@@ -54,7 +55,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 minosHome,
                 delegate,
                 bundleStore,
-                WorkerSandboxBackends.strongestAvailable(minosHome),
+                defaultSandboxBackend(minosHome, delegate),
                 DEFAULT_MAX_WORKSPACE_FILES,
                 DEFAULT_MAX_WORKSPACE_BYTES,
                 Clock.systemUTC());
@@ -201,6 +202,14 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 // Another provider from the same run still owns its isolated directory.
             }
         }
+    }
+
+    private static WorkerSandboxBackend defaultSandboxBackend(Path minosHome, IndexerExecutor delegate) {
+        Objects.requireNonNull(minosHome, "minosHome");
+        Objects.requireNonNull(delegate, "delegate");
+        return delegate instanceof ProcessIndexerExecutor
+                ? WorkerSandboxBackends.strongestAvailable(minosHome)
+                : WorkerSandboxBackend.nativeEphemeralWorkspace();
     }
 
     private void copyWorkspace(Path sourceRoot, Path targetRoot) throws IOException {
