@@ -4,6 +4,7 @@ import com.minos.runtime.CommandLocator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -114,8 +115,8 @@ final class DockerMcpTransport {
             }
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             Thread reader = Thread.ofVirtual().start(() -> {
-                try {
-                    process.getInputStream().transferTo(output);
+                try (InputStream input = process.getInputStream()) {
+                    input.transferTo(output);
                 } catch (IOException ignored) {
                     // The process result below remains authoritative.
                 }
@@ -149,8 +150,14 @@ final class DockerMcpTransport {
                 return process.waitFor();
             } catch (InterruptedException exception) {
                 process.destroy();
-                if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
-                Thread.currentThread().interrupt();
+                try {
+                    if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly();
+                } catch (InterruptedException cleanupInterrupted) {
+                    exception.addSuppressed(cleanupInterrupted);
+                    process.destroyForcibly();
+                } finally {
+                    Thread.currentThread().interrupt();
+                }
                 throw exception;
             }
         }
@@ -159,8 +166,9 @@ final class DockerMcpTransport {
             if (command == null || command.isEmpty() || command.getFirst() == null) {
                 throw new IOException("Docker process command is empty");
             }
-            Path executable = Path.of(command.getFirst()).toAbsolutePath().normalize();
-            if (!Path.of(command.getFirst()).isAbsolute() || !Files.isRegularFile(executable)) {
+            Path configured = Path.of(command.getFirst());
+            Path executable = configured.toAbsolutePath().normalize();
+            if (!configured.isAbsolute() || !Files.isRegularFile(executable)) {
                 throw new IOException("Docker process executable must be an existing absolute file");
             }
         }
