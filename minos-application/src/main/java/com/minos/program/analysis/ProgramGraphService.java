@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Long-lived bounded query service for reconstructible M19 program graphs. */
 public final class ProgramGraphService {
@@ -33,7 +34,7 @@ public final class ProgramGraphService {
     private final List<ProgramGraphProvider> providers;
     private final int maxCacheEntries;
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
-    private final Object[] buildLocks = buildLocks();
+    private final ReentrantLock[] buildLocks = buildLocks();
     private long cacheHits;
     private long cacheMisses;
     private long providerKeyNanos;
@@ -114,10 +115,9 @@ public final class ProgramGraphService {
             }
         }
 
-        // Expensive provider analysis is serialized only for projects sharing a stripe. The LRU
-        // monitor is held solely for short lookup/publication sections, so unrelated projects can
-        // build graphs concurrently instead of queueing behind one global cache lock.
-        synchronized (buildLock(project.id().toString())) {
+        ReentrantLock buildLock = buildLock(project.id().toString());
+        buildLock.lock();
+        try {
             synchronized (cache) {
                 ProgramGraph cached = cache.get(key);
                 if (cached != null) {
@@ -141,10 +141,12 @@ public final class ProgramGraphService {
                 while (cache.size() > maxCacheEntries) cache.remove(cache.keySet().iterator().next());
             }
             return composed;
+        } finally {
+            buildLock.unlock();
         }
     }
 
-    private Object buildLock(String projectId) {
+    private ReentrantLock buildLock(String projectId) {
         return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
     }
 
@@ -189,9 +191,9 @@ public final class ProgramGraphService {
         return List.copyOf(configured.values());
     }
 
-    private static Object[] buildLocks() {
-        Object[] locks = new Object[BUILD_LOCK_STRIPES];
-        for (int index = 0; index < locks.length; index++) locks[index] = new Object();
+    private static ReentrantLock[] buildLocks() {
+        ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
     }
 
