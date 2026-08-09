@@ -1,0 +1,48 @@
+name: Branch Cleanup Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/branch-cleanup-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete non-release branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete unauthorized branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          repo="${GITHUB_REPOSITORY}"
+          mapfile -t branches < <(gh api --paginate "repos/${repo}/branches" --jq '.[].name')
+
+          for branch in "${branches[@]}"; do
+            case "$branch" in
+              main|release/v1.0.0|release/v1.0.1)
+                echo "KEEP $branch"
+                ;;
+              *)
+                echo "DELETE $branch"
+                gh api --method DELETE "repos/${repo}/git/refs/heads/${branch}"
+                ;;
+            esac
+          done
+
+          mapfile -t remaining < <(gh api --paginate "repos/${repo}/branches" --jq '.[].name' | sort)
+          printf 'Remaining branches:\n%s\n' "${remaining[*]}"
+
+          expected=$'main\nrelease/v1.0.0\nrelease/v1.0.1'
+          actual="$(printf '%s\n' "${remaining[@]}")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Unexpected branch set after cleanup" >&2
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected" "$actual" >&2
+            exit 1
+          fi
