@@ -53,6 +53,9 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Immutable workflow supply-chain gate
+        run: python scripts/quality/check-workflow-pins.py
+
       - name: Prepare Maven Wrapper (Unix)
         if: runner.os != 'Windows'
         shell: bash
