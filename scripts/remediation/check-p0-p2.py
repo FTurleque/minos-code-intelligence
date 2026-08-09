@@ -53,6 +53,19 @@ def forbid_production_sonar_suppressions() -> None:
                 raise RuntimeError(f"{source.relative_to(ROOT)}: taint-analysis disruption is forbidden")
 
 
+def forbid_postgres_connection_escape() -> None:
+    source_root = ROOT / "minos-storage-postgresql" / "src" / "main" / "java"
+    for source in source_root.rglob("*.java"):
+        text = source.read_text(encoding="utf-8")
+        if "connections.open()" in text:
+            raise RuntimeError(f"{source.relative_to(ROOT)}: raw PostgreSQL connection ownership is forbidden")
+    factory = read(
+        "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+    )
+    if re.search(r"\bConnection\s+open\s*\(", factory):
+        raise RuntimeError("PostgresConnectionFactory.java: Connection must not escape the factory lifecycle")
+
+
 def main() -> int:
     try:
         application = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
@@ -172,10 +185,12 @@ def main() -> int:
 
         # Current complete-audit P2 regression barriers.
         forbid_production_sonar_suppressions()
+        forbid_postgres_connection_escape()
         require("DockerMcpTransport.java", docker_transport, "CommandLocator.find(\"docker\")")
         require("DockerMcpTransport.java", docker_transport, "CommandLocator.invocation")
         require("PostgresConnectionFactory.java", pg_connections,
                 'properties.setProperty("currentSchema", schema + ",public")')
+        require("PostgresConnectionFactory.java", pg_connections, "withConnection(ConnectionWork<T> work)")
         forbid("PostgresConnectionFactory.java", pg_connections, "set_config('search_path'")
         require("PostgresSchemaMigrator.java", pg_migrator, "enquoteIdentifier")
         require("PostgresProjectRegistry.java", pg_registry,
