@@ -44,29 +44,27 @@ jobs:
 
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # PR workflows normally checkout GitHub's synthetic merge ref. Release
-          # provenance must instead identify the exact branch HEAD being qualified.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Java 24
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '24'
           cache: maven
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
 
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --yes --no-progress
+          choco install innosetup --version=6.7.1 --yes --no-progress
           $iscc = @(
             (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
             'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
@@ -80,28 +78,18 @@ jobs:
 
       - name: Build exact-head non-published candidate
         shell: powershell
-        run: |
-          .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify
+        run: .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify
 
       - name: Install, handshake and uninstall isolated candidate
         shell: powershell
         run: |
           $head = (git rev-parse HEAD).Trim()
-          if ($head -ne '${{ github.event.pull_request.head.sha || github.sha }}') {
-            throw "Exact-head mismatch before smoke validation: checkout=$head expected=${{ github.event.pull_request.head.sha || github.sha }}"
-          }
-          .\scripts\release\publish-windows-release.ps1 `
-            -Version 1.0.1 `
-            -TargetCommit $head `
-            -SkipBuild `
-            -ValidateOnly
+          if ($head -ne '${{ github.event.pull_request.head.sha || github.sha }}') { throw "Exact-head mismatch before smoke validation: checkout=$head expected=${{ github.event.pull_request.head.sha || github.sha }}" }
+          .\scripts\release\publish-windows-release.ps1 -Version 1.0.1 -TargetCommit $head -SkipBuild -ValidateOnly
 
       - name: Verify candidate artifacts
         shell: powershell
         run: |
-          # ValidateOnly intentionally removes the isolated .smoke setup after it
-          # has been installed, handshaken and uninstalled. Only durable release
-          # artifacts and their checksums must remain after successful validation.
           $expected = @(
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe',
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe.sha256',
@@ -118,7 +106,7 @@ jobs:
 
       - name: Upload Windows candidate diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: minos-windows-installer-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
