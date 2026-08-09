@@ -32,7 +32,6 @@ public final class MinosMcpServer {
         } catch (Exception exception) {
             LOGGER.log(System.Logger.Level.ERROR,
                     "MINOS MCP bootstrap failed (type=" + exception.getClass().getName() + ")");
-            System.err.println("error: MINOS MCP bootstrap failed");
             System.exit(1);
         }
     }
