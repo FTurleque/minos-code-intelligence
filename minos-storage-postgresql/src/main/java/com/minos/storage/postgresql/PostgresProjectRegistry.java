@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 final class PostgresProjectRegistry implements ProjectRegistry {
+    private static final String PROJECT_ID_LABEL = "projectId";
     private static final String WORKSPACE_WITH_PROJECTS_SELECT = """
             SELECT w.id,w.name,w.created_at,w.updated_at,p.id AS project_id
             FROM workspaces w
@@ -101,7 +102,7 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         Objects.requireNonNull(workspaceId, "workspaceId");
         RegisteredProject project = findProject(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
@@ -123,7 +124,7 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         RegisteredProject project = findProject(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
         if (project.workspaceId().isEmpty()) {
@@ -142,7 +143,7 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     @Override
     public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         try {
             return connections.withConnection(connection -> {
                 try (PreparedStatement statement = connection.prepareStatement(
