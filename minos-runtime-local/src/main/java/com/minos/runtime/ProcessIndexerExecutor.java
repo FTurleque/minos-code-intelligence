@@ -93,7 +93,14 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
             processBuilder.directory(plan.workingDirectory().toFile());
-            ProviderProcessEnvironment.apply(processBuilder, plan.environment());
+            if (transformer.trustedLauncherRequiresParentEnvironment()) {
+                // The transformed command is a MINOS-owned sandbox launcher, not provider code.
+                // Provider environment isolation remains the launcher's responsibility and must be
+                // encoded into the sandbox plan before this trusted boundary is selected.
+                processBuilder.environment().putAll(plan.environment());
+            } else {
+                ProviderProcessEnvironment.apply(processBuilder, plan.environment());
+            }
             processBuilder.redirectOutput(stdout.toFile());
             processBuilder.redirectError(stderr.toFile());
 
@@ -138,6 +145,10 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
     @FunctionalInterface
     interface ProcessPlanTransformer {
         IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception;
+
+        default boolean trustedLauncherRequiresParentEnvironment() {
+            return false;
+        }
     }
 
     private static Path scopedRunDirectory(Path providerRunDirectory, Path relativeRoot) {
