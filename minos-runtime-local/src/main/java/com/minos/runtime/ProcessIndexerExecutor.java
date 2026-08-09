@@ -3,11 +3,13 @@ package com.minos.runtime;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.orchestration.ProviderId;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -35,10 +37,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
     private final IndexerProcessPlanFactory planFactory;
 
     public ProcessIndexerExecutor(String indexerId, Path minosHome, IndexerProcessPlanFactory planFactory) {
-        if (indexerId == null || indexerId.isBlank()) {
-            throw new IllegalArgumentException("indexerId must not be blank");
-        }
-        this.indexerId = indexerId;
+        this.indexerId = ProviderId.require(indexerId);
         this.runsRoot = Objects.requireNonNull(minosHome, "minosHome")
                 .toAbsolutePath().normalize().resolve("runs");
         this.planFactory = Objects.requireNonNull(planFactory, "planFactory");
@@ -57,11 +56,21 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                     + request.selection().indexer().id());
         }
 
-        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId);
+        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId)
+                .toAbsolutePath().normalize();
+        if (!providerRunDirectory.startsWith(runsRoot)) {
+            throw new IllegalStateException("provider run directory escapes MINOS runs root");
+        }
         Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
+        if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
+            throw new IllegalStateException("provider scope directory escapes provider run root");
+        }
         Files.createDirectories(runDirectory);
         IndexerProcessPlan plan = Objects.requireNonNull(
                 planFactory.create(request, runDirectory), "process plan");
+        if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("provider command must contain non-null arguments");
+        }
         if (!Files.isDirectory(plan.workingDirectory())) {
             throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
         }
@@ -70,10 +79,10 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         Path stderr = runDirectory.resolve("provider.stderr.log");
         Path metadata = runDirectory.resolve("process.txt");
         Path finalArtifact = runDirectory.resolve("index.scip").toAbsolutePath().normalize();
-        Path generatedArtifact = plan.generatedArtifact();
+        Path generatedArtifact = plan.generatedArtifact().toAbsolutePath().normalize();
         Path preservedArtifact = runDirectory.resolve("preexisting-artifact.scip");
         boolean artifactOutsideRun = !generatedArtifact.equals(finalArtifact);
-        boolean preserveExisting = artifactOutsideRun && Files.isRegularFile(generatedArtifact);
+        boolean preserveExisting = artifactOutsideRun && regularFileNoFollow(generatedArtifact);
 
         if (preserveExisting) {
             move(generatedArtifact, preservedArtifact);
@@ -82,7 +91,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         Instant startedAt = Instant.now();
         writeMetadata(metadata, plan, request, startedAt);
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(safeCommand(plan.command()));
+            ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
             processBuilder.directory(plan.workingDirectory().toFile());
             processBuilder.environment().putAll(plan.environment());
             processBuilder.redirectOutput(stdout.toFile());
@@ -102,17 +111,17 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 throw new IllegalStateException("provider exited with code " + exitCode
                         + "; see " + stderr);
             }
-            if (!Files.isRegularFile(generatedArtifact) || Files.size(generatedArtifact) == 0L) {
-                throw new IllegalStateException("provider did not produce a non-empty SCIP artifact: "
+            if (!regularFileNoFollow(generatedArtifact) || Files.size(generatedArtifact) == 0L) {
+                throw new IllegalStateException("provider did not produce a non-empty regular SCIP artifact: "
                         + generatedArtifact);
             }
 
             if (!generatedArtifact.equals(finalArtifact)) {
                 Path partial = runDirectory.resolve("index.partial.scip");
-                Files.copy(generatedArtifact, partial, StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(generatedArtifact, partial, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
                 move(partial, finalArtifact);
             }
-            if (!Files.isRegularFile(finalArtifact) || Files.size(finalArtifact) == 0L) {
+            if (!regularFileNoFollow(finalArtifact) || Files.size(finalArtifact) == 0L) {
                 throw new IllegalStateException("stable run artifact is missing: " + finalArtifact);
             }
 
@@ -125,7 +134,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         } finally {
             if (artifactOutsideRun) {
                 Files.deleteIfExists(generatedArtifact);
-                if (preserveExisting && Files.isRegularFile(preservedArtifact)) {
+                if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
                     move(preservedArtifact, generatedArtifact);
                 }
             }
@@ -150,11 +159,15 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
     }
 
     private static void archiveFailedArtifact(Path generatedArtifact, Path runDirectory) throws IOException {
-        if (!Files.isRegularFile(generatedArtifact)) {
+        if (!regularFileNoFollow(generatedArtifact)) {
             return;
         }
         Path failed = runDirectory.resolve("failed-index.scip");
-        Files.copy(generatedArtifact, failed, StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(generatedArtifact, failed, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+    }
+
+    private static boolean regularFileNoFollow(Path file) {
+        return !Files.isSymbolicLink(file) && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static void terminate(Process process) {
@@ -217,24 +230,6 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             }
         }
         return String.join(" ", rendered);
-    }
-
-    /**
-     * Rebuilds each command element character-by-character to break static taint-analysis
-     * tracking on executable paths resolved via environment variables (PATH, ComSpec).
-     * The result is semantically identical to the input; the reconstruction prevents taint
-     * propagation to the ProcessBuilder sink without modifying any character value.
-     */
-    private static List<String> safeCommand(List<String> command) {
-        List<String> safe = new ArrayList<>(command.size());
-        for (String arg : command) {
-            StringBuilder b = new StringBuilder(arg.length());
-            for (int i = 0; i < arg.length(); i++) {
-                b.append(arg.charAt(i));
-            }
-            safe.add(b.toString());
-        }
-        return safe;
     }
 
     private static void append(Path file, String value) throws IOException {
