@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static consistency gate for the pre-M28 P0-P2 audit remediation."""
+"""Static consistency gate for P0-P2 audit remediation."""
 
 from __future__ import annotations
 
@@ -39,6 +39,20 @@ def section(text: str, heading: str, next_heading: str | None = None) -> str:
     return match.group(1)
 
 
+def forbid_production_sonar_suppressions() -> None:
+    suppression = re.compile(r'@SuppressWarnings\(\s*(?:"java:S|\{[^}]*"java:S)', re.DOTALL)
+    for module in ROOT.iterdir():
+        source_root = module / "src" / "main" / "java"
+        if not source_root.is_dir():
+            continue
+        for source in source_root.rglob("*.java"):
+            text = source.read_text(encoding="utf-8")
+            if suppression.search(text):
+                raise RuntimeError(f"{source.relative_to(ROOT)}: production Sonar suppression is forbidden")
+            if "breaks static taint-analysis tracking" in text or "break static taint-analysis tracking" in text:
+                raise RuntimeError(f"{source.relative_to(ROOT)}: taint-analysis disruption is forbidden")
+
+
 def main() -> int:
     try:
         application = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
@@ -69,6 +83,26 @@ def main() -> int:
             "minos-application/src/test/java/com/minos/hosted/HostedControlPlaneServiceTest.java"
         )
         c0_research = read("docs/research/code-intelligence-architecture-analysis.md")
+
+        docker_transport = read("minos-app/src/main/java/com/minos/cli/DockerMcpTransport.java")
+        pg_connections = read(
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java"
+        )
+        pg_migrator = read(
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresSchemaMigrator.java"
+        )
+        pg_registry = read(
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresProjectRegistry.java"
+        )
+        location = read("minos-domain/src/main/java/com/minos/domain/SymbolLocation.java")
+        intellij_location = read(
+            "minos-intellij/src/main/java/com/minos/intellij/navigation/MinosLocation.java"
+        )
+        file_snapshots = read(
+            "minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java"
+        )
+        mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
+        mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
         require("MinosApplication.java", application,
                 "ProgramGraphService.productionProviders(effectiveFingerprints)")
@@ -135,6 +169,25 @@ def main() -> int:
         for disposition in ("ADOPTER", "ADAPTER", "REJETER", "DIFFÉRER"):
             require("code-intelligence-architecture-analysis.md", c0_research, disposition)
         require("code-intelligence-architecture-analysis.md", c0_research, "issue #2")
+
+        # Current complete-audit P2 regression barriers.
+        forbid_production_sonar_suppressions()
+        require("DockerMcpTransport.java", docker_transport, "CommandLocator.find(\"docker\")")
+        require("DockerMcpTransport.java", docker_transport, "CommandLocator.invocation")
+        require("PostgresConnectionFactory.java", pg_connections,
+                "SELECT set_config('search_path', ?, false)")
+        require("PostgresSchemaMigrator.java", pg_migrator, "enquoteIdentifier")
+        require("PostgresProjectRegistry.java", pg_registry,
+                "LEFT JOIN projects p ON p.workspace_id=w.id")
+        forbid("PostgresProjectRegistry.java", pg_registry, "projectIds(UUID workspaceId)")
+        require("SymbolLocation.java", location, "startLine == endLine && endColumn < startColumn")
+        require("MinosLocation.java", intellij_location, "startColumn must not be negative")
+        require("ProgramGraphService.java", graph_service, "synchronized (buildLock(")
+        require("FileSymbolSnapshotStore.java", file_snapshots, "synchronized (buildLock(projectId))")
+        require("MinosMcpTools.java", mcp_tools, "error: MINOS tool execution failed")
+        forbid("MinosMcpTools.java", mcp_tools, "effective.getMessage()")
+        forbid("MinosMcpServer.java", mcp_server,
+               '"error: MINOS MCP bootstrap failed: "')
 
         print("P0-P2 AUDIT REMEDIATION CONSISTENCY SUCCESS")
         return 0
