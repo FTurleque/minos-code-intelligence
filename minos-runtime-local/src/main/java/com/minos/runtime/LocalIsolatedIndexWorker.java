@@ -3,6 +3,7 @@ package com.minos.runtime;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.orchestration.ProviderId;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -76,6 +77,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         this.workersRoot = Objects.requireNonNull(minosHome, "minosHome")
                 .toAbsolutePath().normalize().resolve("distributed-workers");
         this.delegate = Objects.requireNonNull(delegate, "delegate");
+        ProviderId.require(this.delegate.indexerId());
         this.bundleStore = Objects.requireNonNull(bundleStore, "bundleStore");
         this.sandboxBackend = Objects.requireNonNull(sandboxBackend, "sandboxBackend");
         if (sandboxBackend.id() == null || sandboxBackend.id().isBlank()) {
@@ -126,10 +128,14 @@ public final class LocalIsolatedIndexWorker implements Worker {
         Files.createDirectories(workersRoot);
         Path providerRoot = workersRoot
                 .resolve(request.execution().runId().toString())
-                .resolve(delegate.indexerId());
+                .resolve(ProviderId.require(delegate.indexerId()))
+                .toAbsolutePath().normalize();
+        if (!providerRoot.startsWith(workersRoot)) {
+            throw new IOException("worker provider path escapes distributed worker root");
+        }
         Path workspace = providerRoot.resolve("workspace");
         Files.createDirectories(providerRoot);
-        if (Files.exists(workspace)) {
+        if (Files.exists(workspace, LinkOption.NOFOLLOW_LINKS)) {
             deleteWorkerTree(workspace);
         }
         Files.createDirectory(workspace);
@@ -153,8 +159,10 @@ public final class LocalIsolatedIndexWorker implements Worker {
                         "worker sandbox returned artifact provenance for another provider/language");
             }
             Path artifactPath = artifact.finalArtifact().toAbsolutePath().normalize();
-            if (!Files.isRegularFile(artifactPath) || Files.size(artifactPath) < 1L) {
-                throw new IOException("worker sandbox did not produce a non-empty artifact");
+            if (Files.isSymbolicLink(artifactPath)
+                    || !Files.isRegularFile(artifactPath, LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(artifactPath) < 1L) {
+                throw new IOException("worker sandbox did not produce a non-empty regular artifact");
             }
             Instant completedAt = clock.instant();
             DistributedArtifactManifest manifest = new DistributedArtifactManifest(
@@ -184,7 +192,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 throw exception;
             }
         } finally {
-            if (Files.exists(providerRoot)) {
+            if (Files.exists(providerRoot, LinkOption.NOFOLLOW_LINKS)) {
                 deleteWorkerTree(providerRoot);
             }
             try {
@@ -227,7 +235,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                         throw new IOException("remote worker workspace exceeds configured limits");
                     }
                     Files.createDirectories(target.getParent());
-                    Files.copy(current, target, StandardCopyOption.COPY_ATTRIBUTES);
+                    Files.copy(current, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS);
                 } else {
                     throw new IOException("remote worker rejects non-regular workspace entries");
                 }
