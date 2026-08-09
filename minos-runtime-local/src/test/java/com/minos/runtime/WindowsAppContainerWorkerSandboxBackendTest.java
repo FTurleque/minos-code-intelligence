@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -49,7 +48,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 "minos-appcontainer-escape-" + UUID.randomUUID() + ".txt").toAbsolutePath().normalize();
         Files.deleteIfExists(hostEscape);
 
-        String childScript = """
+        Path childScript = working.resolve("sandbox-child.ps1");
+        Files.writeString(childScript, """
+                param([string] $HostEscape, [string] $Artifact)
                 $ErrorActionPreference = 'Stop'
                 $client = $null
                 $iar = $null
@@ -63,13 +64,12 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                   if ($client) { $client.Dispose() }
                 }
                 try {
-                  [System.IO.File]::WriteAllText($args[0], 'escape')
+                  [System.IO.File]::WriteAllText($HostEscape, 'escape')
                   exit 42
                 } catch { }
-                [System.IO.File]::WriteAllText($args[1], 'qualified-appcontainer-artifact')
+                [System.IO.File]::WriteAllText($Artifact, 'qualified-appcontainer-artifact')
                 exit 0
-                """;
-        String encoded = Base64.getEncoder().encodeToString(childScript.getBytes(StandardCharsets.UTF_16LE));
+                """, StandardCharsets.US_ASCII);
 
         IndexerProcessPlan original = new IndexerProcessPlan(
                 List.of(
@@ -77,8 +77,10 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                         "-NoLogo",
                         "-NoProfile",
                         "-NonInteractive",
-                        "-EncodedCommand",
-                        encoded,
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        childScript.toString(),
                         hostEscape.toString(),
                         artifact.toString()),
                 working,
