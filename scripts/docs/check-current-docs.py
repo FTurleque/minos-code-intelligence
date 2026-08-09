@@ -79,7 +79,7 @@ def validate_current_state() -> None:
         ROADMAP: read(ROADMAP),
     }
     require_all(README, documents[README], (
-        "C0 → M30", "MINOS 1.0.1", "publiée", "immutable", PUBLISHED_101_COMMIT,
+        "C0 → M30", "MINOS 1.0.1", "publiée", "immuable", PUBLISHED_101_COMMIT,
         PUBLISHED_101_URL, "10 assets", "#98",
     ))
     require_all(STATUS, documents[STATUS], (
