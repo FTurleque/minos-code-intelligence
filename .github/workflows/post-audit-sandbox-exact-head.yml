@@ -1,0 +1,93 @@
+name: Post-audit sandbox exact-head qualification
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-sandbox:
+    if: github.head_ref == 'agent/post-audit-remediation-final'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact remediation HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Assert exact HEAD
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+      - name: Install Linux sandbox primitives
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap util-linux
+          command -v bwrap
+          command -v prlimit
+          command -v unshare
+          command -v setpriv
+      - name: Run Linux sandbox tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x mvnw
+          ./mvnw -B -ntp -pl minos-runtime-local -am \
+            '-Dtest=LinuxBubblewrapWorkerSandboxBackendTest,LocalIsolatedIndexWorkerTest' \
+            -Dsurefire.failIfNoSpecifiedTests=false test
+          report='minos-runtime-local/target/surefire-reports/TEST-com.minos.runtime.LinuxBubblewrapWorkerSandboxBackendTest.xml'
+          test -f "$report"
+          python3 - "$report" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          if int(root.attrib.get('tests', '0')) < 3:
+              raise SystemExit('Linux sandbox qualification did not execute all tests')
+          if any(int(root.attrib.get(k, '0')) != 0 for k in ('failures', 'errors', 'skipped')):
+              raise SystemExit(f'Linux sandbox qualification not clean: {root.attrib}')
+          print('LINUX SANDBOX EXACT-HEAD QUALIFICATION SUCCESS', root.attrib)
+          PY
+
+  windows-sandbox:
+    if: github.head_ref == 'agent/post-audit-remediation-final'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact remediation HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Assert exact HEAD
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne '${{ github.event.pull_request.head.sha }}') { throw 'Exact HEAD mismatch' }
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+      - name: Run Windows sandbox and command-line tests
+        shell: pwsh
+        run: |
+          .\mvnw.cmd -B -ntp -pl minos-runtime-local -am `
+            '-Dtest=WindowsAppContainerWorkerSandboxBackendTest,CommandLocatorTest,LocalIsolatedIndexWorkerTest' `
+            -Dsurefire.failIfNoSpecifiedTests=false test
+          $report = 'minos-runtime-local\target\surefire-reports\TEST-com.minos.runtime.WindowsAppContainerWorkerSandboxBackendTest.xml'
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw 'Windows sandbox report missing' }
+          [xml]$xml = Get-Content -LiteralPath $report -Raw
+          $suite = $xml.testsuite
+          if ([int]$suite.tests -lt 2 -or [int]$suite.failures -ne 0 -or [int]$suite.errors -ne 0 -or [int]$suite.skipped -ne 0) {
+            throw "Windows sandbox qualification not clean: tests=$($suite.tests) failures=$($suite.failures) errors=$($suite.errors) skipped=$($suite.skipped)"
+          }
+          Write-Host 'WINDOWS SANDBOX EXACT-HEAD QUALIFICATION SUCCESS'
