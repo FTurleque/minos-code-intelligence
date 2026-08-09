@@ -23,7 +23,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     void denyPlanUsesNetworkNamespaceReadOnlyRootAndResourceLimits() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "bubblewrap/prlimit/unshare/setpriv are required for Linux sandbox qualification");
+        assumeTrue(discovered.isPresent(), "qualified bubblewrap/prlimit runtime is required for Linux sandbox qualification");
 
         Path working = Files.createTempDirectory("minos-bwrap-working-");
         Path run = Files.createTempDirectory("minos-bwrap-run-");
@@ -39,12 +39,9 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         List<String> command = sandboxed.command();
 
         assertTrue(command.contains("--unshare-all"));
-        assertTrue(command.contains("--share-net"), "bubblewrap setup shares net before nested empty namespace");
-        assertTrue(command.stream().anyMatch(value -> value.endsWith("/unshare")));
-        assertTrue(command.contains("--net"));
-        assertTrue(command.stream().anyMatch(value -> value.endsWith("/setpriv")));
-        assertTrue(command.contains("--no-new-privs"));
-        assertTrue(command.contains("--bounding-set=-all"));
+        assertFalse(command.contains("--share-net"), "DENY must retain bubblewrap's isolated network namespace");
+        assertTrue(command.contains("--cap-drop"));
+        assertTrue(command.contains("ALL"));
         assertTrue(command.contains("--ro-bind"));
         assertTrue(command.contains("--as=" + LinuxBubblewrapWorkerSandboxBackend.MAX_ADDRESS_SPACE_BYTES
                 + ":" + LinuxBubblewrapWorkerSandboxBackend.MAX_ADDRESS_SPACE_BYTES));
@@ -60,7 +57,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     void realLinuxSandboxBlocksHostWriteAndNetworkAndAppliesRlimits() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "bubblewrap/prlimit/unshare/setpriv are required for Linux sandbox qualification");
+        assumeTrue(discovered.isPresent(), "qualified bubblewrap/prlimit runtime is required for Linux sandbox qualification");
         assumeTrue(CommandLocator.find("python3").isPresent(), "python3 is required for the negative network/resource test");
 
         Path working = Files.createTempDirectory("minos-bwrap-live-working-");
@@ -120,7 +117,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
     void allowPlanSharesHostNetworkAndDropsCapabilities() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) return;
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent());
+        assumeTrue(discovered.isPresent(), "qualified bubblewrap/prlimit runtime is required");
         Path working = Files.createTempDirectory("minos-bwrap-allow-working-");
         Path run = Files.createTempDirectory("minos-bwrap-allow-run-");
         Path artifact = run.resolve("index.scip");
@@ -130,6 +127,5 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         assertTrue(command.contains("--share-net"));
         assertTrue(command.contains("--cap-drop"));
         assertTrue(command.contains("ALL"));
-        assertFalse(command.contains("--net"));
     }
 }
