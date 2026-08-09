@@ -159,56 +159,105 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        while (true) {
-            Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
-            if (active.isEmpty()) return Optional.empty();
-            SnapshotDescriptor descriptor = active.orElseThrow();
-            CacheKey key = new CacheKey(projectId, descriptor.snapshotId());
+        QueryResolution resolution;
+        do {
+            resolution = resolveActiveQueryView(projectId);
+        } while (resolution.shouldRetry());
+        return resolution.view();
+    }
 
-            synchronized (cacheLock) {
-                SnapshotQueryView cached = queryCache.get(key);
-                if (cached != null && cached.descriptor().equals(descriptor)) {
-                    cacheHits++;
-                    return Optional.of(cached);
-                }
+    private QueryResolution resolveActiveQueryView(UUID projectId) throws IOException {
+        Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
+        if (active.isEmpty()) {
+            return QueryResolution.complete(Optional.empty());
+        }
+        SnapshotDescriptor descriptor = active.orElseThrow();
+        CacheKey key = new CacheKey(projectId, descriptor.snapshotId());
+        Optional<SnapshotQueryView> cached = cachedView(key, descriptor);
+        if (cached.isPresent()) {
+            return QueryResolution.complete(cached);
+        }
+        return buildUnderProjectLock(projectId, descriptor, key);
+    }
+
+    private QueryResolution buildUnderProjectLock(
+            UUID projectId,
+            SnapshotDescriptor descriptor,
+            CacheKey key
+    ) throws IOException {
+        ReentrantLock buildLock = buildLock(projectId);
+        buildLock.lock();
+        try {
+            Optional<SnapshotQueryView> cached = cachedView(key, descriptor);
+            if (cached.isPresent()) {
+                return QueryResolution.complete(cached);
+            }
+            recordCacheMiss();
+
+            PointerState beforeBuild = pointerState(projectId, descriptor);
+            if (beforeBuild == PointerState.MISSING) {
+                return QueryResolution.complete(Optional.empty());
+            }
+            if (beforeBuild == PointerState.CHANGED) {
+                return QueryResolution.retryResolution();
             }
 
-            ReentrantLock buildLock = buildLock(projectId);
-            buildLock.lock();
-            try {
-                synchronized (cacheLock) {
-                    SnapshotQueryView cached = queryCache.get(key);
-                    if (cached != null && cached.descriptor().equals(descriptor)) {
-                        cacheHits++;
-                        return Optional.of(cached);
-                    }
-                    cacheMisses++;
-                }
-
-                Optional<SnapshotDescriptor> beforeBuild = activeSnapshotRepository.read(projectId);
-                if (beforeBuild.isEmpty()) return Optional.empty();
-                if (!descriptor.equals(beforeBuild.orElseThrow())) continue;
-
-                SnapshotQueryView built = buildQueryView(projectId, descriptor);
-                Optional<SnapshotDescriptor> afterBuild = activeSnapshotRepository.read(projectId);
-                if (afterBuild.isEmpty()) return Optional.empty();
-                if (!descriptor.equals(afterBuild.orElseThrow())) continue;
-
-                synchronized (cacheLock) {
-                    SnapshotQueryView raced = queryCache.get(key);
-                    if (raced != null && raced.descriptor().equals(descriptor)) {
-                        cacheHits++;
-                        return Optional.of(raced);
-                    }
-                    queryCache.entrySet().removeIf(entry ->
-                            entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
-                    queryCache.put(key, built);
-                    trimCache();
-                    return Optional.of(built);
-                }
-            } finally {
-                buildLock.unlock();
+            SnapshotQueryView built = buildQueryView(projectId, descriptor);
+            PointerState afterBuild = pointerState(projectId, descriptor);
+            if (afterBuild == PointerState.MISSING) {
+                return QueryResolution.complete(Optional.empty());
             }
+            if (afterBuild == PointerState.CHANGED) {
+                return QueryResolution.retryResolution();
+            }
+            return publishBuiltView(projectId, key, descriptor, built);
+        } finally {
+            buildLock.unlock();
+        }
+    }
+
+    private PointerState pointerState(UUID projectId, SnapshotDescriptor expected) throws IOException {
+        Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
+        if (active.isEmpty()) {
+            return PointerState.MISSING;
+        }
+        return expected.equals(active.orElseThrow()) ? PointerState.MATCH : PointerState.CHANGED;
+    }
+
+    private Optional<SnapshotQueryView> cachedView(CacheKey key, SnapshotDescriptor descriptor) {
+        synchronized (cacheLock) {
+            SnapshotQueryView cached = queryCache.get(key);
+            if (cached != null && cached.descriptor().equals(descriptor)) {
+                cacheHits++;
+                return Optional.of(cached);
+            }
+            return Optional.empty();
+        }
+    }
+
+    private void recordCacheMiss() {
+        synchronized (cacheLock) {
+            cacheMisses++;
+        }
+    }
+
+    private QueryResolution publishBuiltView(
+            UUID projectId,
+            CacheKey key,
+            SnapshotDescriptor descriptor,
+            SnapshotQueryView built
+    ) {
+        synchronized (cacheLock) {
+            SnapshotQueryView raced = queryCache.get(key);
+            if (raced != null && raced.descriptor().equals(descriptor)) {
+                cacheHits++;
+                return QueryResolution.complete(Optional.of(raced));
+            }
+            queryCache.entrySet().removeIf(entry ->
+                    entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
+            queryCache.put(key, built);
+            trimCache();
+            return QueryResolution.complete(Optional.of(built));
         }
     }
 
@@ -243,14 +292,26 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
 
         CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
-        synchronized (cacheLock) { fullSnapshotLoads++; }
+        recordFullSnapshotLoad();
         integrityService.verifyMetadata(snapshot, projectId, descriptor);
 
         long buildStarted = System.nanoTime();
         InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot);
         long buildNanos = System.nanoTime() - buildStarted;
-        synchronized (cacheLock) { queryViewBuilds++; }
+        recordQueryViewBuild();
         return new SnapshotQueryView(descriptor, snapshot, indexedStore, buildNanos);
+    }
+
+    private void recordFullSnapshotLoad() {
+        synchronized (cacheLock) {
+            fullSnapshotLoads++;
+        }
+    }
+
+    private void recordQueryViewBuild() {
+        synchronized (cacheLock) {
+            queryViewBuilds++;
+        }
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot, SnapshotCodec codec) throws IOException {
@@ -333,13 +394,31 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     private static ReentrantLock[] buildLocks() {
         ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
-        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        for (int index = 0; index < locks.length; index++) {
+            locks[index] = new ReentrantLock();
+        }
         return locks;
     }
 
     private static void requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+    }
+
+    private enum PointerState {
+        MATCH,
+        CHANGED,
+        MISSING
+    }
+
+    private record QueryResolution(Optional<SnapshotQueryView> view, boolean shouldRetry) {
+        private static QueryResolution complete(Optional<SnapshotQueryView> view) {
+            return new QueryResolution(view, false);
+        }
+
+        private static QueryResolution retryResolution() {
+            return new QueryResolution(Optional.empty(), true);
         }
     }
 
