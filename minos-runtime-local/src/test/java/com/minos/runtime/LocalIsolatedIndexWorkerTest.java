@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -101,6 +102,19 @@ class LocalIsolatedIndexWorkerTest {
             }
             @Override public NetworkGuarantee networkGuarantee() {
                 return NetworkGuarantee.OS_ENFORCED;
+            }
+            @Override
+            public WorkerSandboxQualification qualification() {
+                return new WorkerSandboxQualification(
+                        id(),
+                        isolation(),
+                        networkGuarantee(),
+                        WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                        WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        Map.of(
+                                WorkerSandboxQualification.currentPlatform(),
+                                WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                        List.of("TEST_FIXTURE_OS_QUALIFIED"));
             }
             @Override
             public IndexingArtifact execute(
