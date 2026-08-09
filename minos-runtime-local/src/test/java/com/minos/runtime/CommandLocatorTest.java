@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CommandLocatorTest {
 
     @Test
-    void batchInvocationUsesOneQuotedCommandWithoutCallOrExpansion() {
+    void batchInvocationUsesCmdOuterQuotePairWithoutCallOrExpansion() {
         List<String> command = CommandLocator.windowsBatchInvocation(
                 Path.of("C:\\Program Files\\MINOS & Tools\\provider.cmd"),
                 "space value", "a&b", "x^y", "(z)", "bang!value", "é漢字");
@@ -27,7 +27,8 @@ class CommandLocatorTest {
         assertEquals("/c", command.get(4));
         assertEquals(6, command.size());
         assertFalse(command.get(5).toLowerCase().contains("call "));
-        assertTrue(command.get(5).contains("\"C:\\Program Files\\MINOS & Tools\\provider.cmd\""));
+        assertTrue(command.get(5).startsWith("\"\"C:\\Program Files\\MINOS & Tools\\provider.cmd\""));
+        assertTrue(command.get(5).endsWith("\"é漢字\"\""));
         assertTrue(command.get(5).contains("\"a&b\""));
         assertTrue(command.get(5).contains("\"x^y\""));
         assertTrue(command.get(5).contains("\"bang!value\""));
