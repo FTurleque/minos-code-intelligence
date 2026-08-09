@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/post-audit-remediation.yml'
       - 'scripts/remediation/apply-post-audit-remediation.py'
+  pull_request:
+    branches: [develop]
+    paths:
+      - '.github/workflows/post-audit-remediation.yml'
+      - 'scripts/remediation/apply-post-audit-remediation.py'
 
 permissions:
   contents: write
