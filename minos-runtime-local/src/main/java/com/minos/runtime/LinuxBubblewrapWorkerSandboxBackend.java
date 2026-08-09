@@ -141,6 +141,10 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path run = runDirectory.toRealPath();
 
         List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds());
+        if (networkPolicy == WorkerNetworkPolicy.ALLOW) {
+            sandbox.add("--cap-drop");
+            sandbox.add("ALL");
+        }
         sandbox.add("--ro-bind");
         sandbox.add("/");
         sandbox.add("/");
