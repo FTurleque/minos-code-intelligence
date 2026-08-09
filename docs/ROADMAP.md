@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **9 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés.**
+Statut au **9 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135.**
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -15,7 +15,8 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 - une release publiée est immuable ;
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - un backend Docker n'est équivalent au natif qu'après qualification de parité métier, données, providers, MCP et lifecycle ;
-- la publication est bloquée par les vulnérabilités connues, l'absence de qualification exacte du candidat ou un conflit de provenance/tag/release.
+- la publication est bloquée par les vulnérabilités connues, l'absence de qualification exacte du candidat ou un conflit de provenance/tag/release ;
+- un sandbox OS ne peut annoncer `OS_ENFORCED` qu'après une sonde de capacité réelle de la plateforme courante.
 
 ## Trajectoire livrée
 
@@ -29,16 +30,18 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | M22 | Advanced Provider Intelligence | ✅ livré |
 | M23 | Semantic Retrieval 2.0 | ✅ livré |
 | M24 | Polyglot Expansion | ✅ livré |
-| M25 | Remote & Distributed Indexing | ✅ livré avec limitation sandbox explicite |
+| M25 | Remote & Distributed Indexing | ✅ livré ; sandbox OS complétée post-audit par #98/#135 |
 | M26 | Runtime & Dynamic Intelligence | ✅ livré |
 | M27 | Team / Hosted Mode | ✅ livré |
 | M28 | Production Convergence | ✅ terminé — issue #93 closed / PR #102 merged |
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ terminé — issue #107 closed / PR #108 merged |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ livré — PR #110 + promotion #111 |
-| Hardening post-audit | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113/#117/#112 |
+| Hardening post-audit initial | sécurité, CI, PostgreSQL, JaCoCo, MCP packagé, Windows setup | ✅ #113/#117/#112 |
 | Readiness 1.0.1 | Plugin Verifier, preflight release, docs et smoke MCP stabilisé | ✅ #118/#119 |
 | Correctifs validation réelle | Docker local, Codex, PowerShell 5.1, staging jpackage | ✅ #122–#127 |
 | Release 1.0.1 | setup Windows + supply-chain + plugin IntelliJ | ✅ publiée le 9 août 2026 |
+| Remédiation audit complet | supply-chain immuable, frontières process/path/config, concurrence PostgreSQL, architecture, qualité | ✅ PR #135 |
+| #98 Real OS worker sandbox | Linux bubblewrap/namespaces/prlimit + Windows AppContainer/Job Object, exact-head | ✅ implémenté et qualifié dans #135 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
@@ -56,6 +59,46 @@ semantic          disabled | local-hash | ollama
 
 Le wizard Windows propose Standard/Avancé, les intégrations MCP détectées, la configuration PostgreSQL/Ollama/Docker applicable, puis un résumé avant installation. PostgreSQL/pgvector est un backend réel et versionné ; PostgreSQL et Ollama peuvent être gérés dans le runtime Docker.
 
+## Remédiation post-audit — #132 / PR #135
+
+La campagne post-audit ferme les findings structurants identifiés après 1.0.1 :
+
+- Coursier et providers téléchargés depuis des références immuables avec checksums attendus ;
+- images Docker de base par digest OCI et workflows Actions par commit SHA ;
+- `ProviderId`, confinement des répertoires et artefacts sans suivi de symlink ;
+- suppression du faux `safeCommand` qui cassait le signal SAST ;
+- configuration `MINOS_HOME` sans état JVM global ;
+- migrations PostgreSQL sérialisées et unicité de racine garantie par la base ;
+- suppression de la dépendance `minos-api → minos-cli` ;
+- sorties processus IntelliJ bornées ;
+- parser Ollama robuste ;
+- quoting batch Windows qualifié sur cas adversariaux ;
+- contrats packaging et seuils JaCoCo alignés sur les garanties réellement vérifiées.
+
+## #98 — Real OS worker sandbox
+
+#98 n'est plus une capacité seulement planifiée : l'implémentation est livrée dans la PR #135 et sa qualification exige une preuve exact-head sur les deux OS.
+
+### Linux
+
+- `bubblewrap --unshare-all` ;
+- network namespace isolé pour `DENY`, partage explicite uniquement pour `ALLOW` ;
+- racine hôte en lecture seule et racines d'écriture bornées ;
+- `--cap-drop ALL` ;
+- limites `prlimit` mémoire virtuelle/processus/fichiers/CPU ;
+- sonde runtime des primitives et du contexte LSM/userns ;
+- fallback process-only + rejet de `DENY` si la sonde échoue.
+
+### Windows
+
+- AppContainer sans capability réseau ;
+- validation `TokenIsAppContainer` avant reprise du processus ;
+- Job Object avec kill-on-close, mémoire, process count et CPU hard cap ;
+- ACL temporaires limitées aux racines gérées par MINOS ;
+- aucune modification des ACL système Windows.
+
+Les tests exact-head couvrent les tentatives réseau, les écritures hors racine, les limites de ressources et le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
+
 ## Release 1.0.1 — livrée
 
 La release **v1.0.1** est publiée et immuable sur :
@@ -66,28 +109,19 @@ f762025d66e33c40324c811079f1527d122f90f9
 
 URL : <https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1>
 
-La livraison a convergé après validation utilisateur réelle et correction des derniers défauts Windows observés sur le poste mainteneur :
+La livraison a convergé après validation utilisateur réelle et correction des derniers défauts Windows observés sur le poste mainteneur. La publication finale a rejoué le Plugin Verifier, la qualification Windows complète, publié 10 assets et vérifié 5 paires SHA-256 après re-téléchargement.
 
-- installation Docker accélérée par réutilisation d'une image exacte préconstruite ;
-- réparation ownership-aware d'un ancien bloc Codex MINOS ;
-- parsing `docker image inspect` compatible Windows PowerShell 5.1 ;
-- génération locale répétable malgré les handles conservés par un ancien runtime jpackage.
-
-La publication finale a rejoué le Plugin Verifier, la qualification Windows complète, remplacé l'ancien état `v1.0.1` uniquement après qualification, publié 10 assets et vérifié 5 paires SHA-256 après re-téléchargement.
-
-## Gates de release durables
+## Gates durables
 
 Les gates actuellement acquis comprennent :
 
-- Jackson 2/3 corrigés ;
 - OSV Scanner bloquant ;
+- supply-chain Actions / Docker / providers immuable et vérifiée ;
 - PostgreSQL/pgvector fail-closed sur Linux ;
 - Testcontainers portable Windows/Linux ;
 - CI sur PR et push `develop/main` ;
-- JaCoCo M29/M30 ;
-- M28 exact-head Linux/Windows ;
+- JaCoCo ciblé M0–M30 ;
 - M19/M20 ;
-- SonarCloud Quality Gate ;
 - IntelliJ unit/build/structure + Plugin Verifier ;
 - build jpackage + ZIP/SBOM/notices/checksums ;
 - handshake MCP SDK sur runtime packagé ;
@@ -95,15 +129,11 @@ Les gates actuellement acquis comprennent :
 - installation ZIP + handshake ;
 - installation setup + handshake ;
 - désinstallation isolée ;
-- vérification des artefacts durables ;
-- contrôle strict de provenance avant publication.
+- contrôle strict de provenance avant publication ;
+- sandbox OS exact-head Linux/Windows sans skip dans la campagne #135.
 
-Le workflow manuel standard de publication reste disponible pour les releases futures ; les workflows one-shot créés uniquement pour la migration de l'ancien `v1.0.1` sont retirés après livraison.
-
-## Priorité ouverte — #98
-
-**#98 — Real OS worker sandbox** reste ouverte et indépendante de 1.0.1. Aucun claim d'isolation hostile ne doit être fait tant qu'un backend sandbox Windows/Linux réel n'est pas implémenté et qualifié.
+Le workflow manuel standard de publication reste disponible pour les releases futures ; les workflows one-shot créés uniquement pour une migration ou une qualification ponctuelle sont retirés après usage.
 
 ## Prochaine planification fonctionnelle
 
-Aucun jalon **M31** n'est encore engagé. La prochaine priorité structurante connue reste #98, sauf décision contraire de roadmap.
+Aucun jalon **M31** n'est encore engagé. Après l'intégration de #135 et la fermeture de #98/#132, aucune priorité structurante ouverte n'est imposée par la roadmap ; la prochaine évolution doit être décidée à partir des besoins produit et des mesures disponibles.
