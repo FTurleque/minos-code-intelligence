@@ -31,9 +31,9 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         IndexerProcessPlan plan = new IndexerProcessPlan(
                 List.of("/bin/sh", "-c", "printf artifact > \"$1\"", "sh", artifact.toString()),
                 working,
+                Map.of(),
                 artifact,
-                Duration.ofSeconds(30),
-                Map.of());
+                Duration.ofSeconds(30));
 
         IndexerProcessPlan sandboxed = discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.DENY);
         List<String> command = sandboxed.command();
@@ -96,9 +96,9 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
                         hostEscape.toString(),
                         artifact.toString()),
                 working,
+                Map.of(),
                 artifact,
-                Duration.ofSeconds(30),
-                Map.of());
+                Duration.ofSeconds(30));
 
         IndexerProcessPlan sandboxed = discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.DENY);
         Process process = new ProcessBuilder(sandboxed.command())
@@ -121,7 +121,7 @@ class LinuxBubblewrapWorkerSandboxBackendTest {
         Path run = Files.createTempDirectory("minos-bwrap-allow-run-");
         Path artifact = run.resolve("index.scip");
         IndexerProcessPlan plan = new IndexerProcessPlan(
-                List.of("/bin/true"), working, artifact, Duration.ofSeconds(10), Map.of());
+                List.of("/bin/true"), working, Map.of(), artifact, Duration.ofSeconds(10));
         assertTrue(discovered.orElseThrow().sandboxPlan(plan, run, WorkerNetworkPolicy.ALLOW).command().contains("--share-net"));
     }
 }
