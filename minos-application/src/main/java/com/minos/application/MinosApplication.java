@@ -40,6 +40,7 @@ import com.minos.semantic.OllamaEmbeddingProvider;
 import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackends;
@@ -167,26 +168,27 @@ public final class MinosApplication {
         this.hostedControlPlaneService = Objects.requireNonNull(hostedControlPlaneService, "hostedControlPlaneService");
     }
 
-    /** Opens MINOS using storage and semantic settings from system properties/environment. */
+    /** Opens MINOS using one immutable settings snapshot for this home. */
     public static MinosApplication open(Path home) throws IOException {
-        Builder builder = builder(home).storageBackend(StorageBackends.open(StorageBackendConfiguration.resolve(home)));
-        String configured = setting(SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
+        MinosRuntimeSettings settings = MinosRuntimeSettings.load(home);
+        Builder builder = builder(home).storageBackend(StorageBackends.open(StorageBackendConfiguration.resolve(settings)));
+        String configured = setting(settings, SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
         String provider = configured == null || configured.isBlank() ? "disabled" : configured.trim().toLowerCase(Locale.ROOT);
         if ("local-hash".equals(provider)) {
             builder.embeddingProvider(new LocalHashEmbeddingProvider());
         } else if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
-            String model = requiredSetting(SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
-            int dimensions = parsePositiveInt(requiredSetting(SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
-            String endpointValue = setting(SEMANTIC_ENDPOINT_PROPERTY, SEMANTIC_ENDPOINT_ENV);
+            String model = requiredSetting(settings, SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
+            int dimensions = parsePositiveInt(requiredSetting(settings, SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
+            String endpointValue = setting(settings, SEMANTIC_ENDPOINT_PROPERTY, SEMANTIC_ENDPOINT_ENV);
             URI endpoint = endpointValue == null || endpointValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_ENDPOINT : URI.create(endpointValue.trim());
-            String timeoutValue = setting(SEMANTIC_TIMEOUT_SECONDS_PROPERTY, SEMANTIC_TIMEOUT_SECONDS_ENV);
+            String timeoutValue = setting(settings, SEMANTIC_TIMEOUT_SECONDS_PROPERTY, SEMANTIC_TIMEOUT_SECONDS_ENV);
             Duration timeout = timeoutValue == null || timeoutValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
                     : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
             builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout));
         } else if (!"disabled".equals(provider)) {
             throw new IllegalArgumentException("unsupported semantic provider: " + configured);
         }
-        String hostedMode = setting(HOSTED_MODE_PROPERTY, HOSTED_MODE_ENV);
+        String hostedMode = setting(settings, HOSTED_MODE_PROPERTY, HOSTED_MODE_ENV);
         if (hostedMode != null && !hostedMode.isBlank() && !"disabled".equalsIgnoreCase(hostedMode)) {
             if (!"enabled".equalsIgnoreCase(hostedMode)) throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
             builder.hostedTenantKeyProvider(new EnvironmentHostedTenantKeyProvider());
@@ -194,11 +196,11 @@ public final class MinosApplication {
         return builder.build();
     }
 
-    private static String setting(String property, String environment) {
-        String value = System.getProperty(property); return value == null || value.isBlank() ? System.getenv(environment) : value;
+    private static String setting(MinosRuntimeSettings settings, String property, String environment) {
+        return settings.value(property, environment);
     }
-    private static String requiredSetting(String property, String environment) {
-        String value = setting(property, environment);
+    private static String requiredSetting(MinosRuntimeSettings settings, String property, String environment) {
+        String value = setting(settings, property, environment);
         if (value == null || value.isBlank()) throw new IllegalArgumentException("missing required semantic setting: " + property + " / " + environment);
         return value.trim();
     }
