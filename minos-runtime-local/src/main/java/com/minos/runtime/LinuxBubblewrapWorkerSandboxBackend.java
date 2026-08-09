@@ -15,12 +15,13 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Linux worker sandbox backed by bubblewrap namespaces and util-linux prlimit.
+ * Linux worker sandbox backed by bubblewrap namespaces and util-linux primitives.
  *
  * <p>The host root is mounted read-only. Only the provider working directory and the generated
- * artifact directory are writable. DENY gets a fresh network namespace. The provider is also
- * bounded by address-space, process-count, descriptor and CPU rlimits in addition to the existing
- * MINOS wall-clock timeout and workspace byte/file quotas.</p>
+ * artifact directory are writable. Bubblewrap owns the user/mount/PID/IPC/UTS/cgroup boundaries.
+ * For DENY, a nested util-linux {@code unshare --net} creates an empty network namespace without
+ * asking bubblewrap to configure loopback; capabilities are then dropped with {@code setpriv}
+ * before the provider starts. Resource limits are inherited from {@code prlimit}.</p>
  */
 public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
 
@@ -30,10 +31,14 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
 
     private final Path bubblewrap;
     private final Path prlimit;
+    private final Path unshare;
+    private final Path setpriv;
 
-    public LinuxBubblewrapWorkerSandboxBackend(Path bubblewrap, Path prlimit) {
+    public LinuxBubblewrapWorkerSandboxBackend(Path bubblewrap, Path prlimit, Path unshare, Path setpriv) {
         this.bubblewrap = regularExecutable(bubblewrap, "bubblewrap");
         this.prlimit = regularExecutable(prlimit, "prlimit");
+        this.unshare = regularExecutable(unshare, "unshare");
+        this.setpriv = regularExecutable(setpriv, "setpriv");
     }
 
     public static Optional<LinuxBubblewrapWorkerSandboxBackend> discover() {
@@ -42,13 +47,21 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         }
         Optional<Path> bwrap = CommandLocator.find("bwrap");
         Optional<Path> limits = CommandLocator.find("prlimit");
-        if (bwrap.isEmpty() || limits.isEmpty()) return Optional.empty();
-        return Optional.of(new LinuxBubblewrapWorkerSandboxBackend(bwrap.orElseThrow(), limits.orElseThrow()));
+        Optional<Path> networkNamespace = CommandLocator.find("unshare");
+        Optional<Path> privilegeDrop = CommandLocator.find("setpriv");
+        if (bwrap.isEmpty() || limits.isEmpty() || networkNamespace.isEmpty() || privilegeDrop.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new LinuxBubblewrapWorkerSandboxBackend(
+                bwrap.orElseThrow(),
+                limits.orElseThrow(),
+                networkNamespace.orElseThrow(),
+                privilegeDrop.orElseThrow()));
     }
 
     @Override
     public String id() {
-        return "linux-bubblewrap-prlimit-v1";
+        return "linux-bubblewrap-unshare-prlimit-v2";
     }
 
     @Override
@@ -77,11 +90,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                         WorkerSandboxQualification.Platform.OTHER,
                         WorkerSandboxQualification.PlatformDisposition.NOT_APPLICABLE),
                 List.of(
-                        "LINUX_BUBBLEWRAP_UNSHARE_ALL",
-                        "LINUX_NETWORK_NAMESPACE_DENY",
+                        "LINUX_BUBBLEWRAP_USER_MOUNT_PID_IPC_UTS_CGROUP_NAMESPACES",
+                        "LINUX_UTIL_LINUX_EMPTY_NETWORK_NAMESPACE_DENY",
                         "LINUX_HOST_ROOT_READ_ONLY",
                         "LINUX_WORKSPACE_AND_ARTIFACT_WRITE_ONLY",
-                        "LINUX_CAPABILITIES_DROPPED",
+                        "LINUX_PROVIDER_CAPABILITIES_DROPPED_AND_NO_NEW_PRIVS",
                         "LINUX_PRLIMIT_ADDRESS_SPACE_PROCESS_COUNT_OPEN_FILES_CPU",
                         "MINOS_WALL_CLOCK_TIMEOUT_AND_WORKSPACE_QUOTAS_RETAINED"));
     }
@@ -133,11 +146,14 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("--die-with-parent");
         sandbox.add("--new-session");
         sandbox.add("--unshare-all");
+        // Keep host networking only during bubblewrap setup. DENY creates its own empty network
+        // namespace below, avoiding bubblewrap's loopback configuration which is blocked on some
+        // hardened hosted runners.
+        sandbox.add("--share-net");
         if (networkPolicy == WorkerNetworkPolicy.ALLOW) {
-            sandbox.add("--share-net");
+            sandbox.add("--cap-drop");
+            sandbox.add("ALL");
         }
-        sandbox.add("--cap-drop");
-        sandbox.add("ALL");
         sandbox.add("--ro-bind");
         sandbox.add("/");
         sandbox.add("/");
@@ -153,6 +169,18 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("--chdir");
         sandbox.add(working.toString());
         sandbox.add("--");
+
+        if (networkPolicy == WorkerNetworkPolicy.DENY) {
+            sandbox.add(unshare.toString());
+            sandbox.add("--net");
+            sandbox.add("--");
+            sandbox.add(setpriv.toString());
+            sandbox.add("--no-new-privs");
+            sandbox.add("--bounding-set=-all");
+            sandbox.add("--inh-caps=-all");
+            sandbox.add("--ambient-caps=-all");
+            sandbox.add("--");
+        }
         sandbox.addAll(plan.command());
 
         return new IndexerProcessPlan(
