@@ -35,13 +35,27 @@ final class PostgresProjectRegistry implements ProjectRegistry {
     public RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
         Path canonical = canonicalExistingDirectory(rootPath);
         if (displayName == null || displayName.isBlank()) throw new IllegalArgumentException("displayName must not be blank");
-        for (RegisteredProject existing : listProjects()) {
-            if (existing.rootPath().equals(canonical)) return existing;
-        }
+        RootIdentity root = rootIdentity(canonical);
         Instant now = Instant.now();
-        RegisteredProject project = new RegisteredProject(UUID.randomUUID(), canonical, displayName, Optional.empty(), now, now);
-        writeProject(project);
-        return project;
+        UUID candidateId = UUID.randomUUID();
+        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
+                "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) "
+                        + "VALUES (?,?,?,?,NULL,?,?) "
+                        + "ON CONFLICT(root_value,root_portable) DO UPDATE SET root_value=EXCLUDED.root_value "
+                        + "RETURNING id,root_value,root_portable,display_name,workspace_id,created_at,updated_at")) {
+            s.setObject(1, candidateId);
+            s.setString(2, root.value());
+            s.setBoolean(3, root.portable());
+            s.setString(4, displayName);
+            s.setObject(5, now);
+            s.setObject(6, now);
+            try (ResultSet r = s.executeQuery()) {
+                if (!r.next()) throw new SQLException("project registration did not return a row");
+                return readProject(r);
+            }
+        } catch (SQLException e) {
+            throw io("register project", e);
+        }
     }
 
     @Override
@@ -119,16 +133,24 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         } catch (SQLException e) { throw io("list workspaces", e); }
     }
 
-    private void writeProject(RegisteredProject project) throws IOException {
-        String rootValue;
+    private RootIdentity rootIdentity(Path physicalRoot) throws IOException {
         boolean portable = mapping.isPresent();
         try {
-            rootValue = portable ? mapping.orElseThrow().relativeForPhysical(project.rootPath(), runtimeLocation) : project.rootPath().toString();
-        } catch (IllegalArgumentException e) { throw new IOException("project path cannot be represented by configured runtime mapping", e); }
+            String rootValue = portable
+                    ? mapping.orElseThrow().relativeForPhysical(physicalRoot, runtimeLocation)
+                    : physicalRoot.toString();
+            return new RootIdentity(rootValue, portable);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("project path cannot be represented by configured runtime mapping", e);
+        }
+    }
+
+    private void writeProject(RegisteredProject project) throws IOException {
+        RootIdentity root = rootIdentity(project.rootPath());
         try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
                 "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?) " +
                         "ON CONFLICT(id) DO UPDATE SET root_value=EXCLUDED.root_value,root_portable=EXCLUDED.root_portable,display_name=EXCLUDED.display_name,workspace_id=EXCLUDED.workspace_id,updated_at=EXCLUDED.updated_at")) {
-            s.setObject(1, project.id()); s.setString(2, rootValue); s.setBoolean(3, portable); s.setString(4, project.displayName());
+            s.setObject(1, project.id()); s.setString(2, root.value()); s.setBoolean(3, root.portable()); s.setString(4, project.displayName());
             s.setObject(5, project.workspaceId().orElse(null)); s.setObject(6, project.createdAt()); s.setObject(7, project.updatedAt()); s.executeUpdate();
         } catch (SQLException e) { throw io("write project", e); }
     }
@@ -158,6 +180,8 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         if (!Files.isDirectory(canonical)) throw new IllegalArgumentException("rootPath must be an existing directory: " + rootPath);
         return canonical;
     }
+
+    private record RootIdentity(String value, boolean portable) { }
 
     private static IOException io(String action, SQLException e) { return new IOException("PostgreSQL project registry failed to " + action, e); }
 }
