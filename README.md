@@ -9,19 +9,26 @@ MINOS est **local-first**, multi-langages, indépendant des fournisseurs d'IA et
 ```text
 C0 → M30                         ✅ terminés / intégrés
 MINOS 1.0.0                      ✅ publiée le 1er août 2026 / immuable
+MINOS 1.0.1                      ✅ publiée le 9 août 2026 / immuable
 M29 #107                         ✅ CLOSED / PR #108 merged
 M30                              ✅ PR #110 + promotion #111 merged
-hardening #113                   ✅ merged
-CI Windows M28 #117              ✅ merged
-promotion develop → main #112    ✅ merged
+hardening #113/#117              ✅ merged
 readiness 1.0.1 #118/#119        ✅ merged / qualifiée
+correctifs installateur #122–127 ✅ merged / qualifiés
 #98 sandbox OS worker réelle     🚧 OPEN
-MINOS 1.0.1                      🚧 pré-publication — NON PUBLIÉE
 ```
 
-La ligne 1.0.1 corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
+La release **1.0.1** corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
 
-> **Important :** un ancien tag Git `v1.0.1` existe encore sur un commit antérieur au hardening final. Il ne constitue **pas** le candidat final 1.0.1 et ne doit pas être utilisé comme release. Le workflow de publication refuse explicitement de déplacer ou d'écraser un tag existant.
+Tag publié et immuable :
+
+```text
+v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
+```
+
+Release : [MINOS v1.0.1](https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1).
+
+La publication finale a été effectuée après validation utilisateur réelle du setup Windows. Le workflow transactionnel a reconstruit le candidat exact, rejoué le Plugin Verifier IntelliJ et les smokes Windows, publié **10 assets**, puis re-téléchargé et vérifié les **5 paires payload/SHA-256**.
 
 Voir [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) et [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md).
 
@@ -121,15 +128,7 @@ En Docker, MINOS peut gérer PostgreSQL/pgvector et Ollama sur le réseau intern
 
 En mode natif, PostgreSQL et Ollama sont des services externes/localement existants fournis par l'utilisateur. MINOS ne prétend pas installer un binaire Ollama natif.
 
-La page **Résumé de l'installation** indique avant le lancement :
-
-- programme et data roots ;
-- backend MCP ;
-- stockage ;
-- provider sémantique ;
-- clients IA sélectionnés ;
-- composants Docker réellement gérés ;
-- éventuel téléchargement/provisionnement du modèle Ollama.
+La page **Résumé de l'installation** indique avant le lancement : programme/data roots, backend MCP, stockage, provider sémantique, clients IA sélectionnés et composants Docker réellement gérés.
 
 Guide complet : [`docs/user/production-installation.md`](docs/user/production-installation.md).
 
@@ -146,7 +145,7 @@ fat JAR
 → assertion java.xml
 ```
 
-Cela corrige le défaut 1.0.0 `NoClassDefFoundError: org/w3c/dom/Node` sans retagger la release publiée.
+Cela corrige le défaut 1.0.0 `NoClassDefFoundError: org/w3c/dom/Node` sans modifier le tag 1.0.0.
 
 ## Sécurité et gates de release
 
@@ -160,9 +159,7 @@ Le hardening post-audit impose notamment :
 - handshake MCP réel sur ZIP et setup installé ;
 - build + Plugin Verifier IntelliJ ;
 - smoke install/handshake/uninstall du setup Windows ;
-- préflight de publication qui refuse un tag/release déjà existant.
-
-Aucun ancien setup/ZIP 1.0.1 construit avant cette convergence ne constitue le candidat final.
+- publication fail-closed sur provenance, tag, release, assets et checksums.
 
 ## Développement
 
