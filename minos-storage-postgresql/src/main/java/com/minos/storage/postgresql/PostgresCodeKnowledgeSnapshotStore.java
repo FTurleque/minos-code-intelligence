@@ -83,45 +83,61 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
         byte[] payload = codec.encode(snapshot);
         String sha = sha256(payload);
-        try (Connection c = connections.open()) {
-            c.setAutoCommit(false);
-            try {
-                String existingSha = null;
-                try (PreparedStatement q = c.prepareStatement("SELECT sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
-                    q.setObject(1, snapshot.projectId()); q.setString(2, snapshot.snapshotId());
-                    try (ResultSet r = q.executeQuery()) { if (r.next()) existingSha = r.getString(1); }
-                }
-                if (existingSha != null && !existingSha.equals(sha)) {
-                    throw new IOException("PostgreSQL snapshot identity already exists with different content: " + snapshot.snapshotId());
-                }
-                if (existingSha == null) {
-                    try (PreparedStatement s = c.prepareStatement("INSERT INTO knowledge_snapshots(project_id,snapshot_id,payload,sha256,symbol_count,occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)")) {
-                        s.setObject(1, snapshot.projectId()); s.setString(2, snapshot.snapshotId()); s.setBytes(3, payload); s.setString(4, sha);
-                        s.setInt(5, snapshot.symbols().size()); s.setInt(6, snapshot.occurrences().size()); s.setInt(7, snapshot.relationships().size()); s.executeUpdate();
+        try {
+            connections.withConnection(c -> {
+                c.setAutoCommit(false);
+                try {
+                    String existingSha = null;
+                    try (PreparedStatement q = c.prepareStatement("SELECT sha256 FROM knowledge_snapshots WHERE project_id=? AND snapshot_id=?")) {
+                        q.setObject(1, snapshot.projectId()); q.setString(2, snapshot.snapshotId());
+                        try (ResultSet r = q.executeQuery()) { if (r.next()) existingSha = r.getString(1); }
                     }
+                    if (existingSha != null && !existingSha.equals(sha)) {
+                        throw new IOException("PostgreSQL snapshot identity already exists with different content: " + snapshot.snapshotId());
+                    }
+                    if (existingSha == null) {
+                        try (PreparedStatement s = c.prepareStatement("INSERT INTO knowledge_snapshots(project_id,snapshot_id,payload,sha256,symbol_count,occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)")) {
+                            s.setObject(1, snapshot.projectId()); s.setString(2, snapshot.snapshotId()); s.setBytes(3, payload); s.setString(4, sha);
+                            s.setInt(5, snapshot.symbols().size()); s.setInt(6, snapshot.occurrences().size()); s.setInt(7, snapshot.relationships().size()); s.executeUpdate();
+                        }
+                    }
+                    try (PreparedStatement s = c.prepareStatement("INSERT INTO knowledge_active(project_id,snapshot_id) VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id")) {
+                        s.setObject(1, snapshot.projectId()); s.setString(2, snapshot.snapshotId()); s.executeUpdate();
+                    }
+                    c.commit();
+                    return null;
+                } catch (Exception e) {
+                    rollbackPreserving(c, e);
+                    if (e instanceof IOException io) throw io;
+                    if (e instanceof SQLException sql) throw sql;
+                    throw new IOException("unable to publish PostgreSQL knowledge snapshot", e);
                 }
-                try (PreparedStatement s = c.prepareStatement("INSERT INTO knowledge_active(project_id,snapshot_id) VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id")) {
-                    s.setObject(1, snapshot.projectId()); s.setString(2, snapshot.snapshotId()); s.executeUpdate();
-                }
-                c.commit();
-            } catch (Exception e) {
-                c.rollback();
-                if (e instanceof IOException io) throw io;
-                throw new IOException("unable to publish PostgreSQL knowledge snapshot", e);
-            }
+            });
         } catch (SQLException e) { throw new IOException("unable to publish PostgreSQL knowledge snapshot", e); }
     }
 
     private Optional<Row> activeRow(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        try (Connection c = connections.open(); PreparedStatement s = c.prepareStatement(
-                "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a JOIN knowledge_snapshots s ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id WHERE a.project_id=?")) {
-            s.setObject(1, projectId);
-            try (ResultSet r = s.executeQuery()) {
-                if (!r.next()) return Optional.empty();
-                return Optional.of(new Row(r.getString(1), r.getBytes(2), r.getString(3)));
-            }
+        try {
+            return connections.withConnection(c -> {
+                try (PreparedStatement s = c.prepareStatement(
+                        "SELECT s.snapshot_id,s.payload,s.sha256 FROM knowledge_active a JOIN knowledge_snapshots s ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id WHERE a.project_id=?")) {
+                    s.setObject(1, projectId);
+                    try (ResultSet r = s.executeQuery()) {
+                        if (!r.next()) return Optional.empty();
+                        return Optional.of(new Row(r.getString(1), r.getBytes(2), r.getString(3)));
+                    }
+                }
+            });
         } catch (SQLException e) { throw new IOException("unable to load PostgreSQL knowledge snapshot", e); }
+    }
+
+    private static void rollbackPreserving(Connection connection, Exception original) {
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackFailure) {
+            original.addSuppressed(rollbackFailure);
+        }
     }
 
     private CodeKnowledgeSnapshot decodeVerified(UUID projectId, Row row) throws IOException {
