@@ -19,168 +19,258 @@ final class PostgresSemanticVectorStore implements SemanticVectorStore {
     private static final int BATCH_SIZE = 500;
     private final PostgresConnectionFactory connections;
 
-    PostgresSemanticVectorStore(PostgresConnectionFactory connections) { this.connections = connections; }
+    PostgresSemanticVectorStore(PostgresConnectionFactory connections) {
+        this.connections = connections;
+    }
 
-    @Override public String searchEngine() { return "pgvector-exact-cosine"; }
+    @Override
+    public String searchEngine() {
+        return "pgvector-exact-cosine";
+    }
 
     @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {
-            return connections.withConnection(c -> {
-                String snapshotId; String providerId; String modelId; int dimensions; long builtAt;
-                try (PreparedStatement meta = c.prepareStatement(
-                        "SELECT snapshot_id,provider_id,model_id,dimensions,built_at FROM semantic_index_meta WHERE project_id=?")) {
-                    meta.setObject(1, id);
-                    try (ResultSet r = meta.executeQuery()) {
-                        if (!r.next()) return Optional.empty();
-                        snapshotId = r.getString(1); providerId = r.getString(2); modelId = r.getString(3);
-                        dimensions = r.getInt(4); builtAt = r.getLong(5);
-                    }
-                }
-                List<IndexedDocument> documents = new ArrayList<>();
-                try (PreparedStatement docs = c.prepareStatement(
-                        "SELECT document_id,stable_key,snapshot_id,kind,source_id,file_id,start_line,end_line,content,checksum,embedding::text " +
-                                "FROM semantic_documents WHERE project_id=? ORDER BY stable_key")) {
-                    docs.setObject(1, id);
-                    try (ResultSet r = docs.executeQuery()) {
-                        while (r.next()) {
-                            SemanticDocument document = document(projectId, r);
-                            double[] values = parseVector(r.getString(11), dimensions);
-                            documents.add(new IndexedDocument(document, SemanticVector.fromArray(document.stableKey(), values)));
+            return connections.withConnection(connection -> {
+                String snapshotId;
+                String providerId;
+                String modelId;
+                int dimensions;
+                long builtAt;
+                try (PreparedStatement metadata = connection.prepareStatement(
+                        "SELECT snapshot_id,provider_id,model_id,dimensions,built_at "
+                                + "FROM semantic_index_meta WHERE project_id=?")) {
+                    metadata.setObject(1, id);
+                    try (ResultSet result = metadata.executeQuery()) {
+                        if (!result.next()) {
+                            return Optional.empty();
                         }
+                        snapshotId = result.getString(1);
+                        providerId = result.getString(2);
+                        modelId = result.getString(3);
+                        dimensions = result.getInt(4);
+                        builtAt = result.getLong(5);
                     }
                 }
-                return Optional.of(new IndexSnapshot(projectId, snapshotId, providerId, modelId, dimensions, builtAt, documents));
+                List<IndexedDocument> documents = loadDocuments(connection, projectId, id, dimensions);
+                return Optional.of(new IndexSnapshot(
+                        projectId, snapshotId, providerId, modelId, dimensions, builtAt, documents));
             });
-        } catch (SQLException e) { throw new IOException("unable to load pgvector semantic index", e); }
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic index", exception);
+        }
+    }
+
+    private static List<IndexedDocument> loadDocuments(
+            Connection connection,
+            String projectId,
+            UUID id,
+            int dimensions
+    ) throws SQLException, IOException {
+        List<IndexedDocument> documents = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT document_id,stable_key,snapshot_id,kind,source_id,file_id,start_line,end_line,"
+                        + "content,checksum,embedding::text "
+                        + "FROM semantic_documents WHERE project_id=? ORDER BY stable_key")) {
+            statement.setObject(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    SemanticDocument document = document(projectId, result);
+                    double[] values = parseVector(result.getString(11), dimensions);
+                    documents.add(new IndexedDocument(
+                            document,
+                            SemanticVector.fromArray(document.stableKey(), values)));
+                }
+            }
+        }
+        return documents;
     }
 
     @Override
     public void replace(IndexSnapshot snapshot) throws IOException {
         UUID projectId = uuid(snapshot.projectId());
         try {
-            connections.withConnection(c -> {
-                c.setAutoCommit(false);
-                try {
-                    try (PreparedStatement delete = c.prepareStatement("DELETE FROM semantic_documents WHERE project_id=?")) {
-                        delete.setObject(1, projectId); delete.executeUpdate();
-                    }
-                    try (PreparedStatement meta = c.prepareStatement(
-                            "INSERT INTO semantic_index_meta(project_id,snapshot_id,provider_id,model_id,dimensions,built_at) VALUES (?,?,?,?,?,?) " +
-                                    "ON CONFLICT(project_id) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id,provider_id=EXCLUDED.provider_id,model_id=EXCLUDED.model_id,dimensions=EXCLUDED.dimensions,built_at=EXCLUDED.built_at")) {
-                        meta.setObject(1, projectId); meta.setString(2, snapshot.snapshotId()); meta.setString(3, snapshot.providerId());
-                        meta.setString(4, snapshot.modelId()); meta.setInt(5, snapshot.dimensions()); meta.setLong(6, snapshot.builtAtEpochMilli()); meta.executeUpdate();
-                    }
-                    try (PreparedStatement insert = c.prepareStatement(
-                            "INSERT INTO semantic_documents(project_id,stable_key,document_id,snapshot_id,kind,source_id,file_id,start_line,end_line,content,checksum,embedding) " +
-                                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,CAST(? AS vector))")) {
-                        int pending = 0;
-                        for (IndexedDocument indexed : snapshot.documents()) {
-                            SemanticDocument d = indexed.document();
-                            insert.setObject(1, projectId); insert.setString(2, d.stableKey()); insert.setString(3, d.id());
-                            insert.setString(4, d.snapshotId()); insert.setString(5, d.kind().name()); insert.setString(6, d.sourceId());
-                            insert.setString(7, d.fileId()); insert.setInt(8, d.startLine()); insert.setInt(9, d.endLine());
-                            insert.setString(10, d.content()); insert.setString(11, d.checksum()); insert.setString(12, vectorLiteral(indexed.vector()));
-                            insert.addBatch(); pending++;
-                            if (pending == BATCH_SIZE) { insert.executeBatch(); pending = 0; }
-                        }
-                        if (pending > 0) insert.executeBatch();
-                    }
-                    c.commit();
-                    return null;
-                } catch (Exception e) {
-                    rollbackPreserving(c, e);
-                    if (e instanceof IOException io) throw io;
-                    if (e instanceof SQLException sql) throw sql;
-                    throw new IOException("unable to replace pgvector semantic index", e);
-                }
+            connections.inTransaction(connection -> {
+                deleteDocuments(connection, projectId);
+                upsertMetadata(connection, projectId, snapshot);
+                insertDocuments(connection, projectId, snapshot);
+                return null;
             });
-        } catch (SQLException e) { throw new IOException("unable to replace pgvector semantic index", e); }
+        } catch (SQLException exception) {
+            throw new IOException("unable to replace pgvector semantic index", exception);
+        }
+    }
+
+    private static void deleteDocuments(Connection connection, UUID projectId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM semantic_documents WHERE project_id=?")) {
+            statement.setObject(1, projectId);
+            statement.executeUpdate();
+        }
+    }
+
+    private static void upsertMetadata(Connection connection, UUID projectId, IndexSnapshot snapshot)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO semantic_index_meta(project_id,snapshot_id,provider_id,model_id,dimensions,built_at) "
+                        + "VALUES (?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET "
+                        + "snapshot_id=EXCLUDED.snapshot_id,provider_id=EXCLUDED.provider_id,"
+                        + "model_id=EXCLUDED.model_id,dimensions=EXCLUDED.dimensions,"
+                        + "built_at=EXCLUDED.built_at")) {
+            statement.setObject(1, projectId);
+            statement.setString(2, snapshot.snapshotId());
+            statement.setString(3, snapshot.providerId());
+            statement.setString(4, snapshot.modelId());
+            statement.setInt(5, snapshot.dimensions());
+            statement.setLong(6, snapshot.builtAtEpochMilli());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void insertDocuments(Connection connection, UUID projectId, IndexSnapshot snapshot)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO semantic_documents(project_id,stable_key,document_id,snapshot_id,kind,source_id,"
+                        + "file_id,start_line,end_line,content,checksum,embedding) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?,CAST(? AS vector))")) {
+            int pending = 0;
+            for (IndexedDocument indexed : snapshot.documents()) {
+                bindDocument(statement, projectId, indexed);
+                statement.addBatch();
+                pending++;
+                if (pending == BATCH_SIZE) {
+                    statement.executeBatch();
+                    pending = 0;
+                }
+            }
+            if (pending > 0) {
+                statement.executeBatch();
+            }
+        }
+    }
+
+    private static void bindDocument(PreparedStatement statement, UUID projectId, IndexedDocument indexed)
+            throws SQLException {
+        SemanticDocument document = indexed.document();
+        statement.setObject(1, projectId);
+        statement.setString(2, document.stableKey());
+        statement.setString(3, document.id());
+        statement.setString(4, document.snapshotId());
+        statement.setString(5, document.kind().name());
+        statement.setString(6, document.sourceId());
+        statement.setString(7, document.fileId());
+        statement.setInt(8, document.startLine());
+        statement.setInt(9, document.endLine());
+        statement.setString(10, document.content());
+        statement.setString(11, document.checksum());
+        statement.setString(12, vectorLiteral(indexed.vector()));
     }
 
     @Override
     public void delete(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {
-            connections.withConnection(c -> {
-                c.setAutoCommit(false);
-                try (PreparedStatement docs = c.prepareStatement("DELETE FROM semantic_documents WHERE project_id=?");
-                     PreparedStatement meta = c.prepareStatement("DELETE FROM semantic_index_meta WHERE project_id=?")) {
-                    docs.setObject(1, id); docs.executeUpdate(); meta.setObject(1, id); meta.executeUpdate(); c.commit();
-                    return null;
-                } catch (SQLException e) {
-                    rollbackPreserving(c, e);
-                    throw e;
+            connections.inTransaction(connection -> {
+                deleteDocuments(connection, id);
+                try (PreparedStatement metadata = connection.prepareStatement(
+                        "DELETE FROM semantic_index_meta WHERE project_id=?")) {
+                    metadata.setObject(1, id);
+                    metadata.executeUpdate();
                 }
+                return null;
             });
-        } catch (SQLException e) { throw new IOException("unable to delete pgvector semantic index", e); }
+        } catch (SQLException exception) {
+            throw new IOException("unable to delete pgvector semantic index", exception);
+        }
     }
 
     @Override
-    public List<VectorHit> search(String projectId, SemanticVector query, int limit, double minimumScore) throws IOException {
+    public List<VectorHit> search(String projectId, SemanticVector query, int limit, double minimumScore)
+            throws IOException {
         UUID id = uuid(projectId);
         String vector = vectorLiteral(query);
-        String sql = "SELECT document_id,stable_key,snapshot_id,kind,source_id,file_id,start_line,end_line,content,checksum," +
-                "1.0-(embedding <=> CAST(? AS vector)) AS score FROM semantic_documents WHERE project_id=? " +
-                "AND 1.0-(embedding <=> CAST(? AS vector)) >= ? ORDER BY embedding <=> CAST(? AS vector), stable_key LIMIT ?";
+        String sql = "SELECT document_id,stable_key,snapshot_id,kind,source_id,file_id,start_line,end_line,"
+                + "content,checksum,1.0-(embedding <=> CAST(? AS vector)) AS score "
+                + "FROM semantic_documents WHERE project_id=? "
+                + "AND 1.0-(embedding <=> CAST(? AS vector)) >= ? "
+                + "ORDER BY embedding <=> CAST(? AS vector), stable_key LIMIT ?";
         try {
-            return connections.withConnection(c -> {
+            return connections.withConnection(connection -> {
                 List<VectorHit> hits = new ArrayList<>();
-                try (PreparedStatement s = c.prepareStatement(sql)) {
-                    s.setString(1, vector); s.setObject(2, id); s.setString(3, vector); s.setDouble(4, minimumScore); s.setString(5, vector); s.setInt(6, limit);
-                    try (ResultSet r = s.executeQuery()) {
-                        while (r.next()) {
-                            SemanticDocument document = document(projectId, r);
-                            double score = Math.max(-1.0, Math.min(1.0, r.getDouble(11)));
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, vector);
+                    statement.setObject(2, id);
+                    statement.setString(3, vector);
+                    statement.setDouble(4, minimumScore);
+                    statement.setString(5, vector);
+                    statement.setInt(6, limit);
+                    try (ResultSet result = statement.executeQuery()) {
+                        while (result.next()) {
+                            SemanticDocument document = document(projectId, result);
+                            double score = Math.max(-1.0, Math.min(1.0, result.getDouble(11)));
                             hits.add(new VectorHit(document, score));
                         }
                     }
                 }
                 return List.copyOf(hits);
             });
-        } catch (SQLException e) { throw new IOException("unable to search pgvector semantic index", e); }
+        } catch (SQLException exception) {
+            throw new IOException("unable to search pgvector semantic index", exception);
+        }
     }
 
     @Override
     public long sizeBytes(String projectId) throws IOException {
         try {
-            return connections.withConnection(c -> {
-                try (PreparedStatement s = c.prepareStatement(
-                        "SELECT COALESCE(SUM(octet_length(content)+pg_column_size(embedding)),0) FROM semantic_documents WHERE project_id=?")) {
-                    s.setObject(1, uuid(projectId));
-                    try (ResultSet r = s.executeQuery()) { r.next(); return r.getLong(1); }
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT COALESCE(SUM(octet_length(content)+pg_column_size(embedding)),0) "
+                                + "FROM semantic_documents WHERE project_id=?")) {
+                    statement.setObject(1, uuid(projectId));
+                    try (ResultSet result = statement.executeQuery()) {
+                        result.next();
+                        return result.getLong(1);
+                    }
                 }
             });
-        } catch (SQLException e) { throw new IOException("unable to measure pgvector semantic index", e); }
-    }
-
-    private static void rollbackPreserving(Connection connection, Exception original) {
-        try {
-            connection.rollback();
-        } catch (SQLException rollbackFailure) {
-            original.addSuppressed(rollbackFailure);
+        } catch (SQLException exception) {
+            throw new IOException("unable to measure pgvector semantic index", exception);
         }
     }
 
-    private static SemanticDocument document(String projectId, ResultSet r) throws SQLException {
-        return new SemanticDocument(r.getString(1), r.getString(2), projectId, r.getString(3),
-                SemanticDocumentKind.valueOf(r.getString(4)), r.getString(5), r.getString(6), r.getInt(7), r.getInt(8),
-                r.getString(9), r.getString(10));
+    private static SemanticDocument document(String projectId, ResultSet result) throws SQLException {
+        return new SemanticDocument(
+                result.getString(1),
+                result.getString(2),
+                projectId,
+                result.getString(3),
+                SemanticDocumentKind.valueOf(result.getString(4)),
+                result.getString(5),
+                result.getString(6),
+                result.getInt(7),
+                result.getInt(8),
+                result.getString(9),
+                result.getString(10));
     }
 
     private static UUID uuid(String projectId) throws IOException {
-        try { return UUID.fromString(projectId); }
-        catch (IllegalArgumentException e) { throw new IOException("semantic project id must be a UUID", e); }
+        try {
+            return UUID.fromString(projectId);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("semantic project id must be a UUID", exception);
+        }
     }
 
     private static String vectorLiteral(SemanticVector vector) {
-        StringBuilder b = new StringBuilder(vector.dimensions() * 12).append('[');
-        for (int i = 0; i < vector.dimensions(); i++) {
-            if (i > 0) b.append(',');
-            b.append(Float.toString((float) vector.valueAt(i)));
+        StringBuilder builder = new StringBuilder(vector.dimensions() * 12).append('[');
+        for (int index = 0; index < vector.dimensions(); index++) {
+            if (index > 0) {
+                builder.append(',');
+            }
+            builder.append(Float.toString((float) vector.valueAt(index)));
         }
-        return b.append(']').toString();
+        return builder.append(']').toString();
     }
 
     private static double[] parseVector(String text, int dimensions) throws IOException {
@@ -189,11 +279,17 @@ final class PostgresSemanticVectorStore implements SemanticVectorStore {
         }
         String body = text.substring(1, text.length() - 1);
         String[] values = body.isBlank() ? new String[0] : body.split(",");
-        if (values.length != dimensions) throw new IOException("pgvector dimensions mismatch");
+        if (values.length != dimensions) {
+            throw new IOException("pgvector dimensions mismatch");
+        }
         double[] result = new double[dimensions];
         try {
-            for (int i = 0; i < dimensions; i++) result[i] = Double.parseDouble(values[i].trim());
-        } catch (NumberFormatException e) { throw new IOException("invalid pgvector numeric value", e); }
+            for (int index = 0; index < dimensions; index++) {
+                result[index] = Double.parseDouble(values[index].trim());
+            }
+        } catch (NumberFormatException exception) {
+            throw new IOException("invalid pgvector numeric value", exception);
+        }
         return result;
     }
 }
