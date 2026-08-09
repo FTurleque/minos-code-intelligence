@@ -22,13 +22,16 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
                 "semantic_index_meta", "semantic_documents",
                 "schema_version"
         };
-        try (var c = connections.open(); Statement s = c.createStatement()) {
-            for (String table : tables) {
-                try (ResultSet r = s.executeQuery("SELECT count(*) FROM " + table)) {
-                    assertTrue(r.next(), "table missing: " + table);
+        connections.withConnection(c -> {
+            try (Statement s = c.createStatement()) {
+                for (String table : tables) {
+                    try (ResultSet r = s.executeQuery("SELECT count(*) FROM " + table)) {
+                        assertTrue(r.next(), "table missing: " + table);
+                    }
                 }
+                return null;
             }
-        }
+        });
     }
 
     @Test
@@ -39,9 +42,12 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
 
     @Test
     void rejectsSchemaVersionNewerThanRuntime() throws Exception {
-        try (var c = connections.open(); Statement s = c.createStatement()) {
-            s.execute("INSERT INTO schema_version(version) VALUES (999)");
-        }
+        connections.withConnection(c -> {
+            try (Statement s = c.createStatement()) {
+                s.execute("INSERT INTO schema_version(version) VALUES (999)");
+                return null;
+            }
+        });
 
         IOException exception = assertThrows(IOException.class,
                 () -> new PostgresSchemaMigrator(connections).migrate());

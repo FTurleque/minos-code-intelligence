@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
 public record MinosLocation(
         String fileId,
@@ -11,20 +12,38 @@ public record MinosLocation(
         int startColumn,
         String positionEncoding
 ) {
+    private static final Set<String> POSITION_ENCODINGS = Set.of(
+            "UTF8_CODE_UNITS", "UTF16_CODE_UNITS", "UTF32_CODE_UNITS", "UNKNOWN");
+
+    public MinosLocation {
+        if (fileId == null || fileId.isBlank()) {
+            throw new IllegalArgumentException("fileId must not be blank");
+        }
+        if (startLine < 1) {
+            throw new IllegalArgumentException("startLine must be at least 1");
+        }
+        if (startColumn < 0) {
+            throw new IllegalArgumentException("startColumn must not be negative");
+        }
+        if (positionEncoding == null || !POSITION_ENCODINGS.contains(positionEncoding)) {
+            throw new IllegalArgumentException("unsupported positionEncoding: " + positionEncoding);
+        }
+    }
+
     public static MinosLocation from(JsonObject location) {
         if (location == null) {
             throw new IllegalArgumentException("location must not be null");
         }
         return new MinosLocation(
                 requiredString(location, "fileId"),
-                location.get("startLine").getAsInt(),
-                location.get("startColumn").getAsInt(),
+                requiredInteger(location, "startLine"),
+                requiredInteger(location, "startColumn"),
                 optionalString(location, "positionEncoding", "UNKNOWN")
         );
     }
 
     public int utf16Column(CharSequence line) {
-        int requested = Math.max(0, startColumn);
+        int requested = startColumn;
         return switch (positionEncoding) {
             case "UTF16_CODE_UNITS" -> Math.min(requested, line.length());
             case "UTF32_CODE_UNITS" -> utf32ToUtf16(line, requested);
@@ -62,6 +81,18 @@ public record MinosLocation(
             throw new IllegalArgumentException("location is missing `" + name + "`");
         }
         return element.getAsString();
+    }
+
+    private static int requiredInteger(JsonObject object, String name) {
+        JsonElement element = object.get(name);
+        if (element == null || element.isJsonNull()) {
+            throw new IllegalArgumentException("location is missing `" + name + "`");
+        }
+        try {
+            return element.getAsInt();
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("location `" + name + "` must be an integer", exception);
+        }
     }
 
     private static String optionalString(JsonObject object, String name, String fallback) {

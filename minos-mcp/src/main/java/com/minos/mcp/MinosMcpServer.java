@@ -19,6 +19,7 @@ public final class MinosMcpServer {
 
     public static final String SERVER_NAME = "minos-code-intelligence";
     public static final String SERVER_VERSION = MinosVersion.current();
+    private static final System.Logger LOGGER = System.getLogger(MinosMcpServer.class.getName());
 
     private MinosMcpServer() {
     }
@@ -29,9 +30,8 @@ public final class MinosMcpServer {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         } catch (Exception exception) {
-            String message = exception.getMessage();
-            System.err.println("error: MINOS MCP bootstrap failed: " +
-                    (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message));
+            LOGGER.log(System.Logger.Level.ERROR,
+                    "MINOS MCP bootstrap failed (type=" + exception.getClass().getName() + ")");
             System.exit(1);
         }
     }

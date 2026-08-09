@@ -88,14 +88,16 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
         PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
         store.publish(projectId, "snap-1", List.of(symbol(projectId, "sym-a")), List.of(), List.of());
 
-        try (var c = connections.open();
-             PreparedStatement s = c.prepareStatement(
-                     "UPDATE knowledge_snapshots SET payload = decode('deadbeef', 'hex') " +
-                             "WHERE project_id=? AND snapshot_id=?")) {
-            s.setObject(1, projectId);
-            s.setString(2, "snap-1");
-            s.executeUpdate();
-        }
+        connections.withConnection(c -> {
+            try (PreparedStatement s = c.prepareStatement(
+                    "UPDATE knowledge_snapshots SET payload = decode('deadbeef', 'hex') " +
+                            "WHERE project_id=? AND snapshot_id=?")) {
+                s.setObject(1, projectId);
+                s.setString(2, "snap-1");
+                s.executeUpdate();
+                return null;
+            }
+        });
 
         IOException exception = assertThrows(IOException.class,
                 () -> store.loadActiveKnowledge(projectId));

@@ -21,6 +21,9 @@ public final class MinosMcpTools {
 
     public static final int TOOL_COUNT = 31;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
+    private static final String GENERIC_TOOL_ERROR = "error: MINOS tool execution failed";
+    private static final int MAX_CLIENT_ERROR_CHARS = 240;
+    private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
     private final MinosMcpBackend backend;
 
@@ -107,23 +110,77 @@ public final class MinosMcpTools {
     private SyncToolSpecification tool(String name, String description, String schema, ToolInvocation invocation) {
         return SyncToolSpecification.builder()
                 .tool(Tool.builder(name, McpJsonDefaults.getMapper(), schema).description(description).build())
-                .callHandler((exchange, request) -> execute(invocation, arguments(request.arguments())))
+                .callHandler((exchange, request) -> execute(name, invocation, arguments(request.arguments())))
                 .build();
     }
 
-    private static CallToolResult execute(ToolInvocation invocation, Map<String, Object> arguments) {
+    private static CallToolResult execute(String toolName, ToolInvocation invocation, Map<String, Object> arguments) {
         try {
             String text = invocation.execute(arguments);
             String result = text == null ? "" : text.stripTrailing();
             return CallToolResult.builder()
                     .content(List.of(TextContent.builder(result.isEmpty() ? "{}" : result).build()))
                     .build();
+        } catch (IllegalArgumentException exception) {
+            return toolError(clientError(toolName, exception));
         } catch (Exception exception) {
-            return CallToolResult.builder()
-                    .content(List.of(TextContent.builder(errorMessage(exception)).build()))
-                    .isError(true)
-                    .build();
+            logInternalFailure(toolName, exception);
+            return toolError(GENERIC_TOOL_ERROR);
         }
+    }
+
+    private static CallToolResult toolError(String message) {
+        return CallToolResult.builder()
+                .content(List.of(TextContent.builder(message).build()))
+                .isError(true)
+                .build();
+    }
+
+    private static String clientError(String toolName, IllegalArgumentException exception) {
+        if (exception.getCause() != null) {
+            logInternalFailure(toolName, exception);
+            return GENERIC_TOOL_ERROR;
+        }
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) return "error: invalid MCP argument";
+        String detail = message.replace('\r', ' ').replace('\n', ' ').trim();
+        if (detail.length() > MAX_CLIENT_ERROR_CHARS) {
+            detail = detail.substring(0, MAX_CLIENT_ERROR_CHARS);
+        }
+        if (looksSensitive(detail)) {
+            logInternalFailure(toolName, exception);
+            return GENERIC_TOOL_ERROR;
+        }
+        return detail.startsWith("error:") ? detail : "error: " + detail;
+    }
+
+    private static boolean looksSensitive(String detail) {
+        String lower = detail.toLowerCase(Locale.ROOT);
+        if (lower.contains("jdbc:") || lower.contains("password") || lower.contains("secret")
+                || lower.contains("bearer") || lower.contains("authorization") || lower.contains("token=")) {
+            return true;
+        }
+        return containsAbsolutePath(detail);
+    }
+
+    private static boolean containsAbsolutePath(String detail) {
+        for (int index = 0; index < detail.length(); index++) {
+            if (index > 0 && !Character.isWhitespace(detail.charAt(index - 1))) continue;
+            char first = detail.charAt(index);
+            if (first == '/') return true;
+            if (index + 2 < detail.length()
+                    && Character.isLetter(first)
+                    && detail.charAt(index + 1) == ':'
+                    && (detail.charAt(index + 2) == '\\' || detail.charAt(index + 2) == '/')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void logInternalFailure(String toolName, Exception exception) {
+        LOGGER.log(System.Logger.Level.WARNING,
+                "MCP tool execution failed (tool=" + toolName + ", type=" + exception.getClass().getName() + ")");
     }
 
     private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {
@@ -274,15 +331,6 @@ public final class MinosMcpTools {
 
     private static Map<String, Object> arguments(Map<String, Object> arguments) {
         return arguments == null ? Map.of() : arguments;
-    }
-
-    private static String errorMessage(Exception exception) {
-        Throwable effective = exception;
-        if (exception instanceof RuntimeException && exception.getCause() != null) effective = exception.getCause();
-        String message = effective.getMessage();
-        String detail = message == null || message.isBlank()
-                ? effective.getClass().getSimpleName() : message.replace('\r', ' ').replace('\n', ' ');
-        return detail.startsWith("error:") ? detail : "error: " + detail;
     }
 
     private static String projectSchema() {

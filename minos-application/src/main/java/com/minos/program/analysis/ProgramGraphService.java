@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Long-lived bounded query service for reconstructible M19 program graphs. */
 public final class ProgramGraphService {
@@ -26,12 +27,14 @@ public final class ProgramGraphService {
     public static final int DEFAULT_MAX_CACHE_ENTRIES = 16;
     public static final int DEFAULT_MAX_NODES = 10_000;
     public static final int DEFAULT_MAX_EDGES = 50_000;
+    private static final int BUILD_LOCK_STRIPES = 64;
 
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final List<ProgramGraphProvider> providers;
     private final int maxCacheEntries;
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private final ReentrantLock[] buildLocks = buildLocks();
     private long cacheHits;
     private long cacheMisses;
     private long providerKeyNanos;
@@ -102,22 +105,49 @@ public final class ProgramGraphService {
         String providersKey = providerKey(project, snapshot);
         long keyElapsed = System.nanoTime() - keyStarted;
         CacheKey key = new CacheKey(project.id().toString(), snapshot.snapshotId(), providersKey);
+
         synchronized (cache) {
             providerKeyNanos += keyElapsed;
             ProgramGraph cached = cache.get(key);
-            if (cached != null) { cacheHits++; return cached; }
-            cacheMisses++;
+            if (cached != null) {
+                cacheHits++;
+                return cached;
+            }
+        }
+
+        ReentrantLock buildLock = buildLock(project.id().toString());
+        buildLock.lock();
+        try {
+            synchronized (cache) {
+                ProgramGraph cached = cache.get(key);
+                if (cached != null) {
+                    cacheHits++;
+                    return cached;
+                }
+            }
+
             long analysisStarted = System.nanoTime();
             List<ProgramGraph> fragments = new ArrayList<>();
             for (ProgramGraphProvider provider : providers) fragments.add(provider.analyze(project, snapshot));
             ProgramGraph composed = withCapabilityLimitations(new ProgramGraphComposer().compose(
                     project.id().toString(), snapshot.snapshotId(), fragments));
-            analysisNanos += System.nanoTime() - analysisStarted;
-            cache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(project.id().toString()) && !entry.getKey().equals(key));
-            cache.put(key, composed);
-            while (cache.size() > maxCacheEntries) cache.remove(cache.keySet().iterator().next());
+            long analysisElapsed = System.nanoTime() - analysisStarted;
+
+            synchronized (cache) {
+                cacheMisses++;
+                analysisNanos += analysisElapsed;
+                cache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(project.id().toString()) && !entry.getKey().equals(key));
+                cache.put(key, composed);
+                while (cache.size() > maxCacheEntries) cache.remove(cache.keySet().iterator().next());
+            }
             return composed;
+        } finally {
+            buildLock.unlock();
         }
+    }
+
+    private ReentrantLock buildLock(String projectId) {
+        return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
     }
 
     private ProgramGraph withCapabilityLimitations(ProgramGraph graph) {
@@ -159,6 +189,12 @@ public final class ProgramGraphService {
         }
         configured.putIfAbsent(FileProgramGraphProvider.PROVIDER_ID, new FileProgramGraphProvider());
         return List.copyOf(configured.values());
+    }
+
+    private static ReentrantLock[] buildLocks() {
+        ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
     }
 
     private static void requireBound(int value, int minimum, int maximum, String name) {

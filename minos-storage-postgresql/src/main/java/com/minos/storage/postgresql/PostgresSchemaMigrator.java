@@ -15,39 +15,47 @@ final class PostgresSchemaMigrator {
         this.connections = connections;
     }
 
-    // schema identifier is validated by StorageBackendConfiguration and rebuilt char-by-char in
-    // quotedSchema(). DDL statements (CREATE SCHEMA, SET search_path) do not accept parameters.
-    @SuppressWarnings("java:S2077")
     void migrate() throws IOException {
-        String schema = connections.quotedSchema();
-        try (Connection connection = connections.open(); Statement statement = connection.createStatement()) {
-            connection.setAutoCommit(false);
-            try {
-                statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
-                statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
-                statement.execute("SET search_path TO " + schema + ", public");
-                // Serialize version inspection and DDL for this MINOS schema across concurrent
-                // application instances. The xact lock is released automatically on commit/rollback.
-                statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
-                statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-                int version = currentVersion(statement);
-                if (version > CURRENT_VERSION) throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
-                if (version < 1) applyV1(statement);
-                if (version < 2) applyV2(statement);
-                connection.commit();
-            } catch (Exception exception) {
-                connection.rollback();
-                if (exception instanceof IOException io) throw io;
-                throw new IOException("unable to migrate MINOS PostgreSQL schema", exception);
-            }
+        try {
+            connections.withConnection(connection -> {
+                try (Statement statement = connection.createStatement()) {
+                    connection.setAutoCommit(false);
+                    try {
+                        String schema = statement.enquoteIdentifier(connections.schema(), true);
+                        statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
+                        statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                        statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
+                        statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
+                        int version = currentVersion(statement);
+                        if (version > CURRENT_VERSION) throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
+                        if (version < 1) applyV1(statement);
+                        if (version < 2) applyV2(statement);
+                        connection.commit();
+                        return null;
+                    } catch (Exception exception) {
+                        rollbackPreserving(connection, exception);
+                        if (exception instanceof IOException io) throw io;
+                        if (exception instanceof SQLException sql) throw sql;
+                        throw new IOException("unable to migrate MINOS PostgreSQL schema", exception);
+                    }
+                }
+            });
         } catch (SQLException exception) {
             throw new IOException("unable to initialize MINOS PostgreSQL backend", exception);
         }
     }
 
+    private static void rollbackPreserving(Connection connection, Exception original) {
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackFailure) {
+            original.addSuppressed(rollbackFailure);
+        }
+    }
+
     private static int currentVersion(Statement statement) throws SQLException {
         try (ResultSet result = statement.executeQuery("SELECT COALESCE(MAX(version), 0) FROM schema_version")) {
-            result.next();
+            if (!result.next()) throw new SQLException("schema_version query returned no row");
             return result.getInt(1);
         }
     }

@@ -84,16 +84,19 @@ abstract class PostgresTestSupport {
     }
 
     private void truncateData() throws Exception {
-        try (var c = connections.open(); var s = c.createStatement()) {
-            s.execute("""
-                TRUNCATE semantic_documents, semantic_index_meta,
-                         runtime_sessions,
-                         fingerprint_active, fingerprint_snapshots,
-                         knowledge_active, knowledge_snapshots,
-                         project_index_state, indexing_runs,
-                         projects, workspaces
-                CASCADE
-            """);
-        }
+        connections.withConnection(c -> {
+            try (var s = c.createStatement()) {
+                s.execute("""
+                    TRUNCATE semantic_documents, semantic_index_meta,
+                             runtime_sessions,
+                             fingerprint_active, fingerprint_snapshots,
+                             knowledge_active, knowledge_snapshots,
+                             project_index_state, indexing_runs,
+                             projects, workspaces
+                    CASCADE
+                """);
+                return null;
+            }
+        });
     }
 }
