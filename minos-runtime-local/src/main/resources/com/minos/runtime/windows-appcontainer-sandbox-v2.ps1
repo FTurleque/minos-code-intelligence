@@ -131,7 +131,7 @@ public static class MinosAppContainerNativeV2 {
         string pszAppContainerName,
         out IntPtr ppsidAppContainerSid);
 
-    [DllImport("advapi32.dll", SetLastError = true)]
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool ConvertSidToStringSid(IntPtr Sid, out IntPtr StringSid);
 
     [DllImport("advapi32.dll", SetLastError = true)]
