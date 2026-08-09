@@ -8,7 +8,6 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -159,9 +158,9 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         return new IndexerProcessPlan(
                 List.copyOf(sandbox),
                 plan.workingDirectory(),
+                plan.environment(),
                 plan.generatedArtifact(),
-                plan.timeout(),
-                plan.environment());
+                plan.timeout());
     }
 
     private static void addWritableBind(List<String> command, Path directory) {
