@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/post-audit-remediation.yml'
       - 'scripts/remediation/post-audit-provenance.env'
+      - 'scripts/remediation/apply-post-audit-remediation.py'
 
 permissions:
   contents: write
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   provenance:
-    name: Capture immutable supply-chain provenance
+    name: Capture and apply immutable supply-chain provenance
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -124,17 +125,25 @@ jobs:
           printf '%s\n' 'INNOSETUP_CHOCO_VERSION=6.7.1' >> scripts/remediation/post-audit-provenance.env
           cat scripts/remediation/post-audit-provenance.env
 
-      - name: Commit provenance snapshot to exact source branch
+      - name: Apply captured provenance to product and CI
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile scripts/remediation/apply-post-audit-remediation.py
+          python3 scripts/remediation/apply-post-audit-remediation.py
           git diff --check
+          python3 scripts/architecture/check-module-boundaries.py
+
+      - name: Commit hardened supply-chain candidate to exact source branch
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name 'MINOS Remediation Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add scripts/remediation/post-audit-provenance.env
+          git add -A
           if git diff --cached --quiet; then
-            echo 'Provenance is already current.'
+            echo 'Supply-chain provenance and hardening are already current.'
             exit 0
           fi
-          git commit -m 'build: pin post-audit supply-chain provenance'
+          git commit -m 'fix: pin post-audit supply-chain dependencies'
           git push origin "HEAD:refs/heads/${REMEDIATION_BRANCH}"
