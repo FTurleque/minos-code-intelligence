@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Linux worker sandbox backed by bubblewrap namespaces and util-linux primitives.
@@ -22,6 +23,10 @@ import java.util.Optional;
  * For DENY, a nested util-linux {@code unshare --net} creates an empty network namespace without
  * asking bubblewrap to configure loopback; capabilities are then dropped with {@code setpriv}
  * before the provider starts. Resource limits are inherited from {@code prlimit}.</p>
+ *
+ * <p>Discovery is capability-based, not executable-presence-based: MINOS runs a bounded probe of
+ * the complete namespace/privilege chain and only advertises OS_ENFORCED when the current kernel,
+ * AppArmor policy and installation actually allow it.</p>
  */
 public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
 
@@ -52,11 +57,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         if (bwrap.isEmpty() || limits.isEmpty() || networkNamespace.isEmpty() || privilegeDrop.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new LinuxBubblewrapWorkerSandboxBackend(
+        LinuxBubblewrapWorkerSandboxBackend candidate = new LinuxBubblewrapWorkerSandboxBackend(
                 bwrap.orElseThrow(),
                 limits.orElseThrow(),
                 networkNamespace.orElseThrow(),
-                privilegeDrop.orElseThrow()));
+                privilegeDrop.orElseThrow());
+        return candidate.probeOsIsolation() ? Optional.of(candidate) : Optional.empty();
     }
 
     @Override
@@ -96,6 +102,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                         "LINUX_WORKSPACE_AND_ARTIFACT_WRITE_ONLY",
                         "LINUX_PROVIDER_CAPABILITIES_DROPPED_AND_NO_NEW_PRIVS",
                         "LINUX_PRLIMIT_ADDRESS_SPACE_PROCESS_COUNT_OPEN_FILES_CPU",
+                        "LINUX_RUNTIME_CAPABILITY_PROBE_REQUIRED",
                         "MINOS_WALL_CLOCK_TIMEOUT_AND_WORKSPACE_QUOTAS_RETAINED"));
     }
 
@@ -133,27 +140,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         artifactParent = artifactParent.toRealPath();
         Path run = runDirectory.toRealPath();
 
-        List<String> sandbox = new ArrayList<>();
-        sandbox.add(prlimit.toString());
-        sandbox.add("--as=" + MAX_ADDRESS_SPACE_BYTES + ":" + MAX_ADDRESS_SPACE_BYTES);
-        sandbox.add("--nproc=" + MAX_PROCESSES + ":" + MAX_PROCESSES);
-        sandbox.add("--nofile=" + MAX_OPEN_FILES + ":" + MAX_OPEN_FILES);
-        long cpuSeconds = Math.max(1L, plan.timeout().plusSeconds(5).toSeconds());
-        sandbox.add("--cpu=" + cpuSeconds + ":" + cpuSeconds);
-        sandbox.add("--");
-
-        sandbox.add(bubblewrap.toString());
-        sandbox.add("--die-with-parent");
-        sandbox.add("--new-session");
-        sandbox.add("--unshare-all");
-        // Keep host networking only during bubblewrap setup. DENY creates its own empty network
-        // namespace below, avoiding bubblewrap's loopback configuration which is blocked on some
-        // hardened hosted runners.
-        sandbox.add("--share-net");
-        if (networkPolicy == WorkerNetworkPolicy.ALLOW) {
-            sandbox.add("--cap-drop");
-            sandbox.add("ALL");
-        }
+        List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds());
         sandbox.add("--ro-bind");
         sandbox.add("/");
         sandbox.add("/");
@@ -171,15 +158,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("--");
 
         if (networkPolicy == WorkerNetworkPolicy.DENY) {
-            sandbox.add(unshare.toString());
-            sandbox.add("--net");
-            sandbox.add("--");
-            sandbox.add(setpriv.toString());
-            sandbox.add("--no-new-privs");
-            sandbox.add("--bounding-set=-all");
-            sandbox.add("--inh-caps=-all");
-            sandbox.add("--ambient-caps=-all");
-            sandbox.add("--");
+            appendNetworkDenyAndPrivilegeDrop(sandbox);
         }
         sandbox.addAll(plan.command());
 
@@ -189,6 +168,63 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                 plan.environment(),
                 plan.generatedArtifact(),
                 plan.timeout());
+    }
+
+    private boolean probeOsIsolation() {
+        List<String> command = baseCommand(5L);
+        command.add("--ro-bind");
+        command.add("/");
+        command.add("/");
+        command.add("--dev");
+        command.add("/dev");
+        command.add("--proc");
+        command.add("/proc");
+        command.add("--");
+        appendNetworkDenyAndPrivilegeDrop(command);
+        command.add("/bin/true");
+        try {
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start();
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                process.waitFor(2, TimeUnit.SECONDS);
+                return false;
+            }
+            process.getInputStream().readAllBytes();
+            return process.exitValue() == 0;
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private List<String> baseCommand(long cpuSeconds) {
+        List<String> sandbox = new ArrayList<>();
+        sandbox.add(prlimit.toString());
+        sandbox.add("--as=" + MAX_ADDRESS_SPACE_BYTES + ":" + MAX_ADDRESS_SPACE_BYTES);
+        sandbox.add("--nproc=" + MAX_PROCESSES + ":" + MAX_PROCESSES);
+        sandbox.add("--nofile=" + MAX_OPEN_FILES + ":" + MAX_OPEN_FILES);
+        long boundedCpuSeconds = Math.max(1L, cpuSeconds);
+        sandbox.add("--cpu=" + boundedCpuSeconds + ":" + boundedCpuSeconds);
+        sandbox.add("--");
+        sandbox.add(bubblewrap.toString());
+        sandbox.add("--die-with-parent");
+        sandbox.add("--new-session");
+        sandbox.add("--unshare-all");
+        sandbox.add("--share-net");
+        return sandbox;
+    }
+
+    private void appendNetworkDenyAndPrivilegeDrop(List<String> sandbox) {
+        sandbox.add(unshare.toString());
+        sandbox.add("--net");
+        sandbox.add("--");
+        sandbox.add(setpriv.toString());
+        sandbox.add("--no-new-privs");
+        sandbox.add("--bounding-set=-all");
+        sandbox.add("--inh-caps=-all");
+        sandbox.add("--ambient-caps=-all");
+        sandbox.add("--");
     }
 
     private static void addWritableBind(List<String> command, Path directory) {
