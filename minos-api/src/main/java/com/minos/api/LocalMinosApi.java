@@ -1,15 +1,15 @@
 package com.minos.api;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
 import com.minos.architecture.ArchitectureModuleDependency;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.cli.LocalProjectOperations;
-import com.minos.cli.LocalProjectSymbolQuery;
-import com.minos.cli.ProjectOperations;
-import com.minos.cli.ProjectSymbolQuery;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;

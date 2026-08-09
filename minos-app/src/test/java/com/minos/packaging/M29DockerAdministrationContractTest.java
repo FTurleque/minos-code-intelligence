@@ -128,7 +128,15 @@ class M29DockerAdministrationContractTest {
         assertTrue(workflow.contains("semanticProvider = $ResolvedSemanticProvider"));
         assertTrue(workflow.contains("'--volumes'"));
 
-        assertTrue(dockerfile.contains("FROM eclipse-temurin:24-jdk"));
+        assertTrue(dockerfile.matches("(?s).*FROM eclipse-temurin@sha256:[0-9a-f]{64}.*"),
+                "runtime base image must be pinned by OCI digest");
+        assertTrue(dockerfile.matches("(?s).*FROM rust@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
+        assertTrue(dockerfile.matches("(?s).*FROM golang@sha256:[0-9a-f]{64} AS go-toolchain.*"));
+        assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
+        assertTrue(dockerfile.contains("COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61"));
+        assertTrue(dockerfile.contains("COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b"));
+        assertTrue(dockerfile.contains("SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784"));
+        assertTrue(dockerfile.contains("RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115"));
         assertTrue(dockerfile.contains("MAVEN_VERSION=3.9.16"));
         assertTrue(dockerfile.contains("apache-maven-${MAVEN_VERSION}-bin.zip"));
         assertTrue(dockerfile.contains("sha512sum -c -"));

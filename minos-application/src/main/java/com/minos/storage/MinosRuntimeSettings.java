@@ -13,6 +13,10 @@ import java.util.Properties;
  * Durable MINOS runtime configuration resolved with explicit precedence:
  * JVM property &gt; environment &gt; {@code MINOS_HOME/config/minos.properties}.
  *
+ * <p>The resolved values remain scoped to this settings instance. Loading one MINOS home never
+ * mutates JVM-global system properties and therefore cannot contaminate another application
+ * instance in the same JVM.</p>
+ *
  * <p>Secret values are never required in the properties file. Password-file indirection is
  * supported so installers can ACL the secret independently from the human-readable config.</p>
  */
@@ -46,7 +50,9 @@ public final class MinosRuntimeSettings {
                 file.load(reader);
             }
         }
-        return new MinosRuntimeSettings(normalized, file, System.getenv(), System.getProperties());
+        Properties systemSnapshot = new Properties();
+        systemSnapshot.putAll(System.getProperties());
+        return new MinosRuntimeSettings(normalized, file, Map.copyOf(System.getenv()), systemSnapshot);
     }
 
     static MinosRuntimeSettings testing(
@@ -67,20 +73,6 @@ public final class MinosRuntimeSettings {
         if (blank(value)) value = environment.get(environmentVariable);
         if (blank(value)) value = fileProperties.getProperty(property);
         return blank(value) ? null : value.trim();
-    }
-
-    /**
-     * Makes a durable file value visible to legacy property/environment readers without
-     * overriding an explicit JVM property or environment variable. Secrets must never use
-     * this mechanism.
-     */
-    public void activateFileFallback(String property, String environmentVariable) {
-        if (!blank(systemProperties.getProperty(property))) return;
-        if (!blank(environment.get(environmentVariable))) return;
-        String configured = fileProperties.getProperty(property);
-        if (blank(configured)) return;
-        System.setProperty(property, configured.trim());
-        systemProperties.setProperty(property, configured.trim());
     }
 
     public String secret(

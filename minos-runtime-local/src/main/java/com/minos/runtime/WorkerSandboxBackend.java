@@ -30,7 +30,13 @@ public interface WorkerSandboxBackend {
     ) throws Exception;
 
     default boolean enforcesNetworkDeny() {
-        return networkGuarantee() == NetworkGuarantee.OS_ENFORCED;
+        if (networkGuarantee() != NetworkGuarantee.OS_ENFORCED) {
+            return false;
+        }
+        WorkerSandboxQualification evidence = qualification();
+        return evidence.networkGuarantee() == NetworkGuarantee.OS_ENFORCED
+                && evidence.networkDeny() == WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED
+                && evidence.qualifiedForCurrentPlatform();
     }
 
     default WorkerSandboxQualification qualification() {

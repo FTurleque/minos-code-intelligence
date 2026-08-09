@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +44,7 @@ class LocalIsolatedIndexWorkerTest {
         AtomicReference<Path> delegateRoot = new AtomicReference<>();
         IndexerExecutor delegate = delegate(temp, delegateRoot);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+        LocalIsolatedIndexWorker worker = nativeWorker(
                 "worker-one", temp.resolve("home"), delegate, store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
                 "fixture-provider", "1.2.3", fixture.materialization(),
@@ -74,7 +75,7 @@ class LocalIsolatedIndexWorkerTest {
     void nativeWorkerFailsClosedWhenNetworkDenyIsRequired(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+        LocalIsolatedIndexWorker worker = nativeWorker(
                 "worker-one", temp.resolve("home"),
                 delegate(temp, new AtomicReference<>()), store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
@@ -101,6 +102,19 @@ class LocalIsolatedIndexWorkerTest {
             }
             @Override public NetworkGuarantee networkGuarantee() {
                 return NetworkGuarantee.OS_ENFORCED;
+            }
+            @Override
+            public WorkerSandboxQualification qualification() {
+                return new WorkerSandboxQualification(
+                        id(),
+                        isolation(),
+                        networkGuarantee(),
+                        WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                        WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        Map.of(
+                                WorkerSandboxQualification.currentPlatform(),
+                                WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                        List.of("TEST_FIXTURE_OS_QUALIFIED"));
             }
             @Override
             public IndexingArtifact execute(
@@ -130,6 +144,18 @@ class LocalIsolatedIndexWorkerTest {
         assertEquals("fixture-os-sandbox", worker.sandboxBackendId());
         assertTrue(executor.verifiedArtifact().orElseThrow().manifest().networkDenyEnforced());
         assertFalse(Files.exists(delegateRoot.get()));
+    }
+
+    @Test
+    void strongestAvailableSelectorNeverOverstatesNetworkGuarantee(@TempDir Path temp) {
+        WorkerSandboxBackend backend = WorkerSandboxBackends.strongestAvailable(temp.resolve("home"));
+        if (backend.networkGuarantee() == WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED) {
+            assertTrue(backend.qualification().qualifiedForCurrentPlatform());
+            assertTrue(backend.qualification().sandboxClaimPermitted());
+        } else {
+            assertEquals("native-process-ephemeral-workspace-v1", backend.id());
+            assertFalse(backend.enforcesNetworkDeny());
+        }
     }
 
     @Test
@@ -178,6 +204,23 @@ class LocalIsolatedIndexWorkerTest {
                 () -> executor.execute(fixture.execution()));
         assertTrue(failure.getMessage().contains("provenance"));
         assertFalse(Files.exists(bundle), "rejected transport envelopes must be removed");
+    }
+
+    private static LocalIsolatedIndexWorker nativeWorker(
+            String workerId,
+            Path home,
+            IndexerExecutor delegate,
+            DistributedArtifactBundleStore store
+    ) {
+        return new LocalIsolatedIndexWorker(
+                workerId,
+                home,
+                delegate,
+                store,
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                100_000,
+                2L * 1024L * 1024L * 1024L,
+                Clock.systemUTC());
     }
 
     private static IndexerExecutor delegate(Path temp, AtomicReference<Path> delegateRoot) {

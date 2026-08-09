@@ -1,5 +1,8 @@
 package com.minos.semantic;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,6 +27,7 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     public static final URI MANAGED_DOCKER_ENDPOINT = URI.create("http://minos-ollama:11434/api/embed");
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
     private static final String MANAGED_DOCKER_HOST = "minos-ollama";
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
     private final URI endpoint;
@@ -107,28 +111,29 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
 
     static double[] parseEmbeddingResponse(String response, int expectedDimensions) throws IOException {
         Objects.requireNonNull(response, "response");
-        int property = response.indexOf("\"embeddings\"");
-        if (property < 0) throw new IOException("Ollama response does not contain embeddings");
-        int outer = response.indexOf('[', property);
-        if (outer < 0) throw new IOException("Ollama embeddings array is missing");
-        int inner = response.indexOf('[', outer + 1);
-        if (inner < 0) throw new IOException("Ollama embedding vector is missing");
-        int innerEnd = matchingBracket(response, inner);
-        int outerEnd = matchingBracket(response, outer);
-        if (!response.substring(innerEnd + 1, outerEnd).trim().isEmpty()) {
+        JsonNode root = JSON.readTree(response);
+        JsonNode embeddings = root == null ? null : root.get("embeddings");
+        if (embeddings == null || !embeddings.isArray()) {
+            throw new IOException("Ollama response does not contain an embeddings array");
+        }
+        if (embeddings.size() != 1 || !embeddings.get(0).isArray()) {
             throw new IOException("Ollama response must contain exactly one embedding vector");
         }
-        String body = response.substring(inner + 1, innerEnd).trim();
-        if (body.isEmpty()) throw new IOException("Ollama embedding vector is empty");
-        String[] parts = body.split(",");
-        if (parts.length != expectedDimensions) {
-            throw new IOException("Ollama embedding dimensions mismatch: expected " + expectedDimensions + " but got " + parts.length);
+        JsonNode vector = embeddings.get(0);
+        if (vector.size() != expectedDimensions) {
+            throw new IOException("Ollama embedding dimensions mismatch: expected " + expectedDimensions
+                    + " but got " + vector.size());
         }
-        double[] values = new double[parts.length];
-        for (int index = 0; index < parts.length; index++) {
-            try { values[index] = Double.parseDouble(parts[index].trim()); }
-            catch (NumberFormatException exception) { throw new IOException("Ollama embedding contains a non-numeric value", exception); }
-            if (!Double.isFinite(values[index])) throw new IOException("Ollama embedding contains a non-finite value");
+        double[] values = new double[expectedDimensions];
+        for (int index = 0; index < expectedDimensions; index++) {
+            JsonNode element = vector.get(index);
+            if (element == null || !element.isNumber()) {
+                throw new IOException("Ollama embedding contains a non-numeric value");
+            }
+            values[index] = element.doubleValue();
+            if (!Double.isFinite(values[index])) {
+                throw new IOException("Ollama embedding contains a non-finite value");
+            }
         }
         return values;
     }
@@ -154,16 +159,6 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
             if (numeric < 0 || numeric > 255) return false;
         }
         return Integer.parseInt(octets[0]) == 127;
-    }
-
-    private static int matchingBracket(String value, int start) throws IOException {
-        int depth = 0;
-        for (int index = start; index < value.length(); index++) {
-            char current = value.charAt(index);
-            if (current == '[') depth++;
-            else if (current == ']' && --depth == 0) return index;
-        }
-        throw new IOException("unterminated Ollama embedding vector");
     }
 
     private static String readBounded(InputStream stream) throws IOException {
