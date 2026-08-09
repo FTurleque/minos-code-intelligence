@@ -36,9 +36,7 @@ public record StorageBackendConfiguration(
     }
 
     public static StorageBackendConfiguration resolve(Path home) throws IOException {
-        MinosRuntimeSettings settings = MinosRuntimeSettings.load(home);
-        activateNonSecretRuntimeFallbacks(settings);
-        return resolve(settings);
+        return resolve(MinosRuntimeSettings.load(home));
     }
 
     static StorageBackendConfiguration resolve(Path home, Map<String, String> environment, Properties properties)
@@ -46,7 +44,7 @@ public record StorageBackendConfiguration(
         return resolve(MinosRuntimeSettings.testing(home, new Properties(), environment, properties));
     }
 
-    static StorageBackendConfiguration resolve(MinosRuntimeSettings settings) throws IOException {
+    public static StorageBackendConfiguration resolve(MinosRuntimeSettings settings) throws IOException {
         Objects.requireNonNull(settings, "settings");
         String backend = settings.value(BACKEND_PROPERTY, BACKEND_ENV);
         if (backend == null || backend.isBlank()) backend = "local";
@@ -67,15 +65,6 @@ public record StorageBackendConfiguration(
     }
 
     public boolean postgresql() { return "postgresql".equals(backend); }
-
-    private static void activateNonSecretRuntimeFallbacks(MinosRuntimeSettings settings) {
-        settings.activateFileFallback("minos.semantic.provider", "MINOS_SEMANTIC_PROVIDER");
-        settings.activateFileFallback("minos.semantic.model", "MINOS_SEMANTIC_MODEL");
-        settings.activateFileFallback("minos.semantic.dimensions", "MINOS_SEMANTIC_DIMENSIONS");
-        settings.activateFileFallback("minos.semantic.endpoint", "MINOS_SEMANTIC_ENDPOINT");
-        settings.activateFileFallback("minos.semantic.timeoutSeconds", "MINOS_SEMANTIC_TIMEOUT_SECONDS");
-        settings.activateFileFallback("minos.hosted.mode", "MINOS_HOSTED_MODE");
-    }
 
     private static String requireBackend(String value) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException("storage backend must not be blank");
