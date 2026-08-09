@@ -27,16 +27,21 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
-      - name: Install Linux sandbox primitives
+      - name: Install and authorize Linux sandbox primitives
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap util-linux
+          sudo apt-get install --yes --no-install-recommends \
+            bubblewrap util-linux apparmor apparmor-profiles
           command -v bwrap
           command -v prlimit
           command -v unshare
           command -v setpriv
+          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
+          test -f "$profile"
+          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
       - name: Run Linux sandbox tests
         shell: bash
         run: |
