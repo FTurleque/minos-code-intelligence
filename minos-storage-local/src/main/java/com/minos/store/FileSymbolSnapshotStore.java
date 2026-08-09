@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -42,7 +43,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final SnapshotCodec codecV2;
     private final int maxQueryCacheEntries;
     private final Object cacheLock = new Object();
-    private final Object[] buildLocks = buildLocks();
+    private final ReentrantLock[] buildLocks = buildLocks();
     private final LinkedHashMap<CacheKey, SnapshotQueryView> queryCache =
             new LinkedHashMap<>(16, 0.75f, true);
 
@@ -172,9 +173,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
                 }
             }
 
-            // Disk verification, decoding and index construction are expensive. Serialize them only
-            // within a project stripe; unrelated projects no longer hold or wait on the global LRU lock.
-            synchronized (buildLock(projectId)) {
+            ReentrantLock buildLock = buildLock(projectId);
+            buildLock.lock();
+            try {
                 synchronized (cacheLock) {
                     SnapshotQueryView cached = queryCache.get(key);
                     if (cached != null && cached.descriptor().equals(descriptor)) {
@@ -205,6 +206,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
                     trimCache();
                     return Optional.of(built);
                 }
+            } finally {
+                buildLock.unlock();
             }
         }
     }
@@ -284,7 +287,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         }
     }
 
-    private Object buildLock(UUID projectId) {
+    private ReentrantLock buildLock(UUID projectId) {
         return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
     }
 
@@ -328,9 +331,9 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         }
     }
 
-    private static Object[] buildLocks() {
-        Object[] locks = new Object[BUILD_LOCK_STRIPES];
-        for (int index = 0; index < locks.length; index++) locks[index] = new Object();
+    private static ReentrantLock[] buildLocks() {
+        ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
         return locks;
     }
 
