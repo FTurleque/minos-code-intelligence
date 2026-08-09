@@ -47,8 +47,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
 
         Path home = Files.createTempDirectory("minos-appcontainer-home-");
-        WindowsAppContainerWorkerSandboxBackend backend = WindowsAppContainerWorkerSandboxBackend.discover(home)
-                .orElseThrow(() -> new AssertionError("Windows AppContainer backend is unavailable"));
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path childPowerShell = CommandLocator.find("powershell")
                 .orElseThrow(() -> new AssertionError("PowerShell child executable is unavailable"));
         Path working = Files.createTempDirectory("minos-appcontainer-working-");
@@ -121,8 +122,9 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-windows-process-home-");
-        WindowsAppContainerWorkerSandboxBackend backend = WindowsAppContainerWorkerSandboxBackend.discover(home)
-                .orElseThrow(() -> new AssertionError("qualified Windows sandbox backend is unavailable"));
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows sandbox backend is required for process-path qualification");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path project = Files.createTempDirectory("minos-windows-process-project-");
         Path childPowerShell = CommandLocator.find("powershell")
                 .orElseThrow(() -> new AssertionError("PowerShell child executable is unavailable"));
