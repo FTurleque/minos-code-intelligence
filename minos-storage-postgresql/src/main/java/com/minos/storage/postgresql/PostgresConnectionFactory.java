@@ -17,7 +17,9 @@ final class PostgresConnectionFactory {
 
     PostgresConnectionFactory(StorageBackendConfiguration configuration) throws IOException {
         Objects.requireNonNull(configuration, "configuration");
-        if (!configuration.postgresql()) throw new IOException("PostgreSQL configuration required");
+        if (!configuration.postgresql()) {
+            throw new IOException("PostgreSQL configuration required");
+        }
         this.url = require(configuration.postgresUrl(), "MINOS_POSTGRES_URL");
         this.user = require(configuration.postgresUser(), "MINOS_POSTGRES_USER");
         this.password = require(configuration.postgresPassword(), "MINOS_POSTGRES_PASSWORD");
@@ -38,15 +40,42 @@ final class PostgresConnectionFactory {
         }
     }
 
-    String schema() { return schema; }
+    <T> T inTransaction(ConnectionWork<T> work) throws SQLException, IOException {
+        Objects.requireNonNull(work, "work");
+        return withConnection(connection -> {
+            connection.setAutoCommit(false);
+            try {
+                T result = work.execute(connection);
+                connection.commit();
+                return result;
+            } catch (SQLException | IOException | RuntimeException exception) {
+                rollbackPreserving(connection, exception);
+                throw exception;
+            }
+        });
+    }
+
+    String schema() {
+        return schema;
+    }
 
     @FunctionalInterface
     interface ConnectionWork<T> {
         T execute(Connection connection) throws SQLException, IOException;
     }
 
+    private static void rollbackPreserving(Connection connection, Exception original) {
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackFailure) {
+            original.addSuppressed(rollbackFailure);
+        }
+    }
+
     private static String require(String value, String name) throws IOException {
-        if (value == null || value.isBlank()) throw new IOException("missing required PostgreSQL setting: " + name);
+        if (value == null || value.isBlank()) {
+            throw new IOException("missing required PostgreSQL setting: " + name);
+        }
         return value.trim();
     }
 }
