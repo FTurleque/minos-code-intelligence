@@ -93,7 +93,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
             processBuilder.directory(plan.workingDirectory().toFile());
-            processBuilder.environment().putAll(plan.environment());
+            ProviderProcessEnvironment.apply(processBuilder, plan.environment());
             processBuilder.redirectOutput(stdout.toFile());
             processBuilder.redirectError(stderr.toFile());
 
