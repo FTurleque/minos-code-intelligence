@@ -56,6 +56,16 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
+      - name: Install Linux worker sandbox runtime
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          command -v bwrap
+          command -v prlimit
+
       - name: Prepare Maven Wrapper (Unix)
         if: runner.os != 'Windows'
         shell: bash
