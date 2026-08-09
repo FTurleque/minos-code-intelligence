@@ -1,10 +1,6 @@
 name: Post-audit remediation
 
 on:
-  push:
-    branches: [agent/post-audit-remediation]
-    paths:
-      - '.github/workflows/post-audit-remediation.yml'
   pull_request:
     branches: [develop]
     paths:
@@ -15,29 +11,29 @@ permissions:
   contents: write
 
 concurrency:
-  group: post-audit-remediation-${{ github.ref }}
+  group: post-audit-remediation-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: false
 
 jobs:
   provenance:
-    if: github.event_name == 'push'
     name: Capture immutable supply-chain provenance
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
-      REMEDIATION_BRANCH: agent/post-audit-remediation
+      REMEDIATION_BRANCH: ${{ github.event.pull_request.head.ref }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Checkout exact branch head without third-party actions
+      - name: Checkout exact pull request head without third-party actions
         shell: bash
         run: |
           set -euo pipefail
           git init .
           git config core.autocrlf false
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git fetch --depth=1 origin "${SOURCE_SHA}"
           git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
 
       - name: Capture release asset SHA-256 values
         shell: bash
@@ -95,15 +91,13 @@ jobs:
           from pathlib import Path
           import re, subprocess
 
-          root = Path('.github/workflows')
           pattern = re.compile(r'\buses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)')
           refs = set()
-          for file in root.glob('*.y*ml'):
+          for file in Path('.github/workflows').glob('*.y*ml'):
               for match in pattern.finditer(file.read_text(encoding='utf-8')):
                   repo, ref = match.groups()
-                  if re.fullmatch(r'[0-9a-fA-F]{40}', ref):
-                      continue
-                  refs.add((repo, ref))
+                  if not re.fullmatch(r'[0-9a-fA-F]{40}', ref):
+                      refs.add((repo, ref))
 
           rows = []
           for repo, ref in sorted(refs):
@@ -112,10 +106,9 @@ jobs:
               proc = subprocess.run(['git', 'ls-remote', url, *names], text=True, capture_output=True, check=True)
               found = {}
               for line in proc.stdout.splitlines():
-                  if not line.strip():
-                      continue
-                  sha, name = line.split()[:2]
-                  found[name] = sha
+                  if line.strip():
+                      sha, name = line.split()[:2]
+                      found[name] = sha
               sha = found.get(f'refs/tags/{ref}^{{}}') or found.get(f'refs/tags/{ref}') or found.get(f'refs/heads/{ref}')
               if sha is None or not re.fullmatch(r'[0-9a-fA-F]{40}', sha):
                   raise SystemExit(f'Unable to resolve {repo}@{ref}')
@@ -128,7 +121,7 @@ jobs:
           printf '%s\n' 'INNOSETUP_CHOCO_VERSION=6.7.1' >> scripts/remediation/post-audit-provenance.env
           cat scripts/remediation/post-audit-provenance.env
 
-      - name: Commit provenance snapshot
+      - name: Commit provenance snapshot to exact source branch
         shell: bash
         run: |
           set -euo pipefail
@@ -142,14 +135,3 @@ jobs:
           fi
           git commit -m 'build: pin post-audit supply-chain provenance'
           git push origin "HEAD:refs/heads/${REMEDIATION_BRANCH}"
-
-  validate:
-    if: github.event_name == 'pull_request'
-    name: Validate remediation provenance contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require generated provenance on product candidate
-        shell: bash
-        run: |
-          echo 'Product gates validate the generated candidate HEAD; provenance is committed by the push job before final qualification.'
