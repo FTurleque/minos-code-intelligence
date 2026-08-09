@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashSet;
@@ -181,9 +180,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         return new IndexerProcessPlan(
                 wrapper,
                 plan.workingDirectory(),
+                plan.environment(),
                 plan.generatedArtifact(),
-                plan.timeout(),
-                plan.environment());
+                plan.timeout());
     }
 
     private static Path installLauncher(Path minosHome) throws IOException {
