@@ -10,19 +10,15 @@ import java.util.Set;
  *
  * <p>Provider code is treated as untrusted. The parent MINOS process may carry database passwords,
  * hosted tokens, CI credentials or operator secrets, so provider processes must never inherit the
- * parent environment wholesale. Only the small runtime allowlist below is inherited implicitly;
+ * parent environment wholesale. Only the runtime/OS allowlists below are inherited implicitly;
  * provider-specific values must be declared explicitly by {@link IndexerProcessPlan#environment()}.</p>
  */
 final class ProviderProcessEnvironment {
 
-    private static final Set<String> SAFE_INHERITED_KEYS = Set.of(
+    private static final Set<String> COMMON_SAFE_INHERITED_KEYS = Set.of(
             "PATH",
             "JAVA_HOME",
             "JDK_HOME",
-            "SystemRoot",
-            "WINDIR",
-            "ComSpec",
-            "PATHEXT",
             "TEMP",
             "TMP",
             "TMPDIR",
@@ -30,19 +26,6 @@ final class ProviderProcessEnvironment {
             "LC_ALL",
             "LC_CTYPE",
             "TZ",
-            "USERPROFILE",
-            "HOMEDRIVE",
-            "HOMEPATH",
-            "LOCALAPPDATA",
-            "APPDATA",
-            "ProgramData",
-            "ProgramFiles",
-            "ProgramFiles(x86)",
-            "ProgramW6432",
-            "CommonProgramFiles",
-            "CommonProgramFiles(x86)",
-            "CommonProgramW6432",
-            "PSModulePath",
             "DOTNET_ROOT",
             "DOTNET_CLI_TELEMETRY_OPTOUT",
             "DOTNET_NOLOGO",
@@ -53,6 +36,44 @@ final class ProviderProcessEnvironment {
             "CARGO_HOME",
             "RUSTUP_HOME",
             "COURSIER_CACHE"
+    );
+
+    /** Non-secret Windows process metadata required by PowerShell/AppContainer/toolchain startup. */
+    private static final Set<String> WINDOWS_SAFE_INHERITED_KEYS = Set.of(
+            "ALLUSERSPROFILE",
+            "APPDATA",
+            "CommonProgramFiles",
+            "CommonProgramFiles(x86)",
+            "CommonProgramW6432",
+            "COMPUTERNAME",
+            "ComSpec",
+            "DriverData",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "LOCALAPPDATA",
+            "LOGONSERVER",
+            "NUMBER_OF_PROCESSORS",
+            "OS",
+            "PATHEXT",
+            "POWERSHELL_DISTRIBUTION_CHANNEL",
+            "PROCESSOR_ARCHITECTURE",
+            "PROCESSOR_IDENTIFIER",
+            "PROCESSOR_LEVEL",
+            "PROCESSOR_REVISION",
+            "ProgramData",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "ProgramW6432",
+            "PSModulePath",
+            "PUBLIC",
+            "SESSIONNAME",
+            "SystemDrive",
+            "SystemRoot",
+            "USERDOMAIN",
+            "USERDOMAIN_ROAMINGPROFILE",
+            "USERNAME",
+            "USERPROFILE",
+            "WINDIR"
     );
 
     private ProviderProcessEnvironment() {
@@ -84,8 +105,9 @@ final class ProviderProcessEnvironment {
 
     private static boolean isSafeInheritedKey(String candidate) {
         if (CommandLocator.isWindows()) {
-            return SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate));
+            return COMMON_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate))
+                    || WINDOWS_SAFE_INHERITED_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate));
         }
-        return SAFE_INHERITED_KEYS.contains(candidate);
+        return COMMON_SAFE_INHERITED_KEYS.contains(candidate);
     }
 }
