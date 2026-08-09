@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -102,6 +103,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 List.of(
                         "WINDOWS_APPCONTAINER_EMPTY_CAPABILITY_SET",
                         "WINDOWS_CHILD_TOKEN_IS_APPCONTAINER_VERIFIED_BEFORE_RESUME",
+                        "WINDOWS_PROVIDER_ENVIRONMENT_EXPLICIT_ALLOWLIST",
                         "WINDOWS_EPHEMERAL_ACL_PROVIDER_OWNED_ROOTS",
                         "WINDOWS_SYSTEM_ROOT_ACL_UNMODIFIED",
                         "WINDOWS_JOB_KILL_ON_CLOSE",
@@ -133,7 +135,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         }
         return processExecutor.executeSandboxed(
                 request,
-                (plan, runDirectory) -> sandboxPlan(plan, runDirectory));
+                new ProcessIndexerExecutor.ProcessPlanTransformer() {
+                    @Override
+                    public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
+                        return sandboxPlan(plan, runDirectory);
+                    }
+
+                    @Override
+                    public boolean trustedLauncherRequiresParentEnvironment() {
+                        return true;
+                    }
+                });
     }
 
     IndexerProcessPlan sandboxPlan(IndexerProcessPlan plan, Path runDirectory) throws IOException {
@@ -164,8 +176,11 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         addWriteRoot(writeRoots, run);
         readRoots.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
 
+        Map<String, String> providerEnvironment = ProviderProcessEnvironment.sanitize(
+                new ProcessBuilder().environment(),
+                plan.environment());
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
-        writePlan(planFile, providerCommand, readRoots, writeRoots, working);
+        writePlan(planFile, providerCommand, providerEnvironment, readRoots, writeRoots, working);
 
         List<String> wrapper = List.of(
                 powershell.toString(),
@@ -181,7 +196,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         return new IndexerProcessPlan(
                 wrapper,
                 plan.workingDirectory(),
-                plan.environment(),
+                Map.of(),
                 plan.generatedArtifact(),
                 plan.timeout());
     }
@@ -206,6 +221,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static void writePlan(
             Path target,
             List<String> command,
+            Map<String, String> environment,
             Set<Path> readRoots,
             Set<Path> writeRoots,
             Path working
@@ -213,12 +229,25 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         List<String> lines = new ArrayList<>();
         lines.add("working=" + encode(working.toString()));
         appendList(lines, "command", command);
+        appendEnvironment(lines, environment);
         appendList(lines, "read", readRoots.stream().map(Path::toString).toList());
         appendList(lines, "write", writeRoots.stream().map(Path::toString).toList());
         lines.add("jobMemoryBytes=" + MAX_JOB_MEMORY_BYTES);
         lines.add("activeProcesses=" + MAX_ACTIVE_PROCESSES);
         lines.add("cpuRate=" + CPU_HARD_CAP);
         Files.write(target, lines, StandardCharsets.UTF_8);
+    }
+
+    private static void appendEnvironment(List<String> lines, Map<String, String> environment) {
+        List<Map.Entry<String, String>> entries = environment.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(String::toLowerCase)))
+                .toList();
+        lines.add("environment.count=" + entries.size());
+        for (int index = 0; index < entries.size(); index++) {
+            Map.Entry<String, String> entry = entries.get(index);
+            lines.add("environment." + index + ".key=" + encode(entry.getKey()));
+            lines.add("environment." + index + ".value=" + encode(entry.getValue()));
+        }
     }
 
     private static void appendList(List<String> lines, String prefix, List<String> values) {
