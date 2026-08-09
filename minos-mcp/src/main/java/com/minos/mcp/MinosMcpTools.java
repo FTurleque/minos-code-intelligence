@@ -160,8 +160,22 @@ public final class MinosMcpTools {
                 || lower.contains("bearer") || lower.contains("authorization") || lower.contains("token=")) {
             return true;
         }
-        return detail.matches(".*(^|\\s)[A-Za-z]:[\\\\/].*")
-                || detail.matches(".*(^|\\s)/(?:[^/\\s]+/)+[^\\s]*.*");
+        return containsAbsolutePath(detail);
+    }
+
+    private static boolean containsAbsolutePath(String detail) {
+        for (int index = 0; index < detail.length(); index++) {
+            if (index > 0 && !Character.isWhitespace(detail.charAt(index - 1))) continue;
+            char first = detail.charAt(index);
+            if (first == '/') return true;
+            if (index + 2 < detail.length()
+                    && Character.isLetter(first)
+                    && detail.charAt(index + 1) == ':'
+                    && (detail.charAt(index + 2) == '\\' || detail.charAt(index + 2) == '/')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void logInternalFailure(String toolName, Exception exception) {
