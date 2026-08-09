@@ -113,27 +113,28 @@ final class DockerMcpTransport {
             } catch (IOException exception) {
                 throw new IOException("Docker backend selected but Docker executable cannot be started", exception);
             }
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            Thread reader = Thread.ofVirtual().start(() -> {
-                try (InputStream input = process.getInputStream()) {
-                    input.transferTo(output);
-                } catch (IOException ignored) {
-                    // The process result below remains authoritative.
-                }
-            });
-            try {
-                boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-                if (!completed) {
+            try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                Thread reader = Thread.ofVirtual().start(() -> {
+                    try (InputStream input = process.getInputStream()) {
+                        input.transferTo(output);
+                    } catch (IOException ignored) {
+                        // The process result below remains authoritative.
+                    }
+                });
+                try {
+                    boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
+                    if (!completed) {
+                        process.destroyForcibly();
+                        process.waitFor();
+                        throw new IOException("Docker backend probe timed out after " + timeout.toMillis() + " ms");
+                    }
+                    reader.join();
+                    return new ProcessResult(process.exitValue(), output.toString(StandardCharsets.UTF_8).trim());
+                } catch (InterruptedException exception) {
                     process.destroyForcibly();
-                    process.waitFor();
-                    throw new IOException("Docker backend probe timed out after " + timeout.toMillis() + " ms");
+                    Thread.currentThread().interrupt();
+                    throw exception;
                 }
-                reader.join();
-                return new ProcessResult(process.exitValue(), output.toString(StandardCharsets.UTF_8).trim());
-            } catch (InterruptedException exception) {
-                process.destroyForcibly();
-                Thread.currentThread().interrupt();
-                throw exception;
             }
         }
 
