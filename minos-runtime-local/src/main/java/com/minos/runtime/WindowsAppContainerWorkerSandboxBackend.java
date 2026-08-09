@@ -27,8 +27,8 @@ import java.util.Set;
  * <p>The AppContainer capability set is deliberately empty: the child receives no Internet/client
  * or server network capability. The launcher verifies {@code TokenIsAppContainer} before resuming
  * the provider. A Job Object adds kill-on-close, active-process, memory and CPU limits. ACL grants
- * are scoped to the provider runtime/read roots plus the ephemeral workspace/artifact/run roots and
- * are removed when the child terminates.</p>
+ * are scoped to MINOS/provider-owned runtime roots plus the ephemeral workspace/artifact/run roots;
+ * Windows system roots rely on their existing AppContainer-compatible ACLs and are never mutated.</p>
  */
 public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSandboxBackend {
 
@@ -102,7 +102,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 List.of(
                         "WINDOWS_APPCONTAINER_EMPTY_CAPABILITY_SET",
                         "WINDOWS_CHILD_TOKEN_IS_APPCONTAINER_VERIFIED_BEFORE_RESUME",
-                        "WINDOWS_EPHEMERAL_ACL_READ_WRITE_ROOTS",
+                        "WINDOWS_EPHEMERAL_ACL_PROVIDER_OWNED_ROOTS",
+                        "WINDOWS_SYSTEM_ROOT_ACL_UNMODIFIED",
                         "WINDOWS_JOB_KILL_ON_CLOSE",
                         "WINDOWS_JOB_ACTIVE_PROCESS_LIMIT",
                         "WINDOWS_JOB_MEMORY_LIMIT",
@@ -243,7 +244,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     private static void addReadRoot(Set<Path> roots, Path value) {
-        if (value != null && Files.isDirectory(value)) roots.add(value.toAbsolutePath().normalize());
+        if (value == null || !Files.isDirectory(value)) return;
+        Path normalized = value.toAbsolutePath().normalize();
+        if (isWindowsSystemRoot(normalized)) return;
+        roots.add(normalized);
+    }
+
+    private static boolean isWindowsSystemRoot(Path value) {
+        String systemRoot = System.getenv("SystemRoot");
+        if (systemRoot == null || systemRoot.isBlank()) return false;
+        Path root = Path.of(systemRoot).toAbsolutePath().normalize();
+        return value.startsWith(root);
     }
 
     private static void addWriteRoot(Set<Path> roots, Path value) {
