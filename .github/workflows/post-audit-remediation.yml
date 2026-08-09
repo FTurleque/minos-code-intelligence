@@ -35,7 +35,7 @@ jobs:
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
 
-      - name: Capture release asset SHA-256 values
+      - name: Capture release and launcher SHA-256 values
         shell: bash
         run: |
           set -euo pipefail
@@ -55,10 +55,13 @@ jobs:
             printf '%s=%s\n' "$key" "$digest" >> "$output"
           }
 
-          fetch_hash COURSIER_WINDOWS_SHA256 coursier-windows.exe \
-            'https://github.com/coursier/coursier/releases/download/v2.1.18/cs-x86_64-pc-win32.exe'
+          launcher_commit="$(git ls-remote https://github.com/coursier/launchers.git refs/heads/master | awk 'NR==1 {print $1}')"
+          [[ "$launcher_commit" =~ ^[0-9a-f]{40}$ ]] || { echo 'Unable to resolve coursier/launchers master commit' >&2; exit 1; }
+          printf 'COURSIER_LAUNCHERS_COMMIT=%s\n' "$launcher_commit" >> "$output"
+          fetch_hash COURSIER_WINDOWS_SHA256 coursier-windows.zip \
+            "https://raw.githubusercontent.com/coursier/launchers/${launcher_commit}/cs-x86_64-pc-win32.zip"
           fetch_hash COURSIER_LINUX_SHA256 coursier-linux.gz \
-            'https://github.com/coursier/coursier/releases/download/v2.1.18/cs-x86_64-pc-linux.gz'
+            "https://raw.githubusercontent.com/coursier/launchers/${launcher_commit}/cs-x86_64-pc-linux.gz"
           fetch_hash SCIP_CLANG_LINUX_SHA256 scip-clang \
             'https://github.com/sourcegraph/scip-clang/releases/download/v0.4.0/scip-clang-x86_64-linux'
           fetch_hash RUST_ANALYZER_LINUX_GZ_SHA256 rust-analyzer.gz \
