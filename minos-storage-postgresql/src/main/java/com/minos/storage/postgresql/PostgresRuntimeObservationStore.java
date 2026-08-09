@@ -29,71 +29,60 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
         UUID projectId = session.session().projectId();
         String sessionId = session.session().sessionId();
         try {
-            return connections.withConnection(connection -> {
-                connection.setAutoCommit(false);
-                try {
-                    try (PreparedStatement query = connection.prepareStatement(
-                            "SELECT source_sha256,payload::text FROM runtime_sessions "
-                                    + "WHERE project_id=? AND session_id=?")) {
-                        query.setObject(1, projectId);
-                        query.setString(2, sessionId);
-                        try (ResultSet result = query.executeQuery()) {
-                            if (result.next()) {
-                                if (!session.sourceSha256().equals(result.getString(1))) {
-                                    throw new IOException(
-                                            "runtime session is immutable and already exists with different content: "
-                                                    + sessionId);
-                                }
-                                CorrelatedRuntimeSession existing = json.read(
-                                        result.getString(2), CorrelatedRuntimeSession.class);
-                                connection.rollback();
-                                return new SaveResult(existing, true);
-                            }
-                        }
+            return connections.inTransaction(connection -> {
+                Optional<CorrelatedRuntimeSession> existing = findExisting(connection, projectId, sessionId);
+                if (existing.isPresent()) {
+                    CorrelatedRuntimeSession value = existing.orElseThrow();
+                    if (!session.sourceSha256().equals(value.sourceSha256())) {
+                        throw new IOException(
+                                "runtime session is immutable and already exists with different content: " + sessionId);
                     }
-                    try (PreparedStatement statement = connection.prepareStatement(
-                            "INSERT INTO runtime_sessions(project_id,session_id,source_sha256,imported_at,payload) "
-                                    + "VALUES (?,?,?,?,CAST(? AS jsonb))")) {
-                        statement.setObject(1, projectId);
-                        statement.setString(2, sessionId);
-                        statement.setString(3, session.sourceSha256());
-                        statement.setObject(4, OffsetDateTime.ofInstant(session.importedAt(), ZoneOffset.UTC));
-                        statement.setString(5, json.write(session));
-                        statement.executeUpdate();
-                    }
-                    connection.commit();
-                    return new SaveResult(session, false);
-                } catch (Exception exception) {
-                    rollbackPreserving(connection, exception);
-                    if (exception instanceof IOException ioException) {
-                        throw ioException;
-                    }
-                    if (exception instanceof SQLException sqlException) {
-                        throw sqlException;
-                    }
-                    throw new IOException("unable to save PostgreSQL runtime session", exception);
+                    return new SaveResult(value, true);
                 }
+                insertSession(connection, session);
+                return new SaveResult(session, false);
             });
         } catch (SQLException exception) {
             throw new IOException("unable to save PostgreSQL runtime session", exception);
         }
     }
 
+    private Optional<CorrelatedRuntimeSession> findExisting(
+            Connection connection,
+            UUID projectId,
+            String sessionId
+    ) throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT payload::text FROM runtime_sessions WHERE project_id=? AND session_id=?")) {
+            statement.setObject(1, projectId);
+            statement.setString(2, sessionId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(json.read(result.getString(1), CorrelatedRuntimeSession.class));
+            }
+        }
+    }
+
+    private static void insertSession(Connection connection, CorrelatedRuntimeSession session)
+            throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO runtime_sessions(project_id,session_id,source_sha256,imported_at,payload) "
+                        + "VALUES (?,?,?,?,CAST(? AS jsonb))")) {
+            statement.setObject(1, session.session().projectId());
+            statement.setString(2, session.session().sessionId());
+            statement.setString(3, session.sourceSha256());
+            statement.setObject(4, OffsetDateTime.ofInstant(session.importedAt(), ZoneOffset.UTC));
+            statement.setString(5, new PostgresJsonCodec().write(session));
+            statement.executeUpdate();
+        }
+    }
+
     @Override
     public Optional<CorrelatedRuntimeSession> find(UUID projectId, String sessionId) throws IOException {
         try {
-            return connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT payload::text FROM runtime_sessions WHERE project_id=? AND session_id=?")) {
-                    statement.setObject(1, projectId);
-                    statement.setString(2, sessionId);
-                    try (ResultSet result = statement.executeQuery()) {
-                        return result.next()
-                                ? Optional.of(json.read(result.getString(1), CorrelatedRuntimeSession.class))
-                                : Optional.empty();
-                    }
-                }
-            });
+            return connections.withConnection(connection -> findExisting(connection, projectId, sessionId));
         } catch (SQLException exception) {
             throw new IOException("unable to find PostgreSQL runtime session", exception);
         }
@@ -118,14 +107,6 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
             });
         } catch (SQLException exception) {
             throw new IOException("unable to list PostgreSQL runtime sessions", exception);
-        }
-    }
-
-    private static void rollbackPreserving(Connection connection, Exception original) {
-        try {
-            connection.rollback();
-        } catch (SQLException rollbackFailure) {
-            original.addSuppressed(rollbackFailure);
         }
     }
 }
