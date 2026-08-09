@@ -31,6 +31,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     /** Entry-count bound. Snapshot sizes remain measured separately for M16 sizing decisions. */
     public static final int DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32;
+    private static final int BUILD_LOCK_STRIPES = 64;
 
     private final Path storageRoot;
     private final SnapshotRepository snapshotRepository;
@@ -41,6 +42,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final SnapshotCodec codecV2;
     private final int maxQueryCacheEntries;
     private final Object cacheLock = new Object();
+    private final Object[] buildLocks = buildLocks();
     private final LinkedHashMap<CacheKey, SnapshotQueryView> queryCache =
             new LinkedHashMap<>(16, 0.75f, true);
 
@@ -158,9 +160,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         Objects.requireNonNull(projectId, "projectId");
         while (true) {
             Optional<SnapshotDescriptor> active = activeSnapshotRepository.read(projectId);
-            if (active.isEmpty()) {
-                return Optional.empty();
-            }
+            if (active.isEmpty()) return Optional.empty();
             SnapshotDescriptor descriptor = active.orElseThrow();
             CacheKey key = new CacheKey(projectId, descriptor.snapshotId());
 
@@ -170,28 +170,41 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
                     cacheHits++;
                     return Optional.of(cached);
                 }
+            }
 
-                cacheMisses++;
+            // Disk verification, decoding and index construction are expensive. Serialize them only
+            // within a project stripe; unrelated projects no longer hold or wait on the global LRU lock.
+            synchronized (buildLock(projectId)) {
+                synchronized (cacheLock) {
+                    SnapshotQueryView cached = queryCache.get(key);
+                    if (cached != null && cached.descriptor().equals(descriptor)) {
+                        cacheHits++;
+                        return Optional.of(cached);
+                    }
+                    cacheMisses++;
+                }
+
+                Optional<SnapshotDescriptor> beforeBuild = activeSnapshotRepository.read(projectId);
+                if (beforeBuild.isEmpty()) return Optional.empty();
+                if (!descriptor.equals(beforeBuild.orElseThrow())) continue;
+
                 SnapshotQueryView built = buildQueryView(projectId, descriptor);
                 Optional<SnapshotDescriptor> afterBuild = activeSnapshotRepository.read(projectId);
-                if (afterBuild.isEmpty()) {
-                    return Optional.empty();
-                }
-                if (!descriptor.equals(afterBuild.orElseThrow())) {
-                    continue;
-                }
+                if (afterBuild.isEmpty()) return Optional.empty();
+                if (!descriptor.equals(afterBuild.orElseThrow())) continue;
 
-                SnapshotQueryView raced = queryCache.get(key);
-                if (raced != null && raced.descriptor().equals(descriptor)) {
-                    cacheHits++;
-                    return Optional.of(raced);
+                synchronized (cacheLock) {
+                    SnapshotQueryView raced = queryCache.get(key);
+                    if (raced != null && raced.descriptor().equals(descriptor)) {
+                        cacheHits++;
+                        return Optional.of(raced);
+                    }
+                    queryCache.entrySet().removeIf(entry ->
+                            entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
+                    queryCache.put(key, built);
+                    trimCache();
+                    return Optional.of(built);
                 }
-
-                queryCache.entrySet().removeIf(entry ->
-                        entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(key));
-                queryCache.put(key, built);
-                trimCache();
-                return Optional.of(built);
             }
         }
     }
@@ -227,13 +240,13 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         integrityService.verifyChecksum(snapshotFile, descriptor.sha256());
 
         CodeKnowledgeSnapshot snapshot = codecFor(descriptor.formatVersion()).read(snapshotFile);
-        fullSnapshotLoads++;
+        synchronized (cacheLock) { fullSnapshotLoads++; }
         integrityService.verifyMetadata(snapshot, projectId, descriptor);
 
         long buildStarted = System.nanoTime();
         InMemoryCodeKnowledgeStore indexedStore = new InMemoryCodeKnowledgeStore(snapshot);
         long buildNanos = System.nanoTime() - buildStarted;
-        queryViewBuilds++;
+        synchronized (cacheLock) { queryViewBuilds++; }
         return new SnapshotQueryView(descriptor, snapshot, indexedStore, buildNanos);
     }
 
@@ -269,6 +282,10 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         synchronized (cacheLock) {
             queryCache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(projectId));
         }
+    }
+
+    private Object buildLock(UUID projectId) {
+        return buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
     }
 
     private void trimCache() {
@@ -309,6 +326,12 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
                 throw new IllegalArgumentException("duplicate " + name + " id in snapshot: " + currentId);
             }
         }
+    }
+
+    private static Object[] buildLocks() {
+        Object[] locks = new Object[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new Object();
+        return locks;
     }
 
     private static void requireText(String value, String fieldName) {
