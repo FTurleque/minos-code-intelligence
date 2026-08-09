@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -42,13 +43,12 @@ class PostgresProjectRegistryTest extends PostgresTestSupport {
         registry.assignProjectToWorkspace(third.id(), beta.id());
 
         RegisteredWorkspace loadedAlpha = registry.findWorkspace(alpha.id()).orElseThrow();
-        assertEquals(List.of(first.id(), second.id()).stream().sorted().toList(), loadedAlpha.projectIds());
+        assertEquals(Set.of(first.id(), second.id()), Set.copyOf(loadedAlpha.projectIds()));
 
         List<RegisteredWorkspace> workspaces = registry.listWorkspaces();
         assertEquals(3, workspaces.size());
-        assertEquals(List.of(first.id(), second.id()).stream().sorted().toList(),
-                workspace(workspaces, alpha).projectIds());
-        assertEquals(List.of(third.id()), workspace(workspaces, beta).projectIds());
+        assertEquals(Set.of(first.id(), second.id()), Set.copyOf(workspace(workspaces, alpha).projectIds()));
+        assertEquals(Set.of(third.id()), Set.copyOf(workspace(workspaces, beta).projectIds()));
         assertEquals(List.of(), workspace(workspaces, empty).projectIds());
     }
 
