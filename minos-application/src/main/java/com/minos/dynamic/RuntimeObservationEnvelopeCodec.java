@@ -2,7 +2,9 @@ package com.minos.dynamic;
 
 import com.minos.io.BoundedInputStream;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -10,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -31,53 +34,70 @@ public final class RuntimeObservationEnvelopeCodec {
         if (path == null || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("runtime observation input must be a regular non-symlink file");
         }
-        byte[] bytes;
-        try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(path), MAX_INPUT_BYTES, "runtime observation input")) {
-            bytes = input.readAllBytes();
+        MessageDigest digest = digest();
+        String[] metadata = new String[METADATA_LINES];
+        List<RuntimeObservation> observations = new ArrayList<>();
+        long sourceBytes;
+        try (DigestInputStream digestInput = new DigestInputStream(Files.newInputStream(path), digest);
+             BoundedInputStream bounded = new BoundedInputStream(
+                     digestInput, MAX_INPUT_BYTES, "runtime observation input");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(
+                     bounded,
+                     StandardCharsets.UTF_8.newDecoder()
+                             .onMalformedInput(CodingErrorAction.REPORT)
+                             .onUnmappableCharacter(CodingErrorAction.REPORT)))) {
+            int lineNumber = 0;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                if (lineNumber == 1 && line.startsWith("\ufeff")) {
+                    throw new IOException("runtime observation input must not contain a BOM");
+                }
+                if (line.isEmpty()) throw new IOException("blank runtime observation line at " + lineNumber);
+                if (lineNumber <= METADATA_LINES) {
+                    metadata[lineNumber - 1] = line;
+                    continue;
+                }
+                if (observations.size() >= RuntimeObservationSession.MAX_OBSERVATIONS) {
+                    throw new IOException("runtime observation count exceeds limit");
+                }
+                observations.add(parseObservation(line, lineNumber));
+            }
+            sourceBytes = bounded.consumedBytes();
         }
-        if (bytes.length < 1) {
-            throw new IOException("runtime observation input must not be empty");
+        if (sourceBytes < 1L) throw new IOException("runtime observation input must not be empty");
+        for (int index = 0; index < METADATA_LINES; index++) {
+            if (metadata[index] == null) throw new IOException("runtime observation input has incomplete metadata");
         }
-        String text = decodeUtf8(bytes);
-        if (text.startsWith("\ufeff")) throw new IOException("runtime observation input must not contain a BOM");
-        List<String> lines = new ArrayList<>(Arrays.asList(text.split("\n", -1)));
-        if (!lines.isEmpty() && lines.getLast().isEmpty()) lines.removeLast();
-        for (int index = 0; index < lines.size(); index++) {
-            String line = lines.get(index);
-            if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
-            if (line.isEmpty()) throw new IOException("blank runtime observation line at " + (index + 1));
-            lines.set(index, line);
-        }
-        if (lines.size() <= METADATA_LINES) throw new IOException("runtime observation input has no observations");
-        if (lines.size() - METADATA_LINES > RuntimeObservationSession.MAX_OBSERVATIONS) {
-            throw new IOException("runtime observation count exceeds limit");
-        }
+        if (observations.isEmpty()) throw new IOException("runtime observation input has no observations");
 
-        expectExact(lines.get(0), RuntimeObservationSession.FORMAT, 1);
-        String sessionId = singleValue(lines.get(1), "session", 2);
-        UUID projectId = uuid(singleValue(lines.get(2), "project", 3), 3);
-        String snapshotId = singleValue(lines.get(3), "snapshot", 4);
-        Instant startedAt = instant(singleValue(lines.get(4), "started", 5), 5);
-        Instant endedAt = instant(singleValue(lines.get(5), "ended", 6), 6);
-        String[] collector = fields(lines.get(6), 3, 7);
+        expectExact(metadata[0], RuntimeObservationSession.FORMAT, 1);
+        String sessionId = singleValue(metadata[1], "session", 2);
+        UUID projectId = uuid(singleValue(metadata[2], "project", 3), 3);
+        String snapshotId = singleValue(metadata[3], "snapshot", 4);
+        Instant startedAt = instant(singleValue(metadata[4], "started", 5), 5);
+        Instant endedAt = instant(singleValue(metadata[5], "ended", 6), 6);
+        String[] collector = fields(metadata[6], 3, 7);
         expectToken(collector[0], "collector", 7);
-        String environment = singleValue(lines.get(7), "environment", 8);
+        String environment = singleValue(metadata[7], "environment", 8);
         RuntimeObservationCompleteness completeness;
         try {
-            completeness = RuntimeObservationCompleteness.valueOf(singleValue(lines.get(8), "completeness", 9));
+            completeness = RuntimeObservationCompleteness.valueOf(singleValue(metadata[8], "completeness", 9));
         } catch (IllegalArgumentException exception) {
             throw new IOException("line 9: completeness must be PARTIAL", exception);
-        }
-
-        List<RuntimeObservation> observations = new ArrayList<>(lines.size() - METADATA_LINES);
-        for (int index = METADATA_LINES; index < lines.size(); index++) {
-            observations.add(parseObservation(lines.get(index), index + 1));
         }
         RuntimeObservationSession session = new RuntimeObservationSession(
                 RuntimeObservationSession.FORMAT, sessionId, projectId, snapshotId,
                 startedAt, endedAt, collector[1], collector[2], environment, completeness, observations);
-        return new DecodedSession(session, sha256(bytes), bytes.length);
+        return new DecodedSession(session, HexFormat.of().formatHex(digest.digest()), sourceBytes);
+    }
+
+    private static MessageDigest digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {

@@ -1,10 +1,12 @@
 package com.minos.program.analysis;
 
+import com.minos.io.BoundedInputStream;
 import com.minos.domain.Symbol;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -105,12 +107,12 @@ final class JavaSourceWorkspace {
             }
             for (SourceFile source : discovery.sources()) {
                 update(digest, source.fileId());
-                digest.update(Files.readAllBytes(source.path()));
+                updateBounded(digest, source.path(), MAX_SOURCE_BYTES, "Java source fingerprint");
             }
             Optional<Path> config = securityConfig(project.rootPath());
             if (config.isPresent()) {
                 update(digest, JavaSourceProgramGraphProvider.SECURITY_CONFIG);
-                digest.update(Files.readAllBytes(config.orElseThrow()));
+                updateBounded(digest, config.orElseThrow(), MAX_SECURITY_CONFIG_BYTES, "Java security config fingerprint");
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
@@ -135,6 +137,15 @@ final class JavaSourceWorkspace {
             throw new IOException("Java advanced provider security config exceeds 1 MiB");
         }
         return Optional.of(real);
+    }
+
+    private static void updateBounded(MessageDigest digest, Path file, long maximum, String boundary)
+            throws IOException {
+        try (InputStream input = new BoundedInputStream(Files.newInputStream(file), maximum, boundary)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
+        }
     }
 
     private static void update(MessageDigest digest, String value) {

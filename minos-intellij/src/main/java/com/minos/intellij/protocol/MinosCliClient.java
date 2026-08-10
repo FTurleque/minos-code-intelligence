@@ -173,7 +173,7 @@ public final class MinosCliClient {
             }
 
             if (!completed) terminate(process);
-            outReader.join(); errReader.join();
+            awaitReaders(process, outReader, errReader);
             if (readFailure.get() != null) throw readFailure.get();
             if (timedOut) throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
             return new ProcessResult(process.exitValue(), new String(stdout.get(), StandardCharsets.UTF_8), new String(stderr.get(), StandardCharsets.UTF_8));
@@ -196,6 +196,34 @@ public final class MinosCliClient {
             if (!process.waitFor(1, TimeUnit.SECONDS)) { process.destroyForcibly(); process.waitFor(5, TimeUnit.SECONDS); }
         } catch (InterruptedException interrupted) {
             process.destroyForcibly(); Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void awaitReaders(Process process, Thread... readers) throws IOException {
+        boolean alive = false;
+        for (Thread reader : readers) {
+            try {
+                reader.join(5_000L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("MINOS process output drain was interrupted", interrupted);
+            }
+            alive |= reader.isAlive();
+        }
+        if (!alive) return;
+        closeQuietly(process.getInputStream());
+        closeQuietly(process.getErrorStream());
+        joinAfterTermination(readers);
+        for (Thread reader : readers) {
+            if (reader.isAlive()) throw new IOException("MINOS process output drain did not terminate");
+        }
+    }
+
+    private static void closeQuietly(java.io.Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (IOException ignored) {
+            // Closing a process pipe is best-effort after the bounded drain timeout.
         }
     }
 

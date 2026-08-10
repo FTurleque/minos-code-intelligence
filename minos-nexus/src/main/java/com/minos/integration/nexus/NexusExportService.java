@@ -13,9 +13,12 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
@@ -196,20 +199,35 @@ public final class NexusExportService {
                 .filter(fileId -> fileId.startsWith("file:"))
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         if (unresolvedStableIds.isEmpty()) return Map.copyOf(resolved);
-        int scanned = 0;
-        try (var paths = Files.walk(root)) {
-            var iterator = paths.filter(Files::isRegularFile).iterator();
-            while (iterator.hasNext() && !unresolvedStableIds.isEmpty()) {
-                if (scanned >= MAX_FILE_PATH_CANDIDATES) { limitations.add("FILE_PATH_DISCOVERY_TRUNCATED"); break; }
-                Path file = iterator.next();
-                scanned++;
+        long[] traversed = {0L};
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            private FileVisitResult account() {
+                traversed[0]++;
+                if (traversed[0] > MAX_FILE_PATH_CANDIDATES) {
+                    limitations.add("FILE_PATH_DISCOVERY_TRUNCATED");
+                    return FileVisitResult.TERMINATE;
+                }
+                return unresolvedStableIds.isEmpty() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                return account();
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                FileVisitResult decision = account();
+                if (decision == FileVisitResult.TERMINATE) return decision;
+                if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
                 Path canonical = file.toRealPath();
-                if (!canonical.startsWith(root)) continue;
+                if (!canonical.startsWith(root)) return FileVisitResult.CONTINUE;
                 String relativePath = root.relativize(file).toString().replace('\\', '/');
                 String stableId = stableFileId(projectId, relativePath);
                 if (unresolvedStableIds.remove(stableId)) resolved.put(stableId, relativePath);
+                return unresolvedStableIds.isEmpty() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
             }
-        }
+        });
         if (!unresolvedStableIds.isEmpty()) limitations.add("UNRESOLVED_FILE_IDS");
         return Map.copyOf(resolved);
     }

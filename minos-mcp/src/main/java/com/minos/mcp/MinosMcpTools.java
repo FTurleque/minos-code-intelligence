@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /** MCP catalogue mapping protocol arguments directly to shared application services. */
-public final class MinosMcpTools {
+public final class MinosMcpTools implements AutoCloseable {
 
     public static final int TOOL_COUNT = 31;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
@@ -26,11 +26,13 @@ public final class MinosMcpTools {
     private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
     private final MinosMcpBackend backend;
+    private final MinosApplication ownedApplication;
 
     public MinosMcpTools(Path home) {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         try {
-            this.backend = new MinosApplicationMcpBackend(MinosApplication.open(normalizedHome));
+            this.ownedApplication = MinosApplication.open(normalizedHome);
+            this.backend = new MinosApplicationMcpBackend(this.ownedApplication);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
@@ -38,6 +40,7 @@ public final class MinosMcpTools {
 
     MinosMcpTools(MinosMcpBackend backend) {
         this.backend = Objects.requireNonNull(backend, "backend");
+        this.ownedApplication = null;
     }
 
     public List<SyncToolSpecification> specifications() {
@@ -503,5 +506,11 @@ public final class MinosMcpTools {
     @FunctionalInterface
     private interface ToolInvocation {
         String execute(Map<String, Object> arguments) throws Exception;
+    }
+
+
+    @Override
+    public void close() throws IOException {
+        if (ownedApplication != null) ownedApplication.close();
     }
 }

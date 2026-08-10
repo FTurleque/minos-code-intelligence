@@ -50,6 +50,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final String COURSIER_WINDOWS_SHA256 = "d6b375ea3f1c58312912af96260cca0c975bc873dc430820e2d67d50b294be3a";
     private static final URI COURSIER_WINDOWS_URI = URI.create(
             "https://raw.githubusercontent.com/coursier/launchers/" + COURSIER_LAUNCHERS_COMMIT + "/cs-x86_64-pc-win32.zip");
+    private static final String SCIP_TYPESCRIPT_NPM_LOCK_RESOURCE = "scip-typescript-package-lock.json";
+    private static final String SCIP_TYPESCRIPT_NPM_INTEGRITY = "sha512-k+AtsrqmS41Sd5qjkZlHcmvoSQIvBOonRj4jpgp0KNFM6aqvMGpdSuPUqrUcg8ENTKjUbfaUVszgQwq3bCOvwA==";
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
@@ -157,9 +159,15 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         deleteRecursively(partial);
         Files.createDirectories(partial);
         try {
+            LockedNpmPackage.prepare(
+                    ManagedScipProviderRuntimeManager.class,
+                    partial,
+                    SCIP_TYPESCRIPT_NPM_LOCK_RESOURCE,
+                    "@sourcegraph/scip-typescript",
+                    SCIP_TYPESCRIPT_VERSION,
+                    SCIP_TYPESCRIPT_NPM_INTEGRITY);
             run(CommandLocator.invocation(
-                    npm, "install", "--prefix", partial.toString(), "--no-audit", "--no-fund", "--ignore-scripts",
-                    "@sourcegraph/scip-typescript@" + SCIP_TYPESCRIPT_VERSION),
+                    npm, "ci", "--prefix", partial.toString(), "--no-audit", "--no-fund", "--ignore-scripts"),
                     home, toolsRoot.resolve("scip-typescript-install.log"), Duration.ofMinutes(10));
             Path installed = partial.resolve("node_modules").resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");

@@ -38,6 +38,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * JGit HTTPS materializer with immutable revision checks, active-use leases and a bounded local cache.
@@ -59,7 +60,9 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private final RemoteGitClient gitClient;
     private final SecretResolver secretResolver;
     private final Clock clock;
+    private static final int LEASE_STRIPE_COUNT = 64;
     private final Object leaseMonitor = new Object();
+    private final ReentrantLock[] leaseStripes = createLeaseStripes();
     private final Map<String, LeaseState> activeLeases = new HashMap<>();
 
     public JGitRemoteRepositoryMaterializer(Path minosHome) throws IOException {
@@ -194,22 +197,41 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     private void acquireLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            LeaseState existing = activeLeases.get(cacheKey);
-            if (existing != null) {
-                existing.references++;
-                return;
+        ReentrantLock stripe = leaseStripe(cacheKey);
+        stripe.lock();
+        try {
+            synchronized (leaseMonitor) {
+                LeaseState existing = activeLeases.get(cacheKey);
+                if (existing != null) {
+                    existing.references++;
+                    return;
+                }
             }
             Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
             FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             try {
+                // Deliberately outside leaseMonitor: another process may hold this lock indefinitely.
                 FileLock lock = channel.lock();
-                activeLeases.put(cacheKey, new LeaseState(channel, lock));
+                synchronized (leaseMonitor) {
+                    activeLeases.put(cacheKey, new LeaseState(channel, lock));
+                }
             } catch (IOException | RuntimeException exception) {
                 channel.close();
                 throw exception;
             }
+        } finally {
+            stripe.unlock();
         }
+    }
+
+    private ReentrantLock leaseStripe(String cacheKey) {
+        return leaseStripes[Math.floorMod(cacheKey.hashCode(), leaseStripes.length)];
+    }
+
+    private static ReentrantLock[] createLeaseStripes() {
+        ReentrantLock[] stripes = new ReentrantLock[LEASE_STRIPE_COUNT];
+        for (int index = 0; index < stripes.length; index++) stripes[index] = new ReentrantLock();
+        return stripes;
     }
 
     private void releaseLease(String cacheKey) throws IOException {

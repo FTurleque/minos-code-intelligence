@@ -43,7 +43,20 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
-        return withLock(() -> delegate.registerProject(rootPath, displayName));
+        return registerProjectWithResult(rootPath, displayName).project();
+    }
+
+    @Override
+    public RegistrationResult registerProjectWithResult(Path rootPath, String displayName) throws IOException {
+        Objects.requireNonNull(rootPath, "rootPath");
+        return withLock(() -> {
+            Path canonical = rootPath.toRealPath();
+            Optional<RegisteredProject> existing = delegate.listProjects().stream()
+                    .filter(project -> project.rootPath().equals(canonical))
+                    .findFirst();
+            RegisteredProject project = delegate.registerProject(canonical, displayName);
+            return new RegistrationResult(project, existing.isEmpty());
+        });
     }
 
     @Override

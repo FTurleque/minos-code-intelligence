@@ -30,7 +30,8 @@ import java.util.Properties;
 import java.util.UUID;
 
 /** Local application adapter over the selected MINOS storage backend. */
-public final class LocalProjectOperations implements ProjectOperations {
+public final class LocalProjectOperations implements ProjectOperations, AutoCloseable {
+    private final MinosApplication ownedApplication;
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
@@ -38,10 +39,17 @@ public final class LocalProjectOperations implements ProjectOperations {
     private final ProjectInspectionService inspectionService;
     private final Path historyDirectory;
 
-    public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home)); }
+    public LocalProjectOperations(Path home) throws IOException {
+        this(MinosApplication.open(home), true);
+    }
 
     public LocalProjectOperations(MinosApplication application) {
+        this(application, false);
+    }
+
+    private LocalProjectOperations(MinosApplication application, boolean ownsApplication) {
         MinosApplication value = Objects.requireNonNull(application, "application");
+        this.ownedApplication = ownsApplication ? value : null;
         this.registry = value.projectRegistry();
         this.projectResolver = new ProjectResolver(this.registry);
         this.snapshotStore = value.snapshotStore();
@@ -178,5 +186,11 @@ public final class LocalProjectOperations implements ProjectOperations {
             ProviderId.require(providerId);
             Objects.requireNonNull(completedAt, "completedAt");
         }
+    }
+
+
+    @Override
+    public void close() throws IOException {
+        if (ownedApplication != null) ownedApplication.close();
     }
 }

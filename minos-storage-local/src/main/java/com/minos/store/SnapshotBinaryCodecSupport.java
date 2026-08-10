@@ -62,6 +62,12 @@ final class SnapshotBinaryCodecSupport {
     private SnapshotBinaryCodecSupport() {
     }
 
+    private static int initialCapacity(int declaredCount) {
+        // Counts describe protocol limits, not a trusted heap-allocation request. Grow incrementally.
+        return Math.min(Math.max(0, declaredCount), 16_384);
+    }
+
+
     static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
         MessageDigest digest = SnapshotIntegrityService.sha256Digest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
@@ -88,7 +94,7 @@ final class SnapshotBinaryCodecSupport {
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String snapshotId = readRequiredString(input, "snapshotId");
             int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
-            List<Symbol> symbols = new ArrayList<>(symbolCount);
+            List<Symbol> symbols = new ArrayList<>(initialCapacity(symbolCount));
             for (int index = 0; index < symbolCount; index++) {
                 symbols.add(readSymbol(input));
             }
@@ -178,17 +184,17 @@ final class SnapshotBinaryCodecSupport {
         UUID projectId = new UUID(input.readLong(), input.readLong());
         String snapshotId = readRequiredString(input, "snapshotId");
         int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
-        List<Symbol> symbols = new ArrayList<>(symbolCount);
+        List<Symbol> symbols = new ArrayList<>(initialCapacity(symbolCount));
         for (int index = 0; index < symbolCount; index++) {
             symbols.add(readSymbol(input));
         }
         int occurrenceCount = readCount(input, MAX_OCCURRENCES, "occurrence count");
-        List<SymbolOccurrence> occurrences = new ArrayList<>(occurrenceCount);
+        List<SymbolOccurrence> occurrences = new ArrayList<>(initialCapacity(occurrenceCount));
         for (int index = 0; index < occurrenceCount; index++) {
             occurrences.add(readOccurrence(input));
         }
         int relationshipCount = readCount(input, MAX_RELATIONSHIPS, "relationship count");
-        List<Relationship> relationships = new ArrayList<>(relationshipCount);
+        List<Relationship> relationships = new ArrayList<>(initialCapacity(relationshipCount));
         for (int index = 0; index < relationshipCount; index++) {
             relationships.add(readRelationship(input));
         }

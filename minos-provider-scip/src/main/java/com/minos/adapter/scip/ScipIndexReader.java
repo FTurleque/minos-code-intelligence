@@ -5,9 +5,13 @@ import org.scip_code.scip.Index;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Set;
 import java.util.Objects;
 
 /**
@@ -44,9 +48,14 @@ public final class ScipIndexReader {
                     + "/" + limits.maxArtifactBytes());
         }
 
-        try (InputStream raw = Files.newInputStream(indexFile);
-             BoundedInputStream input = new BoundedInputStream(
-                     raw, limits.maxArtifactBytes(), "SCIP artifact")) {
+        try (SeekableByteChannel channel = Files.newByteChannel(
+                indexFile, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS))) {
+            BoundedInputStream preflight = new BoundedInputStream(
+                    Channels.newInputStream(channel), limits.maxArtifactBytes(), "SCIP artifact preflight");
+            limits.preflight(preflight);
+            channel.position(0L);
+            BoundedInputStream input = new BoundedInputStream(
+                    Channels.newInputStream(channel), limits.maxArtifactBytes(), "SCIP artifact");
             return Index.parseFrom(input);
         }
     }

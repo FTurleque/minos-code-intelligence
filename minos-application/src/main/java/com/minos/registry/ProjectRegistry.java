@@ -16,6 +16,15 @@ public interface ProjectRegistry {
 
     RegisteredProject registerProject(Path rootPath, String displayName) throws IOException;
 
+    /**
+     * Atomically reports whether this call created the durable registration. Implementations
+     * that cannot prove creation return createdByThisCall=false so higher-level rollback never
+     * deletes a registration that may belong to another concurrent operation.
+     */
+    default RegistrationResult registerProjectWithResult(Path rootPath, String displayName) throws IOException {
+        return new RegistrationResult(registerProject(rootPath, displayName), false);
+    }
+
     RegisteredWorkspace createWorkspace(String name) throws IOException;
 
     RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException;
@@ -36,5 +45,11 @@ public interface ProjectRegistry {
      */
     default boolean deleteProject(UUID projectId) throws IOException {
         throw new UnsupportedOperationException("project deletion is not supported by this registry");
+    }
+
+    record RegistrationResult(RegisteredProject project, boolean createdByThisCall) {
+        public RegistrationResult {
+            java.util.Objects.requireNonNull(project, "project");
+        }
     }
 }

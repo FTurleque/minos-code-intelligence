@@ -23,6 +23,7 @@ public final class LocalSourceReader implements SourceReader {
     private static final long MAX_SOURCE_BYTES = 16L * 1024L * 1024L;
 
     private final Path projectRoot;
+    private CachedSource cachedSource;
 
     public LocalSourceReader(Path projectRoot) throws IOException {
         this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot").toRealPath();
@@ -49,7 +50,8 @@ public final class LocalSourceReader implements SourceReader {
         if (source.isEmpty()) {
             return Optional.empty();
         }
-        List<String> lines = readLines(source.orElseThrow());
+        CachedSource cached = readSource(source.orElseThrow());
+        List<String> lines = cached.lines();
         if (lines.isEmpty() || location.startLine() > lines.size()) {
             return Optional.empty();
         }
@@ -78,7 +80,7 @@ public final class LocalSourceReader implements SourceReader {
         if (contentTruncated) {
             content = TokenEstimator.truncate(content, maxTokens);
         }
-        int totalFileTokens = TokenEstimator.estimate(String.join("\n", lines));
+        int totalFileTokens = cached.totalTokens();
         boolean truncated = start != requestedStart || end != requestedEnd || contentTruncated;
         int actualEnd = content.isEmpty()
                 ? start + 1
@@ -120,17 +122,27 @@ public final class LocalSourceReader implements SourceReader {
         );
     }
 
-    private List<String> readLines(Path source) throws IOException {
+    private CachedSource readSource(Path source) throws IOException {
+        if (cachedSource != null && cachedSource.path().equals(source)) return cachedSource;
         List<String> lines = new ArrayList<>();
+        int utf8Bytes = 0;
         try (BoundedInputStream input = new BoundedInputStream(
                      Files.newInputStream(source), MAX_SOURCE_BYTES, "source file");
              BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
             String line;
+            boolean first = true;
             while ((line = reader.readLine()) != null) {
+                if (!first) utf8Bytes = Math.addExact(utf8Bytes, 1);
+                utf8Bytes = Math.addExact(utf8Bytes, line.getBytes(StandardCharsets.UTF_8).length);
                 lines.add(line);
+                first = false;
             }
+        } catch (ArithmeticException exception) {
+            throw new IOException("source token byte counter overflow", exception);
         }
-        return List.copyOf(lines);
+        int totalTokens = utf8Bytes == 0 ? 0 : Math.max(1, (utf8Bytes + 3) / 4);
+        cachedSource = new CachedSource(source, List.copyOf(lines), totalTokens);
+        return cachedSource;
     }
 
     private String readText(Path source) throws IOException {
@@ -180,4 +192,7 @@ public final class LocalSourceReader implements SourceReader {
     private static String join(List<String> lines, int start, int end) {
         return String.join("\n", lines.subList(start, end + 1));
     }
+
+
+    private record CachedSource(Path path, List<String> lines, int totalTokens) { }
 }

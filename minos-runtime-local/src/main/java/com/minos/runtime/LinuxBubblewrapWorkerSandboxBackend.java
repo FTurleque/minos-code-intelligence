@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -19,8 +21,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Linux worker sandbox backed by bubblewrap namespaces and util-linux prlimit.
  *
- * <p>The host root is mounted read-only. Only the provider working directory, artifact directory
- * and MINOS run directory are writable. DENY keeps bubblewrap's isolated network namespace;
+ * <p>The host root is never exposed wholesale. Only explicit system runtime roots and concrete
+ * provider command paths are mounted read-only; the workspace, artifact and MINOS run roots are
+ * writable. DENY keeps bubblewrap's isolated network namespace;
  * ALLOW explicitly shares the host network namespace. Provider capabilities are dropped in both
  * modes. Resource limits are inherited from {@code prlimit}.</p>
  *
@@ -89,7 +92,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                         WorkerSandboxQualification.PlatformDisposition.NOT_APPLICABLE),
                 List.of(
                         "LINUX_BUBBLEWRAP_USER_MOUNT_PID_IPC_UTS_CGROUP_NETWORK_NAMESPACES",
-                        "LINUX_HOST_ROOT_READ_ONLY",
+                        "LINUX_MINIMAL_RUNTIME_READ_ONLY_ALLOWLIST",
                         "LINUX_WORKSPACE_ARTIFACT_RUN_WRITE_ONLY",
                         "LINUX_PROVIDER_CAPABILITIES_DROPPED",
                         "LINUX_PRLIMIT_ADDRESS_SPACE_PROCESS_COUNT_OPEN_FILES_CPU",
@@ -133,9 +136,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path run = runDirectory.toRealPath();
 
         List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds(), networkPolicy);
-        sandbox.add("--ro-bind");
-        sandbox.add("/");
-        sandbox.add("/");
+        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy);
         sandbox.add("--dev");
         sandbox.add("/dev");
         sandbox.add("--proc");
@@ -160,9 +161,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
 
     private boolean probeOsIsolation() {
         List<String> command = baseCommand(5L, WorkerNetworkPolicy.DENY);
-        command.add("--ro-bind");
-        command.add("/");
-        command.add("/");
+        try {
+            addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY);
+        } catch (IOException exception) {
+            return false;
+        }
         command.add("--dev");
         command.add("/dev");
         command.add("--proc");
@@ -209,10 +212,67 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         return sandbox;
     }
 
+    private static void addRuntimeReadOnlyBinds(
+            List<String> command,
+            List<String> providerCommand,
+            WorkerNetworkPolicy networkPolicy
+    ) throws IOException {
+        Set<Path> mounted = new LinkedHashSet<>();
+        for (String root : List.of("/usr", "/bin", "/lib", "/lib64", "/sbin")) {
+            addReadOnlyIfPresent(command, mounted, Path.of(root));
+        }
+        // Network ALLOW needs public trust/DNS configuration, never the complete /etc tree.
+        if (networkPolicy == WorkerNetworkPolicy.ALLOW) {
+            for (String value : List.of(
+                    "/etc/ssl", "/etc/ca-certificates", "/etc/resolv.conf", "/etc/hosts",
+                    "/etc/nsswitch.conf", "/etc/passwd", "/etc/group", "/etc/ld.so.cache")) {
+                addReadOnlyIfPresent(command, mounted, Path.of(value));
+            }
+        }
+        for (String argument : providerCommand) {
+            try {
+                Path candidate = Path.of(argument);
+                if (!candidate.isAbsolute() || !Files.exists(candidate)) continue;
+                Path real = candidate.toRealPath();
+                if (mounted.stream().anyMatch(real::startsWith)) continue;
+                addReadOnlyIfPresent(command, mounted, Files.isDirectory(real) ? real : real.getParent());
+            } catch (RuntimeException ignored) {
+                // Non-path provider arguments stay opaque.
+            }
+        }
+    }
+
+    private static void addReadOnlyIfPresent(List<String> command, Set<Path> mounted, Path candidate)
+            throws IOException {
+        if (candidate == null || !Files.exists(candidate)) return;
+        Path real = candidate.toRealPath();
+        if (!mounted.add(real)) return;
+        addDestinationParents(command, real);
+        command.add("--ro-bind");
+        command.add(real.toString());
+        command.add(real.toString());
+    }
+
     private static void addWritableBind(List<String> command, Path directory) {
+        addDestinationParents(command, directory);
         command.add("--bind");
         command.add(directory.toString());
         command.add(directory.toString());
+    }
+
+    private static void addDestinationParents(List<String> command, Path destination) {
+        Path absolute = destination.toAbsolutePath().normalize();
+        Path parent = absolute.getParent();
+        if (parent == null) return;
+        List<Path> parents = new ArrayList<>();
+        while (parent != null && parent.getParent() != null) {
+            parents.add(parent);
+            parent = parent.getParent();
+        }
+        for (int index = parents.size() - 1; index >= 0; index--) {
+            command.add("--dir");
+            command.add(parents.get(index).toString());
+        }
     }
 
     private static Path regularExecutable(Path value, String label) {
