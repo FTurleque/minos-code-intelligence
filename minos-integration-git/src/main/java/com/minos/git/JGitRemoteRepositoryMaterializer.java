@@ -49,6 +49,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
 
     private static final String FORMAT_VERSION = "1";
     private static final String METADATA_FILE = "entry.properties";
+    private static final String PIN_FILE = "registered.pin";
     private static final String REPOSITORY_DIRECTORY = "repository";
 
     private final Path cacheRoot;
@@ -108,6 +109,27 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         } finally {
             if (!success) releaseLease(cacheKey);
         }
+    }
+
+    @Override
+    public void pin(RemoteMaterialization materialization) throws IOException {
+        Objects.requireNonNull(materialization, "materialization");
+        Path entry = cacheRoot.resolve(materialization.cacheKey()).toAbsolutePath().normalize();
+        if (!entry.startsWith(cacheRoot) || !Files.isDirectory(entry)) {
+            throw new IOException("cannot pin a remote materialization outside the active cache");
+        }
+        Path repositoryRoot = entry.resolve(REPOSITORY_DIRECTORY).toRealPath();
+        if (!repositoryRoot.equals(materialization.repositoryRoot().toRealPath())) {
+            throw new IOException("remote materialization does not match its cache entry");
+        }
+        Files.writeString(
+                entry.resolve(PIN_FILE),
+                "registeredAt=" + clock.instant() + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE
+        );
     }
 
     @Override
@@ -312,7 +334,9 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         int count = entries.size();
         for (EvictionCandidate candidate : entries) {
             if (count <= cachePolicy.maxEntries() && bytes <= cachePolicy.maxBytes()) break;
-            if (protectedKey.equals(candidate.cacheKey())) continue;
+            if (protectedKey.equals(candidate.cacheKey()) || Files.isRegularFile(candidate.path().resolve(PIN_FILE))) {
+                continue;
+            }
             try (EvictionLease lease = tryAcquireEvictionLease(candidate.cacheKey())) {
                 if (lease == null) continue;
                 deleteCacheTree(candidate.path());
@@ -321,7 +345,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             }
         }
         if (count > cachePolicy.maxEntries() || bytes > cachePolicy.maxBytes()) {
-            throw new IOException("remote cache limits cannot be satisfied without evicting an active entry");
+            throw new IOException("remote cache limits cannot be satisfied without evicting an active or registered entry");
         }
     }
 
