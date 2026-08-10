@@ -70,6 +70,18 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             throw new IllegalArgumentException("displayName must not be blank");
         }
         RemoteMaterialization source = materializer.materialize(request);
+        try (RemoteIndexLease ignored = RemoteIndexLease.acquire(application.home(), source.cacheKey())) {
+            return indexUnderSourceLease(source, displayName, providerOverride, workerId, workerNetworkPolicy);
+        }
+    }
+
+    private RemoteIndexView indexUnderSourceLease(
+            RemoteMaterialization source,
+            String displayName,
+            String providerOverride,
+            String workerId,
+            WorkerNetworkPolicy workerNetworkPolicy
+    ) throws Exception {
         List<DistributedIndexerExecutor> distributedExecutors = new ArrayList<>();
         RegisteredProject project = null;
         boolean newlyRegistered = false;
@@ -82,8 +94,10 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             project = registration.project();
             newlyRegistered = registration.createdByThisCall();
 
-            // A durable registry root must stay materialized after the active-use lease is released.
-            // If this first index fails, the finally block rolls back both the registration and pin.
+            // Registration ownership remains exclusive for this source until the RemoteIndexLease
+            // closes. Another JVM/process cannot adopt the same remote source between this claim and
+            // a failure rollback, so deleting a registration created here cannot erase a successful
+            // concurrent adoption.
             materializer.pin(source);
             pinned = true;
 
