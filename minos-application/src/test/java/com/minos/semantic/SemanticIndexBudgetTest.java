@@ -19,25 +19,16 @@ class SemanticIndexBudgetTest {
     }
 
     @Test
-    void rejectsVectorWeightBeforeEmbeddingAllocationCanGrowUnbounded() throws Exception {
-        SemanticIndexBudget.Tracker tracker = new SemanticIndexBudget(10, 1024, 16).tracker(4);
+    void accountsActualDoubleArrayHeapWidth() throws Exception {
+        SemanticIndexBudget.Tracker tracker = new SemanticIndexBudget(10, 1024, 32).tracker(4);
         tracker.account(document("a", "one"));
-        assertEquals(16, tracker.vectorBytes());
+        assertEquals(32, tracker.vectorBytes());
         assertThrows(IOException.class, () -> tracker.account(document("b", "two")));
     }
 
     private static SemanticDocument document(String key, String content) {
         return new SemanticDocument(
-                "id-" + key,
-                key,
-                "project",
-                "snapshot",
-                SemanticDocumentKind.SYMBOL,
-                "source-" + key,
-                null,
-                0,
-                0,
-                content,
-                "checksum-" + key);
+                "id-" + key, key, "project", "snapshot", SemanticDocumentKind.SYMBOL,
+                "source-" + key, null, 0, 0, content, "checksum-" + key);
     }
 }
