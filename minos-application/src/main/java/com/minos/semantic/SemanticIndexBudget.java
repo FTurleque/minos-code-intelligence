@@ -52,9 +52,12 @@ public record SemanticIndexBudget(
                 contentBytes = Math.addExact(
                         contentBytes,
                         document.content().getBytes(StandardCharsets.UTF_8).length);
+                // SemanticVector retains a Java double[] in heap even though the local persistence
+                // format compacts values to float32. Construction budgets must therefore account
+                // for the representation that is actually live in memory.
                 vectorBytes = Math.addExact(
                         vectorBytes,
-                        Math.multiplyExact((long) dimensions, Float.BYTES));
+                        Math.multiplyExact((long) dimensions, Double.BYTES));
             } catch (ArithmeticException exception) {
                 throw new IOException("semantic index budget counter overflow", exception);
             }
@@ -67,7 +70,7 @@ public record SemanticIndexBudget(
                         + "/" + budget.maxContentBytes());
             }
             if (vectorBytes > budget.maxVectorBytes()) {
-                throw new IOException("semantic vectors exceed byte budget: " + vectorBytes
+                throw new IOException("semantic vectors exceed heap byte budget: " + vectorBytes
                         + "/" + budget.maxVectorBytes());
             }
         }
