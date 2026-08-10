@@ -1,12 +1,16 @@
 package com.minos.context;
 
 import com.minos.domain.SymbolLocation;
+import com.minos.io.BoundedInputStream;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -98,8 +102,7 @@ public final class LocalSourceReader implements SourceReader {
         Path source = resolveReadableSource(requireFileId(fileId))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "source file is not resolvable inside the project: " + fileId));
-        ensureSize(source);
-        String content = Files.readString(source, StandardCharsets.UTF_8);
+        String content = readText(source);
         int totalLines = content.isEmpty()
                 ? 0
                 : 1 + (int) content.chars().filter(character -> character == '\n').count();
@@ -118,14 +121,22 @@ public final class LocalSourceReader implements SourceReader {
     }
 
     private List<String> readLines(Path source) throws IOException {
-        ensureSize(source);
-        return Files.readAllLines(source, StandardCharsets.UTF_8);
+        List<String> lines = new ArrayList<>();
+        try (BoundedInputStream input = new BoundedInputStream(
+                     Files.newInputStream(source), MAX_SOURCE_BYTES, "source file");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+            }
+        }
+        return List.copyOf(lines);
     }
 
-    private void ensureSize(Path source) throws IOException {
-        long size = Files.size(source);
-        if (size > MAX_SOURCE_BYTES) {
-            throw new IOException("source file exceeds 16 MiB safety limit: " + source);
+    private String readText(Path source) throws IOException {
+        try (BoundedInputStream input = new BoundedInputStream(
+                Files.newInputStream(source), MAX_SOURCE_BYTES, "source file")) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
