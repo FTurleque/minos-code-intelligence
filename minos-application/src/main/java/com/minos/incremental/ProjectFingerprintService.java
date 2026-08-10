@@ -1,6 +1,7 @@
 package com.minos.incremental;
 
 import com.minos.discovery.ProjectIgnorePolicy;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,13 +32,22 @@ public final class ProjectFingerprintService {
     );
 
     private final BuildDescriptorPolicy buildDescriptorPolicy;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m24Defaults());
+        this(BuildDescriptorPolicy.m24Defaults(), SourceBudgetPolicy.DEFAULT);
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {
+        this(buildDescriptorPolicy, SourceBudgetPolicy.DEFAULT);
+    }
+
+    public ProjectFingerprintService(
+            BuildDescriptorPolicy buildDescriptorPolicy,
+            SourceBudgetPolicy sourceBudgetPolicy
+    ) {
         this.buildDescriptorPolicy = Objects.requireNonNull(buildDescriptorPolicy, "buildDescriptorPolicy");
+        this.sourceBudgetPolicy = Objects.requireNonNull(sourceBudgetPolicy, "sourceBudgetPolicy");
     }
 
     public ProjectFingerprint capture(Path projectRoot) throws IOException {
@@ -48,6 +58,7 @@ public final class ProjectFingerprintService {
         }
 
         ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
+        SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project fingerprint");
         List<FileFingerprint> files = new ArrayList<>();
 
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
@@ -71,6 +82,7 @@ public final class ProjectFingerprintService {
                     return FileVisitResult.CONTINUE;
                 }
 
+                budget.accountRegularFile(attributes.size());
                 files.add(new FileFingerprint(
                         portable(relative),
                         attributes.size(),
