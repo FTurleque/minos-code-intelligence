@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
 import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -96,120 +97,81 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
 
     private ProviderRuntimeStatus inspectClang() {
         if (CommandLocator.isWindows()) {
-            return status(
-                    ScipIndexerCatalog.SCIP_CLANG_ID,
-                    ScipIndexerCatalog.SCIP_CLANG_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_CLANG_ID, ScipIndexerCatalog.SCIP_CLANG_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "scip-clang 0.4.0 upstream publishes no Windows binary; M24 runtime qualification is Linux x86_64 only");
         }
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         if (!os.contains("linux") || !(arch.contains("amd64") || arch.contains("x86_64"))) {
-            return status(
-                    ScipIndexerCatalog.SCIP_CLANG_ID,
-                    ScipIndexerCatalog.SCIP_CLANG_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_CLANG_ID, ScipIndexerCatalog.SCIP_CLANG_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "M24 qualifies scip-clang only on Linux x86_64; detected " + os + "/" + arch);
         }
         Optional<Path> executable = CommandLocator.find("scip-clang");
         if (executable.isEmpty()) {
-            return status(
-                    ScipIndexerCatalog.SCIP_CLANG_ID,
-                    ScipIndexerCatalog.SCIP_CLANG_VERSION,
-                    ProviderRuntimeStatus.State.NOT_INSTALLED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_CLANG_ID, ScipIndexerCatalog.SCIP_CLANG_VERSION,
+                    ProviderRuntimeStatus.State.NOT_INSTALLED, Optional.empty(),
                     "install upstream scip-clang 0.4.0 and expose scip-clang on PATH");
         }
         Probe probe = probe(CommandLocator.invocation(executable.orElseThrow(), "--version"));
         if (!probe.success() || !probe.output().contains(ScipIndexerCatalog.SCIP_CLANG_VERSION)) {
-            return status(
-                    ScipIndexerCatalog.SCIP_CLANG_ID,
-                    ScipIndexerCatalog.SCIP_CLANG_VERSION,
-                    ProviderRuntimeStatus.State.INVALID,
-                    executable,
+            return status(ScipIndexerCatalog.SCIP_CLANG_ID, ScipIndexerCatalog.SCIP_CLANG_VERSION,
+                    ProviderRuntimeStatus.State.INVALID, executable,
                     "scip-clang version probe must report 0.4.0; output=" + sanitize(probe.output()));
         }
-        return status(
-                ScipIndexerCatalog.SCIP_CLANG_ID,
-                ScipIndexerCatalog.SCIP_CLANG_VERSION,
-                ProviderRuntimeStatus.State.READY,
-                executable,
+        return status(ScipIndexerCatalog.SCIP_CLANG_ID, ScipIndexerCatalog.SCIP_CLANG_VERSION,
+                ProviderRuntimeStatus.State.READY, executable,
                 "operator-managed scip-clang 0.4.0 ready on Linux x86_64; compile_commands.json remains project-specific");
     }
 
     private ProviderRuntimeStatus inspectDotnet() {
         Optional<Path> dotnet = CommandLocator.find("dotnet");
         if (dotnet.isEmpty()) {
-            return status(
-                    ScipIndexerCatalog.SCIP_DOTNET_ID,
-                    ScipIndexerCatalog.SCIP_DOTNET_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "dotnet is missing from PATH; scip-dotnet 0.2.14 requires .NET SDK 10");
         }
         Probe sdk = probe(CommandLocator.invocation(dotnet.orElseThrow(), "--version"));
         if (!sdk.success() || majorVersion(sdk.output()).orElse(-1) < 10) {
-            return status(
-                    ScipIndexerCatalog.SCIP_DOTNET_ID,
-                    ScipIndexerCatalog.SCIP_DOTNET_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "scip-dotnet 0.2.14 requires .NET SDK 10+; dotnet --version=" + sanitize(sdk.output()));
         }
         Path directory = dotnetDirectory();
         Path executable = managedExecutable(directory, "scip-dotnet");
         if (!Files.isRegularFile(executable) || !versionMarkerMatches(directory, ScipIndexerCatalog.SCIP_DOTNET_VERSION)) {
-            return status(
-                    ScipIndexerCatalog.SCIP_DOTNET_ID,
-                    ScipIndexerCatalog.SCIP_DOTNET_VERSION,
-                    ProviderRuntimeStatus.State.NOT_INSTALLED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                    ProviderRuntimeStatus.State.NOT_INSTALLED, Optional.empty(),
                     "managed scip-dotnet 0.2.14 is not installed under " + directory);
         }
-        return status(
-                ScipIndexerCatalog.SCIP_DOTNET_ID,
-                ScipIndexerCatalog.SCIP_DOTNET_VERSION,
-                ProviderRuntimeStatus.State.READY,
-                Optional.of(executable),
+        return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                ProviderRuntimeStatus.State.READY, Optional.of(executable),
                 "managed scip-dotnet 0.2.14 ready under MINOS_HOME/tools; dotnet SDK=" + sanitize(sdk.output()));
     }
 
     private ProviderRuntimeStatus inspectGo() {
         Optional<Path> go = CommandLocator.find("go");
         if (go.isEmpty()) {
-            return status(
-                    ScipIndexerCatalog.SCIP_GO_ID,
-                    ScipIndexerCatalog.SCIP_GO_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "go is missing from PATH; scip-go 0.2.7 requires a Go toolchain");
         }
         Probe goVersion = probe(CommandLocator.invocation(go.orElseThrow(), "version"));
         if (!goVersion.success()) {
-            return status(
-                    ScipIndexerCatalog.SCIP_GO_ID,
-                    ScipIndexerCatalog.SCIP_GO_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "go version probe failed: " + sanitize(goVersion.output()));
         }
         Path directory = goDirectory();
         Path executable = managedExecutable(directory, "scip-go");
         if (!Files.isRegularFile(executable) || !versionMarkerMatches(directory, ScipIndexerCatalog.SCIP_GO_VERSION)) {
-            return status(
-                    ScipIndexerCatalog.SCIP_GO_ID,
-                    ScipIndexerCatalog.SCIP_GO_VERSION,
-                    ProviderRuntimeStatus.State.NOT_INSTALLED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
+                    ProviderRuntimeStatus.State.NOT_INSTALLED, Optional.empty(),
                     "managed scip-go 0.2.7 is not installed under " + directory);
         }
-        return status(
-                ScipIndexerCatalog.SCIP_GO_ID,
-                ScipIndexerCatalog.SCIP_GO_VERSION,
-                ProviderRuntimeStatus.State.READY,
-                Optional.of(executable),
+        return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
+                ProviderRuntimeStatus.State.READY, Optional.of(executable),
                 "managed scip-go 0.2.7 ready under MINOS_HOME/tools; " + sanitize(goVersion.output()));
     }
 
@@ -222,34 +184,24 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         if (rustc.isEmpty()) missing.add("rustc");
         if (analyzer.isEmpty()) missing.add("rust-analyzer");
         if (!missing.isEmpty()) {
-            return status(
-                    ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID,
-                    ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
-                    ProviderRuntimeStatus.State.BLOCKED,
-                    Optional.empty(),
+            return status(ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID, ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
+                    ProviderRuntimeStatus.State.BLOCKED, Optional.empty(),
                     "missing Rust runtime requirements: " + String.join(", ", missing));
         }
         Path executable = analyzer.orElseThrow();
         Probe probe = probe(CommandLocator.invocation(executable, "--version"));
         String output = probe.output();
         if (!probe.success() || !output.contains(ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION)) {
-            return status(
-                    ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID,
-                    ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
-                    ProviderRuntimeStatus.State.INVALID,
-                    Optional.of(executable),
+            return status(ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID, ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
+                    ProviderRuntimeStatus.State.INVALID, Optional.of(executable),
                     "rust-analyzer version probe must report " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION
                             + "; output=" + sanitize(output));
         }
-        return status(
-                ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID,
-                ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
-                ProviderRuntimeStatus.State.READY,
-                Optional.of(executable),
+        return status(ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID, ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION,
+                ProviderRuntimeStatus.State.READY, Optional.of(executable),
                 "operator-managed rust-analyzer v" + ScipIndexerCatalog.RUST_ANALYZER_SCIP_VERSION
                         + " ready; artifact provenance release " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_RELEASE
-                        + " / commit " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT
-                        + "; cargo/rustc present");
+                        + " / commit " + ScipIndexerCatalog.RUST_ANALYZER_SCIP_COMMIT + "; cargo/rustc present");
     }
 
     private ProviderRuntimeStatus installDotnet() throws Exception {
@@ -257,19 +209,14 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                 "dotnet is missing from PATH; install .NET SDK 10+ before scip-dotnet"));
         Probe sdk = probe(CommandLocator.invocation(dotnet, "--version"));
         if (!sdk.success() || majorVersion(sdk.output()).orElse(-1) < 10) {
-            throw new IllegalStateException("scip-dotnet 0.2.14 requires .NET SDK 10+; dotnet --version="
-                    + sanitize(sdk.output()));
+            throw new IllegalStateException("scip-dotnet 0.2.14 requires .NET SDK 10+; dotnet --version=" + sanitize(sdk.output()));
         }
         Path destination = dotnetDirectory();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
         Files.createDirectories(partial);
-        CommandResult result = run(
-                CommandLocator.invocation(
-                        dotnet,
-                        "tool", "install",
-                        "--tool-path", partial.toString(),
-                        "scip-dotnet",
+        CommandResult result = run(CommandLocator.invocation(
+                        dotnet, "tool", "install", "--tool-path", partial.toString(), "scip-dotnet",
                         "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION),
                 home, INSTALL_TIMEOUT, null, null);
         if (!result.success()) {
@@ -293,11 +240,8 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
         Files.createDirectories(partial);
-        CommandResult result = run(
-                CommandLocator.invocation(
-                        go,
-                        "install",
-                        "github.com/scip-code/scip-go/cmd/scip-go@v" + ScipIndexerCatalog.SCIP_GO_VERSION),
+        CommandResult result = run(CommandLocator.invocation(
+                        go, "install", "github.com/scip-code/scip-go/cmd/scip-go@v" + ScipIndexerCatalog.SCIP_GO_VERSION),
                 home, INSTALL_TIMEOUT, "GOBIN", partial.toString());
         if (!result.success()) {
             deleteRecursively(partial);
@@ -351,12 +295,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             CommandResult result = run(command, home, PROBE_TIMEOUT, null, null);
             return new Probe(result.success(), result.output());
         } catch (Exception exception) {
-            return new Probe(false, exception.getMessage() == null
-                    ? exception.getClass().getSimpleName() : exception.getMessage());
+            return new Probe(false, exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
         }
     }
 
-    /** Redirect output to a temp file so verbose installs cannot block on a full process pipe. */
     private static CommandResult run(
             List<String> command,
             Path workingDirectory,
@@ -366,24 +308,31 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     ) throws Exception {
         Path outputFile = Files.createTempFile(workingDirectory.toAbsolutePath().normalize(), "minos-m24-command-", ".log");
         try {
-            ProcessBuilder builder = new ProcessBuilder(safeCommand(command));
+            ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
             builder.redirectErrorStream(true);
-            builder.redirectOutput(outputFile.toFile());
-            if (environmentKey != null) {
-                builder.environment().put(environmentKey, environmentValue);
-            }
+            if (environmentKey != null) builder.environment().put(environmentKey, environmentValue);
             Process process = builder.start();
+            BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, outputFile, null);
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!completed) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
+                terminate(process);
+                capture.await();
                 return new CommandResult(false, "command timed out after " + timeout + "; " + readOutput(outputFile));
             }
+            capture.await();
             return new CommandResult(process.exitValue() == 0, readOutput(outputFile));
         } finally {
             Files.deleteIfExists(outputFile);
         }
+    }
+
+    private static void terminate(Process process) throws InterruptedException {
+        process.descendants().toList().reversed().forEach(handle -> {
+            if (handle.isAlive()) handle.destroyForcibly();
+        });
+        if (process.isAlive()) process.destroyForcibly();
+        process.waitFor(5, TimeUnit.SECONDS);
     }
 
     private static String readOutput(Path outputFile) throws IOException {
@@ -400,34 +349,10 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
     }
 
-    /**
-     * Rebuilds each command element character-by-character to break static taint-analysis
-     * tracking on paths resolved from environment variables (PATH, ComSpec). The result is
-     * semantically identical to the input; the reconstruction prevents taint propagation to
-     * the ProcessBuilder sink without modifying any character value.
-     */
-    private static List<String> safeCommand(List<String> command) {
-        List<String> safe = new ArrayList<>(command.size());
-        for (String arg : command) {
-            safe.add(safeArg(arg));
-        }
-        return safe;
-    }
-
-    private static String safeArg(String value) {
-        StringBuilder b = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            b.append(value.charAt(i));
-        }
-        return b.toString();
-    }
-
     private static void deleteRecursively(Path root) throws IOException {
         if (!Files.exists(root)) return;
         try (var paths = Files.walk(root)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
         }
     }
 
@@ -442,9 +367,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private static String requireProvider(String providerId) {
-        if (providerId == null || providerId.isBlank()) {
-            throw new IllegalArgumentException("providerId must not be blank");
-        }
+        if (providerId == null || providerId.isBlank()) throw new IllegalArgumentException("providerId must not be blank");
         return providerId;
     }
 
