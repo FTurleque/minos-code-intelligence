@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import com.minos.io.BoundedInputStream;
 import org.scip_code.scip.Index;
 
 import java.io.IOException;
@@ -13,7 +14,7 @@ import java.util.Objects;
  * Lit un fichier binaire SCIP à la frontière infrastructure de MINOS.
  *
  * <p>Le type {@link Index} ne doit pas franchir le package d'adaptation SCIP.
- * La taille brute est validée avant toute matérialisation protobuf.</p>
+ * La taille brute est imposée pendant la lecture protobuf, pas uniquement via un précheck.</p>
  */
 public final class ScipIndexReader {
 
@@ -34,16 +35,18 @@ public final class ScipIndexReader {
                 || !Files.isRegularFile(indexFile, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("SCIP index does not exist or is not a regular file: " + indexFile);
         }
-        long size = Files.size(indexFile);
-        if (size < 1L) {
+        long observedSize = Files.size(indexFile);
+        if (observedSize < 1L) {
             throw new IOException("SCIP index is empty: " + indexFile);
         }
-        if (size > limits.maxArtifactBytes()) {
-            throw new IOException("SCIP artifact exceeds configured byte limit: " + size
+        if (observedSize > limits.maxArtifactBytes()) {
+            throw new IOException("SCIP artifact exceeds configured byte limit: " + observedSize
                     + "/" + limits.maxArtifactBytes());
         }
 
-        try (InputStream input = Files.newInputStream(indexFile)) {
+        try (InputStream raw = Files.newInputStream(indexFile);
+             BoundedInputStream input = new BoundedInputStream(
+                     raw, limits.maxArtifactBytes(), "SCIP artifact")) {
             return Index.parseFrom(input);
         }
     }
