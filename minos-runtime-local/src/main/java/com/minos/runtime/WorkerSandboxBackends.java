@@ -11,7 +11,7 @@ public final class WorkerSandboxBackends {
     public static WorkerSandboxBackend strongestAvailable(Path minosHome) {
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         return switch (WorkerSandboxQualification.currentPlatform()) {
-            case LINUX -> LinuxBubblewrapWorkerSandboxBackend.discover()
+            case LINUX -> LinuxBubblewrapWorkerSandboxBackend.discover(home)
                     .<WorkerSandboxBackend>map(value -> value)
                     .orElseGet(WorkerSandboxBackend::nativeEphemeralWorkspace);
             case WINDOWS -> WindowsAppContainerWorkerSandboxBackend.discover(home)
