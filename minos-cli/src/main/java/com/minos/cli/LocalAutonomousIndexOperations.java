@@ -134,6 +134,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                                 prepared.plan()
                         )
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
+        run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
             throw new IllegalStateException("indexing run " + run.id() + " failed: "
                     + run.message().orElse("provider/staging/promotion failure"));
@@ -153,6 +154,41 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
+    }
+
+    private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {
+        if (run.status() == IndexingRun.Status.SUCCEEDED || run.stagedSnapshotId().isEmpty()) {
+            return run;
+        }
+        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(run.projectId());
+        if (active.isEmpty()
+                || !run.stagedSnapshotId().orElseThrow().equals(active.orElseThrow().snapshotId())) {
+            return run;
+        }
+
+        String activeSnapshotId = active.orElseThrow().snapshotId();
+        Instant completedAt = run.completedAt().orElseGet(Instant::now);
+        IndexingRun recovered = new IndexingRun(
+                run.id(),
+                run.projectId(),
+                IndexingRun.Status.SUCCEEDED,
+                IndexingRun.Phase.COMPLETED,
+                run.createdAt(),
+                Optional.of(completedAt),
+                run.executions(),
+                run.stagedSnapshotId(),
+                run.activeSnapshotBefore(),
+                Optional.of(activeSnapshotId),
+                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"));
+        stateStore.saveRun(recovered);
+        stateStore.saveProjectState(new ProjectIndexState(
+                run.projectId(),
+                ProjectIndexState.Availability.READY,
+                Optional.of(activeSnapshotId),
+                Optional.of(run.id()),
+                completedAt,
+                Optional.of("state reconciled after successful snapshot promotion")));
+        return recovered;
     }
 
     @Override public List<ProviderView> providers() {
