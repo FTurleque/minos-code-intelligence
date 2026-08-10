@@ -8,6 +8,7 @@ import com.minos.discovery.spi.BuildSystemDetector;
 import com.minos.discovery.spi.LanguageDetector;
 import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -35,13 +36,15 @@ public final class ProjectDiscoveryService {
     private final List<BuildSystemDetector> buildSystemDetectors;
     private final List<SourceRootDetector> sourceRootDetectors;
     private final List<LanguageDetector> languageDetectors;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectDiscoveryService() {
         this(
                 DefaultDiscoveryPlugins.projectDetectors(),
                 DefaultDiscoveryPlugins.buildSystemDetectors(),
                 DefaultDiscoveryPlugins.sourceRootDetectors(),
-                DefaultDiscoveryPlugins.languageDetectors()
+                DefaultDiscoveryPlugins.languageDetectors(),
+                SourceBudgetPolicy.DEFAULT
         );
     }
 
@@ -51,10 +54,21 @@ public final class ProjectDiscoveryService {
             List<SourceRootDetector> sourceRootDetectors,
             List<LanguageDetector> languageDetectors
     ) {
+        this(projectDetectors, buildSystemDetectors, sourceRootDetectors, languageDetectors, SourceBudgetPolicy.DEFAULT);
+    }
+
+    public ProjectDiscoveryService(
+            List<ProjectDetector> projectDetectors,
+            List<BuildSystemDetector> buildSystemDetectors,
+            List<SourceRootDetector> sourceRootDetectors,
+            List<LanguageDetector> languageDetectors,
+            SourceBudgetPolicy sourceBudgetPolicy
+    ) {
         this.projectDetectors = List.copyOf(Objects.requireNonNull(projectDetectors, "projectDetectors"));
         this.buildSystemDetectors = List.copyOf(Objects.requireNonNull(buildSystemDetectors, "buildSystemDetectors"));
         this.sourceRootDetectors = List.copyOf(Objects.requireNonNull(sourceRootDetectors, "sourceRootDetectors"));
         this.languageDetectors = List.copyOf(Objects.requireNonNull(languageDetectors, "languageDetectors"));
+        this.sourceBudgetPolicy = Objects.requireNonNull(sourceBudgetPolicy, "sourceBudgetPolicy");
     }
 
     public ProjectDiscovery discover(Path projectRoot) throws IOException {
@@ -64,6 +78,7 @@ public final class ProjectDiscoveryService {
         }
 
         ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
+        validateSourceBudget(root, ignorePolicy);
         Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy);
         if (moduleRoots.isEmpty()) {
             moduleRoots.put(root, EnumSet.noneOf(BuildSystem.class));
@@ -94,6 +109,29 @@ public final class ProjectDiscoveryService {
     /** Exposes registered language classifiers for plugin/conformance diagnostics. */
     public List<LanguageDetector> languageDetectors() {
         return languageDetectors;
+    }
+
+    private void validateSourceBudget(Path root, ProjectIgnorePolicy ignorePolicy) throws IOException {
+        SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project discovery");
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                if (!directory.equals(root) && ignorePolicy.isHardIgnored(root.relativize(directory))) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
+                Path relative = root.relativize(file);
+                if (!ignorePolicy.isIgnored(relative, false)) {
+                    budget.accountRegularFile(attributes.size());
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private Map<Path, EnumSet<BuildSystem>> discoverModuleRoots(

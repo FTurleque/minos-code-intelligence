@@ -1,0 +1,45 @@
+package com.minos.adapter.scip;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.scip_code.scip.Document;
+import org.scip_code.scip.Index;
+import org.scip_code.scip.Occurrence;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class ScipIngestionLimitsTest {
+
+    @Test
+    void rejectsArtifactBeforeProtobufParsingWhenByteBudgetIsExceeded(@TempDir Path temp) throws Exception {
+        ScipIngestionLimits limits = new ScipIngestionLimits(8, 10, 10, 10, 10);
+        Path index = temp.resolve("index.scip");
+        Files.write(index, new byte[9]);
+
+        assertThrows(IOException.class, () -> new ScipIndexReader(limits).read(index));
+    }
+
+    @Test
+    void acceptsExactOccurrenceBoundaryAndRejectsBoundaryPlusOne() throws Exception {
+        ScipIngestionLimits limits = new ScipIngestionLimits(1024, 10, 10, 2, 10);
+        Index exact = Index.newBuilder()
+                .addDocuments(Document.newBuilder()
+                        .setRelativePath("A.java")
+                        .addOccurrences(Occurrence.newBuilder())
+                        .addOccurrences(Occurrence.newBuilder()))
+                .build();
+        Index overflow = exact.toBuilder()
+                .addDocuments(Document.newBuilder()
+                        .setRelativePath("B.java")
+                        .addOccurrences(Occurrence.newBuilder()))
+                .build();
+
+        assertDoesNotThrow(() -> limits.validate(exact));
+        assertThrows(IOException.class, () -> limits.validate(overflow));
+    }
+}

@@ -22,4 +22,16 @@ public interface ProgramGraphProvider {
     }
 
     ProgramGraph analyze(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException;
+
+    /**
+     * Budget-aware construction entry point. Providers with potentially large fact sets must override
+     * this method and stop materialization when the supplied budget is exhausted.
+     */
+    default ProgramGraph analyze(
+            RegisteredProject project,
+            CodeKnowledgeSnapshot snapshot,
+            ProgramGraphBudget budget
+    ) throws IOException {
+        return analyze(project, snapshot);
+    }
 }

@@ -18,8 +18,6 @@ public record Evidence(
         if (description == null || description.isBlank()) {
             throw new IllegalArgumentException("description must not be blank");
         }
-        if (weight != null && (weight < 0.0 || weight > 1.0)) {
-            throw new IllegalArgumentException("weight must be between 0 and 1");
-        }
+        ProbabilityInvariant.requireOptional(weight, "weight");
     }
 }

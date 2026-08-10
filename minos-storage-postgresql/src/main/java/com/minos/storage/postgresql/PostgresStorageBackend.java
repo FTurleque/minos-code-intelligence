@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 final class PostgresStorageBackend implements StorageBackend {
+    private final PostgresConnectionFactory connections;
     private final ProjectRegistry projectRegistry;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore indexStateStore;
@@ -20,6 +21,7 @@ final class PostgresStorageBackend implements StorageBackend {
     private final RuntimeObservationStore runtimeObservationStore;
 
     PostgresStorageBackend(PostgresConnectionFactory connections, Path home) throws IOException {
+        this.connections = connections;
         new PostgresSchemaMigrator(connections).migrate();
         PostgresJsonCodec json = new PostgresJsonCodec();
         this.projectRegistry = new PostgresProjectRegistry(connections, home);
@@ -37,4 +39,9 @@ final class PostgresStorageBackend implements StorageBackend {
     @Override public ProjectFingerprintSnapshotStore fingerprintStore() { return fingerprintStore; }
     @Override public SemanticVectorStore semanticVectorStore() { return semanticVectorStore; }
     @Override public RuntimeObservationStore runtimeObservationStore() { return runtimeObservationStore; }
+
+    @Override
+    public void close() {
+        connections.close();
+    }
 }

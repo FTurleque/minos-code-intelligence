@@ -4,8 +4,6 @@ import com.minos.application.ProjectResolver;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
-import com.minos.program.ProgramGraphEdge;
-import com.minos.program.ProgramGraphNode;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -27,6 +25,8 @@ public final class ProgramGraphService {
     public static final int DEFAULT_MAX_CACHE_ENTRIES = 16;
     public static final int DEFAULT_MAX_NODES = 10_000;
     public static final int DEFAULT_MAX_EDGES = 50_000;
+    private static final int PUBLIC_MAX_NODES = 100_000;
+    private static final int PUBLIC_MAX_EDGES = 500_000;
     private static final int BUILD_LOCK_STRIPES = 64;
 
     private final ProjectResolver projectResolver;
@@ -81,30 +81,24 @@ public final class ProgramGraphService {
     }
 
     public ProgramGraph getGraph(String projectIdentifier, int maxNodes, int maxEdges) throws IOException {
-        requireBound(maxNodes, 1, 100_000, "maxNodes");
-        requireBound(maxEdges, 1, 500_000, "maxEdges");
-        ProgramGraph full = fullGraph(projectIdentifier);
-        if (full.nodes().size() <= maxNodes && full.edges().size() <= maxEdges) return full;
-        List<ProgramGraphNode> nodes = full.nodes().stream().limit(maxNodes).toList();
-        Set<String> nodeIds = nodes.stream().map(ProgramGraphNode::id).collect(java.util.stream.Collectors.toSet());
-        List<ProgramGraphEdge> edges = full.edges().stream()
-                .filter(edge -> nodeIds.contains(edge.sourceNodeId()) && nodeIds.contains(edge.targetNodeId()))
-                .limit(maxEdges).toList();
-        Set<String> limitations = new LinkedHashSet<>(full.limitations());
-        if (full.nodes().size() > nodes.size()) limitations.add("PROGRAM_GRAPH_NODE_LIMIT_REACHED");
-        if (full.edges().size() > edges.size()) limitations.add("PROGRAM_GRAPH_EDGE_LIMIT_REACHED");
-        return new ProgramGraph(full.projectId(), full.snapshotId(), full.capabilities(), nodes, edges,
-                limitations.stream().sorted().toList());
+        requireBound(maxNodes, 1, PUBLIC_MAX_NODES, "maxNodes");
+        requireBound(maxEdges, 1, PUBLIC_MAX_EDGES, "maxEdges");
+        return graph(projectIdentifier, new ProgramGraphBudget(maxNodes, maxEdges));
     }
 
     ProgramGraph fullGraph(String projectIdentifier) throws IOException {
+        return graph(projectIdentifier, new ProgramGraphBudget(PUBLIC_MAX_NODES, PUBLIC_MAX_EDGES));
+    }
+
+    private ProgramGraph graph(String projectIdentifier, ProgramGraphBudget budget) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         CodeKnowledgeSnapshot snapshot = snapshotStore.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active symbol snapshot: " + project.id()));
         long keyStarted = System.nanoTime();
         String providersKey = providerKey(project, snapshot);
         long keyElapsed = System.nanoTime() - keyStarted;
-        CacheKey key = new CacheKey(project.id().toString(), snapshot.snapshotId(), providersKey);
+        CacheKey key = new CacheKey(
+                project.id().toString(), snapshot.snapshotId(), providersKey, budget.maxNodes(), budget.maxEdges());
 
         synchronized (cache) {
             providerKeyNanos += keyElapsed;
@@ -128,15 +122,20 @@ public final class ProgramGraphService {
 
             long analysisStarted = System.nanoTime();
             List<ProgramGraph> fragments = new ArrayList<>();
-            for (ProgramGraphProvider provider : providers) fragments.add(provider.analyze(project, snapshot));
+            for (ProgramGraphProvider provider : providers) {
+                fragments.add(provider.analyze(project, snapshot, budget));
+            }
             ProgramGraph composed = withCapabilityLimitations(new ProgramGraphComposer().compose(
-                    project.id().toString(), snapshot.snapshotId(), fragments));
+                    project.id().toString(), snapshot.snapshotId(), fragments, budget));
             long analysisElapsed = System.nanoTime() - analysisStarted;
 
             synchronized (cache) {
                 cacheMisses++;
                 analysisNanos += analysisElapsed;
-                cache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(project.id().toString()) && !entry.getKey().equals(key));
+                cache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(project.id().toString())
+                        && entry.getKey().maxNodes() == budget.maxNodes()
+                        && entry.getKey().maxEdges() == budget.maxEdges()
+                        && !entry.getKey().equals(key));
                 cache.put(key, composed);
                 while (cache.size() > maxCacheEntries) cache.remove(cache.keySet().iterator().next());
             }
@@ -202,5 +201,5 @@ public final class ProgramGraphService {
     }
 
     public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos, int entries, int maximumEntries) { }
-    private record CacheKey(String projectId, String snapshotId, String providers) { }
+    private record CacheKey(String projectId, String snapshotId, String providers, int maxNodes, int maxEdges) { }
 }

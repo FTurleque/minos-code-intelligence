@@ -1,6 +1,7 @@
 package com.minos.impact;
 
 import com.minos.domain.InformationNature;
+import com.minos.domain.ProbabilityInvariant;
 import com.minos.domain.Symbol;
 
 import java.util.List;
@@ -26,9 +27,7 @@ public record ImpactedSymbol(
         if ((depth == 1) != (level == ImpactLevel.DIRECT)) {
             throw new IllegalArgumentException("DIRECT requires depth 1 and INDIRECT requires depth > 1");
         }
-        if (confidence < 0.0 || confidence > 1.0) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
-        }
+        ProbabilityInvariant.require(confidence, "confidence");
         path = List.copyOf(Objects.requireNonNull(path, "path"));
         if (path.size() != depth) {
             throw new IllegalArgumentException("path size must equal depth");
