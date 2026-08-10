@@ -11,6 +11,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class ProgramGraphService {
 
     public static final int DEFAULT_MAX_CACHE_ENTRIES = 16;
+    public static final long DEFAULT_MAX_CACHE_WEIGHT = 2_000_000L;
     public static final int DEFAULT_MAX_NODES = 10_000;
     public static final int DEFAULT_MAX_EDGES = 50_000;
     private static final int PUBLIC_MAX_NODES = 100_000;
@@ -33,8 +35,10 @@ public final class ProgramGraphService {
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final List<ProgramGraphProvider> providers;
     private final int maxCacheEntries;
+    private final long maxCacheWeight;
     private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
     private final ReentrantLock[] buildLocks = buildLocks();
+    private long cacheWeight;
     private long cacheHits;
     private long cacheMisses;
     private long providerKeyNanos;
@@ -46,16 +50,23 @@ public final class ProgramGraphService {
 
     public ProgramGraphService(ProjectRegistry registry, CodeKnowledgeSnapshotStore snapshotStore,
                                List<ProgramGraphProvider> providers) {
-        this(new ProjectResolver(registry), snapshotStore, providers, DEFAULT_MAX_CACHE_ENTRIES);
+        this(new ProjectResolver(registry), snapshotStore, providers, DEFAULT_MAX_CACHE_ENTRIES, DEFAULT_MAX_CACHE_WEIGHT);
     }
 
     public ProgramGraphService(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
                                List<ProgramGraphProvider> providers, int maxCacheEntries) {
+        this(projectResolver, snapshotStore, providers, maxCacheEntries, DEFAULT_MAX_CACHE_WEIGHT);
+    }
+
+    ProgramGraphService(ProjectResolver projectResolver, CodeKnowledgeSnapshotStore snapshotStore,
+                        List<ProgramGraphProvider> providers, int maxCacheEntries, long maxCacheWeight) {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.providers = normalizeProviders(providers);
         if (maxCacheEntries < 1) throw new IllegalArgumentException("maxCacheEntries must be greater than zero");
+        if (maxCacheWeight < 1L) throw new IllegalArgumentException("maxCacheWeight must be greater than zero");
         this.maxCacheEntries = maxCacheEntries;
+        this.maxCacheWeight = maxCacheWeight;
     }
 
     public static List<ProgramGraphProvider> productionProviders() {
@@ -72,7 +83,8 @@ public final class ProgramGraphService {
 
     public CacheStats cacheStats() {
         synchronized (cache) {
-            return new CacheStats(cacheHits, cacheMisses, providerKeyNanos, analysisNanos, cache.size(), maxCacheEntries);
+            return new CacheStats(cacheHits, cacheMisses, providerKeyNanos, analysisNanos,
+                    cache.size(), maxCacheEntries, cacheWeight, maxCacheWeight);
         }
     }
 
@@ -132,16 +144,57 @@ public final class ProgramGraphService {
             synchronized (cache) {
                 cacheMisses++;
                 analysisNanos += analysisElapsed;
-                cache.entrySet().removeIf(entry -> entry.getKey().projectId().equals(project.id().toString())
-                        && entry.getKey().maxNodes() == budget.maxNodes()
-                        && entry.getKey().maxEdges() == budget.maxEdges()
-                        && !entry.getKey().equals(key));
-                cache.put(key, composed);
-                while (cache.size() > maxCacheEntries) cache.remove(cache.keySet().iterator().next());
+                removeSupersededEntries(project.id().toString(), budget, key);
+                long weight = graphWeight(composed);
+                if (weight <= maxCacheWeight) {
+                    ProgramGraph previous = cache.put(key, composed);
+                    if (previous != null) cacheWeight -= graphWeight(previous);
+                    cacheWeight = saturatingAdd(cacheWeight, weight);
+                    evictCache();
+                }
             }
             return composed;
         } finally {
             buildLock.unlock();
+        }
+    }
+
+    private void removeSupersededEntries(String projectId, ProgramGraphBudget budget, CacheKey currentKey) {
+        Iterator<Map.Entry<CacheKey, ProgramGraph>> entries = cache.entrySet().iterator();
+        while (entries.hasNext()) {
+            Map.Entry<CacheKey, ProgramGraph> entry = entries.next();
+            CacheKey candidate = entry.getKey();
+            if (candidate.projectId().equals(projectId)
+                    && candidate.maxNodes() == budget.maxNodes()
+                    && candidate.maxEdges() == budget.maxEdges()
+                    && !candidate.equals(currentKey)) {
+                cacheWeight -= graphWeight(entry.getValue());
+                entries.remove();
+            }
+        }
+    }
+
+    private void evictCache() {
+        Iterator<Map.Entry<CacheKey, ProgramGraph>> entries = cache.entrySet().iterator();
+        while ((cache.size() > maxCacheEntries || cacheWeight > maxCacheWeight) && entries.hasNext()) {
+            Map.Entry<CacheKey, ProgramGraph> eldest = entries.next();
+            cacheWeight -= graphWeight(eldest.getValue());
+            entries.remove();
+        }
+        if (cacheWeight < 0L) cacheWeight = 0L;
+    }
+
+    private static long graphWeight(ProgramGraph graph) {
+        return saturatingAdd(
+                graph.nodes().size(),
+                saturatingAdd((long) graph.edges().size() * 2L, (long) graph.limitations().size() * 4L));
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
         }
     }
 
@@ -200,6 +253,7 @@ public final class ProgramGraphService {
         if (value < minimum || value > maximum) throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
     }
 
-    public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos, int entries, int maximumEntries) { }
+    public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos,
+                             int entries, int maximumEntries, long weight, long maximumWeight) { }
     private record CacheKey(String projectId, String snapshotId, String providers, int maxNodes, int maxEdges) { }
 }
