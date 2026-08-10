@@ -1,17 +1,22 @@
 package com.minos.runtime;
 
+import com.minos.io.BoundedInputStream;
+import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.ProviderId;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -113,25 +118,28 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 throw new IllegalStateException("provider timed out after " + plan.timeout());
             }
             int exitCode = process.exitValue();
-            BoundedProcessOutput.Result output = outputCapture.await();
+            terminateDescendants(process);
+            BoundedProcessOutput.Result output;
+            try {
+                output = outputCapture.await();
+            } catch (IOException exception) {
+                terminate(process);
+                throw exception;
+            }
             appendOutputMetadata(metadata, output);
             append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
             if (exitCode != 0) {
                 archiveFailedArtifact(generatedArtifact, runDirectory);
                 throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
             }
-            if (!regularFileNoFollow(generatedArtifact) || Files.size(generatedArtifact) == 0L) {
-                throw new IllegalStateException("provider did not produce a non-empty regular SCIP artifact: " + generatedArtifact);
-            }
+            requireValidArtifact(generatedArtifact, "provider did not produce a valid SCIP artifact");
 
             if (!generatedArtifact.equals(finalArtifact)) {
                 Path partial = runDirectory.resolve("index.partial.scip");
-                Files.copy(generatedArtifact, partial, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+                copyArtifactBounded(generatedArtifact, partial);
                 move(partial, finalArtifact);
             }
-            if (!regularFileNoFollow(finalArtifact) || Files.size(finalArtifact) == 0L) {
-                throw new IllegalStateException("stable run artifact is missing: " + finalArtifact);
-            }
+            requireValidArtifact(finalArtifact, "stable run artifact is invalid");
 
             return new IndexingArtifact(
                     request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
@@ -172,16 +180,48 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
     private static void archiveFailedArtifact(Path generatedArtifact, Path runDirectory) throws IOException {
         if (!regularFileNoFollow(generatedArtifact)) return;
         Path failed = runDirectory.resolve("failed-index.scip");
-        Files.copy(generatedArtifact, failed, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+        long size = Files.size(generatedArtifact);
+        if (size <= IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES) {
+            copyArtifactBounded(generatedArtifact, failed);
+        }
+    }
+
+    private static void requireValidArtifact(Path artifact, String message) throws IOException {
+        if (!regularFileNoFollow(artifact)) {
+            throw new IllegalStateException(message + ": " + artifact);
+        }
+        long size = Files.size(artifact);
+        if (size < 1L || size > IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES) {
+            throw new IllegalStateException(message + ": size=" + size + "/"
+                    + IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES + " path=" + artifact);
+        }
+    }
+
+    private static void copyArtifactBounded(Path source, Path target) throws IOException {
+        Files.deleteIfExists(target);
+        try (InputStream raw = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+             BoundedInputStream input = new BoundedInputStream(
+                     raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact copy");
+             OutputStream output = Files.newOutputStream(
+                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            input.transferTo(output);
+        } catch (Exception exception) {
+            Files.deleteIfExists(target);
+            throw exception;
+        }
     }
 
     private static boolean regularFileNoFollow(Path file) {
         return !Files.isSymbolicLink(file) && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS);
     }
 
-    private static void terminate(Process process) {
+    private static void terminateDescendants(Process process) {
         List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
         descendants.reversed().forEach(handle -> { if (handle.isAlive()) handle.destroyForcibly(); });
+    }
+
+    private static void terminate(Process process) {
+        terminateDescendants(process);
         if (process.isAlive()) process.destroyForcibly();
         try { process.waitFor(10, TimeUnit.SECONDS); }
         catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
