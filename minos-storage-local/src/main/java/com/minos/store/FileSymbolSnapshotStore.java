@@ -31,6 +31,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
 
     public static final int DEFAULT_MAX_QUERY_CACHE_ENTRIES = 32;
     public static final long DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
+    public static final int DEFAULT_MAX_ACTIVE_QUERY_RETRIES = 2;
     private static final int BUILD_LOCK_STRIPES = 64;
 
     private final Path storageRoot;
@@ -42,6 +43,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     private final SnapshotCodec codecV2;
     private final int maxQueryCacheEntries;
     private final long maxQueryCacheWeightBytes;
+    private final int maxActiveQueryRetries;
+    private final ActiveQueryBuildHook activeQueryBuildHook;
     private final Object cacheLock = new Object();
     private final ReentrantLock[] buildLocks = buildLocks();
     private final LinkedHashMap<CacheKey, WeightedQueryView> queryCache =
@@ -63,11 +66,29 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     }
 
     FileSymbolSnapshotStore(Path storageRoot, int maxQueryCacheEntries, long maxQueryCacheWeightBytes) throws IOException {
+        this(
+                storageRoot,
+                maxQueryCacheEntries,
+                maxQueryCacheWeightBytes,
+                DEFAULT_MAX_ACTIVE_QUERY_RETRIES,
+                ActiveQueryBuildHook.NOOP);
+    }
+
+    FileSymbolSnapshotStore(
+            Path storageRoot,
+            int maxQueryCacheEntries,
+            long maxQueryCacheWeightBytes,
+            int maxActiveQueryRetries,
+            ActiveQueryBuildHook activeQueryBuildHook
+    ) throws IOException {
         if (maxQueryCacheEntries < 1) {
             throw new IllegalArgumentException("maxQueryCacheEntries must be greater than zero");
         }
         if (maxQueryCacheWeightBytes < 1L) {
             throw new IllegalArgumentException("maxQueryCacheWeightBytes must be greater than zero");
+        }
+        if (maxActiveQueryRetries < 0) {
+            throw new IllegalArgumentException("maxActiveQueryRetries must not be negative");
         }
         this.snapshotRepository = new SnapshotRepository(storageRoot);
         this.storageRoot = snapshotRepository.storageRoot();
@@ -78,6 +99,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         this.codecV2 = new SnapshotCodecV2();
         this.maxQueryCacheEntries = maxQueryCacheEntries;
         this.maxQueryCacheWeightBytes = maxQueryCacheWeightBytes;
+        this.maxActiveQueryRetries = maxActiveQueryRetries;
+        this.activeQueryBuildHook = Objects.requireNonNull(activeQueryBuildHook, "activeQueryBuildHook");
     }
 
     @Override
@@ -131,11 +154,19 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        QueryResolution resolution;
-        do {
-            resolution = resolveActiveQueryView(projectId);
-        } while (resolution.shouldRetry());
-        return resolution.view();
+        int attempts = 0;
+        while (true) {
+            attempts++;
+            QueryResolution resolution = resolveActiveQueryView(projectId);
+            if (!resolution.shouldRetry()) {
+                return resolution.view();
+            }
+            if (attempts > maxActiveQueryRetries) {
+                throw new IOException(
+                        "active symbol snapshot changed repeatedly; retry limit exceeded for project "
+                                + projectId + " after " + attempts + " attempts");
+            }
+        }
     }
 
     private QueryResolution resolveActiveQueryView(UUID projectId) throws IOException {
@@ -160,6 +191,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             if (beforeBuild == PointerState.MISSING) return QueryResolution.complete(Optional.empty());
             if (beforeBuild == PointerState.CHANGED) return QueryResolution.retryResolution();
             SnapshotQueryView built = buildQueryView(projectId, descriptor);
+            activeQueryBuildHook.afterBuild(projectId, descriptor);
             PointerState afterBuild = pointerState(projectId, descriptor);
             if (afterBuild == PointerState.MISSING) return QueryResolution.complete(Optional.empty());
             if (afterBuild == PointerState.CHANGED) return QueryResolution.retryResolution();
@@ -375,4 +407,11 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             long maximumWeightBytes,
             long evictions
     ) { }
+}
+
+@FunctionalInterface
+interface ActiveQueryBuildHook {
+    ActiveQueryBuildHook NOOP = (projectId, descriptor) -> { };
+
+    void afterBuild(UUID projectId, SnapshotDescriptor descriptor) throws IOException;
 }
