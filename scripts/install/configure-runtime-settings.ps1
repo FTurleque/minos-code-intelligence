@@ -81,16 +81,84 @@ function Write-Json([string] $Path, [object] $Value) {
     [System.IO.File]::WriteAllText($Path, $Json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Test-LoopbackOllamaEndpoint([string] $Endpoint) {
-    try { $Uri = [Uri]$Endpoint } catch { return $false }
-    if ($Uri.Scheme -notin @('http', 'https') -or [string]::IsNullOrWhiteSpace($Uri.AbsolutePath)) { return $false }
-    $HostValue = $Uri.DnsSafeHost.ToLowerInvariant()
-    if ($HostValue -in @('localhost', '::1')) { return $true }
+function Read-BoundedUtf8([string] $Path, [long] $MaximumBytes, [string] $Label) {
+    if ($MaximumBytes -lt 1) { throw 'MaximumBytes must be positive.' }
+    $Stream = [System.IO.File]::Open(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::Read)
+    $Output = [System.IO.MemoryStream]::new()
+    try {
+        $Buffer = New-Object byte[] 4096
+        while (($ReadCount = $Stream.Read($Buffer, 0, $Buffer.Length)) -gt 0) {
+            if ($Output.Length + $ReadCount -gt $MaximumBytes) {
+                throw "$Label exceeds byte limit: $MaximumBytes"
+            }
+            $Output.Write($Buffer, 0, $ReadCount)
+        }
+        $Utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+        return $Utf8.GetString($Output.ToArray())
+    }
+    finally {
+        $Output.Dispose()
+        $Stream.Dispose()
+    }
+}
+
+function Test-LoopbackHost([string] $HostValue) {
+    if ([string]::IsNullOrWhiteSpace($HostValue)) { return $false }
+    $Normalized = $HostValue.ToLowerInvariant()
+    if ($Normalized -in @('localhost', '::1', '0:0:0:0:0:0:0:1')) { return $true }
     $Address = $null
-    if ([System.Net.IPAddress]::TryParse($HostValue, [ref]$Address)) {
+    if ([System.Net.IPAddress]::TryParse($Normalized, [ref]$Address)) {
         return [System.Net.IPAddress]::IsLoopback($Address)
     }
     return $false
+}
+
+function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
+    if ([string]::IsNullOrWhiteSpace($JdbcUrl) -or -not $JdbcUrl.StartsWith('jdbc:postgresql://')) {
+        throw 'PostgresUrl must use jdbc:postgresql:// when PostgreSQL storage is selected.'
+    }
+    try { $Uri = [Uri]$JdbcUrl.Substring(5) }
+    catch { throw 'PostgresUrl is not a valid PostgreSQL JDBC URL.' }
+    if ($Uri.Scheme -ne 'postgresql' -or [string]::IsNullOrWhiteSpace($Uri.DnsSafeHost)) {
+        throw 'PostgresUrl must contain a valid PostgreSQL host.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Uri.UserInfo)) {
+        throw 'PostgresUrl must not contain credentials in user-info.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Uri.Fragment)) {
+        throw 'PostgresUrl must not contain a URI fragment.'
+    }
+
+    $Parameters = @{}
+    if (-not [string]::IsNullOrWhiteSpace($Uri.Query)) {
+        foreach ($Pair in $Uri.Query.TrimStart('?').Split('&', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $Parts = $Pair.Split('=', 2)
+            $Key = [Uri]::UnescapeDataString($Parts[0].Replace('+', ' ')).ToLowerInvariant()
+            $Value = if ($Parts.Length -gt 1) { [Uri]::UnescapeDataString($Parts[1].Replace('+', ' ')) } else { '' }
+            if ($Parameters.ContainsKey($Key)) { throw "PostgresUrl contains duplicate parameter: $Key" }
+            $Parameters[$Key] = $Value
+        }
+    }
+    foreach ($Sensitive in @('password', 'sslpassword', 'token', 'access_token', 'oauth_token', 'secret')) {
+        if ($Parameters.ContainsKey($Sensitive)) {
+            throw "PostgresUrl must not contain sensitive parameter: $Sensitive"
+        }
+    }
+    if (-not (Test-LoopbackHost $Uri.DnsSafeHost)) {
+        if (-not $Parameters.ContainsKey('sslmode') -or $Parameters['sslmode'] -ine 'verify-full') {
+            throw 'External PostgreSQL requires sslmode=verify-full.'
+        }
+    }
+}
+
+function Test-LoopbackOllamaEndpoint([string] $Endpoint) {
+    try { $Uri = [Uri]$Endpoint } catch { return $false }
+    if ($Uri.Scheme -notin @('http', 'https') -or [string]::IsNullOrWhiteSpace($Uri.AbsolutePath)) { return $false }
+    return Test-LoopbackHost $Uri.DnsSafeHost
 }
 
 $DataRoot = [System.IO.Path]::GetFullPath($DataRoot)
@@ -119,6 +187,7 @@ $Configuration = [ordered]@{
     'minos.storage.backend' = $StorageBackend
     'minos.semantic.provider' = $SemanticProvider
 }
+$SecretPath = $null
 
 if ($StorageBackend -eq 'postgresql') {
     if ($ManagedDockerPostgres.IsPresent) {
@@ -126,9 +195,7 @@ if ($StorageBackend -eq 'postgresql') {
         # Record the backend selection only; do not validate external URL/credentials here.
         $Configuration['minos.postgres.managed'] = 'true'
     } else {
-        if ([string]::IsNullOrWhiteSpace($PostgresUrl) -or -not $PostgresUrl.StartsWith('jdbc:postgresql://')) {
-            throw 'PostgresUrl must use jdbc:postgresql:// when PostgreSQL storage is selected.'
-        }
+        Assert-ExternalPostgresUrl $PostgresUrl
         Require-Identifier $PostgresUser 'PostgreSQL user'
         Require-Identifier $PostgresSchema 'PostgreSQL schema'
         if ([string]::IsNullOrWhiteSpace($PostgresPasswordSourcePath)) {
@@ -138,12 +205,13 @@ if ($StorageBackend -eq 'postgresql') {
         if (-not (Test-Path -LiteralPath $SourceSecret -PathType Leaf)) {
             throw "PostgreSQL password source file does not exist: $SourceSecret"
         }
-        $Secret = [System.IO.File]::ReadAllText($SourceSecret, [System.Text.Encoding]::UTF8).Trim()
+        $Secret = (Read-BoundedUtf8 -Path $SourceSecret -MaximumBytes 65536 -Label 'PostgreSQL password source').Trim()
         if ([string]::IsNullOrWhiteSpace($Secret)) { throw 'PostgreSQL password must not be blank.' }
         $SecretPath = Join-Path $DataRoot 'secrets\postgres.password'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SecretPath) | Out-Null
         [System.IO.File]::WriteAllText($SecretPath, $Secret + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
         Restrict-FileToCurrentUser $SecretPath
+        $Configuration['minos.postgres.managed'] = 'false'
         $Configuration['minos.postgres.url'] = $PostgresUrl
         $Configuration['minos.postgres.user'] = $PostgresUser
         $Configuration['minos.postgres.passwordFile'] = 'secrets/postgres.password'
@@ -164,7 +232,6 @@ if ($SemanticProvider -eq 'ollama') {
     $Configuration['minos.semantic.timeoutSeconds'] = [string]$SemanticTimeoutSeconds
 }
 
-$SecretPath = $null
 $ConfigurationPath = Join-Path $DataRoot 'config\minos.properties'
 Write-Properties -Path $ConfigurationPath -Values $Configuration
 
