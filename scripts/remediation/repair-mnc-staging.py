@@ -48,4 +48,31 @@ if bad_wrapper not in updated:
 updated = updated.replace(bad_wrapper, good_wrapper, 1)
 
 path.write_text(updated, encoding="utf-8", newline="\n")
-print("converted Java snippets to raw literals; hardened NEXUS and discovery staging")
+
+# Narrow MinosApplication.close from AutoCloseable's broad Exception contract to IOException.
+app = Path("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+app_text = app.read_text(encoding="utf-8")
+old_close = '''    @Override
+    public void close() throws Exception {
+        if (closed.compareAndSet(false, true)) {
+            storageBackend.close();
+        }
+    }
+'''
+new_close = '''    @Override
+    public void close() throws IOException {
+        if (!closed.compareAndSet(false, true)) return;
+        try {
+            storageBackend.close();
+        } catch (IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IOException("unable to close MINOS storage backend", exception);
+        }
+    }
+'''
+if app_text.count(old_close) != 1:
+    raise SystemExit("MinosApplication close contract anchor mismatch")
+app.write_text(app_text.replace(old_close, new_close, 1), encoding="utf-8", newline="\n")
+
+print("converted Java snippets to raw literals; hardened NEXUS/discovery and close lifecycle staging")
