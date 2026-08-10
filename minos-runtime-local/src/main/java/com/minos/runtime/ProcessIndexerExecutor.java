@@ -64,6 +64,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         if (!providerRunDirectory.startsWith(runsRoot)) {
             throw new IllegalStateException("provider run directory escapes MINOS runs root");
         }
+        RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent());
         Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
         if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
             throw new IllegalStateException("provider scope directory escapes provider run root");
@@ -217,28 +218,40 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private static void terminateDescendants(Process process) {
         List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
-        descendants.reversed().forEach(handle -> { if (handle.isAlive()) handle.destroyForcibly(); });
+        descendants.reversed().forEach(handle -> {
+            if (handle.isAlive()) handle.destroyForcibly();
+        });
     }
 
     private static void terminate(Process process) {
         terminateDescendants(process);
         if (process.isAlive()) process.destroyForcibly();
-        try { process.waitFor(10, TimeUnit.SECONDS); }
-        catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
+        try {
+            process.waitFor(10, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
     }
 
-    private static void writeMetadata(Path file, IndexerProcessPlan plan, IndexingExecutionRequest request, Instant startedAt)
-            throws IOException {
+    private static void writeMetadata(
+            Path file,
+            IndexerProcessPlan plan,
+            IndexingExecutionRequest request,
+            Instant startedAt
+    ) throws IOException {
         StringBuilder value = new StringBuilder();
         value.append("startedAt=").append(startedAt).append('\n');
         value.append("registeredProjectRoot=").append(request.registeredProjectRoot()).append('\n');
-        value.append("projectRelativeRoot=").append(request.projectRelativeRoot().toString().replace('\\', '/')).append('\n');
+        value.append("projectRelativeRoot=")
+                .append(request.projectRelativeRoot().toString().replace('\\', '/')).append('\n');
         value.append("workingDirectory=").append(plan.workingDirectory()).append('\n');
         value.append("generatedArtifact=").append(plan.generatedArtifact()).append('\n');
         value.append("timeout=").append(plan.timeout()).append('\n');
         value.append("command=").append(redactedCommand(plan.command())).append('\n');
         if (!plan.environment().isEmpty()) {
-            value.append("environmentKeys=").append(String.join(",", plan.environment().keySet().stream().sorted().toList())).append('\n');
+            value.append("environmentKeys=")
+                    .append(String.join(",", plan.environment().keySet().stream().sorted().toList()))
+                    .append('\n');
         }
         Files.writeString(file, value, StandardCharsets.UTF_8);
     }
@@ -252,26 +265,37 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         List<String> rendered = new ArrayList<>(command.size());
         boolean redactNext = false;
         for (String argument : command) {
-            if (redactNext) { rendered.add("<redacted>"); redactNext = false; continue; }
+            if (redactNext) {
+                rendered.add("<redacted>");
+                redactNext = false;
+                continue;
+            }
             String lower = argument.toLowerCase(Locale.ROOT);
             if (lower.contains("token=") || lower.contains("password=") || lower.contains("secret=")) {
                 int separator = argument.indexOf('=');
-                rendered.add(separator >= 0 ? argument.substring(0, separator + 1) + "<redacted>" : "<redacted>");
+                rendered.add(separator >= 0
+                        ? argument.substring(0, separator + 1) + "<redacted>"
+                        : "<redacted>");
                 continue;
             }
             rendered.add(argument);
-            if ("--token".equals(lower) || "--password".equals(lower) || "--secret".equals(lower)) redactNext = true;
+            if ("--token".equals(lower) || "--password".equals(lower) || "--secret".equals(lower)) {
+                redactNext = true;
+            }
         }
         return String.join(" ", rendered);
     }
 
     private static void append(Path file, String value) throws IOException {
-        Files.writeString(file, value, StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+        Files.writeString(file, value, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
     }
 
     private static void move(Path source, Path target) throws IOException {
         Files.createDirectories(target.toAbsolutePath().normalize().getParent());
-        try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-        catch (AtomicMoveNotSupportedException exception) { Files.move(source, target, StandardCopyOption.REPLACE_EXISTING); }
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 }
