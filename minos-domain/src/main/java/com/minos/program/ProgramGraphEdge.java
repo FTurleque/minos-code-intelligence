@@ -3,6 +3,7 @@ package com.minos.program;
 import com.minos.domain.Evidence;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
+import com.minos.domain.ProbabilityInvariant;
 
 import java.util.List;
 import java.util.Objects;
@@ -28,9 +29,7 @@ public record ProgramGraphEdge(
         Objects.requireNonNull(nature, "nature");
         Objects.requireNonNull(origin, "origin");
         evidence = evidence == null ? List.of() : List.copyOf(evidence);
-        if (confidence != null && (confidence < 0.0 || confidence > 1.0)) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
-        }
+        ProbabilityInvariant.requireOptional(confidence, "confidence");
         if (nature != InformationNature.FACTUAL && confidence == null) {
             throw new IllegalArgumentException("derived or heuristic edge requires confidence");
         }
