@@ -113,15 +113,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
 
     @Override
     public void pin(RemoteMaterialization materialization) throws IOException {
-        Objects.requireNonNull(materialization, "materialization");
-        Path entry = cacheRoot.resolve(materialization.cacheKey()).toAbsolutePath().normalize();
-        if (!entry.startsWith(cacheRoot) || !Files.isDirectory(entry)) {
-            throw new IOException("cannot pin a remote materialization outside the active cache");
-        }
-        Path repositoryRoot = entry.resolve(REPOSITORY_DIRECTORY).toRealPath();
-        if (!repositoryRoot.equals(materialization.repositoryRoot().toRealPath())) {
-            throw new IOException("remote materialization does not match its cache entry");
-        }
+        Path entry = validatedEntry(materialization);
         Files.writeString(
                 entry.resolve(PIN_FILE),
                 "registeredAt=" + clock.instant() + System.lineSeparator(),
@@ -133,9 +125,28 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     @Override
+    public void unpin(RemoteMaterialization materialization) throws IOException {
+        Path entry = validatedEntry(materialization);
+        Files.deleteIfExists(entry.resolve(PIN_FILE));
+    }
+
+    @Override
     public void release(RemoteMaterialization materialization) throws IOException {
         Objects.requireNonNull(materialization, "materialization");
         releaseLease(materialization.cacheKey());
+    }
+
+    private Path validatedEntry(RemoteMaterialization materialization) throws IOException {
+        Objects.requireNonNull(materialization, "materialization");
+        Path entry = cacheRoot.resolve(materialization.cacheKey()).toAbsolutePath().normalize();
+        if (!entry.startsWith(cacheRoot) || !Files.isDirectory(entry)) {
+            throw new IOException("remote materialization is outside the active cache");
+        }
+        Path repositoryRoot = entry.resolve(REPOSITORY_DIRECTORY).toRealPath();
+        if (!repositoryRoot.equals(materialization.repositoryRoot().toRealPath())) {
+            throw new IOException("remote materialization does not match its cache entry");
+        }
+        return entry;
     }
 
     private RemoteMaterialization materializeLocked(RemoteRepositoryRequest request, String cacheKey) throws Exception {
@@ -417,7 +428,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-DOS file systems do not need this Windows-specific cleanup.
         }
-        path.toFile().setWritable(true);
     }
 
     private static long sizeOf(Path root) throws IOException {

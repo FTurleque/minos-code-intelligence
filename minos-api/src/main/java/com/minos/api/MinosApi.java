@@ -13,12 +13,18 @@ import java.util.Set;
  * Consumers therefore do not depend on SCIP, Glean, CLI/MCP contracts, storage
  * implementations or MINOS internal domain models.</p>
  */
-public interface MinosApi {
+public interface MinosApi extends AutoCloseable {
 
     String CONTRACT_VERSION = "1";
 
     default String contractVersion() {
         return CONTRACT_VERSION;
+    }
+
+    /** Default keeps contract-v1 third-party implementations source-compatible. */
+    @Override
+    default void close() throws MinosApiException {
+        // Implementations without owned resources remain no-op.
     }
 
     ProjectDto addProject(Path rootPath, String displayName) throws MinosApiException;

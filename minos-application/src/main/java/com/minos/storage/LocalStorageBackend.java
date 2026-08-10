@@ -5,7 +5,7 @@ import com.minos.incremental.FileProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.orchestration.FileIndexStateStore;
 import com.minos.orchestration.IndexStateStore;
-import com.minos.registry.LocalProjectRegistry;
+import com.minos.registry.InterProcessLocalProjectRegistry;
 import com.minos.registry.ProjectRegistry;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.store.CodeKnowledgeSnapshotStore;
@@ -28,7 +28,7 @@ public final class LocalStorageBackend implements StorageBackend {
 
     public LocalStorageBackend(Path home) throws IOException {
         Path root = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        this.projectRegistry = new LocalProjectRegistry(root.resolve("registry"));
+        this.projectRegistry = new InterProcessLocalProjectRegistry(root.resolve("registry"));
         this.snapshotStore = new FileSymbolSnapshotStore(root.resolve("symbol-snapshots"));
         this.indexStateStore = new FileIndexStateStore(root.resolve("index-state"));
         this.fingerprintStore = new FileProjectFingerprintSnapshotStore(root.resolve("fingerprint-snapshots"));

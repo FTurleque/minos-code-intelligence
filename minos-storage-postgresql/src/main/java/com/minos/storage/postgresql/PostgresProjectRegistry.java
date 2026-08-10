@@ -231,6 +231,22 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         }
     }
 
+    @Override
+    public boolean deleteProject(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM projects WHERE id=?")) {
+                    statement.setObject(1, projectId);
+                    return statement.executeUpdate() > 0;
+                }
+            });
+        } catch (SQLException exception) {
+            throw io("delete project", exception);
+        }
+    }
+
     private RootIdentity rootIdentity(Path physicalRoot) throws IOException {
         boolean portable = mapping.isPresent();
         try {

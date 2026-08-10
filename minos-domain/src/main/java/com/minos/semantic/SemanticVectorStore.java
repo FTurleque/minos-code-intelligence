@@ -15,6 +15,14 @@ public interface SemanticVectorStore {
     void replace(IndexSnapshot snapshot) throws IOException;
     void delete(String projectId) throws IOException;
 
+    /**
+     * Loads only index metadata when the backend can do so cheaply. The default preserves
+     * compatibility for simple/local stores by deriving metadata from the full snapshot.
+     */
+    default Optional<IndexMetadata> metadata(String projectId) throws IOException {
+        return load(projectId).map(IndexMetadata::from);
+    }
+
     /** Stable diagnostic identifier for the vector ranking engine. */
     default String searchEngine() { return "exact-linear"; }
 
@@ -68,6 +76,32 @@ public interface SemanticVectorStore {
         return bytes;
     }
 
+    record IndexMetadata(
+            String projectId,
+            String snapshotId,
+            String providerId,
+            String modelId,
+            int dimensions,
+            long builtAtEpochMilli,
+            int documentCount
+    ) {
+        public IndexMetadata {
+            requireText(projectId, "projectId");
+            requireText(snapshotId, "snapshotId");
+            requireText(providerId, "providerId");
+            requireText(modelId, "modelId");
+            if (dimensions < 1) throw new IllegalArgumentException("dimensions must be greater than zero");
+            if (builtAtEpochMilli < 0L) throw new IllegalArgumentException("builtAtEpochMilli must not be negative");
+            if (documentCount < 0) throw new IllegalArgumentException("documentCount must not be negative");
+        }
+
+        static IndexMetadata from(IndexSnapshot snapshot) {
+            return new IndexMetadata(
+                    snapshot.projectId(), snapshot.snapshotId(), snapshot.providerId(), snapshot.modelId(),
+                    snapshot.dimensions(), snapshot.builtAtEpochMilli(), snapshot.documents().size());
+        }
+    }
+
     record VectorHit(SemanticDocument document, double score) {
         public VectorHit {
             Objects.requireNonNull(document, "document");
@@ -99,5 +133,9 @@ public interface SemanticVectorStore {
         private static void requireText(String value, String name) {
             if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
         }
+    }
+
+    private static void requireText(String value, String name) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
     }
 }

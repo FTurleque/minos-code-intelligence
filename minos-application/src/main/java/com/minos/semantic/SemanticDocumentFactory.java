@@ -19,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /** Builds deterministic SYMBOL/FILE/CHUNK semantic units from one active MINOS snapshot. */
 public final class SemanticDocumentFactory {
@@ -29,25 +28,33 @@ public final class SemanticDocumentFactory {
     private static final int FILE_MAX_TOKENS = 2_048;
 
     public List<SemanticDocument> build(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
+        return build(project, snapshot, SemanticIndexBudget.DEFAULT, 1);
+    }
+
+    public List<SemanticDocument> build(
+            RegisteredProject project,
+            CodeKnowledgeSnapshot snapshot,
+            SemanticIndexBudget budget,
+            int dimensions
+    ) throws IOException {
         Objects.requireNonNull(project, "project");
         Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(budget, "budget");
         String projectId = project.id().toString();
         if (!project.id().equals(snapshot.projectId())) {
             throw new IllegalArgumentException("snapshot belongs to another project");
         }
 
+        SemanticIndexBudget.Tracker tracker = budget.tracker(dimensions);
         LocalSourceReader sourceReader = new LocalSourceReader(project.rootPath());
-        List<Symbol> symbols = snapshot.symbols().stream()
-                .filter(symbol -> !symbol.external())
-                .sorted(Comparator.comparing(Symbol::symbolKey).thenComparing(Symbol::id))
-                .toList();
         List<SemanticDocument> documents = new ArrayList<>();
         Map<String, List<Symbol>> symbolsByFile = new LinkedHashMap<>();
 
-        for (Symbol symbol : symbols) {
+        for (Symbol symbol : snapshot.symbols()) {
+            if (symbol.external()) continue;
             String stableSymbolKey = "symbol:" + symbol.symbolKey();
             String symbolContent = bounded(symbolText(symbol), SYMBOL_MAX_TOKENS);
-            documents.add(document(projectId, snapshot.snapshotId(), SemanticDocumentKind.SYMBOL,
+            add(documents, tracker, document(projectId, snapshot.snapshotId(), SemanticDocumentKind.SYMBOL,
                     stableSymbolKey, symbol.id(), fileId(symbol), startLine(symbol), endLine(symbol), symbolContent));
 
             SymbolLocation location = symbol.location();
@@ -58,7 +65,7 @@ public final class SemanticDocumentFactory {
                         .filter(value -> !value.isBlank())
                         .orElse(symbolContent);
                 String chunkStableKey = "chunk:" + symbol.symbolKey() + ":" + location.startLine() + ":" + location.endLine();
-                documents.add(document(projectId, snapshot.snapshotId(), SemanticDocumentKind.CHUNK,
+                add(documents, tracker, document(projectId, snapshot.snapshotId(), SemanticDocumentKind.CHUNK,
                         chunkStableKey, symbol.id(), location.fileId(), location.startLine(), location.endLine(),
                         bounded(chunkText, CHUNK_MAX_TOKENS)));
             }
@@ -72,7 +79,7 @@ public final class SemanticDocumentFactory {
                             .append(textOr(symbol.qualifiedName(), symbol.name())).append(' ')
                             .append(textOr(symbol.signature(), "")).append('\n'));
             String stableFileKey = "file:" + fileId;
-            documents.add(document(projectId, snapshot.snapshotId(), SemanticDocumentKind.FILE,
+            add(documents, tracker, document(projectId, snapshot.snapshotId(), SemanticDocumentKind.FILE,
                     stableFileKey, fileId, fileId, 0, 0, bounded(aggregate.toString(), FILE_MAX_TOKENS)));
         }
 
@@ -85,6 +92,15 @@ public final class SemanticDocumentFactory {
             previous = document.stableKey();
         }
         return List.copyOf(documents);
+    }
+
+    private static void add(
+            List<SemanticDocument> documents,
+            SemanticIndexBudget.Tracker tracker,
+            SemanticDocument document
+    ) throws IOException {
+        tracker.account(document);
+        documents.add(document);
     }
 
     private static SemanticDocument document(

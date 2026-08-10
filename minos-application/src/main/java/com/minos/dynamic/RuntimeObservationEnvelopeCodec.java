@@ -1,5 +1,7 @@
 package com.minos.dynamic;
 
+import com.minos.io.BoundedInputStream;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -29,11 +31,14 @@ public final class RuntimeObservationEnvelopeCodec {
         if (path == null || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("runtime observation input must be a regular non-symlink file");
         }
-        long size = Files.size(path);
-        if (size < 1 || size > MAX_INPUT_BYTES) {
-            throw new IOException("runtime observation input must be between 1 and " + MAX_INPUT_BYTES + " bytes");
+        byte[] bytes;
+        try (BoundedInputStream input = new BoundedInputStream(
+                Files.newInputStream(path), MAX_INPUT_BYTES, "runtime observation input")) {
+            bytes = input.readAllBytes();
         }
-        byte[] bytes = Files.readAllBytes(path);
+        if (bytes.length < 1) {
+            throw new IOException("runtime observation input must not be empty");
+        }
         String text = decodeUtf8(bytes);
         if (text.startsWith("\ufeff")) throw new IOException("runtime observation input must not contain a BOM");
         List<String> lines = new ArrayList<>(Arrays.asList(text.split("\n", -1)));

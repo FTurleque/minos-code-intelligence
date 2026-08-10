@@ -58,9 +58,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Long-lived composition root for one MINOS home and one selected storage backend. */
-public final class MinosApplication {
+public final class MinosApplication implements AutoCloseable {
 
     public static final String SEMANTIC_PROVIDER_ENV = "MINOS_SEMANTIC_PROVIDER";
     public static final String SEMANTIC_PROVIDER_PROPERTY = "minos.semantic.provider";
@@ -76,7 +77,9 @@ public final class MinosApplication {
     public static final String HOSTED_MODE_PROPERTY = "minos.hosted.mode";
 
     private final Path home;
+    private final StorageBackend storageBackend;
     private final String storageBackendId;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
     private final ProjectRegistry projectRegistry;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore indexStateStore;
@@ -109,7 +112,7 @@ public final class MinosApplication {
 
     private MinosApplication(
             Path home,
-            String storageBackendId,
+            StorageBackend storageBackend,
             ProjectRegistry projectRegistry,
             CodeKnowledgeSnapshotStore snapshotStore,
             IndexStateStore indexStateStore,
@@ -130,7 +133,8 @@ public final class MinosApplication {
             Optional<HostedControlPlaneService> hostedControlPlaneService
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
-        this.storageBackendId = requireText(storageBackendId, "storageBackendId");
+        this.storageBackend = Objects.requireNonNull(storageBackend, "storageBackend");
+        this.storageBackendId = requireText(storageBackend.id(), "storageBackendId");
         this.projectRegistry = Objects.requireNonNull(projectRegistry, "projectRegistry");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.indexStateStore = Objects.requireNonNull(indexStateStore, "indexStateStore");
@@ -171,29 +175,37 @@ public final class MinosApplication {
     /** Opens MINOS using one immutable settings snapshot for this home. */
     public static MinosApplication open(Path home) throws IOException {
         MinosRuntimeSettings settings = MinosRuntimeSettings.load(home);
-        Builder builder = builder(home).storageBackend(StorageBackends.open(StorageBackendConfiguration.resolve(settings)));
-        String configured = setting(settings, SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
-        String provider = configured == null || configured.isBlank() ? "disabled" : configured.trim().toLowerCase(Locale.ROOT);
-        if ("local-hash".equals(provider)) {
-            builder.embeddingProvider(new LocalHashEmbeddingProvider());
-        } else if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
-            String model = requiredSetting(settings, SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
-            int dimensions = parsePositiveInt(requiredSetting(settings, SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
-            String endpointValue = setting(settings, SEMANTIC_ENDPOINT_PROPERTY, SEMANTIC_ENDPOINT_ENV);
-            URI endpoint = endpointValue == null || endpointValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_ENDPOINT : URI.create(endpointValue.trim());
-            String timeoutValue = setting(settings, SEMANTIC_TIMEOUT_SECONDS_PROPERTY, SEMANTIC_TIMEOUT_SECONDS_ENV);
-            Duration timeout = timeoutValue == null || timeoutValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
-                    : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
-            builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout));
-        } else if (!"disabled".equals(provider)) {
-            throw new IllegalArgumentException("unsupported semantic provider: " + configured);
+        StorageBackend backend = StorageBackends.open(StorageBackendConfiguration.resolve(settings));
+        boolean buildInvoked = false;
+        try {
+            Builder builder = builder(home).storageBackend(backend);
+            String configured = setting(settings, SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
+            String provider = configured == null || configured.isBlank() ? "disabled" : configured.trim().toLowerCase(Locale.ROOT);
+            if ("local-hash".equals(provider)) {
+                builder.embeddingProvider(new LocalHashEmbeddingProvider());
+            } else if ("ollama".equals(provider) || "local-ollama".equals(provider)) {
+                String model = requiredSetting(settings, SEMANTIC_MODEL_PROPERTY, SEMANTIC_MODEL_ENV);
+                int dimensions = parsePositiveInt(requiredSetting(settings, SEMANTIC_DIMENSIONS_PROPERTY, SEMANTIC_DIMENSIONS_ENV), "semantic dimensions");
+                String endpointValue = setting(settings, SEMANTIC_ENDPOINT_PROPERTY, SEMANTIC_ENDPOINT_ENV);
+                URI endpoint = endpointValue == null || endpointValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_ENDPOINT : URI.create(endpointValue.trim());
+                String timeoutValue = setting(settings, SEMANTIC_TIMEOUT_SECONDS_PROPERTY, SEMANTIC_TIMEOUT_SECONDS_ENV);
+                Duration timeout = timeoutValue == null || timeoutValue.isBlank() ? OllamaEmbeddingProvider.DEFAULT_TIMEOUT
+                        : Duration.ofSeconds(parsePositiveInt(timeoutValue, "semantic timeout seconds"));
+                builder.embeddingProvider(new OllamaEmbeddingProvider(endpoint, model, dimensions, timeout));
+            } else if (!"disabled".equals(provider)) {
+                throw new IllegalArgumentException("unsupported semantic provider: " + configured);
+            }
+            String hostedMode = setting(settings, HOSTED_MODE_PROPERTY, HOSTED_MODE_ENV);
+            if (hostedMode != null && !hostedMode.isBlank() && !"disabled".equalsIgnoreCase(hostedMode)) {
+                if (!"enabled".equalsIgnoreCase(hostedMode)) throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
+                builder.hostedTenantKeyProvider(new EnvironmentHostedTenantKeyProvider());
+            }
+            buildInvoked = true;
+            return builder.build();
+        } catch (IOException | RuntimeException exception) {
+            if (!buildInvoked) closeBackendOnFailure(backend, exception);
+            throw exception;
         }
-        String hostedMode = setting(settings, HOSTED_MODE_PROPERTY, HOSTED_MODE_ENV);
-        if (hostedMode != null && !hostedMode.isBlank() && !"disabled".equalsIgnoreCase(hostedMode)) {
-            if (!"enabled".equalsIgnoreCase(hostedMode)) throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
-            builder.hostedTenantKeyProvider(new EnvironmentHostedTenantKeyProvider());
-        }
-        return builder.build();
     }
 
     private static String setting(MinosRuntimeSettings settings, String property, String environment) {
@@ -251,12 +263,27 @@ public final class MinosApplication {
     public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
     public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
 
+    @Override
+    public void close() throws Exception {
+        if (closed.compareAndSet(false, true)) {
+            storageBackend.close();
+        }
+    }
+
     public IndexerRegistry indexerRegistry(String providerOverride) {
         IndexerRegistry registry = new IndexerRegistry();
         if (providerOverride == null || providerOverride.isBlank()) { registry.registerAll(indexerDescriptors); return registry; }
         IndexerDescriptor descriptor = indexerDescriptors.stream().filter(candidate -> providerOverride.equals(candidate.id())).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("unknown provider override: " + providerOverride));
         registry.register(descriptor); return registry;
+    }
+
+    private static void closeBackendOnFailure(StorageBackend backend, Exception original) {
+        try {
+            backend.close();
+        } catch (Exception closeFailure) {
+            original.addSuppressed(closeFailure);
+        }
     }
 
     public static final class Builder {
@@ -314,47 +341,52 @@ public final class MinosApplication {
             if (selected == null && !explicitStore) selected = StorageBackends.open(StorageBackendConfiguration.resolve(home));
             if (selected == null) selected = new com.minos.storage.LocalStorageBackend(home);
 
-            ProjectRegistry effectiveRegistry = projectRegistry != null ? projectRegistry : selected.projectRegistry();
-            CodeKnowledgeSnapshotStore effectiveSnapshots = snapshotStore != null ? snapshotStore : selected.snapshotStore();
-            IndexStateStore effectiveIndexState = indexStateStore != null ? indexStateStore : selected.indexStateStore();
-            ProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null ? fingerprintStore : selected.fingerprintStore();
-            SemanticVectorStore effectiveSemanticStore = semanticVectorStore != null ? semanticVectorStore : selected.semanticVectorStore();
-            RuntimeObservationStore effectiveRuntimeObservations = runtimeObservationStore != null ? runtimeObservationStore : selected.runtimeObservationStore();
-            ProjectDiscoveryService effectiveDiscovery = discoveryService != null ? discoveryService : new ProjectDiscoveryService();
-            ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
-            ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
-            IncrementalIndexingPlanner effectivePlanner = incrementalIndexingPlanner != null ? incrementalIndexingPlanner : new IncrementalIndexingPlanner();
-            List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null ? indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM24Descriptors());
-            ProviderRuntimeManager effectiveProviderRuntime = providerRuntimeManager != null ? providerRuntimeManager
-                    : new CompositeProviderRuntimeManager(List.of(new ManagedScipProviderRuntimeManager(home),
-                    new ManagedScipPythonRuntimeManager(home), new ManagedPolyglotScipRuntimeManager(home)));
-            SnapshotStager effectiveStager = snapshotStager;
-            SnapshotPromoter effectivePromoter = snapshotPromoter;
-            if ((effectiveStager == null) != (effectivePromoter == null)) throw new IllegalStateException("snapshot stager and promoter must be configured together");
-            if (effectiveStager == null) {
-                ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, effectiveSnapshots, effectiveDescriptors);
-                effectiveStager = lifecycle; effectivePromoter = lifecycle;
+            try {
+                ProjectRegistry effectiveRegistry = projectRegistry != null ? projectRegistry : selected.projectRegistry();
+                CodeKnowledgeSnapshotStore effectiveSnapshots = snapshotStore != null ? snapshotStore : selected.snapshotStore();
+                IndexStateStore effectiveIndexState = indexStateStore != null ? indexStateStore : selected.indexStateStore();
+                ProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null ? fingerprintStore : selected.fingerprintStore();
+                SemanticVectorStore effectiveSemanticStore = semanticVectorStore != null ? semanticVectorStore : selected.semanticVectorStore();
+                RuntimeObservationStore effectiveRuntimeObservations = runtimeObservationStore != null ? runtimeObservationStore : selected.runtimeObservationStore();
+                ProjectDiscoveryService effectiveDiscovery = discoveryService != null ? discoveryService : new ProjectDiscoveryService();
+                ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
+                ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
+                IncrementalIndexingPlanner effectivePlanner = incrementalIndexingPlanner != null ? incrementalIndexingPlanner : new IncrementalIndexingPlanner();
+                List<IndexerDescriptor> effectiveDescriptors = indexerDescriptors != null ? indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM24Descriptors());
+                ProviderRuntimeManager effectiveProviderRuntime = providerRuntimeManager != null ? providerRuntimeManager
+                        : new CompositeProviderRuntimeManager(List.of(new ManagedScipProviderRuntimeManager(home),
+                        new ManagedScipPythonRuntimeManager(home), new ManagedPolyglotScipRuntimeManager(home)));
+                SnapshotStager effectiveStager = snapshotStager;
+                SnapshotPromoter effectivePromoter = snapshotPromoter;
+                if ((effectiveStager == null) != (effectivePromoter == null)) throw new IllegalStateException("snapshot stager and promoter must be configured together");
+                if (effectiveStager == null) {
+                    ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home, effectiveSnapshots, effectiveDescriptors);
+                    effectiveStager = lifecycle; effectivePromoter = lifecycle;
+                }
+                GitIntelligenceService effectiveGit = gitIntelligence != null ? gitIntelligence : new GitIntelligenceService();
+                List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
+                        ? programGraphProviders : ProgramGraphService.productionProviders(effectiveFingerprints);
+                Optional<HostedControlPlaneService> effectiveHosted = Optional.empty();
+                if (hostedTenantKeyProvider != null) {
+                    FileHostedControlPlaneStore hostedStore = new FileHostedControlPlaneStore(home.resolve("hosted-control-plane"), hostedTenantKeyProvider);
+                    HmacHostedIdentityProvider hostedIdentities = new HmacHostedIdentityProvider(hostedTenantKeyProvider);
+                    CodeKnowledgeSnapshotStore exactSnapshots = effectiveSnapshots;
+                    effectiveHosted = Optional.of(new HostedControlPlaneService(hostedStore, hostedIdentities, hostedTenantKeyProvider,
+                            (projectId, snapshotId) -> {
+                                var active = exactSnapshots.loadActiveKnowledge(projectId)
+                                        .orElseThrow(() -> new IOException("hosted project has no active snapshot: " + projectId));
+                                if (!snapshotId.equals(active.snapshotId())) throw new IOException("hosted binding requires the exact active snapshot: " + snapshotId);
+                            }, hostedClock));
+                }
+                return new MinosApplication(home, selected, effectiveRegistry, effectiveSnapshots, effectiveIndexState,
+                        effectiveFingerprints, effectiveSemanticStore, effectiveRuntimeObservations, effectiveDiscovery,
+                        effectiveFingerprintService, effectiveInvalidation, effectivePlanner, effectiveProviderRuntime,
+                        effectiveDescriptors, effectiveStager, effectivePromoter, effectiveGit, effectiveProgramGraphProviders,
+                        Optional.ofNullable(embeddingProvider), effectiveHosted);
+            } catch (IOException | RuntimeException exception) {
+                closeBackendOnFailure(selected, exception);
+                throw exception;
             }
-            GitIntelligenceService effectiveGit = gitIntelligence != null ? gitIntelligence : new GitIntelligenceService();
-            List<ProgramGraphProvider> effectiveProgramGraphProviders = programGraphProviders != null
-                    ? programGraphProviders : ProgramGraphService.productionProviders(effectiveFingerprints);
-            Optional<HostedControlPlaneService> effectiveHosted = Optional.empty();
-            if (hostedTenantKeyProvider != null) {
-                FileHostedControlPlaneStore hostedStore = new FileHostedControlPlaneStore(home.resolve("hosted-control-plane"), hostedTenantKeyProvider);
-                HmacHostedIdentityProvider hostedIdentities = new HmacHostedIdentityProvider(hostedTenantKeyProvider);
-                CodeKnowledgeSnapshotStore exactSnapshots = effectiveSnapshots;
-                effectiveHosted = Optional.of(new HostedControlPlaneService(hostedStore, hostedIdentities, hostedTenantKeyProvider,
-                        (projectId, snapshotId) -> {
-                            var active = exactSnapshots.loadActiveKnowledge(projectId)
-                                    .orElseThrow(() -> new IOException("hosted project has no active snapshot: " + projectId));
-                            if (!snapshotId.equals(active.snapshotId())) throw new IOException("hosted binding requires the exact active snapshot: " + snapshotId);
-                        }, hostedClock));
-            }
-            return new MinosApplication(home, selected.id(), effectiveRegistry, effectiveSnapshots, effectiveIndexState,
-                    effectiveFingerprints, effectiveSemanticStore, effectiveRuntimeObservations, effectiveDiscovery,
-                    effectiveFingerprintService, effectiveInvalidation, effectivePlanner, effectiveProviderRuntime,
-                    effectiveDescriptors, effectiveStager, effectivePromoter, effectiveGit, effectiveProgramGraphProviders,
-                    Optional.ofNullable(embeddingProvider), effectiveHosted);
         }
     }
 }

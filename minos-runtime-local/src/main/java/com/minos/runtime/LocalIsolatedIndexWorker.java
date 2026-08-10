@@ -13,12 +13,14 @@ import com.minos.remote.DistributedIndexing.WorkerResponse;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
@@ -220,6 +222,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 Path relative = source.relativize(directory);
                 if (isGitPath(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -234,6 +237,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 Path relative = source.relativize(file);
                 if (isGitPath(relative)) {
                     return FileVisitResult.CONTINUE;
@@ -244,13 +248,31 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 if (!attributes.isRegularFile()) {
                     throw new IOException("remote worker rejects non-regular workspace entries");
                 }
-                budget.accountRegularFile(attributes.size());
+                budget.accountFile();
                 Path target = checkedTarget(targetRoot, relative);
                 Files.createDirectories(target.getParent());
-                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS);
+                copyBounded(file, target, budget);
+                Files.setLastModifiedTime(target, attributes.lastModifiedTime());
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    private static void copyBounded(Path source, Path target, SourceBudgetPolicy.Tracker budget) throws IOException {
+        byte[] buffer = new byte[8192];
+        try (InputStream input = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+             OutputStream output = Files.newOutputStream(
+                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read == 0) continue;
+                budget.accountBytes(read);
+                output.write(buffer, 0, read);
+            }
+        } catch (Exception exception) {
+            Files.deleteIfExists(target);
+            throw exception;
+        }
     }
 
     private static boolean isGitPath(Path relative) {
@@ -292,6 +314,5 @@ public final class LocalIsolatedIndexWorker implements Worker {
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-DOS file systems do not need this Windows-specific cleanup.
         }
-        path.toFile().setWritable(true);
     }
 }

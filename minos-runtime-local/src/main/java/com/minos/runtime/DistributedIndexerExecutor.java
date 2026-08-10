@@ -11,13 +11,16 @@ import com.minos.remote.DistributedIndexing.WorkerResponse;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.runtime.DistributedArtifactBundleStore.VerifiedArtifact;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 /** Worker-backed executor that accepts only a verified artifact matching the exact request. */
-public final class DistributedIndexerExecutor implements IndexerExecutor {
+public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCloseable {
 
     private final String indexerId;
     private final String providerVersion;
@@ -25,6 +28,7 @@ public final class DistributedIndexerExecutor implements IndexerExecutor {
     private final WorkerNetworkPolicy networkPolicy;
     private final Worker worker;
     private final DistributedArtifactBundleStore bundleStore;
+    private final List<VerifiedArtifact> leasedArtifacts = new ArrayList<>();
     private volatile VerifiedArtifact lastVerifiedArtifact;
 
     public DistributedIndexerExecutor(
@@ -66,21 +70,50 @@ public final class DistributedIndexerExecutor implements IndexerExecutor {
                 networkPolicy
         );
         WorkerResponse response = Objects.requireNonNull(worker.execute(workerRequest), "worker response");
+        VerifiedArtifact verified = null;
+        boolean retained = false;
         try {
-            VerifiedArtifact verified = bundleStore.accept(response.bundle());
+            verified = bundleStore.accept(response.bundle());
             if (!response.manifest().equals(verified.manifest())) {
                 throw new IllegalStateException("worker response manifest differs from the transported manifest");
             }
             verifyManifest(request, verified.manifest());
-            lastVerifiedArtifact = verified;
-            return new IndexingArtifact(request.selection().language(), indexerId, verified.artifact());
+            synchronized (leasedArtifacts) {
+                leasedArtifacts.add(verified);
+                lastVerifiedArtifact = verified;
+            }
+            retained = true;
+            return new IndexingArtifact(
+                    request.selection().language(), indexerId, verified.artifact(), request.projectRelativeRoot());
         } finally {
+            if (verified != null && !retained) {
+                bundleStore.release(verified);
+            }
             Files.deleteIfExists(response.bundle());
         }
     }
 
     public Optional<VerifiedArtifact> verifiedArtifact() {
         return Optional.ofNullable(lastVerifiedArtifact);
+    }
+
+    @Override
+    public void close() throws IOException {
+        List<VerifiedArtifact> releases;
+        synchronized (leasedArtifacts) {
+            releases = List.copyOf(leasedArtifacts);
+            leasedArtifacts.clear();
+            lastVerifiedArtifact = null;
+        }
+        IOException failure = null;
+        for (VerifiedArtifact artifact : releases) {
+            try {
+                bundleStore.release(artifact);
+            } catch (IOException exception) {
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private void verifyManifest(IndexingExecutionRequest request, DistributedArtifactManifest manifest) {

@@ -47,8 +47,10 @@ import java.util.Set;
  * <p>This class is an exposure layer only: it maps the public API contract to
  * M1-M8 query services and never reimplements code-intelligence analysis.</p>
  */
-public final class LocalMinosApi implements MinosApi {
+public final class LocalMinosApi implements MinosApi, AutoCloseable {
 
+    private final MinosApplication application;
+    private final boolean ownsApplication;
     private final ProjectOperations projectOperations;
     private final ProjectSymbolQuery symbolQuery;
     private final ProjectArchitectureQuery architectureQuery;
@@ -56,12 +58,18 @@ public final class LocalMinosApi implements MinosApi {
     private final MinosTeamApi teamApi;
 
     public LocalMinosApi(Path home) throws MinosApiException {
-        this(openApplication(home));
+        this(openApplication(home), true);
     }
 
     /** Uses an already-composed application so API and other surfaces share stateful infrastructure. */
     public LocalMinosApi(MinosApplication application) {
+        this(application, false);
+    }
+
+    private LocalMinosApi(MinosApplication application, boolean ownsApplication) {
         MinosApplication app = Objects.requireNonNull(application, "application");
+        this.application = app;
+        this.ownsApplication = ownsApplication;
         this.projectOperations = new LocalProjectOperations(app);
         this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
         this.architectureQuery = app.architectureQuery();
@@ -190,6 +198,16 @@ public final class LocalMinosApi implements MinosApi {
     @Override
     public MinosTeamApi team() {
         return teamApi;
+    }
+
+    @Override
+    public void close() throws MinosApiException {
+        if (!ownsApplication) return;
+        try {
+            application.close();
+        } catch (Exception exception) {
+            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS API shutdown failed", exception);
+        }
     }
 
     private static ProjectDto project(ProjectOperations.ProjectView view) {

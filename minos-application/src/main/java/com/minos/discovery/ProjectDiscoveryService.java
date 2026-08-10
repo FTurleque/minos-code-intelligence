@@ -115,7 +115,8 @@ public final class ProjectDiscoveryService {
         SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project discovery");
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 if (!directory.equals(root) && ignorePolicy.isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -124,6 +125,7 @@ public final class ProjectDiscoveryService {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
                 Path relative = root.relativize(file);
                 if (!ignorePolicy.isIgnored(relative, false)) {

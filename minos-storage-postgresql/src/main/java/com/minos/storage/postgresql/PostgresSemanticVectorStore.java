@@ -29,6 +29,40 @@ final class PostgresSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<IndexMetadata> metadata(String projectId) throws IOException {
+        UUID id = uuid(projectId);
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at,"
+                                + "COUNT(d.stable_key) "
+                                + "FROM semantic_index_meta m LEFT JOIN semantic_documents d "
+                                + "ON d.project_id=m.project_id WHERE m.project_id=? "
+                                + "GROUP BY m.snapshot_id,m.provider_id,m.model_id,m.dimensions,m.built_at")) {
+                    statement.setObject(1, id);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        long count = result.getLong(6);
+                        if (count > Integer.MAX_VALUE) {
+                            throw new IOException("semantic document count exceeds supported integer range");
+                        }
+                        return Optional.of(new IndexMetadata(
+                                projectId,
+                                result.getString(1),
+                                result.getString(2),
+                                result.getString(3),
+                                result.getInt(4),
+                                result.getLong(5),
+                                (int) count));
+                    }
+                }
+            });
+        } catch (SQLException exception) {
+            throw new IOException("unable to load pgvector semantic metadata", exception);
+        }
+    }
+
+    @Override
     public Optional<IndexSnapshot> load(String projectId) throws IOException {
         UUID id = uuid(projectId);
         try {

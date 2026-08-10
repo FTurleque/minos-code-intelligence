@@ -35,13 +35,17 @@ class DistributedArtifactBundleStoreTest {
 
         var first = store.accept(bundle);
         var second = store.accept(bundle);
-
-        assertEquals(manifest, first.manifest());
-        assertEquals("scip-one", Files.readString(first.artifact()));
-        assertFalse(first.cacheHit());
-        assertTrue(second.cacheHit());
-        assertEquals(first.cacheKey(), second.cacheKey());
-        assertEquals(DistributedArtifactBundleStore.sha256(bundle), second.bundleSha256());
+        try {
+            assertEquals(manifest, first.manifest());
+            assertEquals("scip-one", Files.readString(first.artifact()));
+            assertFalse(first.cacheHit());
+            assertTrue(second.cacheHit());
+            assertEquals(first.cacheKey(), second.cacheKey());
+            assertEquals(DistributedArtifactBundleStore.sha256(bundle), second.bundleSha256());
+        } finally {
+            store.release(second);
+            store.release(first);
+        }
     }
 
     @Test
@@ -69,7 +73,7 @@ class DistributedArtifactBundleStoreTest {
     }
 
     @Test
-    void evictsOldestArtifactWhenEntryLimitIsReached(@TempDir Path temp) throws Exception {
+    void evictsOldestArtifactAfterItsLeaseIsReleased(@TempDir Path temp) throws Exception {
         DistributedArtifactBundleStore store = store(temp, 1);
         Path firstArtifact = Files.writeString(temp.resolve("first.scip"), "first");
         Path secondArtifact = Files.writeString(temp.resolve("second.scip"), "second");
@@ -78,14 +82,48 @@ class DistributedArtifactBundleStoreTest {
                 manifest("provider-one", firstArtifact, Instant.parse("2026-07-29T00:00:01Z")),
                 firstArtifact
         ));
+        store.release(first);
         var second = store.accept(store.createBundle(
                 temp.resolve("second.zip"),
                 manifest("provider-two", secondArtifact, Instant.parse("2026-07-29T00:00:02Z")),
                 secondArtifact
         ));
+        try {
+            assertFalse(Files.exists(first.artifact()));
+            assertTrue(Files.isRegularFile(second.artifact()));
+        } finally {
+            store.release(second);
+        }
+    }
 
-        assertFalse(Files.exists(first.artifact()));
-        assertTrue(Files.isRegularFile(second.artifact()));
+    @Test
+    void refusesToEvictAnArtifactWithAnActiveLeaseWithoutLeavingRejectedEntry(@TempDir Path temp) throws Exception {
+        DistributedArtifactBundleStore store = store(temp, 1);
+        Path firstArtifact = Files.writeString(temp.resolve("first-active.scip"), "first");
+        Path secondArtifact = Files.writeString(temp.resolve("second-active.scip"), "second");
+        var first = store.accept(store.createBundle(
+                temp.resolve("first-active.zip"),
+                manifest("provider-active-one", firstArtifact, Instant.parse("2026-07-29T00:00:01Z")),
+                firstArtifact));
+        try {
+            assertThrows(java.io.IOException.class, () -> store.accept(store.createBundle(
+                    temp.resolve("second-active.zip"),
+                    manifest("provider-active-two", secondArtifact, Instant.parse("2026-07-29T00:00:02Z")),
+                    secondArtifact)));
+            assertTrue(Files.isRegularFile(first.artifact()));
+            assertEquals(1L, cacheEntryCount(temp));
+        } finally {
+            store.release(first);
+        }
+    }
+
+    private static long cacheEntryCount(Path temp) throws Exception {
+        Path cache = temp.resolve("home").resolve("distributed-artifacts");
+        try (var entries = Files.list(cache)) {
+            return entries.filter(Files::isDirectory)
+                    .filter(path -> !path.getFileName().toString().startsWith("."))
+                    .count();
+        }
     }
 
     private static DistributedArtifactBundleStore store(Path temp, int maxEntries) throws Exception {

@@ -29,4 +29,12 @@ public interface ProjectRegistry {
     List<RegisteredProject> listProjects() throws IOException;
 
     List<RegisteredWorkspace> listWorkspaces() throws IOException;
+
+    /**
+     * Removes one project registration when a higher-level operation must roll back a registration.
+     * Implementations that do not support deletion remain source-compatible and fail explicitly.
+     */
+    default boolean deleteProject(UUID projectId) throws IOException {
+        throw new UnsupportedOperationException("project deletion is not supported by this registry");
+    }
 }

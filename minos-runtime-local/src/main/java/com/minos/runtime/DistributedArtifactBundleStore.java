@@ -12,6 +12,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -24,9 +27,11 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -42,7 +47,10 @@ public final class DistributedArtifactBundleStore {
     private static final long MAX_MANIFEST_BYTES = 64L * 1024L;
 
     private final Path cacheRoot;
+    private final Path leasesRoot;
     private final DistributedArtifactCachePolicy policy;
+    private final Object leaseMonitor = new Object();
+    private final Map<String, LeaseState> activeLeases = new HashMap<>();
 
     public DistributedArtifactBundleStore(Path minosHome) throws IOException {
         this(minosHome, DistributedArtifactCachePolicy.DEFAULT);
@@ -54,8 +62,10 @@ public final class DistributedArtifactBundleStore {
     ) throws IOException {
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         this.cacheRoot = home.resolve("distributed-artifacts");
+        this.leasesRoot = cacheRoot.resolve(".leases");
         this.policy = Objects.requireNonNull(policy, "policy");
         Files.createDirectories(cacheRoot);
+        Files.createDirectories(leasesRoot);
     }
 
     public Path createBundle(
@@ -90,7 +100,9 @@ public final class DistributedArtifactBundleStore {
                 zip.write(manifestBytes);
                 zip.closeEntry();
                 zip.putNextEntry(new ZipEntry(DistributedArtifactManifest.ARTIFACT_PATH));
-                Files.copy(source, zip);
+                try (InputStream input = Files.newInputStream(source)) {
+                    transferBounded(input, zip, policy.maxArtifactBytes());
+                }
                 zip.closeEntry();
             }
             move(temporary, target);
@@ -100,6 +112,10 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
+    /**
+     * Accepts and leases a verified cache entry. The caller must invoke {@link #release(VerifiedArtifact)}
+     * after the artifact has been staged/consumed so cross-process eviction can reclaim it safely.
+     */
     public synchronized VerifiedArtifact accept(Path bundle) throws IOException {
         Path source = Objects.requireNonNull(bundle, "bundle").toAbsolutePath().normalize();
         if (!Files.isRegularFile(source)) {
@@ -111,6 +127,7 @@ public final class DistributedArtifactBundleStore {
         }
 
         Path extraction = Files.createTempDirectory(cacheRoot, ".accept-");
+        String leasedKey = null;
         try {
             Extracted extracted = extract(source, extraction);
             DistributedArtifactManifest manifest = decodeManifest(extracted.manifestBytes());
@@ -125,26 +142,48 @@ public final class DistributedArtifactBundleStore {
             }
 
             String cacheKey = cacheKey(manifest);
+            acquireLease(cacheKey);
+            leasedKey = cacheKey;
             Path entry = cacheRoot.resolve(cacheKey);
             Path cachedArtifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
             Path cachedManifest = entry.resolve(MANIFEST_ENTRY);
+            String bundleSha = sha256(source);
             if (validCached(entry, manifest)) {
                 Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(Instant.now()));
-                return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, true, sha256(source));
+                leasedKey = null;
+                return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, true, bundleSha);
             }
             if (Files.exists(entry)) {
                 deleteCacheTree(entry);
             }
             Files.createDirectory(entry);
-            move(artifact, cachedArtifact);
-            Files.write(cachedManifest, extracted.manifestBytes());
-            evict(cacheKey);
-            return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, false, sha256(source));
+            try {
+                move(artifact, cachedArtifact);
+                Files.write(cachedManifest, extracted.manifestBytes());
+                evict(cacheKey);
+            } catch (IOException | RuntimeException exception) {
+                try {
+                    if (Files.exists(entry)) deleteCacheTree(entry);
+                } catch (IOException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+                throw exception;
+            }
+            leasedKey = null;
+            return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, false, bundleSha);
         } finally {
+            if (leasedKey != null) {
+                releaseLease(leasedKey);
+            }
             if (Files.exists(extraction)) {
                 deleteCacheTree(extraction);
             }
         }
+    }
+
+    public void release(VerifiedArtifact artifact) throws IOException {
+        Objects.requireNonNull(artifact, "artifact");
+        releaseLease(artifact.cacheKey());
     }
 
     private Extracted extract(Path bundle, Path extraction) throws IOException {
@@ -200,7 +239,11 @@ public final class DistributedArtifactBundleStore {
         long total = 0L;
         int read;
         while ((read = input.read(buffer)) != -1) {
-            total = Math.addExact(total, read);
+            try {
+                total = Math.addExact(total, read);
+            } catch (ArithmeticException exception) {
+                throw new IOException("distributed artifact bundle byte counter overflow", exception);
+            }
             if (total > maximum) {
                 throw new IOException("distributed artifact bundle entry exceeds its byte limit");
             }
@@ -305,7 +348,14 @@ public final class DistributedArtifactBundleStore {
             }
         }
         entries.sort(Comparator.comparing(CacheEntry::lastAccessAt).thenComparing(CacheEntry::key));
-        long bytes = entries.stream().mapToLong(CacheEntry::size).sum();
+        long bytes = 0L;
+        for (CacheEntry entry : entries) {
+            try {
+                bytes = Math.addExact(bytes, entry.size());
+            } catch (ArithmeticException exception) {
+                throw new IOException("distributed artifact cache byte counter overflow", exception);
+            }
+        }
         int count = entries.size();
         for (CacheEntry entry : entries) {
             if (count <= policy.maxEntries() && bytes <= policy.maxCacheBytes()) {
@@ -314,12 +364,75 @@ public final class DistributedArtifactBundleStore {
             if (protectedKey.equals(entry.key())) {
                 continue;
             }
-            deleteCacheTree(entry.path());
-            count--;
-            bytes -= entry.size();
+            try (EvictionLease lease = tryAcquireEvictionLease(entry.key())) {
+                if (lease == null) continue;
+                deleteCacheTree(entry.path());
+                count--;
+                bytes -= entry.size();
+            }
         }
         if (count > policy.maxEntries() || bytes > policy.maxCacheBytes()) {
-            throw new IOException("distributed artifact cache limits cannot retain the accepted artifact");
+            throw new IOException("distributed artifact cache limits cannot retain the accepted artifact without evicting an active entry");
+        }
+    }
+
+    private void acquireLease(String cacheKey) throws IOException {
+        synchronized (leaseMonitor) {
+            LeaseState existing = activeLeases.get(cacheKey);
+            if (existing != null) {
+                existing.references++;
+                return;
+            }
+            Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
+            FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            try {
+                FileLock lock = channel.lock();
+                activeLeases.put(cacheKey, new LeaseState(channel, lock));
+            } catch (IOException | RuntimeException exception) {
+                channel.close();
+                throw exception;
+            }
+        }
+    }
+
+    private void releaseLease(String cacheKey) throws IOException {
+        synchronized (leaseMonitor) {
+            LeaseState state = activeLeases.get(cacheKey);
+            if (state == null) return;
+            state.references--;
+            if (state.references > 0) return;
+            activeLeases.remove(cacheKey);
+            IOException failure = null;
+            try { state.lock.release(); } catch (IOException exception) { failure = exception; }
+            try { state.channel.close(); } catch (IOException exception) {
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            }
+            if (failure != null) throw failure;
+        }
+    }
+
+    private EvictionLease tryAcquireEvictionLease(String cacheKey) throws IOException {
+        synchronized (leaseMonitor) {
+            if (activeLeases.containsKey(cacheKey)) return null;
+        }
+        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
+        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock;
+            try {
+                lock = channel.tryLock();
+            } catch (OverlappingFileLockException exception) {
+                channel.close();
+                return null;
+            }
+            if (lock == null) {
+                channel.close();
+                return null;
+            }
+            return new EvictionLease(channel, lock);
+        } catch (IOException | RuntimeException exception) {
+            channel.close();
+            throw exception;
         }
     }
 
@@ -423,9 +536,34 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
-    private record Extracted(byte[] manifestBytes, Path artifact) {
+    private static final class LeaseState {
+        private final FileChannel channel;
+        private final FileLock lock;
+        private int references = 1;
+        private LeaseState(FileChannel channel, FileLock lock) {
+            this.channel = channel;
+            this.lock = lock;
+        }
     }
 
-    private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) {
+    private static final class EvictionLease implements AutoCloseable {
+        private final FileChannel channel;
+        private final FileLock lock;
+        private EvictionLease(FileChannel channel, FileLock lock) {
+            this.channel = channel;
+            this.lock = lock;
+        }
+        @Override
+        public void close() throws IOException {
+            IOException failure = null;
+            try { lock.release(); } catch (IOException exception) { failure = exception; }
+            try { channel.close(); } catch (IOException exception) {
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            }
+            if (failure != null) throw failure;
+        }
     }
+
+    private record Extracted(byte[] manifestBytes, Path artifact) { }
+    private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) { }
 }

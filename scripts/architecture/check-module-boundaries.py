@@ -138,7 +138,6 @@ def check_dependency_policy(graph: dict[str, frozenset[str]]) -> None:
         if forbidden:
             fail(f"{module}: forbidden MINOS dependencies: {', '.join(sorted(forbidden))}")
 
-    # Guard the core regardless of future whitelist edits.
     if graph["minos-domain"]:
         fail("minos-domain must remain dependency-free inside MINOS")
     if graph["minos-engine"] - {"minos-domain"}:
@@ -181,13 +180,14 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
 
                 text = source.read_text(encoding="utf-8")
                 match = PACKAGE.search(text)
-                if match:
-                    expected_parent = Path(*match.group(1).split("."))
-                    if source.relative_to(source_root).parent != expected_parent:
-                        fail(
-                            f"{module}: package/path mismatch for {relative}: "
-                            f"package={match.group(1)}"
-                        )
+                if match is None:
+                    fail(f"{module}: production Java source must declare a package: {relative}")
+                expected_parent = Path(*match.group(1).split("."))
+                if source.relative_to(source_root).parent != expected_parent:
+                    fail(
+                        f"{module}: package/path mismatch for {relative}: "
+                        f"package={match.group(1)}"
+                    )
                 module_count += 1
                 total += 1
         counts[module] = module_count
