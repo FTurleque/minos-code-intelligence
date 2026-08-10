@@ -59,6 +59,9 @@ jobs:
       - name: P0-P2 audit remediation consistency
         run: python scripts/remediation/check-p0-p2.py
 
+      - name: Maven module-boundary fitness gate
+        run: python scripts/architecture/check-module-boundaries.py
+
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
         shell: bash
