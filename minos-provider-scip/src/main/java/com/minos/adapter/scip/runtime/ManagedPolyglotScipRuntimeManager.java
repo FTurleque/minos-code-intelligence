@@ -9,29 +9,39 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-/**
- * M24 runtime extension for C/C++, C#, Go and Rust SCIP providers.
- *
- * <p>The manager stays behind {@link ProviderRuntimeManager}. Managed installs
- * are confined below {@code MINOS_HOME/tools}. C/C++ and Rust stay
- * operator-managed because M24 does not mutate compiler toolchains.</p>
- */
+/** M24 runtime extension for C/C++, C#, Go and Rust SCIP providers. */
 public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeManager {
     private static final Duration INSTALL_TIMEOUT = Duration.ofMinutes(10);
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(20);
+    private static final String VERSION_MARKER = ".minos-version";
+    private static final String SOURCE_MARKER = ".minos-install-source";
+    private static final String INTEGRITY_MARKER = ".minos-integrity.sha256";
+    private static final String DOTNET_SOURCE = "https://api.nuget.org/v3/index.json";
+    private static final String DOTNET_SOURCE_ID = "nuget.org-v3-only";
+    private static final String GO_PROXY = "https://proxy.golang.org";
+    private static final String GO_SUMDB = "sum.golang.org";
+    private static final String GO_SOURCE_ID = "proxy.golang.org+sum.golang.org";
 
     private final Path home;
     private final Path toolsRoot;
@@ -145,9 +155,15 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                     ProviderRuntimeStatus.State.NOT_INSTALLED, Optional.empty(),
                     "managed scip-dotnet 0.2.14 is not installed under " + directory);
         }
+        if (!installSourceMatches(directory, DOTNET_SOURCE_ID) || !integrityManifestMatches(directory)) {
+            return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                    ProviderRuntimeStatus.State.INVALID, Optional.of(executable),
+                    "managed scip-dotnet installation provenance/integrity verification failed");
+        }
         return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
                 ProviderRuntimeStatus.State.READY, Optional.of(executable),
-                "managed scip-dotnet 0.2.14 ready under MINOS_HOME/tools; dotnet SDK=" + sanitize(sdk.output()));
+                "managed scip-dotnet 0.2.14 ready; source restricted to nuget.org and local integrity manifest verified; dotnet SDK="
+                        + sanitize(sdk.output()));
     }
 
     private ProviderRuntimeStatus inspectGo() {
@@ -170,9 +186,15 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                     ProviderRuntimeStatus.State.NOT_INSTALLED, Optional.empty(),
                     "managed scip-go 0.2.7 is not installed under " + directory);
         }
+        if (!installSourceMatches(directory, GO_SOURCE_ID) || !integrityManifestMatches(directory)) {
+            return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
+                    ProviderRuntimeStatus.State.INVALID, Optional.of(executable),
+                    "managed scip-go installation provenance/integrity verification failed");
+        }
         return status(ScipIndexerCatalog.SCIP_GO_ID, ScipIndexerCatalog.SCIP_GO_VERSION,
                 ProviderRuntimeStatus.State.READY, Optional.of(executable),
-                "managed scip-go 0.2.7 ready under MINOS_HOME/tools; " + sanitize(goVersion.output()));
+                "managed scip-go 0.2.7 ready; proxy.golang.org + sum.golang.org enforced and local integrity manifest verified; "
+                        + sanitize(goVersion.output()));
     }
 
     private ProviderRuntimeStatus inspectRust() {
@@ -215,10 +237,19 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
         Files.createDirectories(partial);
+        Path nugetConfig = partial.resolve("minos-nuget.config");
+        Files.writeString(nugetConfig,
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                        + "<configuration><packageSources><clear/>"
+                        + "<add key=\"nuget.org\" value=\"" + DOTNET_SOURCE + "\" protocolVersion=\"3\"/>"
+                        + "</packageSources></configuration>\n",
+                StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         CommandResult result = run(CommandLocator.invocation(
                         dotnet, "tool", "install", "--tool-path", partial.toString(), "scip-dotnet",
-                        "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION),
-                home, INSTALL_TIMEOUT, null, null);
+                        "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION,
+                        "--configfile", nugetConfig.toString(), "--no-cache", "--ignore-failed-sources"),
+                home, INSTALL_TIMEOUT, Map.of());
+        Files.deleteIfExists(nugetConfig);
         if (!result.success()) {
             deleteRecursively(partial);
             throw new IllegalStateException("scip-dotnet install failed: " + sanitize(result.output()));
@@ -228,7 +259,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             deleteRecursively(partial);
             throw new IllegalStateException("scip-dotnet installation completed without executable: " + executable);
         }
-        Files.writeString(partial.resolve(".minos-version"), ScipIndexerCatalog.SCIP_DOTNET_VERSION, StandardCharsets.UTF_8);
+        writeManagedMarkers(partial, ScipIndexerCatalog.SCIP_DOTNET_VERSION, DOTNET_SOURCE_ID);
         replaceDirectory(partial, destination);
         return inspectDotnet();
     }
@@ -240,9 +271,16 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
         Files.createDirectories(partial);
+        Map<String, String> environment = new LinkedHashMap<>();
+        environment.put("GOBIN", partial.toString());
+        environment.put("GOPROXY", GO_PROXY);
+        environment.put("GOSUMDB", GO_SUMDB);
+        environment.put("GONOSUMDB", "");
+        environment.put("GOPRIVATE", "");
+        environment.put("GONOPROXY", "");
         CommandResult result = run(CommandLocator.invocation(
                         go, "install", "github.com/scip-code/scip-go/cmd/scip-go@v" + ScipIndexerCatalog.SCIP_GO_VERSION),
-                home, INSTALL_TIMEOUT, "GOBIN", partial.toString());
+                home, INSTALL_TIMEOUT, environment);
         if (!result.success()) {
             deleteRecursively(partial);
             throw new IllegalStateException("scip-go install failed: " + sanitize(result.output()));
@@ -252,7 +290,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             deleteRecursively(partial);
             throw new IllegalStateException("scip-go installation completed without executable: " + executable);
         }
-        Files.writeString(partial.resolve(".minos-version"), ScipIndexerCatalog.SCIP_GO_VERSION, StandardCharsets.UTF_8);
+        writeManagedMarkers(partial, ScipIndexerCatalog.SCIP_GO_VERSION, GO_SOURCE_ID);
         replaceDirectory(partial, destination);
         return inspectGo();
     }
@@ -269,13 +307,69 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         return directory.resolve(CommandLocator.isWindows() ? basename + ".exe" : basename);
     }
 
+    private static void writeManagedMarkers(Path directory, String version, String source) throws IOException {
+        Files.writeString(directory.resolve(VERSION_MARKER), version, StandardCharsets.UTF_8);
+        Files.writeString(directory.resolve(SOURCE_MARKER), source, StandardCharsets.UTF_8);
+        Files.writeString(directory.resolve(INTEGRITY_MARKER), directoryDigest(directory), StandardCharsets.UTF_8);
+    }
+
     private static boolean versionMarkerMatches(Path directory, String expected) {
-        Path marker = directory.resolve(".minos-version");
+        return markerMatches(directory.resolve(VERSION_MARKER), expected);
+    }
+
+    private static boolean installSourceMatches(Path directory, String expected) {
+        return markerMatches(directory.resolve(SOURCE_MARKER), expected);
+    }
+
+    private static boolean markerMatches(Path marker, String expected) {
         try {
-            return Files.isRegularFile(marker) && expected.equals(Files.readString(marker, StandardCharsets.UTF_8).trim());
+            return Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isSymbolicLink(marker)
+                    && expected.equals(Files.readString(marker, StandardCharsets.UTF_8).trim());
         } catch (IOException exception) {
             return false;
         }
+    }
+
+    private static boolean integrityManifestMatches(Path directory) {
+        Path marker = directory.resolve(INTEGRITY_MARKER);
+        try {
+            return Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)
+                    && !Files.isSymbolicLink(marker)
+                    && Files.readString(marker, StandardCharsets.UTF_8).trim().equals(directoryDigest(directory));
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
+    private static String directoryDigest(Path directory) throws IOException {
+        MessageDigest digest = sha256Digest();
+        try (var paths = Files.walk(directory)) {
+            for (Path file : paths
+                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> !Files.isSymbolicLink(path))
+                    .filter(path -> !path.getFileName().toString().equals(INTEGRITY_MARKER))
+                    .sorted(Comparator.comparing(path -> portable(directory.relativize(path))))
+                    .toList()) {
+                String relative = portable(directory.relativize(file));
+                digest.update(relative.getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+                try (InputStream input = Files.newInputStream(file)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int read;
+                    while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
+                }
+                digest.update((byte) 0xff);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static String portable(Path path) { return path.toString().replace('\\', '/'); }
+
+    private static MessageDigest sha256Digest() {
+        try { return MessageDigest.getInstance("SHA-256"); }
+        catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 is unavailable", exception); }
     }
 
     private static Optional<Integer> majorVersion(String output) {
@@ -283,16 +377,13 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         String normalized = output.trim();
         int separator = normalized.indexOf('.');
         String major = separator < 0 ? normalized : normalized.substring(0, separator);
-        try {
-            return Optional.of(Integer.parseInt(major));
-        } catch (NumberFormatException exception) {
-            return Optional.empty();
-        }
+        try { return Optional.of(Integer.parseInt(major)); }
+        catch (NumberFormatException exception) { return Optional.empty(); }
     }
 
     private Probe probe(List<String> command) {
         try {
-            CommandResult result = run(command, home, PROBE_TIMEOUT, null, null);
+            CommandResult result = run(command, home, PROBE_TIMEOUT, Map.of());
             return new Probe(result.success(), result.output());
         } catch (Exception exception) {
             return new Probe(false, exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
@@ -303,15 +394,14 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
             List<String> command,
             Path workingDirectory,
             Duration timeout,
-            String environmentKey,
-            String environmentValue
+            Map<String, String> environmentOverrides
     ) throws Exception {
         Path outputFile = Files.createTempFile(workingDirectory.toAbsolutePath().normalize(), "minos-m24-command-", ".log");
         try {
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toAbsolutePath().normalize().toFile());
             builder.redirectErrorStream(true);
-            if (environmentKey != null) builder.environment().put(environmentKey, environmentValue);
+            builder.environment().putAll(Objects.requireNonNull(environmentOverrides, "environmentOverrides"));
             Process process = builder.start();
             BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, outputFile, null);
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -342,27 +432,22 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     private static void replaceDirectory(Path source, Path destination) throws IOException {
         deleteRecursively(destination);
         Files.createDirectories(destination.getParent());
-        try {
-            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+        try { Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE); }
+        catch (java.nio.file.AtomicMoveNotSupportedException exception) {
             Files.move(source, destination, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
     private static void deleteRecursively(Path root) throws IOException {
-        if (!Files.exists(root)) return;
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
         try (var paths = Files.walk(root)) {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
         }
     }
 
     private static ProviderRuntimeStatus status(
-            String providerId,
-            String version,
-            ProviderRuntimeStatus.State state,
-            Optional<Path> executable,
-            String diagnostic
-    ) {
+            String providerId, String version, ProviderRuntimeStatus.State state,
+            Optional<Path> executable, String diagnostic) {
         return new ProviderRuntimeStatus(providerId, version, state, executable, List.of(diagnostic), false);
     }
 

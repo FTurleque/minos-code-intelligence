@@ -33,7 +33,8 @@ public final class LocalStorageBackend implements StorageBackend {
         this.indexStateStore = new FileIndexStateStore(root.resolve("index-state"));
         this.fingerprintStore = new FileProjectFingerprintSnapshotStore(root.resolve("fingerprint-snapshots"));
         this.semanticVectorStore = new FileSemanticVectorStore(root.resolve("semantic-index"));
-        this.runtimeObservationStore = new FileRuntimeObservationStore(root.resolve("runtime-observations"));
+        this.runtimeObservationStore = new SerializedRuntimeObservationStore(
+                new FileRuntimeObservationStore(root.resolve("runtime-observations")));
     }
 
     @Override public String id() { return "local"; }

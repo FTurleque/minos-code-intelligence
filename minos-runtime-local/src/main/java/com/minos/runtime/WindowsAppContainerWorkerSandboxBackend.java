@@ -25,19 +25,18 @@ import java.util.Set;
 /**
  * Windows worker sandbox backed by an AppContainer token without capabilities and a Job Object.
  *
- * <p>The AppContainer capability set is deliberately empty: the child receives no Internet/client
- * or server network capability. The launcher verifies {@code TokenIsAppContainer} before resuming
- * the provider. A Job Object adds kill-on-close, active-process, memory and CPU limits. ACL grants
- * are scoped to MINOS/provider-owned runtime roots plus the ephemeral workspace/artifact/run roots;
- * Windows system roots rely on their existing AppContainer-compatible ACLs and are never mutated.</p>
+ * <p>ACL grants are scoped to exact provider files, MINOS-owned runtime roots and ephemeral write
+ * roots. Arbitrary provider file arguments never cause their complete parent directory (notably a
+ * user profile) to become readable. A recovery journal allows the next sandbox launch to reconcile
+ * ACL/profile residue left by a forcibly terminated wrapper.</p>
  */
 public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSandboxBackend {
 
     static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
     static final int MAX_ACTIVE_PROCESSES = 128;
-    static final int CPU_HARD_CAP = 8_000; // 80.00 percent; Job Object rates are 1/100th percent.
+    static final int CPU_HARD_CAP = 8_000;
 
-    private static final String RESOURCE = "/com/minos/runtime/windows-appcontainer-sandbox-v2.ps1";
+    private static final String RESOURCE = "/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1";
 
     private final Path minosHome;
     private final Path powershell;
@@ -72,7 +71,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     @Override
     public String id() {
-        return "windows-appcontainer-job-v1";
+        return "windows-appcontainer-job-v2";
     }
 
     @Override
@@ -104,7 +103,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         "WINDOWS_APPCONTAINER_EMPTY_CAPABILITY_SET",
                         "WINDOWS_CHILD_TOKEN_IS_APPCONTAINER_VERIFIED_BEFORE_RESUME",
                         "WINDOWS_PROVIDER_ENVIRONMENT_EXPLICIT_ALLOWLIST",
-                        "WINDOWS_EPHEMERAL_ACL_PROVIDER_OWNED_ROOTS",
+                        "WINDOWS_EXACT_FILE_PROVIDER_ACL",
+                        "WINDOWS_MINOS_RUNTIME_ROOT_ACL_ONLY",
+                        "WINDOWS_STALE_ACL_PROFILE_RECONCILIATION",
                         "WINDOWS_SYSTEM_ROOT_ACL_UNMODIFIED",
                         "WINDOWS_JOB_KILL_ON_CLOSE",
                         "WINDOWS_JOB_ACTIVE_PROCESS_LIMIT",
@@ -158,29 +159,34 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         artifactParent = artifactParent.toRealPath();
 
         List<String> providerCommand = new ArrayList<>(plan.command());
-        providerCommand.set(0, resolveExecutable(providerCommand.get(0)).toString());
+        Path executable = resolveExecutable(providerCommand.get(0));
+        providerCommand.set(0, executable.toString());
 
         Set<Path> readRoots = new LinkedHashSet<>();
+        Set<Path> readFiles = new LinkedHashSet<>();
         Set<Path> writeRoots = new LinkedHashSet<>();
-        addReadRoot(readRoots, resolveExecutable(providerCommand.get(0)).getParent());
         Path javaHome = Path.of(System.getProperty("java.home", ".")).toAbsolutePath().normalize();
+        Path tools = minosHome.resolve("tools").toAbsolutePath().normalize();
         if (Files.isDirectory(javaHome)) addReadRoot(readRoots, javaHome);
-        Path tools = minosHome.resolve("tools");
         if (Files.isDirectory(tools)) addReadRoot(readRoots, tools);
+        addExecutableAccess(readRoots, readFiles, executable, tools, javaHome);
         for (int index = 1; index < providerCommand.size(); index++) {
-            addExistingArgumentRoot(readRoots, providerCommand.get(index));
+            addExistingArgumentAccess(readRoots, readFiles, providerCommand.get(index), tools, javaHome);
         }
 
         addWriteRoot(writeRoots, working);
         addWriteRoot(writeRoots, artifactParent);
         addWriteRoot(writeRoots, run);
         readRoots.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
+        readFiles.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
 
         Map<String, String> providerEnvironment = ProviderProcessEnvironment.sanitize(
                 new ProcessBuilder().environment(),
                 plan.environment());
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
-        writePlan(planFile, providerCommand, providerEnvironment, readRoots, writeRoots, working);
+        Path recovery = minosHome.resolve("sandbox").resolve("appcontainer-recovery").toAbsolutePath().normalize();
+        Files.createDirectories(recovery);
+        writePlan(planFile, providerCommand, providerEnvironment, readRoots, readFiles, writeRoots, working, recovery);
 
         List<String> wrapper = List.of(
                 powershell.toString(),
@@ -204,7 +210,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
-        Path target = directory.resolve("windows-appcontainer-sandbox-v2.ps1");
+        Path target = directory.resolve("windows-appcontainer-sandbox-v3.ps1");
         try (InputStream input = WindowsAppContainerWorkerSandboxBackend.class.getResourceAsStream(RESOURCE)) {
             if (input == null) throw new IOException("embedded Windows AppContainer launcher is missing: " + RESOURCE);
             Path partial = Files.createTempFile(directory, ".windows-appcontainer-", ".ps1");
@@ -223,14 +229,18 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             List<String> command,
             Map<String, String> environment,
             Set<Path> readRoots,
+            Set<Path> readFiles,
             Set<Path> writeRoots,
-            Path working
+            Path working,
+            Path recoveryDirectory
     ) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add("working=" + encode(working.toString()));
+        lines.add("recovery=" + encode(recoveryDirectory.toString()));
         appendList(lines, "command", command);
         appendEnvironment(lines, environment);
         appendList(lines, "read", readRoots.stream().map(Path::toString).toList());
+        appendList(lines, "readFile", readFiles.stream().map(Path::toString).toList());
         appendList(lines, "write", writeRoots.stream().map(Path::toString).toList());
         lines.add("jobMemoryBytes=" + MAX_JOB_MEMORY_BYTES);
         lines.add("activeProcesses=" + MAX_ACTIVE_PROCESSES);
@@ -261,12 +271,43 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
-    private static void addExistingArgumentRoot(Set<Path> roots, String value) {
+    private static void addExecutableAccess(
+            Set<Path> roots,
+            Set<Path> files,
+            Path executable,
+            Path tools,
+            Path javaHome
+    ) throws IOException {
+        Path real = executable.toRealPath();
+        if (isWindowsSystemRoot(real)) return;
+        if (real.startsWith(tools)) {
+            addReadRoot(roots, tools);
+        } else if (real.startsWith(javaHome)) {
+            addReadRoot(roots, javaHome);
+        } else {
+            addReadFile(files, real);
+        }
+    }
+
+    private static void addExistingArgumentAccess(
+            Set<Path> roots,
+            Set<Path> files,
+            String value,
+            Path tools,
+            Path javaHome
+    ) {
         try {
             Path candidate = Path.of(value);
             if (!candidate.isAbsolute() || !Files.exists(candidate)) return;
             Path real = candidate.toRealPath();
-            addReadRoot(roots, Files.isDirectory(real) ? real : real.getParent());
+            if (isWindowsSystemRoot(real)) return;
+            if (real.startsWith(tools)) {
+                addReadRoot(roots, tools);
+            } else if (real.startsWith(javaHome)) {
+                addReadRoot(roots, javaHome);
+            } else if (Files.isRegularFile(real)) {
+                addReadFile(files, real);
+            }
         } catch (IOException | RuntimeException ignored) {
             // Non-path provider arguments intentionally stay opaque.
         }
@@ -277,6 +318,13 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path normalized = value.toAbsolutePath().normalize();
         if (isWindowsSystemRoot(normalized)) return;
         roots.add(normalized);
+    }
+
+    private static void addReadFile(Set<Path> files, Path value) {
+        if (value == null || !Files.isRegularFile(value)) return;
+        Path normalized = value.toAbsolutePath().normalize();
+        if (isWindowsSystemRoot(normalized)) return;
+        files.add(normalized);
     }
 
     private static boolean isWindowsSystemRoot(Path value) {

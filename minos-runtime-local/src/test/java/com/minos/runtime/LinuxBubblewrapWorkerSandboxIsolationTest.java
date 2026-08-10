@@ -18,27 +18,69 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @EnabledOnOs(OS.LINUX)
 class LinuxBubblewrapWorkerSandboxIsolationTest {
 
-    @TempDir
-    Path temporary;
+    @TempDir Path temporary;
 
     @Test
     void sandboxPlanNeverBindsWholeHostRoot() throws Exception {
         Path executable = Path.of("/bin/true");
-        LinuxBubblewrapWorkerSandboxBackend backend =
-                new LinuxBubblewrapWorkerSandboxBackend(executable, executable);
-        Path working = Files.createDirectory(temporary.resolve("workspace"));
-        Path run = Files.createDirectory(temporary.resolve("run"));
-        Path artifact = working.resolve("index.scip");
-        IndexerProcessPlan plan = new IndexerProcessPlan(
-                List.of(executable.toString()), working, Map.of(), artifact, Duration.ofSeconds(10));
-
-        List<String> command = backend.sandboxPlan(plan, run, WorkerNetworkPolicy.DENY).command();
-        for (int index = 0; index + 2 < command.size(); index++) {
-            assertFalse("--ro-bind".equals(command.get(index))
-                    && "/".equals(command.get(index + 1))
-                    && "/".equals(command.get(index + 2)));
-        }
+        LinuxBubblewrapWorkerSandboxBackend backend = new LinuxBubblewrapWorkerSandboxBackend(executable, executable);
+        List<String> command = plan(backend, executable).command();
+        assertFalse(hasBind(command, "/", "/"));
         assertTrue(command.contains("--unshare-all"));
         assertTrue(backend.qualification().limitations().contains("LINUX_MINIMAL_RUNTIME_READ_ONLY_ALLOWLIST"));
+    }
+
+    @Test
+    void arbitraryExecutableBindsExactFileNotItsSensitiveParent() throws Exception {
+        Path executable = Path.of("/bin/true");
+        Path minosHome = Files.createDirectory(temporary.resolve("home"));
+        Path profile = Files.createDirectory(temporary.resolve("profile"));
+        Files.writeString(profile.resolve("secret.txt"), "secret");
+        Path provider = Files.writeString(profile.resolve("provider"), "provider");
+        LinuxBubblewrapWorkerSandboxBackend backend =
+                new LinuxBubblewrapWorkerSandboxBackend(minosHome, executable, executable);
+
+        List<String> command = plan(backend, provider).command();
+        assertTrue(hasBind(command, provider.toRealPath().toString(), provider.toAbsolutePath().normalize().toString()));
+        assertFalse(hasBind(command, profile.toRealPath().toString(), profile.toRealPath().toString()));
+    }
+
+    @Test
+    void managedNpmSymlinkMountsOnlyManagedProviderRuntimeRoot() throws Exception {
+        Path executable = Path.of("/bin/true");
+        Path minosHome = Files.createDirectory(temporary.resolve("minos-home"));
+        Path runtimeRoot = minosHome.resolve("tools/scip-typescript");
+        Path bin = runtimeRoot.resolve("0.4.0/node_modules/.bin");
+        Path target = runtimeRoot.resolve("0.4.0/node_modules/@sourcegraph/scip-typescript/dist/cli.mjs");
+        Files.createDirectories(bin);
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, "cli");
+        Path shim = bin.resolve("scip-typescript");
+        Files.createSymbolicLink(shim, bin.relativize(target));
+        LinuxBubblewrapWorkerSandboxBackend backend =
+                new LinuxBubblewrapWorkerSandboxBackend(minosHome, executable, executable);
+
+        List<String> command = plan(backend, shim).command();
+        assertTrue(hasBind(command, runtimeRoot.toRealPath().toString(), runtimeRoot.toRealPath().toString()));
+        assertFalse(hasBind(command, minosHome.toRealPath().toString(), minosHome.toRealPath().toString()));
+    }
+
+    private IndexerProcessPlan plan(LinuxBubblewrapWorkerSandboxBackend backend, Path provider) throws Exception {
+        Path working = Files.createDirectories(temporary.resolve("workspace-" + Math.abs(provider.hashCode())));
+        Path run = Files.createDirectories(temporary.resolve("run-" + Math.abs(provider.hashCode())));
+        Path artifact = working.resolve("index.scip");
+        IndexerProcessPlan raw = new IndexerProcessPlan(
+                List.of(provider.toAbsolutePath().normalize().toString()),
+                working, Map.of(), artifact, Duration.ofSeconds(10));
+        return backend.sandboxPlan(raw, run, WorkerNetworkPolicy.DENY);
+    }
+
+    private static boolean hasBind(List<String> command, String source, String destination) {
+        for (int index = 0; index + 2 < command.size(); index++) {
+            if ("--ro-bind".equals(command.get(index))
+                    && source.equals(command.get(index + 1))
+                    && destination.equals(command.get(index + 2))) return true;
+        }
+        return false;
     }
 }

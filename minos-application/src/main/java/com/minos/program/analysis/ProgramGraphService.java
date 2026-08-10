@@ -1,9 +1,14 @@
 package com.minos.program.analysis;
 
 import com.minos.application.ProjectResolver;
+import com.minos.domain.Evidence;
+import com.minos.domain.Origin;
+import com.minos.domain.SymbolLocation;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
+import com.minos.program.ProgramGraphEdge;
+import com.minos.program.ProgramGraphNode;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -24,7 +29,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class ProgramGraphService {
 
     public static final int DEFAULT_MAX_CACHE_ENTRIES = 16;
-    public static final long DEFAULT_MAX_CACHE_WEIGHT = 2_000_000L;
+    public static final long DEFAULT_MAX_CACHE_WEIGHT = 256L * 1024L * 1024L;
     public static final int DEFAULT_MAX_NODES = 10_000;
     public static final int DEFAULT_MAX_EDGES = 50_000;
     private static final int PUBLIC_MAX_NODES = 100_000;
@@ -36,7 +41,7 @@ public final class ProgramGraphService {
     private final List<ProgramGraphProvider> providers;
     private final int maxCacheEntries;
     private final long maxCacheWeight;
-    private final LinkedHashMap<CacheKey, ProgramGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private final LinkedHashMap<CacheKey, WeightedGraph> cache = new LinkedHashMap<>(16, 0.75f, true);
     private final ReentrantLock[] buildLocks = buildLocks();
     private long cacheWeight;
     private long cacheHits;
@@ -114,10 +119,10 @@ public final class ProgramGraphService {
 
         synchronized (cache) {
             providerKeyNanos += keyElapsed;
-            ProgramGraph cached = cache.get(key);
+            WeightedGraph cached = cache.get(key);
             if (cached != null) {
                 cacheHits++;
-                return cached;
+                return cached.graph();
             }
         }
 
@@ -125,10 +130,10 @@ public final class ProgramGraphService {
         buildLock.lock();
         try {
             synchronized (cache) {
-                ProgramGraph cached = cache.get(key);
+                WeightedGraph cached = cache.get(key);
                 if (cached != null) {
                     cacheHits++;
-                    return cached;
+                    return cached.graph();
                 }
             }
 
@@ -147,8 +152,8 @@ public final class ProgramGraphService {
                 removeSupersededEntries(project.id().toString(), budget, key);
                 long weight = graphWeight(composed);
                 if (weight <= maxCacheWeight) {
-                    ProgramGraph previous = cache.put(key, composed);
-                    if (previous != null) cacheWeight -= graphWeight(previous);
+                    WeightedGraph previous = cache.put(key, new WeightedGraph(composed, weight));
+                    if (previous != null) cacheWeight -= previous.weightBytes();
                     cacheWeight = saturatingAdd(cacheWeight, weight);
                     evictCache();
                 }
@@ -160,34 +165,82 @@ public final class ProgramGraphService {
     }
 
     private void removeSupersededEntries(String projectId, ProgramGraphBudget budget, CacheKey currentKey) {
-        Iterator<Map.Entry<CacheKey, ProgramGraph>> entries = cache.entrySet().iterator();
+        Iterator<Map.Entry<CacheKey, WeightedGraph>> entries = cache.entrySet().iterator();
         while (entries.hasNext()) {
-            Map.Entry<CacheKey, ProgramGraph> entry = entries.next();
+            Map.Entry<CacheKey, WeightedGraph> entry = entries.next();
             CacheKey candidate = entry.getKey();
             if (candidate.projectId().equals(projectId)
                     && candidate.maxNodes() == budget.maxNodes()
                     && candidate.maxEdges() == budget.maxEdges()
                     && !candidate.equals(currentKey)) {
-                cacheWeight -= graphWeight(entry.getValue());
+                cacheWeight -= entry.getValue().weightBytes();
                 entries.remove();
             }
         }
     }
 
     private void evictCache() {
-        Iterator<Map.Entry<CacheKey, ProgramGraph>> entries = cache.entrySet().iterator();
+        Iterator<Map.Entry<CacheKey, WeightedGraph>> entries = cache.entrySet().iterator();
         while ((cache.size() > maxCacheEntries || cacheWeight > maxCacheWeight) && entries.hasNext()) {
-            Map.Entry<CacheKey, ProgramGraph> eldest = entries.next();
-            cacheWeight -= graphWeight(eldest.getValue());
+            Map.Entry<CacheKey, WeightedGraph> eldest = entries.next();
+            cacheWeight -= eldest.getValue().weightBytes();
             entries.remove();
         }
         if (cacheWeight < 0L) cacheWeight = 0L;
     }
 
+    /** Conservative retained-heap estimate rather than a structural element count. */
     private static long graphWeight(ProgramGraph graph) {
-        return saturatingAdd(
-                graph.nodes().size(),
-                saturatingAdd((long) graph.edges().size() * 2L, (long) graph.limitations().size() * 4L));
+        long weight = 2_048L;
+        weight = saturatingAdd(weight, stringWeight(graph.projectId()));
+        weight = saturatingAdd(weight, stringWeight(graph.snapshotId()));
+        for (ProgramGraphNode node : graph.nodes()) {
+            weight = saturatingAdd(weight, 256L);
+            weight = saturatingAdd(weight, stringWeight(node.id()));
+            weight = saturatingAdd(weight, stringWeight(node.projectId()));
+            weight = saturatingAdd(weight, stringWeight(node.symbolId()));
+            weight = saturatingAdd(weight, stringWeight(node.label()));
+            weight = saturatingAdd(weight, locationWeight(node.location()));
+            weight = saturatingAdd(weight, originWeight(node.origin()));
+            for (Evidence evidence : node.evidence()) weight = saturatingAdd(weight, evidenceWeight(evidence));
+        }
+        for (ProgramGraphEdge edge : graph.edges()) {
+            weight = saturatingAdd(weight, 224L);
+            weight = saturatingAdd(weight, stringWeight(edge.id()));
+            weight = saturatingAdd(weight, stringWeight(edge.projectId()));
+            weight = saturatingAdd(weight, stringWeight(edge.sourceNodeId()));
+            weight = saturatingAdd(weight, stringWeight(edge.targetNodeId()));
+            weight = saturatingAdd(weight, originWeight(edge.origin()));
+            for (Evidence evidence : edge.evidence()) weight = saturatingAdd(weight, evidenceWeight(evidence));
+        }
+        for (String limitation : graph.limitations()) weight = saturatingAdd(weight, stringWeight(limitation));
+        return weight;
+    }
+
+    private static long evidenceWeight(Evidence evidence) {
+        long weight = 192L;
+        weight = saturatingAdd(weight, stringWeight(evidence.description()));
+        if (evidence.source() != null) weight = saturatingAdd(weight, stringWeight(evidence.source().id()));
+        if (evidence.target() != null) weight = saturatingAdd(weight, stringWeight(evidence.target().id()));
+        return saturatingAdd(weight, locationWeight(evidence.location()));
+    }
+
+    private static long originWeight(Origin origin) {
+        if (origin == null) return 0L;
+        long weight = 160L;
+        weight = saturatingAdd(weight, stringWeight(origin.providerId()));
+        weight = saturatingAdd(weight, stringWeight(origin.providerType()));
+        weight = saturatingAdd(weight, stringWeight(origin.providerVersion()));
+        weight = saturatingAdd(weight, stringWeight(origin.indexRunId()));
+        return weight;
+    }
+
+    private static long locationWeight(SymbolLocation location) {
+        return location == null ? 0L : saturatingAdd(96L, stringWeight(location.fileId()));
+    }
+
+    private static long stringWeight(String value) {
+        return value == null ? 0L : saturatingAdd(40L, (long) value.length() * Character.BYTES);
     }
 
     private static long saturatingAdd(long left, long right) {
@@ -256,4 +309,5 @@ public final class ProgramGraphService {
     public record CacheStats(long hits, long misses, long providerKeyNanos, long analysisNanos,
                              int entries, int maximumEntries, long weight, long maximumWeight) { }
     private record CacheKey(String projectId, String snapshotId, String providers, int maxNodes, int maxEdges) { }
+    private record WeightedGraph(ProgramGraph graph, long weightBytes) { }
 }

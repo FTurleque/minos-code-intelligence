@@ -13,11 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Snapshot-retention mechanism separated from persistence.
- *
- * <p>M16 adds a measured count-based policy while preserving the active snapshot unconditionally.</p>
- */
+/** Snapshot-retention mechanism separated from persistence. */
 public final class SnapshotRetentionService {
 
     private final SnapshotRepository repository;
@@ -32,15 +28,23 @@ public final class SnapshotRetentionService {
                 .toList();
     }
 
-    /**
-     * Deletes only explicitly named historical snapshots and refuses to remove the active file.
-     */
+    /** Deletes only explicitly named historical snapshots and refuses to remove the active file. */
     public int deleteHistoricalSnapshots(
             UUID projectId,
             Collection<String> fileNames,
             String activeFileName
     ) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            return deleteHistoricalSnapshotsLocked(projectId, fileNames, activeFileName);
+        }
+    }
+
+    private int deleteHistoricalSnapshotsLocked(
+            UUID projectId,
+            Collection<String> fileNames,
+            String activeFileName
+    ) throws IOException {
         Objects.requireNonNull(fileNames, "fileNames");
         Set<String> requested = fileNames.stream()
                 .map(name -> Objects.requireNonNull(name, "fileNames must not contain null"))
@@ -59,19 +63,23 @@ public final class SnapshotRetentionService {
         return deleted;
     }
 
-    /**
-     * Applies deterministic count-based retention to historical snapshots.
-     *
-     * <p>The active file is never counted against the historical allowance and is never deleted.
-     * Historical snapshots are ordered newest-first using last-modified time then file name for a
-     * stable tie-breaker.</p>
-     */
+    /** Applies deterministic count-based retention to historical snapshots. */
     public RetentionResult applyPolicy(
             UUID projectId,
             String activeFileName,
             SnapshotRetentionPolicy policy
     ) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            return applyPolicyLocked(projectId, activeFileName, policy);
+        }
+    }
+
+    private RetentionResult applyPolicyLocked(
+            UUID projectId,
+            String activeFileName,
+            SnapshotRetentionPolicy policy
+    ) throws IOException {
         Objects.requireNonNull(policy, "policy");
         if (activeFileName == null || activeFileName.isBlank()) {
             throw new IllegalArgumentException("activeFileName must not be blank");

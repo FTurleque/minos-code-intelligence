@@ -15,6 +15,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +25,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -32,10 +33,15 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
 
     public static final String SOURCE_MISMATCH_LIMITATION =
             "JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT";
+    public static final int DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES = 64;
+    public static final long DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES = 128L * 1024L * 1024L;
 
     private final ProjectFingerprintSnapshotStore fingerprints;
     private final JavaSourceProgramGraphProvider delegate;
-    private final Map<FingerprintKey, ProjectFingerprintSnapshot> immutableFingerprintCache = new ConcurrentHashMap<>();
+    private final LinkedHashMap<UUID, CachedFingerprint> immutableFingerprintCache =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private long cacheWeightBytes;
+    private long cacheEvictions;
 
     public FingerprintConstrainedJavaProgramGraphProvider(ProjectFingerprintSnapshotStore fingerprints) {
         this(fingerprints, new JavaSourceProgramGraphProvider());
@@ -67,13 +73,68 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         return delegate.analyze(project, snapshot);
     }
 
+    public FingerprintCacheStats fingerprintCacheStats() {
+        synchronized (immutableFingerprintCache) {
+            return new FingerprintCacheStats(
+                    immutableFingerprintCache.size(), cacheWeightBytes,
+                    DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES, DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES,
+                    cacheEvictions);
+        }
+    }
+
     private Optional<ProjectFingerprintSnapshot> exactFingerprint(UUID projectId, String snapshotId) throws IOException {
-        FingerprintKey key = new FingerprintKey(projectId, snapshotId);
-        ProjectFingerprintSnapshot cached = immutableFingerprintCache.get(key);
-        if (cached != null) return Optional.of(cached);
+        synchronized (immutableFingerprintCache) {
+            CachedFingerprint cached = immutableFingerprintCache.get(projectId);
+            if (cached != null && cached.snapshotId().equals(snapshotId)) return Optional.of(cached.snapshot());
+        }
+
         Optional<ProjectFingerprintSnapshot> loaded = fingerprints.load(projectId, snapshotId);
-        loaded.ifPresent(value -> immutableFingerprintCache.putIfAbsent(key, value));
-        return loaded;
+        if (loaded.isEmpty()) return Optional.empty();
+        ProjectFingerprintSnapshot value = loaded.orElseThrow();
+        long weight = estimateWeight(value);
+        synchronized (immutableFingerprintCache) {
+            CachedFingerprint current = immutableFingerprintCache.get(projectId);
+            if (current != null && current.snapshotId().equals(snapshotId)) return Optional.of(current.snapshot());
+            if (current != null) cacheWeightBytes -= current.weightBytes();
+            if (weight <= DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES) {
+                immutableFingerprintCache.put(projectId, new CachedFingerprint(snapshotId, value, weight));
+                cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+                trimCache();
+            } else {
+                immutableFingerprintCache.remove(projectId);
+            }
+        }
+        return Optional.of(value);
+    }
+
+    private void trimCache() {
+        Iterator<Map.Entry<UUID, CachedFingerprint>> iterator = immutableFingerprintCache.entrySet().iterator();
+        while ((immutableFingerprintCache.size() > DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES
+                || cacheWeightBytes > DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES) && iterator.hasNext()) {
+            Map.Entry<UUID, CachedFingerprint> eldest = iterator.next();
+            cacheWeightBytes -= eldest.getValue().weightBytes();
+            iterator.remove();
+            cacheEvictions++;
+        }
+        if (cacheWeightBytes < 0L) cacheWeightBytes = 0L;
+    }
+
+    private static long estimateWeight(ProjectFingerprintSnapshot snapshot) {
+        long weight = 4_096L;
+        for (FileFingerprint file : snapshot.fingerprint().files()) {
+            weight = safeAdd(weight, 256L);
+            weight = safeAdd(weight, stringWeight(file.relativePath()));
+            weight = safeAdd(weight, stringWeight(file.sha256()));
+        }
+        return weight;
+    }
+
+    private static long stringWeight(String value) {
+        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+    }
+
+    private static long safeAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
     private static boolean matchesExactSnapshot(RegisteredProject project, CodeKnowledgeSnapshot snapshot,
@@ -120,10 +181,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         } catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 is unavailable", exception); }
     }
 
-    private record FingerprintKey(UUID projectId, String snapshotId) {
-        private FingerprintKey {
-            Objects.requireNonNull(projectId, "projectId");
-            if (snapshotId == null || snapshotId.isBlank()) throw new IllegalArgumentException("snapshotId must not be blank");
-        }
-    }
+    private record CachedFingerprint(String snapshotId, ProjectFingerprintSnapshot snapshot, long weightBytes) { }
+    public record FingerprintCacheStats(int entries, long weightBytes, int maximumEntries,
+                                        long maximumWeightBytes, long evictions) { }
 }

@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** AES-256-GCM, tenant-addressed and optimistic-concurrency local M27 control-plane store. */
 public final class FileHostedControlPlaneStore implements HostedControlPlaneStore {
@@ -48,6 +49,8 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     private static final int NONCE_BYTES = 12;
     private static final int GCM_TAG_BITS = 128;
     private static final int MAX_STRING_BYTES = 128 * 1024;
+    private static final int JVM_LOCK_STRIPES = 64;
+    private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path root;
     private final HostedTenantKeyProvider keys;
@@ -354,13 +357,17 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     private TenantLock lock(UUID tenantId) throws IOException {
         Path lockPath = root.resolve(tenantId + ".lock");
         rejectUnsafeEntry(lockPath);
-        FileChannel channel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+        ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockPath.hashCode(), JVM_LOCKS.length)];
+        jvmLock.lock();
+        FileChannel channel = null;
         try {
+            channel = FileChannel.open(lockPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
             FileLock fileLock = channel.lock();
-            return new TenantLock(channel, fileLock);
+            return new TenantLock(jvmLock, channel, fileLock);
         } catch (IOException | RuntimeException exception) {
-            channel.close();
+            if (channel != null) channel.close();
+            jvmLock.unlock();
             throw exception;
         }
     }
@@ -443,14 +450,23 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         return value;
     }
 
-    private record TenantLock(FileChannel channel, FileLock lock) implements AutoCloseable {
+    private static ReentrantLock[] locks() {
+        ReentrantLock[] locks = new ReentrantLock[JVM_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
+    }
+
+    private record TenantLock(ReentrantLock jvmLock, FileChannel channel, FileLock lock) implements AutoCloseable {
         @Override
         public void close() throws IOException {
-            try {
-                lock.close();
+            IOException failure = null;
+            try { lock.close(); } catch (IOException exception) { failure = exception; }
+            try { channel.close(); } catch (IOException exception) {
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
             } finally {
-                channel.close();
+                jvmLock.unlock();
             }
+            if (failure != null) throw failure;
         }
     }
 }

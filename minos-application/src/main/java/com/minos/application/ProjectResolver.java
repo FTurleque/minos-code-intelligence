@@ -4,37 +4,23 @@ import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Single application-level policy for resolving user-facing project references.
- *
- * <p>A generic reference is interpreted as a UUID when it is syntactically valid;
- * otherwise it is matched exactly against the persisted display name. Duplicate
- * display names are intentionally reported as ambiguous because the registry does
- * not require display-name uniqueness.</p>
- */
+/** Single application-level policy for resolving user-facing project references. */
 public final class ProjectResolver {
+    public static final int MAX_REFERENCE_UTF8_BYTES = 64 * 1024;
 
-    public enum ErrorCode {
-        PROJECT_NOT_FOUND,
-        PROJECT_REFERENCE_AMBIGUOUS,
-        INVALID_PROJECT_REFERENCE
-    }
+    public enum ErrorCode { PROJECT_NOT_FOUND, PROJECT_REFERENCE_AMBIGUOUS, INVALID_PROJECT_REFERENCE }
 
     public static final class ResolutionException extends IllegalArgumentException {
         private final ErrorCode code;
         private final String reference;
         private final List<UUID> candidateIds;
 
-        private ResolutionException(
-                ErrorCode code,
-                String reference,
-                List<UUID> candidateIds,
-                String message
-        ) {
+        private ResolutionException(ErrorCode code, String reference, List<UUID> candidateIds, String message) {
             super(message);
             this.code = Objects.requireNonNull(code, "code");
             this.reference = reference;
@@ -48,9 +34,7 @@ public final class ProjectResolver {
 
     private final ProjectRegistry registry;
 
-    public ProjectResolver(ProjectRegistry registry) {
-        this.registry = Objects.requireNonNull(registry, "registry");
-    }
+    public ProjectResolver(ProjectRegistry registry) { this.registry = Objects.requireNonNull(registry, "registry"); }
 
     public RegisteredProject resolve(String reference) throws IOException {
         requireReference(reference);
@@ -86,6 +70,10 @@ public final class ProjectResolver {
         if (reference == null || reference.isBlank()) {
             throw new ResolutionException(ErrorCode.INVALID_PROJECT_REFERENCE, reference, List.of(),
                     "project identifier must not be blank");
+        }
+        if (reference.getBytes(StandardCharsets.UTF_8).length > MAX_REFERENCE_UTF8_BYTES) {
+            throw new ResolutionException(ErrorCode.INVALID_PROJECT_REFERENCE, null, List.of(),
+                    "project identifier exceeds UTF-8 byte limit: " + MAX_REFERENCE_UTF8_BYTES);
         }
     }
 

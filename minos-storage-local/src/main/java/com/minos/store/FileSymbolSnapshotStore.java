@@ -288,12 +288,17 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             SnapshotCodec.SnapshotEncoding encoding = codec.write(temporarySnapshot, snapshot);
             String fileName = "snapshot-" + integrityService.logicalIdHash(snapshot.snapshotId())
                     + "-" + encoding.sha256() + codec.fileExtension();
-            snapshotRepository.publishSnapshot(snapshot.projectId(), fileName, temporarySnapshot);
-            activeSnapshotRepository.promote(
-                    snapshot.projectId(),
-                    new SnapshotDescriptor(
-                            codec.formatVersion(), snapshot.snapshotId(), fileName, encoding.sha256(),
-                            encoding.symbolCount(), encoding.occurrenceCount(), encoding.relationshipCount()));
+            // Publication and active-pointer promotion are one mutation transaction with respect to
+            // retention. A compactor can no longer observe the newly published file as historical
+            // in the gap before active.pointer is replaced.
+            try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(storageRoot, snapshot.projectId())) {
+                snapshotRepository.publishSnapshot(snapshot.projectId(), fileName, temporarySnapshot);
+                activeSnapshotRepository.promote(
+                        snapshot.projectId(),
+                        new SnapshotDescriptor(
+                                codec.formatVersion(), snapshot.snapshotId(), fileName, encoding.sha256(),
+                                encoding.symbolCount(), encoding.occurrenceCount(), encoding.relationshipCount()));
+            }
             invalidateProjectCache(snapshot.projectId());
         } finally {
             Files.deleteIfExists(temporarySnapshot);

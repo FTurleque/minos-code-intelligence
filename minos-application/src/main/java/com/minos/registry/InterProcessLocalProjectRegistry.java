@@ -10,21 +10,20 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Cross-process serialization wrapper for the file-backed project registry.
  *
- * <p>The historical registry uses atomic file replacement and in-instance synchronization. This
- * wrapper adds one MINOS-home lock shared by CLI, MCP, IDE and other JVMs so root uniqueness and
- * workspace mutations are evaluated against one serialized view of the registry.</p>
+ * <p>A bounded striped JVM lock layer prevents {@link java.nio.channels.OverlappingFileLockException}
+ * before taking the OS file lock. Stripes are fixed-size, so opening many independent MINOS homes
+ * cannot grow a static path-to-lock map for the lifetime of the JVM.</p>
  */
 public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     private static final String LOCK_FILE = ".registry.lock";
-    private static final ConcurrentMap<Path, ReentrantLock> JVM_LOCKS = new ConcurrentHashMap<>();
+    private static final int JVM_LOCK_STRIPES = 64;
+    private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path storageRoot;
     private final Path projectsDirectory;
@@ -37,7 +36,7 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
         Files.createDirectories(this.storageRoot);
         this.projectsDirectory = this.storageRoot.resolve("projects");
         this.lockFile = this.storageRoot.resolve(LOCK_FILE);
-        this.jvmLock = JVM_LOCKS.computeIfAbsent(this.lockFile, ignored -> new ReentrantLock());
+        this.jvmLock = JVM_LOCKS[Math.floorMod(this.lockFile.hashCode(), JVM_LOCKS.length)];
         this.delegate = new LocalProjectRegistry(this.storageRoot);
     }
 
@@ -123,6 +122,12 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
         } finally {
             jvmLock.unlock();
         }
+    }
+
+    private static ReentrantLock[] locks() {
+        ReentrantLock[] locks = new ReentrantLock[JVM_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
     }
 
     @FunctionalInterface

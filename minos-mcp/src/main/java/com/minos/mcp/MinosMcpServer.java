@@ -23,10 +23,10 @@ public final class MinosMcpServer {
 
     public static final String SERVER_NAME = "minos-code-intelligence";
     public static final String SERVER_VERSION = MinosVersion.current();
+    public static final int MAX_INBOUND_MESSAGE_BYTES = 1024 * 1024;
     private static final System.Logger LOGGER = System.getLogger(MinosMcpServer.class.getName());
 
-    private MinosMcpServer() {
-    }
+    private MinosMcpServer() { }
 
     public static void main(String[] arguments) {
         try {
@@ -70,9 +70,14 @@ public final class MinosMcpServer {
         return MinosHome.resolve(environment, properties);
     }
 
-    /** Exposes the transport's real STDIO end-of-input signal to the process lifecycle. */
+    /**
+     * Exposes the real STDIO end-of-input signal and rejects a newline-delimited MCP JSON-RPC
+     * message before it can grow beyond the server-wide byte cap. Per-tool DTOs retain tighter
+     * semantic bounds where appropriate.
+     */
     static final class EofAwareInputStream extends FilterInputStream {
         private final CountDownLatch ended = new CountDownLatch(1);
+        private int currentMessageBytes;
 
         EofAwareInputStream(InputStream input) {
             super(Objects.requireNonNull(input, "input"));
@@ -82,7 +87,11 @@ public final class MinosMcpServer {
         public int read() throws IOException {
             try {
                 int value = super.read();
-                if (value < 0) ended.countDown();
+                if (value < 0) {
+                    ended.countDown();
+                    return value;
+                }
+                account(value);
                 return value;
             } catch (IOException exception) {
                 ended.countDown();
@@ -94,12 +103,27 @@ public final class MinosMcpServer {
         public int read(byte[] buffer, int offset, int length) throws IOException {
             try {
                 int read = super.read(buffer, offset, length);
-                if (read < 0) ended.countDown();
+                if (read < 0) {
+                    ended.countDown();
+                    return read;
+                }
+                for (int index = offset; index < offset + read; index++) account(buffer[index] & 0xff);
                 return read;
             } catch (IOException exception) {
                 ended.countDown();
                 throw exception;
             }
+        }
+
+        private void account(int value) throws IOException {
+            if (value == '\n') {
+                currentMessageBytes = 0;
+                return;
+            }
+            if (currentMessageBytes >= MAX_INBOUND_MESSAGE_BYTES) {
+                throw new IOException("MCP inbound message exceeds byte limit: " + MAX_INBOUND_MESSAGE_BYTES);
+            }
+            currentMessageBytes++;
         }
 
         @Override
@@ -108,8 +132,6 @@ public final class MinosMcpServer {
             super.close();
         }
 
-        void awaitEnd() throws InterruptedException {
-            ended.await();
-        }
+        void awaitEnd() throws InterruptedException { ended.await(); }
     }
 }

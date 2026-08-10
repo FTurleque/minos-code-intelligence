@@ -9,27 +9,35 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /** Hybrid lexical + graph + optional semantic ranking. Structural facts remain authoritative. */
 public final class HybridSearchService {
     public static final int MAX_RESULTS = 500;
+    public static final int MAX_QUERY_UTF8_BYTES = 64 * 1024;
+    public static final int DEFAULT_MAX_CORPUS_CACHE_ENTRIES = 64;
+    public static final long DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES = 256L * 1024L * 1024L;
+
     private final ProjectResolver projects;
     private final CodeKnowledgeSnapshotStore snapshots;
     private final SemanticDocumentFactory documentFactory;
     private final SemanticIndexService semanticIndex;
     private final SemanticSearchService semanticSearch;
-    private final ConcurrentHashMap<UUID, CachedCorpus> corpusCache = new ConcurrentHashMap<>();
+    private final LinkedHashMap<UUID, WeightedCorpus> corpusCache = new LinkedHashMap<>(16, 0.75f, true);
+    private long corpusCacheWeightBytes;
+    private long corpusCacheEvictions;
 
     public HybridSearchService(ProjectResolver projects, CodeKnowledgeSnapshotStore snapshots,
                                SemanticIndexService semanticIndex, SemanticSearchService semanticSearch) {
@@ -83,6 +91,7 @@ public final class HybridSearchService {
     }
 
     public List<HybridHit> lexicalBaseline(String projectReference, String query, int limit) throws IOException {
+        requireQuery(query);
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
@@ -98,15 +107,49 @@ public final class HybridSearchService {
                 .thenComparing(hit -> hit.document().stableKey())).limit(limit).toList();
     }
 
+    public CorpusCacheStats corpusCacheStats() {
+        synchronized (corpusCache) {
+            return new CorpusCacheStats(corpusCache.size(), corpusCacheWeightBytes,
+                    DEFAULT_MAX_CORPUS_CACHE_ENTRIES, DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES,
+                    corpusCacheEvictions);
+        }
+    }
+
     private CachedCorpus corpus(RegisteredProject project, CodeKnowledgeSnapshot snapshot,
                                 List<SemanticDocument> indexedDocuments) throws IOException {
-        CachedCorpus cached = corpusCache.get(project.id());
-        if (cached != null && cached.snapshotId().equals(snapshot.snapshotId())) return cached;
+        synchronized (corpusCache) {
+            WeightedCorpus cached = corpusCache.get(project.id());
+            if (cached != null && cached.corpus().snapshotId().equals(snapshot.snapshotId())) return cached.corpus();
+        }
         List<SemanticDocument> documents = indexedDocuments != null ? List.copyOf(indexedDocuments) : documentFactory.build(project, snapshot);
         Map<String, Integer> graphDegree = Map.copyOf(symbolGraphDegree(snapshot.relationships()));
         int maxDegree = graphDegree.values().stream().mapToInt(Integer::intValue).max().orElse(0);
         CachedCorpus next = new CachedCorpus(snapshot.snapshotId(), documents, graphDegree, maxDegree);
-        corpusCache.put(project.id(), next); return next;
+        long weight = estimateCorpusWeight(next);
+        synchronized (corpusCache) {
+            WeightedCorpus raced = corpusCache.get(project.id());
+            if (raced != null && raced.corpus().snapshotId().equals(snapshot.snapshotId())) return raced.corpus();
+            WeightedCorpus previous = corpusCache.remove(project.id());
+            if (previous != null) corpusCacheWeightBytes -= previous.weightBytes();
+            if (weight <= DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) {
+                corpusCache.put(project.id(), new WeightedCorpus(next, weight));
+                corpusCacheWeightBytes = safeAdd(corpusCacheWeightBytes, weight);
+                trimCorpusCache();
+            }
+        }
+        return next;
+    }
+
+    private void trimCorpusCache() {
+        Iterator<Map.Entry<UUID, WeightedCorpus>> iterator = corpusCache.entrySet().iterator();
+        while ((corpusCache.size() > DEFAULT_MAX_CORPUS_CACHE_ENTRIES
+                || corpusCacheWeightBytes > DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) && iterator.hasNext()) {
+            Map.Entry<UUID, WeightedCorpus> eldest = iterator.next();
+            corpusCacheWeightBytes -= eldest.getValue().weightBytes();
+            iterator.remove();
+            corpusCacheEvictions++;
+        }
+        if (corpusCacheWeightBytes < 0L) corpusCacheWeightBytes = 0L;
     }
 
     private Map<String, Double> semanticScores(String projectReference, HybridRequest request, int documentCount,
@@ -129,7 +172,33 @@ public final class HybridSearchService {
         return degree;
     }
 
-    static double lexicalScore(String query, String content) { return LexicalQuery.compile(query).score(content); }
+    private static long estimateCorpusWeight(CachedCorpus corpus) {
+        long weight = 4_096L;
+        for (SemanticDocument document : corpus.documents()) {
+            weight = safeAdd(weight, 256L);
+            weight = safeAdd(weight, stringWeight(document.id()));
+            weight = safeAdd(weight, stringWeight(document.stableKey()));
+            weight = safeAdd(weight, stringWeight(document.sourceId()));
+            weight = safeAdd(weight, stringWeight(document.fileId()));
+            weight = safeAdd(weight, stringWeight(document.content()));
+            weight = safeAdd(weight, stringWeight(document.checksum()));
+        }
+        for (String key : corpus.graphDegree().keySet()) {
+            weight = safeAdd(weight, 64L);
+            weight = safeAdd(weight, stringWeight(key));
+        }
+        return weight;
+    }
+
+    private static long stringWeight(String value) {
+        return value == null ? 0L : safeAdd(40L, (long) value.length() * Character.BYTES);
+    }
+
+    private static long safeAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    static double lexicalScore(String query, String content) { requireQuery(query); return LexicalQuery.compile(query).score(content); }
     private static Set<String> terms(String normalized) {
         Set<String> terms = new HashSet<>();
         if (normalized.isBlank()) return terms;
@@ -176,11 +245,20 @@ public final class HybridSearchService {
     private static double clamp01(double value) { return Math.max(0.0, Math.min(1.0, value)); }
     private static long elapsedMillis(long started) { return (System.nanoTime() - started) / 1_000_000L; }
 
+    private static String requireQuery(String query) {
+        if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+        if (query.getBytes(StandardCharsets.UTF_8).length > MAX_QUERY_UTF8_BYTES) {
+            throw new IllegalArgumentException("query exceeds UTF-8 byte limit: " + MAX_QUERY_UTF8_BYTES);
+        }
+        return query;
+    }
+
     private record CachedCorpus(String snapshotId, List<SemanticDocument> documents, Map<String, Integer> graphDegree, int maxDegree) {
         CachedCorpus { documents = List.copyOf(documents); graphDegree = Map.copyOf(graphDegree); }
     }
+    private record WeightedCorpus(CachedCorpus corpus, long weightBytes) { }
     private record LexicalQuery(Set<String> terms, String normalizedQuery) {
-        static LexicalQuery compile(String query) { String normalized = normalize(query); return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized); }
+        static LexicalQuery compile(String query) { String normalized = normalize(requireQuery(query)); return new LexicalQuery(Set.copyOf(HybridSearchService.terms(normalized)), normalized); }
         double score(String content) {
             if (terms.isEmpty()) return 0.0;
             String normalizedContent = normalize(content);
@@ -194,7 +272,7 @@ public final class HybridSearchService {
 
     public record HybridRequest(String query, int limit, double minimumScore) {
         public HybridRequest {
-            if (query == null || query.isBlank()) throw new IllegalArgumentException("query must not be blank");
+            query = requireQuery(query);
             if (limit < 1 || limit > MAX_RESULTS) throw new IllegalArgumentException("limit must be between 1 and " + MAX_RESULTS);
             if (!Double.isFinite(minimumScore) || minimumScore < 0.0 || minimumScore > 1.0) throw new IllegalArgumentException("minimumScore must be between 0 and 1");
         }
@@ -219,4 +297,6 @@ public final class HybridSearchService {
                                  List<HybridHit> hits, List<String> limitations, long latencyMillis) {
         public HybridResponse { hits = List.copyOf(Objects.requireNonNull(hits, "hits")); limitations = List.copyOf(Objects.requireNonNull(limitations, "limitations")); }
     }
+    public record CorpusCacheStats(int entries, long weightBytes, int maximumEntries,
+                                   long maximumWeightBytes, long evictions) { }
 }

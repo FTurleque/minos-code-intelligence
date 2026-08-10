@@ -12,25 +12,20 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Linux worker sandbox backed by bubblewrap namespaces and util-linux prlimit.
  *
- * <p>The host root is never exposed wholesale. Only explicit system runtime roots and concrete
- * provider command paths are mounted read-only; the workspace, artifact and MINOS run roots are
- * writable. DENY keeps bubblewrap's isolated network namespace;
- * ALLOW explicitly shares the host network namespace. Provider capabilities are dropped in both
- * modes. Resource limits are inherited from {@code prlimit}.</p>
- *
- * <p>Discovery is capability-based rather than executable-presence-based: MINOS runs a bounded
- * probe of the same namespace and privilege chain before advertising {@code OS_ENFORCED}. On
- * kernels or LSM policies that reject unprivileged user namespaces, the backend is unavailable and
- * worker {@code DENY} remains fail-closed.</p>
+ * <p>The host root is never exposed wholesale. System runtime roots and the exact managed provider
+ * runtime needed by the command are mounted read-only; arbitrary absolute files are mounted as
+ * individual files instead of exposing their parent directories. The workspace, artifact and MINOS
+ * run roots are writable. DENY keeps bubblewrap's isolated network namespace; ALLOW explicitly
+ * shares the host network namespace.</p>
  */
 public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
 
@@ -38,15 +33,25 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     static final int MAX_PROCESSES = 128;
     static final int MAX_OPEN_FILES = 2048;
 
+    private final Path minosHome;
     private final Path bubblewrap;
     private final Path prlimit;
 
     public LinuxBubblewrapWorkerSandboxBackend(Path bubblewrap, Path prlimit) {
+        this(null, bubblewrap, prlimit);
+    }
+
+    LinuxBubblewrapWorkerSandboxBackend(Path minosHome, Path bubblewrap, Path prlimit) {
+        this.minosHome = minosHome == null ? null : minosHome.toAbsolutePath().normalize();
         this.bubblewrap = regularExecutable(bubblewrap, "bubblewrap");
         this.prlimit = regularExecutable(prlimit, "prlimit");
     }
 
     public static Optional<LinuxBubblewrapWorkerSandboxBackend> discover() {
+        return discover(null);
+    }
+
+    public static Optional<LinuxBubblewrapWorkerSandboxBackend> discover(Path minosHome) {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.LINUX) {
             return Optional.empty();
         }
@@ -56,13 +61,13 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             return Optional.empty();
         }
         LinuxBubblewrapWorkerSandboxBackend candidate =
-                new LinuxBubblewrapWorkerSandboxBackend(bwrap.orElseThrow(), limits.orElseThrow());
+                new LinuxBubblewrapWorkerSandboxBackend(minosHome, bwrap.orElseThrow(), limits.orElseThrow());
         return candidate.probeOsIsolation() ? Optional.of(candidate) : Optional.empty();
     }
 
     @Override
     public String id() {
-        return "linux-bubblewrap-prlimit-v3";
+        return "linux-bubblewrap-prlimit-v4";
     }
 
     @Override
@@ -93,6 +98,8 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                 List.of(
                         "LINUX_BUBBLEWRAP_USER_MOUNT_PID_IPC_UTS_CGROUP_NETWORK_NAMESPACES",
                         "LINUX_MINIMAL_RUNTIME_READ_ONLY_ALLOWLIST",
+                        "LINUX_EXACT_FILE_BIND_FOR_EXTERNAL_PROVIDER_ARGUMENTS",
+                        "LINUX_MANAGED_PROVIDER_RUNTIME_ROOT_ONLY",
                         "LINUX_WORKSPACE_ARTIFACT_RUN_WRITE_ONLY",
                         "LINUX_PROVIDER_CAPABILITIES_DROPPED",
                         "LINUX_PRLIMIT_ADDRESS_SPACE_PROCESS_COUNT_OPEN_FILES_CPU",
@@ -136,7 +143,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path run = runDirectory.toRealPath();
 
         List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds(), networkPolicy);
-        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy);
+        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
         sandbox.add("--dev");
         sandbox.add("/dev");
         sandbox.add("--proc");
@@ -162,7 +169,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private boolean probeOsIsolation() {
         List<String> command = baseCommand(5L, WorkerNetworkPolicy.DENY);
         try {
-            addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY);
+            addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY, minosHome);
         } catch (IOException exception) {
             return false;
         }
@@ -215,13 +222,13 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private static void addRuntimeReadOnlyBinds(
             List<String> command,
             List<String> providerCommand,
-            WorkerNetworkPolicy networkPolicy
+            WorkerNetworkPolicy networkPolicy,
+            Path minosHome
     ) throws IOException {
         Set<Path> mounted = new LinkedHashSet<>();
         for (String root : List.of("/usr", "/bin", "/lib", "/lib64", "/sbin")) {
             addReadOnlyIfPresent(command, mounted, Path.of(root));
         }
-        // Network ALLOW needs public trust/DNS configuration, never the complete /etc tree.
         if (networkPolicy == WorkerNetworkPolicy.ALLOW) {
             for (String value : List.of(
                     "/etc/ssl", "/etc/ca-certificates", "/etc/resolv.conf", "/etc/hosts",
@@ -229,17 +236,37 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                 addReadOnlyIfPresent(command, mounted, Path.of(value));
             }
         }
+
+        Path tools = minosHome == null ? null : minosHome.resolve("tools").toAbsolutePath().normalize();
         for (String argument : providerCommand) {
             try {
                 Path candidate = Path.of(argument);
                 if (!candidate.isAbsolute() || !Files.exists(candidate)) continue;
+                Path normalized = candidate.toAbsolutePath().normalize();
                 Path real = candidate.toRealPath();
                 if (mounted.stream().anyMatch(real::startsWith)) continue;
-                addReadOnlyIfPresent(command, mounted, Files.isDirectory(real) ? real : real.getParent());
+
+                Path managedRoot = managedRuntimeRoot(normalized, tools);
+                if (managedRoot != null) {
+                    addReadOnlyIfPresent(command, mounted, managedRoot);
+                    continue;
+                }
+                if (Files.isRegularFile(real)) {
+                    addReadOnlyFile(command, mounted, real, normalized);
+                }
+                // Arbitrary directories are deliberately not promoted to read roots. Project,
+                // artifact and run directories are mounted explicitly by sandboxPlan.
             } catch (RuntimeException ignored) {
                 // Non-path provider arguments stay opaque.
             }
         }
+    }
+
+    private static Path managedRuntimeRoot(Path candidate, Path tools) {
+        if (tools == null || !candidate.startsWith(tools)) return null;
+        Path relative = tools.relativize(candidate);
+        if (relative.getNameCount() == 0) return tools;
+        return tools.resolve(relative.getName(0));
     }
 
     private static void addReadOnlyIfPresent(List<String> command, Set<Path> mounted, Path candidate)
@@ -251,6 +278,20 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         command.add("--ro-bind");
         command.add(real.toString());
         command.add(real.toString());
+    }
+
+    private static void addReadOnlyFile(
+            List<String> command,
+            Set<Path> mounted,
+            Path realSource,
+            Path destination
+    ) {
+        Path marker = destination.toAbsolutePath().normalize();
+        if (!mounted.add(marker)) return;
+        addDestinationParents(command, marker);
+        command.add("--ro-bind");
+        command.add(realSource.toString());
+        command.add(marker.toString());
     }
 
     private static void addWritableBind(List<String> command, Path directory) {
