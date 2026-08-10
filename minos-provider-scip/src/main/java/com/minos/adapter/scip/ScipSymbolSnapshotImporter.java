@@ -7,7 +7,6 @@ import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
-import com.minos.store.InMemoryCodeKnowledgeStore;
 import org.scip_code.scip.Index;
 
 import java.io.IOException;
@@ -22,6 +21,16 @@ import java.util.Optional;
 /** Pont explicite entre un artefact SCIP et le snapshot persistant MINOS. */
 public final class ScipSymbolSnapshotImporter {
 
+    private final ScipIngestionLimits limits;
+
+    public ScipSymbolSnapshotImporter() {
+        this(ScipIngestionLimits.DEFAULT);
+    }
+
+    ScipSymbolSnapshotImporter(ScipIngestionLimits limits) {
+        this.limits = Objects.requireNonNull(limits, "limits");
+    }
+
     public ScipSymbolSnapshotReport importSnapshot(
             Path indexFile,
             ScipSymbolSnapshotRequest request,
@@ -31,7 +40,8 @@ public final class ScipSymbolSnapshotImporter {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(snapshotStore, "snapshotStore");
 
-        Index index = new ScipIndexReader().read(indexFile);
+        Index index = new ScipIndexReader(limits).read(indexFile);
+        limits.validate(index);
         Map<String, String> fileIds = defaultFileIds(index, request.fileIdsByRelativePath(), request.projectRelativeRoot());
         CapturingStore capture = new CapturingStore();
         ScipIngestionReport ingestion = new ScipIngestionAdapter().ingest(
@@ -72,29 +82,29 @@ public final class ScipSymbolSnapshotImporter {
         } catch (RuntimeException exception) { return null; }
     }
 
+    /** Write-only capture used only to atomically publish one normalized snapshot. */
     private static final class CapturingStore implements CodeKnowledgeStore {
-        private final InMemoryCodeKnowledgeStore delegate = new InMemoryCodeKnowledgeStore();
         private final Map<String, Symbol> symbolsById = new LinkedHashMap<>();
         private final Map<String, SymbolOccurrence> occurrencesById = new LinkedHashMap<>();
         private final Map<String, Relationship> relationshipsById = new LinkedHashMap<>();
 
         @Override public void putSymbols(Collection<Symbol> symbols) {
-            delegate.putSymbols(symbols);
             if (symbols != null) symbols.forEach(symbol -> symbolsById.put(symbol.id(), symbol));
         }
         @Override public void putOccurrences(Collection<SymbolOccurrence> occurrences) {
-            delegate.putOccurrences(occurrences);
             if (occurrences != null) occurrences.forEach(occurrence -> occurrencesById.put(occurrence.id(), occurrence));
         }
         @Override public void putRelationships(Collection<Relationship> relationships) {
-            delegate.putRelationships(relationships);
             if (relationships != null) relationships.forEach(relationship -> relationshipsById.put(relationship.id(), relationship));
         }
-        @Override public Optional<Symbol> findSymbolById(String projectId, String symbolId) { return delegate.findSymbolById(projectId, symbolId); }
-        @Override public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) { return delegate.findSymbols(projectId, criteria); }
-        @Override public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) { return delegate.findFileSymbols(projectId, fileId, limit); }
-        @Override public List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit) { return delegate.findUsages(projectId, symbolId, limit); }
-        @Override public List<Relationship> findRelationships(String projectId, RelationshipSearchCriteria criteria) { return delegate.findRelationships(projectId, criteria); }
+        @Override public Optional<Symbol> findSymbolById(String projectId, String symbolId) { return Optional.ofNullable(symbolsById.get(symbolId)); }
+        @Override public List<Symbol> findSymbols(String projectId, SymbolSearchCriteria criteria) { throw unsupported(); }
+        @Override public List<Symbol> findFileSymbols(String projectId, String fileId, int limit) { throw unsupported(); }
+        @Override public List<SymbolOccurrence> findUsages(String projectId, String symbolId, int limit) { throw unsupported(); }
+        @Override public List<Relationship> findRelationships(String projectId, RelationshipSearchCriteria criteria) { throw unsupported(); }
+        private static UnsupportedOperationException unsupported() {
+            return new UnsupportedOperationException("SCIP snapshot capture store is write-only");
+        }
         private List<Symbol> symbols() { return List.copyOf(symbolsById.values()); }
         private List<SymbolOccurrence> occurrences() { return List.copyOf(occurrencesById.values()); }
         private List<Relationship> relationships() { return List.copyOf(relationshipsById.values()); }
