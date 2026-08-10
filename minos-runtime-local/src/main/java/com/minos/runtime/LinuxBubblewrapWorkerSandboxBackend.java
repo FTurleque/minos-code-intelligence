@@ -262,11 +262,11 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         }
     }
 
-    private static Path managedRuntimeRoot(Path candidate, Path tools) {
+    static Path managedRuntimeRoot(Path candidate, Path tools) {
         if (tools == null || !candidate.startsWith(tools)) return null;
         Path relative = tools.relativize(candidate);
-        if (relative.getNameCount() == 0) return tools;
-        return tools.resolve(relative.getName(0));
+        if (relative.getNameCount() < 2) return null;
+        return tools.resolve(relative.subpath(0, 2));
     }
 
     private static void addReadOnlyIfPresent(List<String> command, Set<Path> mounted, Path candidate)
