@@ -36,7 +36,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     static final int MAX_ACTIVE_PROCESSES = 128;
     static final int CPU_HARD_CAP = 8_000;
 
-    private static final String RESOURCE = "/com/minos/runtime/windows-appcontainer-sandbox-v2.ps1";
+    private static final String RESOURCE = "/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1";
 
     private final Path minosHome;
     private final Path powershell;
@@ -210,7 +210,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
-        Path target = directory.resolve("windows-appcontainer-sandbox-v2.ps1");
+        Path target = directory.resolve("windows-appcontainer-sandbox-v3.ps1");
         try (InputStream input = WindowsAppContainerWorkerSandboxBackend.class.getResourceAsStream(RESOURCE)) {
             if (input == null) throw new IOException("embedded Windows AppContainer launcher is missing: " + RESOURCE);
             Path partial = Files.createTempFile(directory, ".windows-appcontainer-", ".ps1");
@@ -308,8 +308,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             } else if (Files.isRegularFile(real)) {
                 addReadFile(files, real);
             }
-            // Arbitrary directories are not granted recursively. Project/artifact/run roots are
-            // already represented explicitly as write roots.
         } catch (IOException | RuntimeException ignored) {
             // Non-path provider arguments intentionally stay opaque.
         }
