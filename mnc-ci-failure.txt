@@ -1,0 +1,246 @@
+MNC Maven failure diagnostic
+staging-head=82830045b0d749ca001609867f22dcfee71e028a
+
+--- Maven error lines ---
+[ERROR] COMPILATION ERROR : 
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,80] unclosed character literal
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,83] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,84] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,90] unclosed character literal
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.15.0:compile (default-compile) on project minos-nexus: Compilation failure: Compilation failure: 
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,80] unclosed character literal
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,83] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,84] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,90] unclosed character literal
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :minos-nexus
+
+--- Maven tail ---
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The default text search configuration will be set to "english".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The default database encoding has accordingly been set to "UTF8".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The database cluster will be initialized with locale "en_US.utf8".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The files belonging to this database system will be owned by user "postgres".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting dynamic shared memory implementation ... posix
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: creating subdirectories ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default "max_connections" ... 100
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default "shared_buffers" ... 128MB
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default time zone ... Etc/UTC
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: creating configuration files ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: running bootstrap script ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: performing post-bootstrap initialization ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: syncing data to disk ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:     pg_ctl -D /var/lib/postgresql/data -l logfile start
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: Success. You can now start the database server using:
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: initdb: warning: enabling "trust" authentication for local connections
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.701 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: waiting for server to start....2026-08-10 16:41:50.701 UTC [48] LOG:  starting PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.707 UTC [48] LOG:  database system is ready to accept connections
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.703 UTC [51] LOG:  database system was shut down at 2026-08-10 16:41:50 UTC
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: server started
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:  done
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: CREATE DATABASE
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.892 UTC [49] LOG:  checkpoint starting: shutdown immediate
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.892 UTC [49] LOG:  shutting down
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.891 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: .2026-08-10 16:41:50.888 UTC [48] LOG:  aborting any active transactions
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: waiting for server to shut down...2026-08-10 16:41:50.888 UTC [48] LOG:  received fast shutdown request
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.901 UTC [49] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.009 s, sync=0.001 s, total=0.009 s; sync files=0, longest=0.000 s, average=0.000 s; distance=4238 kB, estimate=4238 kB; lsn=0/1908988, redo lsn=0/1908988
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:50.909 UTC [48] LOG:  database system is shut down
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: server stopped
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:  done
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: PostgreSQL init process complete; ready for start up.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:51.012 UTC [1] LOG:  starting PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:51.012 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:51.012 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:51.018 UTC [1] LOG:  database system is ready to accept connections
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Container pgvector/pgvector:0.8.2-pg17 started in PT1.129686924S
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Container is started (JDBC URL: jdbc:postgresql://localhost:32772/minos_test?loggerLevel=OFF)
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb,<null>
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 0465f0da04d4da23a0550ff7fec9f5ad8502b9a2dfa351edf1904b84f5de78fb,true,true
+[main] DEBUG org.testcontainers.utility.ResourceReaper - Removed container and associated volume(s): pgvector/pgvector:0.8.2-pg17
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.558 s -- in com.minos.storage.postgresql.PostgresSemanticVectorStoreTest
+[INFO] Running com.minos.storage.postgresql.PostgresSchemaMigratorTest
+[main] DEBUG org.testcontainers.utility.PrefixingImageNameSubstitutor - No prefix is configured
+[main] DEBUG org.testcontainers.utility.ImageNameSubstitutor - Did not find a substitute image for pgvector/pgvector:0.8.2-pg17 (using image substitutor: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor'))
+[main] DEBUG org.testcontainers.images.AbstractImagePullPolicy - Using locally available and not pulling image: pgvector/pgvector:0.8.2-pg17
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Creating container for image: pgvector/pgvector:0.8.2-pg17
+[main] DEBUG org.testcontainers.utility.RegistryAuthLocator - Looking up auth config for image: pgvector/pgvector:0.8.2-pg17 at registry: https://index.docker.io/v1/
+[main] DEBUG org.testcontainers.utility.RegistryAuthLocator - Cached auth found: [AuthConfig{username=githubactions, password=hidden non-blank value, auth=hidden non-blank value, email=null, registryAddress=https://index.docker.io/v1/, registryToken=blank}]
+[main] DEBUG org.testcontainers.dockerclient.AuthDelegatingDockerClientConfig - Effective auth config [AuthConfig{username=githubactions, password=hidden non-blank value, auth=hidden non-blank value, email=null, registryAddress=https://index.docker.io/v1/, registryToken=blank}]
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: org.testcontainers.shaded.com.github.dockerjava.core.command.CreateContainerCmdImpl@598f6c93[aliases=<null>,argsEscaped=<null>,attachStderr=<null>,attachStdin=<null>,attachStdout=<null>,authConfig=AuthConfig(username=githubactions, email=null, registryAddress=https://index.docker.io/v1/, stackOrchestrator=null),cmd={postgres,-c,fsync=off},domainName=<null>,entrypoint=<null>,env={POSTGRES_USER=minos,POSTGRES_PASSWORD=test-secret,POSTGRES_DB=minos_test},exposedPorts=ExposedPorts(exposedPorts=[5432/tcp]),healthcheck=<null>,hostConfig=HostConfig(binds=[], blkioWeight=null, blkioWeightDevice=null, blkioDeviceReadBps=null, blkioDeviceWriteBps=null, blkioDeviceReadIOps=null, blkioDeviceWriteIOps=null, memorySwappiness=null, nanoCPUs=null, capAdd=null, capDrop=null, containerIDFile=null, cpuPeriod=null, cpuRealtimePeriod=null, cpuRealtimeRuntime=null, cpuShares=null, cpuQuota=null, cpusetCpus=null, cpusetMems=null, devices=null, deviceCgroupRules=null, deviceRequests=null, diskQuota=null, dns=null, dnsOptions=null, dnsSearch=null, extraHosts=[], groupAdd=null, ipcMode=null, cgroup=null, links=[], logConfig=LogConfig(type=null, config=null), lxcConf=null, memory=null, memorySwap=null, memoryReservation=null, kernelMemory=null, networkMode=null, oomKillDisable=null, init=null, autoRemove=null, oomScoreAdj=null, portBindings={5432/tcp=[Lcom.github.dockerjava.api.model.Ports$Binding;@23657729}, privileged=null, publishAllPorts=null, readonlyRootfs=null, restartPolicy=null, ulimits=null, cpuCount=null, cpuPercent=null, ioMaximumIOps=null, ioMaximumBandwidth=null, volumesFrom=[], mounts=null, pidMode=null, isolation=null, securityOpts=null, storageOpt=null, cgroupParent=null, volumeDriver=null, shmSize=null, pidsLimit=null, runtime=null, tmpFs=null, utSMode=null, usernsMode=null, sysctls=null, consoleSize=null, cgroupnsMode=null),hostName=<null>,image=pgvector/pgvector:0.8.2-pg17,ipv4Address=<null>,ipv6Address=<null>,labels={org.testcontainers=true, org.testcontainers.lang=java, org.testcontainers.version=1.20.5, org.testcontainers.sessionId=54edc1be-a887-4fe1-a225-e461424eb08e},macAddress=<null>,name=<null>,networkDisabled=<null>,networkingConfig=<null>,onBuild=<null>,platform=<null>,portSpecs=<null>,shell=<null>,stdInOnce=<null>,stdinOpen=<null>,stopSignal=<null>,stopTimeout=<null>,tty=<null>,user=<null>,volumes=Volumes(volumes=[]),workingDir=<null>]
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Container pgvector/pgvector:0.8.2-pg17 is starting: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: sha256:bdb5945cfea65945c40134bc74e11d59d404cb054aa4e3fd2c392d8097545f4f
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: This user must also own the server process.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: fixing permissions on existing directory /var/lib/postgresql/data ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: Data page checksums are disabled.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The default text search configuration will be set to "english".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The default database encoding has accordingly been set to "UTF8".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The database cluster will be initialized with locale "en_US.utf8".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: The files belonging to this database system will be owned by user "postgres".
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting dynamic shared memory implementation ... posix
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: creating subdirectories ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default "max_connections" ... 100
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default "shared_buffers" ... 128MB
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: selecting default time zone ... Etc/UTC
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: creating configuration files ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: running bootstrap script ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: performing post-bootstrap initialization ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: initdb: warning: enabling "trust" authentication for local connections
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:     pg_ctl -D /var/lib/postgresql/data -l logfile start
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: Success. You can now start the database server using:
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: syncing data to disk ... ok
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: waiting for server to start....2026-08-10 16:41:52.240 UTC [48] LOG:  starting PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.241 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.246 UTC [48] LOG:  database system is ready to accept connections
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.243 UTC [51] LOG:  database system was shut down at 2026-08-10 16:41:52 UTC
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: server started
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:  done
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: CREATE DATABASE
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.431 UTC [49] LOG:  checkpoint starting: shutdown immediate
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.431 UTC [49] LOG:  shutting down
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.430 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: .2026-08-10 16:41:52.428 UTC [48] LOG:  aborting any active transactions
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: waiting for server to shut down...2026-08-10 16:41:52.428 UTC [48] LOG:  received fast shutdown request
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.440 UTC [49] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.009 s, sync=0.001 s, total=0.009 s; sync files=0, longest=0.000 s, average=0.000 s; distance=4238 kB, estimate=4238 kB; lsn=0/1908988, redo lsn=0/1908988
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 2026-08-10 16:41:52.447 UTC [48] LOG:  database system is shut down
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT:  done
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: server stopped
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: PostgreSQL init process complete; ready for start up.
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDOUT: 
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:52.551 UTC [1] LOG:  starting PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+[main] DEBUG org.testcontainers.containers.output.WaitingConsumer - STDERR: 2026-08-10 16:41:52.558 UTC [1] LOG:  database system is ready to accept connections
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Container pgvector/pgvector:0.8.2-pg17 started in PT1.109602851S
+[main] INFO tc.pgvector/pgvector:0.8.2-pg17 - Container is started (JDBC URL: jdbc:postgresql://localhost:32773/minos_test?loggerLevel=OFF)
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,<null>
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,false
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.exec.InspectContainerCmdExec - GET: DefaultWebTarget{path=[/containers/a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53/json], queryParams={}}
+[main] DEBUG org.testcontainers.shaded.com.github.dockerjava.core.command.AbstrDockerCmd - Cmd: a8d5c3f67e59e3a9cdd5db0fea39d7a4d563fbf0e72c7e2e02adcc35230dbe53,true,true
+[main] DEBUG org.testcontainers.utility.ResourceReaper - Removed container and associated volume(s): pgvector/pgvector:0.8.2-pg17
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.389 s -- in com.minos.storage.postgresql.PostgresSchemaMigratorTest
+[INFO] Running com.minos.storage.postgresql.PostgresConnectionFactoryTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in com.minos.storage.postgresql.PostgresConnectionFactoryTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 28, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] --- jar:3.5.0:jar (default-jar) @ minos-storage-postgresql ---
+[INFO] Building jar: /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-storage-postgresql/target/minos-storage-postgresql-1.0.1-SNAPSHOT.jar
+[INFO] 
+[INFO] --- jacoco:0.8.15:report (jacoco-module-report) @ minos-storage-postgresql ---
+[INFO] Loading execution data file /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-storage-postgresql/target/jacoco.exec
+[INFO] Analyzed bundle 'MINOS PostgreSQL Storage' with 18 classes
+[INFO] 
+[INFO] -----------------------< com.minos:minos-nexus >------------------------
+[INFO] Building MINOS NEXUS Integration 1.0.1-SNAPSHOT                  [10/14]
+[INFO]   from minos-nexus/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ minos-nexus ---
+[INFO] 
+[INFO] --- enforcer:3.6.2:enforce (enforce-minos-toolchain) @ minos-nexus ---
+[INFO] 
+[INFO] --- jacoco:0.8.15:prepare-agent (jacoco-prepare-agent) @ minos-nexus ---
+[INFO] argLine set to -javaagent:/home/runner/.m2/repository/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=/home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/target/jacoco.exec,append=true
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ minos-nexus ---
+[INFO] skip non existing resourceDirectory /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ minos-nexus ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 4 source files with javac [debug parameters release 24] to target/classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,80] unclosed character literal
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,83] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,84] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,90] unclosed character literal
+[INFO] 4 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for MINOS Parent 1.0.1-SNAPSHOT:
+[INFO] 
+[INFO] MINOS Parent ....................................... SUCCESS [  0.445 s]
+[INFO] MINOS Domain ....................................... SUCCESS [  3.769 s]
+[INFO] MINOS Engine ....................................... SUCCESS [  2.172 s]
+[INFO] MINOS Local Provider Runtime ....................... SUCCESS [  3.101 s]
+[INFO] MINOS Local Storage ................................ SUCCESS [  2.625 s]
+[INFO] MINOS SCIP Provider ................................ SUCCESS [  5.818 s]
+[INFO] MINOS Git Integration .............................. SUCCESS [  6.072 s]
+[INFO] MINOS Application Services ......................... SUCCESS [ 11.320 s]
+[INFO] MINOS PostgreSQL Storage ........................... SUCCESS [ 18.338 s]
+[INFO] MINOS NEXUS Integration ............................ FAILURE [  0.065 s]
+[INFO] MINOS CLI .......................................... SKIPPED
+[INFO] MINOS Java API ..................................... SKIPPED
+[INFO] MINOS MCP .......................................... SKIPPED
+[INFO] MINOS Code Intelligence ............................ SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  53.935 s
+[INFO] Finished at: 2026-08-10T16:41:53Z
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.15.0:compile (default-compile) on project minos-nexus: Compilation failure: Compilation failure: 
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,80] unclosed character literal
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,83] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,84] illegal character: '\'
+[ERROR] /home/runner/work/minos-code-intelligence/minos-code-intelligence/minos-nexus/src/main/java/com/minos/integration/nexus/NexusExportService.java:[225,90] unclosed character literal
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :minos-nexus
