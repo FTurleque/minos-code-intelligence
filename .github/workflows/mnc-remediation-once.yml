@@ -64,6 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python scripts/remediation/repair-mnc-staging.py
           python scripts/remediation/apply-mnc-core.py
           python scripts/remediation/apply-mnc-bounds.py
           python scripts/remediation/apply-mnc-supply-lifecycle.py
@@ -115,6 +116,7 @@ jobs:
           rm -f scripts/remediation/generate-mnc-npm-locks.py
           rm -f scripts/remediation/add-mnc-regression-tests.py
           rm -f scripts/remediation/finalize-mnc-staging.py
+          rm -f scripts/remediation/repair-mnc-staging.py
           git diff --check
 
       - name: Commit and push qualified remediation
