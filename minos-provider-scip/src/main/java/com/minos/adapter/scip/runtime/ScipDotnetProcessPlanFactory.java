@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -45,10 +46,14 @@ public final class ScipDotnetProcessPlanFactory implements IndexerProcessPlanFac
     }
 
     private static boolean containsDotnetProject(Path root) throws IOException {
-        try (var paths = Files.walk(root, 3)) {
-            return paths.filter(Files::isRegularFile)
-                    .map(path -> path.getFileName().toString().toLowerCase(java.util.Locale.ROOT))
-                    .anyMatch(name -> name.endsWith(".csproj") || name.endsWith(".sln"));
-        }
+        return BoundedProviderSourceProbe.contains(
+                root,
+                3,
+                "scip-dotnet project preflight",
+                name -> {
+                    String lower = name.toLowerCase(Locale.ROOT);
+                    return lower.endsWith(".csproj") || lower.endsWith(".sln");
+                }
+        );
     }
 }
