@@ -18,6 +18,14 @@ public interface RemoteRepositoryMaterializer {
     }
 
     /**
+     * Removes a durable registry pin. Callers use this only after the corresponding project
+     * registration has been removed or rolled back, so an evicting cache can reclaim the entry.
+     */
+    default void unpin(RemoteMaterialization materialization) throws Exception {
+        Objects.requireNonNull(materialization, "materialization");
+    }
+
+    /**
      * Releases the active-use lease associated with a materialization. Implementations that do not
      * evict materializations may keep the default no-op behavior.
      */
