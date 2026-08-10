@@ -51,6 +51,7 @@ def main() -> int:
         plugins = read("minos-application/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
         registry = read("minos-application/src/main/java/com/minos/registry/InterProcessLocalProjectRegistry.java")
         coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+        mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 
         require("LocalRemoteIndexOperations.java", remote,
                 "RemoteIndexLease.acquire(application.home(), source.cacheKey())",
@@ -103,6 +104,10 @@ def main() -> int:
         require("ManagedScipProviderRuntimeManager.java", coursier,
                 "MAX_COURSIER_ARCHIVE_BYTES", "BodyHandlers.ofInputStream()", "BoundedInputStream")
         forbid("ManagedScipProviderRuntimeManager.java", coursier, "BodyHandlers.ofFile(archivePartial)")
+
+        require("MinosMcpServer.java", mcp_server,
+                "MAX_INBOUND_MESSAGE_BYTES", "currentMessageBytes",
+                "MCP inbound message exceeds byte limit")
 
         print("MND REMEDIATION INVARIANTS SUCCESS")
         return 0
