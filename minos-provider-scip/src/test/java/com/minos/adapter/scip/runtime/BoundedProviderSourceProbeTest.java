@@ -35,7 +35,7 @@ class BoundedProviderSourceProbeTest {
         Files.write(root.resolve("large.txt"), new byte[64]);
         Files.writeString(root.resolve("project.csproj"), "<Project/>", StandardCharsets.UTF_8);
 
-        SourceBudgetPolicy tiny = new SourceBudgetPolicy(100, 32);
+        SourceBudgetPolicy tiny = new SourceBudgetPolicy(100, 1);
         assertThrows(IOException.class, () -> BoundedProviderSourceProbe.contains(
                 root, 3, "test", name -> name.endsWith(".csproj"), tiny));
     }
