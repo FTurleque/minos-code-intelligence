@@ -5,6 +5,8 @@ text = path.read_text(encoding="utf-8")
 updated = text.replace("= '''", "= r'''")
 if updated == text:
     raise SystemExit("no non-raw triple-quoted staging literals found")
+# Raw Python snippets must contain the Java backslash char literal exactly as '\\'.
+updated = updated.replace("replace('\\\\\\\\', '/')", "replace('\\\\', '/')")
 
 fragile = '''if text.count(old_walk) != 1:
     raise SystemExit("Nexus traversal anchor mismatch")
@@ -75,4 +77,4 @@ if app_text.count(old_close) != 1:
     raise SystemExit("MinosApplication close contract anchor mismatch")
 app.write_text(app_text.replace(old_close, new_close, 1), encoding="utf-8", newline="\n")
 
-print("converted Java snippets to raw literals; hardened NEXUS/discovery and close lifecycle staging")
+print("converted Java snippets to raw literals; fixed NEXUS escaping; hardened discovery and close lifecycle staging")
