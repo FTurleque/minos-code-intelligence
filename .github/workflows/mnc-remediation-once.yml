@@ -1,4 +1,5 @@
 name: MNC remediation one-shot
+# staging-revision: 3
 
 on:
   pull_request:
