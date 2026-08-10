@@ -33,6 +33,16 @@ public record SemanticVector(String stableKey, List<Double> values) {
         return ((PrimitiveValues) values).norm();
     }
 
+    private static double requireFloat32Compatible(double value) {
+        if (!Double.isFinite(value)) {
+            throw new IllegalArgumentException("embedding values must be finite");
+        }
+        if (!Float.isFinite((float) value)) {
+            throw new IllegalArgumentException("embedding values must be representable as finite float32");
+        }
+        return value;
+    }
+
     private static final class PrimitiveValues extends AbstractList<Double> implements RandomAccess {
         private final double[] values;
         private final double norm;
@@ -42,7 +52,7 @@ public record SemanticVector(String stableKey, List<Double> values) {
             this.values = clone ? values.clone() : values;
             double squaredNorm = 0.0;
             for (double value : this.values) {
-                if (!Double.isFinite(value)) throw new IllegalArgumentException("embedding values must be finite");
+                requireFloat32Compatible(value);
                 squaredNorm += value * value;
             }
             this.norm = Math.sqrt(squaredNorm);
@@ -54,10 +64,10 @@ public record SemanticVector(String stableKey, List<Double> values) {
             double[] compact = new double[source.size()];
             for (int i = 0; i < compact.length; i++) {
                 Double value = source.get(i);
-                if (value == null || !Double.isFinite(value)) {
+                if (value == null) {
                     throw new IllegalArgumentException("embedding values must be finite");
                 }
-                compact[i] = value;
+                compact[i] = requireFloat32Compatible(value);
             }
             return new PrimitiveValues(compact, false);
         }

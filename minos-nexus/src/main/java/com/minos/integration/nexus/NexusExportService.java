@@ -18,16 +18,16 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static com.minos.integration.nexus.NexusExportContract.CONTRACT_VERSION;
 import static com.minos.integration.nexus.NexusExportContract.PRODUCER;
@@ -61,36 +61,41 @@ public final class NexusExportService {
                 List.copyOf(exportedById.values()), relations, List.copyOf(limitations));
     }
 
-    private static Map<String, NexusExportContract.ExportSymbol> exportSymbols(CodeKnowledgeSnapshot snapshot,
-                                                                                Map<String, String> pathByFileId,
-                                                                                Set<String> limitations) {
-        Map<String, NexusExportContract.ExportSymbol> exported = new LinkedHashMap<>();
+    private static Map<String, NexusExportContract.ExportSymbol> exportSymbols(
+            CodeKnowledgeSnapshot snapshot,
+            Map<String, String> pathByFileId,
+            Set<String> limitations
+    ) {
+        BoundedById<NexusExportContract.ExportSymbol> selected = new BoundedById<>(MAX_EXPORTED_SYMBOLS);
         int omittedExternal = 0, omittedLocation = 0, omittedPath = 0;
-        for (Symbol symbol : snapshot.symbols().stream().sorted(Comparator.comparing(Symbol::id)).toList()) {
+        for (Symbol symbol : snapshot.symbols()) {
             if (symbol.external()) { omittedExternal++; continue; }
             SymbolLocation location = symbol.location();
             if (location == null) { omittedLocation++; continue; }
             String relativePath = pathByFileId.get(location.fileId());
             if (relativePath == null) { omittedPath++; continue; }
-            if (exported.size() >= MAX_EXPORTED_SYMBOLS) { limitations.add("SYMBOLS_TRUNCATED"); break; }
-            exported.put(symbol.id(), new NexusExportContract.ExportSymbol(symbol.id(), symbol.symbolKey(), relativePath,
+            selected.offer(symbol.id(), new NexusExportContract.ExportSymbol(
+                    symbol.id(), symbol.symbolKey(), relativePath,
                     symbol.moduleId(), symbol.kind().name(), symbol.name(), textOr(symbol.qualifiedName(), symbol.name()),
                     textOr(symbol.signature(), ""), symbol.language(), location.startLine(), location.endLine(),
                     symbol.resolutionStatus().name(), symbol.identityQuality().name(), symbol.generated(), origin(symbol.origin())));
         }
+        if (selected.truncated()) limitations.add("SYMBOLS_TRUNCATED");
         if (omittedExternal > 0) limitations.add("EXTERNAL_SYMBOLS_OMITTED");
         if (omittedLocation > 0) limitations.add("SYMBOL_WITHOUT_LOCAL_LOCATION_OMITTED");
         if (omittedPath > 0) limitations.add("UNRESOLVED_SYMBOL_FILE_ID_OMITTED");
-        return exported;
+        return selected.orderedMap();
     }
 
-    private static List<NexusExportContract.ExportRelation> exportRelations(CodeKnowledgeSnapshot snapshot,
-                                                                              Map<String, NexusExportContract.ExportSymbol> symbols,
-                                                                              Map<String, String> pathByFileId,
-                                                                              Set<String> limitations) {
-        List<NexusExportContract.ExportRelation> exported = new ArrayList<>();
+    private static List<NexusExportContract.ExportRelation> exportRelations(
+            CodeKnowledgeSnapshot snapshot,
+            Map<String, NexusExportContract.ExportSymbol> symbols,
+            Map<String, String> pathByFileId,
+            Set<String> limitations
+    ) {
+        BoundedById<NexusExportContract.ExportRelation> selected = new BoundedById<>(MAX_EXPORTED_RELATIONS);
         int omittedNonSymbol = 0, omittedNonLocal = 0, omittedPath = 0;
-        for (Relationship relationship : snapshot.relationships().stream().sorted(Comparator.comparing(Relationship::id)).toList()) {
+        for (Relationship relationship : snapshot.relationships()) {
             if (relationship.source().type() != CodeEntityType.SYMBOL || relationship.target() == null
                     || relationship.target().type() != CodeEntityType.SYMBOL) { omittedNonSymbol++; continue; }
             NexusExportContract.ExportSymbol source = symbols.get(relationship.source().id());
@@ -98,16 +103,17 @@ public final class NexusExportService {
             if (source == null || target == null) { omittedNonLocal++; continue; }
             String relativePath = relationship.location() == null ? source.filePath() : pathByFileId.get(relationship.location().fileId());
             if (relativePath == null) { omittedPath++; continue; }
-            if (exported.size() >= MAX_EXPORTED_RELATIONS) { limitations.add("RELATIONS_TRUNCATED"); break; }
-            exported.add(new NexusExportContract.ExportRelation(relationship.id(), relativePath, relationship.kind().name(),
+            selected.offer(relationship.id(), new NexusExportContract.ExportRelation(
+                    relationship.id(), relativePath, relationship.kind().name(),
                     source.id(), source.qualifiedName(), target.id(), target.qualifiedName(), relationship.resolutionStatus().name(),
                     relationship.nature().name(), relationship.confidence(), origin(relationship.origin()),
                     relationship.evidence().stream().map(NexusExportService::evidence).toList()));
         }
+        if (selected.truncated()) limitations.add("RELATIONS_TRUNCATED");
         if (omittedNonSymbol > 0) limitations.add("NON_SYMBOL_RELATIONS_OMITTED");
         if (omittedNonLocal > 0) limitations.add("NON_LOCAL_RELATIONS_OMITTED");
         if (omittedPath > 0) limitations.add("UNRESOLVED_RELATION_FILE_ID_OMITTED");
-        return List.copyOf(exported);
+        return List.copyOf(selected.values());
     }
 
     private static Map<String, String> resolveFilePaths(Path root, String projectId, CodeKnowledgeSnapshot snapshot,
@@ -172,4 +178,37 @@ public final class NexusExportService {
         return root;
     }
     private static String textOr(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
+
+    static final class BoundedById<T> {
+        private final int limit;
+        private final TreeMap<String, T> retained = new TreeMap<>();
+        private boolean truncated;
+
+        BoundedById(int limit) {
+            if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+            this.limit = limit;
+        }
+
+        void offer(String id, T value) {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(value, "value");
+            retained.put(id, value);
+            if (retained.size() > limit) {
+                retained.pollLastEntry();
+                truncated = true;
+            }
+        }
+
+        boolean truncated() {
+            return truncated;
+        }
+
+        Map<String, T> orderedMap() {
+            return Collections.unmodifiableMap(retained);
+        }
+
+        Collection<T> values() {
+            return retained.values();
+        }
+    }
 }
