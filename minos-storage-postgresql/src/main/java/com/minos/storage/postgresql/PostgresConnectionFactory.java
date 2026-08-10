@@ -3,12 +3,18 @@ package com.minos.storage.postgresql;
 import com.minos.storage.StorageBackendConfiguration;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +27,10 @@ final class PostgresConnectionFactory implements AutoCloseable {
     static final Duration DEFAULT_ACQUIRE_TIMEOUT = Duration.ofSeconds(10);
     private static final int DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
     private static final int DEFAULT_SOCKET_TIMEOUT_SECONDS = 120;
+    private static final int VALIDATION_TIMEOUT_SECONDS = 5;
+    private static final String MANAGED_DOCKER_HOST = "minos-postgres";
+    private static final Set<String> SENSITIVE_URL_PARAMETERS = Set.of(
+            "password", "sslpassword", "token", "access_token", "oauth_token", "secret");
 
     private final String url;
     private final String user;
@@ -55,11 +65,17 @@ final class PostgresConnectionFactory implements AutoCloseable {
         this.user = require(configuration.postgresUser(), "MINOS_POSTGRES_USER");
         this.password = require(configuration.postgresPassword(), "MINOS_POSTGRES_PASSWORD");
         this.schema = configuration.postgresSchema();
-        if (!url.startsWith("jdbc:postgresql://")) throw new IOException("MINOS_POSTGRES_URL must use jdbc:postgresql://");
-        if (maxPoolSize < 1 || maxPoolSize > 128) throw new IllegalArgumentException("maxPoolSize must be between 1 and 128");
+        validateJdbcUrl(url, configuration.postgresManaged());
+        if (maxPoolSize < 1 || maxPoolSize > 128) {
+            throw new IllegalArgumentException("maxPoolSize must be between 1 and 128");
+        }
         this.acquireTimeout = Objects.requireNonNull(acquireTimeout, "acquireTimeout");
-        if (acquireTimeout.isZero() || acquireTimeout.isNegative()) throw new IllegalArgumentException("acquireTimeout must be positive");
-        if (connectTimeoutSeconds < 1 || socketTimeoutSeconds < 1) throw new IllegalArgumentException("JDBC timeouts must be positive");
+        if (acquireTimeout.isZero() || acquireTimeout.isNegative()) {
+            throw new IllegalArgumentException("acquireTimeout must be positive");
+        }
+        if (connectTimeoutSeconds < 1 || socketTimeoutSeconds < 1) {
+            throw new IllegalArgumentException("JDBC timeouts must be positive");
+        }
         this.maxPoolSize = maxPoolSize;
         this.connectTimeoutSeconds = connectTimeoutSeconds;
         this.socketTimeoutSeconds = socketTimeoutSeconds;
@@ -69,10 +85,14 @@ final class PostgresConnectionFactory implements AutoCloseable {
     <T> T withConnection(ConnectionWork<T> work) throws SQLException, IOException {
         Objects.requireNonNull(work, "work");
         Connection connection = borrow();
+        boolean reusable = true;
         try {
             return work.execute(connection);
+        } catch (SQLException exception) {
+            reusable = !isConnectionFailure(exception);
+            throw exception;
         } finally {
-            release(connection);
+            release(connection, reusable);
         }
     }
 
@@ -91,7 +111,9 @@ final class PostgresConnectionFactory implements AutoCloseable {
         });
     }
 
-    String schema() { return schema; }
+    String schema() {
+        return schema;
+    }
 
     PoolStats poolStats() {
         return new PoolStats(
@@ -149,9 +171,9 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
-    private void release(Connection connection) {
+    private void release(Connection connection, boolean reusable) {
         try {
-            if (!usable(connection)) {
+            if (!reusable || !usable(connection)) {
                 closePhysical(connection);
                 return;
             }
@@ -187,10 +209,12 @@ final class PostgresConnectionFactory implements AutoCloseable {
         return connection;
     }
 
-    private static boolean usable(Connection connection) {
+    private boolean usable(Connection connection) {
         try {
-            return connection != null && !connection.isClosed();
-        } catch (SQLException exception) {
+            return connection != null
+                    && !connection.isClosed()
+                    && connection.isValid(Math.min(connectTimeoutSeconds, VALIDATION_TIMEOUT_SECONDS));
+        } catch (SQLException | RuntimeException exception) {
             return false;
         }
     }
@@ -206,6 +230,79 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
+    static boolean isConnectionFailure(SQLException exception) {
+        for (SQLException current = exception; current != null; current = current.getNextException()) {
+            String state = current.getSQLState();
+            if (state != null && state.startsWith("08")) return true;
+        }
+        return false;
+    }
+
+    private static void validateJdbcUrl(String value, boolean managed) throws IOException {
+        if (!value.startsWith("jdbc:postgresql://")) {
+            throw new IOException("MINOS_POSTGRES_URL must use jdbc:postgresql://");
+        }
+        final URI uri;
+        try {
+            uri = new URI(value.substring("jdbc:".length()));
+        } catch (URISyntaxException exception) {
+            throw new IOException("MINOS_POSTGRES_URL is invalid", exception);
+        }
+        if (uri.getUserInfo() != null) {
+            throw new IOException("MINOS_POSTGRES_URL must not contain user-info credentials");
+        }
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IOException("MINOS_POSTGRES_URL must contain a host");
+        }
+        Properties query = queryParameters(uri.getRawQuery());
+        for (String key : query.stringPropertyNames()) {
+            if (SENSITIVE_URL_PARAMETERS.contains(key.toLowerCase(Locale.ROOT))) {
+                throw new IOException("MINOS_POSTGRES_URL must not contain sensitive parameter: " + key);
+            }
+        }
+
+        if (managed) {
+            if (!MANAGED_DOCKER_HOST.equalsIgnoreCase(host) && !loopbackHost(host)) {
+                throw new IOException("managed PostgreSQL must use the MINOS Docker service or loopback");
+            }
+            return;
+        }
+        if (loopbackHost(host)) return;
+
+        String sslMode = query.getProperty("sslmode");
+        if (sslMode == null || !"verify-full".equalsIgnoreCase(sslMode.trim())) {
+            throw new IOException("external PostgreSQL requires sslmode=verify-full");
+        }
+    }
+
+    private static Properties queryParameters(String rawQuery) throws IOException {
+        Properties values = new Properties();
+        if (rawQuery == null || rawQuery.isBlank()) return values;
+        for (String pair : rawQuery.split("&", -1)) {
+            if (pair.isEmpty()) continue;
+            int separator = pair.indexOf('=');
+            String rawKey = separator < 0 ? pair : pair.substring(0, separator);
+            String rawValue = separator < 0 ? "" : pair.substring(separator + 1);
+            try {
+                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
+                String decoded = URLDecoder.decode(rawValue, StandardCharsets.UTF_8);
+                values.setProperty(key, decoded);
+            } catch (IllegalArgumentException exception) {
+                throw new IOException("MINOS_POSTGRES_URL contains invalid query encoding", exception);
+            }
+        }
+        return values;
+    }
+
+    private static boolean loopbackHost(String host) {
+        String normalized = host.toLowerCase(Locale.ROOT);
+        return "localhost".equals(normalized)
+                || normalized.startsWith("127.")
+                || "::1".equals(normalized)
+                || "0:0:0:0:0:0:0:1".equals(normalized);
+    }
+
     private static void rollbackPreserving(Connection connection, Exception original) {
         try {
             connection.rollback();
@@ -215,9 +312,12 @@ final class PostgresConnectionFactory implements AutoCloseable {
     }
 
     private static String require(String value, String name) throws IOException {
-        if (value == null || value.isBlank()) throw new IOException("missing required PostgreSQL setting: " + name);
+        if (value == null || value.isBlank()) {
+            throw new IOException("missing required PostgreSQL setting: " + name);
+        }
         return value.trim();
     }
 
-    record PoolStats(int maximumSize, int leased, int idle, int physical, long acquisitionTimeouts) { }
+    record PoolStats(int maximumSize, int leased, int idle, int physical, long acquisitionTimeouts) {
+    }
 }
