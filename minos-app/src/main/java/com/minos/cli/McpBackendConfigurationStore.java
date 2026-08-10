@@ -1,7 +1,8 @@
 package com.minos.cli;
 
+import com.minos.io.BoundedProperties;
+
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -20,6 +21,7 @@ public final class McpBackendConfigurationStore {
     public static final String RUNTIME_DIRECTORY = "runtime";
     public static final String FILE_NAME = "backend.properties";
 
+    private static final long MAX_CONFIGURATION_BYTES = 64L * 1024L;
     private static final Set<String> ALLOWED_KEYS = Set.of(
             "formatVersion", "backend", "docker.containerName", "docker.probeTimeoutMillis");
 
@@ -43,10 +45,14 @@ public final class McpBackendConfigurationStore {
         if (!Files.isRegularFile(file)) {
             throw new IOException("MCP backend configuration is not a regular file: " + file);
         }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        Properties properties = BoundedProperties.load(
+                file,
+                MAX_CONFIGURATION_BYTES,
+                ALLOWED_KEYS.size(),
+                128,
+                1024,
+                "MCP backend configuration"
+        );
         for (Object rawKey : properties.keySet()) {
             String key = String.valueOf(rawKey);
             if (!ALLOWED_KEYS.contains(key)) {
