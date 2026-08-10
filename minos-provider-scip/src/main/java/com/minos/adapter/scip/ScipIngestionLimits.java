@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import com.minos.orchestration.IndexArtifactLimits;
 import org.scip_code.scip.Document;
 import org.scip_code.scip.Index;
 import org.scip_code.scip.SymbolInformation;
@@ -16,7 +17,7 @@ public record ScipIngestionLimits(
         long maxRelationshipFacts
 ) {
     public static final ScipIngestionLimits DEFAULT = new ScipIngestionLimits(
-            512L * 1024L * 1024L,
+            IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES,
             250_000L,
             2_000_000L,
             10_000_000L,
