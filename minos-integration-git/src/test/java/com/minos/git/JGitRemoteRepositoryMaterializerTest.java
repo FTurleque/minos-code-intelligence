@@ -146,6 +146,29 @@ class JGitRemoteRepositoryMaterializerTest {
     }
 
     @Test
+    void registeredPinSurvivesLeaseReleaseAndMakesCachePressureFailClosed(@TempDir Path temp) throws Exception {
+        Path source = createRepository(temp.resolve("source"));
+        AtomicInteger clones = new AtomicInteger();
+        JGitRemoteRepositoryMaterializer materializer = materializer(
+                temp.resolve("home"), new RemoteRepositoryCachePolicy(1, 1024L * 1024L), source, clones,
+                name -> Optional.empty());
+        RemoteMaterialization registered = materializer.materialize(request(head(source), null));
+        materializer.pin(registered);
+        materializer.release(registered);
+        assertTrue(Files.isRegularFile(registered.repositoryRoot().getParent().resolve("registered.pin")));
+
+        Files.writeString(source.resolve("fixtures/java/pom.xml"), "<project>newer</project>");
+        try (Git git = Git.open(source.toFile())) {
+            git.add().addFilepattern(".").call();
+            git.commit().setMessage("newer").setAuthor(identity()).setCommitter(identity()).call();
+        }
+
+        assertThrows(IOException.class, () -> materializer.materialize(request(head(source), null)));
+        assertTrue(Files.isDirectory(registered.repositoryRoot()));
+        assertTrue(Files.isRegularFile(registered.projectRoot().resolve("pom.xml")));
+    }
+
+    @Test
     void cloneByteBudgetFailsDuringMaterializationAndCleansPartialEntry(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
         RemoteRepositoryCachePolicy policy = new RemoteRepositoryCachePolicy(2, 1024L * 1024L);
