@@ -118,8 +118,12 @@ public final class DistributedArtifactBundleStore {
     /**
      * Accepts and leases a verified cache entry. The caller must invoke {@link #release(VerifiedArtifact)}
      * after the artifact has been staged/consumed so cross-process eviction can reclaim it safely.
+     *
+     * <p>Accept is deliberately not synchronized on the whole store. Cache publication is serialized
+     * only by the key stripe, so a cross-process lease wait for one artifact cannot block unrelated
+     * cache keys in the JVM.</p>
      */
-    public synchronized VerifiedArtifact accept(Path bundle) throws IOException {
+    public VerifiedArtifact accept(Path bundle) throws IOException {
         Path source = Objects.requireNonNull(bundle, "bundle").toAbsolutePath().normalize();
         if (!Files.isRegularFile(source)) {
             throw new IOException("distributed artifact bundle is missing");
@@ -145,35 +149,41 @@ public final class DistributedArtifactBundleStore {
             }
 
             String cacheKey = cacheKey(manifest);
-            acquireLease(cacheKey);
-            leasedKey = cacheKey;
-            Path entry = cacheRoot.resolve(cacheKey);
-            Path cachedArtifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
-            Path cachedManifest = entry.resolve(MANIFEST_ENTRY);
-            String bundleSha = sha256(source);
-            if (validCached(entry, manifest)) {
-                Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(Instant.now()));
-                leasedKey = null;
-                return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, true, bundleSha);
-            }
-            if (Files.exists(entry)) {
-                deleteCacheTree(entry);
-            }
-            Files.createDirectory(entry);
+            ReentrantLock operationLock = leaseStripe(cacheKey);
+            operationLock.lock();
             try {
-                move(artifact, cachedArtifact);
-                Files.write(cachedManifest, extracted.manifestBytes());
-                evict(cacheKey);
-            } catch (IOException | RuntimeException exception) {
-                try {
-                    if (Files.exists(entry)) deleteCacheTree(entry);
-                } catch (IOException cleanupFailure) {
-                    exception.addSuppressed(cleanupFailure);
+                acquireLease(cacheKey);
+                leasedKey = cacheKey;
+                Path entry = cacheRoot.resolve(cacheKey);
+                Path cachedArtifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
+                Path cachedManifest = entry.resolve(MANIFEST_ENTRY);
+                String bundleSha = sha256(source);
+                if (validCached(entry, manifest)) {
+                    Files.setLastModifiedTime(entry, java.nio.file.attribute.FileTime.from(Instant.now()));
+                    leasedKey = null;
+                    return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, true, bundleSha);
                 }
-                throw exception;
+                if (Files.exists(entry)) {
+                    deleteCacheTree(entry);
+                }
+                Files.createDirectory(entry);
+                try {
+                    move(artifact, cachedArtifact);
+                    Files.write(cachedManifest, extracted.manifestBytes());
+                    evict(cacheKey);
+                } catch (IOException | RuntimeException exception) {
+                    try {
+                        if (Files.exists(entry)) deleteCacheTree(entry);
+                    } catch (IOException cleanupFailure) {
+                        exception.addSuppressed(cleanupFailure);
+                    }
+                    throw exception;
+                }
+                leasedKey = null;
+                return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, false, bundleSha);
+            } finally {
+                operationLock.unlock();
             }
-            leasedKey = null;
-            return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, false, bundleSha);
         } finally {
             if (leasedKey != null) {
                 releaseLease(leasedKey);
@@ -428,9 +438,16 @@ public final class DistributedArtifactBundleStore {
             if (state.references > 0) return;
             activeLeases.remove(cacheKey);
             IOException failure = null;
-            try { state.lock.release(); } catch (IOException exception) { failure = exception; }
-            try { state.channel.close(); } catch (IOException exception) {
-                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            try {
+                state.lock.release();
+            } catch (IOException exception) {
+                failure = exception;
+            }
+            try {
+                state.channel.close();
+            } catch (IOException exception) {
+                if (failure == null) failure = exception;
+                else failure.addSuppressed(exception);
             }
             if (failure != null) throw failure;
         }
@@ -499,9 +516,7 @@ public final class DistributedArtifactBundleStore {
         if (normalized.equals(cacheRoot) || !normalized.startsWith(cacheRoot)) {
             throw new IOException("refusing to delete outside the distributed artifact cache");
         }
-        if (!Files.exists(normalized)) {
-            return;
-        }
+        if (!Files.exists(normalized)) return;
         try (var paths = Files.walk(normalized)) {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
@@ -565,6 +580,7 @@ public final class DistributedArtifactBundleStore {
         private final FileChannel channel;
         private final FileLock lock;
         private int references = 1;
+
         private LeaseState(FileChannel channel, FileLock lock) {
             this.channel = channel;
             this.lock = lock;
@@ -574,21 +590,33 @@ public final class DistributedArtifactBundleStore {
     private static final class EvictionLease implements AutoCloseable {
         private final FileChannel channel;
         private final FileLock lock;
+
         private EvictionLease(FileChannel channel, FileLock lock) {
             this.channel = channel;
             this.lock = lock;
         }
+
         @Override
         public void close() throws IOException {
             IOException failure = null;
-            try { lock.release(); } catch (IOException exception) { failure = exception; }
-            try { channel.close(); } catch (IOException exception) {
-                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            try {
+                lock.release();
+            } catch (IOException exception) {
+                failure = exception;
+            }
+            try {
+                channel.close();
+            } catch (IOException exception) {
+                if (failure == null) failure = exception;
+                else failure.addSuppressed(exception);
             }
             if (failure != null) throw failure;
         }
     }
 
-    private record Extracted(byte[] manifestBytes, Path artifact) { }
-    private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) { }
+    private record Extracted(byte[] manifestBytes, Path artifact) {
+    }
+
+    private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) {
+    }
 }
