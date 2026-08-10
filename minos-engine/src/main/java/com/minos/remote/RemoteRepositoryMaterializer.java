@@ -10,6 +10,14 @@ public interface RemoteRepositoryMaterializer {
     RemoteMaterialization materialize(RemoteRepositoryRequest request) throws Exception;
 
     /**
+     * Marks a materialization as durably referenced by the project registry. Evicting implementations
+     * must preserve pinned entries or fail closed when the cache cannot satisfy its limits safely.
+     */
+    default void pin(RemoteMaterialization materialization) throws Exception {
+        Objects.requireNonNull(materialization, "materialization");
+    }
+
+    /**
      * Releases the active-use lease associated with a materialization. Implementations that do not
      * evict materializations may keep the default no-op behavior.
      */
