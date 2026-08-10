@@ -168,7 +168,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path javaHome = Path.of(System.getProperty("java.home", ".")).toAbsolutePath().normalize();
         Path tools = minosHome.resolve("tools").toAbsolutePath().normalize();
         if (Files.isDirectory(javaHome)) addReadRoot(readRoots, javaHome);
-        if (Files.isDirectory(tools)) addReadRoot(readRoots, tools);
         addExecutableAccess(readRoots, readFiles, executable, tools, javaHome);
         for (int index = 1; index < providerCommand.size(); index++) {
             addExistingArgumentAccess(readRoots, readFiles, providerCommand.get(index), tools, javaHome);
@@ -281,7 +280,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path real = executable.toRealPath();
         if (isWindowsSystemRoot(real)) return;
         if (real.startsWith(tools)) {
-            addReadRoot(roots, tools);
+            addReadRoot(roots, managedRuntimeRoot(real, tools));
         } else if (real.startsWith(javaHome)) {
             addReadRoot(roots, javaHome);
         } else {
@@ -302,7 +301,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Path real = candidate.toRealPath();
             if (isWindowsSystemRoot(real)) return;
             if (real.startsWith(tools)) {
-                addReadRoot(roots, tools);
+                addReadRoot(roots, managedRuntimeRoot(real, tools));
             } else if (real.startsWith(javaHome)) {
                 addReadRoot(roots, javaHome);
             } else if (Files.isRegularFile(real)) {
@@ -311,6 +310,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         } catch (IOException | RuntimeException ignored) {
             // Non-path provider arguments intentionally stay opaque.
         }
+    }
+
+    private static Path managedRuntimeRoot(Path value, Path tools) {
+        Path normalizedTools = tools.toAbsolutePath().normalize();
+        Path normalized = value.toAbsolutePath().normalize();
+        if (!normalized.startsWith(normalizedTools)) return normalized;
+        Path relative = normalizedTools.relativize(normalized);
+        if (relative.getNameCount() < 2) {
+            throw new IllegalArgumentException("managed provider path does not identify provider/version: " + value);
+        }
+        return normalizedTools.resolve(relative.subpath(0, 2)).normalize();
     }
 
     private static void addReadRoot(Set<Path> roots, Path value) {

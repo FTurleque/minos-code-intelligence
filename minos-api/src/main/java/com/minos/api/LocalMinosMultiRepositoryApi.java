@@ -14,17 +14,25 @@ import java.util.Objects;
  */
 public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryApi {
 
+    private final MinosApplication application;
+    private final boolean ownsApplication;
     private final LocalMinosApi delegate;
     private final GitIntelligenceService gitIntelligence;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     public LocalMinosMultiRepositoryApi(Path home) throws MinosApiException {
-        this(openApplication(home));
+        this(openApplication(home), true);
     }
 
     /** Uses the same application composition as CLI/MCP instead of rebuilding local stores. */
     public LocalMinosMultiRepositoryApi(MinosApplication application) {
+        this(application, false);
+    }
+
+    private LocalMinosMultiRepositoryApi(MinosApplication application, boolean ownsApplication) {
         MinosApplication app = Objects.requireNonNull(application, "application");
+        this.application = app;
+        this.ownsApplication = ownsApplication;
         this.delegate = new LocalMinosApi(app);
         this.gitIntelligence = app.gitIntelligence();
         this.workspaceIntelligence = app.workspaceIntelligence();
@@ -150,6 +158,16 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
                     value.maxRelationships()
             ));
         });
+    }
+
+    @Override
+    public void close() throws MinosApiException {
+        if (!ownsApplication) return;
+        try {
+            application.close();
+        } catch (Exception exception) {
+            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS multi-repository API shutdown failed", exception);
+        }
     }
 
     private static WorkspaceDto workspace(WorkspaceIntelligenceService.WorkspaceView value) {

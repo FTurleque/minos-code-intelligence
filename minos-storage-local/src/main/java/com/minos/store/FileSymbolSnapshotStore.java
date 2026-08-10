@@ -33,6 +33,7 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     public static final long DEFAULT_MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     public static final int DEFAULT_MAX_ACTIVE_QUERY_RETRIES = 2;
     private static final int BUILD_LOCK_STRIPES = 64;
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
 
     private final Path storageRoot;
     private final SnapshotRepository snapshotRepository;
@@ -227,8 +228,8 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
             CacheKey key,
             SnapshotDescriptor descriptor,
             SnapshotQueryView built
-    ) {
-        long weight = estimateQueryViewWeight(descriptor);
+    ) throws IOException {
+        long weight = estimateQueryViewWeight(projectId, descriptor);
         synchronized (cacheLock) {
             WeightedQueryView raced = queryCache.get(key);
             if (raced != null && raced.view().descriptor().equals(descriptor)) {
@@ -341,16 +342,26 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
         };
     }
 
-    private static long estimateQueryViewWeight(SnapshotDescriptor descriptor) {
-        long weight = 64L * 1024L;
-        weight = safeAdd(weight, (long) descriptor.symbolCount() * 1024L);
-        weight = safeAdd(weight, (long) descriptor.occurrenceCount() * 640L);
-        weight = safeAdd(weight, (long) descriptor.relationshipCount() * 1024L);
-        return weight;
+    private long estimateQueryViewWeight(UUID projectId, SnapshotDescriptor descriptor) throws IOException {
+        long countWeight = 64L * 1024L;
+        countWeight = safeAdd(countWeight, (long) descriptor.symbolCount() * 1024L);
+        countWeight = safeAdd(countWeight, (long) descriptor.occurrenceCount() * 640L);
+        countWeight = safeAdd(countWeight, (long) descriptor.relationshipCount() * 1024L);
+        Path snapshot = snapshotRepository.resolveSnapshotFile(projectId, descriptor.fileName());
+        long persistedWeight = safeMultiply(Files.size(snapshot), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        return Math.max(countWeight, persistedWeight);
     }
 
     private static long safeAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long safeMultiply(long left, long right) {
+        try {
+            return Math.multiplyExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private static <T> List<T> orderedById(Collection<T> values, Function<T, String> id, String name) {

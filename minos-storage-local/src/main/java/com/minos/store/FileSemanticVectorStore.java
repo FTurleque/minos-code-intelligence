@@ -34,6 +34,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private static final int MAX_DOCUMENTS = 2_000_000;
     private static final int MAX_DIMENSIONS = 16_384;
     private static final int MAX_STRING_BYTES = 16 * 1024 * 1024;
+    private static final long MAX_INDEX_FILE_BYTES = 384L * 1024L * 1024L;
+    private static final long MAX_DECODED_STRING_BYTES = 192L * 1024L * 1024L;
+    private static final long MAX_DECODED_VECTOR_BYTES = 192L * 1024L * 1024L;
     public static final long DEFAULT_MAX_CACHE_WEIGHT_BYTES = 256L * 1024L * 1024L;
 
     private final Path root;
@@ -64,10 +67,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             removeCached(projectId, false);
             return Optional.empty();
         }
+        requireIndexFileSize(file);
         CacheEntry cached;
-        synchronized (cacheLock) {
-            cached = cache.get(projectId);
-        }
+        synchronized (cacheLock) { cached = cache.get(projectId); }
         if (cached != null && cached.matches(file)) {
             synchronized (cacheLock) {
                 CacheEntry current = cache.get(projectId);
@@ -80,34 +82,34 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             removeCached(projectId, false);
         }
 
-        synchronized (cacheLock) {
-            cacheMisses++;
-        }
+        synchronized (cacheLock) { cacheMisses++; }
+        DecodeBudget budget = new DecodeBudget();
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
                 throw new IOException("unsupported semantic index version: " + version);
             }
-            String storedProject = readString(input);
-            String snapshotId = readString(input);
-            String providerId = readString(input);
-            String modelId = readString(input);
+            String storedProject = readString(input, budget);
+            String snapshotId = readString(input, budget);
+            String providerId = readString(input, budget);
+            String modelId = readString(input, budget);
             int dimensions = input.readInt();
             long builtAt = input.readLong();
             int count = input.readInt();
             if (!projectId.equals(storedProject)) throw new IOException("semantic index project mismatch");
             if (dimensions < 1 || dimensions > MAX_DIMENSIONS) throw new IOException("invalid semantic dimensions");
             if (count < 0 || count > MAX_DOCUMENTS) throw new IOException("invalid semantic document count");
-            List<IndexedDocument> documents = new ArrayList<>(count);
+            List<IndexedDocument> documents = new ArrayList<>(Math.min(count, 16_384));
             for (int i = 0; i < count; i++) {
                 SemanticDocument document = new SemanticDocument(
-                        readString(input), readString(input), storedProject, snapshotId,
-                        SemanticDocumentKind.valueOf(readString(input)),
-                        readString(input), nullable(readString(input)), input.readInt(), input.readInt(),
-                        readString(input), readString(input));
+                        readString(input, budget), readString(input, budget), storedProject, snapshotId,
+                        SemanticDocumentKind.valueOf(readString(input, budget)),
+                        readString(input, budget), nullable(readString(input, budget)), input.readInt(), input.readInt(),
+                        readString(input, budget), readString(input, budget));
                 int vectorSize = input.readInt();
                 if (vectorSize != dimensions) throw new IOException("semantic vector dimensions mismatch");
+                budget.accountVector(vectorSize);
                 double[] vector = new double[dimensions];
                 for (int d = 0; d < dimensions; d++) {
                     vector[d] = version == LEGACY_FORMAT_VERSION ? input.readDouble() : input.readFloat();
@@ -125,6 +127,36 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     }
 
     @Override
+    public Optional<IndexMetadata> metadata(String projectId) throws IOException {
+        requireText(projectId, "projectId");
+        Path file = readableIndexFile(projectId);
+        if (file == null) return Optional.empty();
+        requireIndexFileSize(file);
+        DecodeBudget budget = new DecodeBudget();
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+            if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
+            int version = input.readInt();
+            if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
+                throw new IOException("unsupported semantic index version: " + version);
+            }
+            String storedProject = readString(input, budget);
+            String snapshotId = readString(input, budget);
+            String providerId = readString(input, budget);
+            String modelId = readString(input, budget);
+            int dimensions = input.readInt();
+            long builtAt = input.readLong();
+            int count = input.readInt();
+            if (!projectId.equals(storedProject)) throw new IOException("semantic index project mismatch");
+            if (dimensions < 1 || dimensions > MAX_DIMENSIONS || count < 0 || count > MAX_DOCUMENTS) {
+                throw new IOException("invalid semantic index metadata");
+            }
+            return Optional.of(new IndexMetadata(storedProject, snapshotId, providerId, modelId, dimensions, builtAt, count));
+        } catch (EOFException exception) {
+            throw new IOException("truncated semantic index metadata: " + file, exception);
+        }
+    }
+
+    @Override
     public void replace(IndexSnapshot snapshot) throws IOException {
         Objects.requireNonNull(snapshot, "snapshot");
         if (snapshot.documents().size() > MAX_DOCUMENTS) throw new IOException("semantic index exceeds document limit");
@@ -133,12 +165,9 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Files.createDirectories(directory);
         Path target = directory.resolve(CURRENT_FILE);
         Path temporary = Files.createTempFile(directory, "index-v2-", ".tmp");
-        List<IndexedDocument> ordered = new ArrayList<>(snapshot.documents().size());
-        for (IndexedDocument indexed : snapshot.documents().stream()
+        List<IndexedDocument> ordered = snapshot.documents().stream()
                 .sorted(Comparator.comparing(value -> value.document().stableKey()))
-                .toList()) {
-            ordered.add(compact(indexed));
-        }
+                .toList();
         try {
             try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
                 output.writeInt(MAGIC);
@@ -163,16 +192,18 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                     writeString(output, document.checksum());
                     output.writeInt(indexed.vector().dimensions());
                     for (int d = 0; d < indexed.vector().dimensions(); d++) {
-                        output.writeFloat((float) indexed.vector().valueAt(d));
+                        float compact = (float) indexed.vector().valueAt(d);
+                        if (!Float.isFinite(compact)) throw new IOException("semantic vector cannot be represented as float32");
+                        output.writeFloat(compact);
                     }
                 }
             }
+            requireIndexFileSize(temporary);
             moveAtomically(temporary, target);
             Files.deleteIfExists(directory.resolve(LEGACY_FILE));
-            IndexSnapshot normalized = new IndexSnapshot(
-                    snapshot.projectId(), snapshot.snapshotId(), snapshot.providerId(), snapshot.modelId(),
-                    snapshot.dimensions(), snapshot.builtAtEpochMilli(), ordered);
-            putCached(snapshot.projectId(), CacheEntry.capture(target, normalized));
+            // Do not construct a second normalized vector graph while the caller still owns `snapshot`.
+            // The next load reconstructs the canonical float32 representation from disk under decode budgets.
+            removeCached(snapshot.projectId(), false);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -238,16 +269,6 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         }
     }
 
-    private static IndexedDocument compact(IndexedDocument indexed) throws IOException {
-        double[] values = new double[indexed.vector().dimensions()];
-        for (int d = 0; d < values.length; d++) {
-            float compact = (float) indexed.vector().valueAt(d);
-            if (!Float.isFinite(compact)) throw new IOException("semantic vector cannot be represented as float32");
-            values[d] = compact;
-        }
-        return new IndexedDocument(indexed.document(), SemanticVector.fromArray(indexed.document().stableKey(), values));
-    }
-
     private Path readableIndexFile(String projectId) {
         Path directory = projectDirectory(projectId);
         Path current = directory.resolve(CURRENT_FILE);
@@ -283,12 +304,47 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         output.write(bytes);
     }
 
-    private static String readString(DataInputStream input) throws IOException {
+    private static String readString(DataInputStream input, DecodeBudget budget) throws IOException {
         int length = input.readInt();
         if (length < 0 || length > MAX_STRING_BYTES) throw new IOException("invalid semantic index string length");
+        budget.accountString(length);
         byte[] bytes = input.readNBytes(length);
         if (bytes.length != length) throw new EOFException("truncated semantic index string");
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private static void requireIndexFileSize(Path file) throws IOException {
+        long size = Files.size(file);
+        if (size < 1L || size > MAX_INDEX_FILE_BYTES) {
+            throw new IOException("semantic index exceeds persisted byte limit: " + size + "/" + MAX_INDEX_FILE_BYTES);
+        }
+    }
+
+    private static final class DecodeBudget {
+        private long stringBytes;
+        private long vectorBytes;
+
+        void accountString(long bytes) throws IOException {
+            stringBytes = checkedAdd(stringBytes, bytes, "string");
+            if (stringBytes > MAX_DECODED_STRING_BYTES) {
+                throw new IOException("semantic index decoded strings exceed heap budget");
+            }
+        }
+
+        void accountVector(int dimensions) throws IOException {
+            long bytes;
+            try { bytes = Math.multiplyExact((long) dimensions, Double.BYTES); }
+            catch (ArithmeticException exception) { throw new IOException("semantic vector byte counter overflow", exception); }
+            vectorBytes = checkedAdd(vectorBytes, bytes, "vector");
+            if (vectorBytes > MAX_DECODED_VECTOR_BYTES) {
+                throw new IOException("semantic index decoded vectors exceed heap budget");
+            }
+        }
+
+        private static long checkedAdd(long left, long right, String label) throws IOException {
+            try { return Math.addExact(left, right); }
+            catch (ArithmeticException exception) { throw new IOException("semantic " + label + " byte counter overflow", exception); }
+        }
     }
 
     private static String nullable(String value) {

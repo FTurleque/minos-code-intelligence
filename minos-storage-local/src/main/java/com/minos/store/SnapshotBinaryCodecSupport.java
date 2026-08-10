@@ -57,6 +57,7 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_ROLES = 1_000;
     private static final int MAX_EVIDENCE = 1_000_000;
     private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
+    static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
 
     private SnapshotBinaryCodecSupport() {
@@ -83,10 +84,12 @@ final class SnapshotBinaryCodecSupport {
                 writeSymbol(output, symbol);
             }
         }
+        requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
     }
 
     static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
+        requireSnapshotFileSize(file);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
@@ -128,6 +131,7 @@ final class SnapshotBinaryCodecSupport {
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
+        requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
     }
 
@@ -136,7 +140,11 @@ final class SnapshotBinaryCodecSupport {
         try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
-        return baos.toByteArray();
+        byte[] payload = baos.toByteArray();
+        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
+        }
+        return payload;
     }
 
     private static void writeKnowledgeSnapshotV2Body(DataOutputStream output, CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -160,6 +168,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
+        requireSnapshotFileSize(file);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
@@ -170,6 +179,9 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2FromBytes(byte[] payload) throws IOException {
+        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
+        }
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 new ByteArrayInputStream(payload)
         ))) {
@@ -211,6 +223,14 @@ final class SnapshotBinaryCodecSupport {
             );
         } catch (IllegalArgumentException exception) {
             throw new IOException("invalid knowledge snapshot: " + exception.getMessage(), exception);
+        }
+    }
+
+    private static void requireSnapshotFileSize(Path file) throws IOException {
+        long size = Files.size(file);
+        if (size < 1L || size > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("snapshot payload exceeds persisted byte limit: " + size
+                    + "/" + MAX_PERSISTED_SNAPSHOT_BYTES);
         }
     }
 

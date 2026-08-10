@@ -1,7 +1,5 @@
 package com.minos.context;
 
-import java.nio.charset.StandardCharsets;
-
 /**
  * Estimation locale et déterministe du volume de contexte.
  *
@@ -17,47 +15,68 @@ public final class TokenEstimator {
     }
 
     public static int estimate(CharSequence value) {
-        if (value == null || value.isEmpty()) {
-            return 0;
-        }
-        int bytes = value.toString().getBytes(StandardCharsets.UTF_8).length;
-        return Math.max(1, (bytes + UTF8_BYTES_PER_TOKEN - 1) / UTF8_BYTES_PER_TOKEN);
+        if (value == null || value.isEmpty()) return 0;
+        long bytes = utf8Length(value, Long.MAX_VALUE);
+        long tokens = Math.max(1L, (bytes + UTF8_BYTES_PER_TOKEN - 1L) / UTF8_BYTES_PER_TOKEN);
+        return tokens > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) tokens;
     }
 
     public static String truncate(CharSequence value, int maxTokens) {
-        if (value == null || value.isEmpty() || maxTokens <= 0) {
-            return "";
-        }
-        String text = value.toString();
-        if (estimate(text) <= maxTokens) {
-            return text;
-        }
-
-        int low = 0;
-        int high = text.length();
-        while (low < high) {
-            int middle = (low + high + 1) >>> 1;
-            int safeMiddle = safeBoundary(text, middle);
-            if (estimate(text.substring(0, safeMiddle)) <= maxTokens) {
-                low = middle;
-            } else {
-                high = middle - 1;
-            }
-        }
-        int boundary = safeBoundary(text, low);
-        while (boundary > 0 && estimate(text.substring(0, boundary)) > maxTokens) {
-            boundary = safeBoundary(text, boundary - 1);
-        }
-        return text.substring(0, boundary);
+        if (value == null || value.isEmpty() || maxTokens <= 0) return "";
+        long maxBytes = (long) maxTokens * UTF8_BYTES_PER_TOKEN;
+        int boundary = boundaryWithinUtf8Bytes(value, maxBytes);
+        if (boundary >= value.length()) return value instanceof String string ? string : value.toString();
+        return value.subSequence(0, boundary).toString();
     }
 
-    private static int safeBoundary(String value, int boundary) {
-        int safe = Math.max(0, Math.min(boundary, value.length()));
-        if (safe > 0 && safe < value.length()
-                && Character.isHighSurrogate(value.charAt(safe - 1))
-                && Character.isLowSurrogate(value.charAt(safe))) {
-            return safe - 1;
+    private static long utf8Length(CharSequence value, long stopAfter) {
+        long bytes = 0L;
+        for (int offset = 0; offset < value.length();) {
+            char first = value.charAt(offset);
+            int codePoint;
+            int chars;
+            if (Character.isHighSurrogate(first) && offset + 1 < value.length()
+                    && Character.isLowSurrogate(value.charAt(offset + 1))) {
+                codePoint = Character.toCodePoint(first, value.charAt(offset + 1));
+                chars = 2;
+            } else {
+                codePoint = first;
+                chars = 1;
+            }
+            bytes += utf8Bytes(codePoint);
+            if (bytes > stopAfter) return bytes;
+            offset += chars;
         }
-        return safe;
+        return bytes;
+    }
+
+    private static int boundaryWithinUtf8Bytes(CharSequence value, long maximumBytes) {
+        long bytes = 0L;
+        int offset = 0;
+        while (offset < value.length()) {
+            char first = value.charAt(offset);
+            int codePoint;
+            int chars;
+            if (Character.isHighSurrogate(first) && offset + 1 < value.length()
+                    && Character.isLowSurrogate(value.charAt(offset + 1))) {
+                codePoint = Character.toCodePoint(first, value.charAt(offset + 1));
+                chars = 2;
+            } else {
+                codePoint = first;
+                chars = 1;
+            }
+            int encoded = utf8Bytes(codePoint);
+            if (bytes + encoded > maximumBytes) break;
+            bytes += encoded;
+            offset += chars;
+        }
+        return offset;
+    }
+
+    private static int utf8Bytes(int codePoint) {
+        if (codePoint <= 0x7f) return 1;
+        if (codePoint <= 0x7ff) return 2;
+        if (codePoint <= 0xffff) return 3;
+        return 4;
     }
 }

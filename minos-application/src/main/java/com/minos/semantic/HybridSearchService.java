@@ -56,11 +56,17 @@ public final class HybridSearchService {
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
         SemanticIndexService.Status semanticStatus = semanticIndex.status(projectReference);
         boolean semanticAvailable = semanticStatus.state() == SemanticIndexService.State.READY;
-        List<SemanticDocument> indexedDocuments = semanticAvailable
-                ? semanticIndex.activeIndex(projectReference).orElseThrow().documents().stream()
-                    .map(SemanticVectorStore.IndexedDocument::document).toList()
-                : null;
-        CachedCorpus corpus = corpus(project, snapshot, indexedDocuments);
+        SemanticVectorStore.IndexSnapshot activeSemanticIndex = semanticAvailable
+                ? semanticIndex.activeIndex(projectReference).orElseThrow() : null;
+        List<SemanticDocument> indexedDocuments = activeSemanticIndex == null
+                ? null
+                : activeSemanticIndex.documents().stream().map(SemanticVectorStore.IndexedDocument::document).toList();
+        String corpusIdentity = activeSemanticIndex == null
+                ? snapshot.snapshotId() + ":structured"
+                : snapshot.snapshotId() + ":semantic:" + activeSemanticIndex.providerId() + ":"
+                    + activeSemanticIndex.modelId() + ":" + activeSemanticIndex.dimensions() + ":"
+                    + activeSemanticIndex.builtAtEpochMilli();
+        CachedCorpus corpus = corpus(project, snapshot, indexedDocuments, corpusIdentity);
         Map<String, Double> semanticScores = semanticScores(projectReference, request, corpus.documents().size(), semanticAvailable);
         LexicalQuery lexicalQuery = LexicalQuery.compile(request.query());
 
@@ -95,7 +101,7 @@ public final class HybridSearchService {
         RegisteredProject project = projects.resolve(projectReference);
         CodeKnowledgeSnapshot snapshot = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
-        CachedCorpus corpus = corpus(project, snapshot, null);
+        CachedCorpus corpus = corpus(project, snapshot, null, snapshot.snapshotId() + ":structured");
         LexicalQuery lexicalQuery = LexicalQuery.compile(query);
         List<HybridHit> hits = new ArrayList<>();
         for (SemanticDocument document : corpus.documents()) {
@@ -116,19 +122,19 @@ public final class HybridSearchService {
     }
 
     private CachedCorpus corpus(RegisteredProject project, CodeKnowledgeSnapshot snapshot,
-                                List<SemanticDocument> indexedDocuments) throws IOException {
+                                List<SemanticDocument> indexedDocuments, String corpusIdentity) throws IOException {
         synchronized (corpusCache) {
             WeightedCorpus cached = corpusCache.get(project.id());
-            if (cached != null && cached.corpus().snapshotId().equals(snapshot.snapshotId())) return cached.corpus();
+            if (cached != null && cached.corpus().identity().equals(corpusIdentity)) return cached.corpus();
         }
         List<SemanticDocument> documents = indexedDocuments != null ? List.copyOf(indexedDocuments) : documentFactory.build(project, snapshot);
         Map<String, Integer> graphDegree = Map.copyOf(symbolGraphDegree(snapshot.relationships()));
         int maxDegree = graphDegree.values().stream().mapToInt(Integer::intValue).max().orElse(0);
-        CachedCorpus next = new CachedCorpus(snapshot.snapshotId(), documents, graphDegree, maxDegree);
+        CachedCorpus next = new CachedCorpus(corpusIdentity, documents, graphDegree, maxDegree);
         long weight = estimateCorpusWeight(next);
         synchronized (corpusCache) {
             WeightedCorpus raced = corpusCache.get(project.id());
-            if (raced != null && raced.corpus().snapshotId().equals(snapshot.snapshotId())) return raced.corpus();
+            if (raced != null && raced.corpus().identity().equals(corpusIdentity)) return raced.corpus();
             WeightedCorpus previous = corpusCache.remove(project.id());
             if (previous != null) corpusCacheWeightBytes -= previous.weightBytes();
             if (weight <= DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES) {
@@ -253,7 +259,7 @@ public final class HybridSearchService {
         return query;
     }
 
-    private record CachedCorpus(String snapshotId, List<SemanticDocument> documents, Map<String, Integer> graphDegree, int maxDegree) {
+    private record CachedCorpus(String identity, List<SemanticDocument> documents, Map<String, Integer> graphDegree, int maxDegree) {
         CachedCorpus { documents = List.copyOf(documents); graphDegree = Map.copyOf(graphDegree); }
     }
     private record WeightedCorpus(CachedCorpus corpus, long weightBytes) { }

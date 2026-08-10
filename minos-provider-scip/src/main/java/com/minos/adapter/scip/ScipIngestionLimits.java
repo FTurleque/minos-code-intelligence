@@ -19,6 +19,8 @@ public record ScipIngestionLimits(
         long maxOccurrences,
         long maxRelationshipFacts
 ) {
+    private static final long MAX_NESTED_MESSAGE_BYTES = 768L * 1024L * 1024L;
+
     public static final ScipIngestionLimits DEFAULT = new ScipIngestionLimits(
             IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES,
             250_000L,
@@ -50,11 +52,11 @@ public record ScipIngestionLimits(
             if (WireFormat.getTagWireType(tag) == WireFormat.WIRETYPE_LENGTH_DELIMITED
                     && field == Index.DOCUMENTS_FIELD_NUMBER) {
                 counters.documents = increment(counters.documents, maxDocuments, "documents");
-                scanNested(input, nested -> scanDocument(nested, counters));
+                scanNested(input, counters, nested -> scanDocument(nested, counters));
             } else if (WireFormat.getTagWireType(tag) == WireFormat.WIRETYPE_LENGTH_DELIMITED
                     && field == Index.EXTERNAL_SYMBOLS_FIELD_NUMBER) {
                 counters.symbols = increment(counters.symbols, maxSymbols, "symbols");
-                scanNested(input, nested -> scanSymbolInformation(nested, counters));
+                scanNested(input, counters, nested -> scanSymbolInformation(nested, counters));
             } else if (!input.skipField(tag)) {
                 return;
             }
@@ -68,10 +70,10 @@ public record ScipIngestionLimits(
             int wire = WireFormat.getTagWireType(tag);
             if (wire == WireFormat.WIRETYPE_LENGTH_DELIMITED && field == Document.SYMBOLS_FIELD_NUMBER) {
                 counters.symbols = increment(counters.symbols, maxSymbols, "symbols");
-                scanNested(input, nested -> scanSymbolInformation(nested, counters));
+                scanNested(input, counters, nested -> scanSymbolInformation(nested, counters));
             } else if (wire == WireFormat.WIRETYPE_LENGTH_DELIMITED && field == Document.OCCURRENCES_FIELD_NUMBER) {
                 counters.occurrences = increment(counters.occurrences, maxOccurrences, "occurrences");
-                skipNested(input);
+                skipNested(input, counters);
             } else if (!input.skipField(tag)) {
                 return;
             }
@@ -86,15 +88,16 @@ public record ScipIngestionLimits(
                     && field == SymbolInformation.RELATIONSHIPS_FIELD_NUMBER) {
                 counters.relationshipFacts = increment(
                         counters.relationshipFacts, maxRelationshipFacts, "relationship facts");
-                skipNested(input);
+                skipNested(input, counters);
             } else if (!input.skipField(tag)) {
                 return;
             }
         }
     }
 
-    private static void scanNested(CodedInputStream input, NestedScanner scanner) throws IOException {
+    private static void scanNested(CodedInputStream input, Counters counters, NestedScanner scanner) throws IOException {
         int length = input.readRawVarint32();
+        accountNestedBytes(counters, length);
         int previous = input.pushLimit(length);
         try {
             scanner.scan(input);
@@ -104,10 +107,18 @@ public record ScipIngestionLimits(
         }
     }
 
-    private static void skipNested(CodedInputStream input) throws IOException {
+    private static void skipNested(CodedInputStream input, Counters counters) throws IOException {
         int length = input.readRawVarint32();
-        if (length < 0) throw new IOException("SCIP protobuf contains a negative message length");
+        accountNestedBytes(counters, length);
         input.skipRawBytes(length);
+    }
+
+    private static void accountNestedBytes(Counters counters, int length) throws IOException {
+        if (length < 0) throw new IOException("SCIP protobuf contains a negative message length");
+        counters.nestedMessageBytes = add(counters.nestedMessageBytes, length, "nested message bytes");
+        if (counters.nestedMessageBytes > MAX_NESTED_MESSAGE_BYTES) {
+            fail("nested message bytes", counters.nestedMessageBytes, MAX_NESTED_MESSAGE_BYTES);
+        }
     }
 
     private static long increment(long value, long maximum, String label) throws IOException {
@@ -126,6 +137,7 @@ public record ScipIngestionLimits(
         private long symbols;
         private long occurrences;
         private long relationshipFacts;
+        private long nestedMessageBytes;
     }
 
     public void validate(Index index) throws IOException {

@@ -13,8 +13,8 @@ public record SemanticIndexBudget(
 
     public static final SemanticIndexBudget DEFAULT = new SemanticIndexBudget(
             250_000,
-            512L * 1024L * 1024L,
-            512L * 1024L * 1024L
+            192L * 1024L * 1024L,
+            192L * 1024L * 1024L
     );
 
     public SemanticIndexBudget {

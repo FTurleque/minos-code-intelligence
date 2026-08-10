@@ -21,6 +21,9 @@ import java.util.UUID;
 public final class SemanticIndexService {
 
     public static final int MAX_DOCUMENTS = SemanticIndexBudget.DEFAULT.maxDocuments();
+    private static final long MAX_SYNCHRONIZE_WORKING_SET_BYTES = 768L * 1024L * 1024L;
+    private static final long INDEX_OBJECT_OVERHEAD_BYTES = 512L;
+    private static final long PERSISTED_INDEX_AMPLIFICATION = 3L;
 
     private final ProjectResolver projects;
     private final CodeKnowledgeSnapshotStore snapshots;
@@ -113,12 +116,20 @@ public final class SemanticIndexService {
             throw new IllegalStateException("semantic document count exceeds bound: " + currentDocuments.size());
         }
 
-        Optional<SemanticVectorStore.IndexSnapshot> previousOptional = store.load(projectId);
+        long currentWorkingSetBytes = estimateWorkingSet(currentDocuments, provider.dimensions());
+        Optional<SemanticVectorStore.IndexMetadata> previousMetadata = store.metadata(projectId);
+        boolean reusableMetadata = previousMetadata.isPresent()
+                && provider.id().equals(previousMetadata.orElseThrow().providerId())
+                && provider.modelId().equals(previousMetadata.orElseThrow().modelId())
+                && provider.dimensions() == previousMetadata.orElseThrow().dimensions();
+        long persistedBytes = previousMetadata.isPresent() ? sizeBytes(projectId) : 0L;
+        boolean reuseFitsWorkingSet = reusableMetadata
+                && safeAdd(currentWorkingSetBytes, safeMultiply(persistedBytes, PERSISTED_INDEX_AMPLIFICATION))
+                    <= MAX_SYNCHRONIZE_WORKING_SET_BYTES;
+        Optional<SemanticVectorStore.IndexSnapshot> previousOptional = reuseFitsWorkingSet
+                ? store.load(projectId) : Optional.empty();
         SemanticVectorStore.IndexSnapshot previous = previousOptional.orElse(null);
-        boolean reusableModel = previous != null
-                && provider.id().equals(previous.providerId())
-                && provider.modelId().equals(previous.modelId())
-                && provider.dimensions() == previous.dimensions();
+        boolean reusableModel = previous != null;
         Map<String, SemanticVectorStore.IndexedDocument> oldByStableKey = new HashMap<>();
         if (reusableModel) {
             for (SemanticVectorStore.IndexedDocument value : previous.documents()) oldByStableKey.put(value.document().stableKey(), value);
@@ -145,8 +156,8 @@ public final class SemanticIndexService {
         }
         int removed = reusableModel
                 ? (int) oldByStableKey.keySet().stream().filter(key -> !currentKeys.contains(key)).count()
-                : previous == null ? 0 : previous.documents().size();
-        if (!reusableModel && previous != null) {
+                : previousMetadata.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0);
+        if (!reusableModel && previousMetadata.isPresent()) {
             added = currentDocuments.size(); changed = 0; reused = 0;
         }
 
@@ -156,12 +167,43 @@ public final class SemanticIndexService {
                 System.currentTimeMillis(), indexed);
         store.replace(next);
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
+        List<String> limitations = new ArrayList<>(providerLimitations(provider));
+        if (reusableMetadata && !reuseFitsWorkingSet) {
+            limitations.add("SEMANTIC_REUSE_SKIPPED_WORKING_SET_BUDGET");
+        }
         return new UpdateReport(projectId, active.snapshotId(), State.READY,
                 currentDocuments.size(), added, changed, removed, reused,
-                elapsedMillis, sizeBytes(projectId), providerLimitations(provider));
+                elapsedMillis, sizeBytes(projectId), limitations);
     }
 
     private long sizeBytes(String projectId) throws IOException { return store.sizeBytes(projectId); }
+
+    private static long estimateWorkingSet(List<SemanticDocument> documents, int dimensions) throws IOException {
+        long bytes = 64L * 1024L * 1024L;
+        try {
+            for (SemanticDocument document : documents) {
+                bytes = Math.addExact(bytes, INDEX_OBJECT_OVERHEAD_BYTES);
+                bytes = Math.addExact(bytes, document.content().getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+                bytes = Math.addExact(bytes, Math.multiplyExact((long) dimensions, Double.BYTES));
+            }
+        } catch (ArithmeticException exception) {
+            throw new IOException("semantic synchronize working-set estimate overflow", exception);
+        }
+        if (bytes > MAX_SYNCHRONIZE_WORKING_SET_BYTES) {
+            throw new IOException("semantic synchronize working set exceeds safety budget: " + bytes
+                    + "/" + MAX_SYNCHRONIZE_WORKING_SET_BYTES);
+        }
+        return bytes;
+    }
+
+    private static long safeAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long safeMultiply(long left, long right) {
+        try { return Math.multiplyExact(left, right); }
+        catch (ArithmeticException exception) { return Long.MAX_VALUE; }
+    }
 
     private static List<String> appendProviderLimitations(List<String> base, EmbeddingProvider provider) {
         List<String> result = new ArrayList<>(base); result.addAll(providerLimitations(provider)); return List.copyOf(result);

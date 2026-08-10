@@ -40,6 +40,8 @@ public final class NexusExportService {
     public static final int MAX_EXPORTED_SYMBOLS = 1_000_000;
     public static final int MAX_EXPORTED_RELATIONS = 1_000_000;
     public static final int MAX_FILE_PATH_CANDIDATES = 1_000_000;
+    public static final long MAX_SYMBOL_SELECTION_WEIGHT_BYTES = 96L * 1024L * 1024L;
+    public static final long MAX_RELATION_SELECTION_WEIGHT_BYTES = 96L * 1024L * 1024L;
 
     private final ProjectRegistry registry;
     private final CodeKnowledgeSnapshotStore snapshots;
@@ -77,7 +79,8 @@ public final class NexusExportService {
             CodeKnowledgeSnapshot snapshot,
             Set<String> limitations
     ) {
-        BoundedById<Symbol> selected = new BoundedById<>(MAX_EXPORTED_SYMBOLS);
+        BoundedById<Symbol> selected = new BoundedById<>(MAX_EXPORTED_SYMBOLS,
+                MAX_SYMBOL_SELECTION_WEIGHT_BYTES, NexusExportService::symbolWeight);
         int omittedExternal = 0;
         int omittedLocation = 0;
         for (Symbol symbol : snapshot.symbols()) {
@@ -96,7 +99,8 @@ public final class NexusExportService {
             Set<String> candidateSymbolIds,
             Set<String> limitations
     ) {
-        BoundedById<Relationship> selected = new BoundedById<>(MAX_EXPORTED_RELATIONS);
+        BoundedById<Relationship> selected = new BoundedById<>(MAX_EXPORTED_RELATIONS,
+                MAX_RELATION_SELECTION_WEIGHT_BYTES, NexusExportService::relationshipWeight);
         int omittedNonSymbol = 0;
         int omittedNonLocal = 0;
         for (Relationship relationship : snapshot.relationships()) {
@@ -267,6 +271,38 @@ public final class NexusExportService {
         return new NexusExportContract.ExportEvidence(evidence.type().name(), evidence.description(), evidence.weight());
     }
 
+    private static long symbolWeight(Symbol symbol) {
+        long weight = 512L;
+        weight = addWeight(weight, symbol.id());
+        weight = addWeight(weight, symbol.symbolKey());
+        weight = addWeight(weight, symbol.name());
+        weight = addWeight(weight, symbol.qualifiedName());
+        weight = addWeight(weight, symbol.signature());
+        weight = addWeight(weight, symbol.fileId());
+        weight = addWeight(weight, symbol.moduleId());
+        weight = addWeight(weight, symbol.language());
+        for (var reference : symbol.providerReferences()) {
+            weight = addWeight(weight, reference.providerId());
+            weight = addWeight(weight, reference.externalId());
+        }
+        return weight;
+    }
+
+    private static long relationshipWeight(Relationship relationship) {
+        long weight = 512L;
+        weight = addWeight(weight, relationship.id());
+        weight = addWeight(weight, relationship.source().id());
+        if (relationship.target() != null) weight = addWeight(weight, relationship.target().id());
+        if (relationship.location() != null) weight = addWeight(weight, relationship.location().fileId());
+        for (Evidence evidence : relationship.evidence()) weight = addWeight(weight, evidence.description());
+        return weight;
+    }
+
+    private static long addWeight(long weight, String value) {
+        long increment = value == null ? 0L : 40L + (long) value.length() * Character.BYTES;
+        return increment > Long.MAX_VALUE - weight ? Long.MAX_VALUE : weight + increment;
+    }
+
     private static Path canonicalProjectRoot(Path projectRoot) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Path root = projectRoot.toRealPath();
@@ -280,34 +316,45 @@ public final class NexusExportService {
 
     static final class BoundedById<T> {
         private final int limit;
+        private final long maximumWeightBytes;
+        private final java.util.function.ToLongFunction<T> estimator;
         private final TreeMap<String, T> retained = new TreeMap<>();
+        private final Map<String, Long> retainedWeights = new HashMap<>();
+        private long retainedWeightBytes;
         private boolean truncated;
 
         BoundedById(int limit) {
+            this(limit, Long.MAX_VALUE, ignored -> 1L);
+        }
+
+        BoundedById(int limit, long maximumWeightBytes, java.util.function.ToLongFunction<T> estimator) {
             if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+            if (maximumWeightBytes < 1L) throw new IllegalArgumentException("maximumWeightBytes must be positive");
             this.limit = limit;
+            this.maximumWeightBytes = maximumWeightBytes;
+            this.estimator = Objects.requireNonNull(estimator, "estimator");
         }
 
         void offer(String id, T value) {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(value, "value");
-            retained.put(id, value);
-            if (retained.size() > limit) {
-                retained.pollLastEntry();
+            long weight = Math.max(1L, estimator.applyAsLong(value));
+            T previous = retained.put(id, value);
+            Long previousWeight = retainedWeights.put(id, weight);
+            if (previous != null && previousWeight != null) retainedWeightBytes -= previousWeight;
+            retainedWeightBytes = retainedWeightBytes > Long.MAX_VALUE - weight
+                    ? Long.MAX_VALUE : retainedWeightBytes + weight;
+            while (retained.size() > limit || retainedWeightBytes > maximumWeightBytes) {
+                Map.Entry<String, T> removed = retained.pollLastEntry();
+                if (removed == null) break;
+                Long removedWeight = retainedWeights.remove(removed.getKey());
+                if (removedWeight != null) retainedWeightBytes = Math.max(0L, retainedWeightBytes - removedWeight);
                 truncated = true;
             }
         }
 
-        boolean truncated() {
-            return truncated;
-        }
-
-        Map<String, T> orderedMap() {
-            return Collections.unmodifiableMap(retained);
-        }
-
-        Collection<T> values() {
-            return retained.values();
-        }
+        boolean truncated() { return truncated; }
+        Map<String, T> orderedMap() { return Collections.unmodifiableMap(retained); }
+        Collection<T> values() { return retained.values(); }
     }
 }
