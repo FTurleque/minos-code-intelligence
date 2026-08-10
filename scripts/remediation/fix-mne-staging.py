@@ -14,5 +14,6 @@ new_end = '''replace_between(nexus,\n                "    static final class Bou
 if text.count(old_end) != 1:
     raise RuntimeError("semantic staging NEXUS class-tail anchor mismatch")
 text = text.replace(old_end, new_end, 1)
+text += '''\n# Staging-only guard: replace_between preserves its end anchor, so collapse the duplicated\n# BoundedById + outer-class closing braces introduced by the replacement payload.\nnexus_value = load(nexus)\nduplicated_closing = "    }\\n}\\n    }\\n}\\n"\nif nexus_value.count(duplicated_closing) != 1:\n    raise RuntimeError("NexusExportService: expected one duplicated staging class tail")\nsave(nexus, nexus_value.replace(duplicated_closing, "    }\\n}\\n", 1))\n'''
 path.write_text(text, encoding="utf-8")
 print("MNE staging fixups applied")
