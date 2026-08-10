@@ -19,17 +19,33 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
     private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 3L * 1024L * 1024L * 1024L;
+    private static final int MAX_QUERY_CACHE_ENTRIES = 32;
+    private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
+    private static final int BUILD_LOCK_STRIPES = 64;
+
     private final PostgresConnectionFactory connections;
     private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
+    private final Object cacheLock = new Object();
+    private final LinkedHashMap<CacheKey, WeightedQueryView> queryCache =
+            new LinkedHashMap<>(16, 0.75f, true);
+    private final ReentrantLock[] buildLocks = buildLocks();
+    private long cacheWeightBytes;
+    private long cacheHits;
+    private long cacheMisses;
+    private long cacheEvictions;
 
     PostgresCodeKnowledgeSnapshotStore(PostgresConnectionFactory connections) {
         this.connections = Objects.requireNonNull(connections, "connections");
@@ -64,39 +80,107 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
 
     @Override
     public Optional<SymbolSnapshot> loadActive(UUID projectId) throws IOException {
-        return loadActiveKnowledge(projectId).map(value ->
-                new SymbolSnapshot(value.projectId(), value.snapshotId(), value.symbols()));
+        return loadActiveQueryView(projectId).map(value ->
+                new SymbolSnapshot(value.snapshot().projectId(), value.snapshot().snapshotId(), value.snapshot().symbols()));
     }
 
     @Override
     public Optional<CodeKnowledgeSnapshot> loadActiveKnowledge(UUID projectId) throws IOException {
-        Optional<Row> row = activeRow(projectId);
-        if (row.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(decodeVerified(projectId, row.orElseThrow()));
+        return loadActiveQueryView(projectId).map(SnapshotQueryView::snapshot);
     }
 
     @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
-        Optional<Row> row = activeRow(projectId);
-        if (row.isEmpty()) {
-            return Optional.empty();
+        Objects.requireNonNull(projectId, "projectId");
+        Optional<ActiveMetadata> metadataOptional = activeMetadata(projectId);
+        if (metadataOptional.isEmpty()) return Optional.empty();
+        ActiveMetadata metadata = metadataOptional.orElseThrow();
+        CacheKey key = new CacheKey(projectId, metadata.snapshotId(), metadata.sha256());
+        Optional<SnapshotQueryView> cached = cached(key);
+        if (cached.isPresent()) return cached;
+
+        ReentrantLock buildLock = buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
+        buildLock.lock();
+        try {
+            cached = cached(key);
+            if (cached.isPresent()) return cached;
+            synchronized (cacheLock) { cacheMisses++; }
+
+            Optional<Row> row = activeRow(projectId);
+            if (row.isEmpty()) return Optional.empty();
+            Row value = row.orElseThrow();
+            if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
+                // The active pointer changed between the metadata probe and payload fetch. Retry
+                // once against the new authoritative identity rather than caching stale data.
+                return loadActiveQueryView(projectId);
+            }
+            CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
+            long started = System.nanoTime();
+            InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
+            long buildNanos = System.nanoTime() - started;
+            SnapshotDescriptor descriptor = new SnapshotDescriptor(
+                    2,
+                    snapshot.snapshotId(),
+                    "postgresql:" + snapshot.snapshotId(),
+                    metadata.sha256(),
+                    metadata.symbolCount(),
+                    metadata.occurrenceCount(),
+                    metadata.relationshipCount());
+            SnapshotQueryView view = new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos);
+            cache(projectId, key, view, estimateWeight(metadata));
+            return Optional.of(view);
+        } finally {
+            buildLock.unlock();
         }
-        Row value = row.orElseThrow();
-        CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
-        long started = System.nanoTime();
-        InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
-        long buildNanos = System.nanoTime() - started;
-        SnapshotDescriptor descriptor = new SnapshotDescriptor(
-                2,
-                snapshot.snapshotId(),
-                "postgresql:" + snapshot.snapshotId(),
-                value.sha256(),
-                snapshot.symbols().size(),
-                snapshot.occurrences().size(),
-                snapshot.relationships().size());
-        return Optional.of(new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos));
+    }
+
+    QueryCacheStats queryCacheStats() {
+        synchronized (cacheLock) {
+            return new QueryCacheStats(cacheHits, cacheMisses, cacheEvictions, queryCache.size(),
+                    cacheWeightBytes, MAX_QUERY_CACHE_WEIGHT_BYTES);
+        }
+    }
+
+    private Optional<SnapshotQueryView> cached(CacheKey key) {
+        synchronized (cacheLock) {
+            WeightedQueryView value = queryCache.get(key);
+            if (value == null) return Optional.empty();
+            cacheHits++;
+            return Optional.of(value.view());
+        }
+    }
+
+    private void cache(UUID projectId, CacheKey key, SnapshotQueryView view, long weight) {
+        synchronized (cacheLock) {
+            removeProjectEntries(projectId, key);
+            if (weight > MAX_QUERY_CACHE_WEIGHT_BYTES) return;
+            WeightedQueryView previous = queryCache.put(key, new WeightedQueryView(view, weight));
+            if (previous != null) cacheWeightBytes -= previous.weightBytes();
+            cacheWeightBytes = safeAdd(cacheWeightBytes, weight);
+            Iterator<Map.Entry<CacheKey, WeightedQueryView>> iterator = queryCache.entrySet().iterator();
+            while ((queryCache.size() > MAX_QUERY_CACHE_ENTRIES || cacheWeightBytes > MAX_QUERY_CACHE_WEIGHT_BYTES)
+                    && iterator.hasNext()) {
+                Map.Entry<CacheKey, WeightedQueryView> eldest = iterator.next();
+                cacheWeightBytes -= eldest.getValue().weightBytes();
+                iterator.remove();
+                cacheEvictions++;
+            }
+        }
+    }
+
+    private void invalidateProjectCache(UUID projectId) {
+        synchronized (cacheLock) { removeProjectEntries(projectId, null); }
+    }
+
+    private void removeProjectEntries(UUID projectId, CacheKey except) {
+        Iterator<Map.Entry<CacheKey, WeightedQueryView>> iterator = queryCache.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<CacheKey, WeightedQueryView> entry = iterator.next();
+            if (entry.getKey().projectId().equals(projectId) && !entry.getKey().equals(except)) {
+                cacheWeightBytes -= entry.getValue().weightBytes();
+                iterator.remove();
+            }
+        }
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -115,6 +199,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                     activateSnapshot(connection, snapshot);
                     return null;
                 });
+                invalidateProjectCache(snapshot.projectId());
             } catch (SQLException exception) {
                 throw new IOException("unable to publish PostgreSQL knowledge snapshot", exception);
             }
@@ -179,6 +264,28 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         }
     }
 
+    private Optional<ActiveMetadata> activeMetadata(UUID projectId) throws IOException {
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT s.snapshot_id,s.sha256,s.symbol_count,s.occurrence_count,s.relationship_count "
+                                + "FROM knowledge_active a JOIN knowledge_snapshots s "
+                                + "ON s.project_id=a.project_id AND s.snapshot_id=a.snapshot_id "
+                                + "WHERE a.project_id=?")) {
+                    statement.setObject(1, projectId);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        return Optional.of(new ActiveMetadata(
+                                result.getString(1), result.getString(2),
+                                result.getInt(3), result.getInt(4), result.getInt(5)));
+                    }
+                }
+            });
+        } catch (SQLException exception) {
+            throw new IOException("unable to read PostgreSQL active snapshot metadata", exception);
+        }
+    }
+
     private Optional<Row> activeRow(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         try {
@@ -230,10 +337,32 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         int read;
         while ((read = input.read(buffer)) >= 0) {
             if (read == 0) continue;
-            total = Math.addExact(total, read);
+            try {
+                total = Math.addExact(total, read);
+            } catch (ArithmeticException exception) {
+                throw new IOException("PostgreSQL knowledge snapshot payload size overflow", exception);
+            }
             if (total > maximum) throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
             output.write(buffer, 0, read);
         }
+    }
+
+    private static long estimateWeight(ActiveMetadata metadata) {
+        long weight = 64L * 1024L;
+        weight = safeAdd(weight, (long) metadata.symbolCount() * 1024L);
+        weight = safeAdd(weight, (long) metadata.occurrenceCount() * 640L);
+        weight = safeAdd(weight, (long) metadata.relationshipCount() * 1024L);
+        return weight;
+    }
+
+    private static long safeAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static ReentrantLock[] buildLocks() {
+        ReentrantLock[] locks = new ReentrantLock[BUILD_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
     }
 
     private static String requireText(String value) {
@@ -250,4 +379,11 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
             Objects.requireNonNull(sha256, "sha256");
         }
     }
+
+    private record ActiveMetadata(String snapshotId, String sha256, int symbolCount,
+                                  int occurrenceCount, int relationshipCount) { }
+    private record CacheKey(UUID projectId, String snapshotId, String sha256) { }
+    private record WeightedQueryView(SnapshotQueryView view, long weightBytes) { }
+    record QueryCacheStats(long hits, long misses, long evictions, int entries,
+                           long weightBytes, long maximumWeightBytes) { }
 }
