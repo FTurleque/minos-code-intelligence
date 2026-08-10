@@ -1,0 +1,24 @@
+name: MNC npm integrity probe
+
+on:
+  push:
+    branches:
+      - fix/mnc-complete-remediation
+    paths:
+      - .github/workflows/mnc-integrity-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report pinned package integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'SCIP_PYTHON_INTEGRITY='
+          npm view '@sourcegraph/scip-python@0.6.6' dist.integrity
+          printf 'SCIP_TYPESCRIPT_INTEGRITY='
+          npm view '@sourcegraph/scip-typescript@0.4.0' dist.integrity
