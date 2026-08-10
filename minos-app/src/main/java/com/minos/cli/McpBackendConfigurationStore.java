@@ -22,6 +22,7 @@ public final class McpBackendConfigurationStore {
     public static final String FILE_NAME = "backend.properties";
 
     private static final long MAX_CONFIGURATION_BYTES = 64L * 1024L;
+    private static final int MAX_CONFIGURATION_ENTRIES = 16;
     private static final Set<String> ALLOWED_KEYS = Set.of(
             "formatVersion", "backend", "docker.containerName", "docker.probeTimeoutMillis");
 
@@ -48,7 +49,7 @@ public final class McpBackendConfigurationStore {
         Properties properties = BoundedProperties.load(
                 file,
                 MAX_CONFIGURATION_BYTES,
-                ALLOWED_KEYS.size(),
+                MAX_CONFIGURATION_ENTRIES,
                 128,
                 1024,
                 "MCP backend configuration"
