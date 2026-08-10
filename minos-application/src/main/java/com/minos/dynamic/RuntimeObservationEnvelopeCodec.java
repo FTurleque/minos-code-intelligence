@@ -1,8 +1,9 @@
 package com.minos.dynamic;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.BoundedLineReader;
+import com.minos.io.FixedTsv;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
@@ -17,16 +18,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 /** Strict UTF-8 TSV codec for {@code minos-runtime-observation-v1}. */
 public final class RuntimeObservationEnvelopeCodec {
 
     public static final long MAX_INPUT_BYTES = 64L * 1024L * 1024L;
+    public static final int MAX_LINE_CHARS = 1024 * 1024;
     private static final int METADATA_LINES = 9;
 
     public DecodedSession read(Path source) throws IOException {
@@ -41,11 +42,11 @@ public final class RuntimeObservationEnvelopeCodec {
         try (DigestInputStream digestInput = new DigestInputStream(Files.newInputStream(path), digest);
              BoundedInputStream bounded = new BoundedInputStream(
                      digestInput, MAX_INPUT_BYTES, "runtime observation input");
-             BufferedReader reader = new BufferedReader(new InputStreamReader(
+             BoundedLineReader reader = new BoundedLineReader(new InputStreamReader(
                      bounded,
                      StandardCharsets.UTF_8.newDecoder()
                              .onMalformedInput(CodingErrorAction.REPORT)
-                             .onUnmappableCharacter(CodingErrorAction.REPORT)))) {
+                             .onUnmappableCharacter(CodingErrorAction.REPORT)), MAX_LINE_CHARS)) {
             int lineNumber = 0;
             String line;
             while ((line = reader.readLine()) != null) {
@@ -101,18 +102,18 @@ public final class RuntimeObservationEnvelopeCodec {
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {
-        String[] values = line.split("\t", -1);
+        String kind = FixedTsv.firstField(line, lineNumber);
         try {
-            return switch (values[0]) {
+            return switch (kind) {
                 case "symbol" -> {
-                    requireFieldCount(values, 7, lineNumber);
+                    String[] values = FixedTsv.splitExact(line, 7, lineNumber);
                     RuntimeSymbolReference source = reference(values, 1);
                     yield new RuntimeObservation(RuntimeObservationType.SYMBOL_EXECUTION, source, null,
                             positiveLong(values[5], "hits", lineNumber),
                             nonNegativeLong(values[6], "durationNanos", lineNumber));
                 }
                 case "call" -> {
-                    requireFieldCount(values, 11, lineNumber);
+                    String[] values = FixedTsv.splitExact(line, 11, lineNumber);
                     RuntimeSymbolReference source = reference(values, 1);
                     RuntimeSymbolReference target = reference(values, 5);
                     yield new RuntimeObservation(RuntimeObservationType.CALL, source, target,
@@ -120,14 +121,14 @@ public final class RuntimeObservationEnvelopeCodec {
                             nonNegativeLong(values[10], "durationNanos", lineNumber));
                 }
                 case "line" -> {
-                    requireFieldCount(values, 4, lineNumber);
+                    String[] values = FixedTsv.splitExact(line, 4, lineNumber);
                     RuntimeSymbolReference source = new RuntimeSymbolReference(
                             null, null, required(values[1], "fileId", lineNumber),
                             positiveInt(values[2], "line", lineNumber));
                     yield new RuntimeObservation(RuntimeObservationType.LINE_COVERAGE, source, null,
                             positiveLong(values[3], "hits", lineNumber), 0);
                 }
-                default -> throw new IOException("line " + lineNumber + ": unknown runtime observation kind: " + values[0]);
+                default -> throw new IOException("line " + lineNumber + ": unknown runtime observation kind: " + kind);
             };
         } catch (IllegalArgumentException exception) {
             throw new IOException("line " + lineNumber + ": " + exception.getMessage(), exception);
@@ -147,13 +148,7 @@ public final class RuntimeObservationEnvelopeCodec {
     }
 
     private static String[] fields(String line, int count, int lineNumber) throws IOException {
-        String[] values = line.split("\t", -1);
-        requireFieldCount(values, count, lineNumber);
-        return values;
-    }
-
-    private static void requireFieldCount(String[] values, int count, int lineNumber) throws IOException {
-        if (values.length != count) throw new IOException("line " + lineNumber + ": expected " + count + " tab-separated fields");
+        return FixedTsv.splitExact(line, count, lineNumber);
     }
 
     private static void expectExact(String actual, String expected, int lineNumber) throws IOException {
