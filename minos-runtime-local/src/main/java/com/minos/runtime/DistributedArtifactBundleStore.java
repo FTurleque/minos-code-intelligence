@@ -157,9 +157,18 @@ public final class DistributedArtifactBundleStore {
                 deleteCacheTree(entry);
             }
             Files.createDirectory(entry);
-            move(artifact, cachedArtifact);
-            Files.write(cachedManifest, extracted.manifestBytes());
-            evict(cacheKey);
+            try {
+                move(artifact, cachedArtifact);
+                Files.write(cachedManifest, extracted.manifestBytes());
+                evict(cacheKey);
+            } catch (IOException | RuntimeException exception) {
+                try {
+                    if (Files.exists(entry)) deleteCacheTree(entry);
+                } catch (IOException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+                throw exception;
+            }
             leasedKey = null;
             return new VerifiedArtifact(manifest, cachedArtifact, cacheKey, false, bundleSha);
         } finally {
