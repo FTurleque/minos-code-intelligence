@@ -18,7 +18,17 @@ import java.util.Set;
 public final class ProgramGraphComposer {
 
     public ProgramGraph compose(String projectId, String snapshotId, List<ProgramGraph> fragments) {
+        return compose(projectId, snapshotId, fragments, new ProgramGraphBudget(Integer.MAX_VALUE, Integer.MAX_VALUE));
+    }
+
+    public ProgramGraph compose(
+            String projectId,
+            String snapshotId,
+            List<ProgramGraph> fragments,
+            ProgramGraphBudget budget
+    ) {
         Objects.requireNonNull(fragments, "fragments");
+        Objects.requireNonNull(budget, "budget");
         Map<String, ProgramGraphNode> nodes = new LinkedHashMap<>();
         Map<String, ProgramGraphEdge> edges = new LinkedHashMap<>();
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>();
@@ -31,25 +41,53 @@ public final class ProgramGraphComposer {
             }
             capabilities.addAll(fragment.capabilities());
             limitations.addAll(fragment.limitations());
-            fragment.nodes().forEach(node -> merge(nodes, node.id(), node, "node"));
-            fragment.edges().forEach(edge -> merge(edges, edge.id(), edge, "edge"));
+            for (ProgramGraphNode node : fragment.nodes().stream().sorted(Comparator.comparing(ProgramGraphNode::id)).toList()) {
+                ProgramGraphNode existing = nodes.get(node.id());
+                if (existing != null) {
+                    if (!existing.equals(node)) throw conflict("node", node.id());
+                    continue;
+                }
+                if (nodes.size() >= budget.maxNodes()) {
+                    limitations.add("PROGRAM_GRAPH_NODE_LIMIT_REACHED");
+                    continue;
+                }
+                nodes.put(node.id(), node);
+            }
         }
 
-        if (!nodes.isEmpty()) {
-            capabilities.add(ProgramGraphCapability.CPG);
+        Set<String> nodeIds = Set.copyOf(nodes.keySet());
+        outer:
+        for (ProgramGraph fragment : fragments) {
+            for (ProgramGraphEdge edge : fragment.edges().stream().sorted(Comparator.comparing(ProgramGraphEdge::id)).toList()) {
+                if (!nodeIds.contains(edge.sourceNodeId()) || !nodeIds.contains(edge.targetNodeId())) continue;
+                ProgramGraphEdge existing = edges.get(edge.id());
+                if (existing != null) {
+                    if (!existing.equals(edge)) throw conflict("edge", edge.id());
+                    continue;
+                }
+                if (edges.size() >= budget.maxEdges()) {
+                    limitations.add("PROGRAM_GRAPH_EDGE_LIMIT_REACHED");
+                    break outer;
+                }
+                edges.put(edge.id(), edge);
+            }
         }
+
+        if (!nodes.isEmpty()) capabilities.add(ProgramGraphCapability.CPG);
         List<ProgramGraphNode> orderedNodes = new ArrayList<>(nodes.values());
         orderedNodes.sort(Comparator.comparing(ProgramGraphNode::id));
         List<ProgramGraphEdge> orderedEdges = new ArrayList<>(edges.values());
         orderedEdges.sort(Comparator.comparing(ProgramGraphEdge::id));
-        List<String> orderedLimitations = limitations.stream().sorted().toList();
-        return new ProgramGraph(projectId, snapshotId, capabilities, orderedNodes, orderedEdges, orderedLimitations);
+        return new ProgramGraph(
+                projectId,
+                snapshotId,
+                capabilities,
+                orderedNodes,
+                orderedEdges,
+                limitations.stream().sorted().toList());
     }
 
-    private static <T> void merge(Map<String, T> values, String id, T value, String kind) {
-        T existing = values.putIfAbsent(id, value);
-        if (existing != null && !existing.equals(value)) {
-            throw new IllegalArgumentException("conflicting program " + kind + " id: " + id);
-        }
+    private static IllegalArgumentException conflict(String kind, String id) {
+        return new IllegalArgumentException("conflicting program " + kind + " id: " + id);
     }
 }
