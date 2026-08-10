@@ -92,10 +92,11 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             );
         }
 
-        // scip-java's Maven build writes compiler outputs into the project tree. Linux/Docker runs
-        // therefore execute against a writable staging copy under MINOS_HOME/runs. The staging copy
-        // uses the same bounded .gitignore/.minosignore contract as discovery and additionally omits
-        // provider-specific cache/build directories and root Maven wrappers.
+        // scip-java's Maven build creates target/scip-targetroot and other compiler outputs in the
+        // project tree. Linux/Docker runs therefore execute against a writable staging copy under
+        // MINOS_HOME/runs. The staging copy uses the same bounded .gitignore/.minosignore contract
+        // as discovery and additionally omits provider-specific cache/build directories and root
+        // Maven wrappers.
         Path executionRoot = prepareWritableWorkspace(root, normalizedRunDirectory);
 
         var standalone = CommandLocator.find("scip-java");
