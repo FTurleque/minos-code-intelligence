@@ -1,6 +1,11 @@
 name: MNC npm integrity probe
 
 on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/mnc-integrity-probe.yml
   push:
     branches:
       - fix/mnc-complete-remediation
