@@ -10,11 +10,8 @@ import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -23,8 +20,7 @@ import java.util.Set;
 /** Built-in discovery extensions. The orchestration service only consumes the SPI lists. */
 public final class DefaultDiscoveryPlugins {
 
-    private DefaultDiscoveryPlugins() {
-    }
+    private DefaultDiscoveryPlugins() { }
 
     public static List<ProjectDetector> projectDetectors() {
         return List.of(
@@ -137,12 +133,8 @@ public final class DefaultDiscoveryPlugins {
                 boolean present = names.stream()
                         .map(directory::resolve)
                         .anyMatch(file -> visibleFile(root, file, ignorePolicy));
-                if (present) {
-                    return Optional.of(system);
-                }
-                if (current.equals(root)) {
-                    break;
-                }
+                if (present) return Optional.of(system);
+                if (current.equals(root)) break;
                 current = current.getParent();
             }
             return Optional.empty();
@@ -158,11 +150,7 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static SourceRootDetector conventionalRoot(
-            String relative,
-            SourceRootKind kind,
-            Language language,
-            String... extensions
-    ) {
+            String relative, SourceRootKind kind, Language language, String... extensions) {
         Set<String> values = normalizedSuffixes(extensions);
         return (projectRoot, moduleRoot, ignorePolicy) -> {
             Path candidate = moduleRoot.resolve(relative).normalize();
@@ -183,14 +171,8 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static boolean containsVisibleMarkerExtension(
-            Path projectRoot,
-            Path directory,
-            Set<String> suffixes,
-            ProjectIgnorePolicy ignorePolicy
-    ) {
-        if (!Files.isDirectory(directory)) {
-            return false;
-        }
+            Path projectRoot, Path directory, Set<String> suffixes, ProjectIgnorePolicy ignorePolicy) {
+        if (!Files.isDirectory(directory)) return false;
         try (var entries = Files.list(directory)) {
             return entries.filter(Files::isRegularFile)
                     .filter(file -> !ignorePolicy.isIgnored(projectRoot.relativize(file), false))
@@ -202,35 +184,12 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static boolean containsVisibleExtension(
-            Path projectRoot,
-            Path sourceRoot,
-            Set<String> extensions,
-            ProjectIgnorePolicy ignorePolicy) throws IOException {
-        boolean[] found = {false};
-        Files.walkFileTree(sourceRoot, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs) {
-                if (!directory.equals(sourceRoot)
-                        && ignorePolicy.isHardIgnored(projectRoot.relativize(directory))) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                Path relative = projectRoot.relativize(file);
-                if (!ignorePolicy.isIgnored(relative, false)) {
-                    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-                    if (extensions.stream().anyMatch(name::endsWith)) {
-                        found[0] = true;
-                        return FileVisitResult.TERMINATE;
-                    }
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
-        return found[0];
+            Path projectRoot, Path sourceRoot, Set<String> extensions, ProjectIgnorePolicy ignorePolicy)
+            throws IOException {
+        if (!sourceRoot.toAbsolutePath().normalize().startsWith(projectRoot.toAbsolutePath().normalize())) {
+            throw new IOException("source root escapes project root");
+        }
+        return ignorePolicy.containsVisibleExtension(sourceRoot, extensions);
     }
 
     private static boolean visibleFile(Path projectRoot, Path file, ProjectIgnorePolicy ignorePolicy) {
