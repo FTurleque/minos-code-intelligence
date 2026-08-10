@@ -63,7 +63,8 @@ public final class ProjectFingerprintService {
 
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 if (!directory.equals(root)
                         && ignorePolicy.isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -73,6 +74,7 @@ public final class ProjectFingerprintService {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 if (!attributes.isRegularFile()) {
                     return FileVisitResult.CONTINUE;
                 }
@@ -82,11 +84,12 @@ public final class ProjectFingerprintService {
                     return FileVisitResult.CONTINUE;
                 }
 
-                budget.accountRegularFile(attributes.size());
+                budget.accountFile();
+                HashedFile hashed = hashFile(file, budget);
                 files.add(new FileFingerprint(
                         portable(relative),
-                        attributes.size(),
-                        hashFile(file)
+                        hashed.sizeBytes(),
+                        hashed.sha256()
                 ));
                 return FileVisitResult.CONTINUE;
             }
@@ -176,18 +179,25 @@ public final class ProjectFingerprintService {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static String hashFile(Path file) throws IOException {
+    private static HashedFile hashFile(Path file, SourceBudgetPolicy.Tracker budget) throws IOException {
         MessageDigest digest = sha256();
         byte[] buffer = new byte[8192];
+        long bytes = 0L;
         try (InputStream input = Files.newInputStream(file)) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read > 0) {
+                    budget.accountBytes(read);
+                    try {
+                        bytes = Math.addExact(bytes, read);
+                    } catch (ArithmeticException exception) {
+                        throw new IOException("project fingerprint file byte counter overflow", exception);
+                    }
                     digest.update(buffer, 0, read);
                 }
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return new HashedFile(HexFormat.of().formatHex(digest.digest()), bytes);
     }
 
     private static MessageDigest sha256() {
@@ -205,4 +215,6 @@ public final class ProjectFingerprintService {
     private static String portable(Path path) {
         return path.toString().replace('\\', '/');
     }
+
+    private record HashedFile(String sha256, long sizeBytes) { }
 }
