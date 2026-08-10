@@ -32,6 +32,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     public static final String VERSION = ScipIndexerCatalog.SCIP_PYTHON_VERSION;
 
     private static final String WINDOWS_COMPATIBILITY_PRELOAD = "minos-windows-regexp-compat.cjs";
+    private static final String NPM_LOCK_RESOURCE = "scip-python-package-lock.json";
+    private static final String NPM_INTEGRITY = "sha512-qoKL1Rggg0o5newAFbCFAKlS0AjWxG5MA+mC28BtgxOv0DhO4zdL8u7151FxEppDpXMVvm7+yXSjXotoVH9cMQ==";
     private static final String WINDOWS_COMPATIBILITY_SOURCE = """
             // MINOS compatibility shim for sourcegraph/scip-python#210 / PR #211.
             // scip-python 0.6.6 evaluates new RegExp(path.sep, 'g'); on Windows path.sep is a lone
@@ -114,12 +116,18 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         deleteRecursively(partial);
         Files.createDirectories(partial);
         try {
+            LockedNpmPackage.prepare(
+                    ManagedScipPythonRuntimeManager.class,
+                    partial,
+                    NPM_LOCK_RESOURCE,
+                    "@sourcegraph/scip-python",
+                    VERSION,
+                    NPM_INTEGRITY);
             run(CommandLocator.invocation(
                     npm,
-                    "install",
+                    "ci",
                     "--prefix", partial.toString(),
-                    "--no-audit", "--no-fund",
-                    "@sourcegraph/scip-python@" + VERSION
+                    "--no-audit", "--no-fund", "--ignore-scripts"
             ), home, toolsRoot.resolve("scip-python-install.log"), Duration.ofMinutes(10));
             Path installed = partial.resolve("node_modules").resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-python.cmd" : "scip-python");

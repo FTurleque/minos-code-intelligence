@@ -42,8 +42,9 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Autonomous indexing adapter over the selected MINOS storage backend. */
-public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
+public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations, AutoCloseable {
     private final MinosApplication application;
+    private final MinosApplication ownedApplication;
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
@@ -56,17 +57,28 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final IncrementalIndexingPlanner planner;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
 
-    public LocalAutonomousIndexOperations(Path minosHome) throws IOException { this(MinosApplication.open(minosHome)); }
+    public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
+        this(MinosApplication.open(minosHome), UnaryOperator.identity(), true);
+    }
 
     public LocalAutonomousIndexOperations(MinosApplication application) {
-        this(application, UnaryOperator.identity());
+        this(application, UnaryOperator.identity(), false);
     }
 
     public LocalAutonomousIndexOperations(
             MinosApplication application,
             UnaryOperator<IndexerExecutor> executorDecorator
     ) {
+        this(application, executorDecorator, false);
+    }
+
+    private LocalAutonomousIndexOperations(
+            MinosApplication application,
+            UnaryOperator<IndexerExecutor> executorDecorator,
+            boolean ownsApplication
+    ) {
         this.application = Objects.requireNonNull(application, "application");
+        this.ownedApplication = ownsApplication ? this.application : null;
         this.projectResolver = new ProjectResolver(application.projectRegistry());
         this.snapshotStore = application.snapshotStore();
         this.stateStore = application.indexStateStore();
@@ -307,4 +319,10 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             ProjectFingerprint fingerprintBefore,
             IndexPlanView view
     ) { }
+
+
+    @Override
+    public void close() throws IOException {
+        if (ownedApplication != null) ownedApplication.close();
+    }
 }

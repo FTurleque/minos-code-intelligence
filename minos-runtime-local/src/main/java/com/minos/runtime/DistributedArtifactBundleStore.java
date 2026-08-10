@@ -36,6 +36,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -49,7 +50,9 @@ public final class DistributedArtifactBundleStore {
     private final Path cacheRoot;
     private final Path leasesRoot;
     private final DistributedArtifactCachePolicy policy;
+    private static final int LEASE_STRIPE_COUNT = 64;
     private final Object leaseMonitor = new Object();
+    private final ReentrantLock[] leaseStripes = createLeaseStripes();
     private final Map<String, LeaseState> activeLeases = new HashMap<>();
 
     public DistributedArtifactBundleStore(Path minosHome) throws IOException {
@@ -324,7 +327,10 @@ public final class DistributedArtifactBundleStore {
             if (!Files.isRegularFile(manifestFile) || !Files.isRegularFile(artifact)) {
                 return false;
             }
-            DistributedArtifactManifest actual = decodeManifest(Files.readAllBytes(manifestFile));
+            DistributedArtifactManifest actual;
+            try (InputStream input = Files.newInputStream(manifestFile)) {
+                actual = decodeManifest(readBounded(input, MAX_MANIFEST_BYTES));
+            }
             return expected.equals(actual)
                     && Files.size(artifact) == actual.artifactSize()
                     && sha256(artifact).equals(actual.artifactSha256());
@@ -377,22 +383,41 @@ public final class DistributedArtifactBundleStore {
     }
 
     private void acquireLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            LeaseState existing = activeLeases.get(cacheKey);
-            if (existing != null) {
-                existing.references++;
-                return;
+        ReentrantLock stripe = leaseStripe(cacheKey);
+        stripe.lock();
+        try {
+            synchronized (leaseMonitor) {
+                LeaseState existing = activeLeases.get(cacheKey);
+                if (existing != null) {
+                    existing.references++;
+                    return;
+                }
             }
             Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
             FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             try {
+                // Deliberately outside leaseMonitor: another process may hold this lock indefinitely.
                 FileLock lock = channel.lock();
-                activeLeases.put(cacheKey, new LeaseState(channel, lock));
+                synchronized (leaseMonitor) {
+                    activeLeases.put(cacheKey, new LeaseState(channel, lock));
+                }
             } catch (IOException | RuntimeException exception) {
                 channel.close();
                 throw exception;
             }
+        } finally {
+            stripe.unlock();
         }
+    }
+
+    private ReentrantLock leaseStripe(String cacheKey) {
+        return leaseStripes[Math.floorMod(cacheKey.hashCode(), leaseStripes.length)];
+    }
+
+    private static ReentrantLock[] createLeaseStripes() {
+        ReentrantLock[] stripes = new ReentrantLock[LEASE_STRIPE_COUNT];
+        for (int index = 0; index < stripes.length; index++) stripes[index] = new ReentrantLock();
+        return stripes;
     }
 
     private void releaseLease(String cacheKey) throws IOException {

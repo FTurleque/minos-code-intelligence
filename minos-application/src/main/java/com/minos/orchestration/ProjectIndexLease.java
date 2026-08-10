@@ -15,15 +15,22 @@ import java.util.concurrent.locks.ReentrantLock;
 /** Cross-JVM exclusive lease for one project's indexing lifecycle. */
 public final class ProjectIndexLease implements AutoCloseable {
 
-    private static final ConcurrentMap<Path, ReentrantLock> JVM_LOCKS = new ConcurrentHashMap<>();
+    private static final Object JVM_LOCK_MONITOR = new Object();
+    private static final ConcurrentMap<Path, LockState> JVM_LOCKS = new ConcurrentHashMap<>();
 
+    private final Path lockPath;
+    private final LockState lockState;
     private final ReentrantLock jvmLock;
     private final FileChannel channel;
     private final FileLock fileLock;
     private boolean closed;
 
-    private ProjectIndexLease(ReentrantLock jvmLock, FileChannel channel, FileLock fileLock) {
-        this.jvmLock = jvmLock;
+    private ProjectIndexLease(
+            Path lockPath, LockState lockState, FileChannel channel, FileLock fileLock
+    ) {
+        this.lockPath = lockPath;
+        this.lockState = lockState;
+        this.jvmLock = lockState.lock;
         this.channel = channel;
         this.fileLock = fileLock;
     }
@@ -37,16 +44,21 @@ public final class ProjectIndexLease implements AutoCloseable {
         if (!lockPath.startsWith(directory.toAbsolutePath().normalize())) {
             throw new IOException("project indexing lock escapes MINOS lock directory");
         }
-        ReentrantLock jvm = JVM_LOCKS.computeIfAbsent(lockPath, ignored -> new ReentrantLock());
-        jvm.lock();
+        LockState state;
+        synchronized (JVM_LOCK_MONITOR) {
+            state = JVM_LOCKS.computeIfAbsent(lockPath, ignored -> new LockState());
+            state.references++;
+        }
+        state.lock.lock();
         FileChannel channel = null;
         try {
             channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             FileLock lock = channel.lock();
-            return new ProjectIndexLease(jvm, channel, lock);
+            return new ProjectIndexLease(lockPath, state, channel, lock);
         } catch (IOException | RuntimeException exception) {
             if (channel != null) channel.close();
-            jvm.unlock();
+            state.lock.unlock();
+            releaseState(lockPath, state);
             throw exception;
         }
     }
@@ -67,7 +79,27 @@ public final class ProjectIndexLease implements AutoCloseable {
             if (failure == null) failure = exception; else failure.addSuppressed(exception);
         } finally {
             jvmLock.unlock();
+            releaseState(lockPath, lockState);
         }
         if (failure != null) throw failure;
+    }
+
+    static int retainedJvmLockCount() {
+        synchronized (JVM_LOCK_MONITOR) {
+            return JVM_LOCKS.size();
+        }
+    }
+
+    private static void releaseState(Path path, LockState state) {
+        synchronized (JVM_LOCK_MONITOR) {
+            state.references--;
+            if (state.references < 0) throw new IllegalStateException("project index JVM lock reference underflow");
+            if (state.references == 0) JVM_LOCKS.remove(path, state);
+        }
+    }
+
+    private static final class LockState {
+        private final ReentrantLock lock = new ReentrantLock();
+        private int references;
     }
 }

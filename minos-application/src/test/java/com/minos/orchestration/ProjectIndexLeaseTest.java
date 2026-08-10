@@ -41,4 +41,15 @@ class ProjectIndexLeaseTest {
             assertTrue(secondAcquired.get());
         }
     }
+
+    @Test
+    void releasesJvmLockStateAfterLastLeaseCloses() throws Exception {
+        int baseline = ProjectIndexLease.retainedJvmLockCount();
+        for (int index = 0; index < 128; index++) {
+            try (ProjectIndexLease ignored = ProjectIndexLease.acquire(temporary, UUID.randomUUID())) {
+                assertTrue(ProjectIndexLease.retainedJvmLockCount() >= baseline + 1);
+            }
+        }
+        assertTrue(ProjectIndexLease.retainedJvmLockCount() <= baseline);
+    }
 }

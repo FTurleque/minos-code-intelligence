@@ -43,6 +43,11 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredProject registerProject(Path rootPath, String displayName) throws IOException {
+        return registerProjectWithResult(rootPath, displayName).project();
+    }
+
+    @Override
+    public RegistrationResult registerProjectWithResult(Path rootPath, String displayName) throws IOException {
         Path canonical = canonicalExistingDirectory(rootPath);
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
@@ -67,7 +72,8 @@ final class PostgresProjectRegistry implements ProjectRegistry {
                         if (!result.next()) {
                             throw new SQLException("project registration did not return a row");
                         }
-                        return readProject(result);
+                        RegisteredProject project = readProject(result);
+                        return new RegistrationResult(project, candidateId.equals(project.id()));
                     }
                 }
             });

@@ -4,6 +4,7 @@ import com.minos.application.MinosApplication;
 import com.minos.git.JGitRemoteRepositoryMaterializer;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer;
@@ -19,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -77,11 +77,10 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         boolean completed = false;
         Exception primaryFailure = null;
         try {
-            Optional<RegisteredProject> existing = application.projectRegistry().listProjects().stream()
-                    .filter(candidate -> candidate.rootPath().equals(source.projectRoot()))
-                    .findFirst();
-            project = application.projectRegistry().registerProject(source.projectRoot(), displayName);
-            newlyRegistered = existing.isEmpty();
+            ProjectRegistry.RegistrationResult registration = application.projectRegistry()
+                    .registerProjectWithResult(source.projectRoot(), displayName);
+            project = registration.project();
+            newlyRegistered = registration.createdByThisCall();
 
             // A durable registry root must stay materialized after the active-use lease is released.
             // If this first index fails, the finally block rolls back both the registration and pin.

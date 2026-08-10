@@ -11,22 +11,23 @@ import com.minos.store.SnapshotQueryView;
 import com.minos.store.SymbolSnapshot;
 
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
+    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 3L * 1024L * 1024L * 1024L;
     private final PostgresConnectionFactory connections;
     private final PostgresSnapshotPayloadCodec codec = new PostgresSnapshotPayloadCodec();
 
@@ -99,20 +100,26 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
-        byte[] payload = codec.encode(snapshot);
-        String sha = sha256(payload);
+        Path payload = Files.createTempFile("minos-postgresql-snapshot-", ".knowledge");
         try {
-            connections.inTransaction(connection -> {
-                String existingSha = existingSnapshotSha(connection, snapshot);
-                validateExistingSnapshot(snapshot, sha, existingSha);
-                if (existingSha == null) {
-                    insertSnapshot(connection, snapshot, payload, sha);
-                }
-                activateSnapshot(connection, snapshot);
-                return null;
-            });
-        } catch (SQLException exception) {
-            throw new IOException("unable to publish PostgreSQL knowledge snapshot", exception);
+            String sha = codec.encode(payload, snapshot).sha256();
+            long payloadBytes = Files.size(payload);
+            if (payloadBytes < 1L || payloadBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
+                throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
+            }
+            try {
+                connections.inTransaction(connection -> {
+                    String existingSha = existingSnapshotSha(connection, snapshot);
+                    validateExistingSnapshot(snapshot, sha, existingSha);
+                    if (existingSha == null) insertSnapshot(connection, snapshot, payload, payloadBytes, sha);
+                    activateSnapshot(connection, snapshot);
+                    return null;
+                });
+            } catch (SQLException exception) {
+                throw new IOException("unable to publish PostgreSQL knowledge snapshot", exception);
+            }
+        } finally {
+            Files.deleteIfExists(payload);
         }
     }
 
@@ -143,15 +150,17 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     private static void insertSnapshot(
             Connection connection,
             CodeKnowledgeSnapshot snapshot,
-            byte[] payload,
+            Path payload,
+            long payloadBytes,
             String sha
-    ) throws SQLException {
+    ) throws SQLException, IOException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO knowledge_snapshots(project_id,snapshot_id,payload,sha256,symbol_count,"
-                        + "occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)")) {
+                        + "occurrence_count,relationship_count) VALUES (?,?,?,?,?,?,?)");
+             InputStream input = Files.newInputStream(payload)) {
             statement.setObject(1, snapshot.projectId());
             statement.setString(2, snapshot.snapshotId());
-            statement.setBytes(3, payload);
+            statement.setBinaryStream(3, input, payloadBytes);
             statement.setString(4, sha);
             statement.setInt(5, snapshot.symbols().size());
             statement.setInt(6, snapshot.occurrences().size());
@@ -181,10 +190,16 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                                 + "WHERE a.project_id=?")) {
                     statement.setObject(1, projectId);
                     try (ResultSet result = statement.executeQuery()) {
-                        if (!result.next()) {
-                            return Optional.empty();
+                        if (!result.next()) return Optional.empty();
+                        Path payload = Files.createTempFile("minos-postgresql-snapshot-read-", ".knowledge");
+                        try (InputStream input = result.getBinaryStream(2);
+                             OutputStream output = Files.newOutputStream(payload)) {
+                            copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
+                        } catch (Exception exception) {
+                            Files.deleteIfExists(payload);
+                            throw exception;
                         }
-                        return Optional.of(new Row(result.getString(1), result.getBytes(2), result.getString(3)));
+                        return Optional.of(new Row(result.getString(1), payload, result.getString(3)));
                     }
                 }
             });
@@ -194,21 +209,30 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private CodeKnowledgeSnapshot decodeVerified(UUID projectId, Row row) throws IOException {
-        if (!row.sha256().equals(sha256(row.payload()))) {
-            throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
+        try {
+            String actualSha = new com.minos.store.SnapshotIntegrityService().checksum(row.payload());
+            if (!row.sha256().equals(actualSha)) {
+                throw new IOException("PostgreSQL knowledge snapshot checksum mismatch");
+            }
+            CodeKnowledgeSnapshot snapshot = codec.decode(row.payload());
+            if (!projectId.equals(snapshot.projectId()) || !row.snapshotId().equals(snapshot.snapshotId())) {
+                throw new IOException("PostgreSQL knowledge snapshot identity mismatch");
+            }
+            return snapshot;
+        } finally {
+            Files.deleteIfExists(row.payload());
         }
-        CodeKnowledgeSnapshot snapshot = codec.decode(row.payload());
-        if (!projectId.equals(snapshot.projectId()) || !row.snapshotId().equals(snapshot.snapshotId())) {
-            throw new IOException("PostgreSQL knowledge snapshot identity mismatch");
-        }
-        return snapshot;
     }
 
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 unavailable", exception);
+    private static void copyBounded(InputStream input, OutputStream output, long maximum) throws IOException {
+        byte[] buffer = new byte[8192];
+        long total = 0L;
+        int read;
+        while ((read = input.read(buffer)) >= 0) {
+            if (read == 0) continue;
+            total = Math.addExact(total, read);
+            if (total > maximum) throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
+            output.write(buffer, 0, read);
         }
     }
 
@@ -219,29 +243,11 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         return value;
     }
 
-    private record Row(String snapshotId, byte[] payload, String sha256) {
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) {
-                return true;
-            }
-            if (!(other instanceof Row row)) {
-                return false;
-            }
-            return Objects.equals(snapshotId, row.snapshotId)
-                    && Arrays.equals(payload, row.payload)
-                    && Objects.equals(sha256, row.sha256);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(snapshotId, Arrays.hashCode(payload), sha256);
-        }
-
-        @Override
-        public String toString() {
-            return "Row[snapshotId=" + snapshotId + ", payload=byte[" + payload.length + "]"
-                    + ", sha256=" + sha256 + "]";
+    private record Row(String snapshotId, Path payload, String sha256) {
+        private Row {
+            Objects.requireNonNull(snapshotId, "snapshotId");
+            Objects.requireNonNull(payload, "payload");
+            Objects.requireNonNull(sha256, "sha256");
         }
     }
 }

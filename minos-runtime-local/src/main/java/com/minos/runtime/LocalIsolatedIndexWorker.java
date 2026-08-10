@@ -1,5 +1,6 @@
 package com.minos.runtime;
 
+import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
@@ -162,9 +163,13 @@ public final class LocalIsolatedIndexWorker implements Worker {
             }
             Path artifactPath = artifact.finalArtifact().toAbsolutePath().normalize();
             if (Files.isSymbolicLink(artifactPath)
-                    || !Files.isRegularFile(artifactPath, LinkOption.NOFOLLOW_LINKS)
-                    || Files.size(artifactPath) < 1L) {
+                    || !Files.isRegularFile(artifactPath, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("worker sandbox did not produce a non-empty regular artifact");
+            }
+            long artifactBytes = Files.size(artifactPath);
+            if (artifactBytes < 1L) throw new IOException("worker sandbox did not produce a non-empty regular artifact");
+            if (artifactBytes > IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES) {
+                throw new IOException("worker SCIP artifact exceeds configured byte limit before hashing");
             }
             Instant completedAt = clock.instant();
             DistributedArtifactManifest manifest = new DistributedArtifactManifest(
@@ -183,7 +188,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     startedAt,
                     completedAt,
                     DistributedArtifactManifest.ARTIFACT_PATH,
-                    Files.size(artifactPath),
+                    artifactBytes,
                     DistributedArtifactBundleStore.sha256(artifactPath));
             Path bundle = Files.createTempFile(workersRoot, ".bundle-", ".zip");
             try {

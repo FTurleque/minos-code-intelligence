@@ -136,7 +136,7 @@ final class DockerMcpTransport {
                         process.waitFor();
                         throw new IOException("Docker backend probe timed out after " + timeout.toMillis() + " ms");
                     }
-                    reader.join();
+                    joinReaderBounded(process, reader);
                     IOException readFailure = readerFailure.get();
                     if (readFailure != null) {
                         throw new IOException("Docker backend probe output could not be read", readFailure);
@@ -148,6 +148,19 @@ final class DockerMcpTransport {
                     throw exception;
                 }
             }
+        }
+
+        private static void joinReaderBounded(Process process, Thread reader)
+                throws IOException, InterruptedException {
+            reader.join(5_000L);
+            if (!reader.isAlive()) return;
+            try {
+                process.getInputStream().close();
+            } catch (IOException ignored) {
+                // The process may already have closed its direct pipe.
+            }
+            reader.join(5_000L);
+            if (reader.isAlive()) throw new IOException("Docker backend probe output drain did not terminate");
         }
 
         private static void drainBounded(InputStream source, ByteArrayOutputStream captured) throws IOException {

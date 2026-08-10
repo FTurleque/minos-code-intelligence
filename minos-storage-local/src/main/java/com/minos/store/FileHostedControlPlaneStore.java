@@ -1,5 +1,6 @@
 package com.minos.store;
 
+import com.minos.io.BoundedInputStream;
 import com.minos.hosted.HostedAuditEvent;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedPrincipal;
@@ -128,9 +129,12 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
 
     private HostedTenantState read(Path file, UUID expectedTenant) throws IOException {
         requireRegularFile(file);
-        long size = Files.size(file);
-        if (size < 1 || size > maxTenantBytes) throw new IOException("hosted tenant file size is invalid");
-        byte[] bytes = Files.readAllBytes(file);
+        byte[] bytes;
+        try (BoundedInputStream input = new BoundedInputStream(
+                Files.newInputStream(file), maxTenantBytes, "hosted tenant file")) {
+            bytes = input.readAllBytes();
+        }
+        if (bytes.length < 1) throw new IOException("hosted tenant file size is invalid");
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid hosted tenant magic");
             if (input.readInt() != VERSION) throw new IOException("unsupported hosted tenant version");

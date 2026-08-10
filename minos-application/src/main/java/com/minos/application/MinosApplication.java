@@ -264,9 +264,14 @@ public final class MinosApplication implements AutoCloseable {
     public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
 
     @Override
-    public void close() throws Exception {
-        if (closed.compareAndSet(false, true)) {
+    public void close() throws IOException {
+        if (!closed.compareAndSet(false, true)) return;
+        try {
             storageBackend.close();
+        } catch (IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IOException("unable to close MINOS storage backend", exception);
         }
     }
 

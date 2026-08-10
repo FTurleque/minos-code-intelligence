@@ -15,6 +15,7 @@ import com.minos.program.ProgramNodeKind;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -164,32 +165,37 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
             Origin origin,
             Map<String, Symbol> symbols
     ) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        requireHeader(file, lines, NODE_HEADER);
         List<ProgramGraphNode> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
-        for (int index = 1; index < lines.size(); index++) {
-            String raw = lines.get(index);
-            if (raw.isBlank() || raw.startsWith("#")) continue;
-            if (result.size() >= MAX_NODES) throw new IOException("advanced program sidecar exceeds max nodes: " + MAX_NODES);
-            String[] values = raw.split("\\t", -1);
-            if (values.length != 10) throw rowFailure(file, index + 1, "expected 10 tab-separated node columns");
-            String id = field(values[0]);
-            String symbolId = nullable(field(values[1]));
-            ProgramNodeKind kind = enumValue(ProgramNodeKind.class, field(values[2]), file, index + 1, "node kind");
-            String label = field(values[3]);
-            if (id.isBlank() || label.isBlank()) throw rowFailure(file, index + 1, "node id and label must not be blank");
-            if (!ids.add(id)) throw rowFailure(file, index + 1, "duplicate node id: " + id);
-
-            Symbol symbol = symbolId == null ? null : symbols.get(symbolId);
-            if (symbolId != null && symbol == null) {
-                throw rowFailure(file, index + 1, "node references unknown active-snapshot symbol: " + symbolId);
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String header = reader.readLine();
+            if (!NODE_HEADER.equals(header)) {
+                throw new IOException(file.getFileName() + " has an incompatible header; expected: " + NODE_HEADER);
             }
-            SymbolLocation location = location(values, file, index + 1);
-            if (location == null && symbol != null) location = symbol.location();
-            result.add(new ProgramGraphNode(
-                    id, projectId, symbolId, kind, label, location,
-                    InformationNature.FACTUAL, null, origin, List.of()));
+            int line = 1;
+            String raw;
+            while ((raw = reader.readLine()) != null) {
+                line++;
+                if (raw.isBlank() || raw.startsWith("#")) continue;
+                if (result.size() >= MAX_NODES) throw new IOException("advanced program sidecar exceeds max nodes: " + MAX_NODES);
+                String[] values = raw.split("\t", -1);
+                if (values.length != 10) throw rowFailure(file, line, "expected 10 tab-separated node columns");
+                String id = field(values[0]);
+                String symbolId = nullable(field(values[1]));
+                ProgramNodeKind kind = enumValue(ProgramNodeKind.class, field(values[2]), file, line, "node kind");
+                String label = field(values[3]);
+                if (id.isBlank() || label.isBlank()) throw rowFailure(file, line, "node id and label must not be blank");
+                if (!ids.add(id)) throw rowFailure(file, line, "duplicate node id: " + id);
+                Symbol symbol = symbolId == null ? null : symbols.get(symbolId);
+                if (symbolId != null && symbol == null) {
+                    throw rowFailure(file, line, "node references unknown active-snapshot symbol: " + symbolId);
+                }
+                SymbolLocation location = location(values, file, line);
+                if (location == null && symbol != null) location = symbol.location();
+                result.add(new ProgramGraphNode(
+                        id, projectId, symbolId, kind, label, location,
+                        InformationNature.FACTUAL, null, origin, List.of()));
+            }
         }
         return List.copyOf(result);
     }
@@ -200,30 +206,36 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
             Origin origin,
             List<ProgramGraphNode> nodes
     ) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        requireHeader(file, lines, EDGE_HEADER);
         Set<String> nodeIds = nodes.stream().map(ProgramGraphNode::id).collect(java.util.stream.Collectors.toSet());
         List<ProgramGraphEdge> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
-        for (int index = 1; index < lines.size(); index++) {
-            String raw = lines.get(index);
-            if (raw.isBlank() || raw.startsWith("#")) continue;
-            if (result.size() >= MAX_EDGES) throw new IOException("advanced program sidecar exceeds max edges: " + MAX_EDGES);
-            String[] values = raw.split("\\t", -1);
-            if (values.length != 4) throw rowFailure(file, index + 1, "expected 4 tab-separated edge columns");
-            String id = field(values[0]);
-            String source = field(values[1]);
-            String target = field(values[2]);
-            ProgramEdgeKind kind = enumValue(ProgramEdgeKind.class, field(values[3]), file, index + 1, "edge kind");
-            if (id.isBlank() || source.isBlank() || target.isBlank()) {
-                throw rowFailure(file, index + 1, "edge id/source/target must not be blank");
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String header = reader.readLine();
+            if (!EDGE_HEADER.equals(header)) {
+                throw new IOException(file.getFileName() + " has an incompatible header; expected: " + EDGE_HEADER);
             }
-            if (!ids.add(id)) throw rowFailure(file, index + 1, "duplicate edge id: " + id);
-            if (!nodeIds.contains(source) || !nodeIds.contains(target)) {
-                throw rowFailure(file, index + 1, "edge references a node not declared by this sidecar: " + id);
+            int line = 1;
+            String raw;
+            while ((raw = reader.readLine()) != null) {
+                line++;
+                if (raw.isBlank() || raw.startsWith("#")) continue;
+                if (result.size() >= MAX_EDGES) throw new IOException("advanced program sidecar exceeds max edges: " + MAX_EDGES);
+                String[] values = raw.split("\t", -1);
+                if (values.length != 4) throw rowFailure(file, line, "expected 4 tab-separated edge columns");
+                String id = field(values[0]);
+                String source = field(values[1]);
+                String target = field(values[2]);
+                ProgramEdgeKind kind = enumValue(ProgramEdgeKind.class, field(values[3]), file, line, "edge kind");
+                if (id.isBlank() || source.isBlank() || target.isBlank()) {
+                    throw rowFailure(file, line, "edge id/source/target must not be blank");
+                }
+                if (!ids.add(id)) throw rowFailure(file, line, "duplicate edge id: " + id);
+                if (!nodeIds.contains(source) || !nodeIds.contains(target)) {
+                    throw rowFailure(file, line, "edge references a node not declared by this sidecar: " + id);
+                }
+                result.add(new ProgramGraphEdge(
+                        id, projectId, source, target, kind, InformationNature.FACTUAL, null, origin, List.of()));
             }
-            result.add(new ProgramGraphEdge(
-                    id, projectId, source, target, kind, InformationNature.FACTUAL, null, origin, List.of()));
         }
         return List.copyOf(result);
     }
