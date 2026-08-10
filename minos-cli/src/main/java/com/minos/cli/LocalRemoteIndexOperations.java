@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -69,12 +70,24 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             throw new IllegalArgumentException("displayName must not be blank");
         }
         RemoteMaterialization source = materializer.materialize(request);
+        List<DistributedIndexerExecutor> distributedExecutors = new ArrayList<>();
+        RegisteredProject project = null;
+        boolean newlyRegistered = false;
+        boolean pinned = false;
+        boolean completed = false;
+        Exception primaryFailure = null;
         try {
-            RegisteredProject project = application.projectRegistry().registerProject(source.projectRoot(), displayName);
-            // The registry persists rootPath beyond this index invocation. Pin the cache entry before
-            // releasing its active lease so later LRU eviction cannot orphan that durable project.
+            Optional<RegisteredProject> existing = application.projectRegistry().listProjects().stream()
+                    .filter(candidate -> candidate.rootPath().equals(source.projectRoot()))
+                    .findFirst();
+            project = application.projectRegistry().registerProject(source.projectRoot(), displayName);
+            newlyRegistered = existing.isEmpty();
+
+            // A durable registry root must stay materialized after the active-use lease is released.
+            // If this first index fails, the finally block rolls back both the registration and pin.
             materializer.pin(source);
-            List<DistributedIndexerExecutor> distributedExecutors = new ArrayList<>();
+            pinned = true;
+
             UnaryOperator<IndexerExecutor> decorator = delegate -> {
                 IndexerDescriptor descriptor = descriptors.get(delegate.indexerId());
                 if (descriptor == null) {
@@ -96,10 +109,58 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                     .map(LocalRemoteIndexOperations::evidence)
                     .sorted(java.util.Comparator.comparing(ArtifactEvidence::providerId))
                     .toList();
-            return new RemoteIndexView(view(source), project.id().toString(), project.displayName(), execution, evidence);
+            RemoteIndexView result = new RemoteIndexView(
+                    view(source), project.id().toString(), project.displayName(), execution, evidence);
+            completed = true;
+            return result;
+        } catch (Exception exception) {
+            primaryFailure = exception;
+            throw exception;
         } finally {
-            materializer.release(source);
+            Exception cleanupFailure = closeExecutors(distributedExecutors);
+            if (!completed && newlyRegistered && project != null) {
+                try {
+                    boolean removed = application.projectRegistry().deleteProject(project.id());
+                    boolean absent = removed || application.projectRegistry().findProject(project.id()).isEmpty();
+                    if (absent && pinned) {
+                        materializer.unpin(source);
+                        pinned = false;
+                    }
+                } catch (Exception exception) {
+                    cleanupFailure = combine(cleanupFailure, exception);
+                }
+            }
+            try {
+                materializer.release(source);
+            } catch (Exception exception) {
+                cleanupFailure = combine(cleanupFailure, exception);
+            }
+            if (cleanupFailure != null) {
+                if (primaryFailure != null) {
+                    primaryFailure.addSuppressed(cleanupFailure);
+                } else {
+                    throw cleanupFailure;
+                }
+            }
         }
+    }
+
+    private static Exception closeExecutors(List<DistributedIndexerExecutor> executors) {
+        Exception failure = null;
+        for (DistributedIndexerExecutor executor : executors) {
+            try {
+                executor.close();
+            } catch (Exception exception) {
+                failure = combine(failure, exception);
+            }
+        }
+        return failure;
+    }
+
+    private static Exception combine(Exception first, Exception next) {
+        if (first == null) return next;
+        first.addSuppressed(next);
+        return first;
     }
 
     private static RemoteMaterializationView view(RemoteMaterialization value) {
