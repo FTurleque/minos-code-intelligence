@@ -10,12 +10,16 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.DistributedIndexing.WorkerRequest;
 import com.minos.remote.DistributedIndexing.WorkerResponse;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
 import java.time.Instant;
@@ -32,16 +36,15 @@ import java.util.Objects;
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
-    private static final long DEFAULT_MAX_WORKSPACE_FILES = 100_000L;
-    private static final long DEFAULT_MAX_WORKSPACE_BYTES = 2L * 1024L * 1024L * 1024L;
+    private static final long DEFAULT_MAX_WORKSPACE_FILES = SourceBudgetPolicy.DEFAULT_MAX_FILES;
+    private static final long DEFAULT_MAX_WORKSPACE_BYTES = SourceBudgetPolicy.DEFAULT_MAX_BYTES;
 
     private final String workerId;
     private final Path workersRoot;
     private final IndexerExecutor delegate;
     private final DistributedArtifactBundleStore bundleStore;
     private final WorkerSandboxBackend sandboxBackend;
-    private final long maxWorkspaceFiles;
-    private final long maxWorkspaceBytes;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
     private final Clock clock;
 
     public LocalIsolatedIndexWorker(
@@ -86,11 +89,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
         Objects.requireNonNull(sandboxBackend.isolation(), "sandbox backend isolation");
         Objects.requireNonNull(sandboxBackend.networkGuarantee(), "sandbox backend network guarantee");
-        if (maxWorkspaceFiles < 1 || maxWorkspaceBytes < 1) {
-            throw new IllegalArgumentException("workspace limits must be positive");
-        }
-        this.maxWorkspaceFiles = maxWorkspaceFiles;
-        this.maxWorkspaceBytes = maxWorkspaceBytes;
+        this.sourceBudgetPolicy = new SourceBudgetPolicy(maxWorkspaceFiles, maxWorkspaceBytes);
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -217,39 +216,57 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (!Files.isDirectory(source)) {
             throw new IOException("worker source workspace is not a directory");
         }
-        long files = 0L;
-        long bytes = 0L;
-        try (var paths = Files.walk(source)) {
-            for (Path current : paths.sorted().toList()) {
-                Path relative = source.relativize(current);
-                if (relative.getNameCount() > 0
-                        && ".git".equals(relative.getName(0).toString())) {
-                    continue;
+        SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("remote worker workspace");
+        Files.walkFileTree(source, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                Path relative = source.relativize(directory);
+                if (isGitPath(relative)) {
+                    return FileVisitResult.SKIP_SUBTREE;
                 }
-                if (Files.isSymbolicLink(current)) {
-                    throw new IOException(
-                            "remote worker rejects symbolic links: "
-                                    + relative.toString().replace('\\', '/'));
+                if (Files.isSymbolicLink(directory)) {
+                    throw new IOException("remote worker rejects symbolic links: " + portable(relative));
                 }
-                Path target = targetRoot.resolve(relative).normalize();
-                if (!target.startsWith(targetRoot)) {
-                    throw new IOException("worker workspace path escapes its target root");
+                Path target = checkedTarget(targetRoot, relative);
+                Files.createDirectories(target);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                Path relative = source.relativize(file);
+                if (isGitPath(relative)) {
+                    return FileVisitResult.CONTINUE;
                 }
-                if (Files.isDirectory(current, LinkOption.NOFOLLOW_LINKS)) {
-                    Files.createDirectories(target);
-                } else if (Files.isRegularFile(current, LinkOption.NOFOLLOW_LINKS)) {
-                    files = Math.addExact(files, 1L);
-                    bytes = Math.addExact(bytes, Files.size(current));
-                    if (files > maxWorkspaceFiles || bytes > maxWorkspaceBytes) {
-                        throw new IOException("remote worker workspace exceeds configured limits");
-                    }
-                    Files.createDirectories(target.getParent());
-                    Files.copy(current, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS);
-                } else {
+                if (Files.isSymbolicLink(file)) {
+                    throw new IOException("remote worker rejects symbolic links: " + portable(relative));
+                }
+                if (!attributes.isRegularFile()) {
                     throw new IOException("remote worker rejects non-regular workspace entries");
                 }
+                budget.accountRegularFile(attributes.size());
+                Path target = checkedTarget(targetRoot, relative);
+                Files.createDirectories(target.getParent());
+                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS);
+                return FileVisitResult.CONTINUE;
             }
+        });
+    }
+
+    private static boolean isGitPath(Path relative) {
+        return relative.getNameCount() > 0 && ".git".equals(relative.getName(0).toString());
+    }
+
+    private static Path checkedTarget(Path targetRoot, Path relative) throws IOException {
+        Path target = targetRoot.resolve(relative).normalize();
+        if (!target.startsWith(targetRoot)) {
+            throw new IOException("worker workspace path escapes its target root");
         }
+        return target;
+    }
+
+    private static String portable(Path path) {
+        return path.toString().replace('\\', '/');
     }
 
     private void deleteWorkerTree(Path target) throws IOException {
