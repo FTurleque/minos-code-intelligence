@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+import os
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def save(path: str, value: str) -> None:
+    (ROOT / path).write_text(value, encoding="utf-8")
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    value = load(path)
+    count = value.count(old)
+    if count != 1:
+        raise RuntimeError(f"{path}: expected one anchor, found {count}: {old[:120]!r}")
+    save(path, value.replace(old, new, 1))
+
+
+# MNE-15/MNE-16: exact primary NuGet artifact pin plus bounded integrity traversal.
+dotnet_sha = os.environ.get("MNE_DOTNET_NUPKG_SHA256", "").strip().lower()
+if not re.fullmatch(r"[0-9a-f]{64}", dotnet_sha):
+    raise RuntimeError("MNE_DOTNET_NUPKG_SHA256 must be an exact lowercase SHA-256")
+
+polyglot = "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java"
+replace_once(polyglot,
+'''import java.io.IOException;\nimport java.io.InputStream;\n''',
+'''import java.io.IOException;\nimport java.io.InputStream;\nimport java.io.OutputStream;\nimport java.net.URI;\nimport java.net.http.HttpClient;\nimport java.net.http.HttpRequest;\nimport java.net.http.HttpResponse;\n''')
+replace_once(polyglot,
+'''    private static final String DOTNET_SOURCE = "https://api.nuget.org/v3/index.json";\n    private static final String DOTNET_SOURCE_ID = "nuget.org-v3-only";\n''',
+'''    private static final String DOTNET_SOURCE = "https://api.nuget.org/v3-flatcontainer";\n    private static final String DOTNET_SOURCE_ID = "nuget.org-pinned-nupkg-sha256";\n    private static final String DOTNET_PACKAGE_SHA256 = "''' + dotnet_sha + '''";\n    private static final long MAX_DOTNET_PACKAGE_BYTES = 256L * 1024L * 1024L;\n    private static final int MAX_MANAGED_TRAVERSAL_ENTRIES = 50_000;\n    private static final int MAX_MANAGED_FILES = 20_000;\n    private static final long MAX_MANAGED_BYTES = 512L * 1024L * 1024L;\n''')
+replace_once(polyglot,
+'''                "managed scip-dotnet 0.2.14 ready; source restricted to nuget.org and local integrity manifest verified; dotnet SDK="\n''',
+'''                "managed scip-dotnet 0.2.14 ready; primary nupkg SHA-256 pinned and local integrity manifest verified; dotnet SDK="\n''')
+old_install = '''        Path destination = dotnetDirectory();\n        Path partial = destination.resolveSibling(destination.getFileName() + ".partial");\n        deleteRecursively(partial);\n        Files.createDirectories(partial);\n        Path nugetConfig = partial.resolve("minos-nuget.config");\n        Files.writeString(nugetConfig,\n                "<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n"\n                        + "<configuration><packageSources><clear/>"\n                        + "<add key=\\\"nuget.org\\\" value=\\\"" + DOTNET_SOURCE + "\\\" protocolVersion=\\\"3\\\"/>"\n                        + "</packageSources></configuration>\\n",\n                StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);\n        CommandResult result = run(CommandLocator.invocation(\n                        dotnet, "tool", "install", "--tool-path", partial.toString(), "scip-dotnet",\n                        "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION,\n                        "--configfile", nugetConfig.toString(), "--no-cache", "--ignore-failed-sources"),\n                home, INSTALL_TIMEOUT, Map.of());\n        Files.deleteIfExists(nugetConfig);\n'''
+new_install = '''        Path destination = dotnetDirectory();\n        Path partial = destination.resolveSibling(destination.getFileName() + ".partial");\n        deleteRecursively(partial);\n        Files.createDirectories(partial);\n        Path localSource = partial.resolve("pinned-nuget-source");\n        Files.createDirectories(localSource);\n        Path pinnedPackage = localSource.resolve("scip-dotnet." + ScipIndexerCatalog.SCIP_DOTNET_VERSION + ".nupkg");\n        downloadPinnedDotnetPackage(pinnedPackage);\n        Path nugetConfig = partial.resolve("minos-nuget.config");\n        Files.writeString(nugetConfig,\n                "<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n"\n                        + "<configuration><packageSources><clear/>"\n                        + "<add key=\\\"minos-pinned\\\" value=\\\"" + xml(localSource.toString()) + "\\\"/>"\n                        + "</packageSources></configuration>\\n",\n                StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);\n        CommandResult result = run(CommandLocator.invocation(\n                        dotnet, "tool", "install", "--tool-path", partial.toString(), "scip-dotnet",\n                        "--version", ScipIndexerCatalog.SCIP_DOTNET_VERSION,\n                        "--configfile", nugetConfig.toString(), "--no-cache", "--ignore-failed-sources"),\n                home, INSTALL_TIMEOUT, Map.of());\n        Files.deleteIfExists(nugetConfig);\n        deleteRecursively(localSource);\n'''
+replace_once(polyglot, old_install, new_install)
+# Add pinned downloader + XML escaping before dotnetDirectory().
+replace_once(polyglot,
+'''    private Path dotnetDirectory() {\n''',
+'''    private static void downloadPinnedDotnetPackage(Path target) throws IOException, InterruptedException {\n        String version = ScipIndexerCatalog.SCIP_DOTNET_VERSION.toLowerCase(Locale.ROOT);\n        URI uri = URI.create(DOTNET_SOURCE + "/scip-dotnet/" + version + "/scip-dotnet." + version + ".nupkg");\n        HttpClient client = HttpClient.newBuilder()\n                .connectTimeout(PROBE_TIMEOUT)\n                .followRedirects(HttpClient.Redirect.NORMAL)\n                .build();\n        HttpRequest request = HttpRequest.newBuilder(uri).timeout(INSTALL_TIMEOUT).GET().build();\n        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());\n        if (response.statusCode() != 200) {\n            try (InputStream ignored = response.body()) { }\n            throw new IOException("scip-dotnet pinned nupkg download failed with HTTP " + response.statusCode());\n        }\n        MessageDigest digest = sha256Digest();\n        long total = 0L;\n        try (InputStream input = response.body(); OutputStream output = Files.newOutputStream(target)) {\n            byte[] buffer = new byte[64 * 1024];\n            int read;\n            while ((read = input.read(buffer)) >= 0) {\n                if (read == 0) continue;\n                try { total = Math.addExact(total, read); }\n                catch (ArithmeticException exception) { throw new IOException("scip-dotnet nupkg byte counter overflow", exception); }\n                if (total > MAX_DOTNET_PACKAGE_BYTES) throw new IOException("scip-dotnet nupkg exceeds byte limit");\n                digest.update(buffer, 0, read);\n                output.write(buffer, 0, read);\n            }\n        } catch (Exception exception) {\n            Files.deleteIfExists(target);\n            throw exception;\n        }\n        String actual = HexFormat.of().formatHex(digest.digest());\n        if (!DOTNET_PACKAGE_SHA256.equals(actual)) {\n            Files.deleteIfExists(target);\n            throw new IOException("scip-dotnet nupkg SHA-256 mismatch: " + actual);\n        }\n    }\n\n    private static String xml(String value) {\n        return value.replace("&", "&amp;").replace("\\\"", "&quot;")\n                .replace("<", "&lt;").replace(">", "&gt;");\n    }\n\n    private Path dotnetDirectory() {\n''')
+old_digest = '''    private static String directoryDigest(Path directory) throws IOException {\n        MessageDigest digest = sha256Digest();\n        try (var paths = Files.walk(directory)) {\n            for (Path file : paths\n                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))\n                    .filter(path -> !Files.isSymbolicLink(path))\n                    .filter(path -> !path.getFileName().toString().equals(INTEGRITY_MARKER))\n                    .sorted(Comparator.comparing(path -> portable(directory.relativize(path))))\n                    .toList()) {\n                String relative = portable(directory.relativize(file));\n                digest.update(relative.getBytes(StandardCharsets.UTF_8));\n                digest.update((byte) 0);\n                try (InputStream input = Files.newInputStream(file)) {\n                    byte[] buffer = new byte[64 * 1024];\n                    int read;\n                    while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);\n                }\n                digest.update((byte) 0xff);\n            }\n        }\n        return HexFormat.of().formatHex(digest.digest());\n    }\n'''
+new_digest = '''    private static String directoryDigest(Path directory) throws IOException {\n        MessageDigest digest = sha256Digest();\n        List<Path> files = new ArrayList<>();\n        int traversed = 0;\n        try (var paths = Files.walk(directory)) {\n            var iterator = paths.iterator();\n            while (iterator.hasNext()) {\n                Path path = iterator.next();\n                traversed++;\n                if (traversed > MAX_MANAGED_TRAVERSAL_ENTRIES) {\n                    throw new IOException("managed runtime integrity traversal exceeds entry limit");\n                }\n                if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)\n                        && !Files.isSymbolicLink(path)\n                        && !path.getFileName().toString().equals(INTEGRITY_MARKER)) {\n                    if (files.size() >= MAX_MANAGED_FILES) {\n                        throw new IOException("managed runtime integrity traversal exceeds file limit");\n                    }\n                    files.add(path);\n                }\n            }\n        }\n        files.sort(Comparator.comparing(path -> portable(directory.relativize(path))));\n        long totalBytes = 0L;\n        for (Path file : files) {\n            String relative = portable(directory.relativize(file));\n            digest.update(relative.getBytes(StandardCharsets.UTF_8));\n            digest.update((byte) 0);\n            long expected = Files.size(file);\n            if (expected < 0L || expected > MAX_MANAGED_BYTES - totalBytes) {\n                throw new IOException("managed runtime integrity traversal exceeds byte limit");\n            }\n            long observed = 0L;\n            try (InputStream input = Files.newInputStream(file)) {\n                byte[] buffer = new byte[64 * 1024];\n                int read;\n                while ((read = input.read(buffer)) >= 0) {\n                    if (read == 0) continue;\n                    observed += read;\n                    if (observed > expected) throw new IOException("managed runtime file grew during integrity scan: " + relative);\n                    digest.update(buffer, 0, read);\n                }\n            }\n            if (observed != expected) throw new IOException("managed runtime file changed during integrity scan: " + relative);\n            totalBytes += observed;\n            digest.update((byte) 0xff);\n        }\n        return HexFormat.of().formatHex(digest.digest());\n    }\n'''
+replace_once(polyglot, old_digest, new_digest)
+
+# MNE-17: Windows providers may read only their managed <provider>/<version> root, never the whole tools tree.
+windows = "minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java"
+replace_once(windows,
+             "        if (Files.isDirectory(tools)) addReadRoot(readRoots, tools);\n",
+             "")
+replace_once(windows,
+'''        if (real.startsWith(tools)) {\n            addReadRoot(roots, tools);\n        } else if (real.startsWith(javaHome)) {\n''',
+'''        if (real.startsWith(tools)) {\n            addReadRoot(roots, managedRuntimeRoot(real, tools));\n        } else if (real.startsWith(javaHome)) {\n''')
+replace_once(windows,
+'''            if (real.startsWith(tools)) {\n                addReadRoot(roots, tools);\n            } else if (real.startsWith(javaHome)) {\n''',
+'''            if (real.startsWith(tools)) {\n                addReadRoot(roots, managedRuntimeRoot(real, tools));\n            } else if (real.startsWith(javaHome)) {\n''')
+replace_once(windows,
+'''    private static void addReadRoot(Set<Path> roots, Path value) {\n''',
+'''    private static Path managedRuntimeRoot(Path value, Path tools) {\n        Path normalizedTools = tools.toAbsolutePath().normalize();\n        Path normalized = value.toAbsolutePath().normalize();\n        if (!normalized.startsWith(normalizedTools)) return normalized;\n        Path relative = normalizedTools.relativize(normalized);\n        if (relative.getNameCount() < 2) {\n            throw new IllegalArgumentException("managed provider path does not identify provider/version: " + value);\n        }\n        return normalizedTools.resolve(relative.subpath(0, 2)).normalize();\n    }\n\n    private static void addReadRoot(Set<Path> roots, Path value) {\n''')
+
+print("MNE supply-chain/sandbox transformations applied")
