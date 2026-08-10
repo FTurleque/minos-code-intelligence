@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -14,6 +15,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class BoundedProcessOutput {
 
     public static final long DEFAULT_MAX_BYTES_PER_STREAM = 8L * 1024L * 1024L;
+    public static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration FORCED_CLOSE_GRACE = Duration.ofSeconds(1);
     private static final byte[] TRUNCATION_MARKER =
             "\n[MINOS output truncated at configured byte limit]\n".getBytes(StandardCharsets.UTF_8);
 
@@ -52,8 +55,25 @@ public final class BoundedProcessOutput {
         }
 
         public Result await() throws IOException, InterruptedException {
-            stdout.join();
-            stderr.join();
+            return await(DEFAULT_DRAIN_TIMEOUT);
+        }
+
+        public Result await(Duration timeout) throws IOException, InterruptedException {
+            Objects.requireNonNull(timeout, "timeout");
+            if (timeout.isZero() || timeout.isNegative()) {
+                throw new IllegalArgumentException("timeout must be positive");
+            }
+            long deadline = System.nanoTime() + timeout.toNanos();
+            boolean stdoutDone = stdout.joinUntil(deadline);
+            boolean stderrDone = stderr.joinUntil(deadline);
+            if (!stdoutDone || !stderrDone) {
+                stdout.closeInput();
+                stderr.closeInput();
+                long forcedDeadline = System.nanoTime() + FORCED_CLOSE_GRACE.toNanos();
+                stdout.joinUntil(forcedDeadline);
+                stderr.joinUntil(forcedDeadline);
+                throw new IOException("process output streams did not quiesce within " + timeout);
+            }
             stdout.rethrow();
             stderr.rethrow();
             return new Result(stdout.truncated, stderr.truncated);
@@ -84,8 +104,22 @@ public final class BoundedProcessOutput {
             thread.start();
         }
 
-        private void join() throws InterruptedException {
-            thread.join();
+        private boolean joinUntil(long deadlineNanos) throws InterruptedException {
+            while (thread.isAlive()) {
+                long remaining = deadlineNanos - System.nanoTime();
+                if (remaining <= 0L) return false;
+                long millis = Math.max(1L, Math.min(Duration.ofNanos(remaining).toMillis(), 100L));
+                thread.join(millis);
+            }
+            return true;
+        }
+
+        private void closeInput() {
+            try {
+                input.close();
+            } catch (IOException exception) {
+                failure.compareAndSet(null, exception);
+            }
         }
 
         private void rethrow() throws IOException {
