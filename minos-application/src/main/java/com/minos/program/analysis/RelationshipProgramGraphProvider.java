@@ -33,6 +33,7 @@ import java.util.Set;
 public final class RelationshipProgramGraphProvider implements ProgramGraphProvider {
 
     public static final String PROVIDER_ID = "minos-relationships";
+    private static final ProgramGraphBudget DIRECT_CALL_BUDGET = new ProgramGraphBudget(100_000, 500_000);
 
     @Override
     public String id() {
@@ -41,54 +42,74 @@ public final class RelationshipProgramGraphProvider implements ProgramGraphProvi
 
     @Override
     public ProgramGraph analyze(RegisteredProject project, CodeKnowledgeSnapshot snapshot) {
+        return analyze(project, snapshot, DIRECT_CALL_BUDGET);
+    }
+
+    @Override
+    public ProgramGraph analyze(
+            RegisteredProject project,
+            CodeKnowledgeSnapshot snapshot,
+            ProgramGraphBudget budget
+    ) {
         String projectId = project.id().toString();
+        List<Relationship> selected = new ArrayList<>(Math.min(snapshot.relationships().size(), budget.maxEdges()));
+        Set<String> requiredSymbolIds = new LinkedHashSet<>();
+        boolean edgeBudgetReached = false;
+
+        for (Relationship relationship : snapshot.relationships()) {
+            if (!resolvedSymbolToSymbol(relationship) || !supported(relationship.kind())) continue;
+            if (selected.size() >= budget.maxEdges()) {
+                edgeBudgetReached = true;
+                break;
+            }
+            selected.add(relationship);
+            requiredSymbolIds.add(relationship.source().id());
+            requiredSymbolIds.add(relationship.target().id());
+        }
+
         Map<String, Symbol> symbols = new LinkedHashMap<>();
-        snapshot.symbols().forEach(symbol -> symbols.put(symbol.id(), symbol));
+        for (Symbol symbol : snapshot.symbols()) {
+            if (requiredSymbolIds.contains(symbol.id())) {
+                symbols.put(symbol.id(), symbol);
+                if (symbols.size() == requiredSymbolIds.size()) break;
+            }
+        }
+
         Map<String, ProgramGraphNode> nodes = new LinkedHashMap<>();
-        List<ProgramGraphEdge> edges = new ArrayList<>();
+        List<ProgramGraphEdge> edges = new ArrayList<>(selected.size());
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>();
         Set<String> limitations = new LinkedHashSet<>();
+        if (edgeBudgetReached) limitations.add("PROGRAM_GRAPH_EDGE_LIMIT_REACHED");
 
         boolean callObserved = false;
         boolean localFlowObserved = false;
-        for (Relationship relationship : snapshot.relationships()) {
-            if (!resolvedSymbolToSymbol(relationship)) {
-                continue;
-            }
+        for (Relationship relationship : selected) {
             Symbol source = symbols.get(relationship.source().id());
             Symbol target = symbols.get(relationship.target().id());
-            if (source == null || target == null) {
+            if (source == null || target == null) continue;
+            if (!ensureNode(nodes, source, budget) || !ensureNode(nodes, target, budget)) {
+                limitations.add("PROGRAM_GRAPH_NODE_LIMIT_REACHED");
                 continue;
             }
             if (relationship.kind() == RelationshipKind.CALLS) {
-                addNode(nodes, source);
-                addNode(nodes, target);
                 edges.add(new ProgramGraphEdge(
                         "call:" + relationship.id(), projectId, nodeId(source.id()), nodeId(target.id()),
                         ProgramEdgeKind.CALL, relationship.nature(), relationship.confidence(),
                         relationship.origin(), relationship.evidence()));
                 callObserved = true;
             } else if (relationship.kind() == RelationshipKind.WRITES) {
-                addNode(nodes, source);
-                addNode(nodes, target);
                 edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, source, target, true));
                 localFlowObserved = true;
                 limitations.add("EXECUTION_ORDER_NOT_PROVEN");
             } else if (relationship.kind() == RelationshipKind.READS) {
-                addNode(nodes, source);
-                addNode(nodes, target);
                 edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, target, source, false));
                 localFlowObserved = true;
                 limitations.add("EXECUTION_ORDER_NOT_PROVEN");
             }
         }
 
-        if (callObserved) {
-            capabilities.add(ProgramGraphCapability.CALL_GRAPH);
-        }
-        if (localFlowObserved) {
-            capabilities.add(ProgramGraphCapability.LOCAL_DATA_FLOW);
-        }
+        if (callObserved) capabilities.add(ProgramGraphCapability.CALL_GRAPH);
+        if (localFlowObserved) capabilities.add(ProgramGraphCapability.LOCAL_DATA_FLOW);
         return new ProgramGraph(
                 projectId,
                 snapshot.snapshotId(),
@@ -96,6 +117,10 @@ public final class RelationshipProgramGraphProvider implements ProgramGraphProvi
                 nodes.values().stream().sorted(java.util.Comparator.comparing(ProgramGraphNode::id)).toList(),
                 edges.stream().sorted(java.util.Comparator.comparing(ProgramGraphEdge::id)).toList(),
                 limitations.stream().sorted().toList());
+    }
+
+    private static boolean supported(RelationshipKind kind) {
+        return kind == RelationshipKind.CALLS || kind == RelationshipKind.WRITES || kind == RelationshipKind.READS;
     }
 
     private static ProgramGraphEdge derivedFlowEdge(
@@ -134,11 +159,15 @@ public final class RelationshipProgramGraphProvider implements ProgramGraphProvi
                 && relationship.target().type() == CodeEntityType.SYMBOL;
     }
 
-    private static void addNode(Map<String, ProgramGraphNode> nodes, Symbol symbol) {
-        nodes.putIfAbsent(nodeId(symbol.id()), new ProgramGraphNode(
-                nodeId(symbol.id()), symbol.projectId(), symbol.id(), ProgramNodeKind.SYMBOL,
+    private static boolean ensureNode(Map<String, ProgramGraphNode> nodes, Symbol symbol, ProgramGraphBudget budget) {
+        String id = nodeId(symbol.id());
+        if (nodes.containsKey(id)) return true;
+        if (nodes.size() >= budget.maxNodes()) return false;
+        nodes.put(id, new ProgramGraphNode(
+                id, symbol.projectId(), symbol.id(), ProgramNodeKind.SYMBOL,
                 symbol.qualifiedName() == null ? symbol.name() : symbol.qualifiedName(),
                 symbol.location(), InformationNature.FACTUAL, null, symbol.origin(), List.of()));
+        return true;
     }
 
     private static String nodeId(String symbolId) {
