@@ -20,7 +20,7 @@ import java.util.UUID;
 /** Maintains an optional reconstructible semantic index aligned with the active MINOS snapshot. */
 public final class SemanticIndexService {
 
-    public static final int MAX_DOCUMENTS = 250_000;
+    public static final int MAX_DOCUMENTS = SemanticIndexBudget.DEFAULT.maxDocuments();
 
     private final ProjectResolver projects;
     private final CodeKnowledgeSnapshotStore snapshots;
@@ -60,20 +60,20 @@ public final class SemanticIndexService {
     private Status status(RegisteredProject project) throws IOException {
         String projectId = project.id().toString();
         Optional<CodeKnowledgeSnapshot> active = snapshots.loadActiveKnowledge(project.id());
-        Optional<SemanticVectorStore.IndexSnapshot> stored = store.load(projectId);
+        Optional<SemanticVectorStore.IndexMetadata> stored = store.metadata(projectId);
         if (embeddingProvider.isEmpty()) {
             return new Status(projectId, project.displayName(), State.DISABLED,
                     active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null),
-                    stored.map(SemanticVectorStore.IndexSnapshot::snapshotId).orElse(null),
-                    null, null, 0, stored.map(value -> value.documents().size()).orElse(0),
+                    stored.map(SemanticVectorStore.IndexMetadata::snapshotId).orElse(null),
+                    null, null, 0, stored.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0),
                     sizeBytes(projectId), List.of("SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE"));
         }
         EmbeddingProvider provider = embeddingProvider.orElseThrow();
         if (active.isEmpty()) {
             return new Status(projectId, project.displayName(), State.NO_ACTIVE_SNAPSHOT,
-                    null, stored.map(SemanticVectorStore.IndexSnapshot::snapshotId).orElse(null),
+                    null, stored.map(SemanticVectorStore.IndexMetadata::snapshotId).orElse(null),
                     provider.id(), provider.modelId(), provider.dimensions(),
-                    stored.map(value -> value.documents().size()).orElse(0), sizeBytes(projectId),
+                    stored.map(SemanticVectorStore.IndexMetadata::documentCount).orElse(0), sizeBytes(projectId),
                     appendProviderLimitations(List.of("ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE"), provider));
         }
         if (stored.isEmpty()) {
@@ -82,7 +82,7 @@ public final class SemanticIndexService {
                     provider.dimensions(), 0, 0L,
                     appendProviderLimitations(List.of("SEMANTIC_INDEX_MISSING"), provider));
         }
-        SemanticVectorStore.IndexSnapshot index = stored.orElseThrow();
+        SemanticVectorStore.IndexMetadata index = stored.orElseThrow();
         boolean modelAligned = provider.id().equals(index.providerId())
                 && provider.modelId().equals(index.modelId())
                 && provider.dimensions() == index.dimensions();
@@ -94,7 +94,7 @@ public final class SemanticIndexService {
         limitations.addAll(providerLimitations(provider));
         return new Status(projectId, project.displayName(), state,
                 active.orElseThrow().snapshotId(), index.snapshotId(), provider.id(), provider.modelId(),
-                provider.dimensions(), index.documents().size(), sizeBytes(projectId), limitations);
+                provider.dimensions(), index.documentCount(), sizeBytes(projectId), limitations);
     }
 
     private UpdateReport synchronize(RegisteredProject project) throws IOException {
@@ -107,9 +107,10 @@ public final class SemanticIndexService {
         CodeKnowledgeSnapshot active = snapshots.loadActiveKnowledge(project.id())
                 .orElseThrow(() -> new IllegalStateException("project has no active knowledge snapshot: " + project.displayName()));
         long started = System.nanoTime();
-        List<SemanticDocument> currentDocuments = documents.build(project, active);
+        List<SemanticDocument> currentDocuments = documents.build(
+                project, active, SemanticIndexBudget.DEFAULT, provider.dimensions());
         if (currentDocuments.size() > MAX_DOCUMENTS) {
-            throw new IllegalStateException("semantic document count exceeds M20 bound: " + currentDocuments.size());
+            throw new IllegalStateException("semantic document count exceeds bound: " + currentDocuments.size());
         }
 
         Optional<SemanticVectorStore.IndexSnapshot> previousOptional = store.load(projectId);
