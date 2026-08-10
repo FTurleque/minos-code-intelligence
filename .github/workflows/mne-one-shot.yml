@@ -1,32 +1,32 @@
 name: MNE remediation one-shot
 
 on:
-  push:
-    branches: [fix/mne-complete-remediation]
+  pull_request:
+    branches: [develop]
 
 permissions:
   contents: write
 
 concurrency:
-  group: mne-one-shot-${{ github.ref }}
-  cancel-in-progress: false
+  group: mne-one-shot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   remediate:
-    if: github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'fix/mne-complete-remediation' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Checkout exact staging head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Assert exact staging HEAD
         shell: bash
         env:
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
