@@ -1,7 +1,8 @@
 package com.minos.registry;
 
+import com.minos.io.BoundedProperties;
+
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -31,6 +32,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private static final String WORKSPACES_DIRECTORY = "workspaces";
     private static final String LEGACY_ROOT_PATH = "rootPath";
     private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
+    private static final long MAX_METADATA_BYTES = 128L * 1024L;
+    private static final int MAX_METADATA_ENTRIES = 16;
 
     private final Path storageRoot;
     private final Path projectsDirectory;
@@ -171,9 +174,17 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return List.copyOf(workspaces);
     }
 
-    public Path storageRoot() { return storageRoot; }
-    public Optional<ProjectPathMapping> pathMapping() { return pathMapping; }
-    public ProjectPathMapping.RuntimeLocation runtimeLocation() { return runtimeLocation; }
+    public Path storageRoot() {
+        return storageRoot;
+    }
+
+    public Optional<ProjectPathMapping> pathMapping() {
+        return pathMapping;
+    }
+
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() {
+        return runtimeLocation;
+    }
 
     private void writeProject(RegisteredProject project) throws IOException {
         Properties properties = new Properties();
@@ -277,9 +288,14 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static Properties readProperties(Path file) throws IOException {
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) { properties.load(reader); }
-        return properties;
+        return BoundedProperties.load(
+                file,
+                MAX_METADATA_BYTES,
+                MAX_METADATA_ENTRIES,
+                128,
+                16 * 1024,
+                "local registry metadata"
+        );
     }
 
     private static String required(Properties properties, String key, Path file) {
@@ -334,8 +350,11 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static void validateName(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(label + " must not be blank");
+        }
     }
 
-    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) { }
+    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {
+    }
 }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -24,6 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DistributedArtifactBundleStoreTest {
+
+    @Test
+    void acceptIsNotSerializedOnTheWholeStore() throws Exception {
+        int modifiers = DistributedArtifactBundleStore.class
+                .getMethod("accept", Path.class)
+                .getModifiers();
+        assertFalse(Modifier.isSynchronized(modifiers),
+                "a cross-process lease wait for one cache key must not block every other cache key");
+    }
 
     @Test
     void roundTripsStrictManifestAndArtifactThenUsesVerifiedCache(@TempDir Path temp) throws Exception {
@@ -57,13 +67,15 @@ class DistributedArtifactBundleStoreTest {
         Path valid = store.createBundle(temp.resolve("valid.zip"), manifest, artifact);
 
         Map<String, byte[]> entries = readEntries(valid);
-        entries.put(DistributedArtifactManifest.ARTIFACT_PATH, "tampered".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        entries.put(DistributedArtifactManifest.ARTIFACT_PATH,
+                "tampered".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Path tampered = writeEntries(temp.resolve("tampered.zip"), entries);
         assertThrows(java.io.IOException.class, () -> store.accept(tampered));
 
         Map<String, byte[]> unsafe = new LinkedHashMap<>(readEntries(valid));
         unsafe.put("../escape", new byte[]{1});
-        assertThrows(java.io.IOException.class, () -> store.accept(writeEntries(temp.resolve("unsafe.zip"), unsafe)));
+        assertThrows(java.io.IOException.class,
+                () -> store.accept(writeEntries(temp.resolve("unsafe.zip"), unsafe)));
 
         Path large = Files.write(temp.resolve("large.scip"), new byte[65]);
         DistributedArtifactManifest largeManifest = manifest(

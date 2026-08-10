@@ -46,22 +46,27 @@ class LinuxBubblewrapWorkerSandboxIsolationTest {
     }
 
     @Test
-    void managedNpmSymlinkMountsOnlyManagedProviderRuntimeRoot() throws Exception {
+    void managedNpmSymlinkMountsOnlyExactManagedProviderVersionRoot() throws Exception {
         Path executable = Path.of("/bin/true");
         Path minosHome = Files.createDirectory(temporary.resolve("minos-home"));
-        Path runtimeRoot = minosHome.resolve("tools/scip-typescript");
-        Path bin = runtimeRoot.resolve("0.4.0/node_modules/.bin");
-        Path target = runtimeRoot.resolve("0.4.0/node_modules/@sourcegraph/scip-typescript/dist/cli.mjs");
+        Path providerRoot = minosHome.resolve("tools/scip-typescript");
+        Path versionRoot = providerRoot.resolve("0.4.0");
+        Path siblingVersion = providerRoot.resolve("9.9.9");
+        Path bin = versionRoot.resolve("node_modules/.bin");
+        Path target = versionRoot.resolve("node_modules/@sourcegraph/scip-typescript/dist/cli.mjs");
         Files.createDirectories(bin);
         Files.createDirectories(target.getParent());
+        Files.createDirectories(siblingVersion);
         Files.writeString(target, "cli");
+        Files.writeString(siblingVersion.resolve("secret-marker"), "must-not-be-visible");
         Path shim = bin.resolve("scip-typescript");
         Files.createSymbolicLink(shim, bin.relativize(target));
         LinuxBubblewrapWorkerSandboxBackend backend =
                 new LinuxBubblewrapWorkerSandboxBackend(minosHome, executable, executable);
 
         List<String> command = plan(backend, shim).command();
-        assertTrue(hasBind(command, runtimeRoot.toRealPath().toString(), runtimeRoot.toRealPath().toString()));
+        assertTrue(hasBind(command, versionRoot.toRealPath().toString(), versionRoot.toRealPath().toString()));
+        assertFalse(hasBind(command, providerRoot.toRealPath().toString(), providerRoot.toRealPath().toString()));
         assertFalse(hasBind(command, minosHome.toRealPath().toString(), minosHome.toRealPath().toString()));
     }
 

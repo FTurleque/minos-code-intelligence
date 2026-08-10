@@ -15,7 +15,7 @@ M30                              ✅ PR #110 + promotion #111 merged
 hardening #113/#117              ✅ merged
 readiness 1.0.1 #118/#119        ✅ merged / qualifiée
 correctifs installateur #122–127 ✅ merged / qualifiés
-#98 sandbox OS worker réelle     🚧 OPEN
+#98 sandbox OS worker réelle     ✅ CLOSED / qualifiée Linux + Windows
 ```
 
 La release **1.0.1** corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
@@ -126,7 +126,7 @@ Une case n'est activable que lorsque son intégration est réellement détectée
 
 En Docker, MINOS peut gérer PostgreSQL/pgvector et Ollama sur le réseau interne du runtime avec volumes persistants. Aucun port public n'est nécessaire au query plane.
 
-En mode natif, PostgreSQL et Ollama sont des services externes/localement existants fournis par l'utilisateur. MINOS ne prétend pas installer un binaire Ollama natif.
+En mode natif, PostgreSQL et Ollama sont des services externes/localement existants fournis par l'utilisateur. Une base PostgreSQL externe non-loopback doit utiliser `sslmode=verify-full`; les credentials restent séparés de l'URL JDBC. MINOS ne prétend pas installer un binaire Ollama natif.
 
 La page **Résumé de l'installation** indique avant le lancement : programme/data roots, backend MCP, stockage, provider sémantique, clients IA sélectionnés et composants Docker réellement gérés.
 
@@ -187,9 +187,9 @@ La qualification Linux exige en plus un Docker utilisable pour les tests Postgre
 - Docker runtime : [`docs/user/docker-runtime.md`](docs/user/docker-runtime.md)
 - release 1.0.1 : [`docs/releases/1.0.1.md`](docs/releases/1.0.1.md)
 
-## Limitation explicitement ouverte
+## Sandbox worker OS
 
-L'issue **#98** reste ouverte : MINOS ne revendique pas de sandbox OS réelle pour l'exécution hostile des workers distants tant qu'un backend Windows/Linux réellement isolé n'est pas implémenté et qualifié.
+L'issue **#98** est **fermée / completed** depuis le **9 août 2026**. La sandbox worker réelle est qualifiée sur Linux (`bubblewrap`/namespaces/`prlimit`) et Windows (AppContainer + Job Object). `DENY` reste fail-closed lorsqu'une primitive OS qualifiée n'est pas disponible.
 
 ## Licence
 

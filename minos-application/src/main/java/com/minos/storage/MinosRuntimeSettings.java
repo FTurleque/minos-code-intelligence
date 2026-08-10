@@ -1,8 +1,8 @@
 package com.minos.storage;
 
+import com.minos.io.BoundedProperties;
+
 import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -23,6 +23,12 @@ import java.util.Properties;
 public final class MinosRuntimeSettings {
     public static final String CONFIG_DIRECTORY = "config";
     public static final String CONFIG_FILE = "minos.properties";
+
+    private static final long MAX_CONFIGURATION_BYTES = 256L * 1024L;
+    private static final int MAX_CONFIGURATION_ENTRIES = 512;
+    private static final int MAX_CONFIGURATION_KEY_CHARS = 256;
+    private static final int MAX_CONFIGURATION_VALUE_CHARS = 16 * 1024;
+    private static final long MAX_SECRET_BYTES = 64L * 1024L;
 
     private final Path home;
     private final Properties fileProperties;
@@ -46,9 +52,14 @@ public final class MinosRuntimeSettings {
         Properties file = new Properties();
         Path configuration = normalized.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE);
         if (Files.isRegularFile(configuration)) {
-            try (Reader reader = Files.newBufferedReader(configuration, StandardCharsets.UTF_8)) {
-                file.load(reader);
-            }
+            file.putAll(BoundedProperties.load(
+                    configuration,
+                    MAX_CONFIGURATION_BYTES,
+                    MAX_CONFIGURATION_ENTRIES,
+                    MAX_CONFIGURATION_KEY_CHARS,
+                    MAX_CONFIGURATION_VALUE_CHARS,
+                    "MINOS runtime configuration"
+            ));
         }
         Properties systemSnapshot = new Properties();
         systemSnapshot.putAll(System.getProperties());
@@ -91,13 +102,21 @@ public final class MinosRuntimeSettings {
         if (!Files.isRegularFile(secretPath)) {
             throw new IOException("configured MINOS secret file does not exist: " + secretPath);
         }
-        String secret = Files.readString(secretPath, StandardCharsets.UTF_8).trim();
+        String secret = BoundedProperties.readUtf8(
+                secretPath, MAX_SECRET_BYTES, "MINOS secret file").trim();
         if (secret.isEmpty()) throw new IOException("configured MINOS secret file is empty: " + secretPath);
         return secret;
     }
 
-    public Path home() { return home; }
-    public Path configurationFile() { return home.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE); }
+    public Path home() {
+        return home;
+    }
 
-    private static boolean blank(String value) { return value == null || value.isBlank(); }
+    public Path configurationFile() {
+        return home.resolve(CONFIG_DIRECTORY).resolve(CONFIG_FILE);
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
 }

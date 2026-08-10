@@ -105,6 +105,53 @@ def provider_facts(source: str) -> list[tuple[str, str, str, list[str], list[str
     return facts
 
 
+def check_authoritative_documentation() -> None:
+    """Reject stale mutable prose that contradicts the authoritative STATUS release/sandbox facts."""
+    status = read("docs/STATUS.md")
+    readme = read("README.md")
+    production = read("docs/user/production-installation.md")
+
+    release_date = require(
+        r"La release \*\*MINOS v1\.0\.1\*\* a été publiée le \*\*([^*]+)\*\*",
+        status,
+        "v1.0.1 publication date from STATUS",
+    )
+    release_sha = require(
+        r"v1\.0\.1 → ([0-9a-f]{40})",
+        status,
+        "v1.0.1 immutable tag SHA from STATUS",
+    )
+    if "#98 sandbox OS réelle" not in status or "IMPLÉMENTÉE + QUALIFIÉE" not in status:
+        raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
+
+    stale_markers = {
+        "README.md": [
+            "#98 sandbox OS worker réelle     🚧 OPEN",
+            "L'issue **#98** reste ouverte",
+        ],
+        "docs/user/production-installation.md": [
+            "1.0.1` reste **NON PUBLIÉE**",
+            "1.0.1 reste **NON PUBLIÉE**",
+        ],
+    }
+    documents = {
+        "README.md": readme,
+        "docs/user/production-installation.md": production,
+    }
+    for path, markers in stale_markers.items():
+        for marker in markers:
+            if marker in documents[path]:
+                raise RuntimeError(f"stale product fact in {path}: {marker}")
+
+    if release_date not in readme or release_date not in production:
+        raise RuntimeError(
+            f"README and production guide must both expose v1.0.1 publication date {release_date}")
+    if release_sha not in readme or release_sha not in production:
+        raise RuntimeError("README and production guide must both expose the immutable v1.0.1 tag SHA")
+    if not re.search(r"#98[^\n]*(?:CLOSED|fermée|completed|qualifiée)", readme, re.I):
+        raise RuntimeError("README must expose #98 as closed/qualified")
+
+
 def render() -> str:
     pom = read("pom.xml")
     api = read("minos-api/src/main/java/com/minos/api/MinosApi.java")
@@ -161,6 +208,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         expected = render()
+        check_authoritative_documentation()
     except Exception as exception:
         print(f"PRODUCT FACTS ERROR: {exception}", file=sys.stderr)
         return 2

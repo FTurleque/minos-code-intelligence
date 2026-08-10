@@ -1,7 +1,8 @@
 package com.minos.registry;
 
+import com.minos.io.BoundedProperties;
+
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -21,6 +22,7 @@ public final class ProjectPathMappingStore {
     public static final String RUNTIME_DIRECTORY = "runtime";
     public static final String FILE_NAME = "project-paths.properties";
 
+    private static final long MAX_MAPPING_BYTES = 64L * 1024L;
     private static final Set<String> ALLOWED_KEYS = Set.of("formatVersion", "hostRoot", "containerRoot");
 
     private final Path file;
@@ -32,14 +34,22 @@ public final class ProjectPathMappingStore {
 
     public Optional<ProjectPathMapping> loadOptional() throws IOException {
         if (!Files.exists(file)) return Optional.empty();
-        if (!Files.isRegularFile(file)) throw new IOException("project path mapping is not a regular file: " + file);
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            properties.load(reader);
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("project path mapping is not a regular file: " + file);
         }
+        Properties properties = BoundedProperties.load(
+                file,
+                MAX_MAPPING_BYTES,
+                ALLOWED_KEYS.size(),
+                128,
+                16 * 1024,
+                "project path mapping"
+        );
         for (Object rawKey : properties.keySet()) {
             String key = String.valueOf(rawKey);
-            if (!ALLOWED_KEYS.contains(key)) throw new IOException("unknown project path mapping property: " + key);
+            if (!ALLOWED_KEYS.contains(key)) {
+                throw new IOException("unknown project path mapping property: " + key);
+            }
         }
         try {
             int version = Integer.parseInt(required(properties, "formatVersion"));
@@ -78,11 +88,15 @@ public final class ProjectPathMappingStore {
         }
     }
 
-    public Path file() { return file; }
+    public Path file() {
+        return file;
+    }
 
     private static String required(Properties properties, String key) {
         String value = properties.getProperty(key);
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("missing property " + key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("missing property " + key);
+        }
         return value.trim();
     }
 }

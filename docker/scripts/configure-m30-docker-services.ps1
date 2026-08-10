@@ -41,10 +41,36 @@ function Require-Identifier([string] $Value, [string] $Name) {
     }
 }
 
+function Read-BoundedUtf8([string] $Path, [long] $MaximumBytes, [string] $Label) {
+    if ($MaximumBytes -lt 1) { throw 'MaximumBytes must be positive.' }
+    $Stream = [System.IO.File]::Open(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::Read)
+    $Output = [System.IO.MemoryStream]::new()
+    try {
+        $Buffer = New-Object byte[] 4096
+        while (($ReadCount = $Stream.Read($Buffer, 0, $Buffer.Length)) -gt 0) {
+            if ($Output.Length + $ReadCount -gt $MaximumBytes) {
+                throw "$Label exceeds byte limit: $MaximumBytes"
+            }
+            $Output.Write($Buffer, 0, $ReadCount)
+        }
+        $Utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+        return $Utf8.GetString($Output.ToArray())
+    }
+    finally {
+        $Output.Dispose()
+        $Stream.Dispose()
+    }
+}
+
 function Read-KeyValueFile([string] $Path) {
     $Values = [ordered]@{}
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
-        foreach ($Line in [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8)) {
+        $Content = Read-BoundedUtf8 -Path $Path -MaximumBytes 262144 -Label 'MINOS Docker environment file'
+        foreach ($Line in ($Content -split "\r?\n")) {
             if ($Line -match '^([^#][^=]*)=(.*)$') {
                 $Values[$Matches[1].Trim()] = $Matches[2].Trim().Trim('"')
             }
@@ -78,7 +104,7 @@ function Write-MinosProperties([string] $Path, [System.Collections.IDictionary] 
 
 function New-ManagedPassword([string] $Path) {
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
-        $Existing = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8).Trim()
+        $Existing = (Read-BoundedUtf8 -Path $Path -MaximumBytes 65536 -Label 'Managed PostgreSQL secret').Trim()
         if ([string]::IsNullOrWhiteSpace($Existing)) { throw "Managed PostgreSQL secret is empty: $Path" }
         return
     }
@@ -168,6 +194,7 @@ if ($StorageBackend -eq 'postgresql') {
     Ensure-ManagedVolume -Name $PostgresVolume -Plane 'storage'
     $SecretFile = Join-Path $DataRoot 'secrets\postgres.password'
     New-ManagedPassword $SecretFile
+    $Configuration['minos.postgres.managed'] = 'true'
     $Configuration['minos.postgres.url'] = "jdbc:postgresql://minos-postgres:5432/$PostgresDatabase"
     $Configuration['minos.postgres.user'] = $PostgresUser
     $Configuration['minos.postgres.passwordFile'] = 'secrets/postgres.password'

@@ -23,13 +23,15 @@ class StorageBackendConfigurationTest {
         assertEquals("local", value.backend());
         assertFalse(value.postgresql());
         assertEquals("minos", value.postgresSchema());
+        assertFalse(value.postgresManaged());
     }
 
     @Test
     void resolvesPostgresqlWithoutLeakingPasswordInDiagnostics() throws IOException {
         Properties properties = new Properties();
         properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
-        properties.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY, "jdbc:postgresql://localhost:5432/minos");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY,
+                "jdbc:postgresql://localhost:5432/minos?sslmode=verify-full&token=url-secret");
         properties.setProperty(StorageBackendConfiguration.POSTGRES_USER_PROPERTY, "minos_user");
         properties.setProperty(StorageBackendConfiguration.POSTGRES_PASSWORD_PROPERTY, "super-secret-value");
         properties.setProperty(StorageBackendConfiguration.POSTGRES_SCHEMA_PROPERTY, "minos_ci");
@@ -40,7 +42,25 @@ class StorageBackendConfigurationTest {
         assertTrue(value.postgresql());
         assertEquals("minos_ci", value.postgresSchema());
         assertFalse(value.safeDescription().contains("super-secret-value"));
-        assertTrue(value.safeDescription().contains("jdbc:postgresql://localhost:5432/minos"));
+        assertFalse(value.safeDescription().contains("url-secret"));
+        assertFalse(value.safeDescription().contains("sslmode"));
+        assertEquals(
+                "backend=postgresql url=jdbc:postgresql://localhost:5432/minos user=minos_user schema=minos_ci managed=false",
+                value.safeDescription());
+    }
+
+    @Test
+    void resolvesManagedPostgresqlFlagStrictly() throws IOException {
+        Properties properties = new Properties();
+        properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY, "true");
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(
+                Path.of("target/test-minos-home"), Map.of(), properties);
+        assertTrue(value.postgresManaged());
+
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_MANAGED_PROPERTY, "sometimes");
+        assertThrows(IllegalArgumentException.class, () -> StorageBackendConfiguration.resolve(
+                Path.of("target/test-minos-home"), Map.of(), properties));
     }
 
     @Test
