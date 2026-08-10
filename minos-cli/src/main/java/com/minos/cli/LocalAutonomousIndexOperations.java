@@ -23,6 +23,7 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.orchestration.ProjectIndexLease;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -79,11 +80,27 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
     }
 
-    @Override public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        return prepare(projectIdentifier, providerOverride, forceFull).view();
+    @Override
+    public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(application.home(), project.id())) {
+            return prepare(projectIdentifier, providerOverride, forceFull).view();
+        }
     }
 
-    @Override public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+    @Override
+    public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(application.home(), project.id())) {
+            return executeLocked(projectIdentifier, providerOverride, forceFull);
+        }
+    }
+
+    private IndexExecutionView executeLocked(
+            String projectIdentifier,
+            String providerOverride,
+            boolean forceFull
+    ) throws Exception {
         Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull);
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
@@ -207,15 +224,37 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
 
     private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
         Optional<ProjectIndexState> stored = stateStore.findProjectState(projectId);
-        if (stored.isPresent()) return stored.orElseThrow();
         Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(projectId);
-        ProjectIndexState aligned = active
-                .map(snapshot -> new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
-                        Optional.of(snapshot.snapshotId()), Optional.empty(), Instant.now(),
-                        Optional.of("state aligned from active symbol snapshot")))
-                .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, Instant.now()));
-        stateStore.saveProjectState(aligned);
-        return aligned;
+        Instant now = Instant.now();
+
+        if (active.isPresent()) {
+            String activeSnapshotId = active.orElseThrow().snapshotId();
+            boolean aligned = stored.isPresent()
+                    && stored.orElseThrow().availability() == ProjectIndexState.Availability.READY
+                    && stored.orElseThrow().activeSnapshotId().filter(activeSnapshotId::equals).isPresent();
+            if (aligned) {
+                return stored.orElseThrow();
+            }
+            ProjectIndexState reconciled = new ProjectIndexState(
+                    projectId,
+                    ProjectIndexState.Availability.READY,
+                    Optional.of(activeSnapshotId),
+                    stored.flatMap(ProjectIndexState::latestRunId),
+                    now,
+                    Optional.of("state reconciled from authoritative active symbol snapshot"));
+            stateStore.saveProjectState(reconciled);
+            return reconciled;
+        }
+
+        if (stored.isPresent()
+                && stored.orElseThrow().activeSnapshotId().isEmpty()
+                && stored.orElseThrow().availability() != ProjectIndexState.Availability.INDEXING
+                && stored.orElseThrow().availability() != ProjectIndexState.Availability.REFRESHING) {
+            return stored.orElseThrow();
+        }
+        ProjectIndexState reconciled = ProjectIndexState.neverIndexed(projectId, now);
+        stateStore.saveProjectState(reconciled);
+        return reconciled;
     }
 
     private static ProviderView view(ProviderRuntimeStatus status) {
