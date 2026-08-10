@@ -21,9 +21,20 @@ class SourceBudgetPolicyTest {
     }
 
     @Test
-    void rejectsByteOverflowBeforeFurtherWork() throws Exception {
-        SourceBudgetPolicy.Tracker tracker = new SourceBudgetPolicy(10, 10).tracker("test");
-        tracker.accountRegularFile(10);
-        assertThrows(IOException.class, () -> tracker.accountRegularFile(1));
+    void accountsBytesAsTheyAreConsumed() throws Exception {
+        SourceBudgetPolicy.Tracker tracker = new SourceBudgetPolicy(2, 5).tracker("test");
+        tracker.accountFile();
+        tracker.accountBytes(3);
+        tracker.accountBytes(2);
+        assertEquals(5, tracker.bytes());
+        assertThrows(IOException.class, () -> tracker.accountBytes(1));
+    }
+
+    @Test
+    void boundsTraversalEvenWhenEntriesAreIgnored() throws Exception {
+        SourceBudgetPolicy.Tracker tracker = new SourceBudgetPolicy(1, 1).tracker("test");
+        for (int index = 0; index < 8; index++) tracker.accountTraversalEntry();
+        assertEquals(8, tracker.traversalEntries());
+        assertThrows(IOException.class, tracker::accountTraversalEntry);
     }
 }
