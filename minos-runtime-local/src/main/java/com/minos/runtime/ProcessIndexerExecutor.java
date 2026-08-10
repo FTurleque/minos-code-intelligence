@@ -101,17 +101,20 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             } else {
                 ProviderProcessEnvironment.apply(processBuilder, plan.environment());
             }
-            processBuilder.redirectOutput(stdout.toFile());
-            processBuilder.redirectError(stderr.toFile());
 
             Process process = processBuilder.start();
+            BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
             boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
             if (!completed) {
                 terminate(process);
+                BoundedProcessOutput.Result output = outputCapture.await();
+                appendOutputMetadata(metadata, output);
                 append(metadata, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
                 throw new IllegalStateException("provider timed out after " + plan.timeout());
             }
             int exitCode = process.exitValue();
+            BoundedProcessOutput.Result output = outputCapture.await();
+            appendOutputMetadata(metadata, output);
             append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
             if (exitCode != 0) {
                 archiveFailedArtifact(generatedArtifact, runDirectory);
@@ -198,6 +201,11 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             value.append("environmentKeys=").append(String.join(",", plan.environment().keySet().stream().sorted().toList())).append('\n');
         }
         Files.writeString(file, value, StandardCharsets.UTF_8);
+    }
+
+    private static void appendOutputMetadata(Path metadata, BoundedProcessOutput.Result output) throws IOException {
+        append(metadata, "stdoutTruncated=" + output.stdoutTruncated()
+                + "\nstderrTruncated=" + output.stderrTruncated() + "\n");
     }
 
     private static String redactedCommand(List<String> command) {
