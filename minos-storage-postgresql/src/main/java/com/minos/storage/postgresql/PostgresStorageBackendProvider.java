@@ -12,6 +12,11 @@ public final class PostgresStorageBackendProvider implements StorageBackendProvi
     @Override
     public StorageBackend open(StorageBackendConfiguration configuration) throws IOException {
         PostgresConnectionFactory connections = new PostgresConnectionFactory(configuration);
-        return new PostgresStorageBackend(connections, configuration.home());
+        try {
+            return new PostgresStorageBackend(connections, configuration.home());
+        } catch (IOException | RuntimeException exception) {
+            connections.close();
+            throw exception;
+        }
     }
 }
