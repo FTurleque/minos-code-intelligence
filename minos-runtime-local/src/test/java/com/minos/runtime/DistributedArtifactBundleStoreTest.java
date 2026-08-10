@@ -97,7 +97,7 @@ class DistributedArtifactBundleStoreTest {
     }
 
     @Test
-    void refusesToEvictAnArtifactWithAnActiveLease(@TempDir Path temp) throws Exception {
+    void refusesToEvictAnArtifactWithAnActiveLeaseWithoutLeavingRejectedEntry(@TempDir Path temp) throws Exception {
         DistributedArtifactBundleStore store = store(temp, 1);
         Path firstArtifact = Files.writeString(temp.resolve("first-active.scip"), "first");
         Path secondArtifact = Files.writeString(temp.resolve("second-active.scip"), "second");
@@ -111,8 +111,18 @@ class DistributedArtifactBundleStoreTest {
                     manifest("provider-active-two", secondArtifact, Instant.parse("2026-07-29T00:00:02Z")),
                     secondArtifact)));
             assertTrue(Files.isRegularFile(first.artifact()));
+            assertEquals(1L, cacheEntryCount(temp));
         } finally {
             store.release(first);
+        }
+    }
+
+    private static long cacheEntryCount(Path temp) throws Exception {
+        Path cache = temp.resolve("home").resolve("distributed-artifacts");
+        try (var entries = Files.list(cache)) {
+            return entries.filter(Files::isDirectory)
+                    .filter(path -> !path.getFileName().toString().startsWith("."))
+                    .count();
         }
     }
 
