@@ -71,6 +71,9 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         RemoteMaterialization source = materializer.materialize(request);
         try {
             RegisteredProject project = application.projectRegistry().registerProject(source.projectRoot(), displayName);
+            // The registry persists rootPath beyond this index invocation. Pin the cache entry before
+            // releasing its active lease so later LRU eviction cannot orphan that durable project.
+            materializer.pin(source);
             List<DistributedIndexerExecutor> distributedExecutors = new ArrayList<>();
             UnaryOperator<IndexerExecutor> decorator = delegate -> {
                 IndexerDescriptor descriptor = descriptors.get(delegate.indexerId());
