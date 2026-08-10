@@ -1,5 +1,5 @@
 name: MNC remediation one-shot
-# staging-revision: 3
+# staging-revision: 4
 
 on:
   pull_request:
@@ -95,11 +95,38 @@ jobs:
           git diff --check
 
       - name: Maven clean verify
+        id: maven
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           chmod +x mvnw
-          ./mvnw -B -ntp clean verify
+          ./mvnw -B -ntp clean verify 2>&1 | tee /tmp/mnc-maven.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Publish concise Maven failure diagnostic
+        if: steps.maven.outcome == 'failure'
+        shell: bash
+        env:
+          TARGET_BRANCH: fix/mnc-complete-remediation
+        run: |
+          set -euo pipefail
+          {
+            echo "MNC Maven failure diagnostic"
+            echo "staging-head=${{ github.event.pull_request.head.sha }}"
+            echo
+            echo "--- Maven error lines ---"
+            grep -E '^\[ERROR\]|^Caused by:|Tests run: .*Failures: [1-9]|Tests run: .*Errors: [1-9]' /tmp/mnc-maven.log | tail -n 160 || true
+            echo
+            echo "--- Maven tail ---"
+            tail -n 220 /tmp/mnc-maven.log
+          } > mnc-ci-failure.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mnc-ci-failure.txt
+          git commit -m 'chore: capture MNC Maven failure diagnostic'
+          git push origin "HEAD:${TARGET_BRANCH}"
+          exit 1
 
       - name: Targeted JaCoCo gate
         shell: bash
@@ -118,6 +145,7 @@ jobs:
           rm -f scripts/remediation/add-mnc-regression-tests.py
           rm -f scripts/remediation/finalize-mnc-staging.py
           rm -f scripts/remediation/repair-mnc-staging.py
+          rm -f mnc-ci-failure.txt
           git diff --check
 
       - name: Commit and push qualified remediation
