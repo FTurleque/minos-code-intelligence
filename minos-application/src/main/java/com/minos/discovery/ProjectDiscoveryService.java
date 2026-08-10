@@ -81,7 +81,7 @@ public final class ProjectDiscoveryService {
 
             SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project discovery");
             ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root, budget);
-            Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy);
+            Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy, budget);
             if (moduleRoots.isEmpty()) {
                 moduleRoots.put(root, EnumSet.noneOf(BuildSystem.class));
             }
@@ -118,12 +118,14 @@ public final class ProjectDiscoveryService {
 
     private Map<Path, EnumSet<BuildSystem>> discoverModuleRoots(
             Path root,
-            ProjectIgnorePolicy ignorePolicy
+            ProjectIgnorePolicy ignorePolicy,
+            SourceBudgetPolicy.Tracker budget
     ) throws IOException {
         Map<Path, EnumSet<BuildSystem>> modules = new LinkedHashMap<>();
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 Path relative = root.relativize(directory);
                 if (!directory.equals(root) && ignorePolicy.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -133,6 +135,18 @@ public final class ProjectDiscoveryService {
                     modules.put(directory, detectBuildSystems(root, directory, ignorePolicy));
                 }
                 return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
+                budget.accountTraversalEntry();
+                throw exception;
             }
         });
         return modules;

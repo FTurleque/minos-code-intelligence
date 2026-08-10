@@ -89,6 +89,37 @@ final class PostgresRuntimeObservationStore implements RuntimeObservationStore {
     }
 
     @Override
+    public List<CorrelatedRuntimeSession> list(UUID projectId, String snapshotId, int limit) throws IOException {
+        if (limit < 1) throw new IllegalArgumentException("runtime session limit must be positive");
+        try {
+            return connections.withConnection(connection -> {
+                List<CorrelatedRuntimeSession> sessions = new ArrayList<>();
+                String sql = snapshotId == null
+                        ? "SELECT payload::text FROM runtime_sessions WHERE project_id=? ORDER BY imported_at DESC,session_id LIMIT ?"
+                        : "SELECT payload::text FROM runtime_sessions WHERE project_id=? "
+                            + "AND payload->'session'->>'snapshotId'=? ORDER BY imported_at DESC,session_id LIMIT ?";
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setObject(1, projectId);
+                    int limitIndex;
+                    if (snapshotId == null) {
+                        limitIndex = 2;
+                    } else {
+                        statement.setString(2, snapshotId);
+                        limitIndex = 3;
+                    }
+                    statement.setInt(limitIndex, limit);
+                    try (ResultSet result = statement.executeQuery()) {
+                        while (result.next()) sessions.add(json.read(result.getString(1), CorrelatedRuntimeSession.class));
+                    }
+                }
+                return List.copyOf(sessions);
+            });
+        } catch (SQLException exception) {
+            throw new IOException("unable to list bounded PostgreSQL runtime sessions", exception);
+        }
+    }
+
+    @Override
     public List<CorrelatedRuntimeSession> list(UUID projectId) throws IOException {
         try {
             return connections.withConnection(connection -> {

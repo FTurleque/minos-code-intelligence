@@ -10,6 +10,11 @@ import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -37,8 +42,13 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     private static final String VERSION_MARKER = ".minos-version";
     private static final String SOURCE_MARKER = ".minos-install-source";
     private static final String INTEGRITY_MARKER = ".minos-integrity.sha256";
-    private static final String DOTNET_SOURCE = "https://api.nuget.org/v3/index.json";
-    private static final String DOTNET_SOURCE_ID = "nuget.org-v3-only";
+    private static final String DOTNET_SOURCE = "https://api.nuget.org/v3-flatcontainer";
+    private static final String DOTNET_SOURCE_ID = "nuget.org-pinned-nupkg-sha256";
+    private static final String DOTNET_PACKAGE_SHA256 = "e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52";
+    private static final long MAX_DOTNET_PACKAGE_BYTES = 256L * 1024L * 1024L;
+    private static final int MAX_MANAGED_TRAVERSAL_ENTRIES = 50_000;
+    private static final int MAX_MANAGED_FILES = 20_000;
+    private static final long MAX_MANAGED_BYTES = 512L * 1024L * 1024L;
     private static final String GO_PROXY = "https://proxy.golang.org";
     private static final String GO_SUMDB = "sum.golang.org";
     private static final String GO_SOURCE_ID = "proxy.golang.org+sum.golang.org";
@@ -162,7 +172,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
         return status(ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_DOTNET_VERSION,
                 ProviderRuntimeStatus.State.READY, Optional.of(executable),
-                "managed scip-dotnet 0.2.14 ready; source restricted to nuget.org and local integrity manifest verified; dotnet SDK="
+                "managed scip-dotnet 0.2.14 ready; primary nupkg SHA-256 pinned and local integrity manifest verified; dotnet SDK="
                         + sanitize(sdk.output()));
     }
 
@@ -237,11 +247,15 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
         Files.createDirectories(partial);
+        Path localSource = partial.resolve("pinned-nuget-source");
+        Files.createDirectories(localSource);
+        Path pinnedPackage = localSource.resolve("scip-dotnet." + ScipIndexerCatalog.SCIP_DOTNET_VERSION + ".nupkg");
+        downloadPinnedDotnetPackage(pinnedPackage);
         Path nugetConfig = partial.resolve("minos-nuget.config");
         Files.writeString(nugetConfig,
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
                         + "<configuration><packageSources><clear/>"
-                        + "<add key=\"nuget.org\" value=\"" + DOTNET_SOURCE + "\" protocolVersion=\"3\"/>"
+                        + "<add key=\"minos-pinned\" value=\"" + xml(localSource.toString()) + "\"/>"
                         + "</packageSources></configuration>\n",
                 StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         CommandResult result = run(CommandLocator.invocation(
@@ -250,6 +264,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
                         "--configfile", nugetConfig.toString(), "--no-cache", "--ignore-failed-sources"),
                 home, INSTALL_TIMEOUT, Map.of());
         Files.deleteIfExists(nugetConfig);
+        deleteRecursively(localSource);
         if (!result.success()) {
             deleteRecursively(partial);
             throw new IllegalStateException("scip-dotnet install failed: " + sanitize(result.output()));
@@ -293,6 +308,48 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         writeManagedMarkers(partial, ScipIndexerCatalog.SCIP_GO_VERSION, GO_SOURCE_ID);
         replaceDirectory(partial, destination);
         return inspectGo();
+    }
+
+    private static void downloadPinnedDotnetPackage(Path target) throws IOException, InterruptedException {
+        String version = ScipIndexerCatalog.SCIP_DOTNET_VERSION.toLowerCase(Locale.ROOT);
+        URI uri = URI.create(DOTNET_SOURCE + "/scip-dotnet/" + version + "/scip-dotnet." + version + ".nupkg");
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(PROBE_TIMEOUT)
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+        HttpRequest request = HttpRequest.newBuilder(uri).timeout(INSTALL_TIMEOUT).GET().build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() != 200) {
+            try (InputStream ignored = response.body()) { }
+            throw new IOException("scip-dotnet pinned nupkg download failed with HTTP " + response.statusCode());
+        }
+        MessageDigest digest = sha256Digest();
+        long total = 0L;
+        try (InputStream input = response.body(); OutputStream output = Files.newOutputStream(target)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read == 0) continue;
+                try { total = Math.addExact(total, read); }
+                catch (ArithmeticException exception) { throw new IOException("scip-dotnet nupkg byte counter overflow", exception); }
+                if (total > MAX_DOTNET_PACKAGE_BYTES) throw new IOException("scip-dotnet nupkg exceeds byte limit");
+                digest.update(buffer, 0, read);
+                output.write(buffer, 0, read);
+            }
+        } catch (Exception exception) {
+            Files.deleteIfExists(target);
+            throw exception;
+        }
+        String actual = HexFormat.of().formatHex(digest.digest());
+        if (!DOTNET_PACKAGE_SHA256.equals(actual)) {
+            Files.deleteIfExists(target);
+            throw new IOException("scip-dotnet nupkg SHA-256 mismatch: " + actual);
+        }
+    }
+
+    private static String xml(String value) {
+        return value.replace("&", "&amp;").replace("\"", "&quot;")
+                .replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private Path dotnetDirectory() {
@@ -344,23 +401,50 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
 
     private static String directoryDigest(Path directory) throws IOException {
         MessageDigest digest = sha256Digest();
+        List<Path> files = new ArrayList<>();
+        int traversed = 0;
         try (var paths = Files.walk(directory)) {
-            for (Path file : paths
-                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                    .filter(path -> !Files.isSymbolicLink(path))
-                    .filter(path -> !path.getFileName().toString().equals(INTEGRITY_MARKER))
-                    .sorted(Comparator.comparing(path -> portable(directory.relativize(path))))
-                    .toList()) {
-                String relative = portable(directory.relativize(file));
-                digest.update(relative.getBytes(StandardCharsets.UTF_8));
-                digest.update((byte) 0);
-                try (InputStream input = Files.newInputStream(file)) {
-                    byte[] buffer = new byte[64 * 1024];
-                    int read;
-                    while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
+            var iterator = paths.iterator();
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                traversed++;
+                if (traversed > MAX_MANAGED_TRAVERSAL_ENTRIES) {
+                    throw new IOException("managed runtime integrity traversal exceeds entry limit");
                 }
-                digest.update((byte) 0xff);
+                if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                        && !Files.isSymbolicLink(path)
+                        && !path.getFileName().toString().equals(INTEGRITY_MARKER)) {
+                    if (files.size() >= MAX_MANAGED_FILES) {
+                        throw new IOException("managed runtime integrity traversal exceeds file limit");
+                    }
+                    files.add(path);
+                }
             }
+        }
+        files.sort(Comparator.comparing(path -> portable(directory.relativize(path))));
+        long totalBytes = 0L;
+        for (Path file : files) {
+            String relative = portable(directory.relativize(file));
+            digest.update(relative.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            long expected = Files.size(file);
+            if (expected < 0L || expected > MAX_MANAGED_BYTES - totalBytes) {
+                throw new IOException("managed runtime integrity traversal exceeds byte limit");
+            }
+            long observed = 0L;
+            try (InputStream input = Files.newInputStream(file)) {
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read == 0) continue;
+                    observed += read;
+                    if (observed > expected) throw new IOException("managed runtime file grew during integrity scan: " + relative);
+                    digest.update(buffer, 0, read);
+                }
+            }
+            if (observed != expected) throw new IOException("managed runtime file changed during integrity scan: " + relative);
+            totalBytes += observed;
+            digest.update((byte) 0xff);
         }
         return HexFormat.of().formatHex(digest.digest());
     }

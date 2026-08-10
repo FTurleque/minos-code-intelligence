@@ -31,7 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
-    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 3L * 1024L * 1024L * 1024L;
+    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
+    private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
+    private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
     private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     private static final int BUILD_LOCK_STRIPES = 64;
@@ -92,46 +94,53 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     @Override
     public Optional<SnapshotQueryView> loadActiveQueryView(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        Optional<ActiveMetadata> metadataOptional = activeMetadata(projectId);
-        if (metadataOptional.isEmpty()) return Optional.empty();
-        ActiveMetadata metadata = metadataOptional.orElseThrow();
-        CacheKey key = new CacheKey(projectId, metadata.snapshotId(), metadata.sha256());
-        Optional<SnapshotQueryView> cached = cached(key);
-        if (cached.isPresent()) return cached;
-
-        ReentrantLock buildLock = buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
-        buildLock.lock();
-        try {
-            cached = cached(key);
+        for (int attempt = 1; attempt <= MAX_ACTIVE_QUERY_RETRIES; attempt++) {
+            Optional<ActiveMetadata> metadataOptional = activeMetadata(projectId);
+            if (metadataOptional.isEmpty()) return Optional.empty();
+            ActiveMetadata metadata = metadataOptional.orElseThrow();
+            CacheKey key = new CacheKey(projectId, metadata.snapshotId(), metadata.sha256());
+            Optional<SnapshotQueryView> cached = cached(key);
             if (cached.isPresent()) return cached;
-            synchronized (cacheLock) { cacheMisses++; }
 
-            Optional<Row> row = activeRow(projectId);
-            if (row.isEmpty()) return Optional.empty();
-            Row value = row.orElseThrow();
-            if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
-                // The active pointer changed between the metadata probe and payload fetch. Retry
-                // once against the new authoritative identity rather than caching stale data.
-                return loadActiveQueryView(projectId);
+            ReentrantLock buildLock = buildLocks[Math.floorMod(projectId.hashCode(), buildLocks.length)];
+            boolean retry = false;
+            buildLock.lock();
+            try {
+                cached = cached(key);
+                if (cached.isPresent()) return cached;
+                synchronized (cacheLock) { cacheMisses++; }
+
+                Optional<Row> row = activeRow(projectId);
+                if (row.isEmpty()) return Optional.empty();
+                Row value = row.orElseThrow();
+                if (!metadata.snapshotId().equals(value.snapshotId()) || !metadata.sha256().equals(value.sha256())) {
+                    Files.deleteIfExists(value.payload());
+                    retry = true;
+                } else {
+                    long payloadBytes = Files.size(value.payload());
+                    CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
+                    long started = System.nanoTime();
+                    InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
+                    long buildNanos = System.nanoTime() - started;
+                    SnapshotDescriptor descriptor = new SnapshotDescriptor(
+                            2,
+                            snapshot.snapshotId(),
+                            "postgresql:" + snapshot.snapshotId(),
+                            metadata.sha256(),
+                            metadata.symbolCount(),
+                            metadata.occurrenceCount(),
+                            metadata.relationshipCount());
+                    SnapshotQueryView view = new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos);
+                    cache(projectId, key, view, estimateWeight(metadata, payloadBytes));
+                    return Optional.of(view);
+                }
+            } finally {
+                buildLock.unlock();
             }
-            CodeKnowledgeSnapshot snapshot = decodeVerified(projectId, value);
-            long started = System.nanoTime();
-            InMemoryCodeKnowledgeStore queryStore = new InMemoryCodeKnowledgeStore(snapshot);
-            long buildNanos = System.nanoTime() - started;
-            SnapshotDescriptor descriptor = new SnapshotDescriptor(
-                    2,
-                    snapshot.snapshotId(),
-                    "postgresql:" + snapshot.snapshotId(),
-                    metadata.sha256(),
-                    metadata.symbolCount(),
-                    metadata.occurrenceCount(),
-                    metadata.relationshipCount());
-            SnapshotQueryView view = new SnapshotQueryView(descriptor, snapshot, queryStore, buildNanos);
-            cache(projectId, key, view, estimateWeight(metadata));
-            return Optional.of(view);
-        } finally {
-            buildLock.unlock();
+            if (!retry) throw new IOException("PostgreSQL active snapshot resolution ended without a result");
         }
+        throw new IOException("PostgreSQL active snapshot changed repeatedly; retry limit exceeded for project "
+                + projectId + " after " + MAX_ACTIVE_QUERY_RETRIES + " attempts");
     }
 
     QueryCacheStats queryCacheStats() {
@@ -347,16 +356,25 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         }
     }
 
-    private static long estimateWeight(ActiveMetadata metadata) {
-        long weight = 64L * 1024L;
-        weight = safeAdd(weight, (long) metadata.symbolCount() * 1024L);
-        weight = safeAdd(weight, (long) metadata.occurrenceCount() * 640L);
-        weight = safeAdd(weight, (long) metadata.relationshipCount() * 1024L);
-        return weight;
+    private static long estimateWeight(ActiveMetadata metadata, long persistedBytes) {
+        long countWeight = 64L * 1024L;
+        countWeight = safeAdd(countWeight, (long) metadata.symbolCount() * 1024L);
+        countWeight = safeAdd(countWeight, (long) metadata.occurrenceCount() * 640L);
+        countWeight = safeAdd(countWeight, (long) metadata.relationshipCount() * 1024L);
+        long persistedWeight = safeMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
+        return Math.max(countWeight, persistedWeight);
     }
 
     private static long safeAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long safeMultiply(long left, long right) {
+        try {
+            return Math.multiplyExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private static ReentrantLock[] buildLocks() {

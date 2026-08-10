@@ -35,6 +35,7 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
             "JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT";
     public static final int DEFAULT_MAX_FINGERPRINT_CACHE_ENTRIES = 64;
     public static final long DEFAULT_MAX_FINGERPRINT_CACHE_WEIGHT_BYTES = 128L * 1024L * 1024L;
+    private static final long MAX_SECURITY_CONFIG_BYTES = 1024L * 1024L;
 
     private final ProjectFingerprintSnapshotStore fingerprints;
     private final JavaSourceProgramGraphProvider delegate;
@@ -155,7 +156,8 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
             Path candidate = root.resolve(Path.of(fileId.replace('/', java.io.File.separatorChar))).normalize();
             if (!candidate.startsWith(root) || !Files.isRegularFile(candidate)) return false;
             Path real = candidate.toRealPath();
-            if (!real.startsWith(root) || Files.size(real) != expectedFile.sizeBytes() || !sha256(real).equals(expectedFile.sha256())) return false;
+            if (!real.startsWith(root) || Files.size(real) != expectedFile.sizeBytes()
+                    || !sha256Exact(real, expectedFile.sizeBytes(), "Java snapshot source").equals(expectedFile.sha256())) return false;
         }
         return true;
     }
@@ -167,18 +169,34 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         if (!Files.isRegularFile(candidate)) throw new IOException("Java advanced provider security config is not a regular file");
         Path real = candidate.toRealPath();
         if (!real.startsWith(root)) throw new IOException("Java advanced provider security config escapes project root");
-        return sha256(real);
+        long size = Files.size(real);
+        if (size > MAX_SECURITY_CONFIG_BYTES) {
+            throw new IOException("Java advanced provider security config exceeds byte limit: " + size);
+        }
+        return sha256Exact(real, size, "Java advanced provider security config");
     }
 
-    private static String sha256(Path file) throws IOException {
+    private static String sha256Exact(Path file, long expectedBytes, String label) throws IOException {
+        if (expectedBytes < 0L) throw new IOException(label + " has a negative expected size");
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            long total = 0L;
             try (InputStream input = Files.newInputStream(file)) {
-                byte[] buffer = new byte[64 * 1024]; int read;
-                while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read == 0) continue;
+                    try { total = Math.addExact(total, read); }
+                    catch (ArithmeticException exception) { throw new IOException(label + " byte counter overflow", exception); }
+                    if (total > expectedBytes) throw new IOException(label + " grew while being fingerprinted");
+                    digest.update(buffer, 0, read);
+                }
             }
+            if (total != expectedBytes) throw new IOException(label + " changed size while being fingerprinted");
             return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 is unavailable", exception); }
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private record CachedFingerprint(String snapshotId, ProjectFingerprintSnapshot snapshot, long weightBytes) { }

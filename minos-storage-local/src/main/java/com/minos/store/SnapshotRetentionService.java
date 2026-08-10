@@ -75,7 +75,7 @@ public final class SnapshotRetentionService {
         }
     }
 
-    private RetentionResult applyPolicyLocked(
+    RetentionResult applyPolicyLocked(
             UUID projectId,
             String activeFileName,
             SnapshotRetentionPolicy policy

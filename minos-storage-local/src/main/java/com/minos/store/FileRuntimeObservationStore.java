@@ -136,22 +136,65 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
 
     @Override
     public List<CorrelatedRuntimeSession> list(UUID projectId) throws IOException {
+        return list(projectId, null, maxSessionsPerProject);
+    }
+
+    @Override
+    public List<CorrelatedRuntimeSession> list(UUID projectId, String snapshotId, int limit) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        if (limit < 1) throw new IllegalArgumentException("runtime session limit must be positive");
         Path project = projectDirectory(projectId);
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireProjectDirectory(project);
         try (LockedProject ignored = lock(project)) {
-            List<CorrelatedRuntimeSession> sessions = new ArrayList<>();
-            for (Path file : sessionFiles(project)) sessions.add(readVerified(file, projectId));
-            sessions.sort(Comparator.comparing(CorrelatedRuntimeSession::importedAt).reversed()
-                    .thenComparing(value -> value.session().sessionId()));
+            List<SessionMetadata> metadata = new ArrayList<>();
+            for (Path file : sessionFiles(project)) {
+                SessionMetadata candidate = readMetadata(file, projectId);
+                if (snapshotId == null || snapshotId.equals(candidate.snapshotId())) metadata.add(candidate);
+            }
+            metadata.sort(Comparator.comparing(SessionMetadata::importedAt).reversed()
+                    .thenComparing(SessionMetadata::sessionId));
+            List<CorrelatedRuntimeSession> sessions = new ArrayList<>(Math.min(limit, metadata.size()));
+            for (SessionMetadata candidate : metadata) {
+                if (sessions.size() >= limit) break;
+                sessions.add(readVerified(candidate.file(), projectId));
+            }
             return List.copyOf(sessions);
         }
     }
 
     public Path root() {
         return root;
+    }
+
+    private SessionMetadata readMetadata(Path file, UUID expectedProjectId) throws IOException {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(file)) {
+            throw new IOException("runtime session entry must be a regular non-symlink file: " + file.getFileName());
+        }
+        long size = Files.size(file);
+        if (size < 1L || size > maxSessionBytes) throw new IOException("persisted runtime session size is invalid");
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+            if (input.readInt() != MAGIC) throw new IOException("invalid runtime session magic");
+            int version = input.readInt();
+            if (version != VERSION) throw new IOException("unsupported runtime session version: " + version);
+            readString(input, "format");
+            String sessionId = readString(input, "sessionId");
+            UUID projectId = parseUuid(readString(input, "projectId"));
+            if (!expectedProjectId.equals(projectId)) throw new IOException("runtime session project identity mismatch");
+            String snapshotId = readString(input, "snapshotId");
+            readInstant(input);
+            readInstant(input);
+            readString(input, "collectorId");
+            readString(input, "collectorVersion");
+            readString(input, "environment");
+            readString(input, "completeness");
+            Instant importedAt = readInstant(input);
+            readString(input, "sourceSha256");
+            return new SessionMetadata(file, snapshotId, sessionId, importedAt);
+        } catch (EOFException exception) {
+            throw new IOException("truncated runtime session metadata", exception);
+        }
     }
 
     private Optional<CorrelatedRuntimeSession> findUnlocked(Path project, UUID projectId, String sessionId) throws IOException {
@@ -449,6 +492,15 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private record SessionMetadata(Path file, String snapshotId, String sessionId, Instant importedAt) {
+        private SessionMetadata {
+            Objects.requireNonNull(file, "file");
+            Objects.requireNonNull(snapshotId, "snapshotId");
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(importedAt, "importedAt");
         }
     }
 
