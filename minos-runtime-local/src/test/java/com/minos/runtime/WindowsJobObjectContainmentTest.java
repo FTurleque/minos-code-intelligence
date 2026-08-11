@@ -49,7 +49,7 @@ class WindowsJobObjectContainmentTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
-                $ErrorActionPreference = 'Stop'
+                $ErrorActionPreference = 'Continue'
                 $report = New-Object System.Collections.Generic.List[string]
                 function Start-Detached([string] $Command) {
                   $info = New-Object System.Diagnostics.ProcessStartInfo
@@ -68,8 +68,16 @@ class WindowsJobObjectContainmentTest {
                   }
                 }
                 Start-Sleep -Milliseconds 500
-                [System.IO.File]::WriteAllText($Descendants, ($report -join "`n"))
-                [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
+                try {
+                  [System.IO.File]::WriteAllText($Descendants, ($report -join [Environment]::NewLine))
+                } catch {
+                  Write-Error ('DESCENDANT-REPORT-FAILED: ' + $_.Exception.Message)
+                }
+                try {
+                  [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
+                } catch {
+                  Write-Error ('ARTIFACT-WRITE-FAILED: ' + $_.Exception.Message)
+                }
                 exit 0
 """, StandardCharsets.US_ASCII);
 
@@ -97,7 +105,13 @@ class WindowsJobObjectContainmentTest {
                             Duration.ofSeconds(60));
                 });
 
-        IndexingArtifact artifact = backend.execute(executor, executionRequest(project), WorkerNetworkPolicy.ALLOW);
+        IndexingArtifact artifact;
+        try {
+            artifact = backend.execute(executor, executionRequest(project), WorkerNetworkPolicy.ALLOW);
+        } catch (Exception failure) {
+            throw new AssertionError(
+                    failure.getMessage() + "\nprovider diagnostics:\n" + providerDiagnostics(home), failure);
+        }
 
         assertEquals("contained-windows-artifact",
                 Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
@@ -162,6 +176,24 @@ class WindowsJobObjectContainmentTest {
         assertTrue(discovered.orElseThrow().supportsUntrustedCode());
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_BREAKAWAY_PROHIBITED"));
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_TERMINATED_ON_EVERY_EXIT_PATH"));
+    }
+
+    /** Surfaces what the contained provider actually reported, instead of an opaque exit code. */
+    private static String providerDiagnostics(Path home) {
+        Path runs = home.resolve("runs");
+        if (!Files.isDirectory(runs)) return "<no MINOS run directory>";
+        StringBuilder diagnostics = new StringBuilder();
+        try (var entries = Files.walk(runs, 6)) {
+            for (Path candidate : entries.filter(Files::isRegularFile).toList()) {
+                String name = String.valueOf(candidate.getFileName());
+                if (!name.equals("provider.stderr.log") && !name.equals("provider.stdout.log")) continue;
+                diagnostics.append(name).append(": ")
+                        .append(Files.readString(candidate, StandardCharsets.UTF_8)).append('\n');
+            }
+        } catch (Exception exception) {
+            diagnostics.append("<unreadable: ").append(exception.getMessage()).append('>');
+        }
+        return diagnostics.isEmpty() ? "<no provider diagnostics>" : diagnostics.toString();
     }
 
     private static boolean awaitAlive(long pid) throws InterruptedException {
