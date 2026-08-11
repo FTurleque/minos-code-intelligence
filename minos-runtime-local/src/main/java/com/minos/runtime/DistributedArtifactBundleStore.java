@@ -55,6 +55,25 @@ public final class DistributedArtifactBundleStore {
     private static final int MAX_CACHE_ROOT_ENTRIES = 4_096;
     private static final int MAX_CACHE_ENTRY_TREE_ENTRIES = 128;
 
+    private static final String PROP_FORMAT = "format";
+    private static final String PROP_RUN_ID = "runId";
+    private static final String PROP_PROJECT_ID = "projectId";
+    private static final String PROP_PROJECT_RELATIVE_ROOT = "projectRelativeRoot";
+    private static final String PROP_SOURCE_REPOSITORY = "sourceRepository";
+    private static final String PROP_SOURCE_COMMIT = "sourceCommit";
+    private static final String PROP_LANGUAGE = "language";
+    private static final String PROP_PROVIDER_ID = "providerId";
+    private static final String PROP_PROVIDER_VERSION = "providerVersion";
+    private static final String PROP_WORKER_ID = "workerId";
+    private static final String PROP_ISOLATION = "isolation";
+    private static final String PROP_NETWORK_POLICY = "networkPolicy";
+    private static final String PROP_NETWORK_DENY_ENFORCED = "networkDenyEnforced";
+    private static final String PROP_STARTED_AT = "startedAt";
+    private static final String PROP_COMPLETED_AT = "completedAt";
+    private static final String PROP_ARTIFACT_PATH = "artifactPath";
+    private static final String PROP_ARTIFACT_SIZE = "artifactSize";
+    private static final String PROP_ARTIFACT_SHA256 = "artifactSha256";
+
     private final Path cacheRoot;
     private final Path leasesRoot;
     private final DistributedArtifactCachePolicy policy;
@@ -274,27 +293,27 @@ public final class DistributedArtifactBundleStore {
 
     private static byte[] encodeManifest(DistributedArtifactManifest manifest) throws IOException {
         Properties properties = new Properties();
-        properties.setProperty("format", manifest.format());
-        properties.setProperty("runId", manifest.runId().toString());
-        properties.setProperty("projectId", manifest.projectId().toString());
+        properties.setProperty(PROP_FORMAT, manifest.format());
+        properties.setProperty(PROP_RUN_ID, manifest.runId().toString());
+        properties.setProperty(PROP_PROJECT_ID, manifest.projectId().toString());
         // FORMAT_V1 wire format does not carry projectRelativeRoot; decodeV1 rejects extra fields
         if (DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
-            properties.setProperty("projectRelativeRoot", manifest.projectRelativeRoot());
+            properties.setProperty(PROP_PROJECT_RELATIVE_ROOT, manifest.projectRelativeRoot());
         }
-        properties.setProperty("sourceRepository", manifest.sourceRepository());
-        properties.setProperty("sourceCommit", manifest.sourceCommit());
-        properties.setProperty("language", manifest.language().name());
-        properties.setProperty("providerId", manifest.providerId());
-        properties.setProperty("providerVersion", manifest.providerVersion());
-        properties.setProperty("workerId", manifest.workerId());
-        properties.setProperty("isolation", manifest.isolation().name());
-        properties.setProperty("networkPolicy", manifest.networkPolicy().name());
-        properties.setProperty("networkDenyEnforced", Boolean.toString(manifest.networkDenyEnforced()));
-        properties.setProperty("startedAt", manifest.startedAt().toString());
-        properties.setProperty("completedAt", manifest.completedAt().toString());
-        properties.setProperty("artifactPath", manifest.artifactPath());
-        properties.setProperty("artifactSize", Long.toString(manifest.artifactSize()));
-        properties.setProperty("artifactSha256", manifest.artifactSha256());
+        properties.setProperty(PROP_SOURCE_REPOSITORY, manifest.sourceRepository());
+        properties.setProperty(PROP_SOURCE_COMMIT, manifest.sourceCommit());
+        properties.setProperty(PROP_LANGUAGE, manifest.language().name());
+        properties.setProperty(PROP_PROVIDER_ID, manifest.providerId());
+        properties.setProperty(PROP_PROVIDER_VERSION, manifest.providerVersion());
+        properties.setProperty(PROP_WORKER_ID, manifest.workerId());
+        properties.setProperty(PROP_ISOLATION, manifest.isolation().name());
+        properties.setProperty(PROP_NETWORK_POLICY, manifest.networkPolicy().name());
+        properties.setProperty(PROP_NETWORK_DENY_ENFORCED, Boolean.toString(manifest.networkDenyEnforced()));
+        properties.setProperty(PROP_STARTED_AT, manifest.startedAt().toString());
+        properties.setProperty(PROP_COMPLETED_AT, manifest.completedAt().toString());
+        properties.setProperty(PROP_ARTIFACT_PATH, manifest.artifactPath());
+        properties.setProperty(PROP_ARTIFACT_SIZE, Long.toString(manifest.artifactSize()));
+        properties.setProperty(PROP_ARTIFACT_SHA256, manifest.artifactSha256());
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (Writer writer = new java.io.OutputStreamWriter(output, StandardCharsets.UTF_8)) {
             properties.store(writer, "MINOS M25 distributed artifact manifest - no secrets");
@@ -306,7 +325,7 @@ public final class DistributedArtifactBundleStore {
         Properties properties = BoundedProperties.loadUtf8(
                 bytes, MAX_MANIFEST_BYTES, 32, 128, 16_384,
                 "distributed artifact manifest");
-        String format = properties.getProperty("format");
+        String format = properties.getProperty(PROP_FORMAT);
         if (DistributedArtifactManifest.FORMAT_V1.equals(format)) {
             return decodeV1(properties);
         } else if (DistributedArtifactManifest.FORMAT_V2.equals(format)) {
@@ -318,10 +337,12 @@ public final class DistributedArtifactBundleStore {
 
     private static DistributedArtifactManifest decodeV1(Properties properties) throws IOException {
         Set<String> expected = Set.of(
-                "format", "runId", "projectId", "sourceRepository", "sourceCommit", "language",
-                "providerId", "providerVersion", "workerId", "isolation", "networkPolicy",
-                "networkDenyEnforced", "startedAt", "completedAt", "artifactPath",
-                "artifactSize", "artifactSha256"
+                PROP_FORMAT, PROP_RUN_ID, PROP_PROJECT_ID,
+                PROP_SOURCE_REPOSITORY, PROP_SOURCE_COMMIT, PROP_LANGUAGE,
+                PROP_PROVIDER_ID, PROP_PROVIDER_VERSION, PROP_WORKER_ID,
+                PROP_ISOLATION, PROP_NETWORK_POLICY, PROP_NETWORK_DENY_ENFORCED,
+                PROP_STARTED_AT, PROP_COMPLETED_AT, PROP_ARTIFACT_PATH,
+                PROP_ARTIFACT_SIZE, PROP_ARTIFACT_SHA256
         );
         if (!properties.stringPropertyNames().equals(expected)) {
             throw new IOException("distributed artifact manifest fields do not match format v1");
@@ -330,24 +351,24 @@ public final class DistributedArtifactBundleStore {
             // V1 always decodes as root scope — it carries no projectRelativeRoot on the wire.
             // The coordinator will reject this manifest for any non-root-scope request.
             return new DistributedArtifactManifest(
-                    required(properties, "format"),
-                    UUID.fromString(required(properties, "runId")),
-                    UUID.fromString(required(properties, "projectId")),
+                    required(properties, PROP_FORMAT),
+                    UUID.fromString(required(properties, PROP_RUN_ID)),
+                    UUID.fromString(required(properties, PROP_PROJECT_ID)),
                     /* projectRelativeRoot = */ "",
-                    required(properties, "sourceRepository"),
-                    required(properties, "sourceCommit"),
-                    Language.valueOf(required(properties, "language")),
-                    required(properties, "providerId"),
-                    required(properties, "providerVersion"),
-                    required(properties, "workerId"),
-                    WorkerIsolation.valueOf(required(properties, "isolation")),
-                    WorkerNetworkPolicy.valueOf(required(properties, "networkPolicy")),
-                    parseBooleanStrict(required(properties, "networkDenyEnforced")),
-                    Instant.parse(required(properties, "startedAt")),
-                    Instant.parse(required(properties, "completedAt")),
-                    required(properties, "artifactPath"),
-                    Long.parseLong(required(properties, "artifactSize")),
-                    required(properties, "artifactSha256")
+                    required(properties, PROP_SOURCE_REPOSITORY),
+                    required(properties, PROP_SOURCE_COMMIT),
+                    Language.valueOf(required(properties, PROP_LANGUAGE)),
+                    required(properties, PROP_PROVIDER_ID),
+                    required(properties, PROP_PROVIDER_VERSION),
+                    required(properties, PROP_WORKER_ID),
+                    WorkerIsolation.valueOf(required(properties, PROP_ISOLATION)),
+                    WorkerNetworkPolicy.valueOf(required(properties, PROP_NETWORK_POLICY)),
+                    parseBooleanStrict(required(properties, PROP_NETWORK_DENY_ENFORCED)),
+                    Instant.parse(required(properties, PROP_STARTED_AT)),
+                    Instant.parse(required(properties, PROP_COMPLETED_AT)),
+                    required(properties, PROP_ARTIFACT_PATH),
+                    Long.parseLong(required(properties, PROP_ARTIFACT_SIZE)),
+                    required(properties, PROP_ARTIFACT_SHA256)
             );
         } catch (RuntimeException exception) {
             throw new IOException("distributed artifact manifest is invalid", exception);
@@ -356,36 +377,37 @@ public final class DistributedArtifactBundleStore {
 
     private static DistributedArtifactManifest decodeV2(Properties properties) throws IOException {
         Set<String> expected = Set.of(
-                "format", "runId", "projectId", "projectRelativeRoot",
-                "sourceRepository", "sourceCommit", "language",
-                "providerId", "providerVersion", "workerId", "isolation", "networkPolicy",
-                "networkDenyEnforced", "startedAt", "completedAt", "artifactPath",
-                "artifactSize", "artifactSha256"
+                PROP_FORMAT, PROP_RUN_ID, PROP_PROJECT_ID, PROP_PROJECT_RELATIVE_ROOT,
+                PROP_SOURCE_REPOSITORY, PROP_SOURCE_COMMIT, PROP_LANGUAGE,
+                PROP_PROVIDER_ID, PROP_PROVIDER_VERSION, PROP_WORKER_ID,
+                PROP_ISOLATION, PROP_NETWORK_POLICY, PROP_NETWORK_DENY_ENFORCED,
+                PROP_STARTED_AT, PROP_COMPLETED_AT, PROP_ARTIFACT_PATH,
+                PROP_ARTIFACT_SIZE, PROP_ARTIFACT_SHA256
         );
         if (!properties.stringPropertyNames().equals(expected)) {
             throw new IOException("distributed artifact manifest fields do not match format v2");
         }
         try {
             return new DistributedArtifactManifest(
-                    required(properties, "format"),
-                    UUID.fromString(required(properties, "runId")),
-                    UUID.fromString(required(properties, "projectId")),
+                    required(properties, PROP_FORMAT),
+                    UUID.fromString(required(properties, PROP_RUN_ID)),
+                    UUID.fromString(required(properties, PROP_PROJECT_ID)),
                     // "" is the canonical root scope — getProperty allows blank, required does not
-                    properties.getProperty("projectRelativeRoot"),
-                    required(properties, "sourceRepository"),
-                    required(properties, "sourceCommit"),
-                    Language.valueOf(required(properties, "language")),
-                    required(properties, "providerId"),
-                    required(properties, "providerVersion"),
-                    required(properties, "workerId"),
-                    WorkerIsolation.valueOf(required(properties, "isolation")),
-                    WorkerNetworkPolicy.valueOf(required(properties, "networkPolicy")),
-                    parseBooleanStrict(required(properties, "networkDenyEnforced")),
-                    Instant.parse(required(properties, "startedAt")),
-                    Instant.parse(required(properties, "completedAt")),
-                    required(properties, "artifactPath"),
-                    Long.parseLong(required(properties, "artifactSize")),
-                    required(properties, "artifactSha256")
+                    properties.getProperty(PROP_PROJECT_RELATIVE_ROOT),
+                    required(properties, PROP_SOURCE_REPOSITORY),
+                    required(properties, PROP_SOURCE_COMMIT),
+                    Language.valueOf(required(properties, PROP_LANGUAGE)),
+                    required(properties, PROP_PROVIDER_ID),
+                    required(properties, PROP_PROVIDER_VERSION),
+                    required(properties, PROP_WORKER_ID),
+                    WorkerIsolation.valueOf(required(properties, PROP_ISOLATION)),
+                    WorkerNetworkPolicy.valueOf(required(properties, PROP_NETWORK_POLICY)),
+                    parseBooleanStrict(required(properties, PROP_NETWORK_DENY_ENFORCED)),
+                    Instant.parse(required(properties, PROP_STARTED_AT)),
+                    Instant.parse(required(properties, PROP_COMPLETED_AT)),
+                    required(properties, PROP_ARTIFACT_PATH),
+                    Long.parseLong(required(properties, PROP_ARTIFACT_SIZE)),
+                    required(properties, PROP_ARTIFACT_SHA256)
             );
         } catch (RuntimeException exception) {
             throw new IOException("distributed artifact manifest is invalid", exception);

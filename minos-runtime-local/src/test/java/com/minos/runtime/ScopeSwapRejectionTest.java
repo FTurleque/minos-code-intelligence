@@ -124,7 +124,7 @@ class ScopeSwapRejectionTest {
         UUID projectId = UUID.randomUUID();
         // A v1 bundle always decodes as root scope (projectRelativeRoot = ""); requesting
         // "module-a" (non-root) therefore produces a provenance mismatch.
-        BundleAndManifest v1Bundle = buildV1Bundle(temp, store, runId, projectId);
+        BundleAndManifest v1Bundle = buildV1Bundle(temp, runId, projectId);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "module-a", v1Bundle));
@@ -219,7 +219,6 @@ class ScopeSwapRejectionTest {
 
     private static BundleAndManifest buildV1Bundle(
             Path temp,
-            DistributedArtifactBundleStore store,
             UUID runId,
             UUID projectId
     ) throws Exception {
