@@ -62,16 +62,20 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
         Objects.requireNonNull(jobKill, "jobKill");
         Set<Path> normalized = new LinkedHashSet<>();
         for (Path root : writableRoots) {
-            if (root == null) continue;
-            Path candidate = root.toAbsolutePath().normalize();
-            if (normalized.stream().anyMatch(candidate::startsWith)) continue;
-            normalized.removeIf(existing -> existing.startsWith(candidate));
-            normalized.add(candidate);
+            if (root != null) addNormalizedRoot(normalized, root);
         }
         ProviderWriteQuotaSupervisor supervisor =
                 new ProviderWriteQuotaSupervisor(List.copyOf(normalized), quota, jobKill);
         supervisor.thread.start();
         return supervisor;
+    }
+
+    /** A writable root is kept only if it is not already covered by a shorter, already-kept root. */
+    private static void addNormalizedRoot(Set<Path> normalized, Path root) {
+        Path candidate = root.toAbsolutePath().normalize();
+        if (normalized.stream().anyMatch(candidate::startsWith)) return;
+        normalized.removeIf(existing -> existing.startsWith(candidate));
+        normalized.add(candidate);
     }
 
     /** Returns the breach description when the provider crossed its write budget. */
@@ -130,39 +134,44 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
     private Sample sample() {
         long[] totals = {0L, 0L};
         for (Path root : roots) {
-            if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) continue;
-            try {
-                Files.walkFileTree(root, Set.<FileVisitOption>of(), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
-                    @Override
-                    public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                        return account(0L);
-                    }
-
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
-                        return account(attributes.isRegularFile() ? attributes.size() : 0L);
-                    }
-
-                    @Override
-                    public FileVisitResult visitFileFailed(Path file, IOException failure) {
-                        // Provider files disappear concurrently; an unreadable entry still costs one entry.
-                        return account(0L);
-                    }
-
-                    private FileVisitResult account(long bytes) {
-                        totals[0] = saturatingAdd(totals[0], bytes);
-                        totals[1] = saturatingAdd(totals[1], 1L);
-                        return totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()
-                                ? FileVisitResult.TERMINATE
-                                : FileVisitResult.CONTINUE;
-                    }
-                });
-            } catch (IOException | RuntimeException ignored) {
-                // A root that vanished or became unreadable is accounted on the next sample.
-            }
+            sampleRoot(root, totals);
             if (totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()) break;
         }
         return new Sample(totals[0], totals[1]);
+    }
+
+    /** Accumulates one writable root's bytes/entries into {@code totals}; never throws. */
+    private void sampleRoot(Path root, long[] totals) {
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
+        try {
+            Files.walkFileTree(root, Set.<FileVisitOption>of(), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                    return account(0L);
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                    return account(attributes.isRegularFile() ? attributes.size() : 0L);
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                    // Provider files disappear concurrently; an unreadable entry still costs one entry.
+                    return account(0L);
+                }
+
+                private FileVisitResult account(long bytes) {
+                    totals[0] = saturatingAdd(totals[0], bytes);
+                    totals[1] = saturatingAdd(totals[1], 1L);
+                    return totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()
+                            ? FileVisitResult.TERMINATE
+                            : FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException | RuntimeException ignored) {
+            // A root that vanished or became unreadable is accounted on the next sample.
+        }
     }
 
     private static long saturatingAdd(long left, long right) {

@@ -35,6 +35,8 @@ import java.util.UUID;
  */
 final class LinuxCgroupJob implements AutoCloseable {
 
+    private static final System.Logger LOGGER = System.getLogger(LinuxCgroupJob.class.getName());
+
     static final String ROOT_ENVIRONMENT_VARIABLE = "MINOS_SANDBOX_CGROUP_ROOT";
     static final Path CGROUP_MOUNT = Path.of("/sys/fs/cgroup");
     static final String CONTROLLER_DIRECTORY = "minos-controller";
@@ -130,8 +132,8 @@ final class LinuxCgroupJob implements AutoCloseable {
             reclaimStaleJobs(root);
             return true;
         } catch (IOException | RuntimeException exception) {
-            System.err.println("MINOS Linux cgroup delegation probe rejected " + root + ": "
-                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Linux cgroup delegation probe rejected " + root, exception);
             return false;
         }
     }
@@ -182,8 +184,8 @@ final class LinuxCgroupJob implements AutoCloseable {
                     .filter(child -> !CONTROLLER_DIRECTORY.equals(String.valueOf(child.getFileName())))
                     .forEach(child -> new LinuxCgroupJob(child).close());
         } catch (IOException | RuntimeException exception) {
-            System.err.println("MINOS could not reclaim stale sandbox cgroups in " + root + ": "
-                    + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not reclaim stale sandbox cgroups in " + root, exception);
         }
     }
 
@@ -194,14 +196,17 @@ final class LinuxCgroupJob implements AutoCloseable {
             job.close();
             return true;
         } catch (IOException | RuntimeException exception) {
-            System.err.println("MINOS Linux cgroup capability probe failed: "
-                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
-            try {
-                Files.deleteIfExists(probe);
-            } catch (IOException ignored) {
-                // A probe leftover is diagnosed by the next probe, never silently trusted.
-            }
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux cgroup capability probe failed", exception);
+            deleteProbeQuietly(probe);
             return false;
+        }
+    }
+
+    private static void deleteProbeQuietly(Path probe) {
+        try {
+            Files.deleteIfExists(probe);
+        } catch (IOException ignored) {
+            // A probe leftover is diagnosed by the next probe, never silently trusted.
         }
     }
 
@@ -298,16 +303,20 @@ final class LinuxCgroupJob implements AutoCloseable {
         try {
             List<Long> members = new ArrayList<>();
             for (String line : Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
-                if (line.isBlank()) continue;
-                try {
-                    members.add(Long.parseLong(line.trim()));
-                } catch (NumberFormatException ignored) {
-                    // cgroup.procs only ever holds decimal pids; anything else is not addressable.
-                }
+                if (!line.isBlank()) parsePid(line).ifPresent(members::add);
             }
             return members;
         } catch (IOException exception) {
             return List.of();
+        }
+    }
+
+    private static Optional<Long> parsePid(String line) {
+        try {
+            return Optional.of(Long.parseLong(line.trim()));
+        } catch (NumberFormatException ignored) {
+            // cgroup.procs only ever holds decimal pids; anything else is not addressable.
+            return Optional.empty();
         }
     }
 
@@ -317,7 +326,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         try {
             Files.deleteIfExists(directory);
         } catch (IOException exception) {
-            System.err.println("MINOS could not reclaim sandbox cgroup " + directory + ": " + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim sandbox cgroup " + directory, exception);
         }
     }
 

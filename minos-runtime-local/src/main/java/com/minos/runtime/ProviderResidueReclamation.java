@@ -20,6 +20,8 @@ import java.util.Set;
  */
 final class ProviderResidueReclamation {
 
+    private static final System.Logger LOGGER = System.getLogger(ProviderResidueReclamation.class.getName());
+
     /** Diagnostics MINOS itself authors and that retention, not reclamation, bounds. */
     static final Set<String> RETAINED_ENTRIES = Set.of(
             "provider.stdout.log",
@@ -45,8 +47,8 @@ final class ProviderResidueReclamation {
                 deleteResidue(directory, child);
             }
         } catch (IOException exception) {
-            System.err.println("MINOS could not enumerate provider residue in " + directory + ": "
-                    + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not enumerate provider residue in " + directory, exception);
         }
     }
 
@@ -62,8 +64,8 @@ final class ProviderResidueReclamation {
                 FileTreeOperations.deleteRecursively(normalized);
             }
         } catch (IOException exception) {
-            System.err.println("MINOS could not reclaim provider residue " + normalized + ": "
-                    + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not reclaim provider residue " + normalized, exception);
         }
     }
 }

@@ -34,6 +34,8 @@ import java.util.UUID;
  */
 final class RunDirectoryRetention {
 
+    private static final System.Logger LOGGER = System.getLogger(RunDirectoryRetention.class.getName());
+
     static final Policy DEFAULT = new Policy(16, 4L * 1024L * 1024L * 1024L, Duration.ofDays(7));
     static final String QUARANTINE_DIRECTORY = ".quarantine";
     static final long MAX_SCAN_ENTRIES_PER_RUN = 1_000_000L;
@@ -112,14 +114,19 @@ final class RunDirectoryRetention {
             long scanned = 0;
             for (Path child : children) {
                 if (++scanned > budgets.maxRunRootScanEntries()) return new Scan(entries, true);
-                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
-                Path normalized = child.toAbsolutePath().normalize();
-                if (normalized.equals(protectedRoot)) continue;
-                if (QUARANTINE_DIRECTORY.equals(String.valueOf(normalized.getFileName()))) continue;
-                entries.add(measure(normalized, budgets.maxScanEntriesPerRun()));
+                if (isScannableRun(child, protectedRoot)) {
+                    entries.add(measure(child.toAbsolutePath().normalize(), budgets.maxScanEntriesPerRun()));
+                }
             }
         }
         return new Scan(entries, false);
+    }
+
+    private static boolean isScannableRun(Path child, Path protectedRoot) {
+        if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) return false;
+        Path normalized = child.toAbsolutePath().normalize();
+        if (normalized.equals(protectedRoot)) return false;
+        return !QUARANTINE_DIRECTORY.equals(String.valueOf(normalized.getFileName()));
     }
 
     /**
@@ -135,11 +142,15 @@ final class RunDirectoryRetention {
             deleteTree(runsRoot, target, budget);
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) quarantine(runsRoot, target);
         } catch (IOException exception) {
-            try {
-                quarantine(runsRoot, target);
-            } catch (IOException failure) {
-                System.err.println("MINOS could not reclaim run directory " + target + ": " + failure.getMessage());
-            }
+            quarantineQuietly(runsRoot, target);
+        }
+    }
+
+    private static void quarantineQuietly(Path runsRoot, Path target) {
+        try {
+            quarantine(runsRoot, target);
+        } catch (IOException failure) {
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim run directory " + target, failure);
         }
     }
 
@@ -160,12 +171,12 @@ final class RunDirectoryRetention {
                 try {
                     deleteTree(runsRoot, child.toAbsolutePath().normalize(), budget);
                 } catch (IOException exception) {
-                    System.err.println("MINOS could not drain quarantined run " + child + ": "
-                            + exception.getMessage());
+                    LOGGER.log(System.Logger.Level.WARNING, "MINOS could not drain quarantined run " + child,
+                            exception);
                 }
             }
         } catch (IOException exception) {
-            System.err.println("MINOS could not enumerate the run quarantine: " + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not enumerate the run quarantine", exception);
         }
     }
 
