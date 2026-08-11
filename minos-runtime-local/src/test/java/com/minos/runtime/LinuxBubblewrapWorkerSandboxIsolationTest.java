@@ -27,6 +27,9 @@ class LinuxBubblewrapWorkerSandboxIsolationTest {
         List<String> command = plan(backend, executable).command();
         assertFalse(hasBind(command, "/", "/"));
         assertTrue(command.contains("--unshare-all"));
+        if (Files.isSymbolicLink(Path.of("/bin"))) {
+            assertTrue(hasSymlink(command, Files.readSymbolicLink(Path.of("/bin")).toString(), "/bin"));
+        }
         assertTrue(backend.qualification().limitations().contains("LINUX_MINIMAL_RUNTIME_READ_ONLY_ALLOWLIST"));
     }
 
@@ -83,6 +86,15 @@ class LinuxBubblewrapWorkerSandboxIsolationTest {
     private static boolean hasBind(List<String> command, String source, String destination) {
         for (int index = 0; index + 2 < command.size(); index++) {
             if ("--ro-bind".equals(command.get(index))
+                    && source.equals(command.get(index + 1))
+                    && destination.equals(command.get(index + 2))) return true;
+        }
+        return false;
+    }
+
+    private static boolean hasSymlink(List<String> command, String source, String destination) {
+        for (int index = 0; index + 2 < command.size(); index++) {
+            if ("--symlink".equals(command.get(index))
                     && source.equals(command.get(index + 1))
                     && destination.equals(command.get(index + 2))) return true;
         }

@@ -281,12 +281,22 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private static void addReadOnlyIfPresent(List<String> command, Set<Path> mounted, Path candidate)
             throws IOException {
         if (candidate == null || !Files.exists(candidate)) return;
+        Path destination = candidate.toAbsolutePath().normalize();
         Path real = candidate.toRealPath();
+        if (mounted.stream().anyMatch(real::startsWith)) {
+            if (Files.isSymbolicLink(destination)) {
+                addDestinationParents(command, destination);
+                command.add("--symlink");
+                command.add(Files.readSymbolicLink(destination).toString());
+                command.add(destination.toString());
+            }
+            return;
+        }
         if (!mounted.add(real)) return;
-        addDestinationParents(command, real);
+        addDestinationParents(command, destination);
         command.add("--ro-bind");
         command.add(real.toString());
-        command.add(real.toString());
+        command.add(destination.toString());
     }
 
     private static void addReadOnlyFile(
