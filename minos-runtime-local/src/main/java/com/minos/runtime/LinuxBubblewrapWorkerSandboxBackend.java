@@ -37,6 +37,9 @@ import java.util.concurrent.TimeUnit;
  */
 public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
 
+    private static final System.Logger LOGGER =
+            System.getLogger(LinuxBubblewrapWorkerSandboxBackend.class.getName());
+
     /** Aggregate memory of the whole provider tree, enforced by {@code memory.max}. */
     static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
     /** Per-process address space; defence in depth on top of the aggregate cgroup limit. */
@@ -83,9 +86,10 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             return Optional.empty();
         }
         if (LinuxCgroupJob.delegatedRoot().isEmpty()) {
-            System.err.println("MINOS Linux worker sandbox is unqualified: no delegated cgroup v2 job boundary "
-                    + "(set " + LinuxCgroupJob.ROOT_ENVIRONMENT_VARIABLE + " or run MINOS in a delegated cgroup); "
-                    + "untrusted provider execution stays fail-closed");
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Linux worker sandbox is unqualified: no delegated cgroup v2 job boundary (set "
+                            + LinuxCgroupJob.ROOT_ENVIRONMENT_VARIABLE + " or run MINOS in a delegated cgroup); "
+                            + "untrusted provider execution stays fail-closed");
             return Optional.empty();
         }
         LinuxBubblewrapWorkerSandboxBackend candidate =
@@ -242,7 +246,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             IndexerProcessPlan plan,
             Path runDirectory,
             WorkerNetworkPolicy networkPolicy
-    ) throws Exception {
+    ) throws IOException {
         return sandboxPlan(plan, runDirectory, networkPolicy, null);
     }
 
@@ -251,7 +255,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             Path runDirectory,
             WorkerNetworkPolicy networkPolicy,
             LinuxCgroupJob job
-    ) throws Exception {
+    ) throws IOException {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(networkPolicy, "networkPolicy");
         Path working = plan.workingDirectory().toRealPath();
@@ -306,12 +310,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             if (!process.waitFor(5, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 process.waitFor(2, TimeUnit.SECONDS);
-                System.err.println("MINOS Linux sandbox capability probe timed out");
+                LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux sandbox capability probe timed out");
                 return false;
             }
             String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
             if (process.exitValue() != 0) {
-                System.err.println("MINOS Linux sandbox capability probe failed (exit="
+                LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux sandbox capability probe failed (exit="
                         + process.exitValue() + "): " + output);
                 return false;
             }
@@ -320,8 +324,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             Thread.currentThread().interrupt();
             return false;
         } catch (IOException | RuntimeException exception) {
-            System.err.println("MINOS Linux sandbox capability probe could not start: "
-                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux sandbox capability probe could not start", exception);
             return false;
         }
     }
