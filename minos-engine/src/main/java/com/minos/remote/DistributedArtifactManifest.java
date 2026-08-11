@@ -36,16 +36,11 @@ public record DistributedArtifactManifest(
     public static final String ARTIFACT_PATH = "index.scip";
 
     public DistributedArtifactManifest {
-        if (!FORMAT_V1.equals(format) && !FORMAT_V2.equals(format)) {
-            throw new IllegalArgumentException("unsupported distributed artifact format: " + format);
-        }
+        requireKnownFormat(format);
         Objects.requireNonNull(runId, "runId");
         Objects.requireNonNull(projectId, "projectId");
         projectRelativeRoot = normalizeManifestScope(projectRelativeRoot);
-        if (FORMAT_V1.equals(format) && !projectRelativeRoot.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "format v1 cannot carry a non-root projectRelativeRoot; use FORMAT_V2");
-        }
+        requireRootScopeForV1(format, projectRelativeRoot);
         sourceRepository = requireText(sourceRepository, "sourceRepository");
         if (sourceRepository.contains("@") || sourceRepository.contains("?") || sourceRepository.contains("#")) {
             throw new IllegalArgumentException("sourceRepository must be canonical and secret-free");
@@ -117,5 +112,18 @@ public record DistributedArtifactManifest(
             throw new IllegalArgumentException(label + " must not be blank");
         }
         return value;
+    }
+
+    private static void requireKnownFormat(String format) {
+        if (!FORMAT_V1.equals(format) && !FORMAT_V2.equals(format)) {
+            throw new IllegalArgumentException("unsupported distributed artifact format: " + format);
+        }
+    }
+
+    private static void requireRootScopeForV1(String format, String scope) {
+        if (FORMAT_V1.equals(format) && !scope.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "format v1 cannot carry a non-root projectRelativeRoot; use FORMAT_V2");
+        }
     }
 }
