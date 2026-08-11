@@ -49,22 +49,26 @@ class WindowsJobObjectContainmentTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
+                # Only .NET APIs: a sanitized AppContainer environment cannot always initialize the
+                # PowerShell provider stack, so cmdlets are unavailable to a contained provider.
                 $ErrorActionPreference = 'Continue'
-                Add-Content -LiteralPath $Descendants -Value 'begin' -Encoding Ascii
-                foreach ($index in 1..2) {
+                $journal = "begin`r`n"
+                [System.IO.File]::WriteAllText($Descendants, $journal)
+                foreach ($index in 1, 2) {
                   try {
-                    $info = New-Object 'System.Diagnostics.ProcessStartInfo'
+                    $info = [System.Diagnostics.ProcessStartInfo]::new()
                     $info.FileName = $PowerShell
-                    $info.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 300"'
+                    $info.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "[System.Threading.Thread]::Sleep(300000)"'
                     $info.UseShellExecute = $false
                     $info.CreateNoWindow = $true
                     $spawned = [System.Diagnostics.Process]::Start($info)
-                    Add-Content -LiteralPath $Descendants -Value ('pid=' + $spawned.Id) -Encoding Ascii
+                    $journal = $journal + 'pid=' + $spawned.Id + "`r`n"
                   } catch {
-                    Add-Content -LiteralPath $Descendants -Value ('spawn-failed=' + $_.Exception.Message) -Encoding Ascii
+                    $journal = $journal + 'spawn-failed=' + $_.Exception.Message + "`r`n"
                   }
+                  [System.IO.File]::WriteAllText($Descendants, $journal)
                 }
-                Start-Sleep -Milliseconds 500
+                [System.Threading.Thread]::Sleep(500)
                 [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
                 exit 0
 """, StandardCharsets.US_ASCII);

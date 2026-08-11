@@ -83,27 +83,8 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         writeMetadata(metadata, plan, request, startedAt);
         ProviderWriteQuotaSupervisor supervisor = null;
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
-            processBuilder.directory(plan.workingDirectory().toFile());
-            if (transformer.trustedLauncherRequiresParentEnvironment()) {
-                // The transformed command is a MINOS-owned sandbox launcher, not provider code.
-                // Provider environment isolation remains the launcher's responsibility and must be
-                // encoded into the sandbox plan before this trusted boundary is selected.
-                processBuilder.environment().putAll(plan.environment());
-            } else {
-                ProviderProcessEnvironment.apply(processBuilder, plan.environment());
-            }
-
-            Process process = processBuilder.start();
-            if (writeQuota.isPresent()) {
-                supervisor = ProviderWriteQuotaSupervisor.start(
-                        providerWritableRoots(plan, runDirectory),
-                        writeQuota.orElseThrow(),
-                        () -> {
-                            transformer.killContainedJob();
-                            terminate(process);
-                        });
-            }
+            Process process = startProvider(plan, transformer);
+            supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
             BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
             boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
             Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
@@ -137,14 +118,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 archiveFailedArtifact(generatedArtifact, runDirectory);
                 throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
             }
-            requireValidArtifact(generatedArtifact, "provider did not produce a valid SCIP artifact");
-
-            if (!generatedArtifact.equals(finalArtifact)) {
-                Path partial = runDirectory.resolve("index.partial.scip");
-                copyArtifactBounded(generatedArtifact, partial);
-                move(partial, finalArtifact);
-            }
-            requireValidArtifact(finalArtifact, "stable run artifact is invalid");
+            promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
 
             return new IndexingArtifact(
                     request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
@@ -161,6 +135,50 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
             }
         }
+    }
+
+    private static Process startProvider(IndexerProcessPlan plan, ProcessPlanTransformer transformer)
+            throws IOException {
+        ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
+        processBuilder.directory(plan.workingDirectory().toFile());
+        if (transformer.trustedLauncherRequiresParentEnvironment()) {
+            // The transformed command is a MINOS-owned sandbox launcher, not provider code.
+            // Provider environment isolation remains the launcher's responsibility and must be
+            // encoded into the sandbox plan before this trusted boundary is selected.
+            processBuilder.environment().putAll(plan.environment());
+        } else {
+            ProviderProcessEnvironment.apply(processBuilder, plan.environment());
+        }
+        return processBuilder.start();
+    }
+
+    /** Enforces the provider write budget for as long as the provider runs. */
+    private static ProviderWriteQuotaSupervisor startWriteQuotaSupervisor(
+            Optional<ProviderWriteQuota> writeQuota,
+            IndexerProcessPlan plan,
+            Path runDirectory,
+            ProcessPlanTransformer transformer,
+            Process process
+    ) {
+        if (writeQuota.isEmpty()) return null;
+        return ProviderWriteQuotaSupervisor.start(
+                providerWritableRoots(plan, runDirectory),
+                writeQuota.orElseThrow(),
+                () -> {
+                    transformer.killContainedJob();
+                    terminate(process);
+                });
+    }
+
+    private static void promoteArtifact(Path generatedArtifact, Path finalArtifact, Path runDirectory)
+            throws IOException {
+        requireValidArtifact(generatedArtifact, "provider did not produce a valid SCIP artifact");
+        if (!generatedArtifact.equals(finalArtifact)) {
+            Path partial = runDirectory.resolve("index.partial.scip");
+            copyArtifactBounded(generatedArtifact, partial);
+            move(partial, finalArtifact);
+        }
+        requireValidArtifact(finalArtifact, "stable run artifact is invalid");
     }
 
     /** Resolves and bounds the MINOS-owned run directory this execution may write to. */

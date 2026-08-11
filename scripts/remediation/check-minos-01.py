@@ -152,10 +152,10 @@ def main() -> int:
                 "ProviderWriteQuotaSupervisor.start", "providerWriteQuota()",
                 "transformer.killContainedJob()", "transformer.releaseContainment()",
                 "write containment breached", "ProviderResidueReclamation.reclaim",
-                "providerWritableRoots")
+                "providerWritableRoots", "supervisor = startWriteQuotaSupervisor(")
         require("ProviderResidueReclamation.java", reclamation,
                 "RETAINED_ENTRIES", "LinkOption.NOFOLLOW_LINKS", "startsWith(root)")
-        if executor.index("ProviderWriteQuotaSupervisor.start") > executor.index("process.waitFor"):
+        if executor.index("supervisor = startWriteQuotaSupervisor(") > executor.index("process.waitFor"):
             raise RuntimeError("ProcessIndexerExecutor.java: the write quota starts after the provider ran")
 
         # 6. A hostile previous run can never block the runs that follow it.

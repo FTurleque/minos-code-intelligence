@@ -50,7 +50,8 @@ final class LinuxCgroupJob implements AutoCloseable {
     private static final long MAX_STALE_JOB_SWEEP = 4_096L;
 
     private static final Object DISCOVERY_LOCK = new Object();
-    private static Optional<Path> discovered;
+    private static boolean delegationProbed;
+    private static Optional<Path> delegation = Optional.empty();
 
     private final Path directory;
 
@@ -66,15 +67,19 @@ final class LinuxCgroupJob implements AutoCloseable {
      */
     static Optional<Path> delegatedRoot() {
         synchronized (DISCOVERY_LOCK) {
-            if (discovered == null) discovered = discoverDelegatedRoot();
-            return discovered;
+            if (!delegationProbed) {
+                delegation = discoverDelegatedRoot();
+                delegationProbed = true;
+            }
+            return delegation;
         }
     }
 
     /** Test seam: forgets the memoized delegation so a probe can be re-evaluated. */
     static void resetDelegationForTesting() {
         synchronized (DISCOVERY_LOCK) {
-            discovered = null;
+            delegationProbed = false;
+            delegation = Optional.empty();
         }
     }
 
