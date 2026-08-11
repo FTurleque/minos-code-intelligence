@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -49,6 +50,7 @@ class WindowsJobObjectContainmentTest {
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
                 $ErrorActionPreference = 'Stop'
+                $report = New-Object System.Collections.Generic.List[string]
                 function Start-Detached([string] $Command) {
                   $info = New-Object System.Diagnostics.ProcessStartInfo
                   $info.FileName = $PowerShell
@@ -57,10 +59,16 @@ class WindowsJobObjectContainmentTest {
                   $info.CreateNoWindow = $true
                   return [System.Diagnostics.Process]::Start($info)
                 }
-                $child = Start-Detached 'Start-Sleep -Seconds 300'
-                $grandchild = Start-Detached 'Start-Sleep -Seconds 300'
+                foreach ($index in 1..2) {
+                  try {
+                    $spawned = Start-Detached 'Start-Sleep -Seconds 300'
+                    $report.Add([string]$spawned.Id)
+                  } catch {
+                    $report.Add('SPAWN-FAILED ' + $_.Exception.GetType().FullName + ': ' + $_.Exception.Message)
+                  }
+                }
                 Start-Sleep -Milliseconds 500
-                [System.IO.File]::WriteAllText($Descendants, "$($child.Id)`n$($grandchild.Id)")
+                [System.IO.File]::WriteAllText($Descendants, ($report -join "`n"))
                 [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
                 exit 0
 """, StandardCharsets.US_ASCII);
@@ -93,11 +101,17 @@ class WindowsJobObjectContainmentTest {
 
         assertEquals("contained-windows-artifact",
                 Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
-        assumeTrue(Files.isRegularFile(descendants),
-                "the AppContainer provider must be able to spawn descendants for this proof to mean anything");
-        for (String line : Files.readAllLines(descendants, StandardCharsets.UTF_8)) {
-            if (line.isBlank()) continue;
-            long pid = Long.parseLong(line.trim());
+        assertTrue(Files.isRegularFile(descendants), "the provider must report the descendants it spawned");
+        List<String> reported = Files.readAllLines(descendants, StandardCharsets.UTF_8).stream()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .toList();
+        assertEquals(2, reported.size(), "the provider must report both descendants: " + reported);
+        for (String line : reported) {
+            if (!line.chars().allMatch(Character::isDigit)) {
+                fail("the AppContainer provider could not spawn a descendant: " + line);
+            }
+            long pid = Long.parseLong(line);
             assertFalse(awaitAlive(pid), "descendant " + pid + " outlived the MINOS job object");
         }
     }

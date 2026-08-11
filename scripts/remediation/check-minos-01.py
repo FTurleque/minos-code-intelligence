@@ -186,10 +186,16 @@ def main() -> int:
         require("docs/developer/quality-gates.md", quality, "check-minos-01.py")
 
         # 10. The CI gate itself is wired and provisions a real delegated cgroup on Linux.
-        workflow = read(".github/workflows/pr-ci.yml")
-        require(".github/workflows/pr-ci.yml", workflow,
-                "scripts/remediation/check-minos-01.py", "MINOS_SANDBOX_CGROUP_ROOT",
-                "cgroup.subtree_control")
+        delegation = read("scripts/ci/delegate-linux-cgroup.sh")
+        require("scripts/ci/delegate-linux-cgroup.sh", delegation,
+                "MINOS_SANDBOX_CGROUP_ROOT", "cgroup.subtree_control", "cgroup.procs")
+        require(".github/workflows/pr-ci.yml", read(".github/workflows/pr-ci.yml"),
+                "scripts/remediation/check-minos-01.py", "scripts/ci/delegate-linux-cgroup.sh")
+        for relative in (
+            ".github/workflows/m19-advanced-code-intelligence.yml",
+            ".github/workflows/m20-semantic-hybrid-intelligence.yml",
+        ):
+            require(relative, read(relative), "scripts/ci/delegate-linux-cgroup.sh")
 
         print("MINOS-01 WORKER RESOURCE CONTAINMENT INVARIANTS SUCCESS")
         return 0

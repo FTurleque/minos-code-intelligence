@@ -61,6 +61,10 @@ jobs:
           sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
           sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
 
+      - name: Delegate a cgroup v2 job boundary to the worker sandbox
+        shell: bash
+        run: bash scripts/ci/delegate-linux-cgroup.sh
+
       - name: Prepare Maven Wrapper
         shell: bash
         run: chmod +x mvnw
