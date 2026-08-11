@@ -58,7 +58,7 @@ class ScopeSwapRejectionTest {
         UUID runId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         BundleAndManifest attackBundle = buildBundle(
-                temp, store, runId, projectId, "module-b", COMMIT, REPO, 0);
+                temp, store, runId, projectId, "module-b", 0);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "module-a", attackBundle));
@@ -76,7 +76,7 @@ class ScopeSwapRejectionTest {
         UUID runId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         BundleAndManifest attackBundle = buildBundle(
-                temp, store, runId, projectId, "module-a", COMMIT, REPO, 1);
+                temp, store, runId, projectId, "module-a", 1);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "module-b", attackBundle));
@@ -92,7 +92,7 @@ class ScopeSwapRejectionTest {
         UUID runId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         BundleAndManifest attackBundle = buildBundle(
-                temp, store, runId, projectId, "", COMMIT, REPO, 2);
+                temp, store, runId, projectId, "", 2);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "services/catalog", attackBundle));
@@ -107,7 +107,7 @@ class ScopeSwapRejectionTest {
         UUID runId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
         BundleAndManifest attackBundle = buildBundle(
-                temp, store, runId, projectId, "services/catalog", COMMIT, REPO, 3);
+                temp, store, runId, projectId, "services/catalog", 3);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "", attackBundle));
@@ -124,7 +124,7 @@ class ScopeSwapRejectionTest {
         UUID projectId = UUID.randomUUID();
         // A v1 bundle always decodes as root scope (projectRelativeRoot = ""); requesting
         // "module-a" (non-root) therefore produces a provenance mismatch.
-        BundleAndManifest v1Bundle = buildV1Bundle(temp, store, runId, projectId, COMMIT, REPO);
+        BundleAndManifest v1Bundle = buildV1Bundle(temp, store, runId, projectId);
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> executeWith(temp, store, runId, projectId, registeredRoot, "module-a", v1Bundle));
@@ -141,8 +141,8 @@ class ScopeSwapRejectionTest {
 
         UUID runId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        BundleAndManifest bundleA = buildBundle(temp, store, runId, projectId, "module-a", COMMIT, REPO, 10);
-        BundleAndManifest bundleB = buildBundle(temp, store, runId, projectId, "module-b", COMMIT, REPO, 11);
+        BundleAndManifest bundleA = buildBundle(temp, store, runId, projectId, "module-a", 10);
+        BundleAndManifest bundleB = buildBundle(temp, store, runId, projectId, "module-b", 11);
 
         RemoteRepositoryRequest repoRequest = RemoteRepositoryRequest.of(REPO, "main", COMMIT, "project/module-a", null);
         RemoteMaterialization sourceA = new RemoteMaterialization(
@@ -200,8 +200,6 @@ class ScopeSwapRejectionTest {
             UUID runId,
             UUID projectId,
             String scope,
-            String commit,
-            String sourceRepo,
             int salt
     ) throws Exception {
         byte[] content = ("scip-content-salt-" + salt).getBytes(StandardCharsets.UTF_8);
@@ -209,7 +207,7 @@ class ScopeSwapRejectionTest {
         DistributedArtifactManifest manifest = new DistributedArtifactManifest(
                 DistributedArtifactManifest.FORMAT_V2,
                 runId, projectId, scope,
-                sourceRepo, commit, Language.JAVA,
+                REPO, COMMIT, Language.JAVA,
                 "fixture-provider", "1.2.3", "worker-one",
                 WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE, WorkerNetworkPolicy.ALLOW, false,
                 Instant.parse("2026-07-29T00:00:00Z"), Instant.parse("2026-07-29T00:00:01Z"),
@@ -223,9 +221,7 @@ class ScopeSwapRejectionTest {
             Path temp,
             DistributedArtifactBundleStore store,
             UUID runId,
-            UUID projectId,
-            String commit,
-            String sourceRepo
+            UUID projectId
     ) throws Exception {
         byte[] content = "scip-content-v1".getBytes(StandardCharsets.UTF_8);
         Path artifact = Files.write(temp.resolve("artifact-v1.scip"), content);
@@ -236,8 +232,8 @@ class ScopeSwapRejectionTest {
         properties.setProperty("runId", runId.toString());
         properties.setProperty("projectId", projectId.toString());
         // No projectRelativeRoot — v1 wire format
-        properties.setProperty("sourceRepository", sourceRepo);
-        properties.setProperty("sourceCommit", commit);
+        properties.setProperty("sourceRepository", REPO);
+        properties.setProperty("sourceCommit", COMMIT);
         properties.setProperty("language", "JAVA");
         properties.setProperty("providerId", "fixture-provider");
         properties.setProperty("providerVersion", "1.2.3");
@@ -268,7 +264,7 @@ class ScopeSwapRejectionTest {
         DistributedArtifactManifest v1Manifest = new DistributedArtifactManifest(
                 DistributedArtifactManifest.FORMAT_V1,
                 runId, projectId, "",
-                sourceRepo, commit, Language.JAVA,
+                REPO, COMMIT, Language.JAVA,
                 "fixture-provider", "1.2.3", "worker-one",
                 WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE, WorkerNetworkPolicy.ALLOW, false,
                 Instant.parse("2026-07-29T00:00:00Z"), Instant.parse("2026-07-29T00:00:01Z"),
