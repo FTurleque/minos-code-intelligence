@@ -46,7 +46,7 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
             try (Statement s = c.createStatement();
                  ResultSet column = s.executeQuery("""
                          SELECT count(*) FROM information_schema.columns
-                         WHERE table_schema='public' AND table_name='fingerprint_snapshots'
+                         WHERE table_schema=current_schema() AND table_name='fingerprint_snapshots'
                            AND column_name='created_at'
                          """)) {
                 assertTrue(column.next());
@@ -55,7 +55,7 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
             try (Statement s = c.createStatement();
                  ResultSet index = s.executeQuery("""
                          SELECT count(*) FROM pg_indexes
-                         WHERE schemaname='public' AND tablename='fingerprint_snapshots'
+                         WHERE schemaname=current_schema() AND tablename='fingerprint_snapshots'
                            AND indexname='fingerprint_snapshots_project_created_idx'
                          """)) {
                 assertTrue(index.next());
