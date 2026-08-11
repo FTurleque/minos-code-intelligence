@@ -53,7 +53,8 @@ public interface RemoteIndexOperations {
             String artifactSha256,
             String bundleSha256,
             String cacheKey,
-            boolean cacheHit
+            boolean cacheHit,
+            String projectRelativeRoot
     ) {
         public ArtifactEvidence {
             requireText(providerId, "providerId");
@@ -65,6 +66,8 @@ public interface RemoteIndexOperations {
             requireText(artifactSha256, "artifactSha256");
             requireText(bundleSha256, "bundleSha256");
             requireText(cacheKey, "cacheKey");
+            // projectRelativeRoot is "" for root scope — requireNonNull, not requireText
+            Objects.requireNonNull(projectRelativeRoot, "projectRelativeRoot");
         }
     }
 

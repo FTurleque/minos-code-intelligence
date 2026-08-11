@@ -136,6 +136,7 @@ public final class RemoteIndexCommand {
                     + " worker=" + artifact.workerId()
                     + " isolation=" + artifact.isolation()
                     + " network=" + artifact.networkPolicy()
+                    + " scope=" + (artifact.projectRelativeRoot().isEmpty() ? "." : artifact.projectRelativeRoot())
                     + " cacheHit=" + artifact.cacheHit());
         }
         return String.join("\n", lines);
@@ -182,6 +183,7 @@ public final class RemoteIndexCommand {
         map.put("bundleSha256", value.bundleSha256());
         map.put("cacheKey", value.cacheKey());
         map.put("cacheHit", value.cacheHit());
+        map.put("projectRelativeRoot", value.projectRelativeRoot());
         return map;
     }
 

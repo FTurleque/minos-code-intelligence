@@ -83,8 +83,11 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
                 lastVerifiedArtifact = verified;
             }
             retained = true;
+            Path manifestScope = verified.manifest().projectRelativeRoot().isEmpty()
+                    ? Path.of("")
+                    : Path.of(verified.manifest().projectRelativeRoot());
             return new IndexingArtifact(
-                    request.selection().language(), indexerId, verified.artifact(), request.projectRelativeRoot());
+                    request.selection().language(), indexerId, verified.artifact(), manifestScope);
         } finally {
             if (verified != null && !retained) {
                 bundleStore.release(verified);
@@ -119,6 +122,7 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     private void verifyManifest(IndexingExecutionRequest request, DistributedArtifactManifest manifest) {
         if (!request.runId().equals(manifest.runId())
                 || !request.projectId().equals(manifest.projectId())
+                || !portableScope(request.projectRelativeRoot()).equals(manifest.projectRelativeRoot())
                 || !source.request().canonicalRepositoryUri().equals(manifest.sourceRepository())
                 || !source.request().expectedCommit().equals(manifest.sourceCommit())
                 || request.selection().language() != manifest.language()
@@ -131,6 +135,11 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
                         != manifest.networkDenyEnforced()) {
             throw new IllegalStateException("transported artifact provenance does not match the indexing request");
         }
+    }
+
+    private static String portableScope(Path projectRelativeRoot) {
+        String portable = projectRelativeRoot.toString().replace('\\', '/');
+        return ".".equals(portable) ? "" : portable;
     }
 
     private static String requireText(String value, String label) {

@@ -148,6 +148,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
         Files.createDirectory(workspace);
 
+        String portableScope = portableScope(request.execution().projectRelativeRoot());
         Instant startedAt = clock.instant();
         try {
             copyWorkspace(request.execution().projectRoot(), workspace);
@@ -178,9 +179,10 @@ public final class LocalIsolatedIndexWorker implements Worker {
             }
             Instant completedAt = clock.instant();
             DistributedArtifactManifest manifest = new DistributedArtifactManifest(
-                    DistributedArtifactManifest.FORMAT_V1,
+                    DistributedArtifactManifest.FORMAT_V2,
                     isolated.runId(),
                     isolated.projectId(),
+                    portableScope,
                     request.sourceRepository(),
                     request.sourceCommit(),
                     artifact.language(),
@@ -293,6 +295,11 @@ public final class LocalIsolatedIndexWorker implements Worker {
             throw new IOException("worker workspace path escapes its target root");
         }
         return target;
+    }
+
+    private static String portableScope(Path projectRelativeRoot) {
+        String portable = projectRelativeRoot.toString().replace('\\', '/');
+        return ".".equals(portable) ? "" : portable;
     }
 
     private static String portable(Path path) {

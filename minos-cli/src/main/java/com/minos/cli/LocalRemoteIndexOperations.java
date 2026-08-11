@@ -188,6 +188,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         return new ArtifactEvidence(
                 manifest.providerId(), manifest.providerVersion(), manifest.language().name(), manifest.workerId(),
                 manifest.isolation().name(), manifest.networkPolicy().name(), manifest.networkDenyEnforced(),
-                manifest.artifactSha256(), value.bundleSha256(), value.cacheKey(), value.cacheHit());
+                manifest.artifactSha256(), value.bundleSha256(), value.cacheKey(), value.cacheHit(),
+                manifest.projectRelativeRoot());
     }
 }

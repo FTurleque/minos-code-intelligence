@@ -81,8 +81,11 @@ def main() -> int:
                       "interface Worker", "WorkerRequest", "WorkerResponse", "DENY", "ALLOW",
                       "PROCESS_EPHEMERAL_WORKSPACE", "Ownership")
         require_facts("DistributedArtifactManifest.java", manifest,
-                      "minos-distributed-artifact-v1", "index.scip", "artifactSha256",
-                      "networkDenyEnforced", "DENY network policy requires an enforced worker boundary")
+                      "minos-distributed-artifact-v1", "minos-distributed-artifact-v2",
+                      "projectRelativeRoot", "index.scip", "artifactSha256",
+                      "networkDenyEnforced", "DENY network policy requires an enforced worker boundary",
+                      "format v1 cannot carry a non-root projectRelativeRoot",
+                      "NUL bytes", "must use '/' as the path separator")
         require_pattern("DistributedArtifactManifest.java", manifest, r"\[0-9a-f\]\{64\}", "lowercase SHA-256 validation")
 
         require_facts("DistributedArtifactCachePolicy.java", artifact_policy,
@@ -91,17 +94,20 @@ def main() -> int:
                       "MAX_SCIP_ARTIFACT_BYTES = 512L * 1024L * 1024L")
         require_facts("DistributedArtifactBundleStore.java", artifact_store,
                       "manifest.properties", "exactly manifest.properties and index.scip", "MAX_MANIFEST_BYTES",
-                      "unsafe or duplicate entry", "artifact checksum", "maxArtifactBytes", "evict")
+                      "unsafe or duplicate entry", "artifact checksum", "maxArtifactBytes", "evict",
+                      "decodeV1", "decodeV2", "projectRelativeRoot", "FORMAT_V2")
         require_facts("LocalIsolatedIndexWorker.java", local_worker,
                       "ProjectIgnoreRules.load", "supportsUntrustedCode", "isSymbolicLink",
-                      "deleteWorkerTree", ".bundle-")
+                      "deleteWorkerTree", ".bundle-",
+                      "FORMAT_V2", "portableScope", "projectRelativeRoot")
         require_facts("WorkerSandboxBackend.java", sandbox_backend,
                       "native worker cannot prove OS-level network denial", "supportsUntrustedCode")
         require_facts("ProjectIgnoreRules.java", ignore_rules,
                       '".git"', '".minos"', 'root.resolve(".minosignore")')
         require_facts("DistributedIndexerExecutor.java", coordinator,
                       "sourceRepository", "sourceCommit", "providerVersion", "workerId",
-                      "networkDenyEnforced", "provenance does not match", "deleteIfExists(response.bundle())")
+                      "networkDenyEnforced", "provenance does not match", "deleteIfExists(response.bundle())",
+                      "projectRelativeRoot", "manifestScope", "portableScope")
 
         require_facts("LocalAutonomousIndexOperations.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
         require_facts("LocalRemoteIndexOperations.java", remote_operations,
@@ -126,8 +132,10 @@ def main() -> int:
         tests = {
             "RemoteRepositoryRequestTest.java": read("minos-engine/src/test/java/com/minos/remote/RemoteRepositoryRequestTest.java"),
             "JGitRemoteRepositoryMaterializerTest.java": read("minos-integration-git/src/test/java/com/minos/git/JGitRemoteRepositoryMaterializerTest.java"),
+            "DistributedArtifactManifestTest.java": read("minos-engine/src/test/java/com/minos/remote/DistributedArtifactManifestTest.java"),
             "DistributedArtifactBundleStoreTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/DistributedArtifactBundleStoreTest.java"),
             "LocalIsolatedIndexWorkerTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/LocalIsolatedIndexWorkerTest.java"),
+            "ScopeSwapRejectionTest.java": read("minos-runtime-local/src/test/java/com/minos/runtime/ScopeSwapRejectionTest.java"),
             "RemoteIndexCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RemoteIndexCommandTest.java"),
             "LocalRemoteIndexOperationsIntegrationTest.java": read("minos-cli/src/test/java/com/minos/cli/LocalRemoteIndexOperationsIntegrationTest.java"),
         }
@@ -137,14 +145,30 @@ def main() -> int:
         require_facts("JGitRemoteRepositoryMaterializerTest.java", tests["JGitRemoteRepositoryMaterializerTest.java"],
                       "cache", "dirty", "evictsLeastRecentEntryAndRejectsUnexpectedCommitOrMissingSecret",
                       "super-secret-token", "MISSING_REMOTE_TOKEN")
+        require_facts("DistributedArtifactManifestTest.java", tests["DistributedArtifactManifestTest.java"],
+                      "v1ManifestRejectsNonRootScope", "v2AcceptsNonRootScopeAndNormalizesDot",
+                      "rejectsAbsoluteBackslashNulAndOverscopedPaths")
         require_facts("DistributedArtifactBundleStoreTest.java", tests["DistributedArtifactBundleStoreTest.java"],
-                      "rejectsTamperingUnknownEntriesAndOversize", "../escape", "evictsOldestArtifact")
+                      "rejectsTamperingUnknownEntriesAndOversize", "../escape", "evictsOldestArtifact",
+                      "differentScopesProduceDifferentCacheKeys", "rejectsTamperedScopeFieldInManifest",
+                      "v1ManifestAlwaysDecodesAsRootScope")
         require_facts("LocalIsolatedIndexWorkerTest.java", tests["LocalIsolatedIndexWorkerTest.java"],
-                      "FailsClosed", "WrongProvenance", "transport envelopes")
+                      "FailsClosed", "WrongProvenance", "transport envelopes",
+                      "workerPreservesProjectRelativeRootFromRequestInManifest")
+        require_facts("ScopeSwapRejectionTest.java", tests["ScopeSwapRejectionTest.java"],
+                      "bundleForModuleBIsRejectedWhenModuleARequested",
+                      "bundleForModuleAIsRejectedWhenModuleBRequested",
+                      "rootBundleIsRejectedWhenModuleRequested",
+                      "moduleBundleIsRejectedWhenRootRequested",
+                      "v1BundleIsRejectedForNonRootRequest",
+                      "differentScopeRequestsNeverShareCacheKey",
+                      "provenance")
         require_facts("RemoteIndexCommandTest.java", tests["RemoteIndexCommandTest.java"],
-                      "SecretFree", "RequiresExplicitWorkerNetworkPolicy", "token@")
+                      "SecretFree", "RequiresExplicitWorkerNetworkPolicy", "token@",
+                      "rendersProjectRelativeRootInJsonAndTextOutput")
         require_facts("LocalRemoteIndexOperationsIntegrationTest.java", tests["LocalRemoteIndexOperationsIntegrationTest.java"],
-                      "WorkerTransportStagingAndAtomicLocalSnapshot", "loadActiveKnowledge")
+                      "WorkerTransportStagingAndAtomicLocalSnapshot", "loadActiveKnowledge",
+                      "projectRelativeRoot")
 
         execution = read("docs/roadmap/M25_EXECUTION.md")
         adr = read("docs/adr/0033-immutable-remote-revisions-and-verified-worker-artifacts.md")
@@ -157,7 +181,8 @@ def main() -> int:
             ("docs/developer/remote-distributed-indexing.md", developer),
         ):
             require_facts(relative, document, "github.com", "gitlab.com", "SHA", "DENY", "fail-closed",
-                          "minos-distributed-artifact-v1", "provenance", "borné")
+                          "minos-distributed-artifact-v1", "minos-distributed-artifact-v2",
+                          "projectRelativeRoot", "provenance", "borné")
         require_facts("docs/roadmap/M25_EXECUTION.md", execution,
                       "#84", "CLOSED", "completed", "#85", "MERGED",
                       "b17631de59871848351a4139b12be6e0354989bc",
