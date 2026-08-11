@@ -4,6 +4,7 @@ import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
+import com.minos.semantic.StaleSemanticSyncException;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -133,6 +134,40 @@ final class PostgresSemanticVectorStore implements SemanticVectorStore {
             });
         } catch (SQLException exception) {
             throw new IOException("unable to replace pgvector semantic index", exception);
+        }
+    }
+
+    @Override
+    public void replaceConditionally(IndexSnapshot next,
+                                      String expectedActiveSnapshotId,
+                                      ActiveSnapshotIdReader activeSnapshotReader) throws IOException {
+        UUID projectId = uuid(next.projectId());
+        // Derive a stable 64-bit key from the project UUID for pg_advisory_xact_lock.
+        // XOR of the two halves distributes uniformly and avoids key collisions between projects.
+        long advisoryKey = projectId.getMostSignificantBits() ^ projectId.getLeastSignificantBits();
+        try {
+            connections.inTransaction(connection -> {
+                try (PreparedStatement advisory = connection.prepareStatement(
+                        "SELECT pg_advisory_xact_lock(?)")) {
+                    advisory.setLong(1, advisoryKey);
+                    advisory.execute();
+                }
+                Optional<String> currentActive = activeSnapshotReader.read();
+                String currentId = currentActive.orElse(null);
+                if (!expectedActiveSnapshotId.equals(currentId)) {
+                    throw new StaleSemanticSyncException(
+                            next.projectId(), expectedActiveSnapshotId,
+                            currentId != null ? currentId : "absent");
+                }
+                deleteDocuments(connection, projectId);
+                upsertMetadata(connection, projectId, next);
+                insertDocuments(connection, projectId, next);
+                return null;
+            });
+        } catch (StaleSemanticSyncException exception) {
+            throw exception;
+        } catch (SQLException exception) {
+            throw new IOException("unable to conditionally replace pgvector semantic index", exception);
         }
     }
 

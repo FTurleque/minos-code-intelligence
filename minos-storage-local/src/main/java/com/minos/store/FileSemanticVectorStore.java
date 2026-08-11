@@ -5,26 +5,35 @@ import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 
+import com.minos.semantic.StaleSemanticSyncException;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Local versioned vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
+
+    private static final ConcurrentHashMap<Path, ReentrantLock> JVM_SYNC_LOCKS = new ConcurrentHashMap<>();
 
     private static final int MAGIC = 0x4D53454D; // MSEM
     private static final int LEGACY_FORMAT_VERSION = 1;
@@ -206,6 +215,37 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
             removeCached(snapshot.projectId(), false);
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    @Override
+    public void replaceConditionally(IndexSnapshot next,
+                                      String expectedActiveSnapshotId,
+                                      ActiveSnapshotIdReader activeSnapshotReader) throws IOException {
+        Objects.requireNonNull(next, "next");
+        requireText(expectedActiveSnapshotId, "expectedActiveSnapshotId");
+        Objects.requireNonNull(activeSnapshotReader, "activeSnapshotReader");
+        Path lockDirectory = root.resolve(".sync-locks").toAbsolutePath().normalize();
+        Files.createDirectories(lockDirectory);
+        Path lockFile = lockDirectory.resolve(safeProjectDirectory(next.projectId()) + ".lock")
+                .toAbsolutePath().normalize();
+        if (!lockFile.startsWith(lockDirectory)) {
+            throw new IOException("semantic sync lock file escapes store directory");
+        }
+        ReentrantLock jvmLock = JVM_SYNC_LOCKS.computeIfAbsent(lockFile, ignored -> new ReentrantLock());
+        jvmLock.lock();
+        try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock fileLock = channel.lock()) {
+            Optional<String> currentActive = activeSnapshotReader.read();
+            String currentId = currentActive.orElse(null);
+            if (!expectedActiveSnapshotId.equals(currentId)) {
+                throw new StaleSemanticSyncException(
+                        next.projectId(), expectedActiveSnapshotId,
+                        currentId != null ? currentId : "absent");
+            }
+            replace(next);
+        } finally {
+            jvmLock.unlock();
         }
     }
 
