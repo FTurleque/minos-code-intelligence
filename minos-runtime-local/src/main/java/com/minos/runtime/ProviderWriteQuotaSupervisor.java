@@ -27,6 +27,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
+    /** Idle periods per sampling period, so supervision never burns more than 1/(1+N) of a core. */
+    private static final long IDLE_RATIO = 3L;
+
     private final List<Path> roots;
     private final ProviderWriteQuota quota;
     private final Runnable jobKill;
@@ -97,7 +100,9 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
     private void supervise() {
         while (running) {
+            long startedAt = System.nanoTime();
             Sample sample = sample();
+            long elapsedMillis = Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
             observedBytes.set(sample.bytes());
             observedEntries.set(sample.entries());
             if (sample.bytes() > quota.maxBytes() || sample.entries() > quota.maxEntries()) {
@@ -111,7 +116,10 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                 return;
             }
             try {
-                Thread.sleep(quota.samplePeriod().toMillis());
+                // Supervision must never cost more than a bounded share of a core. The walk itself is
+                // bounded by the entry budget, so backing off proportionally keeps the breach latency
+                // bounded too: at most max(samplePeriod, IDLE_RATIO x boundedWalk).
+                Thread.sleep(Math.max(quota.samplePeriod().toMillis(), IDLE_RATIO * elapsedMillis));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 return;

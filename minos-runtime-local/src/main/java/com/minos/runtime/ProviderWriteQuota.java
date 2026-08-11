@@ -14,7 +14,9 @@ import java.util.Objects;
  *
  * @param maxBytes     aggregate bytes the provider may materialize across all writable roots
  * @param maxEntries   aggregate files and directories the provider may materialize (inode proxy)
- * @param samplePeriod upper bound on the latency between a breach and the job being destroyed
+ * @param samplePeriod minimum delay between two samples; the supervisor also backs off
+ *                     proportionally to its own (budget-bounded) walk cost so that supervising a
+ *                     large workspace never burns more than a bounded share of a core
  */
 public record ProviderWriteQuota(long maxBytes, long maxEntries, Duration samplePeriod) {
 

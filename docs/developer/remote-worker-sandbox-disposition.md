@@ -81,6 +81,8 @@ La découverte exige Windows PowerShell 5.1 et le lanceur AppContainer. Le lance
 
 Ni Linux ni Windows n’offrent de quota disque par job à un utilisateur non privilégié. MINOS ne prétend donc pas à une garantie OS sur cette dimension : `ProviderWriteQuotaSupervisor` échantillonne, à période bornée (250 ms par défaut), **toutes** les racines rendues accessibles en écriture au provider (workspace, artifact, run) et détruit la frontière de job dès que le budget d’octets **ou** d’entrées est dépassé. Chaque échantillon est lui-même borné — le parcours s’arrête au dépassement — et ne suit jamais les symlinks.
 
+Le superviseur s’auto-limite : il attend au minimum sa période nominale et, sur une grande workspace, se met en attente proportionnellement au coût — lui-même borné par le budget d’entrées — de son propre parcours. La supervision ne consomme donc jamais plus qu’une fraction bornée d’un cœur, et la latence de détection reste bornée.
+
 La limite honnête de ce mécanisme est le dépassement possible pendant une période d’échantillonnage : le provider peut écrire au débit du disque pendant au plus une période avant d’être détruit. Le budget effectif est donc « budget + une période d’écriture », borné et documenté, et non « budget exact ». C’est précisément la raison pour laquelle cette dimension est déclarée `SUPERVISED_HARD_KILL` et non `OS_ENFORCED`.
 
 Après succès, erreur, timeout ou dépassement, `ProviderResidueReclamation` supprime tout ce que le provider a écrit dans le run, ne conservant que les diagnostics écrits par MINOS. La workspace éphémère du worker est supprimée dans tous les cas par `LocalIsolatedIndexWorker`.
