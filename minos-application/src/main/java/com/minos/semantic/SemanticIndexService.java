@@ -165,7 +165,9 @@ public final class SemanticIndexService {
         SemanticVectorStore.IndexSnapshot next = new SemanticVectorStore.IndexSnapshot(
                 projectId, active.snapshotId(), provider.id(), provider.modelId(), provider.dimensions(),
                 System.currentTimeMillis(), indexed);
-        store.replace(next);
+        final String capturedSnapshotId = active.snapshotId();
+        store.replaceConditionally(next, capturedSnapshotId,
+                () -> snapshots.loadActiveKnowledge(project.id()).map(CodeKnowledgeSnapshot::snapshotId));
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
         List<String> limitations = new ArrayList<>(providerLimitations(provider));
         if (reusableMetadata && !reuseFitsWorkingSet) {

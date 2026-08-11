@@ -11,9 +11,33 @@ import java.util.PriorityQueue;
 /** Reconstructible semantic vector index abstraction. Snapshots remain authoritative. */
 public interface SemanticVectorStore {
 
+    /**
+     * Reads the currently-active structural snapshot ID for the project, evaluated inside a
+     * commit boundary. Implementations must be safe to invoke while holding a cross-process lock.
+     */
+    @FunctionalInterface
+    interface ActiveSnapshotIdReader {
+        Optional<String> read() throws IOException;
+    }
+
     Optional<IndexSnapshot> load(String projectId) throws IOException;
     void replace(IndexSnapshot snapshot) throws IOException;
     void delete(String projectId) throws IOException;
+
+    /**
+     * Atomically replaces the semantic index for {@code next.projectId()} provided that
+     * {@code activeSnapshotReader.read()} still returns {@code expectedActiveSnapshotId}
+     * when evaluated inside the commit boundary.
+     *
+     * <p>Implementations must ensure that the re-check and the write share the same
+     * cross-JVM per-project exclusive boundary (file lock, advisory lock, …) so that
+     * no TOCTOU window exists between steps 4 and 5 of the build protocol.
+     *
+     * @throws StaleSemanticSyncException if the active snapshot changed during the build phase.
+     */
+    void replaceConditionally(IndexSnapshot next,
+                               String expectedActiveSnapshotId,
+                               ActiveSnapshotIdReader activeSnapshotReader) throws IOException;
 
     /**
      * Loads only index metadata when the backend can do so cheaply. The default preserves
