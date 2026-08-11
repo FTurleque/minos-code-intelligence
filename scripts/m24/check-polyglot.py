@@ -227,8 +227,14 @@ def main() -> int:
         require_pattern(
             runtime_path,
             runtime,
-            r"(?s)CommandLocator\.invocation\(\s*go\s*,\s*\"install\"\s*,\s*\"github\.com/scip-code/scip-go/cmd/scip-go@v\"\s*\+\s*ScipIndexerCatalog\.SCIP_GO_VERSION\s*\).*?\"GOBIN\"\s*,\s*partial\.toString\(\)",
-            "scip-go pinned isolated GOBIN install",
+            r"CommandLocator\.invocation\(\s*go\s*,\s*\"install\"\s*,\s*\"github\.com/scip-code/scip-go/cmd/scip-go@v\"\s*\+\s*ScipIndexerCatalog\.SCIP_GO_VERSION\s*\)",
+            "scip-go pinned install",
+        )
+        require_pattern(
+            runtime_path,
+            runtime,
+            r"environment\.put\(\s*\"GOBIN\"\s*,\s*partial\.toString\(\)\s*\)",
+            "scip-go isolated GOBIN",
         )
         forbid_pattern(runtime_path, runtime, r"CommandLocator\.find\(\s*\"rustup\"", "implicit rustup execution")
         forbid_pattern(runtime_path, runtime, r"(?s)CommandLocator\.invocation\([^)]*\"(?:-g|--global)\"", "global tool installation")

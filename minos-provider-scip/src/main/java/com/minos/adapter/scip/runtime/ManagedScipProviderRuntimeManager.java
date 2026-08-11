@@ -1,6 +1,8 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.BoundedLineReader;
+import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
@@ -10,6 +12,7 @@ import com.minos.runtime.ProviderRuntimeStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,11 +23,11 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -35,6 +38,8 @@ import java.util.zip.ZipInputStream;
 
 /** Local manager for MINOS-qualified SCIP runtimes. */
 public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeManager {
+
+    private static final int MAX_INSTALL_LOG_LINE_CHARS = 64 * 1024;
 
     public static final String SCIP_TYPESCRIPT_ID = "scip-typescript";
     public static final String SCIP_TYPESCRIPT_VERSION = "0.4.0";
@@ -193,7 +198,23 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     static void requireExpectedScipJavaVersion(Path log) throws IOException {
         String expected = "scip-java version " + SCIP_JAVA_VERSION;
-        boolean found = Files.readAllLines(log).stream().map(String::trim).anyMatch(expected::equals);
+        if (!Files.isRegularFile(log, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(log)) {
+            throw new IOException("scip-java version log must be a regular non-symbolic file: " + log);
+        }
+        boolean found = false;
+        try (BoundedInputStream input = new BoundedInputStream(
+                     Files.newInputStream(log), BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
+                     "scip-java installation log");
+             BoundedLineReader reader = new BoundedLineReader(
+                     new InputStreamReader(input, StandardCharsets.UTF_8), MAX_INSTALL_LOG_LINE_CHARS)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (expected.equals(line.trim())) {
+                    found = true;
+                    break;
+                }
+            }
+        }
         if (!found) throw new IllegalStateException("scip-java version verification failed; expected `" + expected + "`; see " + log);
     }
 
@@ -361,10 +382,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     }
 
     private static void deleteRecursively(Path path) throws IOException {
-        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return;
-        try (var stream = Files.walk(path)) {
-            for (Path current : stream.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(current);
-        }
+        FileTreeOperations.deleteRecursively(path);
     }
 
     private static void move(Path source, Path target) throws IOException {

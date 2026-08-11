@@ -1,6 +1,8 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.io.BoundedInputStream;
+import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
@@ -382,7 +384,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         try {
             return Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)
                     && !Files.isSymbolicLink(marker)
-                    && expected.equals(Files.readString(marker, StandardCharsets.UTF_8).trim());
+                    && expected.equals(readBoundedText(marker, 4L * 1024L, "managed runtime marker").trim());
         } catch (IOException exception) {
             return false;
         }
@@ -393,7 +395,8 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         try {
             return Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)
                     && !Files.isSymbolicLink(marker)
-                    && Files.readString(marker, StandardCharsets.UTF_8).trim().equals(directoryDigest(directory));
+                    && readBoundedText(marker, 4L * 1024L, "managed runtime integrity marker")
+                            .trim().equals(directoryDigest(directory));
         } catch (IOException exception) {
             return false;
         }
@@ -510,7 +513,16 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private static String readOutput(Path outputFile) throws IOException {
-        return Files.isRegularFile(outputFile) ? Files.readString(outputFile, StandardCharsets.UTF_8) : "";
+        return Files.isRegularFile(outputFile, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(outputFile)
+                ? readBoundedText(outputFile, BoundedProcessOutput.DEFAULT_MAX_BYTES_PER_STREAM,
+                        "managed runtime command output")
+                : "";
+    }
+
+    private static String readBoundedText(Path file, long maximumBytes, String boundary) throws IOException {
+        try (BoundedInputStream input = new BoundedInputStream(Files.newInputStream(file), maximumBytes, boundary)) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private static void replaceDirectory(Path source, Path destination) throws IOException {
@@ -523,10 +535,7 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
     }
 
     private static void deleteRecursively(Path root) throws IOException {
-        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
-        try (var paths = Files.walk(root)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
-        }
+        FileTreeOperations.deleteRecursively(root);
     }
 
     private static ProviderRuntimeStatus status(

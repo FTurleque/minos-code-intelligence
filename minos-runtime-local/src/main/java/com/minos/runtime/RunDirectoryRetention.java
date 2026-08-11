@@ -1,8 +1,11 @@
 package com.minos.runtime;
 
+import com.minos.io.FileTreeOperations;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -19,6 +22,7 @@ final class RunDirectoryRetention {
 
     static final Policy DEFAULT = new Policy(16, 4L * 1024L * 1024L * 1024L, Duration.ofDays(7));
     private static final long MAX_SCAN_ENTRIES_PER_RUN = 1_000_000L;
+    private static final int MAX_RUN_ROOT_SCAN_ENTRIES = 4_096;
 
     private RunDirectoryRetention() {
     }
@@ -41,7 +45,14 @@ final class RunDirectoryRetention {
 
         List<Entry> entries = new ArrayList<>();
         try (var children = Files.list(root)) {
-            for (Path child : children.filter(Files::isDirectory).toList()) {
+            var iterator = children.iterator();
+            int scanned = 0;
+            while (iterator.hasNext()) {
+                Path child = iterator.next();
+                if (++scanned > MAX_RUN_ROOT_SCAN_ENTRIES) {
+                    throw new IOException("MINOS runs root exceeds entry scan limit");
+                }
+                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
                 Path normalized = child.toAbsolutePath().normalize();
                 if (protectedRoot != null && normalized.equals(protectedRoot)) continue;
                 entries.add(new Entry(
@@ -75,21 +86,7 @@ final class RunDirectoryRetention {
         if (normalized.equals(root) || !normalized.startsWith(root)) {
             throw new IOException("refusing to delete outside the MINOS runs root");
         }
-        if (!Files.exists(normalized)) return;
-        Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                Files.deleteIfExists(file);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException exception) throws IOException {
-                if (exception != null) throw exception;
-                Files.deleteIfExists(directory);
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        FileTreeOperations.deleteRecursively(normalized);
     }
 
     private static long sizeOf(Path run) throws IOException {

@@ -1,6 +1,7 @@
 package com.minos.runtime;
 
 import com.minos.io.BoundedProperties;
+import com.minos.io.FileTreeOperations;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -19,9 +20,13 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.FileVisitResult;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -47,6 +52,8 @@ public final class DistributedArtifactBundleStore {
 
     static final String MANIFEST_ENTRY = "manifest.properties";
     private static final long MAX_MANIFEST_BYTES = 64L * 1024L;
+    private static final int MAX_CACHE_ROOT_ENTRIES = 4_096;
+    private static final int MAX_CACHE_ENTRY_TREE_ENTRIES = 128;
 
     private final Path cacheRoot;
     private final Path leasesRoot;
@@ -333,7 +340,8 @@ public final class DistributedArtifactBundleStore {
         try {
             Path manifestFile = entry.resolve(MANIFEST_ENTRY);
             Path artifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
-            if (!Files.isRegularFile(manifestFile) || !Files.isRegularFile(artifact)) {
+            if (!Files.isRegularFile(manifestFile, LinkOption.NOFOLLOW_LINKS)
+                    || !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS)) {
                 return false;
             }
             DistributedArtifactManifest actual;
@@ -351,15 +359,22 @@ public final class DistributedArtifactBundleStore {
     private void evict(String protectedKey) throws IOException {
         List<CacheEntry> entries = new ArrayList<>();
         try (var paths = Files.list(cacheRoot)) {
-            for (Path path : paths.filter(Files::isDirectory)
-                    .filter(value -> !value.getFileName().toString().startsWith("."))
-                    .toList()) {
-                entries.add(new CacheEntry(
-                        path,
-                        path.getFileName().toString(),
-                        Files.getLastModifiedTime(path).toInstant(),
-                        sizeOf(path)
-                ));
+            var iterator = paths.iterator();
+            int scanned = 0;
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                if (++scanned > MAX_CACHE_ROOT_ENTRIES) {
+                    throw new IOException("distributed artifact cache root exceeds entry scan limit");
+                }
+                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+                        && !path.getFileName().toString().startsWith(".")) {
+                    entries.add(new CacheEntry(
+                            path,
+                            path.getFileName().toString(),
+                            Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toInstant(),
+                            sizeOf(path)
+                    ));
+                }
             }
         }
         entries.sort(Comparator.comparing(CacheEntry::lastAccessAt).thenComparing(CacheEntry::key));
@@ -515,22 +530,39 @@ public final class DistributedArtifactBundleStore {
         if (normalized.equals(cacheRoot) || !normalized.startsWith(cacheRoot)) {
             throw new IOException("refusing to delete outside the distributed artifact cache");
         }
-        if (!Files.exists(normalized)) return;
-        try (var paths = Files.walk(normalized)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
-        }
+        FileTreeOperations.deleteRecursively(normalized);
     }
 
     private static long sizeOf(Path root) throws IOException {
-        long total = 0L;
-        try (var paths = Files.walk(root)) {
-            for (Path path : paths.filter(Files::isRegularFile).toList()) {
-                total = Math.addExact(total, Files.size(path));
+        long[] total = {0L};
+        int[] traversed = {0};
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            private void accountEntry() throws IOException {
+                if (++traversed[0] > MAX_CACHE_ENTRY_TREE_ENTRIES) {
+                    throw new IOException("distributed artifact cache entry exceeds traversal limit");
+                }
             }
-        }
-        return total;
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                accountEntry();
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                accountEntry();
+                if (attributes.isRegularFile()) {
+                    try {
+                        total[0] = Math.addExact(total[0], attributes.size());
+                    } catch (ArithmeticException exception) {
+                        throw new IOException("distributed artifact cache byte counter overflow", exception);
+                    }
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return total[0];
     }
 
     private static String required(Properties properties, String key) {
