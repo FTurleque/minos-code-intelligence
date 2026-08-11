@@ -52,7 +52,7 @@ La sandbox OS qualifiée utilise bubblewrap/namespaces plus une frontière de jo
 
 Sous Linux, MINOS doit disposer d’une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`.
 
-Le transport utilise `minos-distributed-artifact-v1`. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau et les SHA-256 vérifiés.
+Le transport utilise `minos-distributed-artifact-v1` (monorepo : `minos-distributed-artifact-v2` avec `projectRelativeRoot`). Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
 Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny`, car ces primitives seules ne prouvent pas un blocage réseau au niveau OS, et le worker distant le refuse aussi avec `allow`, car elles ne prouvent pas le confinement de code non fiable.
 

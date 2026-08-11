@@ -65,11 +65,13 @@ manifest.properties
 index.scip
 ```
 
+`minos-distributed-artifact-v2` ajoute le champ `projectRelativeRoot` au manifest pour les monorepos multi-module. Un manifest v1 est toujours traité comme racine (`projectRelativeRoot = ""`).
+
 Le transport est borné : manifest limité à 64 KiB, artefact SCIP limité à **512 MiB** par la constante autoritative partagée `IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES`, et cache vérifié à 32 entrées / 5 GiB par défaut. Le transport ne peut donc plus accepter un artefact que l’ingestion SCIP rejetterait ensuite uniquement pour sa taille.
 
 Après `accept()`, l’entrée d’artefact reste protégée par un lease inter-processus pendant toute sa consommation par le lifecycle. `DistributedIndexerExecutor.close()` libère tous les leases acquis pour ses scopes seulement après staging/promotion ou lors du nettoyage d’un échec. L’éviction du cache ignore toute entrée active.
 
-Les champs inconnus, doublons, chemins supplémentaires, traversal, tailles incohérentes, checksum SHA-256 incorrect ou provenance divergente sont fail-closed. Le coordinateur compare run, projet, URI, commit, langage, provider/version, worker, isolation et politique/enforcement réseau. Aucun snapshot n’est promu par le worker.
+Les champs inconnus, doublons, chemins supplémentaires, traversal, tailles incohérentes, checksum SHA-256 incorrect ou provenance divergente sont fail-closed. Le coordinateur compare run, projet, URI, commit, langage, provider/version, worker, isolation, politique/enforcement réseau **et `projectRelativeRoot`**. Un bundle produit pour le module B ne peut donc jamais être accepté pour une requête concernant le module A. Aucun snapshot n’est promu par le worker.
 
 ## Composition et extension
 

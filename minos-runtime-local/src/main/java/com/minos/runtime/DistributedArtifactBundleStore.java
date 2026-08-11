@@ -277,6 +277,10 @@ public final class DistributedArtifactBundleStore {
         properties.setProperty("format", manifest.format());
         properties.setProperty("runId", manifest.runId().toString());
         properties.setProperty("projectId", manifest.projectId().toString());
+        // FORMAT_V1 wire format does not carry projectRelativeRoot; decodeV1 rejects extra fields
+        if (DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
+            properties.setProperty("projectRelativeRoot", manifest.projectRelativeRoot());
+        }
         properties.setProperty("sourceRepository", manifest.sourceRepository());
         properties.setProperty("sourceCommit", manifest.sourceCommit());
         properties.setProperty("language", manifest.language().name());
@@ -302,6 +306,17 @@ public final class DistributedArtifactBundleStore {
         Properties properties = BoundedProperties.loadUtf8(
                 bytes, MAX_MANIFEST_BYTES, 32, 128, 16_384,
                 "distributed artifact manifest");
+        String format = properties.getProperty("format");
+        if (DistributedArtifactManifest.FORMAT_V1.equals(format)) {
+            return decodeV1(properties);
+        } else if (DistributedArtifactManifest.FORMAT_V2.equals(format)) {
+            return decodeV2(properties);
+        } else {
+            throw new IOException("unsupported distributed artifact manifest format: " + format);
+        }
+    }
+
+    private static DistributedArtifactManifest decodeV1(Properties properties) throws IOException {
         Set<String> expected = Set.of(
                 "format", "runId", "projectId", "sourceRepository", "sourceCommit", "language",
                 "providerId", "providerVersion", "workerId", "isolation", "networkPolicy",
@@ -312,10 +327,51 @@ public final class DistributedArtifactBundleStore {
             throw new IOException("distributed artifact manifest fields do not match format v1");
         }
         try {
+            // V1 always decodes as root scope — it carries no projectRelativeRoot on the wire.
+            // The coordinator will reject this manifest for any non-root-scope request.
             return new DistributedArtifactManifest(
                     required(properties, "format"),
                     UUID.fromString(required(properties, "runId")),
                     UUID.fromString(required(properties, "projectId")),
+                    /* projectRelativeRoot = */ "",
+                    required(properties, "sourceRepository"),
+                    required(properties, "sourceCommit"),
+                    Language.valueOf(required(properties, "language")),
+                    required(properties, "providerId"),
+                    required(properties, "providerVersion"),
+                    required(properties, "workerId"),
+                    WorkerIsolation.valueOf(required(properties, "isolation")),
+                    WorkerNetworkPolicy.valueOf(required(properties, "networkPolicy")),
+                    parseBooleanStrict(required(properties, "networkDenyEnforced")),
+                    Instant.parse(required(properties, "startedAt")),
+                    Instant.parse(required(properties, "completedAt")),
+                    required(properties, "artifactPath"),
+                    Long.parseLong(required(properties, "artifactSize")),
+                    required(properties, "artifactSha256")
+            );
+        } catch (RuntimeException exception) {
+            throw new IOException("distributed artifact manifest is invalid", exception);
+        }
+    }
+
+    private static DistributedArtifactManifest decodeV2(Properties properties) throws IOException {
+        Set<String> expected = Set.of(
+                "format", "runId", "projectId", "projectRelativeRoot",
+                "sourceRepository", "sourceCommit", "language",
+                "providerId", "providerVersion", "workerId", "isolation", "networkPolicy",
+                "networkDenyEnforced", "startedAt", "completedAt", "artifactPath",
+                "artifactSize", "artifactSha256"
+        );
+        if (!properties.stringPropertyNames().equals(expected)) {
+            throw new IOException("distributed artifact manifest fields do not match format v2");
+        }
+        try {
+            return new DistributedArtifactManifest(
+                    required(properties, "format"),
+                    UUID.fromString(required(properties, "runId")),
+                    UUID.fromString(required(properties, "projectId")),
+                    // "" is the canonical root scope — getProperty allows blank, required does not
+                    properties.getProperty("projectRelativeRoot"),
                     required(properties, "sourceRepository"),
                     required(properties, "sourceCommit"),
                     Language.valueOf(required(properties, "language")),
@@ -497,6 +553,7 @@ public final class DistributedArtifactBundleStore {
                 manifest.format(),
                 manifest.sourceRepository(),
                 manifest.sourceCommit(),
+                manifest.projectRelativeRoot(),
                 manifest.language().name(),
                 manifest.providerId(),
                 manifest.providerVersion(),

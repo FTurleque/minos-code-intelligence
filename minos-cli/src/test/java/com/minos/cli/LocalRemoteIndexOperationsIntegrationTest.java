@@ -93,6 +93,8 @@ class LocalRemoteIndexOperationsIntegrationTest {
         assertEquals("fixture-provider", result.artifacts().getFirst().providerId());
         assertEquals("PROCESS_EPHEMERAL_WORKSPACE", result.artifacts().getFirst().isolation());
         assertFalse(result.artifacts().getFirst().networkDenyEnforced());
+        assertEquals("", result.artifacts().getFirst().projectRelativeRoot(),
+                "root-scope indexing must report empty projectRelativeRoot");
         var snapshot = application.snapshotStore().loadActiveKnowledge(
                 java.util.UUID.fromString(result.projectId())).orElseThrow();
         assertEquals(result.execution().activeSnapshotId(), snapshot.snapshotId());

@@ -116,6 +116,10 @@ class RemoteIndexCommandTest {
     }
 
     private static RemoteIndexOperations.RemoteIndexView indexView() {
+        return indexViewWithScope("");
+    }
+
+    private static RemoteIndexOperations.RemoteIndexView indexViewWithScope(String scope) {
         AutonomousIndexOperations.IndexPlanView plan = new AutonomousIndexOperations.IndexPlanView(
                 "11111111-1111-1111-1111-111111111111",
                 "demo",
@@ -140,7 +144,8 @@ class RemoteIndexCommandTest {
         RemoteIndexOperations.ArtifactEvidence artifact = new RemoteIndexOperations.ArtifactEvidence(
                 "scip-java", "0.13.1", "JAVA", "worker-one",
                 "PROCESS_EPHEMERAL_WORKSPACE", "ALLOW", false,
-                "a".repeat(64), "b".repeat(64), "c".repeat(64), false
+                "a".repeat(64), "b".repeat(64), "c".repeat(64), false,
+                scope
         );
         return new RemoteIndexOperations.RemoteIndexView(
                 materialization(false),
@@ -149,6 +154,41 @@ class RemoteIndexCommandTest {
                 execution,
                 List.of(artifact)
         );
+    }
+
+    @Test
+    void rendersProjectRelativeRootInJsonAndTextOutput() throws Exception {
+        RemoteIndexOperations operations = new StubOperations() {
+            @Override
+            public RemoteIndexView index(
+                    RemoteRepositoryRequest request,
+                    String displayName,
+                    String providerOverride,
+                    String workerId,
+                    WorkerNetworkPolicy policy
+            ) {
+                return indexViewWithScope("services/catalog");
+            }
+        };
+
+        StringBuilder json = new StringBuilder();
+        new RemoteIndexCommand(operations).run(new String[]{
+                "index", "https://gitlab.com/acme/demo",
+                "--ref", "main", "--commit", COMMIT,
+                "--name", "demo", "--worker-network", "allow",
+                "--format", "json"
+        }, json, new StringBuilder());
+        assertTrue(json.toString().contains("\"projectRelativeRoot\":\"services/catalog\""),
+                "JSON must expose projectRelativeRoot");
+
+        StringBuilder text = new StringBuilder();
+        new RemoteIndexCommand(operations).run(new String[]{
+                "index", "https://gitlab.com/acme/demo",
+                "--ref", "main", "--commit", COMMIT,
+                "--name", "demo", "--worker-network", "allow"
+        }, text, new StringBuilder());
+        assertTrue(text.toString().contains("scope=services/catalog"),
+                "text output must expose scope");
     }
 
     private static class StubOperations implements RemoteIndexOperations {

@@ -189,6 +189,7 @@ class LocalIsolatedIndexWorkerTest {
                 DistributedArtifactManifest.FORMAT_V1,
                 fixture.execution().runId(),
                 fixture.execution().projectId(),
+                "",
                 fixture.request().canonicalRepositoryUri(),
                 "b".repeat(40),
                 Language.JAVA,
@@ -299,6 +300,28 @@ class LocalIsolatedIndexWorkerTest {
         assertTrue(failure.getMessage().contains("source budget"));
     }
 
+    @Test
+    void workerPreservesProjectRelativeRootFromRequestInManifest(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixtureWithScope(temp, "services/catalog");
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        IndexerExecutor delegate = delegate(temp, delegateRoot);
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", temp.resolve("home"), delegate, store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        IndexingArtifact artifact = executor.execute(fixture.execution());
+
+        var verified = executor.verifiedArtifact().orElseThrow();
+        assertEquals("services/catalog", verified.manifest().projectRelativeRoot(),
+                "manifest must record the request's scope, not the isolated workspace root");
+        assertEquals(DistributedArtifactManifest.FORMAT_V2, verified.manifest().format());
+        assertEquals(Path.of("services/catalog"), artifact.projectRelativeRoot());
+    }
+
     private static WorkerSandboxBackend qualifiedBackend(WorkerNetworkPolicy expectedPolicy) {
         return new WorkerSandboxBackend() {
             @Override public String id() { return "fixture-os-sandbox"; }
@@ -397,6 +420,47 @@ class LocalIsolatedIndexWorkerTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 projectRoot,
+                new IndexerSelection(Language.JAVA, descriptor),
+                IndexingMode.FULL,
+                List.of());
+        return new Fixture(request, repositoryRoot, projectRoot, materialization, execution);
+    }
+
+    private static Fixture fixtureWithScope(Path temp, String portableScope) throws Exception {
+        Path repositoryRoot = Files.createDirectories(temp.resolve("repository-scoped"));
+        Path registeredRoot = Files.createDirectories(repositoryRoot.resolve("project"));
+        Path projectRoot = Files.createDirectories(registeredRoot.resolve(Path.of(portableScope)));
+        Files.writeString(projectRoot.resolve("pom.xml"), "<project/>");
+        Files.createDirectories(projectRoot.resolve(".git"));
+        RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                "https://github.com/acme/demo",
+                "main",
+                "a".repeat(40),
+                "project/" + portableScope,
+                null);
+        RemoteMaterialization materialization = new RemoteMaterialization(
+                request,
+                repositoryRoot,
+                projectRoot,
+                "c".repeat(64),
+                false,
+                Instant.parse("2026-07-29T00:00:00Z"));
+        IndexerDescriptor descriptor = new IndexerDescriptor(
+                "fixture-provider",
+                "1.2.3",
+                "Fixture provider",
+                Set.of(Language.JAVA),
+                Set.of(BuildSystem.MAVEN),
+                Set.of(IndexerCapability.SYMBOLS),
+                IndexerQualification.QUALIFIED,
+                1,
+                List.of());
+        IndexingExecutionRequest execution = new IndexingExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                registeredRoot,
+                projectRoot,
+                Path.of(portableScope),
                 new IndexerSelection(Language.JAVA, descriptor),
                 IndexingMode.FULL,
                 List.of());
