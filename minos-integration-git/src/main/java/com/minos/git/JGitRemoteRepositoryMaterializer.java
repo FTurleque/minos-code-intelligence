@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
@@ -53,6 +54,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static final String METADATA_FILE = "entry.properties";
     private static final String PIN_FILE = "registered.pin";
     private static final String REPOSITORY_DIRECTORY = "repository";
+    private static final int MAX_CACHE_ROOT_SCAN_ENTRIES = 4_096;
 
     private final Path cacheRoot;
     private final Path locksRoot;
@@ -351,9 +353,17 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private void evict(String protectedKey) throws IOException {
         List<EvictionCandidate> entries = new ArrayList<>();
         try (var paths = Files.list(cacheRoot)) {
-            for (Path path : paths.filter(Files::isDirectory)
-                    .filter(value -> !value.getFileName().toString().startsWith("."))
-                    .toList()) {
+            var iterator = paths.iterator();
+            int scanned = 0;
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
+                if (++scanned > MAX_CACHE_ROOT_SCAN_ENTRIES) {
+                    throw new IOException("remote repository cache root exceeds entry scan limit");
+                }
+                if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
+                        || path.getFileName().toString().startsWith(".")) {
+                    continue;
+                }
                 try {
                     Properties metadata = readProperties(path.resolve(METADATA_FILE));
                     long size = new CloneBudget(path, cachePolicy).checkpoint().bytes();

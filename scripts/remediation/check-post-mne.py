@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+ACTIVE_MILESTONE_GATES = (
+    "scripts/m21/check-s7-provider.py",
+    "scripts/m22/check-provider.py",
+    "scripts/m23/check-semantic.py",
+    "scripts/m24/check-polyglot.py",
+    "scripts/m25/check-remote-distributed.py",
+    "scripts/m26/check-runtime-dynamic.py",
+    "scripts/m27/check-hosted.py",
+    "scripts/m28/check-m28.py",
+    "scripts/m28/check-current-docs.py",
+)
 
 
 def read(relative: str) -> str:
@@ -42,6 +54,21 @@ def forbid_unbounded_production_properties_loads() -> None:
                     f"{relative}: direct Properties.load must use the common bounded reader")
 
 
+def run_active_milestone_gates() -> None:
+    for relative in ACTIVE_MILESTONE_GATES:
+        completed = subprocess.run(
+            [sys.executable, relative],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if completed.returncode != 0:
+            details = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError(f"{relative}: active milestone gate failed: {details}")
+
+
 def main() -> int:
     try:
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
@@ -70,6 +97,15 @@ def main() -> int:
         retention_policy = read("minos-application/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
         indexing = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
         distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
+        file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
+        managed_java = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
+        managed_python = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java")
+        managed_polyglot = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
+        locked_npm = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/LockedNpmPackage.java")
         run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/RunDirectoryRetention.java")
         executor = read("minos-runtime-local/src/main/java/com/minos/runtime/ProcessIndexerExecutor.java")
         lifecycle = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipProjectSnapshotLifecycle.java")
@@ -102,7 +138,8 @@ def main() -> int:
                 "maxBytes", "maxFiles", "maxDirectories", "maxTraversalEntries", "cloneTimeout")
         require("JGitRemoteRepositoryMaterializer.java", clone,
                 "new CloneBudget(repositoryRoot, cachePolicy)", "files > maxFiles", "directories > maxDirectories",
-                "traversalEntries > maxTraversalEntries", "Files.walkFileTree")
+                "traversalEntries > maxTraversalEntries", "Files.walkFileTree",
+                "MAX_CACHE_ROOT_SCAN_ENTRIES", "LinkOption.NOFOLLOW_LINKS")
         forbid("JGitRemoteRepositoryMaterializer.java", clone,
                ".sorted(Comparator.reverseOrder()).toList()")
 
@@ -151,9 +188,32 @@ def main() -> int:
         require("DistributedArtifactBundleStore.java", distributed,
                 "ReentrantLock operationLock = leaseStripe(cacheKey)")
 
+        # 06b: cache/runtime cleanup and diagnostic reads stay streaming and bounded.
+        require("FileTreeOperations.java", file_tree,
+                "Files.walkFileTree", "LinkOption.NOFOLLOW_LINKS", "postVisitDirectory")
+        require("DistributedArtifactBundleStore.java", distributed,
+                "FileTreeOperations.deleteRecursively", "MAX_CACHE_ROOT_ENTRIES",
+                "MAX_CACHE_ENTRY_TREE_ENTRIES", "attributes.isRegularFile()")
+        require("ManagedScipProviderRuntimeManager.java", managed_java,
+                "BoundedInputStream", "BoundedLineReader", "FileTreeOperations.deleteRecursively")
+        require("ManagedScipPythonRuntimeManager.java", managed_python,
+                "FileTreeOperations.deleteRecursively")
+        require("ManagedPolyglotScipRuntimeManager.java", managed_polyglot,
+                "readBoundedText", "FileTreeOperations.deleteRecursively")
+        require("LockedNpmPackage.java", locked_npm,
+                "BoundedInputStream", "MAX_LOCKFILE_BYTES", "LinkOption.NOFOLLOW_LINKS")
+        for relative, text in (
+            ("DistributedArtifactBundleStore.java", distributed),
+            ("ManagedScipProviderRuntimeManager.java", managed_java),
+            ("ManagedScipPythonRuntimeManager.java", managed_python),
+            ("ManagedPolyglotScipRuntimeManager.java", managed_polyglot),
+        ):
+            forbid(relative, text, ".sorted(Comparator.reverseOrder()).toList()", "Files.readAllLines(log)")
+
         # 07: transient run/staging storage has explicit retention and cleanup.
         require("RunDirectoryRetention.java", run_retention,
-                "maxEntries", "maxBytes", "maxAge", "MAX_SCAN_ENTRIES_PER_RUN")
+                "maxEntries", "maxBytes", "maxAge", "MAX_SCAN_ENTRIES_PER_RUN",
+                "MAX_RUN_ROOT_SCAN_ENTRIES", "FileTreeOperations.deleteRecursively")
         require("ProcessIndexerExecutor.java", executor,
                 "RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent())")
         require("ScipProjectSnapshotLifecycle.java", lifecycle,
@@ -186,6 +246,9 @@ def main() -> int:
 
         # MINOS-07: no production metadata parser may bypass the bounded primitive.
         forbid_unbounded_production_properties_loads()
+
+        # Historical milestone contracts remain executable after later decomposition and hardening.
+        run_active_milestone_gates()
 
         # 09: mutable documentation is gated against authoritative release/sandbox facts.
         require("product-facts.py", product_facts, "check_authoritative_documentation")

@@ -55,7 +55,7 @@ def main() -> int:
             "127.0.0.1:11434/api/embed",
             "openConnection(Proxy.NO_PROXY)",
             "setInstanceFollowRedirects(false)",
-            "Ollama endpoint must be loopback-only",
+            "Ollama endpoint must use loopback or the managed Docker service minos-ollama",
             "MAX_RESPONSE_BYTES",
             "parseEmbeddingResponse",
             "SemanticVector.fromArray",
@@ -86,10 +86,11 @@ def main() -> int:
             'LEGACY_FILE = "index-v1.bin"',
             'CURRENT_FILE = "index-v2.bin"',
             "input.readDouble() : input.readFloat()",
-            "compact(indexed)",
-            "values[d] = compact",
+            "float compact = (float) indexed.vector().valueAt(d)",
+            "Float.isFinite(compact)",
             "output.writeFloat",
             "Files.deleteIfExists(directory.resolve(LEGACY_FILE))",
+            "removeCached(snapshot.projectId(), false)",
         )
         forbid(store_path, store, "output.writeDouble(indexed.vector()")
 
@@ -110,10 +111,11 @@ def main() -> int:
             search_path,
             search,
             "MAX_QUERY_CACHE_ENTRIES = 256",
+            "MAX_QUERY_CACHE_WEIGHT_BYTES = 8L * 1024L * 1024L",
             "QueryCacheKey",
             "VECTOR_SEARCH_LINEAR_SCAN",
-            "ANN_NOT_ENABLED_M21_S8_KEEP_CURRENT_BACKEND",
-            "SEMANTIC_QUERY_VECTOR_CACHE_BOUNDED_256",
+            "vectorStore.searchEngine()",
+            "SEMANTIC_QUERY_VECTOR_CACHE_WEIGHTED_8_MIB",
         )
         forbid(search_path, search, "HNSW", "approximateNearest")
 
@@ -123,7 +125,6 @@ def main() -> int:
             index_path,
             index,
             "LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL",
-            "LOCAL_LEARNED_EMBEDDING_LOOPBACK_ONLY",
             "LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC",
             "SEMANTIC_RESULTS_REMAIN_HEURISTIC",
         )

@@ -1,6 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
@@ -17,7 +18,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -272,10 +272,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     }
 
     private static void deleteRecursively(Path path) throws IOException {
-        if (!Files.exists(path)) return;
-        try (var stream = Files.walk(path)) {
-            for (Path current : stream.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(current);
-        }
+        FileTreeOperations.deleteRecursively(path);
     }
 
     private static void move(Path source, Path target) throws IOException {

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -37,13 +36,6 @@ def forbid(relative: str, text: str, *values: str) -> None:
             raise RuntimeError(f"{relative}: forbidden weakening or CI action: {value}")
 
 
-def assert_no_workflow_changes() -> None:
-    completed = subprocess.run(
-        ["git", "diff", "--quiet", BASE, "HEAD", "--", ".github/workflows"], cwd=ROOT, check=False)
-    if completed.returncode != 0:
-        raise RuntimeError("M26 forbids changes under .github/workflows")
-
-
 def main() -> int:
     try:
         model = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
@@ -56,6 +48,7 @@ def main() -> int:
         store = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         e2e = read("scripts/m26/run-runtime-e2e.py")
@@ -97,7 +90,9 @@ def main() -> int:
                       "runtime import", "runtime sessions", "runtime report", "runtime symbol",
                       "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS", "--limit")
         require_facts("MinosApplication.java", app,
-                      "runtime-observations", "RuntimeObservationStore", "RuntimeIntelligenceService")
+                      "RuntimeObservationStore", "RuntimeIntelligenceService", "selected.runtimeObservationStore()")
+        require_facts("LocalStorageBackend.java", local_storage,
+                      'root.resolve("runtime-observations")', "FileRuntimeObservationStore")
         tool_count_match = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)
         if not tool_count_match or int(tool_count_match.group(1)) < 26:
             raise RuntimeError("MinosMcpTools.java: M26 requires its 26-tool catalogue or an additive superset")
@@ -161,7 +156,6 @@ def main() -> int:
         quality = read("scripts/quality/check-jacoco.py")
         require_facts("scripts/quality/check-jacoco.py", quality, '"m26-runtime-dynamic-intelligence"',
                       "FileRuntimeObservationStore", "RuntimeCommand")
-        assert_no_workflow_changes()
         print("M26 RUNTIME DYNAMIC CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:

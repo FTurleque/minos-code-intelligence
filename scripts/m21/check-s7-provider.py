@@ -76,7 +76,7 @@ def main() -> int:
         provider = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
         service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         spi = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphProvider.java")
-        ignore = read("minos-application/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
+        ignore = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         fixture_test = read("minos-application/src/test/java/com/minos/program/analysis/AdvancedProgramSidecarFixtureTest.java")
 
         for token in (
@@ -96,7 +96,8 @@ def main() -> int:
         require(service, "provider.cacheKey(project, snapshot)", "ProgramGraphService")
         require(service, "new FileProgramGraphProvider()", "ProgramGraphService")
         forbid(service, "capabilities.add(ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW)", "ProgramGraphService")
-        require(ignore, '".minos"', "ProjectIgnorePolicy")
+        require(ignore, '".minos"', "ProjectIgnoreRules")
+        require(ignore, 'root.resolve(".minosignore")', "ProjectIgnoreRules")
         require(fixture_test, "evaluation.perfect()", "AdvancedProgramSidecarFixtureTest")
 
         metadata_file = SIDE / "metadata.properties"

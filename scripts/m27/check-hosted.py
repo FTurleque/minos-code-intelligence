@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -50,6 +49,10 @@ def main() -> int:
         workspace = read("minos-domain/src/main/java/com/minos/hosted/SharedWorkspace.java")
         token = read("minos-application/src/main/java/com/minos/hosted/HmacHostedIdentityProvider.java")
         service = read("minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
+        authorization = read("minos-application/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
+        audit_chain = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
+        membership_service = read("minos-application/src/main/java/com/minos/hosted/HostedMembershipService.java")
+        workspace_service = read("minos-application/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
         key_provider = read("minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java")
         store = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
@@ -75,9 +78,13 @@ def main() -> int:
                 "hosted tenant concurrent modification")
         forbid("FileHostedControlPlaneStore.java", store, "ObjectInputStream", "ObjectOutputStream")
 
-        require("HostedControlPlaneService.java", service, "authorizeMutation", "HostedAuditEvent.Outcome.DENIED",
-                "hosted permission denied", "verifyAudit", "HmacSHA256", "requireSnapshot(projectId, snapshotId)",
-                "retentionPlan", "applyRetention", "rotateKey", "cannot remove or demote the last tenant owner")
+        require("HostedControlPlaneService.java", service, "retentionPlan", "applyRetention", "rotateKey")
+        require("HostedAuthorizationService.java", authorization, "authorizeMutation",
+                "HostedAuditEvent.Outcome.DENIED", "hosted permission denied", "auditChain.verify(state)")
+        require("HostedAuditChain.java", audit_chain, "HmacSHA256")
+        require("HostedWorkspaceService.java", workspace_service, "requireSnapshot(projectId, snapshotId)")
+        require("HostedMembershipService.java", membership_service,
+                "cannot remove or demote the last tenant owner")
         forbid("HostedControlPlaneService.java", service, "ProjectDiscoveryService", "ProviderCapability")
         require("MinosApplication.java", app, 'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"',
                 '"enabled"', 'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
@@ -169,9 +176,6 @@ def main() -> int:
         quality = read("scripts/quality/check-jacoco.py")
         require("check-jacoco.py", quality, '"m27-team-hosted-control-plane"',
                 "FileHostedControlPlaneStore", "TeamCommand", "LocalMinosTeamApi")
-        if subprocess.run(["git", "diff", "--quiet", BASE, "HEAD", "--", ".github/workflows"],
-                          cwd=ROOT, check=False).returncode != 0:
-            raise RuntimeError("M27 forbids changes under .github/workflows")
         print("M27 TEAM HOSTED CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:

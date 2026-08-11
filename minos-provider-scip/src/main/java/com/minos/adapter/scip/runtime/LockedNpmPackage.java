@@ -1,15 +1,20 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.BoundedInputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 
 /** Repository-owned npm lockfile preparation for managed SCIP runtimes. */
 final class LockedNpmPackage {
+    private static final long MAX_LOCKFILE_BYTES = 4L * 1024L * 1024L;
+
     private LockedNpmPackage() {
     }
 
@@ -42,11 +47,18 @@ final class LockedNpmPackage {
     }
 
     static void verify(Path lock, String packageName, String version, String expectedIntegrity) throws IOException {
+        if (!Files.isRegularFile(lock, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(lock)) {
+            throw new IOException("managed npm lockfile must be a regular non-symbolic file");
+        }
         long size = Files.size(lock);
-        if (size < 1L || size > 4L * 1024L * 1024L) {
+        if (size < 1L || size > MAX_LOCKFILE_BYTES) {
             throw new IOException("managed npm lockfile size is invalid");
         }
-        String json = Files.readString(lock, StandardCharsets.UTF_8);
+        String json;
+        try (BoundedInputStream input = new BoundedInputStream(
+                Files.newInputStream(lock), MAX_LOCKFILE_BYTES, "managed npm lockfile")) {
+            json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
         String marker = "\"node_modules/" + packageName + "\"";
         int start = json.indexOf(marker);
         if (start < 0) throw new IOException("managed npm lockfile does not contain root package: " + packageName);
