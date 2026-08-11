@@ -20,32 +20,53 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Linux worker sandbox backed by bubblewrap namespaces and util-linux prlimit.
+ * Linux worker sandbox backed by bubblewrap namespaces, a cgroup v2 job boundary and prlimit.
  *
  * <p>The host root is never exposed wholesale. System runtime roots and the exact managed provider
  * runtime needed by the command are mounted read-only; arbitrary absolute files are mounted as
  * individual files instead of exposing their parent directories. The workspace, artifact and MINOS
  * run roots are writable. DENY keeps bubblewrap's isolated network namespace; ALLOW explicitly
  * shares the host network namespace.</p>
+ *
+ * <p>Resource containment is aggregate and lives in {@link LinuxCgroupJob}: {@code memory.max},
+ * {@code memory.swap.max}, {@code pids.max}, {@code cpu.max} and {@code cgroup.kill} apply to the
+ * whole provider process tree. The {@code prlimit} values kept below are per-process defence in
+ * depth only — a provider multiplies them by forking, so they are never presented as an aggregate
+ * guarantee. Without a delegated cgroup v2 boundary this backend does not exist and untrusted
+ * execution is refused before the provider starts.</p>
  */
 public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxBackend {
 
-    static final long MAX_ADDRESS_SPACE_BYTES = 8L * 1024L * 1024L * 1024L;
+    /** Aggregate memory of the whole provider tree, enforced by {@code memory.max}. */
+    static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
+    /** Per-process address space; defence in depth on top of the aggregate cgroup limit. */
+    static final long MAX_ADDRESS_SPACE_BYTES = MAX_JOB_MEMORY_BYTES;
+    /** Aggregate process/thread count of the whole provider tree, enforced by {@code pids.max}. */
     static final int MAX_PROCESSES = 128;
     static final int MAX_OPEN_FILES = 2048;
+    /** Aggregate CPU bandwidth per {@link LinuxCgroupJob#CPU_PERIOD_MICROS}, enforced by {@code cpu.max}. */
+    static final long MAX_CPU_MICROS_PER_PERIOD = 8L * LinuxCgroupJob.CPU_PERIOD_MICROS;
+
+    private static final Path POSIX_SHELL = Path.of("/bin/sh");
 
     private final Path minosHome;
     private final Path bubblewrap;
     private final Path prlimit;
+    private final Path shell;
 
     public LinuxBubblewrapWorkerSandboxBackend(Path bubblewrap, Path prlimit) {
         this(null, bubblewrap, prlimit);
     }
 
     LinuxBubblewrapWorkerSandboxBackend(Path minosHome, Path bubblewrap, Path prlimit) {
+        this(minosHome, bubblewrap, prlimit, POSIX_SHELL);
+    }
+
+    LinuxBubblewrapWorkerSandboxBackend(Path minosHome, Path bubblewrap, Path prlimit, Path shell) {
         this.minosHome = minosHome == null ? null : minosHome.toAbsolutePath().normalize();
         this.bubblewrap = regularExecutable(bubblewrap, "bubblewrap");
         this.prlimit = regularExecutable(prlimit, "prlimit");
+        this.shell = Objects.requireNonNull(shell, "shell").toAbsolutePath().normalize();
     }
 
     public static Optional<LinuxBubblewrapWorkerSandboxBackend> discover() {
@@ -61,6 +82,12 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         if (bwrap.isEmpty() || limits.isEmpty()) {
             return Optional.empty();
         }
+        if (LinuxCgroupJob.delegatedRoot().isEmpty()) {
+            System.err.println("MINOS Linux worker sandbox is unqualified: no delegated cgroup v2 job boundary "
+                    + "(set " + LinuxCgroupJob.ROOT_ENVIRONMENT_VARIABLE + " or run MINOS in a delegated cgroup); "
+                    + "untrusted provider execution stays fail-closed");
+            return Optional.empty();
+        }
         LinuxBubblewrapWorkerSandboxBackend candidate =
                 new LinuxBubblewrapWorkerSandboxBackend(minosHome, bwrap.orElseThrow(), limits.orElseThrow());
         return candidate.probeOsIsolation() ? Optional.of(candidate) : Optional.empty();
@@ -68,7 +95,7 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
 
     @Override
     public String id() {
-        return "linux-bubblewrap-prlimit-v4";
+        return "linux-bubblewrap-cgroup2-v5";
     }
 
     @Override
@@ -83,15 +110,22 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
 
     @Override
     public WorkerSandboxQualification qualification() {
+        boolean job = LinuxCgroupJob.delegatedRoot().isPresent();
         return new WorkerSandboxQualification(
                 id(),
                 isolation(),
                 networkGuarantee(),
                 WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
-                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                job
+                        ? WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                        : WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                job ? containment() : WorkerResourceContainment.none(id()),
                 Map.of(
                         WorkerSandboxQualification.Platform.LINUX,
-                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED,
+                        job
+                                ? WorkerSandboxQualification.PlatformDisposition.QUALIFIED
+                                : WorkerSandboxQualification.PlatformDisposition
+                                        .BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY,
                         WorkerSandboxQualification.Platform.WINDOWS,
                         WorkerSandboxQualification.PlatformDisposition.NOT_APPLICABLE,
                         WorkerSandboxQualification.Platform.OTHER,
@@ -103,9 +137,35 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
                         "LINUX_MANAGED_PROVIDER_RUNTIME_ROOT_ONLY",
                         "LINUX_WORKSPACE_ARTIFACT_RUN_WRITE_ONLY",
                         "LINUX_PROVIDER_CAPABILITIES_DROPPED",
-                        "LINUX_PRLIMIT_ADDRESS_SPACE_PROCESS_COUNT_OPEN_FILES_CPU",
+                        "LINUX_CGROUP_V2_AGGREGATE_MEMORY_PIDS_CPU_JOB_BOUNDARY",
+                        "LINUX_CGROUP_V2_KILL_LEAVES_NO_SURVIVING_DESCENDANT",
+                        "LINUX_PRLIMIT_PER_PROCESS_DEFENCE_IN_DEPTH_ONLY",
+                        "LINUX_SANDBOX_SCRATCH_IS_PRIVATE_TMPFS_CHARGED_TO_THE_JOB_MEMORY_LIMIT",
                         "LINUX_RUNTIME_CAPABILITY_PROBE_REQUIRED",
-                        "MINOS_WALL_CLOCK_TIMEOUT_AND_WORKSPACE_QUOTAS_RETAINED"));
+                        "MINOS_SUPERVISED_PROVIDER_WRITE_QUOTA_BYTES_AND_ENTRIES",
+                        "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION"));
+    }
+
+    /** Aggregate containment this backend really enforces once the cgroup boundary exists. */
+    static WorkerResourceContainment containment() {
+        return new WorkerResourceContainment(
+                "linux-cgroup2-bubblewrap",
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                List.of(
+                        "CGROUP_V2_MEMORY_MAX_AND_MEMORY_SWAP_MAX",
+                        "CGROUP_V2_PIDS_MAX",
+                        "CGROUP_V2_CPU_MAX",
+                        "CGROUP_V2_CGROUP_KILL",
+                        "MINOS_PROVIDER_WRITE_QUOTA_SUPERVISOR",
+                        "MINOS_WALL_CLOCK_TIMEOUT",
+                        "MINOS_RUN_RESIDUE_RECLAMATION"));
     }
 
     @Override
@@ -124,15 +184,73 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             throw new IllegalArgumentException(
                     "qualified OS sandbox requires ProcessIndexerExecutor so MINOS controls the actual provider process");
         }
-        return processExecutor.executeSandboxed(
-                request,
-                (plan, runDirectory) -> sandboxPlan(plan, runDirectory, networkPolicy));
+        String jobName = "minos-" + request.runId() + "-" + Long.toHexString(System.nanoTime());
+        try (ContainedSandboxSession session = new ContainedSandboxSession(networkPolicy, jobName)) {
+            return processExecutor.executeSandboxed(request, session);
+        }
+    }
+
+    /** One provider execution: creates the cgroup boundary, then guarantees it is reclaimed. */
+    final class ContainedSandboxSession
+            implements ProcessIndexerExecutor.ProcessPlanTransformer, AutoCloseable {
+
+        private final WorkerNetworkPolicy networkPolicy;
+        private final String jobName;
+        private volatile LinuxCgroupJob job;
+
+        ContainedSandboxSession(WorkerNetworkPolicy networkPolicy, String jobName) {
+            this.networkPolicy = networkPolicy;
+            this.jobName = jobName;
+        }
+
+        @Override
+        public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
+            Path root = LinuxCgroupJob.delegatedRoot().orElseThrow(() -> new IllegalStateException(
+                    "Linux worker sandbox requires a delegated cgroup v2 job boundary; "
+                            + "untrusted provider execution is fail-closed"));
+            LinuxCgroupJob created = LinuxCgroupJob.create(root, jobName, LinuxCgroupJob.Limits.DEFAULT);
+            job = created;
+            return sandboxPlan(plan, runDirectory, networkPolicy, created);
+        }
+
+        @Override
+        public Optional<ProviderWriteQuota> providerWriteQuota() {
+            return Optional.of(ProviderWriteQuota.DEFAULT);
+        }
+
+        @Override
+        public void killContainedJob() {
+            LinuxCgroupJob current = job;
+            if (current != null) current.kill();
+        }
+
+        @Override
+        public void releaseContainment() {
+            LinuxCgroupJob current = job;
+            if (current == null) return;
+            job = null;
+            current.close();
+        }
+
+        @Override
+        public void close() {
+            releaseContainment();
+        }
     }
 
     IndexerProcessPlan sandboxPlan(
             IndexerProcessPlan plan,
             Path runDirectory,
             WorkerNetworkPolicy networkPolicy
+    ) throws Exception {
+        return sandboxPlan(plan, runDirectory, networkPolicy, null);
+    }
+
+    IndexerProcessPlan sandboxPlan(
+            IndexerProcessPlan plan,
+            Path runDirectory,
+            WorkerNetworkPolicy networkPolicy,
+            LinuxCgroupJob job
     ) throws Exception {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(networkPolicy, "networkPolicy");
@@ -159,8 +277,9 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         sandbox.add("--");
         sandbox.addAll(plan.command());
 
+        List<String> command = job == null ? List.copyOf(sandbox) : job.enterThenExec(shell, sandbox);
         return new IndexerProcessPlan(
-                List.copyOf(sandbox),
+                command,
                 plan.workingDirectory(),
                 plan.environment(),
                 plan.generatedArtifact(),

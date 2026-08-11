@@ -44,7 +44,16 @@ public interface WorkerSandboxBackend {
         WorkerSandboxQualification evidence = qualification();
         return evidence.trustDisposition()
                 == WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && evidence.containment().qualifiedForUntrustedCode()
                 && evidence.qualifiedForCurrentPlatform();
+    }
+
+    /**
+     * Aggregate resource containment this backend actually enforces on the current host.
+     * A backend that cannot answer this truthfully must not claim untrusted-code support.
+     */
+    default WorkerResourceContainment resourceContainment() {
+        return qualification().containment();
     }
 
     default WorkerSandboxQualification qualification() {
