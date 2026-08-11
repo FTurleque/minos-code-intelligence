@@ -7,6 +7,7 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -186,14 +187,22 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             if (!process.waitFor(5, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 process.waitFor(2, TimeUnit.SECONDS);
+                System.err.println("MINOS Linux sandbox capability probe timed out");
                 return false;
             }
-            process.getInputStream().readAllBytes();
-            return process.exitValue() == 0;
+            String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
+            if (process.exitValue() != 0) {
+                System.err.println("MINOS Linux sandbox capability probe failed (exit="
+                        + process.exitValue() + "): " + output);
+                return false;
+            }
+            return true;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
         } catch (IOException | RuntimeException exception) {
+            System.err.println("MINOS Linux sandbox capability probe could not start: "
+                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return false;
         }
     }
