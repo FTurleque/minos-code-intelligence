@@ -50,34 +50,22 @@ class WindowsJobObjectContainmentTest {
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
                 $ErrorActionPreference = 'Continue'
-                $report = New-Object System.Collections.Generic.List[string]
-                function Start-Detached([string] $Command) {
-                  $info = New-Object System.Diagnostics.ProcessStartInfo
-                  $info.FileName = $PowerShell
-                  $info.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "' + $Command + '"'
-                  $info.UseShellExecute = $false
-                  $info.CreateNoWindow = $true
-                  return [System.Diagnostics.Process]::Start($info)
-                }
+                Add-Content -LiteralPath $Descendants -Value 'begin' -Encoding Ascii
                 foreach ($index in 1..2) {
                   try {
-                    $spawned = Start-Detached 'Start-Sleep -Seconds 300'
-                    $report.Add([string]$spawned.Id)
+                    $info = New-Object 'System.Diagnostics.ProcessStartInfo'
+                    $info.FileName = $PowerShell
+                    $info.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 300"'
+                    $info.UseShellExecute = $false
+                    $info.CreateNoWindow = $true
+                    $spawned = [System.Diagnostics.Process]::Start($info)
+                    Add-Content -LiteralPath $Descendants -Value ('pid=' + $spawned.Id) -Encoding Ascii
                   } catch {
-                    $report.Add('SPAWN-FAILED ' + $_.Exception.GetType().FullName + ': ' + $_.Exception.Message)
+                    Add-Content -LiteralPath $Descendants -Value ('spawn-failed=' + $_.Exception.Message) -Encoding Ascii
                   }
                 }
                 Start-Sleep -Milliseconds 500
-                try {
-                  [System.IO.File]::WriteAllText($Descendants, ($report -join [Environment]::NewLine))
-                } catch {
-                  Write-Error ('DESCENDANT-REPORT-FAILED: ' + $_.Exception.Message)
-                }
-                try {
-                  [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
-                } catch {
-                  Write-Error ('ARTIFACT-WRITE-FAILED: ' + $_.Exception.Message)
-                }
+                [System.IO.File]::WriteAllText($Artifact, 'contained-windows-artifact')
                 exit 0
 """, StandardCharsets.US_ASCII);
 
@@ -116,16 +104,20 @@ class WindowsJobObjectContainmentTest {
         assertEquals("contained-windows-artifact",
                 Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
         assertTrue(Files.isRegularFile(descendants), "the provider must report the descendants it spawned");
-        List<String> reported = Files.readAllLines(descendants, StandardCharsets.UTF_8).stream()
+        List<String> journal = Files.readAllLines(descendants, StandardCharsets.UTF_8).stream()
                 .map(String::trim)
                 .filter(line -> !line.isBlank())
                 .toList();
-        assertEquals(2, reported.size(), "the provider must report both descendants: " + reported);
-        for (String line : reported) {
-            if (!line.chars().allMatch(Character::isDigit)) {
-                fail("the AppContainer provider could not spawn a descendant: " + line);
-            }
-            long pid = Long.parseLong(line);
+        String evidence = "descendant journal=" + journal + "\nprovider diagnostics:\n" + providerDiagnostics(home);
+        assertTrue(journal.contains("begin"), () -> "the provider fixture did not run: " + evidence);
+        journal.stream()
+                .filter(line -> line.startsWith("spawn-failed="))
+                .findFirst()
+                .ifPresent(line -> fail("the AppContainer provider could not spawn a descendant: " + line));
+        List<String> pids = journal.stream().filter(line -> line.startsWith("pid=")).toList();
+        assertEquals(2, pids.size(), () -> "the provider must report both descendants: " + evidence);
+        for (String line : pids) {
+            long pid = Long.parseLong(line.substring("pid=".length()));
             assertFalse(awaitAlive(pid), "descendant " + pid + " outlived the MINOS job object");
         }
     }

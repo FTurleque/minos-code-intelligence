@@ -38,6 +38,7 @@ final class LinuxCgroupJob implements AutoCloseable {
     static final String ROOT_ENVIRONMENT_VARIABLE = "MINOS_SANDBOX_CGROUP_ROOT";
     static final Path CGROUP_MOUNT = Path.of("/sys/fs/cgroup");
     static final String CONTROLLER_DIRECTORY = "minos-controller";
+    static final String PROCS_FILE = "cgroup.procs";
     static final long CPU_PERIOD_MICROS = 100_000L;
 
     private static final java.util.regex.Pattern SAFE_JOB_NAME =
@@ -146,7 +147,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         Optional<Path> own = ownCgroup();
         if (own.isPresent() && own.orElseThrow().equals(controller)) return;
         Files.writeString(
-                controller.resolve("cgroup.procs"),
+                controller.resolve(PROCS_FILE),
                 Long.toString(ProcessHandle.current().pid()),
                 StandardCharsets.UTF_8);
     }
@@ -257,7 +258,7 @@ final class LinuxCgroupJob implements AutoCloseable {
     /** Number of processes still alive inside the boundary. */
     long aliveProcesses() {
         try {
-            return Files.readAllLines(directory.resolve("cgroup.procs"), StandardCharsets.UTF_8).stream()
+            return Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8).stream()
                     .filter(line -> !line.isBlank())
                     .count();
         } catch (IOException exception) {
@@ -291,7 +292,7 @@ final class LinuxCgroupJob implements AutoCloseable {
     private List<Long> members() {
         try {
             List<Long> members = new ArrayList<>();
-            for (String line : Files.readAllLines(directory.resolve("cgroup.procs"), StandardCharsets.UTF_8)) {
+            for (String line : Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
                 if (line.isBlank()) continue;
                 try {
                     members.add(Long.parseLong(line.trim()));

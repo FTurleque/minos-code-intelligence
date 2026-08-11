@@ -39,8 +39,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     /** Aggregate job CPU seconds granted per wall-clock second of the provider timeout. */
     static final long JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND = 8L;
 
-    private static final String LAUNCHER = "windows-appcontainer-sandbox-v4.ps1";
-    private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER;
+    private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
+    private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_SCRIPT_NAME;
 
     private final Path minosHome;
     private final Path powershell;
@@ -258,7 +258,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
-        Path target = directory.resolve(LAUNCHER);
+        Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
         try (InputStream input = WindowsAppContainerWorkerSandboxBackend.class.getResourceAsStream(RESOURCE)) {
             if (input == null) throw new IOException("embedded Windows AppContainer launcher is missing: " + RESOURCE);
             Path partial = Files.createTempFile(directory, ".windows-appcontainer-", ".ps1");

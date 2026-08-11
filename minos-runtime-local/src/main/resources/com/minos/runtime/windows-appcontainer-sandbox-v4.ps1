@@ -670,8 +670,8 @@ function Remove-AppContainerPath([string] $Path, [string] $Sid) {
     & icacls.exe $Path /remove:g "*$Sid" /q | Out-Null
 }
 
-function Write-Recovery([string] $Journal, [string] $Profile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
-    $state = [ordered]@{ profile = $Profile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
+function Write-Recovery([string] $Journal, [string] $containerProfile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
+    $state = [ordered]@{ profile = $containerProfile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
     $temporary = $Journal + '.tmp'
     $state | ConvertTo-Json -Depth 3 -Compress | Set-Content -LiteralPath $temporary -Encoding UTF8
     Move-Item -LiteralPath $temporary -Destination $Journal -Force
@@ -714,31 +714,31 @@ if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
 New-Item -ItemType Directory -Path $recoveryDirectory -Force | Out-Null
 Recover-Stale $recoveryDirectory
 
-$profile = 'Minos.Worker.' + ([Guid]::NewGuid().ToString('N'))
+$containerProfile = 'Minos.Worker.' + ([Guid]::NewGuid().ToString('N'))
 $sid = $null
 $granted = New-Object System.Collections.Generic.List[string]
-$journal = Join-Path $recoveryDirectory ($profile + '.json')
+$journal = Join-Path $recoveryDirectory ($containerProfile + '.json')
 
 try {
-    $sid = [MinosAppContainerNativeV3]::CreateProfile($profile)
-    Write-Recovery $journal $profile $sid $granted
+    $sid = [MinosAppContainerNativeV3]::CreateProfile($containerProfile)
+    Write-Recovery $journal $containerProfile $sid $granted
     foreach ($path in $readPaths) {
         Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
     foreach ($path in $readFiles) {
         Grant-AppContainerFile $path $sid
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
     foreach ($path in $writePaths) {
         Grant-AppContainerDirectory $path $sid '(OI)(CI)M'
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
     $exitCode = [MinosAppContainerNativeV3]::RunSandbox(
-        $profile,
+        $containerProfile,
         $command,
         $environment,
         $workingDirectory,
@@ -755,6 +755,6 @@ finally {
             try { Remove-AppContainerPath $path $sid } catch { Write-Warning $_ }
         }
     }
-    try { [MinosAppContainerNativeV3]::DeleteProfile($profile) } catch { Write-Warning $_ }
+    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { Write-Warning $_ }
     Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
 }

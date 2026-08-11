@@ -62,27 +62,8 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                     + request.selection().indexer().id());
         }
 
-        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId)
-                .toAbsolutePath().normalize();
-        if (!providerRunDirectory.startsWith(runsRoot)) {
-            throw new IllegalStateException("provider run directory escapes MINOS runs root");
-        }
-        RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent());
-        Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
-        if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
-            throw new IllegalStateException("provider scope directory escapes provider run root");
-        }
-        Files.createDirectories(runDirectory);
-        IndexerProcessPlan original = Objects.requireNonNull(
-                planFactory.create(request, runDirectory), "process plan");
-        IndexerProcessPlan plan = Objects.requireNonNull(
-                transformer.transform(original, runDirectory), "transformed process plan");
-        if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("provider command must contain non-null arguments");
-        }
-        if (!Files.isDirectory(plan.workingDirectory())) {
-            throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
-        }
+        Path runDirectory = prepareRunDirectory(request);
+        IndexerProcessPlan plan = preparePlan(request, transformer, runDirectory);
 
         Path stdout = runDirectory.resolve("provider.stdout.log");
         Path stderr = runDirectory.resolve("provider.stderr.log");
@@ -180,6 +161,41 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
             }
         }
+    }
+
+    /** Resolves and bounds the MINOS-owned run directory this execution may write to. */
+    private Path prepareRunDirectory(IndexingExecutionRequest request) throws IOException {
+        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId)
+                .toAbsolutePath().normalize();
+        if (!providerRunDirectory.startsWith(runsRoot)) {
+            throw new IllegalStateException("provider run directory escapes MINOS runs root");
+        }
+        RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent());
+        Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
+        if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
+            throw new IllegalStateException("provider scope directory escapes provider run root");
+        }
+        Files.createDirectories(runDirectory);
+        return runDirectory;
+    }
+
+    /** Builds the provider plan and lets the sandbox backend own the containment boundary. */
+    private IndexerProcessPlan preparePlan(
+            IndexingExecutionRequest request,
+            ProcessPlanTransformer transformer,
+            Path runDirectory
+    ) throws Exception {
+        IndexerProcessPlan original = Objects.requireNonNull(
+                planFactory.create(request, runDirectory), "process plan");
+        IndexerProcessPlan plan = Objects.requireNonNull(
+                transformer.transform(original, runDirectory), "transformed process plan");
+        if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("provider command must contain non-null arguments");
+        }
+        if (!Files.isDirectory(plan.workingDirectory())) {
+            throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
+        }
+        return plan;
     }
 
     /** Every root the transformed plan makes writable for the provider. */

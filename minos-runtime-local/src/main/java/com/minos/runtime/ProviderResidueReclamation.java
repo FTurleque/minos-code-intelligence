@@ -42,23 +42,27 @@ final class ProviderResidueReclamation {
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) return;
         try (DirectoryStream<Path> children = Files.newDirectoryStream(directory)) {
             for (Path child : children) {
-                Path name = child.getFileName();
-                if (name != null && RETAINED_ENTRIES.contains(name.toString())) continue;
-                Path normalized = child.toAbsolutePath().normalize();
-                if (!normalized.startsWith(directory) || normalized.equals(directory)) continue;
-                try {
-                    if (Files.isSymbolicLink(normalized) || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
-                        Files.deleteIfExists(normalized);
-                    } else {
-                        FileTreeOperations.deleteRecursively(normalized);
-                    }
-                } catch (IOException exception) {
-                    System.err.println("MINOS could not reclaim provider residue " + normalized + ": "
-                            + exception.getMessage());
-                }
+                deleteResidue(directory, child);
             }
         } catch (IOException exception) {
             System.err.println("MINOS could not enumerate provider residue in " + directory + ": "
+                    + exception.getMessage());
+        }
+    }
+
+    private static void deleteResidue(Path directory, Path child) {
+        Path name = child.getFileName();
+        if (name != null && RETAINED_ENTRIES.contains(name.toString())) return;
+        Path normalized = child.toAbsolutePath().normalize();
+        if (!normalized.startsWith(directory) || normalized.equals(directory)) return;
+        try {
+            if (Files.isSymbolicLink(normalized) || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
+                Files.deleteIfExists(normalized);
+            } else {
+                FileTreeOperations.deleteRecursively(normalized);
+            }
+        } catch (IOException exception) {
+            System.err.println("MINOS could not reclaim provider residue " + normalized + ": "
                     + exception.getMessage());
         }
     }

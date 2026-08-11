@@ -75,24 +75,8 @@ final class RunDirectoryRetention {
         DeletionBudget budget = new DeletionBudget(budgets.maxDeleteEntriesPerPrune());
         drainQuarantine(root, budget);
 
-        List<Entry> entries = new ArrayList<>();
-        boolean truncatedScan = false;
-        try (DirectoryStream<Path> children = Files.newDirectoryStream(root)) {
-            long scanned = 0;
-            for (Path child : children) {
-                if (++scanned > budgets.maxRunRootScanEntries()) {
-                    // A truncated listing must never abort retention: the entries already observed
-                    // are still pruned and the remainder is measured on the next invocation.
-                    truncatedScan = true;
-                    break;
-                }
-                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
-                Path normalized = child.toAbsolutePath().normalize();
-                if (protectedRoot != null && normalized.equals(protectedRoot)) continue;
-                if (QUARANTINE_DIRECTORY.equals(String.valueOf(normalized.getFileName()))) continue;
-                entries.add(measure(normalized, budgets.maxScanEntriesPerRun()));
-            }
-        }
+        Scan scan = scanRunRoot(root, protectedRoot, budgets);
+        List<Entry> entries = scan.entries();
 
         // Unreadable or oversized residue is reclaimed first: it is the only thing that can starve
         // the next indexation, and it can never be trusted to stay within the scan budget.
@@ -108,13 +92,34 @@ final class RunDirectoryRetention {
 
         for (Entry entry : entries) {
             boolean expired = entry.lastModified().toInstant().isBefore(cutoff);
-            boolean overCount = retainedCount > policy.maxEntries() || truncatedScan;
+            boolean overCount = retainedCount > policy.maxEntries() || scan.truncated();
             boolean overBytes = retainedBytes > policy.maxBytes();
             if (!entry.reclaimFirst() && !expired && !overCount && !overBytes) continue;
             reclaim(root, entry.path(), budget);
             retainedCount--;
             retainedBytes = entry.bytes() >= retainedBytes ? 0L : retainedBytes - entry.bytes();
         }
+    }
+
+    /**
+     * Measures the retained runs without ever exceeding the run-root scan budget. A truncated
+     * listing must never abort retention: what was observed is still pruned and the remainder is
+     * measured by the next invocation.
+     */
+    private static Scan scanRunRoot(Path root, Path protectedRoot, Budgets budgets) throws IOException {
+        List<Entry> entries = new ArrayList<>();
+        try (DirectoryStream<Path> children = Files.newDirectoryStream(root)) {
+            long scanned = 0;
+            for (Path child : children) {
+                if (++scanned > budgets.maxRunRootScanEntries()) return new Scan(entries, true);
+                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
+                Path normalized = child.toAbsolutePath().normalize();
+                if (normalized.equals(protectedRoot)) continue;
+                if (QUARANTINE_DIRECTORY.equals(String.valueOf(normalized.getFileName()))) continue;
+                entries.add(measure(normalized, budgets.maxScanEntriesPerRun()));
+            }
+        }
+        return new Scan(entries, false);
     }
 
     /**
@@ -299,5 +304,8 @@ final class RunDirectoryRetention {
     }
 
     private record Entry(Path path, FileTime lastModified, long bytes, boolean reclaimFirst) {
+    }
+
+    private record Scan(List<Entry> entries, boolean truncated) {
     }
 }
