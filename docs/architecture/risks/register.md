@@ -11,7 +11,8 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 | Réf | Titre | P | I | Exposition | Propriétaire | Statut | Mitigation durable |
 |-----|-------|---|---|-----------|-------------|--------|--------------------|
 | R-04 | ANN non encore décidé | Faible | Moyen | Faible | Équipe MINOS | Watchlist | Aucun claim ANN ; évolution uniquement après mesure d'un besoin réel. |
-| R-09 | Disponibilité des primitives sandbox selon l'OS / LSM | Faible | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`/user namespaces avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object. En absence de primitive qualifiée, toute exécution distante (`ALLOW` ou `DENY`) échoue de façon fail-closed. |
+| R-09 | Disponibilité des primitives sandbox et de la délégation cgroup selon l'OS / LSM | Moyenne | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`, les user namespaces **et** la délégation cgroup v2 avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object vérifié. `WorkerResourceContainment` distingue garantie OS, supervision MINOS et simple mesure. En absence d'une primitive qualifiée, toute exécution distante (`ALLOW` ou `DENY`) échoue de façon fail-closed. |
+| R-11 | Absence de quota disque par job non privilégié sur Linux et Windows | Moyenne | Moyen | Moyenne | Équipe MINOS | Mitigé / assumé | Le budget d'écriture (octets et entrées) est appliqué pendant l'exécution par `ProviderWriteQuotaSupervisor`, qui détruit la frontière de job au dépassement, et est déclaré `SUPERVISED_HARD_KILL` — jamais `OS_ENFORCED`. |
 | R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Équipe MINOS | Mitigé / surveillé | GitHub Actions épinglées par SHA, images OCI par digest, providers binaires par checksum attendu, gate `check-workflow-pins.py`. |
 
 ---
@@ -35,7 +36,7 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 | Réf | Description | Module | Priorité | État |
 |-----|-------------|--------|----------|------|
 | DT-06 | Décider ANN uniquement si les profils sémantiques montrent un besoin mesuré | semantic/storage | Faible | Watchlist |
-| DT-07 | Documenter/provisionner les prérequis Linux de sandbox (`bubblewrap`, util-linux, politique userns/LSM) dans chaque environnement opérateur | runtime/deployment | Moyenne | Ouvert — l'absence reste fail-closed |
+| DT-07 | Documenter/provisionner les prérequis Linux de sandbox (`bubblewrap`, util-linux, politique userns/LSM, racine cgroup v2 déléguée via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) dans chaque environnement opérateur | runtime/deployment | Moyenne | Ouvert — l'absence reste fail-closed |
 | DT-08 | Continuer la hausse progressive des seuils JaCoCo à mesure que des tests comportementaux utiles sont ajoutés | tous | Faible | Continu |
 
 ## Dette clôturée par la campagne post-audit

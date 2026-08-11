@@ -36,6 +36,9 @@ try {
     python scripts/remediation/check-p0-p2.py
     if ($LASTEXITCODE -ne 0) { throw 'P0-P2 structural gate failed' }
 
+    python scripts/remediation/check-minos-01.py
+    if ($LASTEXITCODE -ne 0) { throw 'MINOS-01 worker resource containment gate failed' }
+
     python scripts/m28/check-m28.py
     if ($LASTEXITCODE -ne 0) { throw 'M28 convergence/decomposition gate failed' }
 

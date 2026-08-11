@@ -34,7 +34,7 @@ def main() -> int:
         remote_lease = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexLease.java")
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
-        windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1")
+        windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1")
         snapshots = read("minos-storage-local/src/main/java/com/minos/store/FileSymbolSnapshotStore.java")
         retention = read("minos-storage-local/src/main/java/com/minos/store/SnapshotRetentionService.java")
         runtime_codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
@@ -63,8 +63,8 @@ def main() -> int:
         forbid("LinuxBubblewrapWorkerSandboxBackend.java", linux,
                "Files.isDirectory(real) ? real : real.getParent()")
         require("WindowsAppContainerWorkerSandboxBackend.java", windows,
-                "windows-appcontainer-sandbox-v3.ps1", 'appendList(lines, "readFile"', 'lines.add("recovery="')
-        require("windows-appcontainer-sandbox-v3.ps1", windows_script,
+                "windows-appcontainer-sandbox-v4.ps1", 'appendList(lines, "readFile"', 'lines.add("recovery="')
+        require("windows-appcontainer-sandbox-v4.ps1", windows_script,
                 "Grant-AppContainerFile", "Recover-Stale", "Write-Recovery", "readFile")
 
         require("FileSymbolSnapshotStore.java", snapshots,

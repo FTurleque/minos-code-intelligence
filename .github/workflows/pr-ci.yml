@@ -83,6 +83,9 @@ jobs:
       - name: P0-P2 audit remediation consistency
         run: python scripts/remediation/check-p0-p2.py
 
+      - name: MINOS-01 worker resource containment gate
+        run: python scripts/remediation/check-minos-01.py
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
@@ -102,6 +105,25 @@ jobs:
           test -f "$profile"
           sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
           sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+
+      - name: Delegate a cgroup v2 job boundary to the worker sandbox
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /sys/fs/cgroup/cgroup.controllers
+          sudo mkdir -p /sys/fs/cgroup/minos.slice
+          sudo sh -c 'echo "+memory +pids +cpu" > /sys/fs/cgroup/cgroup.subtree_control' || true
+          sudo sh -c 'echo "+memory +pids +cpu" > /sys/fs/cgroup/minos.slice/cgroup.subtree_control'
+          sudo chown -R "$(id -u):$(id -g)" /sys/fs/cgroup/minos.slice
+          # cgroup v2 delegation containment: migrating a process also requires write access to the
+          # cgroup.procs of the common ancestor of its source and destination cgroups.
+          sudo chown "$(id -u):$(id -g)" /sys/fs/cgroup/cgroup.procs
+          for controller in memory pids cpu; do
+            grep -qw "$controller" /sys/fs/cgroup/minos.slice/cgroup.controllers
+            grep -qw "$controller" /sys/fs/cgroup/minos.slice/cgroup.subtree_control
+          done
+          echo "MINOS_SANDBOX_CGROUP_ROOT=/sys/fs/cgroup/minos.slice" >> "$GITHUB_ENV"
 
       - name: Prepare Maven Wrapper (Unix)
         if: runner.os != 'Windows'
