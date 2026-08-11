@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Windows worker sandbox backed by an AppContainer token without capabilities and a Job Object.
+ * Windows worker sandbox backed by an AppContainer token and a Job Object.
  *
  * <p>ACL grants are scoped to exact provider files, MINOS-owned runtime roots and ephemeral write
  * roots. Arbitrary provider file arguments never cause their complete parent directory (notably a
@@ -53,14 +53,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) {
             return Optional.empty();
         }
-        Optional<Path> shell = CommandLocator.find("powershell");
-        if (shell.isEmpty()) {
-            String systemRoot = System.getenv("SystemRoot");
-            if (systemRoot != null && !systemRoot.isBlank()) {
-                Path fallback = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-                if (Files.isRegularFile(fallback)) shell = Optional.of(fallback);
-            }
-        }
+        Optional<Path> shell = CommandLocator.windowsPowerShell();
         if (shell.isEmpty()) return Optional.empty();
         try {
             return Optional.of(new WindowsAppContainerWorkerSandboxBackend(minosHome, shell.orElseThrow()));
@@ -100,7 +93,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         WorkerSandboxQualification.Platform.OTHER,
                         WorkerSandboxQualification.PlatformDisposition.NOT_APPLICABLE),
                 List.of(
-                        "WINDOWS_APPCONTAINER_EMPTY_CAPABILITY_SET",
+                        "WINDOWS_DENY_APPCONTAINER_EMPTY_CAPABILITY_SET",
+                        "WINDOWS_ALLOW_APPCONTAINER_INTERNET_CLIENT_CAPABILITY_ONLY",
                         "WINDOWS_CHILD_TOKEN_IS_APPCONTAINER_VERIFIED_BEFORE_RESUME",
                         "WINDOWS_PROVIDER_ENVIRONMENT_EXPLICIT_ALLOWLIST",
                         "WINDOWS_EXACT_FILE_PROVIDER_ACL",
@@ -126,10 +120,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (!qualification().qualifiedForCurrentPlatform()) {
             throw new IllegalStateException("Windows AppContainer backend is not qualified on this platform");
         }
-        if (networkPolicy != WorkerNetworkPolicy.DENY) {
-            throw new IllegalArgumentException(
-                    "Windows AppContainer backend is a deny-network sandbox; ALLOW must use an explicitly non-isolated backend");
-        }
         if (!(delegate instanceof ProcessIndexerExecutor processExecutor)) {
             throw new IllegalArgumentException(
                     "qualified OS sandbox requires ProcessIndexerExecutor so MINOS controls the actual provider process");
@@ -139,7 +129,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 new ProcessIndexerExecutor.ProcessPlanTransformer() {
                     @Override
                     public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
-                        return sandboxPlan(plan, runDirectory);
+                        return sandboxPlan(plan, runDirectory, networkPolicy);
                     }
 
                     @Override
@@ -150,7 +140,16 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     IndexerProcessPlan sandboxPlan(IndexerProcessPlan plan, Path runDirectory) throws IOException {
+        return sandboxPlan(plan, runDirectory, WorkerNetworkPolicy.DENY);
+    }
+
+    IndexerProcessPlan sandboxPlan(
+            IndexerProcessPlan plan,
+            Path runDirectory,
+            WorkerNetworkPolicy networkPolicy
+    ) throws IOException {
         Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(networkPolicy, "networkPolicy");
         Path run = runDirectory.toRealPath();
         Path working = plan.workingDirectory().toRealPath();
         Path artifact = plan.generatedArtifact().toAbsolutePath().normalize();
@@ -185,7 +184,16 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
         Path recovery = minosHome.resolve("sandbox").resolve("appcontainer-recovery").toAbsolutePath().normalize();
         Files.createDirectories(recovery);
-        writePlan(planFile, providerCommand, providerEnvironment, readRoots, readFiles, writeRoots, working, recovery);
+        writePlan(
+                planFile,
+                providerCommand,
+                providerEnvironment,
+                readRoots,
+                readFiles,
+                writeRoots,
+                working,
+                recovery,
+                networkPolicy);
 
         List<String> wrapper = List.of(
                 powershell.toString(),
@@ -231,11 +239,13 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Set<Path> readFiles,
             Set<Path> writeRoots,
             Path working,
-            Path recoveryDirectory
+            Path recoveryDirectory,
+            WorkerNetworkPolicy networkPolicy
     ) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add("working=" + encode(working.toString()));
         lines.add("recovery=" + encode(recoveryDirectory.toString()));
+        lines.add("networkPolicy=" + networkPolicy.name());
         appendList(lines, "command", command);
         appendEnvironment(lines, environment);
         appendList(lines, "read", readRoots.stream().map(Path::toString).toList());

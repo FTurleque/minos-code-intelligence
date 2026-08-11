@@ -48,6 +48,22 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install and authorize Linux worker sandbox runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bubblewrap util-linux apparmor apparmor-profiles
+          command -v bwrap
+          command -v prlimit
+          command -v unshare
+          command -v setpriv
+          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
+          test -f "$profile"
+          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+
       - name: Prepare Maven Wrapper
         shell: bash
         run: chmod +x mvnw

@@ -28,9 +28,30 @@ def forbid(relative: str, text: str, *needles: str) -> None:
             raise RuntimeError(f"{relative}: forbidden post-MNE regression: {needle}")
 
 
+def forbid_unbounded_production_properties_loads() -> None:
+    allowed = Path("minos-engine/src/main/java/com/minos/io/BoundedProperties.java")
+    for source in ROOT.glob("*/src/main/java/**/*.java"):
+        relative = source.relative_to(ROOT)
+        if relative == allowed:
+            continue
+        text = source.read_text(encoding="utf-8")
+        variables = re.findall(r"\bProperties\s+(\w+)\s*=\s*new\s+Properties\s*\(", text)
+        for variable in variables:
+            if re.search(rf"\b{re.escape(variable)}\s*\.\s*load\s*\(", text):
+                raise RuntimeError(
+                    f"{relative}: direct Properties.load must use the common bounded reader")
+
+
 def main() -> int:
     try:
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
+        windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
+        windows_launcher = read(
+            "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1")
+        worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
+        worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
+        clone_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
+        clone = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteRepositoryMaterializer.java")
         java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java")
         source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
@@ -40,6 +61,14 @@ def main() -> int:
         registry = read("minos-application/src/main/java/com/minos/registry/LocalProjectRegistry.java")
         storage_config = read("minos-application/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java")
+        mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
+        mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
+        json = read("minos-application/src/main/java/com/minos/output/DeterministicJson.java")
+        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        postgres_storage = read(
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresStorageBackend.java")
+        retention_policy = read("minos-application/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
+        indexing = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
         distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
         run_retention = read("minos-runtime-local/src/main/java/com/minos/runtime/RunDirectoryRetention.java")
         executor = read("minos-runtime-local/src/main/java/com/minos/runtime/ProcessIndexerExecutor.java")
@@ -49,6 +78,33 @@ def main() -> int:
         product_facts = read("scripts/docs/product-facts.py")
         readme = read("README.md")
         production = read("docs/user/production-installation.md")
+        remote_user = read("docs/user/remote-indexing.md")
+        remote_developer = read("docs/developer/remote-worker-sandbox-disposition.md")
+
+        # MINOS-01/02: remote code always requires a platform-qualified sandbox and shared ignores.
+        require("WorkerSandboxBackend.java", worker_contract,
+                "supportsUntrustedCode", "UNTRUSTED_CODE_SUPPORTED", "qualifiedForCurrentPlatform")
+        require("LocalIsolatedIndexWorker.java", worker,
+                "!sandboxBackend.supportsUntrustedCode()", "ProjectIgnoreRules.load(source)",
+                "ignoreRules.isHardIgnored(relative)", "ignoreRules.isIgnored(relative, false)")
+        if worker.index("!sandboxBackend.supportsUntrustedCode()") > worker.index("sandboxBackend.execute"):
+            raise RuntimeError("LocalIsolatedIndexWorker.java: trust qualification occurs after execution")
+        require("LinuxBubblewrapWorkerSandboxBackend.java", linux,
+                "WorkerNetworkPolicy.ALLOW", 'sandbox.add("--share-net")')
+        require("WindowsAppContainerWorkerSandboxBackend.java", windows,
+                "networkPolicy", "WINDOWS_ALLOW_APPCONTAINER_INTERNET_CLIENT_CAPABILITY_ONLY")
+        require("windows-appcontainer-sandbox-v3.ps1", windows_launcher,
+                'ConvertStringSidToSid("S-1-15-3-1"', "allowNetwork ? 1u : 0u",
+                "$networkPolicy -eq 'ALLOW'")
+
+        # MINOS-03: remote clone and every traversal/cleanup are multidimensionally bounded/streaming.
+        require("RemoteRepositoryCachePolicy.java", clone_policy,
+                "maxBytes", "maxFiles", "maxDirectories", "maxTraversalEntries", "cloneTimeout")
+        require("JGitRemoteRepositoryMaterializer.java", clone,
+                "new CloneBudget(repositoryRoot, cachePolicy)", "files > maxFiles", "directories > maxDirectories",
+                "traversalEntries > maxTraversalEntries", "Files.walkFileTree")
+        forbid("JGitRemoteRepositoryMaterializer.java", clone,
+               ".sorted(Comparator.reverseOrder()).toList()")
 
         # 01: managed Linux runtime is exactly <provider>/<version>, never <provider>.
         require("LinuxBubblewrapWorkerSandboxBackend.java", linux,
@@ -79,11 +135,13 @@ def main() -> int:
         require("StorageBackendConfiguration.java", storage_config,
                 "postgresManaged", "safePostgresUrl", "managed=")
         require("PostgresConnectionFactory.java", postgres,
-                '"verify-full"', "connection.isValid", "state.startsWith(\"08\")",
-                "MINOS_POSTGRES_URL must not contain sensitive parameter")
+                'ALLOWED_URL_PARAMETERS = Set.of("sslmode")', '"verify-full"',
+                "connection.isValid", "state.startsWith(\"08\")", "duplicate parameter")
+        forbid("PostgresConnectionFactory.java", postgres, "SENSITIVE_URL_PARAMETERS")
         require("configure-runtime-settings.ps1", installer,
                 "Assert-ExternalPostgresUrl", "sslmode=verify-full", "Read-BoundedUtf8",
-                "'minos.postgres.managed'] = 'false'")
+                "'minos.postgres.managed'] = 'false'", "PostgresUrl contains unsupported parameter",
+                "PostgresUrl contains duplicate parameter")
         require("configure-m30-docker-services.ps1", docker_services,
                 "Read-BoundedUtf8", "'minos.postgres.managed'] = 'true'")
 
@@ -101,12 +159,49 @@ def main() -> int:
         require("ScipProjectSnapshotLifecycle.java", lifecycle,
                 "cleanupProviderWorkspaces", "deleteRecursively(stagedRunRoot)")
 
+        # MINOS-05: the MCP boundary measures UTF-8 and the largest renderer stops upstream.
+        require("MinosMcpTools.java", mcp_tools,
+                "MAX_RESULT_BYTES", "MCP_RESULT_BUDGET_EXCEEDED", "exceedsUtf8Budget")
+        require("MinosApplicationMcpBackend.java", mcp_backend,
+                "renderProgramGraph", "MinosMcpTools.MAX_RESULT_BYTES")
+        require("DeterministicJson.java", json,
+                "maximumUtf8Bytes", "OutputBudgetExceededException", "utf8Bytes")
+
+        # MINOS-06: both durable backends expose retention and the real indexing lifecycle invokes it.
+        require("PersistentRetentionPolicy.java", retention_policy,
+                "DEFAULT_MAX_HISTORICAL_SNAPSHOTS = 2", "DEFAULT_MAX_SUCCEEDED_RUNS = 20",
+                "DEFAULT_MAX_NON_SUCCEEDED_RUNS = 10")
+        require("LocalStorageBackend.java", local_storage,
+                "new LocalStorageRetentionService", "retentionService()")
+        local_retention = read(
+            "minos-application/src/main/java/com/minos/storage/LocalStorageRetentionService.java")
+        require("LocalStorageRetentionService.java", local_retention,
+                "compactWithActiveSnapshot", "CompactionResult::activeSnapshotId")
+        require("PostgresStorageBackend.java", postgres_storage,
+                "new PostgresStorageRetentionService", "retentionService()")
+        require("LocalAutonomousIndexOperations.java", indexing,
+                "application.retentionService().compact(prepared.project().id())")
+        if indexing.count("application.retentionService().compact(prepared.project().id())") < 4:
+            raise RuntimeError("LocalAutonomousIndexOperations.java: retention is not applied on every terminal path")
+
+        # MINOS-07: no production metadata parser may bypass the bounded primitive.
+        forbid_unbounded_production_properties_loads()
+
         # 09: mutable documentation is gated against authoritative release/sandbox facts.
         require("product-facts.py", product_facts, "check_authoritative_documentation")
         forbid("README.md", readme,
                "#98 sandbox OS worker réelle     🚧 OPEN", "L'issue **#98** reste ouverte")
         forbid("production-installation.md", production,
                "1.0.1` reste **NON PUBLIÉE**", "1.0.1 reste **NON PUBLIÉE**")
+
+        # MINOS-08: active remote documentation states the same qualified/fail-closed contract.
+        for relative, text in (
+            ("docs/user/remote-indexing.md", remote_user),
+            ("docs/developer/remote-worker-sandbox-disposition.md", remote_developer),
+        ):
+            require(relative, text, "ALLOW", "DENY", "sandbox OS qualifiée", "fail-closed")
+            forbid(relative, text,
+                   "worker natif accepte", "backend durci futur", "Conditions d’un futur PASS")
 
         print("POST-MNE REMEDIATION INVARIANTS SUCCESS")
         return 0

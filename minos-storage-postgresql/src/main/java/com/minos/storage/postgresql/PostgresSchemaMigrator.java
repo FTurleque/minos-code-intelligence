@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 final class PostgresSchemaMigrator {
-    static final int CURRENT_VERSION = 2;
+    static final int CURRENT_VERSION = 3;
 
     private final PostgresConnectionFactory connections;
 
@@ -30,6 +30,7 @@ final class PostgresSchemaMigrator {
                         if (version > CURRENT_VERSION) throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
                         if (version < 1) applyV1(statement);
                         if (version < 2) applyV2(statement);
+                        if (version < 3) applyV3(statement);
                         connection.commit();
                         return null;
                     } catch (Exception exception) {
@@ -95,5 +96,12 @@ final class PostgresSchemaMigrator {
         }
         s.execute("CREATE UNIQUE INDEX IF NOT EXISTS projects_root_identity_uq ON projects(root_value, root_portable)");
         s.execute("INSERT INTO schema_version(version) VALUES (2) ON CONFLICT(version) DO NOTHING");
+    }
+
+    private static void applyV3(Statement s) throws SQLException {
+        s.execute("ALTER TABLE fingerprint_snapshots ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()");
+        s.execute("CREATE INDEX IF NOT EXISTS fingerprint_snapshots_project_created_idx "
+                + "ON fingerprint_snapshots(project_id, created_at DESC, snapshot_id DESC)");
+        s.execute("INSERT INTO schema_version(version) VALUES (3) ON CONFLICT(version) DO NOTHING");
     }
 }

@@ -39,6 +39,14 @@ public interface WorkerSandboxBackend {
                 && evidence.qualifiedForCurrentPlatform();
     }
 
+    /** Returns true only when this backend is qualified to execute untrusted code on this OS. */
+    default boolean supportsUntrustedCode() {
+        WorkerSandboxQualification evidence = qualification();
+        return evidence.trustDisposition()
+                == WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && evidence.qualifiedForCurrentPlatform();
+    }
+
     default WorkerSandboxQualification qualification() {
         if (networkGuarantee() == NetworkGuarantee.NONE) {
             return WorkerSandboxQualification.nativeProcessOnly(id(), isolation());
@@ -89,7 +97,7 @@ public interface WorkerSandboxBackend {
             Objects.requireNonNull(networkPolicy, "networkPolicy");
             if (networkPolicy == WorkerNetworkPolicy.DENY) {
                 throw new IllegalStateException(
-                        "native worker cannot prove OS-level network denial; choose a qualified sandbox backend or ALLOW explicitly");
+                        "native worker cannot prove OS-level network denial; choose a qualified sandbox backend");
             }
             return delegate.execute(request);
         }

@@ -11,6 +11,7 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.DistributedIndexing.WorkerRequest;
 import com.minos.remote.DistributedIndexing.WorkerResponse;
+import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
@@ -26,7 +27,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -121,6 +121,11 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (!delegate.indexerId().equals(request.execution().selection().indexer().id())) {
             throw new IllegalArgumentException("worker delegate does not match selected provider");
         }
+        if (!sandboxBackend.supportsUntrustedCode()) {
+            throw new IllegalStateException(
+                    "sandbox backend " + sandboxBackend.id()
+                            + " is not qualified for untrusted remote code on the current platform; execution is fail-closed");
+        }
         if (request.networkPolicy() == WorkerNetworkPolicy.DENY
                 && !sandboxBackend.enforcesNetworkDeny()) {
             throw new IllegalStateException(
@@ -184,7 +189,8 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     workerId,
                     isolation(),
                     request.networkPolicy(),
-                    sandboxBackend.enforcesNetworkDeny(),
+                    request.networkPolicy() == WorkerNetworkPolicy.DENY
+                            && sandboxBackend.enforcesNetworkDeny(),
                     startedAt,
                     completedAt,
                     DistributedArtifactManifest.ARTIFACT_PATH,
@@ -224,12 +230,13 @@ public final class LocalIsolatedIndexWorker implements Worker {
             throw new IOException("worker source workspace is not a directory");
         }
         SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("remote worker workspace");
+        ProjectIgnoreRules ignoreRules = ProjectIgnoreRules.load(source);
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
                 budget.accountTraversalEntry();
                 Path relative = source.relativize(directory);
-                if (isGitPath(relative)) {
+                if (ignoreRules.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 if (Files.isSymbolicLink(directory)) {
@@ -244,7 +251,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 budget.accountTraversalEntry();
                 Path relative = source.relativize(file);
-                if (isGitPath(relative)) {
+                if (ignoreRules.isIgnored(relative, false)) {
                     return FileVisitResult.CONTINUE;
                 }
                 if (Files.isSymbolicLink(file)) {
@@ -280,10 +287,6 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
     }
 
-    private static boolean isGitPath(Path relative) {
-        return relative.getNameCount() > 0 && ".git".equals(relative.getName(0).toString());
-    }
-
     private static Path checkedTarget(Path targetRoot, Path relative) throws IOException {
         Path target = targetRoot.resolve(relative).normalize();
         if (!target.startsWith(targetRoot)) {
@@ -301,12 +304,22 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (normalized.equals(workersRoot) || !normalized.startsWith(workersRoot)) {
             throw new IOException("refusing to delete outside the distributed worker root");
         }
-        try (var paths = Files.walk(normalized)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) throws IOException {
                 clearReadOnly(path);
                 Files.deleteIfExists(path);
+                return FileVisitResult.CONTINUE;
             }
-        }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+                if (failure != null) throw failure;
+                clearReadOnly(directory);
+                Files.deleteIfExists(directory);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private static void clearReadOnly(Path path) {

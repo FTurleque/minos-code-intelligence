@@ -189,7 +189,7 @@ La qualification Linux exige en plus un Docker utilisable pour les tests Postgre
 
 ## Sandbox worker OS
 
-L'issue **#98** est **fermée / completed** depuis le **9 août 2026**. La sandbox worker réelle est qualifiée sur Linux (`bubblewrap`/namespaces/`prlimit`) et Windows (AppContainer + Job Object). `DENY` reste fail-closed lorsqu'une primitive OS qualifiée n'est pas disponible.
+L'issue **#98** est **fermée / completed** depuis le **9 août 2026**. La sandbox worker réelle est qualifiée sur Linux (`bubblewrap`/namespaces/`prlimit`) et Windows (AppContainer + Job Object). L’indexation distante refuse `ALLOW` comme `DENY` lorsqu’une primitive OS qualifiée n’est pas disponible.
 
 ## Licence
 

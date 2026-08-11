@@ -41,4 +41,42 @@ class BoundedPropertiesTest {
         assertThrows(IOException.class,
                 () -> BoundedProperties.load(file, 1024, 10, 64, 16, "test config"));
     }
+
+    @Test
+    void rejectsTooManyProperties(@TempDir Path root) throws Exception {
+        Path file = root.resolve("config.properties");
+        Files.writeString(file, "a=1\nb=2\nc=3\n", StandardCharsets.UTF_8);
+
+        assertThrows(IOException.class,
+                () -> BoundedProperties.load(file, 1024, 2, 64, 64, "test config"));
+    }
+
+    @Test
+    void rejectsMalformedUnicodeEscapeAsIoFailure(@TempDir Path root) throws Exception {
+        Path file = root.resolve("config.properties");
+        Files.writeString(file, "name=\\u12xz\n", StandardCharsets.UTF_8);
+
+        assertThrows(IOException.class,
+                () -> BoundedProperties.load(file, 1024, 10, 64, 64, "test config"));
+    }
+
+    @Test
+    void rejectsMalformedUtf8(@TempDir Path root) throws Exception {
+        Path file = root.resolve("malformed-utf8.properties");
+        Files.write(file, new byte[] {'k', '=', (byte) 0xc3, (byte) 0x28});
+
+        assertThrows(IOException.class,
+                () -> BoundedProperties.load(file, 1024, 10, 64, 64, "test config"));
+    }
+
+    @Test
+    void appliesTheSameBoundsToAnInMemoryUtf8Envelope() throws Exception {
+        byte[] bytes = "name=MINOS\nmode=local\n".getBytes(StandardCharsets.UTF_8);
+
+        var properties = BoundedProperties.loadUtf8(bytes, 1024, 10, 64, 64, "test envelope");
+
+        assertEquals("MINOS", properties.getProperty("name"));
+        assertThrows(IOException.class,
+                () -> BoundedProperties.loadUtf8(bytes, 8, 10, 64, 64, "test envelope"));
+    }
 }

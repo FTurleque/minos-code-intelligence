@@ -44,6 +44,7 @@ import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.storage.StorageBackends;
+import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.store.FileHostedControlPlaneStore;
@@ -86,6 +87,7 @@ public final class MinosApplication implements AutoCloseable {
     private final ProjectFingerprintSnapshotStore fingerprintStore;
     private final SemanticVectorStore semanticVectorStore;
     private final RuntimeObservationStore runtimeObservationStore;
+    private final StorageRetentionService retentionService;
     private final ProjectDiscoveryService discoveryService;
     private final ProjectFingerprintService fingerprintService;
     private final ProjectInvalidationService invalidationService;
@@ -119,6 +121,7 @@ public final class MinosApplication implements AutoCloseable {
             ProjectFingerprintSnapshotStore fingerprintStore,
             SemanticVectorStore semanticVectorStore,
             RuntimeObservationStore runtimeObservationStore,
+            StorageRetentionService retentionService,
             ProjectDiscoveryService discoveryService,
             ProjectFingerprintService fingerprintService,
             ProjectInvalidationService invalidationService,
@@ -141,6 +144,7 @@ public final class MinosApplication implements AutoCloseable {
         this.fingerprintStore = Objects.requireNonNull(fingerprintStore, "fingerprintStore");
         this.semanticVectorStore = Objects.requireNonNull(semanticVectorStore, "semanticVectorStore");
         this.runtimeObservationStore = Objects.requireNonNull(runtimeObservationStore, "runtimeObservationStore");
+        this.retentionService = Objects.requireNonNull(retentionService, "retentionService");
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.fingerprintService = Objects.requireNonNull(fingerprintService, "fingerprintService");
         this.invalidationService = Objects.requireNonNull(invalidationService, "invalidationService");
@@ -239,6 +243,7 @@ public final class MinosApplication implements AutoCloseable {
     public ProjectFingerprintSnapshotStore fingerprintStore() { return fingerprintStore; }
     public SemanticVectorStore semanticVectorStore() { return semanticVectorStore; }
     public RuntimeObservationStore runtimeObservationStore() { return runtimeObservationStore; }
+    public StorageRetentionService retentionService() { return retentionService; }
     public ProjectDiscoveryService discoveryService() { return discoveryService; }
     public ProjectFingerprintService fingerprintService() { return fingerprintService; }
     public ProjectInvalidationService invalidationService() { return invalidationService; }
@@ -300,6 +305,7 @@ public final class MinosApplication implements AutoCloseable {
         private ProjectFingerprintSnapshotStore fingerprintStore;
         private SemanticVectorStore semanticVectorStore;
         private RuntimeObservationStore runtimeObservationStore;
+        private StorageRetentionService retentionService;
         private ProjectDiscoveryService discoveryService;
         private ProjectFingerprintService fingerprintService;
         private ProjectInvalidationService invalidationService;
@@ -322,6 +328,7 @@ public final class MinosApplication implements AutoCloseable {
         public Builder fingerprintStore(ProjectFingerprintSnapshotStore value) { this.fingerprintStore = Objects.requireNonNull(value); return this; }
         public Builder semanticVectorStore(SemanticVectorStore value) { this.semanticVectorStore = Objects.requireNonNull(value); return this; }
         public Builder runtimeObservationStore(RuntimeObservationStore value) { this.runtimeObservationStore = Objects.requireNonNull(value); return this; }
+        public Builder retentionService(StorageRetentionService value) { this.retentionService = Objects.requireNonNull(value); return this; }
         public Builder embeddingProvider(EmbeddingProvider value) { this.embeddingProvider = Objects.requireNonNull(value); return this; }
         public Builder hostedTenantKeyProvider(HostedTenantKeyProvider value) { this.hostedTenantKeyProvider = Objects.requireNonNull(value); return this; }
         public Builder hostedClock(Clock value) { this.hostedClock = Objects.requireNonNull(value); return this; }
@@ -353,6 +360,10 @@ public final class MinosApplication implements AutoCloseable {
                 ProjectFingerprintSnapshotStore effectiveFingerprints = fingerprintStore != null ? fingerprintStore : selected.fingerprintStore();
                 SemanticVectorStore effectiveSemanticStore = semanticVectorStore != null ? semanticVectorStore : selected.semanticVectorStore();
                 RuntimeObservationStore effectiveRuntimeObservations = runtimeObservationStore != null ? runtimeObservationStore : selected.runtimeObservationStore();
+                boolean retentionStoresOverridden = snapshotStore != null || indexStateStore != null || fingerprintStore != null;
+                StorageRetentionService effectiveRetention = retentionService != null
+                        ? retentionService
+                        : retentionStoresOverridden ? StorageRetentionService.noOp() : selected.retentionService();
                 ProjectDiscoveryService effectiveDiscovery = discoveryService != null ? discoveryService : new ProjectDiscoveryService();
                 ProjectFingerprintService effectiveFingerprintService = fingerprintService != null ? fingerprintService : new ProjectFingerprintService();
                 ProjectInvalidationService effectiveInvalidation = invalidationService != null ? invalidationService : new ProjectInvalidationService();
@@ -384,7 +395,8 @@ public final class MinosApplication implements AutoCloseable {
                             }, hostedClock));
                 }
                 return new MinosApplication(home, selected, effectiveRegistry, effectiveSnapshots, effectiveIndexState,
-                        effectiveFingerprints, effectiveSemanticStore, effectiveRuntimeObservations, effectiveDiscovery,
+                        effectiveFingerprints, effectiveSemanticStore, effectiveRuntimeObservations, effectiveRetention,
+                        effectiveDiscovery,
                         effectiveFingerprintService, effectiveInvalidation, effectivePlanner, effectiveProviderRuntime,
                         effectiveDescriptors, effectiveStager, effectivePromoter, effectiveGit, effectiveProgramGraphProviders,
                         Optional.ofNullable(embeddingProvider), effectiveHosted);

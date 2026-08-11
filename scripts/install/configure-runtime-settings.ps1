@@ -126,6 +126,9 @@ function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
     if ($Uri.Scheme -ne 'postgresql' -or [string]::IsNullOrWhiteSpace($Uri.DnsSafeHost)) {
         throw 'PostgresUrl must contain a valid PostgreSQL host.'
     }
+    if ([string]::IsNullOrWhiteSpace($Uri.AbsolutePath) -or $Uri.AbsolutePath -eq '/') {
+        throw 'PostgresUrl must contain a database name.'
+    }
     if (-not [string]::IsNullOrWhiteSpace($Uri.UserInfo)) {
         throw 'PostgresUrl must not contain credentials in user-info.'
     }
@@ -135,18 +138,30 @@ function Assert-ExternalPostgresUrl([string] $JdbcUrl) {
 
     $Parameters = @{}
     if (-not [string]::IsNullOrWhiteSpace($Uri.Query)) {
-        foreach ($Pair in $Uri.Query.TrimStart('?').Split('&', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+        foreach ($Pair in $Uri.Query.TrimStart('?').Split('&')) {
+            if ([string]::IsNullOrEmpty($Pair)) {
+                throw 'PostgresUrl contains an empty query parameter name.'
+            }
             $Parts = $Pair.Split('=', 2)
+            if ($Parts[0] -match '%(?![0-9A-Fa-f]{2})' -or
+                    ($Parts.Length -gt 1 -and $Parts[1] -match '%(?![0-9A-Fa-f]{2})')) {
+                throw 'PostgresUrl contains invalid query encoding.'
+            }
             $Key = [Uri]::UnescapeDataString($Parts[0].Replace('+', ' ')).ToLowerInvariant()
             $Value = if ($Parts.Length -gt 1) { [Uri]::UnescapeDataString($Parts[1].Replace('+', ' ')) } else { '' }
+            if ([string]::IsNullOrWhiteSpace($Key)) { throw 'PostgresUrl contains an empty query parameter name.' }
             if ($Parameters.ContainsKey($Key)) { throw "PostgresUrl contains duplicate parameter: $Key" }
             $Parameters[$Key] = $Value
         }
     }
-    foreach ($Sensitive in @('password', 'sslpassword', 'token', 'access_token', 'oauth_token', 'secret')) {
-        if ($Parameters.ContainsKey($Sensitive)) {
-            throw "PostgresUrl must not contain sensitive parameter: $Sensitive"
+    foreach ($Parameter in $Parameters.Keys) {
+        if ($Parameter -notin @('sslmode')) {
+            throw "PostgresUrl contains unsupported parameter: $Parameter"
         }
+    }
+    if ($Parameters.ContainsKey('sslmode') -and
+            $Parameters['sslmode'].ToLowerInvariant() -notin @('disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full')) {
+        throw 'PostgresUrl contains an unsupported sslmode.'
     }
     if (-not (Test-LoopbackHost $Uri.DnsSafeHost)) {
         if (-not $Parameters.ContainsKey('sslmode') -or $Parameters['sslmode'] -ine 'verify-full') {

@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +14,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FileIndexStateStoreTest {
 
@@ -59,5 +62,16 @@ class FileIndexStateStoreTest {
         assertEquals(artifact, run.executions().getFirst().finalArtifact());
         assertEquals(List.of(runId), reopened.listRuns(projectId).stream().map(IndexingRun::id).toList());
         assertTrue(reopened.listRuns(UUID.randomUUID()).isEmpty());
+    }
+
+    @Test
+    void rejectsOversizedPersistedMetadataBeforePropertiesParsing() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        Path stateRoot = root.resolve("state");
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        Files.write(stateRoot.resolve("projects").resolve(projectId + ".properties"),
+                new byte[4 * 1024 * 1024 + 1]);
+
+        assertThrows(UncheckedIOException.class, () -> store.findProjectState(projectId));
     }
 }

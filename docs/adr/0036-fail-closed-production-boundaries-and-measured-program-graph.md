@@ -79,7 +79,7 @@ On Ubuntu 24.04 qualification, the distribution-provided AppArmor profile `bwrap
 
 `WindowsAppContainerWorkerSandboxBackend` uses :
 
-- an AppContainer token with an empty capability set, including no network capability ;
+- an AppContainer token with an empty capability set for `DENY`, or only the system `internetClient` capability for `ALLOW` ;
 - verification of `TokenIsAppContainer` before child resume ;
 - temporary ACL grants limited to MINOS/provider-owned roots ;
 - no mutation of Windows system ACLs ;
@@ -109,7 +109,7 @@ The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRS
 - the Java provider can evolve without recreating a monolith ;
 - stale-source analysis is prevented rather than merely documented ;
 - remote and hosted claims are machine-readable and fail closed ;
-- Linux and Windows workers can satisfy `DENY` only when an actual OS sandbox is available ;
+- Linux and Windows workers accept remote `ALLOW` or `DENY` only when an actual OS sandbox is available ;
 - sandbox availability itself is capability-probed rather than inferred from an executable name ;
 - future KMS/IdP/transport/availability adapters retain explicit contracts ;
 - backend evolution remains measurement-gated.
@@ -120,7 +120,7 @@ The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRS
 - exact fingerprint validation adds source hashing on ProgramGraph cache misses ;
 - Linux sandbox operation depends on available `bubblewrap`/util-linux primitives and an LSM/userns policy that permits them ;
 - Windows AppContainer setup requires correct ACL lifecycle and PowerShell/Win32 interop ;
-- environments without a qualified sandbox cannot satisfy `DENY` and deliberately fail closed ;
+- environments without a qualified sandbox cannot execute remote providers, with either `ALLOW` or `DENY`, and deliberately fail closed ;
 - the embedded hosted mode remains intentionally insufficient for an operated SaaS service ;
 - audit-sink export still needs idempotent retry handling in an operated adapter.
 

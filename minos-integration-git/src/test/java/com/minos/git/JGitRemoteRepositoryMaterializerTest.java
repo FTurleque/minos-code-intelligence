@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -187,6 +188,60 @@ class JGitRemoteRepositoryMaterializerTest {
                 Clock.systemUTC());
 
         assertThrows(IOException.class, () -> materializer.materialize(request("a".repeat(40), null)));
+        assertNoCacheDirectories(home);
+    }
+
+    @Test
+    void cloneFileBudgetFailsAndCleansPartialEntry(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        RemoteRepositoryCachePolicy policy = new RemoteRepositoryCachePolicy(
+                2, 1024L * 1024L, 3, 10, 20, Duration.ofMinutes(1));
+        JGitRemoteRepositoryMaterializer materializer = new JGitRemoteRepositoryMaterializer(
+                home,
+                policy,
+                (request, destination, secret, budget) -> {
+                    Files.createDirectories(destination);
+                    for (int index = 0; index < 4; index++) {
+                        Files.writeString(destination.resolve("file-" + index + ".txt"), "x");
+                    }
+                    budget.checkpoint();
+                },
+                name -> Optional.empty(),
+                Clock.systemUTC());
+
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> materializer.materialize(request("a".repeat(40), null)));
+
+        assertTrue(failure.getMessage().contains("file limit"));
+        assertNoCacheDirectories(home);
+    }
+
+    @Test
+    void cloneTraversalBudgetFailsBeforeADeepEntryTreeCanBeAccepted(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        RemoteRepositoryCachePolicy policy = new RemoteRepositoryCachePolicy(
+                2, 1024L * 1024L, 1, 1, 1, Duration.ofMinutes(1));
+        JGitRemoteRepositoryMaterializer materializer = new JGitRemoteRepositoryMaterializer(
+                home,
+                policy,
+                (request, destination, secret, budget) -> {
+                    Files.createDirectories(destination);
+                    Files.writeString(destination.resolve("one.txt"), "x");
+                    budget.checkpoint();
+                },
+                name -> Optional.empty(),
+                Clock.systemUTC());
+
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> materializer.materialize(request("a".repeat(40), null)));
+
+        assertTrue(failure.getMessage().contains("traversal entry limit"));
+        assertNoCacheDirectories(home);
+    }
+
+    private static void assertNoCacheDirectories(Path home) throws IOException {
         Path repositories = home.resolve("remote-cache/repositories");
         try (var entries = Files.list(repositories)) {
             assertTrue(entries.noneMatch(Files::isDirectory));

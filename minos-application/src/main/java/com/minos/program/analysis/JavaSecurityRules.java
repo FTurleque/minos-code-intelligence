@@ -1,11 +1,9 @@
 package com.minos.program.analysis;
 
 import com.sun.source.tree.MethodInvocationTree;
+import com.minos.io.BoundedProperties;
 
 import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -24,10 +22,9 @@ record JavaSecurityRules(
         if (config.isEmpty()) {
             return new JavaSecurityRules(false, Set.of(), Set.of(), Set.of());
         }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(config.orElseThrow(), StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        Properties properties = BoundedProperties.load(
+                config.orElseThrow(), 1024L * 1024L, 16, 64, 256 * 1024,
+                "Java security analysis rules");
         return new JavaSecurityRules(
                 true,
                 tokens(properties.getProperty("sources", "")),

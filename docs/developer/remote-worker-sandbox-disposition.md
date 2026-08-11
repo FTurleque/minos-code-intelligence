@@ -1,46 +1,32 @@
-# Remote worker — disposition d’isolation M28
+# Remote worker — disposition d’isolation
 
-M28 distingue explicitement trois notions qui ne doivent jamais être confondues :
+L’indexation distante traite le provider et le dépôt matérialisé comme du code non fiable. Une copie dans une workspace éphémère et un processus distinct ne suffisent donc jamais : le provider doit être lancé par un backend OS dont la qualification annonce `UNTRUSTED_CODE_SUPPORTED` sur la plateforme courante.
 
-1. la copie dans une workspace éphémère ;
-2. la séparation dans un processus distinct ;
-3. une sandbox OS qualifiée pour exécuter du code non fiable.
+## Contrat fail-closed
 
-Le backend courant `native-process-ephemeral-workspace-v1` fournit uniquement les deux premières garanties. Il conserve les invariants M25 de provenance, de confinement applicatif, de suppression de `.git`, de rejet des symlinks et d’artefact signé par checksums, mais **ne constitue pas une sandbox pour code non fiable**.
+`LocalIsolatedIndexWorker` vérifie la qualification avant toute copie ou exécution, indépendamment de la politique réseau :
 
-## Disposition courante
+- `ALLOW` autorise le réseau **dans** une sandbox OS qualifiée ;
+- `DENY` exige en plus une preuve de blocage réseau `OS_ENFORCED` ;
+- `native-process-ephemeral-workspace-v1` reste `UNTRUSTED_CODE_UNSUPPORTED` et est refusé avec `ALLOW` comme avec `DENY` ;
+- aucun opt-in unsafe permettant d’exécuter du code distant avec les droits de l’hôte n’existe.
 
-| Propriété | Disposition M28 |
-|---|---|
-| Isolation déclarée | `PROCESS_EPHEMERAL_WORKSPACE` |
-| Garantie réseau | `NONE` |
-| Politique `ALLOW` | supportée explicitement |
-| Politique `DENY` | `FAIL_CLOSED_NOT_ENFORCED` |
-| Code non fiable | `UNTRUSTED_CODE_UNSUPPORTED` |
-| Claim « sandbox » | `WORKER_SANDBOX_CLAIM_PROHIBITED` |
+Cette disposition conserve l'invariant diagnostique `WORKER_SANDBOX_CLAIM_PROHIBITED` : un backend process-only ne peut jamais revendiquer le statut d'une sandbox OS qualifiée.
 
-`WORKER_SANDBOX_CLAIM_PROHIBITED` interdit explicitement de présenter le backend natif actuel comme une sandbox OS qualifiée.
+La provenance, les checksums, le bundle distribué, le rejet des symlinks, les budgets de source et les règles `.gitignore`/`.minosignore` restent appliqués en complément de la sandbox.
 
-La politique `DENY` est rejetée avant l’exécution du provider. MINOS ne transforme pas l’absence de mécanisme OS en succès logique.
+## Backends qualifiés
 
-## Matrice plateforme
+| Plateforme | Backend | Isolation hôte | `ALLOW` | `DENY` |
+|---|---|---|---|---|
+| Linux | `linux-bubblewrap-prlimit-v4` | bubblewrap, namespaces, racine hôte read-only, capacités supprimées, limites `prlimit` | namespace réseau hôte explicitement partagé | namespace réseau isolé |
+| Windows | `windows-appcontainer-job-v2` | AppContainer, ACL éphémères ciblées, vérification du token, Job Object borné | seule capacité `internetClient` (`S-1-15-3-1`) | ensemble de capacités vide |
+| Autre | aucun | — | refus | refus |
 
-| Plateforme | Disposition | Mécanisme manquant avant qualification |
-|---|---|---|
-| Windows | `BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND` | restricted token/AppContainer, Job Object borné, règles réseau OS et tests d’évasion |
-| Linux | `BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND` | namespaces adaptés, seccomp/capabilities, règles réseau OS et tests d’évasion |
-| Autre | `NOT_APPLICABLE` | backend et protocole de qualification dédiés |
+La découverte Linux sonde réellement `bubblewrap`, `prlimit`, les user namespaces et la politique LSM. La découverte Windows exige Windows PowerShell 5.1 et le lanceur AppContainer. Si la primitive qualifiée n’est pas disponible, le sélecteur peut décrire le backend natif pour le diagnostic, mais le worker distant échoue avant le provider.
 
-Cette matrice est exposée par `WorkerSandboxQualification` et protégée par `WorkerSandboxQualificationTest` ainsi que `scripts/m28/check-m28.py`.
+Sur Linux, l'absence des primitives namespace/seccomp requises reste signalée par `BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND`; elle ne déclenche jamais un fallback d'exécution native.
 
-## Conditions d’un futur PASS
+## Limites et qualification
 
-Un backend ne peut annoncer `OS_ENFORCED` et `UNTRUSTED_CODE_SUPPORTED` que si :
-
-- son mécanisme d’isolation est propre à la plateforme et réellement utilisé pour lancer le provider ;
-- la politique réseau `DENY` est observée par un test négatif externe au processus indexeur ;
-- les accès filesystem, processus, IPC et réseau sont testés contre des tentatives d’évasion ;
-- la disposition qualifiée est associée à une plateforme, une version et une preuve exact-head ;
-- les bundles, checksums et contrôles de provenance M25 restent inchangés.
-
-En l’absence de ces preuves, le comportement autorisé reste `ALLOW` explicite ou échec fail-closed.
+La qualification est propre à la plateforme et protégée par des tests négatifs réseau/filesystem ainsi que par un test du chemin réel `ProcessIndexerExecutor → sandbox OS → provider → artefact`. `ALLOW` ne relâche ni les ACL/mounts, ni les limites mémoire/processus/CPU, ni les contrôles de provenance. `DENY` ne doit être annoncé que lorsque la primitive réseau OS est effectivement exercée.

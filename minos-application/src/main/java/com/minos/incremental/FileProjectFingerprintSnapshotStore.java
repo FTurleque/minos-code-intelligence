@@ -13,6 +13,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -24,6 +25,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 
@@ -214,6 +216,73 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     public Path storageRoot() {
         return storageRoot;
+    }
+
+    /** Applies bounded historical retention while protecting active and caller-referenced ids. */
+    public synchronized FingerprintRetentionResult compact(
+            UUID projectId,
+            Set<String> additionallyProtectedSnapshotIds,
+            int maxHistoricalSnapshots
+    ) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(additionallyProtectedSnapshotIds, "additionallyProtectedSnapshotIds");
+        if (maxHistoricalSnapshots < 0) {
+            throw new IllegalArgumentException("maxHistoricalSnapshots must not be negative");
+        }
+        Path projectDirectory = projectDirectory(projectId);
+        if (!Files.isDirectory(projectDirectory)) return new FingerprintRetentionResult(0, 0);
+
+        String activeFileName = null;
+        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
+        if (Files.isRegularFile(activePointer, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            ActivePointer pointer = readPointer(activePointer);
+            Path activeFile = resolveFile(projectDirectory, pointer.fileName());
+            if (!Files.isRegularFile(activeFile, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
+            }
+            activeFileName = pointer.fileName();
+        }
+
+        Set<String> protectedPrefixes = new HashSet<>();
+        for (String snapshotId : additionallyProtectedSnapshotIds) {
+            protectedPrefixes.add("fingerprint-" + sha256(requireText(snapshotId, "protectedSnapshotId")) + "-");
+        }
+        Comparator<FingerprintFile> oldestFirst = Comparator
+                .comparing(FingerprintFile::lastModified)
+                .thenComparing(FingerprintFile::fileName);
+        PriorityQueue<FingerprintFile> historical = new PriorityQueue<>(oldestFirst);
+        int protectedCount = 0;
+        int deleted = 0;
+        try (var stream = Files.newDirectoryStream(projectDirectory)) {
+            for (Path file : stream) {
+                String fileName = file.getFileName().toString();
+                if (!isSnapshotFile(fileName)
+                        || !Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                boolean protectedFile = fileName.equals(activeFileName)
+                        || protectedPrefixes.stream().anyMatch(fileName::startsWith);
+                if (protectedFile) {
+                    protectedCount++;
+                    continue;
+                }
+                FingerprintFile candidate = new FingerprintFile(
+                        file, fileName,
+                        Files.getLastModifiedTime(file, java.nio.file.LinkOption.NOFOLLOW_LINKS));
+                if (historical.size() < maxHistoricalSnapshots) {
+                    historical.add(candidate);
+                } else if (maxHistoricalSnapshots > 0
+                        && oldestFirst.compare(candidate, historical.element()) > 0) {
+                    Files.deleteIfExists(historical.remove().path());
+                    deleted++;
+                    historical.add(candidate);
+                } else {
+                    Files.deleteIfExists(candidate.path());
+                    deleted++;
+                }
+            }
+        }
+        return new FingerprintRetentionResult(protectedCount + historical.size(), deleted);
     }
 
     private Path projectDirectory(UUID projectId) {
@@ -544,6 +613,16 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             buildSha256 = FileFingerprint.requireSha256(buildSha256);
             if (fileCount < 0) {
                 throw new IllegalArgumentException("fileCount must be >= 0");
+            }
+        }
+    }
+
+    private record FingerprintFile(Path path, String fileName, FileTime lastModified) { }
+
+    public record FingerprintRetentionResult(int retainedSnapshots, int deletedSnapshots) {
+        public FingerprintRetentionResult {
+            if (retainedSnapshots < 0 || deletedSnapshots < 0) {
+                throw new IllegalArgumentException("fingerprint retention counts must not be negative");
             }
         }
     }

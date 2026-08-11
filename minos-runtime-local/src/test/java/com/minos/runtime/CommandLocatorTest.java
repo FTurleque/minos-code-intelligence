@@ -70,13 +70,15 @@ class CommandLocatorTest {
                 if not "%~4"=="x^y" exit /b 13
                 if not "%~5"=="(z)" exit /b 14
                 if not "%~6"=="bang!value" exit /b 15
-                powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~8" "%~7" "%~9"
+                "%MINOS_TEST_POWERSHELL%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~8" "%~7" "%~9"
                 if errorlevel 1 exit /b 16
                 > "%~1" echo PASS
                 exit /b 0
                 """, StandardCharsets.US_ASCII);
 
-        Process process = new ProcessBuilder(CommandLocator.invocation(
+        Path windowsPowerShell = CommandLocator.windowsPowerShell()
+                .orElseThrow(() -> new AssertionError("Windows PowerShell 5.1 is unavailable"));
+        ProcessBuilder builder = new ProcessBuilder(CommandLocator.invocation(
                 script,
                 marker.toString(),
                 "space value",
@@ -86,7 +88,9 @@ class CommandLocatorTest {
                 "bang!value",
                 "é漢字",
                 captureHelper.toString(),
-                unicodeCapture.toString())).start();
+                unicodeCapture.toString()));
+        builder.environment().put("MINOS_TEST_POWERSHELL", windowsPowerShell.toString());
+        Process process = builder.start();
 
         assertTrue(process.waitFor(20, TimeUnit.SECONDS), "cmd.exe qualification process timed out");
         String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);

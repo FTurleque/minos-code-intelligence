@@ -91,7 +91,7 @@ La campagne post-audit ferme les findings structurants identifiés après 1.0.1 
 
 ### Windows
 
-- AppContainer sans capability réseau ;
+- AppContainer sans capability réseau pour `DENY`, ou avec la seule capability `internetClient` pour `ALLOW` ;
 - validation `TokenIsAppContainer` avant reprise du processus ;
 - Job Object avec kill-on-close, mémoire, process count et CPU hard cap ;
 - ACL temporaires limitées aux racines gérées par MINOS ;

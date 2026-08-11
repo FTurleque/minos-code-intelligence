@@ -127,7 +127,8 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
                 || !worker.workerId().equals(manifest.workerId())
                 || worker.isolation() != manifest.isolation()
                 || networkPolicy != manifest.networkPolicy()
-                || worker.enforcesNetworkDeny() != manifest.networkDenyEnforced()) {
+                || (networkPolicy == WorkerNetworkPolicy.DENY && worker.enforcesNetworkDeny())
+                        != manifest.networkDenyEnforced()) {
             throw new IllegalStateException("transported artifact provenance does not match the indexing request");
         }
     }

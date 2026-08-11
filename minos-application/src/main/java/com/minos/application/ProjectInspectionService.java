@@ -2,6 +2,7 @@ package com.minos.application;
 
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.discovery.ProjectDiscoveryService;
+import com.minos.io.BoundedProperties;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
@@ -12,7 +13,6 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
 
 /** Shared read-only project/index view used by transport adapters. */
 public final class ProjectInspectionService {
+
+    private static final long MAX_HISTORY_PROPERTIES_BYTES = 64L * 1024L;
 
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
@@ -136,8 +138,9 @@ public final class ProjectInspectionService {
     private Optional<IndexHistory> readHistory(UUID projectId) throws IOException {
         Path file = historyDirectory.resolve(projectId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
-        Properties properties = new Properties();
-        try (InputStream input = Files.newInputStream(file)) { properties.load(input); }
+        Properties properties = BoundedProperties.load(
+                file, MAX_HISTORY_PROPERTIES_BYTES, 16, 64, 8192,
+                "CLI index history metadata");
         return Optional.of(new IndexHistory(required(properties, "snapshotId", file), required(properties, "providerId", file),
                 blankToNull(properties.getProperty("providerVersion")), Instant.parse(required(properties, "completedAt", file))));
     }

@@ -80,7 +80,17 @@ public final class SnapshotRetentionService {
             String activeFileName,
             SnapshotRetentionPolicy policy
     ) throws IOException {
+        return applyPolicyLocked(projectId, activeFileName, policy, Set.of());
+    }
+
+    RetentionResult applyPolicyLocked(
+            UUID projectId,
+            String activeFileName,
+            SnapshotRetentionPolicy policy,
+            Set<String> protectedFileNamePrefixes
+    ) throws IOException {
         Objects.requireNonNull(policy, "policy");
+        Objects.requireNonNull(protectedFileNamePrefixes, "protectedFileNamePrefixes");
         if (activeFileName == null || activeFileName.isBlank()) {
             throw new IllegalArgumentException("activeFileName must not be blank");
         }
@@ -92,22 +102,32 @@ public final class SnapshotRetentionService {
         }
 
         files.removeIf(path -> path.getFileName().toString().equals(activeFileName));
+        List<Path> protectedHistorical = files.stream()
+                .filter(path -> protectedFileNamePrefixes.stream()
+                        .anyMatch(path.getFileName().toString()::startsWith))
+                .toList();
+        files.removeAll(protectedHistorical);
         files.sort(Comparator
                 .comparing(SnapshotRetentionService::lastModifiedSafe)
                 .reversed()
                 .thenComparing(path -> path.getFileName().toString()));
 
         int keep = Math.min(policy.maxHistoricalSnapshots(), files.size());
-        List<String> retained = files.subList(0, keep).stream()
+        List<String> retained = new ArrayList<>();
+        files.subList(0, keep).stream()
                 .map(path -> path.getFileName().toString())
-                .toList();
+                .forEach(retained::add);
+        protectedHistorical.stream()
+                .map(path -> path.getFileName().toString())
+                .sorted()
+                .forEach(retained::add);
         List<String> deleted = new ArrayList<>();
         for (Path path : files.subList(keep, files.size())) {
             if (Files.deleteIfExists(path)) {
                 deleted.add(path.getFileName().toString());
             }
         }
-        return new RetentionResult(activeFileName, retained, List.copyOf(deleted));
+        return new RetentionResult(activeFileName, List.copyOf(retained), List.copyOf(deleted));
     }
 
     private static FileTime lastModifiedSafe(Path path) {

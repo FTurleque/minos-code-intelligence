@@ -7,6 +7,7 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -143,13 +144,13 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path run = runDirectory.toRealPath();
 
         List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds(), networkPolicy);
-        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
         sandbox.add("--dev");
         sandbox.add("/dev");
         sandbox.add("--proc");
         sandbox.add("/proc");
         sandbox.add("--tmpfs");
         sandbox.add("/tmp");
+        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
         addWritableBind(sandbox, working);
         if (!artifactParent.startsWith(working)) addWritableBind(sandbox, artifactParent);
         if (!run.startsWith(working) && !run.startsWith(artifactParent)) addWritableBind(sandbox, run);
@@ -186,14 +187,22 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
             if (!process.waitFor(5, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 process.waitFor(2, TimeUnit.SECONDS);
+                System.err.println("MINOS Linux sandbox capability probe timed out");
                 return false;
             }
-            process.getInputStream().readAllBytes();
-            return process.exitValue() == 0;
+            String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
+            if (process.exitValue() != 0) {
+                System.err.println("MINOS Linux sandbox capability probe failed (exit="
+                        + process.exitValue() + "): " + output);
+                return false;
+            }
+            return true;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
         } catch (IOException | RuntimeException exception) {
+            System.err.println("MINOS Linux sandbox capability probe could not start: "
+                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             return false;
         }
     }
@@ -272,12 +281,22 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
     private static void addReadOnlyIfPresent(List<String> command, Set<Path> mounted, Path candidate)
             throws IOException {
         if (candidate == null || !Files.exists(candidate)) return;
+        Path destination = candidate.toAbsolutePath().normalize();
         Path real = candidate.toRealPath();
+        if (mounted.stream().anyMatch(real::startsWith)) {
+            if (Files.isSymbolicLink(destination)) {
+                addDestinationParents(command, destination);
+                command.add("--symlink");
+                command.add(Files.readSymbolicLink(destination).toString());
+                command.add(destination.toString());
+            }
+            return;
+        }
         if (!mounted.add(real)) return;
-        addDestinationParents(command, real);
+        addDestinationParents(command, destination);
         command.add("--ro-bind");
         command.add(real.toString());
-        command.add(real.toString());
+        command.add(destination.toString());
     }
 
     private static void addReadOnlyFile(

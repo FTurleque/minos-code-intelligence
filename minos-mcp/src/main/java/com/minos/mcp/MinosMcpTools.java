@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.output.DeterministicJson;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
@@ -20,27 +21,38 @@ import java.util.Set;
 public final class MinosMcpTools implements AutoCloseable {
 
     public static final int TOOL_COUNT = 31;
+    public static final int MAX_RESULT_BYTES = 8 * 1024 * 1024;
     private static final Set<String> ARCHITECTURE_GRAPH_FORMATS = Set.of("json", "mermaid", "dot");
     private static final String GENERIC_TOOL_ERROR = "error: MINOS tool execution failed";
+    private static final String RESULT_BUDGET_ERROR =
+            "error: MCP_RESULT_BUDGET_EXCEEDED; reduce limits or paginate the request";
     private static final int MAX_CLIENT_ERROR_CHARS = 240;
     private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
     private final MinosMcpBackend backend;
     private final MinosApplication ownedApplication;
+    private final int maxResultBytes;
 
     public MinosMcpTools(Path home) {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         try {
             this.ownedApplication = MinosApplication.open(normalizedHome);
             this.backend = new MinosApplicationMcpBackend(this.ownedApplication);
+            this.maxResultBytes = MAX_RESULT_BYTES;
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
     }
 
     MinosMcpTools(MinosMcpBackend backend) {
+        this(backend, MAX_RESULT_BYTES);
+    }
+
+    MinosMcpTools(MinosMcpBackend backend, int maxResultBytes) {
         this.backend = Objects.requireNonNull(backend, "backend");
         this.ownedApplication = null;
+        if (maxResultBytes < 1) throw new IllegalArgumentException("maxResultBytes must be positive");
+        this.maxResultBytes = maxResultBytes;
     }
 
     public List<SyncToolSpecification> specifications() {
@@ -117,19 +129,45 @@ public final class MinosMcpTools implements AutoCloseable {
                 .build();
     }
 
-    private static CallToolResult execute(String toolName, ToolInvocation invocation, Map<String, Object> arguments) {
+    private CallToolResult execute(String toolName, ToolInvocation invocation, Map<String, Object> arguments) {
         try {
             String text = invocation.execute(arguments);
             String result = text == null ? "" : text.stripTrailing();
+            if (exceedsUtf8Budget(result.isEmpty() ? "{}" : result, maxResultBytes)) {
+                return toolError(RESULT_BUDGET_ERROR);
+            }
             return CallToolResult.builder()
                     .content(List.of(TextContent.builder(result.isEmpty() ? "{}" : result).build()))
                     .build();
+        } catch (DeterministicJson.OutputBudgetExceededException exception) {
+            return toolError(RESULT_BUDGET_ERROR);
         } catch (IllegalArgumentException exception) {
             return toolError(clientError(toolName, exception));
         } catch (Exception exception) {
             logInternalFailure(toolName, exception);
             return toolError(GENERIC_TOOL_ERROR);
         }
+    }
+
+    private static boolean exceedsUtf8Budget(String value, long maximumBytes) {
+        long bytes = 0L;
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            int encoded;
+            if (Character.isHighSurrogate(current)
+                    && index + 1 < value.length()
+                    && Character.isLowSurrogate(value.charAt(index + 1))) {
+                encoded = 4;
+                index++;
+            } else if (Character.isSurrogate(current)) {
+                encoded = 1;
+            } else {
+                encoded = current <= 0x7f ? 1 : current <= 0x7ff ? 2 : 3;
+            }
+            bytes += encoded;
+            if (bytes > maximumBytes) return true;
+        }
+        return false;
     }
 
     private static CallToolResult toolError(String message) {
@@ -230,8 +268,8 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static MinosMcpBackend.ProgramGraphRequest programGraphRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.programGraphDefaults(
-                required(args, "project"), optionalInteger(args, "maxNodes", 1, 100000),
-                optionalInteger(args, "maxEdges", 1, 500000));
+                required(args, "project"), optionalInteger(args, "maxNodes", 1, 10000),
+                optionalInteger(args, "maxEdges", 1, 50000));
     }
 
     private static MinosMcpBackend.SecurityRequest securityRequest(Map<String, Object> args) {
@@ -407,8 +445,8 @@ public final class MinosMcpTools implements AutoCloseable {
     private static String programGraphSchema() {
         return objectSchema(
                 "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"maxNodes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100000}," +
-                        "\"maxEdges\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500000}",
+                        "\"maxNodes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}," +
+                        "\"maxEdges\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50000}",
                 "\"project\"");
     }
 

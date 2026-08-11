@@ -1,5 +1,6 @@
 package com.minos.runtime;
 
+import com.minos.io.BoundedProperties;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -291,11 +292,9 @@ public final class DistributedArtifactBundleStore {
     }
 
     private static DistributedArtifactManifest decodeManifest(byte[] bytes) throws IOException {
-        Properties properties = new Properties();
-        try (Reader reader = new java.io.InputStreamReader(
-                new ByteArrayInputStream(bytes), StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        Properties properties = BoundedProperties.loadUtf8(
+                bytes, MAX_MANIFEST_BYTES, 32, 128, 16_384,
+                "distributed artifact manifest");
         Set<String> expected = Set.of(
                 "format", "runId", "projectId", "sourceRepository", "sourceCommit", "language",
                 "providerId", "providerVersion", "workerId", "isolation", "networkPolicy",

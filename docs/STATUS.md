@@ -55,7 +55,7 @@ La PR #135 contient une qualification exact-head dédiée qui :
 - vérifie les limites OS ;
 - exécute le chemin réel `ProcessIndexerExecutor → sandbox OS → provider → artefact`.
 
-Linux n'annonce `OS_ENFORCED` qu'après une sonde runtime réussie des namespaces/userns/LSM. Windows lance le provider dans un AppContainer sans capability réseau, vérifie `TokenIsAppContainer` avant reprise du child et l'attache à un Job Object borné. En absence de mécanisme qualifié, le worker revient au backend process-only et refuse `DENY`.
+Linux n'annonce `OS_ENFORCED` qu'après une sonde runtime réussie des namespaces/userns/LSM. Windows vérifie `TokenIsAppContainer` avant reprise du child et l'attache à un Job Object borné : ensemble de capabilities vide pour `DENY`, seule capability `internetClient` pour `ALLOW`. En absence de mécanisme qualifié, le worker distant refuse `ALLOW` comme `DENY` avant l’exécution.
 
 L'issue #98 est donc techniquement résolue par #135 ; sa fermeture intervient avec l'intégration finale de cette PR.
 

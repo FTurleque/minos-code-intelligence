@@ -20,6 +20,7 @@ public static class MinosAppContainerNativeV2 {
     private const uint STARTF_USESTDHANDLES = 0x00000100;
     private const long PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES = 0x00020009;
     private const uint TOKEN_QUERY = 0x0008;
+    private const uint SE_GROUP_ENABLED = 0x00000004;
     private const int TokenIsAppContainer = 29;
     private const uint INFINITE = 0xffffffff;
 
@@ -73,6 +74,12 @@ public static class MinosAppContainerNativeV2 {
         public IntPtr Capabilities;
         public uint CapabilityCount;
         public uint Reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SID_AND_ATTRIBUTES {
+        public IntPtr Sid;
+        public uint Attributes;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -133,6 +140,9 @@ public static class MinosAppContainerNativeV2 {
 
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool ConvertSidToStringSid(IntPtr Sid, out IntPtr StringSid);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool ConvertStringSidToSid(string StringSid, out IntPtr Sid);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
@@ -249,12 +259,15 @@ public static class MinosAppContainerNativeV2 {
         string workingDirectory,
         ulong jobMemoryBytes,
         uint activeProcesses,
-        uint cpuRate) {
+        uint cpuRate,
+        bool allowNetwork) {
         if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
         if (environment == null) throw new ArgumentNullException("environment");
         IntPtr sid = IntPtr.Zero;
         IntPtr attributeList = IntPtr.Zero;
         IntPtr securityCapabilitiesPtr = IntPtr.Zero;
+        IntPtr capabilityArray = IntPtr.Zero;
+        IntPtr internetClientSid = IntPtr.Zero;
         IntPtr environmentBlock = IntPtr.Zero;
         IntPtr job = IntPtr.Zero;
         PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
@@ -262,10 +275,22 @@ public static class MinosAppContainerNativeV2 {
             int hr = DeriveAppContainerSidFromAppContainerName(profileName, out sid);
             if (hr < 0) Marshal.ThrowExceptionForHR(hr);
 
+            if (allowNetwork) {
+                if (!ConvertStringSidToSid("S-1-15-3-1", out internetClientSid)) {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+                SID_AND_ATTRIBUTES internetClient = new SID_AND_ATTRIBUTES {
+                    Sid = internetClientSid,
+                    Attributes = SE_GROUP_ENABLED
+                };
+                capabilityArray = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SID_AND_ATTRIBUTES)));
+                Marshal.StructureToPtr(internetClient, capabilityArray, false);
+            }
+
             SECURITY_CAPABILITIES capabilities = new SECURITY_CAPABILITIES {
                 AppContainerSid = sid,
-                Capabilities = IntPtr.Zero,
-                CapabilityCount = 0,
+                Capabilities = capabilityArray,
+                CapabilityCount = allowNetwork ? 1u : 0u,
                 Reserved = 0
             };
             securityCapabilitiesPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SECURITY_CAPABILITIES)));
@@ -365,6 +390,8 @@ public static class MinosAppContainerNativeV2 {
                 Marshal.FreeHGlobal(attributeList);
             }
             if (securityCapabilitiesPtr != IntPtr.Zero) Marshal.FreeHGlobal(securityCapabilitiesPtr);
+            if (capabilityArray != IntPtr.Zero) Marshal.FreeHGlobal(capabilityArray);
+            if (internetClientSid != IntPtr.Zero) LocalFree(internetClientSid);
             if (sid != IntPtr.Zero) FreeSid(sid);
         }
     }
@@ -562,6 +589,10 @@ $recoveryDirectory = Decode ([string]$values['recovery'])
 $memoryBytes = [UInt64]$values['jobMemoryBytes']
 $activeProcesses = [UInt32]$values['activeProcesses']
 $cpuRate = [UInt32]$values['cpuRate']
+$networkPolicy = [string]$values['networkPolicy']
+if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
+    throw "Invalid sandbox network policy: $networkPolicy"
+}
 
 New-Item -ItemType Directory -Path $recoveryDirectory -Force | Out-Null
 Recover-Stale $recoveryDirectory
@@ -596,7 +627,8 @@ try {
         $workingDirectory,
         $memoryBytes,
         $activeProcesses,
-        $cpuRate)
+        $cpuRate,
+        ($networkPolicy -eq 'ALLOW'))
     exit $exitCode
 }
 finally {

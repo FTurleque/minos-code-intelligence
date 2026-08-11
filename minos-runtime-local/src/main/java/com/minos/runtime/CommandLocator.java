@@ -37,6 +37,18 @@ public final class CommandLocator {
         return Optional.empty();
     }
 
+    /** Resolves the Windows PowerShell 5.1 host even when its system directory is absent from PATH. */
+    static Optional<Path> windowsPowerShell() {
+        Optional<Path> fromPath = find("powershell");
+        if (fromPath.isPresent() || !isWindows()) return fromPath;
+        String systemRoot = System.getenv("SystemRoot");
+        if (systemRoot == null || systemRoot.isBlank()) return Optional.empty();
+        Path systemHost = Path.of(
+                systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+                .toAbsolutePath().normalize();
+        return Files.isRegularFile(systemHost) ? Optional.of(systemHost) : Optional.empty();
+    }
+
     /**
      * Builds a direct process invocation. Windows batch files necessarily require cmd.exe.
      * The complete batch command is wrapped in cmd's required outer quote pair so /S cannot
