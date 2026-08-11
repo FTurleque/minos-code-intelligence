@@ -45,6 +45,10 @@ class LinuxBubblewrapWorkerSandboxIsolationTest {
 
         List<String> command = plan(backend, provider).command();
         assertTrue(hasBind(command, provider.toRealPath().toString(), provider.toAbsolutePath().normalize().toString()));
+        assertTrue(bindIndex(
+                command,
+                provider.toRealPath().toString(),
+                provider.toAbsolutePath().normalize().toString()) > tmpfsIndex(command, "/tmp"));
         assertFalse(hasBind(command, profile.toRealPath().toString(), profile.toRealPath().toString()));
     }
 
@@ -84,12 +88,24 @@ class LinuxBubblewrapWorkerSandboxIsolationTest {
     }
 
     private static boolean hasBind(List<String> command, String source, String destination) {
+        return bindIndex(command, source, destination) >= 0;
+    }
+
+    private static int bindIndex(List<String> command, String source, String destination) {
         for (int index = 0; index + 2 < command.size(); index++) {
             if ("--ro-bind".equals(command.get(index))
                     && source.equals(command.get(index + 1))
-                    && destination.equals(command.get(index + 2))) return true;
+                    && destination.equals(command.get(index + 2))) return index;
         }
-        return false;
+        return -1;
+    }
+
+    private static int tmpfsIndex(List<String> command, String destination) {
+        for (int index = 0; index + 1 < command.size(); index++) {
+            if ("--tmpfs".equals(command.get(index))
+                    && destination.equals(command.get(index + 1))) return index;
+        }
+        return -1;
     }
 
     private static boolean hasSymlink(List<String> command, String source, String destination) {

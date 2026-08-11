@@ -144,13 +144,13 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         Path run = runDirectory.toRealPath();
 
         List<String> sandbox = baseCommand(plan.timeout().plusSeconds(5).toSeconds(), networkPolicy);
-        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
         sandbox.add("--dev");
         sandbox.add("/dev");
         sandbox.add("--proc");
         sandbox.add("/proc");
         sandbox.add("--tmpfs");
         sandbox.add("/tmp");
+        addRuntimeReadOnlyBinds(sandbox, plan.command(), networkPolicy, minosHome);
         addWritableBind(sandbox, working);
         if (!artifactParent.startsWith(working)) addWritableBind(sandbox, artifactParent);
         if (!run.startsWith(working) && !run.startsWith(artifactParent)) addWritableBind(sandbox, run);
