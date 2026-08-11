@@ -98,9 +98,19 @@ Une ligne couverte ne prouve pas un contrat fonctionnel. JaCoCo reste complémen
 
 Le backend worker n'annonce `OS_ENFORCED` que si la primitive actuelle peut réellement être exercée.
 
-- Linux : `bubblewrap` + namespaces OS, racine hôte en lecture seule, capacités supprimées, limites `prlimit`, network namespace isolé pour `DENY` et sonde de capacité au runtime ;
-- Windows : AppContainer avec ensemble de capabilities vide pour `DENY` ou seule capability `internetClient` pour `ALLOW`, validation `TokenIsAppContainer`, ACL temporaires sur les racines gérées par MINOS et Job Object pour mémoire/processus/CPU/kill-on-close ;
-- absence de primitive qualifiée : backend process-only conservé pour le diagnostic, mais `ALLOW` et `DENY` sont rejetés avant toute exécution remote du provider.
+- Linux : `bubblewrap` + namespaces OS, racine hôte en lecture seule, capacités supprimées, network namespace isolé pour `DENY`, **frontière de job cgroup v2** (`memory.max`, `memory.swap.max`, `pids.max`, `cpu.max`, `cgroup.kill`) et sonde de capacité au runtime ; les limites `prlimit` restent une défense en profondeur par processus, jamais une garantie agrégée ;
+- Windows : AppContainer avec ensemble de capabilities vide pour `DENY` ou seule capability `internetClient` pour `ALLOW`, validation `TokenIsAppContainer`, ACL temporaires sur les racines gérées par MINOS et Job Object configuré avant la création du processus (mémoire, processus, CPU, job time, kill-on-close, terminaison explicite, breakaway interdit) ;
+- absence de primitive qualifiée — y compris l’absence de délégation cgroup v2 — : backend process-only conservé pour le diagnostic, mais `ALLOW` et `DENY` sont rejetés avant toute exécution remote du provider.
+
+### Gate MINOS-01
+
+Le gate reproductible du confinement agrégé est :
+
+```text
+python scripts/remediation/check-minos-01.py
+```
+
+Il interdit de revenir à un simple contrôle par processus, de supprimer la sonde de capacité, de retirer le quota d’écriture supervisé ou de supprimer les tests adversariaux de confinement. Le job Ubuntu de `pr-ci.yml` provisionne en plus une racine cgroup v2 déléguée (`MINOS_SANDBOX_CGROUP_ROOT`) afin que ces tests s’exécutent réellement.
 
 La campagne #135 ajoute une preuve exact-head Linux/Windows qui interdit explicitement les skips et exécute également le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
 

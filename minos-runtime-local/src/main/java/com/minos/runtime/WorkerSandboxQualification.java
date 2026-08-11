@@ -14,6 +14,7 @@ public record WorkerSandboxQualification(
         WorkerSandboxBackend.NetworkGuarantee networkGuarantee,
         NetworkDenyDisposition networkDeny,
         TrustDisposition trustDisposition,
+        WorkerResourceContainment containment,
         Map<Platform, PlatformDisposition> platforms,
         List<String> limitations
 ) {
@@ -25,6 +26,7 @@ public record WorkerSandboxQualification(
         Objects.requireNonNull(networkGuarantee, "networkGuarantee");
         Objects.requireNonNull(networkDeny, "networkDeny");
         Objects.requireNonNull(trustDisposition, "trustDisposition");
+        Objects.requireNonNull(containment, "containment");
         platforms = platforms == null ? Map.of() : Map.copyOf(platforms);
         limitations = limitations == null ? List.of() : List.copyOf(limitations);
         if (networkDeny == NetworkDenyDisposition.QUALIFIED
@@ -36,6 +38,12 @@ public record WorkerSandboxQualification(
             throw new IllegalArgumentException("untrusted-code support requires qualified network denial");
         }
         if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && !containment.qualifiedForUntrustedCode()) {
+            throw new IllegalArgumentException(
+                    "untrusted-code support requires complete aggregate resource containment: "
+                            + containment.unmetRequirements());
+        }
+        if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && platforms.values().stream().noneMatch(value -> value == PlatformDisposition.QUALIFIED)) {
             throw new IllegalArgumentException("untrusted-code support requires at least one qualified platform");
         }
@@ -44,6 +52,7 @@ public record WorkerSandboxQualification(
     public boolean sandboxClaimPermitted() {
         return trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && networkDeny == NetworkDenyDisposition.QUALIFIED
+                && containment.qualifiedForUntrustedCode()
                 && qualifiedForCurrentPlatform();
     }
 
@@ -66,6 +75,7 @@ public record WorkerSandboxQualification(
                 WorkerSandboxBackend.NetworkGuarantee.NONE,
                 NetworkDenyDisposition.FAIL_CLOSED_NOT_ENFORCED,
                 TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                WorkerResourceContainment.none(backendId),
                 Map.of(
                         Platform.WINDOWS, PlatformDisposition.BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND,
                         Platform.LINUX, PlatformDisposition.BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND,
@@ -74,6 +84,7 @@ public record WorkerSandboxQualification(
                         "WORKER_PROCESS_SEPARATION_ONLY",
                         "WORKER_FILESYSTEM_CONFINEMENT_APPLICATION_LEVEL_ONLY",
                         "WORKER_NETWORK_DENY_NOT_OS_ENFORCED",
+                        "WORKER_AGGREGATE_RESOURCE_CONTAINMENT_UNAVAILABLE",
                         "WORKER_UNTRUSTED_CODE_NOT_SUPPORTED",
                         "WORKER_SANDBOX_CLAIM_PROHIBITED"));
     }
@@ -98,6 +109,7 @@ public record WorkerSandboxQualification(
         QUALIFIED,
         BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND,
         BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND,
+        BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY,
         NOT_APPLICABLE
     }
 }

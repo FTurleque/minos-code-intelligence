@@ -12,7 +12,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 
-public static class MinosAppContainerNativeV2 {
+public static class MinosAppContainerNativeV3 {
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     private const uint CREATE_SUSPENDED = 0x00000004;
@@ -24,11 +24,16 @@ public static class MinosAppContainerNativeV2 {
     private const int TokenIsAppContainer = 29;
     private const uint INFINITE = 0xffffffff;
 
+    private const uint JOB_OBJECT_LIMIT_JOB_TIME = 0x00000004;
     private const uint JOB_OBJECT_LIMIT_ACTIVE_PROCESS = 0x00000008;
     private const uint JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200;
+    private const uint JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION = 0x00000400;
+    private const uint JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800;
+    private const uint JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK = 0x00001000;
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     private const uint JOB_OBJECT_CPU_RATE_CONTROL_ENABLE = 0x1;
     private const uint JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP = 0x4;
+    private const int JobObjectBasicAccountingInformation = 1;
     private const int JobObjectExtendedLimitInformation = 9;
     private const int JobObjectCpuRateControlInformation = 15;
 
@@ -113,6 +118,18 @@ public static class MinosAppContainerNativeV2 {
         public UIntPtr JobMemoryLimit;
         public UIntPtr PeakProcessMemoryUsed;
         public UIntPtr PeakJobMemoryUsed;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION {
+        public long TotalUserTime;
+        public long TotalKernelTime;
+        public long ThisPeriodTotalUserTime;
+        public long ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount;
+        public uint TotalProcesses;
+        public uint ActiveProcesses;
+        public uint TotalTerminatedProcesses;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -208,7 +225,21 @@ public static class MinosAppContainerNativeV2 {
         uint cbJobObjectInfoLength);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool QueryInformationJobObject(
+        IntPtr hJob,
+        int JobObjectInfoClass,
+        IntPtr lpJobObjectInfo,
+        uint cbJobObjectInfoLength,
+        IntPtr lpReturnLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool IsProcessInJob(IntPtr ProcessHandle, IntPtr JobHandle, out bool Result);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateJobObject(IntPtr hJob, uint uExitCode);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint ResumeThread(IntPtr hThread);
@@ -260,6 +291,7 @@ public static class MinosAppContainerNativeV2 {
         ulong jobMemoryBytes,
         uint activeProcesses,
         uint cpuRate,
+        ulong jobCpuSeconds,
         bool allowNetwork) {
         if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
         if (environment == null) throw new ArgumentNullException("environment");
@@ -314,6 +346,13 @@ public static class MinosAppContainerNativeV2 {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            // The job boundary exists and is fully configured before the contained process is even
+            // created, so there is no window in which an untrusted child could be spawned outside it.
+            job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+            ConfigureJob(job, jobMemoryBytes, activeProcesses, cpuRate, jobCpuSeconds);
+            VerifyJob(job, jobMemoryBytes, activeProcesses);
+
             STARTUPINFOEX startup = new STARTUPINFOEX();
             startup.StartupInfo.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFOEX));
             startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -342,6 +381,7 @@ public static class MinosAppContainerNativeV2 {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
+            // The process is still suspended: it cannot have created any descendant yet.
             IntPtr token;
             if (!OpenProcessToken(pi.hProcess, TOKEN_QUERY, out token)) {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -364,11 +404,15 @@ public static class MinosAppContainerNativeV2 {
                 CloseHandle(token);
             }
 
-            job = CreateJobObject(IntPtr.Zero, null);
-            if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
-            ConfigureJob(job, jobMemoryBytes, activeProcesses, cpuRate);
             if (!AssignProcessToJobObject(job, pi.hProcess)) {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            bool inJob;
+            if (!IsProcessInJob(pi.hProcess, job, out inJob)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            if (!inJob) {
+                throw new InvalidOperationException("sandbox process is not a member of the MINOS job object");
             }
             if (ResumeThread(pi.hThread) == 0xffffffff) {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -381,6 +425,10 @@ public static class MinosAppContainerNativeV2 {
             }
             return unchecked((int)exitCode);
         } finally {
+            if (job != IntPtr.Zero) {
+                // No descendant may outlive the job, whatever the outcome was.
+                TerminateJobObject(job, 1);
+            }
             if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
             if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
             if (job != IntPtr.Zero) CloseHandle(job);
@@ -409,12 +457,20 @@ public static class MinosAppContainerNativeV2 {
         return Marshal.StringToHGlobalUni(block.ToString());
     }
 
-    private static void ConfigureJob(IntPtr job, ulong memoryBytes, uint activeProcesses, uint cpuRate) {
+    private static void ConfigureJob(
+        IntPtr job,
+        ulong memoryBytes,
+        uint activeProcesses,
+        uint cpuRate,
+        ulong jobCpuSeconds) {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_ACTIVE_PROCESS
                 | JOB_OBJECT_LIMIT_JOB_MEMORY
+                | JOB_OBJECT_LIMIT_JOB_TIME
+                | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION
                 | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         limits.BasicLimitInformation.ActiveProcessLimit = activeProcesses;
+        limits.BasicLimitInformation.PerJobUserTimeLimit = checked((long)(jobCpuSeconds * 10000000UL));
         limits.JobMemoryLimit = new UIntPtr(memoryBytes);
         IntPtr limitsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
         try {
@@ -446,6 +502,66 @@ public static class MinosAppContainerNativeV2 {
             }
         } finally {
             Marshal.FreeHGlobal(cpuPtr);
+        }
+    }
+
+    /** Reads the limits back from the kernel: a silently ignored limit must never be claimed. */
+    private static void VerifyJob(IntPtr job, ulong memoryBytes, uint activeProcesses) {
+        int size = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try {
+            if (!QueryInformationJobObject(
+                    job,
+                    JobObjectExtendedLimitInformation,
+                    buffer,
+                    (uint)size,
+                    IntPtr.Zero)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION applied =
+                (JOBOBJECT_EXTENDED_LIMIT_INFORMATION)Marshal.PtrToStructure(
+                    buffer, typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+            uint flags = applied.BasicLimitInformation.LimitFlags;
+            if ((flags & JOB_OBJECT_LIMIT_ACTIVE_PROCESS) == 0
+                || (flags & JOB_OBJECT_LIMIT_JOB_MEMORY) == 0
+                || (flags & JOB_OBJECT_LIMIT_JOB_TIME) == 0
+                || (flags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) == 0) {
+                throw new InvalidOperationException("MINOS job object limits were not applied: flags=" + flags);
+            }
+            if ((flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK) != 0
+                || (flags & JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK) != 0) {
+                throw new InvalidOperationException("MINOS job object must never allow breakaway");
+            }
+            if (applied.BasicLimitInformation.ActiveProcessLimit != activeProcesses) {
+                throw new InvalidOperationException("MINOS job active process limit was not applied");
+            }
+            if (applied.JobMemoryLimit.ToUInt64() != memoryBytes) {
+                throw new InvalidOperationException("MINOS job memory limit was not applied");
+            }
+        } finally {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /** Number of processes still alive inside the job; used to prove that nothing survived. */
+    public static uint ActiveProcesses(IntPtr job) {
+        int size = Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try {
+            if (!QueryInformationJobObject(
+                    job,
+                    JobObjectBasicAccountingInformation,
+                    buffer,
+                    (uint)size,
+                    IntPtr.Zero)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting =
+                (JOBOBJECT_BASIC_ACCOUNTING_INFORMATION)Marshal.PtrToStructure(
+                    buffer, typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));
+            return accounting.ActiveProcesses;
+        } finally {
+            Marshal.FreeHGlobal(buffer);
         }
     }
 
@@ -554,8 +670,8 @@ function Remove-AppContainerPath([string] $Path, [string] $Sid) {
     & icacls.exe $Path /remove:g "*$Sid" /q | Out-Null
 }
 
-function Write-Recovery([string] $Journal, [string] $Profile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
-    $state = [ordered]@{ profile = $Profile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
+function Write-Recovery([string] $Journal, [string] $containerProfile, [string] $Sid, [System.Collections.Generic.List[string]] $Granted) {
+    $state = [ordered]@{ profile = $containerProfile; sid = $Sid; paths = [string[]]$Granted.ToArray() }
     $temporary = $Journal + '.tmp'
     $state | ConvertTo-Json -Depth 3 -Compress | Set-Content -LiteralPath $temporary -Encoding UTF8
     Move-Item -LiteralPath $temporary -Destination $Journal -Force
@@ -570,7 +686,7 @@ function Recover-Stale([string] $RecoveryDirectory) {
             foreach ($path in @($state.paths)) {
                 try { Remove-AppContainerPath ([string]$path) $sid } catch { Write-Warning $_ }
             }
-            try { [MinosAppContainerNativeV2]::DeleteProfile([string]$state.profile) } catch { Write-Warning $_ }
+            try { [MinosAppContainerNativeV3]::DeleteProfile([string]$state.profile) } catch { Write-Warning $_ }
             Remove-Item -LiteralPath $journal.FullName -Force -ErrorAction SilentlyContinue
         } catch {
             Write-Warning "Unable to reconcile stale MINOS AppContainer journal $($journal.FullName): $_"
@@ -589,6 +705,7 @@ $recoveryDirectory = Decode ([string]$values['recovery'])
 $memoryBytes = [UInt64]$values['jobMemoryBytes']
 $activeProcesses = [UInt32]$values['activeProcesses']
 $cpuRate = [UInt32]$values['cpuRate']
+$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']
 $networkPolicy = [string]$values['networkPolicy']
 if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
     throw "Invalid sandbox network policy: $networkPolicy"
@@ -597,37 +714,38 @@ if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
 New-Item -ItemType Directory -Path $recoveryDirectory -Force | Out-Null
 Recover-Stale $recoveryDirectory
 
-$profile = 'Minos.Worker.' + ([Guid]::NewGuid().ToString('N'))
+$containerProfile = 'Minos.Worker.' + ([Guid]::NewGuid().ToString('N'))
 $sid = $null
 $granted = New-Object System.Collections.Generic.List[string]
-$journal = Join-Path $recoveryDirectory ($profile + '.json')
+$journal = Join-Path $recoveryDirectory ($containerProfile + '.json')
 
 try {
-    $sid = [MinosAppContainerNativeV2]::CreateProfile($profile)
-    Write-Recovery $journal $profile $sid $granted
+    $sid = [MinosAppContainerNativeV3]::CreateProfile($containerProfile)
+    Write-Recovery $journal $containerProfile $sid $granted
     foreach ($path in $readPaths) {
         Grant-AppContainerDirectory $path $sid '(OI)(CI)RX'
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
     foreach ($path in $readFiles) {
         Grant-AppContainerFile $path $sid
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
     foreach ($path in $writePaths) {
         Grant-AppContainerDirectory $path $sid '(OI)(CI)M'
         $granted.Add($path)
-        Write-Recovery $journal $profile $sid $granted
+        Write-Recovery $journal $containerProfile $sid $granted
     }
-    $exitCode = [MinosAppContainerNativeV2]::RunSandbox(
-        $profile,
+    $exitCode = [MinosAppContainerNativeV3]::RunSandbox(
+        $containerProfile,
         $command,
         $environment,
         $workingDirectory,
         $memoryBytes,
         $activeProcesses,
         $cpuRate,
+        $jobCpuSeconds,
         ($networkPolicy -eq 'ALLOW'))
     exit $exitCode
 }
@@ -637,6 +755,6 @@ finally {
             try { Remove-AppContainerPath $path $sid } catch { Write-Warning $_ }
         }
     }
-    try { [MinosAppContainerNativeV2]::DeleteProfile($profile) } catch { Write-Warning $_ }
+    try { [MinosAppContainerNativeV3]::DeleteProfile($containerProfile) } catch { Write-Warning $_ }
     Remove-Item -LiteralPath $journal -Force -ErrorAction SilentlyContinue
 }

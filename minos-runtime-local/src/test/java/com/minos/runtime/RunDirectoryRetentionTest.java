@@ -3,6 +3,7 @@ package com.minos.runtime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -10,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RunDirectoryRetentionTest {
@@ -52,6 +54,75 @@ class RunDirectoryRetentionTest {
         );
 
         assertFalse(Files.exists(expired));
+    }
+
+    @Test
+    void anOversizedHostileRunIsReclaimedInsteadOfBlockingEveryFutureIndexation(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Path hostile = runs.resolve("hostile");
+        Files.createDirectories(hostile);
+        for (int index = 0; index < 40; index++) {
+            Files.writeString(hostile.resolve("entry-" + index), "x");
+        }
+        Path healthy = run(runs, "healthy", 8);
+        Instant now = Instant.parse("2026-08-10T12:00:00Z");
+        Files.setLastModifiedTime(hostile, FileTime.from(now));
+        Files.setLastModifiedTime(healthy, FileTime.from(now));
+
+        RunDirectoryRetention.prune(
+                runs,
+                healthy,
+                new RunDirectoryRetention.Policy(16, 4L * 1024L * 1024L, Duration.ofDays(7)),
+                now,
+                new RunDirectoryRetention.Budgets(4L, 4_096L, 250_000L));
+
+        assertFalse(Files.exists(hostile), "a run exceeding the scan budget must be reclaimed, not fatal");
+        assertTrue(Files.exists(healthy), "a healthy run must survive an adjacent hostile run");
+    }
+
+    @Test
+    void aRunTooLargeToDeleteInOnePassIsQuarantinedAndDrainedLater(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Path hostile = runs.resolve("hostile");
+        Files.createDirectories(hostile);
+        for (int index = 0; index < 40; index++) {
+            Files.writeString(hostile.resolve("entry-" + index), "x");
+        }
+        Instant now = Instant.parse("2026-08-10T12:00:00Z");
+        Files.setLastModifiedTime(hostile, FileTime.from(now.minus(Duration.ofDays(30))));
+
+        RunDirectoryRetention.prune(
+                runs,
+                null,
+                new RunDirectoryRetention.Policy(16, 4L * 1024L * 1024L, Duration.ofDays(7)),
+                now,
+                new RunDirectoryRetention.Budgets(1_000_000L, 4_096L, 5L));
+
+        assertFalse(Files.exists(hostile), "the hostile run must leave the active run namespace immediately");
+        Path quarantine = runs.resolve(RunDirectoryRetention.QUARANTINE_DIRECTORY);
+        assertTrue(Files.isDirectory(quarantine), "the residue must be quarantined, never left in place");
+
+        for (int pass = 0; pass < 20; pass++) {
+            RunDirectoryRetention.prune(
+                    runs,
+                    null,
+                    new RunDirectoryRetention.Policy(16, 4L * 1024L * 1024L, Duration.ofDays(7)),
+                    now,
+                    new RunDirectoryRetention.Budgets(1_000_000L, 4_096L, 20L));
+        }
+        try (var children = Files.list(quarantine)) {
+            assertTrue(children.findAny().isEmpty(), "bounded passes must eventually drain the quarantine");
+        }
+    }
+
+    @Test
+    void pruneNeverDeletesOutsideTheRunsRoot(@TempDir Path home) throws Exception {
+        Path runs = Files.createDirectories(home.resolve("runs"));
+        Path outside = Files.createDirectories(home.resolve("outside"));
+
+        assertThrows(IOException.class, () -> RunDirectoryRetention.deleteTree(runs, outside));
+        assertThrows(IOException.class, () -> RunDirectoryRetention.deleteTree(runs, runs));
+        assertTrue(Files.exists(outside));
     }
 
     private static Path run(Path runs, String name, int bytes) throws Exception {

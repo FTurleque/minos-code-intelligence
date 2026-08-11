@@ -73,6 +73,11 @@ The post-audit implementation adds two real platform backends.
 - `prlimit` bounds for address space, process count, open files and CPU ;
 - a bounded runtime capability probe before `OS_ENFORCED` is advertised.
 
+> Superseded on the resource-containment dimension by
+> [0038](0038-aggregate-worker-resource-containment.md): `prlimit` bounds are per process and are
+> multiplied by every `fork`. The aggregate job boundary is a per-run cgroup v2, and untrusted
+> execution is refused when that boundary cannot be created.
+
 On Ubuntu 24.04 qualification, the distribution-provided AppArmor profile `bwrap-userns-restrict` is loaded so the same unprivileged-user-namespace boundary exercised by production can be tested. If kernel/LSM policy or required tools do not permit the sandbox, discovery fails and MINOS remains process-only / fail-closed.
 
 #### Windows
@@ -83,7 +88,9 @@ On Ubuntu 24.04 qualification, the distribution-provided AppArmor profile `bwrap
 - verification of `TokenIsAppContainer` before child resume ;
 - temporary ACL grants limited to MINOS/provider-owned roots ;
 - no mutation of Windows system ACLs ;
-- a Job Object with kill-on-close, active-process, job-memory and CPU hard-cap limits.
+- a Job Object with kill-on-close, active-process, job-memory and CPU hard-cap limits, hardened by
+  [0038](0038-aggregate-worker-resource-containment.md) with job-time limits, verified membership,
+  refused breakaway and explicit termination on every exit path.
 
 Both OS implementations are accepted only with negative tests for network/filesystem escape and with a real path test through `ProcessIndexerExecutor → sandbox → provider → artefact`.
 

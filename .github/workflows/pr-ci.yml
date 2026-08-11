@@ -83,6 +83,9 @@ jobs:
       - name: P0-P2 audit remediation consistency
         run: python scripts/remediation/check-p0-p2.py
 
+      - name: MINOS-01 worker resource containment gate
+        run: python scripts/remediation/check-minos-01.py
+
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
@@ -102,6 +105,11 @@ jobs:
           test -f "$profile"
           sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
           sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+
+      - name: Delegate a cgroup v2 job boundary to the worker sandbox
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/ci/delegate-linux-cgroup.sh
 
       - name: Prepare Maven Wrapper (Unix)
         if: runner.os != 'Windows'
@@ -162,6 +170,22 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+      - name: Install and authorize Linux worker sandbox runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bubblewrap util-linux apparmor apparmor-profiles
+          command -v bwrap
+          command -v prlimit
+          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
+          test -f "$profile"
+          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+      - name: Delegate a cgroup v2 job boundary to the worker sandbox
+        shell: bash
+        run: bash scripts/ci/delegate-linux-cgroup.sh
       - name: Prepare Maven Wrapper
         run: chmod +x mvnw
       - name: Run complete M28 Linux exact-head qualification

@@ -132,6 +132,7 @@ class LocalIsolatedIndexWorkerTest {
                         networkGuarantee(),
                         WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
                         WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        WorkerContainmentFixtures.FULLY_CONTAINED,
                         Map.of(
                                 WorkerSandboxQualification.currentPlatform(),
                                 WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
@@ -309,6 +310,7 @@ class LocalIsolatedIndexWorkerTest {
                         id(), isolation(), networkGuarantee(),
                         WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
                         WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        WorkerContainmentFixtures.FULLY_CONTAINED,
                         Map.of(WorkerSandboxQualification.currentPlatform(),
                                 WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
                         List.of("TEST_FIXTURE_OS_QUALIFIED"));

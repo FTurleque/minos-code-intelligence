@@ -33,7 +33,7 @@ Principales corrections :
 - supply-chain Coursier/provider rendue immuable et vérifiée par SHA-256 ;
 - images de base Docker épinglées par digest OCI ;
 - GitHub Actions épinglées par SHA et gate anti-régression ;
-- sandbox worker OS réelle : Linux `bubblewrap`/namespaces/`prlimit`, Windows AppContainer + Job Object ;
+- sandbox worker OS réelle avec confinement agrégé : Linux `bubblewrap`/namespaces + frontière de job cgroup v2, Windows AppContainer + Job Object ;
 - `DENY` reste fail-closed lorsque la primitive OS n'est pas réellement disponible ;
 - IDs providers validés, confinement de chemins et artefacts `NOFOLLOW_LINKS` ;
 - suppression du faux contournement SAST `safeCommand` ;

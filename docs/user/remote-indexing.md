@@ -48,7 +48,9 @@ minos.cmd remote index https://github.com/acme/project `
 - `ALLOW` (`allow` en CLI) laisse le provider accéder au réseau à l’intérieur de la sandbox qualifiée ;
 - `DENY` (`deny` en CLI) bloque le réseau au niveau OS à l’intérieur de cette même sandbox.
 
-La sandbox OS qualifiée utilise bubblewrap/namespaces/`prlimit` sous Linux et AppContainer + Job Object sous Windows. Si ce mécanisme n’est pas disponible, l’indexation échoue avant l’exécution. Le backend process-only natif n’est accepté ni avec `allow`, ni avec `deny`; il n’existe pas d’option unsafe de contournement.
+La sandbox OS qualifiée utilise bubblewrap/namespaces plus une frontière de job cgroup v2 sous Linux, et AppContainer + Job Object sous Windows. Cette frontière borne de façon agrégée la mémoire, le nombre de processus et la CPU de tout l’arbre du provider, et garantit qu’aucun descendant ne survit au run. MINOS y ajoute un quota d’écriture (octets et nombre d’entrées) appliqué pendant l’exécution sur toutes les racines accessibles en écriture. Si l’un de ces mécanismes n’est pas disponible — y compris la délégation cgroup v2 sous Linux — l’indexation échoue avant l’exécution. Le backend process-only natif n’est accepté ni avec `allow`, ni avec `deny`; il n’existe pas d’option unsafe de contournement.
+
+Sous Linux, MINOS doit disposer d’une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`.
 
 Le transport utilise `minos-distributed-artifact-v1`. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau et les SHA-256 vérifiés.
 

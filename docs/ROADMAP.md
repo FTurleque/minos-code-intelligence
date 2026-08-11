@@ -85,19 +85,27 @@ La campagne post-audit ferme les findings structurants identifiés après 1.0.1 
 - network namespace isolé pour `DENY`, partage explicite uniquement pour `ALLOW` ;
 - racine hôte en lecture seule et racines d'écriture bornées ;
 - `--cap-drop ALL` ;
-- limites `prlimit` mémoire virtuelle/processus/fichiers/CPU ;
-- sonde runtime des primitives et du contexte LSM/userns ;
-- fallback process-only + rejet de `DENY` si la sonde échoue.
+- frontière de job cgroup v2 par run : `memory.max`, `memory.swap.max`, `pids.max`, `cpu.max`, `cgroup.kill` ;
+- limites `prlimit` mémoire virtuelle/processus/fichiers/CPU conservées comme défense en profondeur **par processus** uniquement ;
+- sonde runtime des primitives, du contexte LSM/userns et de la délégation cgroup ;
+- fallback process-only + rejet de `ALLOW` comme de `DENY` si une sonde échoue.
 
 ### Windows
 
 - AppContainer sans capability réseau pour `DENY`, ou avec la seule capability `internetClient` pour `ALLOW` ;
 - validation `TokenIsAppContainer` avant reprise du processus ;
-- Job Object avec kill-on-close, mémoire, process count et CPU hard cap ;
+- Job Object configuré avant la création du processus, avec kill-on-close, mémoire, process count, CPU hard cap et job time ;
+- vérification `IsProcessInJob` avant `ResumeThread`, relecture des limites appliquées, breakaway interdit et `TerminateJobObject` sur tous les chemins de sortie ;
 - ACL temporaires limitées aux racines gérées par MINOS ;
 - aucune modification des ACL système Windows.
 
-Les tests exact-head couvrent les tentatives réseau, les écritures hors racine, les limites de ressources et le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
+### Quota d'écriture et résidu
+
+- budget d'écriture (octets et nombre d'entrées) appliqué pendant l'exécution sur toutes les racines accessibles au provider, avec destruction de la frontière de job au dépassement ;
+- récupération du résidu du run après succès, erreur, timeout ou dépassement ;
+- rétention des runs bornée, avec quarantaine d'un ancien run pathologique au lieu d'un échec propagé.
+
+Les tests exact-head couvrent les tentatives réseau, les écritures hors racine, les limites de ressources agrégées, la survie des descendants, un provider hostile en écriture et le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
 
 ## Release 1.0.1 — livrée
 

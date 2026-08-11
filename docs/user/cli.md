@@ -331,7 +331,7 @@ DENY  → réseau bloqué dans une sandbox OS qualifiée
 backend natif/process-only → refusé dans les deux modes
 ```
 
-Linux utilise bubblewrap/namespaces/`prlimit` et Windows AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
+Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
 ## Runtime & Dynamic Intelligence
 

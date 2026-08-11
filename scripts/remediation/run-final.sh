@@ -27,6 +27,7 @@ if [[ "$(date +%s)" -lt "$(date -d '2026-08-01T00:00:00+02:00' +%s)" ]]; then
 fi
 
 python3 scripts/remediation/check-p0-p2.py
+python3 scripts/remediation/check-minos-01.py
 python3 scripts/m28/check-m28.py
 python3 scripts/docs/product-facts.py --check
 python3 scripts/m28/check-current-docs.py

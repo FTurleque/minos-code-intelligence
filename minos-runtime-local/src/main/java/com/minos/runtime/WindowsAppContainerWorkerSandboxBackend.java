@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -35,8 +36,11 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     static final long MAX_JOB_MEMORY_BYTES = 8L * 1024L * 1024L * 1024L;
     static final int MAX_ACTIVE_PROCESSES = 128;
     static final int CPU_HARD_CAP = 8_000;
+    /** Aggregate job CPU seconds granted per wall-clock second of the provider timeout. */
+    static final long JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND = 8L;
 
-    private static final String RESOURCE = "/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1";
+    private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
+    private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_SCRIPT_NAME;
 
     private final Path minosHome;
     private final Path powershell;
@@ -64,7 +68,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
     @Override
     public String id() {
-        return "windows-appcontainer-job-v2";
+        return "windows-appcontainer-job-v3";
     }
 
     @Override
@@ -85,6 +89,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 networkGuarantee(),
                 WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
                 WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                containment(),
                 Map.of(
                         WorkerSandboxQualification.Platform.WINDOWS,
                         WorkerSandboxQualification.PlatformDisposition.QUALIFIED,
@@ -101,11 +106,41 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         "WINDOWS_MINOS_RUNTIME_ROOT_ACL_ONLY",
                         "WINDOWS_STALE_ACL_PROFILE_RECONCILIATION",
                         "WINDOWS_SYSTEM_ROOT_ACL_UNMODIFIED",
+                        "WINDOWS_JOB_CONFIGURED_BEFORE_THE_CONTAINED_PROCESS_EXISTS",
+                        "WINDOWS_JOB_ASSIGNED_WHILE_SUSPENDED_AND_MEMBERSHIP_VERIFIED",
+                        "WINDOWS_JOB_BREAKAWAY_PROHIBITED",
+                        "WINDOWS_JOB_LIMITS_READ_BACK_FROM_THE_KERNEL",
                         "WINDOWS_JOB_KILL_ON_CLOSE",
+                        "WINDOWS_JOB_TERMINATED_ON_EVERY_EXIT_PATH",
                         "WINDOWS_JOB_ACTIVE_PROCESS_LIMIT",
                         "WINDOWS_JOB_MEMORY_LIMIT",
-                        "WINDOWS_JOB_CPU_HARD_CAP",
-                        "MINOS_WALL_CLOCK_TIMEOUT_AND_WORKSPACE_QUOTAS_RETAINED"));
+                        "WINDOWS_JOB_CPU_HARD_CAP_AND_AGGREGATE_JOB_TIME_LIMIT",
+                        "MINOS_SUPERVISED_PROVIDER_WRITE_QUOTA_BYTES_AND_ENTRIES",
+                        "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION"));
+    }
+
+    /** Aggregate containment the AppContainer Job Object really enforces. */
+    static WorkerResourceContainment containment() {
+        return new WorkerResourceContainment(
+                "windows-appcontainer-job-object",
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                List.of(
+                        "JOB_OBJECT_LIMIT_ACTIVE_PROCESS",
+                        "JOB_OBJECT_LIMIT_JOB_MEMORY",
+                        "JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP",
+                        "JOB_OBJECT_LIMIT_JOB_TIME",
+                        "JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE",
+                        "TERMINATE_JOB_OBJECT_ON_EVERY_EXIT_PATH",
+                        "MINOS_PROVIDER_WRITE_QUOTA_SUPERVISOR",
+                        "MINOS_WALL_CLOCK_TIMEOUT",
+                        "MINOS_RUN_RESIDUE_RECLAMATION"));
     }
 
     @Override
@@ -135,6 +170,11 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     @Override
                     public boolean trustedLauncherRequiresParentEnvironment() {
                         return true;
+                    }
+
+                    @Override
+                    public Optional<ProviderWriteQuota> providerWriteQuota() {
+                        return Optional.of(ProviderWriteQuota.DEFAULT);
                     }
                 });
     }
@@ -193,7 +233,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 writeRoots,
                 working,
                 recovery,
-                networkPolicy);
+                networkPolicy,
+                jobCpuSeconds(plan.timeout()));
 
         List<String> wrapper = List.of(
                 powershell.toString(),
@@ -217,7 +258,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
-        Path target = directory.resolve("windows-appcontainer-sandbox-v3.ps1");
+        Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
         try (InputStream input = WindowsAppContainerWorkerSandboxBackend.class.getResourceAsStream(RESOURCE)) {
             if (input == null) throw new IOException("embedded Windows AppContainer launcher is missing: " + RESOURCE);
             Path partial = Files.createTempFile(directory, ".windows-appcontainer-", ".ps1");
@@ -240,7 +281,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Set<Path> writeRoots,
             Path working,
             Path recoveryDirectory,
-            WorkerNetworkPolicy networkPolicy
+            WorkerNetworkPolicy networkPolicy,
+            long jobCpuSeconds
     ) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add("working=" + encode(working.toString()));
@@ -254,7 +296,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         lines.add("jobMemoryBytes=" + MAX_JOB_MEMORY_BYTES);
         lines.add("activeProcesses=" + MAX_ACTIVE_PROCESSES);
         lines.add("cpuRate=" + CPU_HARD_CAP);
+        lines.add("jobCpuSeconds=" + jobCpuSeconds);
         Files.write(target, lines, StandardCharsets.UTF_8);
+    }
+
+    /** Aggregate CPU seconds the whole job may burn, derived from the MINOS wall-clock timeout. */
+    static long jobCpuSeconds(Duration timeout) {
+        long seconds = Math.max(1L, timeout.toSeconds());
+        long granted = seconds > Long.MAX_VALUE / JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND
+                ? Long.MAX_VALUE / JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND
+                : seconds * JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND;
+        return Math.min(granted, 86_400L);
     }
 
     private static void appendEnvironment(List<String> lines, Map<String, String> environment) {

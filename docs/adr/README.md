@@ -52,6 +52,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0035](0035-opt-in-tenant-control-plane-with-external-keys.md) | Ajouter un contrôle tenant opt-in, chiffré, audité et alimenté par des clés externes | Accepted | M27 |
 | [0036](0036-fail-closed-production-boundaries-and-measured-program-graph.md) | Converger par mesures et interdire les claims sandbox/hosted non qualifiés | Proposed | M28 |
 | [0037](0037-first-class-native-and-docker-runtime-backends.md) | Router `minos mcp` vers un backend natif ou Docker explicite, versionné et fail-closed | Accepted — parity pending | M29-S1 |
+| [0038](0038-aggregate-worker-resource-containment.md) | Confiner les ressources des workers non fiables de manière agrégée et fail-closed | Accepted | MINOS-01 |
 
 ## Règle de rédaction
 

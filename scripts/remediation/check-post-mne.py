@@ -74,7 +74,7 @@ def main() -> int:
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
         windows_launcher = read(
-            "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v3.ps1")
+            "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
         worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
         clone_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
@@ -129,7 +129,7 @@ def main() -> int:
                 "WorkerNetworkPolicy.ALLOW", 'sandbox.add("--share-net")')
         require("WindowsAppContainerWorkerSandboxBackend.java", windows,
                 "networkPolicy", "WINDOWS_ALLOW_APPCONTAINER_INTERNET_CLIENT_CAPABILITY_ONLY")
-        require("windows-appcontainer-sandbox-v3.ps1", windows_launcher,
+        require("windows-appcontainer-sandbox-v4.ps1", windows_launcher,
                 'ConvertStringSidToSid("S-1-15-3-1"', "allowNetwork ? 1u : 0u",
                 "$networkPolicy -eq 'ALLOW'")
 

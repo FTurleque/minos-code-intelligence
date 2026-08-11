@@ -22,9 +22,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
@@ -59,27 +62,8 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                     + request.selection().indexer().id());
         }
 
-        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId)
-                .toAbsolutePath().normalize();
-        if (!providerRunDirectory.startsWith(runsRoot)) {
-            throw new IllegalStateException("provider run directory escapes MINOS runs root");
-        }
-        RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent());
-        Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
-        if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
-            throw new IllegalStateException("provider scope directory escapes provider run root");
-        }
-        Files.createDirectories(runDirectory);
-        IndexerProcessPlan original = Objects.requireNonNull(
-                planFactory.create(request, runDirectory), "process plan");
-        IndexerProcessPlan plan = Objects.requireNonNull(
-                transformer.transform(original, runDirectory), "transformed process plan");
-        if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("provider command must contain non-null arguments");
-        }
-        if (!Files.isDirectory(plan.workingDirectory())) {
-            throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
-        }
+        Path runDirectory = prepareRunDirectory(request);
+        IndexerProcessPlan plan = preparePlan(request, transformer, runDirectory);
 
         Path stdout = runDirectory.resolve("provider.stdout.log");
         Path stderr = runDirectory.resolve("provider.stderr.log");
@@ -94,24 +78,24 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             move(generatedArtifact, preservedArtifact);
         }
 
+        Optional<ProviderWriteQuota> writeQuota = transformer.providerWriteQuota();
         Instant startedAt = Instant.now();
         writeMetadata(metadata, plan, request, startedAt);
+        ProviderWriteQuotaSupervisor supervisor = null;
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
-            processBuilder.directory(plan.workingDirectory().toFile());
-            if (transformer.trustedLauncherRequiresParentEnvironment()) {
-                // The transformed command is a MINOS-owned sandbox launcher, not provider code.
-                // Provider environment isolation remains the launcher's responsibility and must be
-                // encoded into the sandbox plan before this trusted boundary is selected.
-                processBuilder.environment().putAll(plan.environment());
-            } else {
-                ProviderProcessEnvironment.apply(processBuilder, plan.environment());
-            }
-
-            Process process = processBuilder.start();
+            Process process = startProvider(plan, transformer);
+            supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
             BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
             boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
+            Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
+            if (breach.isPresent()) {
+                transformer.killContainedJob();
+                terminate(process);
+                appendQuietly(metadata, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
+                throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
+            }
             if (!completed) {
+                transformer.killContainedJob();
                 terminate(process);
                 BoundedProcessOutput.Result output = outputCapture.await();
                 appendOutputMetadata(metadata, output);
@@ -119,6 +103,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 throw new IllegalStateException("provider timed out after " + plan.timeout());
             }
             int exitCode = process.exitValue();
+            transformer.killContainedJob();
             terminateDescendants(process);
             BoundedProcessOutput.Result output;
             try {
@@ -133,25 +118,112 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 archiveFailedArtifact(generatedArtifact, runDirectory);
                 throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
             }
-            requireValidArtifact(generatedArtifact, "provider did not produce a valid SCIP artifact");
-
-            if (!generatedArtifact.equals(finalArtifact)) {
-                Path partial = runDirectory.resolve("index.partial.scip");
-                copyArtifactBounded(generatedArtifact, partial);
-                move(partial, finalArtifact);
-            }
-            requireValidArtifact(finalArtifact, "stable run artifact is invalid");
+            promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
 
             return new IndexingArtifact(
                     request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
         } finally {
+            if (supervisor != null) supervisor.close();
+            transformer.releaseContainment();
             if (artifactOutsideRun) {
                 Files.deleteIfExists(generatedArtifact);
                 if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
                     move(preservedArtifact, generatedArtifact);
                 }
             }
+            if (writeQuota.isPresent()) {
+                ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
+            }
         }
+    }
+
+    private static Process startProvider(IndexerProcessPlan plan, ProcessPlanTransformer transformer)
+            throws IOException {
+        ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
+        processBuilder.directory(plan.workingDirectory().toFile());
+        if (transformer.trustedLauncherRequiresParentEnvironment()) {
+            // The transformed command is a MINOS-owned sandbox launcher, not provider code.
+            // Provider environment isolation remains the launcher's responsibility and must be
+            // encoded into the sandbox plan before this trusted boundary is selected.
+            processBuilder.environment().putAll(plan.environment());
+        } else {
+            ProviderProcessEnvironment.apply(processBuilder, plan.environment());
+        }
+        return processBuilder.start();
+    }
+
+    /** Enforces the provider write budget for as long as the provider runs. */
+    private static ProviderWriteQuotaSupervisor startWriteQuotaSupervisor(
+            Optional<ProviderWriteQuota> writeQuota,
+            IndexerProcessPlan plan,
+            Path runDirectory,
+            ProcessPlanTransformer transformer,
+            Process process
+    ) {
+        if (writeQuota.isEmpty()) return null;
+        return ProviderWriteQuotaSupervisor.start(
+                providerWritableRoots(plan, runDirectory),
+                writeQuota.orElseThrow(),
+                () -> {
+                    transformer.killContainedJob();
+                    terminate(process);
+                });
+    }
+
+    private static void promoteArtifact(Path generatedArtifact, Path finalArtifact, Path runDirectory)
+            throws IOException {
+        requireValidArtifact(generatedArtifact, "provider did not produce a valid SCIP artifact");
+        if (!generatedArtifact.equals(finalArtifact)) {
+            Path partial = runDirectory.resolve("index.partial.scip");
+            copyArtifactBounded(generatedArtifact, partial);
+            move(partial, finalArtifact);
+        }
+        requireValidArtifact(finalArtifact, "stable run artifact is invalid");
+    }
+
+    /** Resolves and bounds the MINOS-owned run directory this execution may write to. */
+    private Path prepareRunDirectory(IndexingExecutionRequest request) throws IOException {
+        Path providerRunDirectory = runsRoot.resolve(request.runId().toString()).resolve(indexerId)
+                .toAbsolutePath().normalize();
+        if (!providerRunDirectory.startsWith(runsRoot)) {
+            throw new IllegalStateException("provider run directory escapes MINOS runs root");
+        }
+        RunDirectoryRetention.prune(runsRoot, providerRunDirectory.getParent());
+        Path runDirectory = scopedRunDirectory(providerRunDirectory, request.projectRelativeRoot());
+        if (!runDirectory.toAbsolutePath().normalize().startsWith(providerRunDirectory)) {
+            throw new IllegalStateException("provider scope directory escapes provider run root");
+        }
+        Files.createDirectories(runDirectory);
+        return runDirectory;
+    }
+
+    /** Builds the provider plan and lets the sandbox backend own the containment boundary. */
+    private IndexerProcessPlan preparePlan(
+            IndexingExecutionRequest request,
+            ProcessPlanTransformer transformer,
+            Path runDirectory
+    ) throws Exception {
+        IndexerProcessPlan original = Objects.requireNonNull(
+                planFactory.create(request, runDirectory), "process plan");
+        IndexerProcessPlan plan = Objects.requireNonNull(
+                transformer.transform(original, runDirectory), "transformed process plan");
+        if (plan.command().isEmpty() || plan.command().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("provider command must contain non-null arguments");
+        }
+        if (!Files.isDirectory(plan.workingDirectory())) {
+            throw new IllegalArgumentException("provider working directory is missing: " + plan.workingDirectory());
+        }
+        return plan;
+    }
+
+    /** Every root the transformed plan makes writable for the provider. */
+    private static Set<Path> providerWritableRoots(IndexerProcessPlan plan, Path runDirectory) {
+        Set<Path> roots = new LinkedHashSet<>();
+        roots.add(plan.workingDirectory().toAbsolutePath().normalize());
+        Path artifactParent = plan.generatedArtifact().toAbsolutePath().normalize().getParent();
+        if (artifactParent != null) roots.add(artifactParent);
+        roots.add(runDirectory.toAbsolutePath().normalize());
+        return roots;
     }
 
     @FunctionalInterface
@@ -160,6 +232,22 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
         default boolean trustedLauncherRequiresParentEnvironment() {
             return false;
+        }
+
+        /**
+         * Write budget MINOS enforces on the provider during execution. An empty value means the
+         * plan is trusted MINOS-side work, not an untrusted provider inside an OS job boundary.
+         */
+        default Optional<ProviderWriteQuota> providerWriteQuota() {
+            return Optional.empty();
+        }
+
+        /** Destroys the whole OS job boundary so that no descendant can survive MINOS. */
+        default void killContainedJob() {
+        }
+
+        /** Reclaims the OS job boundary itself after the provider terminated. */
+        default void releaseContainment() {
         }
     }
 
@@ -288,6 +376,14 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private static void append(Path file, String value) throws IOException {
         Files.writeString(file, value, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+    }
+
+    private static void appendQuietly(Path file, String value) {
+        try {
+            append(file, value);
+        } catch (IOException ignored) {
+            // A containment breach is reported by the thrown failure, never hidden behind metadata IO.
+        }
     }
 
     private static void move(Path source, Path target) throws IOException {

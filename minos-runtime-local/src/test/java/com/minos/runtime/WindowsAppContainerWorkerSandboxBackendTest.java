@@ -143,7 +143,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertTrue(sandboxed.command().contains("-File"));
         assertTrue(Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)
                 .contains("networkPolicy=ALLOW"));
-        assertTrue(Files.readString(home.resolve("sandbox/windows-appcontainer-sandbox-v3.ps1"), StandardCharsets.UTF_8)
+        assertTrue(Files.readString(home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8)
                 .contains("S-1-15-3-1"));
     }
 
