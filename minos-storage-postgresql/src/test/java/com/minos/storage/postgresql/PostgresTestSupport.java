@@ -73,10 +73,15 @@ abstract class PostgresTestSupport {
 
     PostgresConnectionFactory createFactory(String schema) throws IOException {
         Path home = Files.createTempDirectory("minos-pg-test-home");
+        String containerJdbcUrl = POSTGRES.getJdbcUrl();
+        int queryStart = containerJdbcUrl.indexOf('?');
+        String canonicalJdbcUrl = queryStart < 0
+                ? containerJdbcUrl
+                : containerJdbcUrl.substring(0, queryStart);
         return new PostgresConnectionFactory(new StorageBackendConfiguration(
                 "postgresql",
                 home,
-                POSTGRES.getJdbcUrl(),
+                canonicalJdbcUrl,
                 POSTGRES.getUsername(),
                 POSTGRES.getPassword(),
                 schema
