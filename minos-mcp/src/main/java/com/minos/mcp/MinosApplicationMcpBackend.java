@@ -205,7 +205,8 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
     @Override
     public String programGraph(ProgramGraphRequest request) throws Exception {
         return AdvancedAnalysisResultRenderer.renderProgramGraph(
-                application.programGraphService().getGraph(request.project(), request.maxNodes(), request.maxEdges()));
+                application.programGraphService().getGraph(request.project(), request.maxNodes(), request.maxEdges()),
+                MinosMcpTools.MAX_RESULT_BYTES);
     }
 
     @Override

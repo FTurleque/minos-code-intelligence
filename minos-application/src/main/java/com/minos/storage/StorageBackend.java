@@ -24,6 +24,8 @@ public interface StorageBackend extends AutoCloseable {
 
     RuntimeObservationStore runtimeObservationStore();
 
+    StorageRetentionService retentionService();
+
     @Override
     default void close() throws Exception {
         // Most backends are connection-per-operation or file-based and need no close action.

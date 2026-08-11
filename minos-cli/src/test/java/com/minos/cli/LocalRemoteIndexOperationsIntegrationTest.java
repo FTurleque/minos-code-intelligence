@@ -13,6 +13,8 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.DistributedArtifactBundleStore;
+import com.minos.runtime.IndexerProcessPlan;
+import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 import org.junit.jupiter.api.Test;
@@ -28,7 +30,9 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -111,26 +115,50 @@ class LocalRemoteIndexOperationsIntegrationTest {
         );
     }
 
-    private static ProviderRuntimeManager runtime(Path temp, IndexerDescriptor descriptor) {
+    private static ProviderRuntimeManager runtime(Path temp, IndexerDescriptor descriptor) throws Exception {
         ProviderRuntimeStatus ready = new ProviderRuntimeStatus(
                 descriptor.id(), descriptor.version(), ProviderRuntimeStatus.State.READY,
                 Optional.of(temp.resolve("fixture-provider")), List.of(), true);
-        IndexerExecutor executor = new IndexerExecutor() {
-            @Override public String indexerId() { return descriptor.id(); }
-
-            @Override
-            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
-                Path artifact = temp.resolve("fixture-" + request.runId() + ".scip");
-                writeIndex(artifact);
-                return new IndexingArtifact(Language.JAVA, descriptor.id(), artifact);
-            }
-        };
+        Path fixtureArtifact = temp.resolve("fixture-provider-output.scip");
+        writeIndex(fixtureArtifact);
+        Path windowsCopyScript = temp.resolve("fixture-provider-copy.ps1");
+        Files.writeString(windowsCopyScript, """
+                param([string] $Source, [string] $Target)
+                $ErrorActionPreference = 'Stop'
+                [System.IO.File]::Copy($Source, $Target, $true)
+                """, java.nio.charset.StandardCharsets.US_ASCII);
+        IndexerExecutor executor = new ProcessIndexerExecutor(
+                descriptor.id(),
+                temp.resolve("provider-runtime-home"),
+                (request, runDirectory) -> {
+                    Path artifact = runDirectory.resolve("fixture-" + request.runId() + ".scip");
+                    return new IndexerProcessPlan(
+                            copyCommand(fixtureArtifact, artifact, windowsCopyScript),
+                            request.projectRoot(),
+                            Map.of(),
+                            artifact,
+                            Duration.ofSeconds(20));
+                });
         return new ProviderRuntimeManager() {
             @Override public List<ProviderRuntimeStatus> list() { return List.of(ready); }
             @Override public ProviderRuntimeStatus inspect(String providerId) { return ready; }
             @Override public ProviderRuntimeStatus install(String providerId) { return ready; }
             @Override public IndexerExecutor executor(String providerId) { return executor; }
         };
+    }
+
+    private static List<String> copyCommand(Path source, Path target, Path windowsScript) {
+        if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+            String systemRoot = System.getenv("SystemRoot");
+            Path powershell = Path.of(
+                    systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+                    .toAbsolutePath().normalize();
+            return List.of(
+                    powershell.toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                    "-ExecutionPolicy", "Bypass", "-File", windowsScript.toString(),
+                    source.toString(), target.toString());
+        }
+        return List.of("/bin/cp", source.toString(), target.toString());
     }
 
     private static void writeIndex(Path file) throws Exception {

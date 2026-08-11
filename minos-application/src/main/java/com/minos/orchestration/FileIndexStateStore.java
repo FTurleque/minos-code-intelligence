@@ -1,10 +1,10 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.io.BoundedProperties;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -28,6 +28,11 @@ import java.util.UUID;
  * transformées en succès.</p>
  */
 public final class FileIndexStateStore implements IndexStateStore {
+
+    private static final long MAX_PROPERTIES_BYTES = 4L * 1024L * 1024L;
+    private static final int MAX_PROPERTIES_ENTRIES = 40_032;
+    private static final int MAX_PROPERTY_KEY_CHARS = 128;
+    private static final int MAX_PROPERTY_VALUE_CHARS = 32_768;
 
     private final Path projectRoot;
     private final Path runRoot;
@@ -158,10 +163,14 @@ public final class FileIndexStateStore implements IndexStateStore {
     }
 
     private static Properties load(Path file) {
-        Properties properties = new Properties();
-        try (InputStream input = Files.newInputStream(file)) {
-            properties.load(input);
-            return properties;
+        try {
+            return BoundedProperties.load(
+                    file,
+                    MAX_PROPERTIES_BYTES,
+                    MAX_PROPERTIES_ENTRIES,
+                    MAX_PROPERTY_KEY_CHARS,
+                    MAX_PROPERTY_VALUE_CHARS,
+                    "MINOS index state metadata");
         } catch (IOException exception) {
             throw new UncheckedIOException("cannot read MINOS index state: " + file, exception);
         }

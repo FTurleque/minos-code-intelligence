@@ -73,6 +73,53 @@ class PostgresConnectionFactoryTest {
     }
 
     @Test
+    void externalJdbcUrlUsesAStrictAllowlistForDriverParameters(@TempDir Path home) {
+        String prefix = "jdbc:postgresql://db.example.com:5432/minos?sslmode=verify-full&";
+        for (String parameter : new String[]{
+                "user=attacker", "password=secret", "currentSchema=public", "options=-c%20search_path%3Dpublic",
+                "connectTimeout=0", "socketTimeout=0", "ApplicationName=spoofed",
+                "sslfactory=example.CustomFactory", "sslfactoryarg=value",
+                "sslhostnameverifier=example.CustomVerifier"
+        }) {
+            assertThrows(IOException.class,
+                    () -> factory(home, prefix + parameter, "minos", "secret", "minos"),
+                    parameter);
+        }
+    }
+
+    @Test
+    void rejectsDuplicateCaseVariantsAndInvalidQueryEncoding(@TempDir Path home) {
+        assertThrows(IOException.class, () -> factory(
+                home,
+                "jdbc:postgresql://db.example.com:5432/minos?sslmode=verify-full&SSLMODE=verify-full",
+                "minos", "secret", "minos"));
+        assertThrows(IOException.class, () -> factory(
+                home,
+                "jdbc:postgresql://db.example.com:5432/minos?sslmode=verify-full%ZZ",
+                "minos", "secret", "minos"));
+        assertThrows(IOException.class, () -> factory(
+                home,
+                "jdbc:postgresql://db.example.com:5432/minos?sslmode=verify-full&&",
+                "minos", "secret", "minos"));
+        assertThrows(IOException.class, () -> factory(
+                home,
+                "jdbc:postgresql://db.example.com:5432/minos?sslmode=%20verify-full%20",
+                "minos", "secret", "minos"));
+    }
+
+    @Test
+    void loopbackRemainsSupportedButCannotOverrideOwnedJdbcProperties(@TempDir Path home) {
+        assertDoesNotThrow(() -> factory(
+                home,
+                "jdbc:postgresql://127.0.0.1:5432/minos?sslmode=disable",
+                "minos", "secret", "minos").close());
+        assertThrows(IOException.class, () -> factory(
+                home,
+                "jdbc:postgresql://localhost:5432/minos?currentSchema=public",
+                "minos", "secret", "minos"));
+    }
+
+    @Test
     void managedPostgresAllowsOnlyDockerServiceOrLoopback(@TempDir Path home) {
         StorageBackendConfiguration managed = new StorageBackendConfiguration(
                 "postgresql", home, "jdbc:postgresql://minos-postgres:5432/minos",

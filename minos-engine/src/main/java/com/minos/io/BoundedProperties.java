@@ -1,8 +1,10 @@
 package com.minos.io;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,9 +32,59 @@ public final class BoundedProperties {
         Properties properties = new Properties();
         try (BoundedInputStream input = new BoundedInputStream(
                      Files.newInputStream(file), maximumBytes, boundary);
-             Reader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
-            properties.load(reader);
+             Reader reader = strictUtf8Reader(input)) {
+            loadInto(properties, reader, boundary);
         }
+        validate(properties, maximumEntries, maximumKeyChars, maximumValueChars, boundary);
+        return properties;
+    }
+
+    /** Bounded variant for an already byte-capped UTF-8 envelope such as a ZIP manifest. */
+    public static Properties loadUtf8(
+            byte[] bytes,
+            long maximumBytes,
+            int maximumEntries,
+            int maximumKeyChars,
+            int maximumValueChars,
+            String boundary
+    ) throws IOException {
+        Objects.requireNonNull(bytes, "bytes");
+        if (maximumBytes < 1L || bytes.length > maximumBytes) {
+            throw new IOException(label(boundary) + " exceeds byte limit: "
+                    + bytes.length + "/" + maximumBytes);
+        }
+        if (maximumEntries < 1 || maximumKeyChars < 1 || maximumValueChars < 1) {
+            throw new IllegalArgumentException("properties limits must be positive");
+        }
+        Properties properties = new Properties();
+        try (Reader reader = strictUtf8Reader(new ByteArrayInputStream(bytes))) {
+            loadInto(properties, reader, boundary);
+        }
+        validate(properties, maximumEntries, maximumKeyChars, maximumValueChars, boundary);
+        return properties;
+    }
+
+    private static void loadInto(Properties properties, Reader reader, String boundary) throws IOException {
+        try {
+            properties.load(reader);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException(label(boundary) + " is malformed", exception);
+        }
+    }
+
+    private static Reader strictUtf8Reader(java.io.InputStream input) {
+        return new InputStreamReader(input, StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT));
+    }
+
+    private static void validate(
+            Properties properties,
+            int maximumEntries,
+            int maximumKeyChars,
+            int maximumValueChars,
+            String boundary
+    ) throws IOException {
         if (properties.size() > maximumEntries) {
             throw new IOException(label(boundary) + " exceeds property count limit: "
                     + properties.size() + "/" + maximumEntries);
@@ -46,7 +98,6 @@ public final class BoundedProperties {
                 throw new IOException(label(boundary) + " property value exceeds character limit for " + key);
             }
         }
-        return properties;
     }
 
     public static String readUtf8(Path file, long maximumBytes, String boundary) throws IOException {

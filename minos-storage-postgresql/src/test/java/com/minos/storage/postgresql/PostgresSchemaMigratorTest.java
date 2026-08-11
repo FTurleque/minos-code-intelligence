@@ -41,6 +41,31 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
     }
 
     @Test
+    void createsFingerprintRetentionTimestampAndOrderingIndex() throws Exception {
+        connections.withConnection(c -> {
+            try (Statement s = c.createStatement();
+                 ResultSet column = s.executeQuery("""
+                         SELECT count(*) FROM information_schema.columns
+                         WHERE table_schema='public' AND table_name='fingerprint_snapshots'
+                           AND column_name='created_at'
+                         """)) {
+                assertTrue(column.next());
+                assertTrue(column.getInt(1) == 1, "fingerprint created_at column is missing");
+            }
+            try (Statement s = c.createStatement();
+                 ResultSet index = s.executeQuery("""
+                         SELECT count(*) FROM pg_indexes
+                         WHERE schemaname='public' AND tablename='fingerprint_snapshots'
+                           AND indexname='fingerprint_snapshots_project_created_idx'
+                         """)) {
+                assertTrue(index.next());
+                assertTrue(index.getInt(1) == 1, "fingerprint retention index is missing");
+            }
+            return null;
+        });
+    }
+
+    @Test
     void rejectsSchemaVersionNewerThanRuntime() throws Exception {
         connections.withConnection(c -> {
             try (Statement s = c.createStatement()) {

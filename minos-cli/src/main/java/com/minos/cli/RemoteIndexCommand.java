@@ -36,12 +36,13 @@ public final class RemoteIndexCommand {
 
             Index options:
               --provider <id>                Override provider negotiation
-              --worker <id>                  Worker identity (default: local-native)
+              --worker <id>                  Worker identity (default: local-qualified)
               --worker-network <allow|deny>  Required explicit provider network policy
 
             Security contract:
               github.com/gitlab.com HTTPS only; full commit pin required; no URL credentials.
-              Native workers reject deny because they cannot prove OS-level network isolation.
+              Remote providers run only inside a qualified OS sandbox; native fallback is rejected.
+              allow/deny controls network inside that qualified sandbox and never weakens host isolation.
             """.stripTrailing();
 
     private final RemoteIndexOperations operations;
@@ -248,7 +249,7 @@ public final class RemoteIndexCommand {
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             String displayName = null;
             String provider = null;
-            String workerId = "local-native";
+            String workerId = "local-qualified";
             WorkerNetworkPolicy workerNetwork = null;
             Set<String> seen = new HashSet<>();
             Set<String> supported = new HashSet<>(COMMON_OPTIONS);

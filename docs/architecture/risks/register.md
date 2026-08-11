@@ -11,7 +11,7 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 | Réf | Titre | P | I | Exposition | Propriétaire | Statut | Mitigation durable |
 |-----|-------|---|---|-----------|-------------|--------|--------------------|
 | R-04 | ANN non encore décidé | Faible | Moyen | Faible | Équipe MINOS | Watchlist | Aucun claim ANN ; évolution uniquement après mesure d'un besoin réel. |
-| R-09 | Disponibilité des primitives sandbox selon l'OS / LSM | Faible | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`/user namespaces avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object. En absence de primitive qualifiée, `DENY` échoue de façon fail-closed. |
+| R-09 | Disponibilité des primitives sandbox selon l'OS / LSM | Faible | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`/user namespaces avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object. En absence de primitive qualifiée, toute exécution distante (`ALLOW` ou `DENY`) échoue de façon fail-closed. |
 | R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Équipe MINOS | Mitigé / surveillé | GitHub Actions épinglées par SHA, images OCI par digest, providers binaires par checksum attendu, gate `check-workflow-pins.py`. |
 
 ---

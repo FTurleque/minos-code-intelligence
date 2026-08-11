@@ -122,6 +122,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         }
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
             String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
+            application.retentionService().compact(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
                     prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
         }
@@ -148,8 +149,15 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            throw new IllegalStateException("indexing run " + run.id() + " failed: "
-                    + run.message().orElse("provider/staging/promotion failure"));
+            IllegalStateException failure = new IllegalStateException(
+                    "indexing run " + run.id() + " failed: "
+                            + run.message().orElse("provider/staging/promotion failure"));
+            try {
+                application.retentionService().compact(prepared.project().id());
+            } catch (IOException retentionFailure) {
+                failure.addSuppressed(retentionFailure);
+            }
+            throw failure;
         }
         ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
         boolean stable = prepared.fingerprintBefore().equals(after);
@@ -157,13 +165,23 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         String diagnostic = null;
         if (stable) {
             String activeSnapshotId = run.activeSnapshotAfter().orElseThrow();
-            fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
-            fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
+            try {
+                fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
+                fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
+            } catch (IOException fingerprintFailure) {
+                try {
+                    application.retentionService().compact(prepared.project().id());
+                } catch (IOException retentionFailure) {
+                    fingerprintFailure.addSuppressed(retentionFailure);
+                }
+                throw fingerprintFailure;
+            }
             fingerprintPromoted = true;
         } else {
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
+        application.retentionService().compact(prepared.project().id());
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
     }

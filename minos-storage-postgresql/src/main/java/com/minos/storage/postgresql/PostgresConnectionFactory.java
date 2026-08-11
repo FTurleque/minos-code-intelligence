@@ -12,6 +12,8 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -29,8 +31,9 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private static final int DEFAULT_SOCKET_TIMEOUT_SECONDS = 120;
     private static final int VALIDATION_TIMEOUT_SECONDS = 5;
     private static final String MANAGED_DOCKER_HOST = "minos-postgres";
-    private static final Set<String> SENSITIVE_URL_PARAMETERS = Set.of(
-            "password", "sslpassword", "token", "access_token", "oauth_token", "secret");
+    private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of("sslmode");
+    private static final Set<String> ALLOWED_SSL_MODES = Set.of(
+            "disable", "allow", "prefer", "require", "verify-ca", "verify-full");
 
     private final String url;
     private final String user;
@@ -251,15 +254,26 @@ final class PostgresConnectionFactory implements AutoCloseable {
         if (uri.getUserInfo() != null) {
             throw new IOException("MINOS_POSTGRES_URL must not contain user-info credentials");
         }
+        if (uri.getRawFragment() != null) {
+            throw new IOException("MINOS_POSTGRES_URL must not contain a fragment");
+        }
         String host = uri.getHost();
         if (host == null || host.isBlank()) {
             throw new IOException("MINOS_POSTGRES_URL must contain a host");
         }
-        Properties query = queryParameters(uri.getRawQuery());
-        for (String key : query.stringPropertyNames()) {
-            if (SENSITIVE_URL_PARAMETERS.contains(key.toLowerCase(Locale.ROOT))) {
-                throw new IOException("MINOS_POSTGRES_URL must not contain sensitive parameter: " + key);
+        String database = uri.getRawPath();
+        if (database == null || database.isBlank() || "/".equals(database)) {
+            throw new IOException("MINOS_POSTGRES_URL must contain a database name");
+        }
+        Map<String, String> query = queryParameters(uri.getRawQuery());
+        for (String key : query.keySet()) {
+            if (!ALLOWED_URL_PARAMETERS.contains(key)) {
+                throw new IOException("MINOS_POSTGRES_URL contains unsupported parameter: " + key);
             }
+        }
+        String sslMode = query.get("sslmode");
+        if (sslMode != null && !ALLOWED_SSL_MODES.contains(sslMode.toLowerCase(Locale.ROOT))) {
+            throw new IOException("MINOS_POSTGRES_URL contains an unsupported sslmode");
         }
 
         if (managed) {
@@ -270,24 +284,31 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
         if (loopbackHost(host)) return;
 
-        String sslMode = query.getProperty("sslmode");
-        if (sslMode == null || !"verify-full".equalsIgnoreCase(sslMode.trim())) {
+        if (sslMode == null || !"verify-full".equalsIgnoreCase(sslMode)) {
             throw new IOException("external PostgreSQL requires sslmode=verify-full");
         }
     }
 
-    private static Properties queryParameters(String rawQuery) throws IOException {
-        Properties values = new Properties();
+    private static Map<String, String> queryParameters(String rawQuery) throws IOException {
+        Map<String, String> values = new LinkedHashMap<>();
         if (rawQuery == null || rawQuery.isBlank()) return values;
         for (String pair : rawQuery.split("&", -1)) {
-            if (pair.isEmpty()) continue;
+            if (pair.isEmpty()) {
+                throw new IOException("MINOS_POSTGRES_URL contains an empty query parameter name");
+            }
             int separator = pair.indexOf('=');
             String rawKey = separator < 0 ? pair : pair.substring(0, separator);
             String rawValue = separator < 0 ? "" : pair.substring(separator + 1);
             try {
-                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
+                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8)
+                        .toLowerCase(Locale.ROOT);
                 String decoded = URLDecoder.decode(rawValue, StandardCharsets.UTF_8);
-                values.setProperty(key, decoded);
+                if (key.isEmpty()) {
+                    throw new IOException("MINOS_POSTGRES_URL contains an empty query parameter name");
+                }
+                if (values.putIfAbsent(key, decoded) != null) {
+                    throw new IOException("MINOS_POSTGRES_URL contains duplicate parameter: " + key);
+                }
             } catch (IllegalArgumentException exception) {
                 throw new IOException("MINOS_POSTGRES_URL contains invalid query encoding", exception);
             }

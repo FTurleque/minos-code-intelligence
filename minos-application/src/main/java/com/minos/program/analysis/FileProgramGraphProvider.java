@@ -8,6 +8,7 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolLocation;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
+import com.minos.io.BoundedProperties;
 import com.minos.io.FixedTsv;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
@@ -20,7 +21,6 @@ import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -125,12 +125,9 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
     }
 
     private static Metadata readMetadata(Path file) throws IOException {
-        Properties properties = new Properties();
-        try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file), MAX_FILE_BYTES, "advanced program metadata");
-             Reader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        Properties properties = BoundedProperties.load(
+                file, 64L * 1024L, 32, 128, 16_384,
+                "advanced program metadata");
         int version = integer(required(properties, "formatVersion"), "formatVersion");
         if (version != FORMAT_VERSION) throw new IOException("unsupported advanced program sidecar formatVersion: " + version);
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>();

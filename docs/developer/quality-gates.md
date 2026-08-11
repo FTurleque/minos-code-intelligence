@@ -99,8 +99,8 @@ Une ligne couverte ne prouve pas un contrat fonctionnel. JaCoCo reste complémen
 Le backend worker n'annonce `OS_ENFORCED` que si la primitive actuelle peut réellement être exercée.
 
 - Linux : `bubblewrap` + namespaces OS, racine hôte en lecture seule, capacités supprimées, limites `prlimit`, network namespace isolé pour `DENY` et sonde de capacité au runtime ;
-- Windows : AppContainer sans capabilities réseau, validation `TokenIsAppContainer`, ACL temporaires sur les racines gérées par MINOS et Job Object pour mémoire/processus/CPU/kill-on-close ;
-- absence de primitive qualifiée : fallback process-only et `DENY` rejeté avant exécution provider.
+- Windows : AppContainer avec ensemble de capabilities vide pour `DENY` ou seule capability `internetClient` pour `ALLOW`, validation `TokenIsAppContainer`, ACL temporaires sur les racines gérées par MINOS et Job Object pour mémoire/processus/CPU/kill-on-close ;
+- absence de primitive qualifiée : backend process-only conservé pour le diagnostic, mais `ALLOW` et `DENY` sont rejetés avant toute exécution remote du provider.
 
 La campagne #135 ajoute une preuve exact-head Linux/Windows qui interdit explicitement les skips et exécute également le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
 

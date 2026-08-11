@@ -1,10 +1,10 @@
-# Indexer une révision distante — M25
+# Indexer une révision distante
 
-M25 permet de matérialiser puis d’indexer une révision Git distante immuable. Cette surface est opt-in et limitée aux endpoints HTTPS officiels GitHub.com et GitLab.com.
+MINOS peut matérialiser puis indexer une révision Git distante immuable. Cette surface est opt-in et limitée aux endpoints HTTPS officiels GitHub.com et GitLab.com.
 
 ## Préparer la révision exacte
 
-Récupérer le SHA complet de 40 caractères de la branche ou du tag à indexer. Une branche seule n’est jamais suffisante.
+Récupérez le SHA complet de 40 caractères de la branche ou du tag. Une branche seule n’est jamais suffisante.
 
 ```powershell
 minos.cmd remote materialize https://github.com/acme/project `
@@ -13,21 +13,11 @@ minos.cmd remote materialize https://github.com/acme/project `
   --format json
 ```
 
-Pour un monorepo :
-
-```powershell
-minos.cmd remote materialize https://gitlab.com/acme/platform `
-  --ref release/2026.07 `
-  --commit 0123456789abcdef0123456789abcdef01234567 `
-  --subdir services/catalog `
-  --format json
-```
-
-Le JSON confirme host, URI canonique, ref, commit, racines confinées, clé/cache-hit et date de matérialisation.
+Pour un monorepo, ajoutez par exemple `--subdir services/catalog`. Le résultat confirme l’URI canonique, la révision, les racines confinées et l’état du cache.
 
 ## Dépôt privé
 
-Ne jamais placer le token dans l’URL ou dans une commande. Définir une variable d’environnement puis passer seulement son nom :
+Ne placez jamais le token dans l’URL ou la commande. Passez seulement le nom d’une variable d’environnement :
 
 ```powershell
 $env:MINOS_REMOTE_TOKEN='<token>'
@@ -38,9 +28,9 @@ minos.cmd remote materialize https://github.com/acme/private-project `
   --format json
 ```
 
-MINOS ne persiste ni le token ni le nom de sa variable dans le cache ou l’évidence. Les permissions du token restent sous responsabilité opérateur et doivent être read-only.
+MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-only.
 
-## Indexer via le worker natif
+## Indexer dans la sandbox locale qualifiée
 
 ```powershell
 minos.cmd remote index https://github.com/acme/project `
@@ -48,25 +38,33 @@ minos.cmd remote index https://github.com/acme/project `
   --commit 0123456789abcdef0123456789abcdef01234567 `
   --name acme-project-at-commit `
   --provider scip-java `
-  --worker local-native `
+  --worker local-qualified `
   --worker-network allow `
   --format json
 ```
 
-`--worker-network` est obligatoire. Le worker natif accepte `allow` explicitement. Il refuse `deny`, car une copie de workspace et un process séparé ne prouvent pas un blocage réseau au niveau OS. Il faut un backend durci futur pour une politique `deny` réellement enforced.
+`--worker-network` est obligatoire :
 
-Le transport utilise le format strict `minos-distributed-artifact-v1`. Le résultat JSON expose le snapshot actif et une évidence par provider : version, langage, worker, isolation, politique réseau, SHA-256 de `index.scip`, SHA-256 du bundle et état du cache vérifié.
+- `ALLOW` (`allow` en CLI) laisse le provider accéder au réseau à l’intérieur de la sandbox qualifiée ;
+- `DENY` (`deny` en CLI) bloque le réseau au niveau OS à l’intérieur de cette même sandbox.
+
+La sandbox OS qualifiée utilise bubblewrap/namespaces/`prlimit` sous Linux et AppContainer + Job Object sous Windows. Si ce mécanisme n’est pas disponible, l’indexation échoue avant l’exécution. Le backend process-only natif n’est accepté ni avec `allow`, ni avec `deny`; il n’existe pas d’option unsafe de contournement.
+
+Le transport utilise `minos-distributed-artifact-v1`. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau et les SHA-256 vérifiés.
+
+Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny`, car ces primitives seules ne prouvent pas un blocage réseau au niveau OS, et le worker distant le refuse aussi avec `allow`, car elles ne prouvent pas le confinement de code non fiable.
 
 ## Sécurité et limites
 
 - HTTPS `github.com` / `gitlab.com` uniquement ;
-- pas de GitHub/GitLab Enterprise, SSH, submodules ou ref non épinglée dans M25 ;
+- pas de GitHub/GitLab Enterprise, SSH, submodules ou ref non épinglée ;
 - checkout exact et propre obligatoire ;
 - cache source et cache artefact locaux, reconstructibles et bornés ;
-- symlinks rejetés dans la workspace worker ;
-- manifest et checksum validés avant import ;
+- `.gitignore`, `.minosignore`, hard ignores et budgets appliqués à la workspace du provider ;
+- symlinks rejetés ;
+- manifest, checksum et provenance validés avant import ;
 - promotion atomique locale inchangée ;
 - aucune capability CFG/def-use/data-flow/security déduite du seul transport SCIP ;
-- aucun scheduler, worker partagé ou hosted mode n’est fourni par M25.
+- aucun scheduler, worker partagé ou hosted mode fourni par cette commande.
 
-La validation est fail-closed : une erreur de commit, checksum, provenance, politique réseau ou confinement provoque un échec ; MINOS ne promeut pas de snapshot partiel.
+Toute erreur de commit, qualification sandbox, politique réseau, budget, checksum, provenance ou confinement est fail-closed et aucun snapshot partiel n’est promu.

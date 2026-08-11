@@ -50,7 +50,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
         assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
-        Path childPowerShell = CommandLocator.find("powershell")
+        Path childPowerShell = CommandLocator.windowsPowerShell()
                 .orElseThrow(() -> new AssertionError("PowerShell child executable is unavailable"));
         Path working = Files.createTempDirectory("minos-appcontainer-working-");
         Path run = Files.createTempDirectory("minos-appcontainer-run-");
@@ -101,6 +101,8 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 Duration.ofSeconds(30));
 
         IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run);
+        String planText = Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8);
+        assertTrue(planText.contains("networkPolicy=DENY"));
         Process process = new ProcessBuilder(sandboxed.command())
                 .directory(working.toFile())
                 .redirectErrorStream(true)
@@ -119,6 +121,33 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    void allowPolicyKeepsAppContainerAndGrantsOnlyInternetClientCapability() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-allow-home-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+        Path working = Files.createTempDirectory("minos-appcontainer-allow-working-");
+        Path run = Files.createTempDirectory("minos-appcontainer-allow-run-");
+        Path artifact = run.resolve("index.scip");
+        IndexerProcessPlan original = new IndexerProcessPlan(
+                List.of(childPowerShell.toString(), "-NoLogo"),
+                working,
+                Map.of(),
+                artifact,
+                Duration.ofSeconds(30));
+
+        IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run, WorkerNetworkPolicy.ALLOW);
+
+        assertTrue(sandboxed.command().contains("-File"));
+        assertTrue(Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)
+                .contains("networkPolicy=ALLOW"));
+        assertTrue(Files.readString(home.resolve("sandbox/windows-appcontainer-sandbox-v3.ps1"), StandardCharsets.UTF_8)
+                .contains("S-1-15-3-1"));
+    }
+
+    @Test
     void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-windows-process-home-");
@@ -126,7 +155,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assumeTrue(discovered.isPresent(), "qualified Windows sandbox backend is required for process-path qualification");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path project = Files.createTempDirectory("minos-windows-process-project-");
-        Path childPowerShell = CommandLocator.find("powershell")
+        Path childPowerShell = CommandLocator.windowsPowerShell()
                 .orElseThrow(() -> new AssertionError("PowerShell child executable is unavailable"));
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
@@ -159,7 +188,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                             Duration.ofSeconds(20));
                 });
 
-        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.DENY);
+        IndexingArtifact artifact = backend.execute(executor, request, WorkerNetworkPolicy.ALLOW);
 
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));

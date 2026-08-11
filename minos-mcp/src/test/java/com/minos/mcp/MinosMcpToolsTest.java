@@ -244,6 +244,26 @@ class MinosMcpToolsTest {
         assertEquals("error: invalid input", ((TextContent) result.content().getFirst()).text());
     }
 
+    @Test
+    void enforcesGlobalResultBudgetInUtf8BytesWithoutReturningPartialJson() {
+        RecordingBackend backend = new RecordingBackend();
+        MinosMcpTools tools = new MinosMcpTools(backend, 8);
+
+        backend.statusResult = "12345678";
+        var justUnder = call(tools.specifications(), "minos_index_status", Map.of("project", "demo"));
+        assertSuccess(justUnder);
+        assertEquals("12345678", ((TextContent) justUnder.content().getFirst()).text());
+
+        backend.statusResult = "ééééé"; // five characters, ten UTF-8 bytes
+        var exceeded = call(tools.specifications(), "minos_index_status", Map.of("project", "demo"));
+
+        assertTrue(Boolean.TRUE.equals(exceeded.isError()));
+        assertEquals(
+                "error: MCP_RESULT_BUDGET_EXCEEDED; reduce limits or paginate the request",
+                ((TextContent) exceeded.content().getFirst()).text());
+        assertFalse(((TextContent) exceeded.content().getFirst()).text().contains("é"));
+    }
+
     private static io.modelcontextprotocol.spec.McpSchema.CallToolResult call(
             List<SyncToolSpecification> specs, String name, Map<String, Object> arguments) {
         return spec(specs, name).callHandler().apply(null,
@@ -285,9 +305,10 @@ class MinosMcpToolsTest {
         private String teamWorkspaceId;
         private int teamAuditLimit;
         private RuntimeException statusFailure;
+        private String statusResult = "{}";
 
         @Override public String projectStructure(String project) { return "{}"; }
-        @Override public String indexStatus(String project) { if (statusFailure != null) throw statusFailure; return "{}"; }
+        @Override public String indexStatus(String project) { if (statusFailure != null) throw statusFailure; return statusResult; }
         @Override public String searchCode(SearchRequest request) { searchRequest = request; return "{}"; }
         @Override public String findSymbols(SymbolSearchRequest request) { symbolSearchRequest = request; return "{\"count\":0,\"symbols\":[]}"; }
         @Override public String findUsages(RelationRequest request) { usageRequest = request; return "{}"; }
