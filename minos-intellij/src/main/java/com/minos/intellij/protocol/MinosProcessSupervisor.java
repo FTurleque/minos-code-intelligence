@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Mark as stopping — reject further poll/drain calls.
  *   <li>Graceful signal: {@link Process#destroy()} (SIGTERM / WM_CLOSE).
  *   <li>Bounded wait (1 s) for the process to exit on its own.
- *   <li>Kill all descendants leaf-first (3 bounded sweeps, 100 ms apart), then force the root.
+ *   <li>Kill pre-signal snapshot descendants leaf-first (snapshot taken before step 2 so root
+ *       death does not empty the list), then 3 bounded fresh sweeps (100 ms apart), then the root.
  *   <li>Bounded wait (5 s), log any survivors as suppressed info — never throw here.
  *   <li>Force-close stdout/stderr pipes to unblock reader threads.
  *   <li>Join reader threads (5 s each).
@@ -68,6 +69,11 @@ final class MinosProcessSupervisor implements AutoCloseable {
         stopping.set(true);
         List<Throwable> suppressed = new ArrayList<>();
 
+        // Snapshot descendants before the graceful signal. Once the root exits from SIGTERM,
+        // process.descendants() returns empty and orphaned grandchildren escape the kill sweep
+        // without this pre-signal snapshot.
+        List<ProcessHandle> snapshot = process.descendants().toList();
+
         // Step 2 — graceful
         process.destroy();
 
@@ -79,8 +85,8 @@ final class MinosProcessSupervisor implements AutoCloseable {
             suppressed.add(interrupted);
         }
 
-        // Step 4 — descendants first, then root
-        terminateDescendants(suppressed);
+        // Step 4 — descendants first (snapshot + fresh sweeps), then root
+        terminateDescendants(snapshot, suppressed);
         if (process.isAlive()) process.destroyForcibly();
         try {
             process.waitFor(FORCED_WAIT_MILLIS, TimeUnit.MILLISECONDS);
@@ -177,10 +183,17 @@ final class MinosProcessSupervisor implements AutoCloseable {
     // Private helpers
     // -----------------------------------------------------------------------------------------
 
-    private void terminateDescendants(List<Throwable> suppressed) {
+    private void terminateDescendants(List<ProcessHandle> snapshot, List<Throwable> suppressed) {
+        // Kill the pre-signal snapshot leaf-first: these handles survive root's death and reach
+        // grandchildren that process.descendants() can no longer find after root exits.
+        List<ProcessHandle> snapshotList = new ArrayList<>(snapshot);
+        snapshotList.reversed().forEach(handle -> {
+            if (handle.isAlive()) handle.destroyForcibly();
+        });
+        // Additional sweeps to catch processes spawned after the snapshot was taken
         for (int sweep = 0; sweep < DESCENDANT_SWEEP_COUNT; sweep++) {
-            List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
-            descendants.reversed().forEach(handle -> {
+            List<ProcessHandle> fresh = new ArrayList<>(process.descendants().toList());
+            fresh.reversed().forEach(handle -> {
                 if (handle.isAlive()) handle.destroyForcibly();
             });
             if (sweep < DESCENDANT_SWEEP_COUNT - 1 && process.isAlive()) {

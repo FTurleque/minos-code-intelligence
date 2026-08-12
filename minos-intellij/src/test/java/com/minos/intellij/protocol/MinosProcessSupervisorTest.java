@@ -150,18 +150,17 @@ class MinosProcessSupervisorTest {
         Process root = startTreeFixture(marker);
         awaitFile(marker, 10);
 
-        ProcessHandle rootHandle = root.toHandle();
         List<ProcessHandle> descendantHandles = root.descendants().toList();
         assertFalse(descendantHandles.isEmpty(), "fixture must have at least one descendant");
+        List<ProcessHandle> allHandles = new ArrayList<>();
+        allHandles.add(root.toHandle());
+        allHandles.addAll(descendantHandles);
 
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
             supervisor.stop(null);
         }
 
-        assertFalse(rootHandle.isAlive(), "root pid=" + rootHandle.pid() + " must be dead");
-        for (ProcessHandle handle : descendantHandles) {
-            assertFalse(handle.isAlive(), "descendant pid=" + handle.pid() + " must be dead");
-        }
+        assertAllDead(allHandles);
     }
 
     // 9 — Descendant holding stdout open must not block drain indefinitely
@@ -317,7 +316,13 @@ class MinosProcessSupervisorTest {
         return List.copyOf(handles);
     }
 
-    private static void assertAllDead(List<ProcessHandle> handles) {
+    private static void assertAllDead(List<ProcessHandle> handles) throws InterruptedException {
+        // Poll briefly to allow the kernel to reap SIGKILL'd descendants as zombies. In practice
+        // this loop exits on the first iteration — the sleep is a safety valve for slow CI reaping.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (handles.stream().anyMatch(ProcessHandle::isAlive) && System.nanoTime() < deadline) {
+            Thread.sleep(100); // NOSONAR: polling loop — no shared state to synchronize
+        }
         for (ProcessHandle handle : handles) {
             assertFalse(handle.isAlive(), "PID " + handle.pid() + " should be dead after stop");
         }
