@@ -203,15 +203,14 @@ class MinosProcessSupervisorTest {
         long pidB = pB.pid();
         assertTrue(pB.isAlive(), "B must be running before the test");
 
-        MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA);
-        MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB);
-        try {
-            ProcessCanceledException pce = new ProcessCanceledException();
-            assertThrows(ProcessCanceledException.class, () -> supervisorA.stop(pce));
-
+        // Nested try-with-resources: supervisorB closes B after we verify A's cancel didn't
+        // affect it; supervisorA is closed (no-op — stop already ran) after the assertThrows.
+        try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB)) {
+            try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA)) {
+                ProcessCanceledException pce = new ProcessCanceledException();
+                assertThrows(ProcessCanceledException.class, () -> supervisorA.stop(pce));
+            }
             assertTrue(isAlive(pidB), "process B must still be alive after cancelling A");
-        } finally {
-            supervisorB.stop(null);
         }
     }
 

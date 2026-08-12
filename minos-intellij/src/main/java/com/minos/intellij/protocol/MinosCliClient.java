@@ -151,20 +151,24 @@ public final class MinosCliClient {
         try {
             try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(builder.start())) {
                 boolean completed = false;
-                boolean timedOut = false;
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
                 try {
                     while (!(completed = supervisor.waitFor(PROCESS_POLL_MILLIS))) {
                         ProgressManager.checkCanceled();
-                        if (System.nanoTime() >= deadline) { timedOut = true; break; }
+                        if (System.nanoTime() >= deadline) break;
                     }
                 } catch (ProcessCanceledException canceled) {
                     supervisor.stop(canceled);
                 }
-                if (!completed) supervisor.stop(null);
+                if (!completed) {
+                    // Timeout: stop kills the tree and joins reader threads. Throw the
+                    // timeout error here — drainOutput() would surface a misleading
+                    // "stream closed" IOException from the force-close done inside stop().
+                    supervisor.stop(null);
+                    throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
+                }
                 supervisor.drainOutput();
                 if (supervisor.readFailure() != null) throw supervisor.readFailure();
-                if (timedOut) throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
                 return new ProcessResult(supervisor.exitValue(), supervisor.stdout(), supervisor.stderr());
             }
         } catch (ProcessCanceledException canceled) {
