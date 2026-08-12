@@ -171,9 +171,7 @@ public final class MinosCliClient {
                 if (supervisor.readFailure() != null) throw supervisor.readFailure();
                 return new ProcessResult(supervisor.exitValue(), supervisor.stdout(), supervisor.stderr());
             }
-        } catch (ProcessCanceledException canceled) {
-            throw canceled;
-        } catch (MinosProtocolException exception) {
+        } catch (ProcessCanceledException | MinosProtocolException exception) {
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();

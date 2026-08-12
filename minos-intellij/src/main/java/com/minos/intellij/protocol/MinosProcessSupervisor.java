@@ -131,9 +131,9 @@ final class MinosProcessSupervisor implements AutoCloseable {
         closeQuietly(process.getErrorStream(), null);
         List<Throwable> suppressed = new ArrayList<>();
         joinReaders(suppressed);
-        for (Throwable t : suppressed) {
+        if (!suppressed.isEmpty()) {
             IOException ioe = new IOException("MINOS process output drain did not terminate");
-            ioe.addSuppressed(t);
+            suppressed.forEach(ioe::addSuppressed);
             throw ioe;
         }
         for (Thread reader : new Thread[]{outReader, errReader}) {

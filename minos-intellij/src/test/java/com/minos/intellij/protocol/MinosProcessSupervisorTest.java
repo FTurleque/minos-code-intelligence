@@ -57,33 +57,35 @@ class MinosProcessSupervisorTest {
     @Test
     void timeoutKillsEntireTree() throws Exception {
         Path marker = tmp.resolve("ready.txt");
-        Process root = startTreeFixture(marker);
-        awaitFile(marker, 10);
-        List<Long> allPids = collectPids(root);
+        try (Process root = startTreeFixture(marker)) {
+            awaitFile(marker, 10);
+            List<ProcessHandle> handles = collectHandles(root);
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
+
+            assertAllDead(handles);
         }
-
-        assertAllDead(allPids);
     }
 
     // 4 — Cancel kills entire tree: ProcessCanceledException rethrown, all PIDs dead
     @Test
     void cancelKillsEntireTree() throws Exception {
         Path marker = tmp.resolve("ready.txt");
-        Process root = startTreeFixture(marker);
-        awaitFile(marker, 10);
-        List<Long> allPids = collectPids(root);
+        try (Process root = startTreeFixture(marker)) {
+            awaitFile(marker, 10);
+            List<ProcessHandle> handles = collectHandles(root);
 
-        ProcessCanceledException pce = new ProcessCanceledException();
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            ProcessCanceledException thrown = assertThrows(ProcessCanceledException.class,
-                    () -> supervisor.stop(pce));
-            assertSame(pce, thrown, "original PCE instance must be rethrown");
+            ProcessCanceledException pce = new ProcessCanceledException();
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                ProcessCanceledException thrown = assertThrows(ProcessCanceledException.class,
+                        () -> supervisor.stop(pce));
+                assertSame(pce, thrown, "original PCE instance must be rethrown");
+            }
+
+            assertAllDead(handles);
         }
-
-        assertAllDead(allPids);
     }
 
     // 5 — Recalcitrant process ignoring SIGTERM must be force-killed
@@ -94,15 +96,16 @@ class MinosProcessSupervisorTest {
         Files.writeString(script, "#!/bin/sh\ntrap '' TERM\nsleep 300\n");
         makeExecutable(script);
 
-        Process root = new ProcessBuilder(script.toString()).start();
-        List<Long> allPids = collectPids(root);
-        assertTrue(root.isAlive(), "stubborn process must be running");
+        try (Process root = new ProcessBuilder(script.toString()).start()) {
+            List<ProcessHandle> handles = collectHandles(root);
+            assertTrue(root.isAlive(), "stubborn process must be running");
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
+
+            assertAllDead(handles);
         }
-
-        assertAllDead(allPids);
     }
 
     // 6 — .cmd wrapper on Windows: descendants killed through cmd.exe wrapping layer
@@ -115,15 +118,16 @@ class MinosProcessSupervisorTest {
 
         // Route through cmd.exe via MinosCommandLine — mirrors real plugin invocation
         List<String> cmd = MinosCommandLine.build(cmdScript.toString(), List.of(), "Windows 10");
-        Process root = new ProcessBuilder(cmd).start();
-        awaitFile(marker, 15);
-        List<Long> allPids = collectPids(root);
+        try (Process root = new ProcessBuilder(cmd).start()) {
+            awaitFile(marker, 15);
+            List<ProcessHandle> handles = collectHandles(root);
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
+
+            assertAllDead(handles);
         }
-
-        assertAllDead(allPids);
     }
 
     // 7 — Direct executable on Unix: grandchild killed
@@ -132,35 +136,37 @@ class MinosProcessSupervisorTest {
     void directExecutableUnixAllDescendantsKilled() throws Exception {
         Path marker = tmp.resolve("ready.txt");
         Path script = writeUnixTreeFixture(marker);
-        Process root = new ProcessBuilder(script.toString()).start();
-        awaitFile(marker, 10);
-        List<Long> allPids = collectPids(root);
+        try (Process root = new ProcessBuilder(script.toString()).start()) {
+            awaitFile(marker, 10);
+            List<ProcessHandle> handles = collectHandles(root);
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
+
+            assertAllDead(handles);
         }
-
-        assertAllDead(allPids);
     }
 
     // 8 — Explicit PID-level check: every PID in the tree individually confirmed dead
     @Test
     void parentChildGrandchildAllDead() throws Exception {
         Path marker = tmp.resolve("ready.txt");
-        Process root = startTreeFixture(marker);
-        awaitFile(marker, 10);
+        try (Process root = startTreeFixture(marker)) {
+            awaitFile(marker, 10);
 
-        long rootPid = root.pid();
-        List<Long> descendantPids = root.descendants().map(ProcessHandle::pid).toList();
-        assertFalse(descendantPids.isEmpty(), "fixture must have at least one descendant");
+            ProcessHandle rootHandle = root.toHandle();
+            List<ProcessHandle> descendantHandles = root.descendants().toList();
+            assertFalse(descendantHandles.isEmpty(), "fixture must have at least one descendant");
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
-        }
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
 
-        assertFalse(isAlive(rootPid), "root pid=" + rootPid + " must be dead");
-        for (long pid : descendantPids) {
-            assertFalse(isAlive(pid), "descendant pid=" + pid + " must be dead");
+            assertFalse(rootHandle.isAlive(), "root pid=" + rootHandle.pid() + " must be dead");
+            for (ProcessHandle handle : descendantHandles) {
+                assertFalse(handle.isAlive(), "descendant pid=" + handle.pid() + " must be dead");
+            }
         }
     }
 
@@ -178,19 +184,20 @@ class MinosProcessSupervisorTest {
                 """.formatted(marker.toString()));
         makeExecutable(script);
 
-        Process root = new ProcessBuilder(script.toString()).start();
-        awaitFile(marker, 10);
+        try (Process root = new ProcessBuilder(script.toString()).start()) {
+            awaitFile(marker, 10);
 
-        long startNs = System.nanoTime();
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            supervisor.stop(null);
+            long startNs = System.nanoTime();
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+                supervisor.stop(null);
+            }
+            long elapsedSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startNs);
+
+            assertFalse(root.isAlive(), "root must be dead after stop");
+            assertTrue(elapsedSeconds < 15,
+                    "stop() must complete within 15 s even with a pipe-holding descendant, took "
+                            + elapsedSeconds + " s");
         }
-        long elapsedSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startNs);
-
-        assertFalse(root.isAlive(), "root must be dead after stop");
-        assertTrue(elapsedSeconds < 15,
-                "stop() must complete within 15 s even with a pipe-holding descendant, took "
-                        + elapsedSeconds + " s");
     }
 
     // 10 — Cancelling A does not kill B
@@ -198,19 +205,19 @@ class MinosProcessSupervisorTest {
     void twoSimultaneousCommandsCancelADoesNotKillB() throws Exception {
         List<String> longRunning = longRunningCommand();
 
-        Process pA = new ProcessBuilder(longRunning).start();
-        Process pB = new ProcessBuilder(longRunning).start();
-        long pidB = pB.pid();
-        assertTrue(pB.isAlive(), "B must be running before the test");
+        try (Process pA = new ProcessBuilder(longRunning).start();
+             Process pB = new ProcessBuilder(longRunning).start()) {
+            assertTrue(pB.isAlive(), "B must be running before the test");
 
-        // Nested try-with-resources: supervisorB closes B after we verify A's cancel didn't
-        // affect it; supervisorA is closed (no-op — stop already ran) after the assertThrows.
-        try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB)) {
-            try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA)) {
-                ProcessCanceledException pce = new ProcessCanceledException();
-                assertThrows(ProcessCanceledException.class, () -> supervisorA.stop(pce));
+            // Nested try-with-resources: supervisorB closes B after we verify A's cancel didn't
+            // affect it; supervisorA is closed (no-op — stop already ran) after the assertThrows.
+            try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB)) {
+                try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA)) {
+                    ProcessCanceledException pce = new ProcessCanceledException();
+                    assertThrows(ProcessCanceledException.class, () -> supervisorA.stop(pce));
+                }
+                assertTrue(pB.isAlive(), "process B must still be alive after cancelling A");
             }
-            assertTrue(isAlive(pidB), "process B must still be alive after cancelling A");
         }
     }
 
@@ -302,25 +309,26 @@ class MinosProcessSupervisorTest {
         while (!Files.exists(file)) {
             if (System.nanoTime() >= deadline)
                 fail("Timed out waiting for marker file: " + file);
-            Thread.sleep(50);
+            Thread.sleep(50); // NOSONAR: polling loop in test fixture — no shared state to synchronize
         }
     }
 
-    private static List<Long> collectPids(Process root) {
-        List<Long> pids = new ArrayList<>();
-        pids.add(root.pid());
-        root.descendants().map(ProcessHandle::pid).forEach(pids::add);
-        return List.copyOf(pids);
+    /**
+     * Collects the root {@link ProcessHandle} and all current descendants. Uses handle identity
+     * (PID + start time) rather than raw PIDs so that PID reuse on busy CI runners does not
+     * produce false-positive liveness results in {@link #assertAllDead}.
+     */
+    private static List<ProcessHandle> collectHandles(Process root) {
+        List<ProcessHandle> handles = new ArrayList<>();
+        handles.add(root.toHandle());
+        root.descendants().forEach(handles::add);
+        return List.copyOf(handles);
     }
 
-    private static void assertAllDead(List<Long> pids) {
-        for (long pid : pids) {
-            assertFalse(isAlive(pid), "PID " + pid + " should be dead after stop");
+    private static void assertAllDead(List<ProcessHandle> handles) {
+        for (ProcessHandle handle : handles) {
+            assertFalse(handle.isAlive(), "PID " + handle.pid() + " should be dead after stop");
         }
-    }
-
-    private static boolean isAlive(long pid) {
-        return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
     }
 
     private static boolean isWindows() {
