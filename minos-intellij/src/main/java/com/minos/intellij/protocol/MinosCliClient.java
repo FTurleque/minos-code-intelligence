@@ -11,8 +11,6 @@ import com.intellij.openapi.project.Project;
 import com.minos.intellij.settings.MinosSettingsState;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,7 +19,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Service(Service.Level.PROJECT)
 public final class MinosCliClient {
@@ -30,7 +27,6 @@ public final class MinosCliClient {
     public static final String PROTOCOL_VERSION = "1";
 
     private static final long PROCESS_POLL_MILLIS = 200L;
-    private static final int MAX_PROCESS_STREAM_BYTES = 16 * 1024 * 1024;
 
     private final Project project;
     private volatile String verifiedConfiguration;
@@ -153,30 +149,24 @@ public final class MinosCliClient {
         }
         if (!settings.minosHome.isBlank()) builder.environment().put("MINOS_HOME", settings.minosHome);
         try {
-            Process process = builder.start();
-            AtomicReference<byte[]> stdout = new AtomicReference<>(new byte[0]);
-            AtomicReference<byte[]> stderr = new AtomicReference<>(new byte[0]);
-            AtomicReference<IOException> readFailure = new AtomicReference<>();
-            Thread outReader = Thread.ofVirtual().name("minos-stdout").start(() -> read(process, true, stdout, readFailure));
-            Thread errReader = Thread.ofVirtual().name("minos-stderr").start(() -> read(process, false, stderr, readFailure));
-
-            boolean completed = false;
-            boolean timedOut = false;
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
-            try {
-                while (!(completed = process.waitFor(PROCESS_POLL_MILLIS, TimeUnit.MILLISECONDS))) {
-                    ProgressManager.checkCanceled();
-                    if (System.nanoTime() >= deadline) { timedOut = true; break; }
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(builder.start())) {
+                boolean completed = false;
+                boolean timedOut = false;
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
+                try {
+                    while (!(completed = supervisor.waitFor(PROCESS_POLL_MILLIS))) {
+                        ProgressManager.checkCanceled();
+                        if (System.nanoTime() >= deadline) { timedOut = true; break; }
+                    }
+                } catch (ProcessCanceledException canceled) {
+                    supervisor.stop(canceled);
                 }
-            } catch (ProcessCanceledException canceled) {
-                terminate(process); joinAfterTermination(outReader, errReader); throw canceled;
+                if (!completed) supervisor.stop(null);
+                supervisor.drainOutput();
+                if (supervisor.readFailure() != null) throw supervisor.readFailure();
+                if (timedOut) throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
+                return new ProcessResult(supervisor.exitValue(), supervisor.stdout(), supervisor.stderr());
             }
-
-            if (!completed) terminate(process);
-            awaitReaders(process, outReader, errReader);
-            if (readFailure.get() != null) throw readFailure.get();
-            if (timedOut) throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
-            return new ProcessResult(process.exitValue(), new String(stdout.get(), StandardCharsets.UTF_8), new String(stderr.get(), StandardCharsets.UTF_8));
         } catch (ProcessCanceledException canceled) {
             throw canceled;
         } catch (MinosProtocolException exception) {
@@ -186,69 +176,6 @@ public final class MinosCliClient {
             throw new MinosProtocolException("MINOS command was interrupted", exception);
         } catch (IOException exception) {
             throw new MinosProtocolException("Cannot start MINOS executable `" + settings.executable + "`: " + exception.getMessage(), exception);
-        }
-    }
-
-    private static void terminate(Process process) {
-        if (!process.isAlive()) return;
-        process.destroy();
-        try {
-            if (!process.waitFor(1, TimeUnit.SECONDS)) { process.destroyForcibly(); process.waitFor(5, TimeUnit.SECONDS); }
-        } catch (InterruptedException interrupted) {
-            process.destroyForcibly(); Thread.currentThread().interrupt();
-        }
-    }
-
-    private static void awaitReaders(Process process, Thread... readers) throws IOException {
-        boolean alive = false;
-        for (Thread reader : readers) {
-            try {
-                reader.join(5_000L);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new IOException("MINOS process output drain was interrupted", interrupted);
-            }
-            alive |= reader.isAlive();
-        }
-        if (!alive) return;
-        closeQuietly(process.getInputStream());
-        closeQuietly(process.getErrorStream());
-        joinAfterTermination(readers);
-        for (Thread reader : readers) {
-            if (reader.isAlive()) throw new IOException("MINOS process output drain did not terminate");
-        }
-    }
-
-    private static void closeQuietly(java.io.Closeable closeable) {
-        try {
-            closeable.close();
-        } catch (IOException ignored) {
-            // Closing a process pipe is best-effort after the bounded drain timeout.
-        }
-    }
-
-    private static void joinAfterTermination(Thread... readers) {
-        for (Thread reader : readers) {
-            try { reader.join(5_000L); }
-            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return; }
-        }
-    }
-
-    private static void read(Process process, boolean standardOutput, AtomicReference<byte[]> target, AtomicReference<IOException> failure) {
-        try {
-            target.set(readBounded(standardOutput ? process.getInputStream() : process.getErrorStream()));
-        } catch (IOException exception) {
-            failure.compareAndSet(null, exception);
-        }
-    }
-
-    private static byte[] readBounded(InputStream input) throws IOException {
-        try (InputStream stream = input) {
-            byte[] bytes = stream.readNBytes(MAX_PROCESS_STREAM_BYTES + 1);
-            if (bytes.length > MAX_PROCESS_STREAM_BYTES) {
-                throw new IOException("MINOS process output exceeds 16 MiB safety limit");
-            }
-            return bytes;
         }
     }
 
