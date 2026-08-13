@@ -1,5 +1,7 @@
 package com.minos.intellij.protocol;
 
+import com.intellij.execution.process.OSProcessUtil;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -14,25 +16,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * guaranteed cleanup of every descendant. Implements AutoCloseable so try-with-resources covers
  * the case where control flow exits before an explicit stop() call.
  *
- * <p>Stop sequence (deterministic, 8 steps):
- * <ol>
- *   <li>Mark as stopping — reject further poll/drain calls.
- *   <li>Graceful signal: {@link Process#destroy()} (SIGTERM / WM_CLOSE).
- *   <li>Bounded wait (1 s) for the process to exit on its own.
- *   <li>Kill pre-signal snapshot descendants leaf-first (snapshot taken before step 2 so root
- *       death does not empty the list), then 3 bounded fresh sweeps (100 ms apart), then the root.
- *   <li>Bounded wait (5 s), log any survivors as suppressed info — never throw here.
- *   <li>Force-close stdout/stderr pipes to unblock reader threads.
- *   <li>Join reader threads (5 s each).
- *   <li>Propagate the original cause (cancel rethrown; timeout wrapped in MinosProtocolException).
- * </ol>
+ * <p>Cancellation and timeout deliberately keep the CLI root alive while known descendants are
+ * signalled first. This prevents the root from disappearing before its provider/build descendants
+ * can be enumerated. The final forced phase delegates to IntelliJ's OS-aware
+ * {@link OSProcessUtil#killProcessTree(Process)} (WinP/Windows recursive termination on Windows,
+ * platform process-tree termination elsewhere) and retains bounded ProcessHandle sweeps only as a
+ * fallback/verification layer.</p>
  */
 final class MinosProcessSupervisor implements AutoCloseable {
 
     private static final int MAX_PROCESS_STREAM_BYTES = 16 * 1024 * 1024;
     private static final int DESCENDANT_SWEEP_COUNT = 3;
     private static final long DESCENDANT_SWEEP_DELAY_MILLIS = 100L;
-    private static final long GRACEFUL_WAIT_MILLIS = 1_000L;
+    private static final long GRACEFUL_DESCENDANT_WAIT_MILLIS = 1_000L;
     private static final long FORCED_WAIT_MILLIS = 5_000L;
     private static final long READER_JOIN_MILLIS = 5_000L;
 
@@ -52,41 +48,43 @@ final class MinosProcessSupervisor implements AutoCloseable {
                 .start(() -> readBounded(process.getErrorStream(), stderr, readFailure));
     }
 
-    /**
-     * Waits up to {@code millis} for the process to exit. Returns {@code true} if it has exited.
-     */
+    /** Waits up to {@code millis} for the process to exit. */
     boolean waitFor(long millis) throws InterruptedException {
         return process.waitFor(millis, TimeUnit.MILLISECONDS);
     }
 
     /**
-     * Runs the full 8-step stop sequence. Rethrows {@code cause} if it is a
-     * {@link com.intellij.openapi.progress.ProcessCanceledException}; otherwise wraps it (or the
-     * timeout) into a {@link MinosProtocolException}. If {@code cause} is {@code null} the caller
-     * is responsible for throwing a timeout exception after this method returns.
+     * Stops the complete MINOS process tree. The original IntelliJ cancellation exception is
+     * rethrown unchanged. A null cause is the timeout/cleanup path and is reported by the caller.
      */
     void stop(Throwable cause) throws MinosProtocolException {
         stopping.set(true);
         List<Throwable> suppressed = new ArrayList<>();
 
-        // Snapshot descendants before the graceful signal. Once the root exits from SIGTERM,
-        // process.descendants() returns empty and orphaned grandchildren escape the kill sweep
-        // without this pre-signal snapshot.
+        // Capture descendants while the root is definitely still alive. Handles remain valid even
+        // if parent/child relationships disappear later in the shutdown sequence.
         List<ProcessHandle> snapshot = process.descendants().toList();
 
-        // Step 2 — graceful
-        process.destroy();
+        // Give already-known descendants a bounded graceful opportunity without terminating the
+        // CLI root first. Keeping the root alive prevents the original orphaning window.
+        terminateDescendantsGracefully(snapshot);
+        waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, suppressed);
 
-        // Step 3 — bounded wait
+        // IntelliJ owns the OS-specific recursive termination implementation. On Windows this goes
+        // through WinP/WinProcessManager rather than Java-only descendant traversal.
+        boolean platformTreeKilled = false;
         try {
-            process.waitFor(GRACEFUL_WAIT_MILLIS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            suppressed.add(interrupted);
+            platformTreeKilled = OSProcessUtil.killProcessTree(process);
+        } catch (RuntimeException exception) {
+            suppressed.add(new IOException("IntelliJ platform process-tree termination failed", exception));
+        }
+        if (!platformTreeKilled && process.isAlive()) {
+            suppressed.add(new IOException("IntelliJ platform process-tree termination returned false"));
         }
 
-        // Step 4 — descendants first (snapshot + fresh sweeps), then root
-        terminateDescendants(snapshot, suppressed);
+        // Defense in depth: kill the pre-stop handles and perform bounded fresh sweeps. This also
+        // covers environments where the native platform implementation is unavailable or partial.
+        terminateDescendantsForcibly(snapshot, suppressed);
         if (process.isAlive()) process.destroyForcibly();
         try {
             process.waitFor(FORCED_WAIT_MILLIS, TimeUnit.MILLISECONDS);
@@ -95,7 +93,6 @@ final class MinosProcessSupervisor implements AutoCloseable {
             suppressed.add(interrupted);
         }
 
-        // Step 5 — verify (log survivors, do not throw)
         long survivors = process.descendants().filter(ProcessHandle::isAlive).count();
         if (process.isAlive() || survivors > 0) {
             suppressed.add(new IOException(
@@ -103,20 +100,15 @@ final class MinosProcessSupervisor implements AutoCloseable {
                             + survivors + " descendant(s) still alive after forced termination"));
         }
 
-        // Step 6 — force-close pipes
         closeQuietly(process.getInputStream(), suppressed);
         closeQuietly(process.getErrorStream(), suppressed);
-
-        // Step 7 — join reader threads
         joinReaders(suppressed);
-
-        // Step 8 — propagate
         propagate(cause, suppressed);
     }
 
     /**
-     * Waits for the reader threads to finish draining output after normal process exit.
-     * Force-closes pipes after 5 s if the threads are still alive.
+     * Waits for reader threads to finish after normal process exit. Force-closes pipes after the
+     * bounded join so a descendant cannot hold the IDE command indefinitely through inherited I/O.
      */
     void drainOutput() throws IOException {
         boolean alive = false;
@@ -164,10 +156,6 @@ final class MinosProcessSupervisor implements AutoCloseable {
         return readFailure.get();
     }
 
-    /**
-     * Ensures cleanup if control flow exits without an explicit stop() — e.g. an unexpected
-     * exception from the poll loop before the timeout/cancel branches run.
-     */
     @Override
     public void close() {
         if (process.isAlive() && stopping.compareAndSet(false, true)) {
@@ -179,18 +167,32 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Private helpers
-    // -----------------------------------------------------------------------------------------
+    private static void terminateDescendantsGracefully(List<ProcessHandle> snapshot) {
+        List<ProcessHandle> handles = new ArrayList<>(snapshot);
+        handles.reversed().forEach(handle -> {
+            if (handle.isAlive()) handle.destroy();
+        });
+    }
 
-    private void terminateDescendants(List<ProcessHandle> snapshot, List<Throwable> suppressed) {
-        // Kill the pre-signal snapshot leaf-first: these handles survive root's death and reach
-        // grandchildren that process.descendants() can no longer find after root exits.
+    private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> suppressed) {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(maximumMillis);
+        while (System.nanoTime() < deadline) {
+            if (process.descendants().noneMatch(ProcessHandle::isAlive)) return;
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                suppressed.add(interrupted);
+                return;
+            }
+        }
+    }
+
+    private void terminateDescendantsForcibly(List<ProcessHandle> snapshot, List<Throwable> suppressed) {
         List<ProcessHandle> snapshotList = new ArrayList<>(snapshot);
         snapshotList.reversed().forEach(handle -> {
             if (handle.isAlive()) handle.destroyForcibly();
         });
-        // Additional sweeps to catch processes spawned after the snapshot was taken
         for (int sweep = 0; sweep < DESCENDANT_SWEEP_COUNT; sweep++) {
             List<ProcessHandle> fresh = new ArrayList<>(process.descendants().toList());
             fresh.reversed().forEach(handle -> {
@@ -236,13 +238,11 @@ final class MinosProcessSupervisor implements AutoCloseable {
             throw pce;
         }
         if (cause != null) {
-            MinosProtocolException wrapped = new MinosProtocolException("MINOS process stopped: " + cause.getMessage(), cause);
+            MinosProtocolException wrapped = new MinosProtocolException(
+                    "MINOS process stopped: " + cause.getMessage(), cause);
             suppressed.forEach(wrapped::addSuppressed);
             throw wrapped;
         }
-        // cause == null: timeout path — caller is responsible for throwing the timeout exception.
-        // Attach any cleanup errors as suppressed on a sentinel for the caller to inspect if needed.
-        // We surface read failures here so the caller can check readFailure().
     }
 
     private void checkReadFailure() throws IOException {
@@ -250,7 +250,11 @@ final class MinosProcessSupervisor implements AutoCloseable {
         if (failure != null) throw failure;
     }
 
-    private static void readBounded(InputStream input, AtomicReference<byte[]> target, AtomicReference<IOException> failure) {
+    private static void readBounded(
+            InputStream input,
+            AtomicReference<byte[]> target,
+            AtomicReference<IOException> failure
+    ) {
         try (InputStream stream = input) {
             byte[] bytes = stream.readNBytes(MAX_PROCESS_STREAM_BYTES + 1);
             if (bytes.length > MAX_PROCESS_STREAM_BYTES) {
