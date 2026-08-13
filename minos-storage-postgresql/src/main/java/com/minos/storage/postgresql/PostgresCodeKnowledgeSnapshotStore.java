@@ -202,6 +202,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
             }
             try {
                 connections.inTransaction(connection -> {
+                    acquireProjectMutationLock(connection, snapshot.projectId());
                     String existingSha = existingSnapshotSha(connection, snapshot);
                     validateExistingSnapshot(snapshot, sha, existingSha);
                     if (existingSha == null) insertSnapshot(connection, snapshot, payload, payloadBytes, sha);
@@ -214,6 +215,15 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
             }
         } finally {
             Files.deleteIfExists(payload);
+        }
+    }
+
+    /** Same transaction-scoped project lock used by PostgresSemanticVectorStore. */
+    private static void acquireProjectMutationLock(Connection connection, UUID projectId) throws SQLException {
+        long advisoryKey = projectId.getMostSignificantBits() ^ projectId.getLeastSignificantBits();
+        try (PreparedStatement advisory = connection.prepareStatement("SELECT pg_advisory_xact_lock(?)")) {
+            advisory.setLong(1, advisoryKey);
+            advisory.execute();
         }
     }
 
