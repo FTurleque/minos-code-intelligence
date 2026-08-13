@@ -1,0 +1,96 @@
+package com.minos.orchestration;
+
+import com.minos.discovery.ProjectDiscovery;
+import com.minos.incremental.IncrementalIndexingPlan;
+import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
+import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
+
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+public final class IndexingLifecycleService {
+    private final Map<String, IndexerExecutor> executors;
+    private final SnapshotStager stager;
+    private final SnapshotPromoter promoter;
+    private final IndexStateStore stateStore;
+    private final Clock clock;
+    private final ConcurrentMap<UUID, Object> projectLocks = new ConcurrentHashMap<>();
+    private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
+
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore) {
+        this(executors, stager, promoter, stateStore, Clock.systemUTC());
+    }
+
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
+        this.stager = Objects.requireNonNull(stager, "stager");
+        this.promoter = Objects.requireNonNull(promoter, "promoter");
+        this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
+        this.clock = Objects.requireNonNull(clock, "clock");
+        Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
+        for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
+            String id = Objects.requireNonNull(executor, "executor").indexerId();
+            if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
+            if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
+        }
+        this.executors = Map.copyOf(byId);
+    }
+
+    public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
+        plans.validate(id, root, negotiation);
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of());
+    }
+
+    public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
+                               IndexerNegotiationResult negotiation) {
+        plans.validate(id, root, negotiation);
+        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of());
+    }
+
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
+                                                IncrementalIndexingPlan plan) {
+        plans.validate(id, root, negotiation);
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan);
+    }
+
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
+                                                IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan) {
+        plans.validate(id, root, negotiation);
+        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan);
+    }
+
+    private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
+                                          List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan) {
+        Objects.requireNonNull(plan, "plan");
+        if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
+        plans.validatePlan(plan, negotiation);
+        if (plan.mode() == IndexingMode.NONE) return Optional.empty();
+        return Optional.of(run(id, root, targets, plan.mode(),
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of()));
+    }
+
+    private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
+                            IndexingMode mode, List<String> changedFiles) {
+        if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
+        return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
+                executors, stager, promoter, stateStore, clock, projectLocks);
+    }
+
+    public ProjectIndexState projectState(UUID id) {
+        Objects.requireNonNull(id, "projectId");
+        return stateStore.findProjectState(id).orElseGet(() -> ProjectIndexState.neverIndexed(id, clock.instant()));
+    }
+    public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }
+    public List<IndexingRun> listRuns(UUID id) { return stateStore.listRuns(Objects.requireNonNull(id, "projectId")); }
+}
