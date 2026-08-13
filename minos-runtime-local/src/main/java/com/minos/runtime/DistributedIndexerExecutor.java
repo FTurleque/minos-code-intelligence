@@ -159,6 +159,11 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     }
 
     private void verifyManifest(IndexingExecutionRequest request, DistributedArtifactManifest manifest) {
+        // FORMAT_V1 did not carry projectRelativeRoot on the wire. Treating its absence as root
+        // would manufacture provenance, so verified distributed execution is V2-or-newer only.
+        if (!DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
+            throw new IllegalStateException("verified distributed artifact requires scope-aware manifest format v2");
+        }
         if (!request.runId().equals(manifest.runId())
                 || !request.projectId().equals(manifest.projectId())
                 || !portableScope(request.projectRelativeRoot()).equals(manifest.projectRelativeRoot())
