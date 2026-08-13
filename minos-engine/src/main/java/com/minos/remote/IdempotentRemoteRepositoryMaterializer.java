@@ -6,8 +6,8 @@ import java.util.Objects;
 
 /**
  * Gives every logical materialization acquisition a unique opaque object identity and makes release
- * idempotent for that identity. A reconstructed or structurally equal record cannot release another
- * acquisition because only wrapper-issued instances are registered.
+ * idempotent for that identity. A reconstructed or structurally equal record cannot release, pin or
+ * unpin another acquisition because only wrapper-issued instances are registered.
  */
 public final class IdempotentRemoteRepositoryMaterializer implements RemoteRepositoryMaterializer {
     private final RemoteRepositoryMaterializer delegate;
@@ -36,12 +36,12 @@ public final class IdempotentRemoteRepositoryMaterializer implements RemoteRepos
 
     @Override
     public void pin(RemoteMaterialization materialization) throws Exception {
-        delegate.pin(delegateView(materialization));
+        delegate.pin(requireOwned(materialization));
     }
 
     @Override
     public void unpin(RemoteMaterialization materialization) throws Exception {
-        delegate.unpin(delegateView(materialization));
+        delegate.unpin(requireOwned(materialization));
     }
 
     @Override
@@ -58,11 +58,14 @@ public final class IdempotentRemoteRepositoryMaterializer implements RemoteRepos
         synchronized (monitor) { return active.size(); }
     }
 
-    private RemoteMaterialization delegateView(RemoteMaterialization exposed) {
+    private RemoteMaterialization requireOwned(RemoteMaterialization exposed) {
         Objects.requireNonNull(exposed, "materialization");
         synchronized (monitor) {
             RemoteMaterialization owned = active.get(exposed);
-            return owned == null ? exposed : owned;
+            if (owned == null) {
+                throw new IllegalArgumentException("remote materialization handle is not an active acquisition");
+            }
+            return owned;
         }
     }
 
