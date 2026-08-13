@@ -10,10 +10,18 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
-/** Cross-JVM mutation lease shared by snapshot publication/promotion and retention. */
+/**
+ * Cross-JVM mutation lease shared by structural snapshot publication/promotion, semantic commit and
+ * structural retention for one project.
+ *
+ * <p>Storage implementations live in sibling directories below the MINOS home. The lock therefore
+ * lives at their common parent rather than inside one particular store; otherwise a semantic recheck
+ * and a structural promotion can both hold different "project" locks and race.</p>
+ */
 final class SnapshotProjectLease implements AutoCloseable {
     private static final int STRIPES = 64;
     private static final ReentrantLock[] JVM_LOCKS = locks();
+    private static final String LEASE_DIRECTORY = ".project-mutation-leases";
 
     private final ReentrantLock jvmLock;
     private final FileChannel channel;
@@ -27,10 +35,22 @@ final class SnapshotProjectLease implements AutoCloseable {
     }
 
     static SnapshotProjectLease acquire(Path storageRoot, UUID projectId) throws IOException {
-        Path directory = Objects.requireNonNull(storageRoot, "storageRoot")
-                .toAbsolutePath().normalize().resolve(".snapshot-leases");
+        return acquire(storageRoot, Objects.requireNonNull(projectId, "projectId").toString());
+    }
+
+    static SnapshotProjectLease acquire(Path storageRoot, String projectId) throws IOException {
+        Path normalizedRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        Path commonRoot = normalizedRoot.getParent() != null ? normalizedRoot.getParent() : normalizedRoot;
+        Path directory = commonRoot.resolve(LEASE_DIRECTORY).toAbsolutePath().normalize();
+        if (!directory.startsWith(commonRoot)) {
+            throw new IOException("project mutation lease directory escapes storage family root");
+        }
         Files.createDirectories(directory);
-        Path file = directory.resolve(Objects.requireNonNull(projectId, "projectId") + ".lock");
+        String safeProjectId = requireSafeProjectId(projectId);
+        Path file = directory.resolve(safeProjectId + ".lock").toAbsolutePath().normalize();
+        if (!file.startsWith(directory)) {
+            throw new IOException("project mutation lease file escapes lease directory");
+        }
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(file.hashCode(), JVM_LOCKS.length)];
         jvmLock.lock();
         FileChannel channel = null;
@@ -42,6 +62,13 @@ final class SnapshotProjectLease implements AutoCloseable {
             jvmLock.unlock();
             throw exception;
         }
+    }
+
+    static Path lockFile(Path storageRoot, String projectId) throws IOException {
+        Path normalizedRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        Path commonRoot = normalizedRoot.getParent() != null ? normalizedRoot.getParent() : normalizedRoot;
+        return commonRoot.resolve(LEASE_DIRECTORY).resolve(requireSafeProjectId(projectId) + ".lock")
+                .toAbsolutePath().normalize();
     }
 
     @Override
@@ -56,6 +83,16 @@ final class SnapshotProjectLease implements AutoCloseable {
             jvmLock.unlock();
         }
         if (failure != null) throw failure;
+    }
+
+    private static String requireSafeProjectId(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            throw new IllegalArgumentException("projectId must not be blank");
+        }
+        if (!projectId.matches("[A-Za-z0-9._-]{1,200}")) {
+            throw new IllegalArgumentException("projectId contains unsafe lease path characters");
+        }
+        return projectId;
     }
 
     private static ReentrantLock[] locks() {
