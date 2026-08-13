@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class IdempotentRemoteRepositoryMaterializerTest {
 
@@ -35,7 +36,7 @@ class IdempotentRemoteRepositoryMaterializerTest {
     }
 
     @Test
-    void structurallyEqualForgedHandleCannotReleaseAnOwnedAcquisition(@TempDir Path temp) throws Exception {
+    void structurallyEqualForgedHandleCannotMutateAnOwnedAcquisition(@TempDir Path temp) throws Exception {
         CacheKeyRefcountMaterializer delegate = new CacheKeyRefcountMaterializer(temp);
         RemoteRepositoryMaterializer guarded = IdempotentRemoteRepositoryMaterializer.wrap(delegate);
         var owned = guarded.materialize(request());
@@ -44,12 +45,19 @@ class IdempotentRemoteRepositoryMaterializerTest {
                 owned.cacheHit(), owned.materializedAt());
 
         guarded.release(forged);
+        assertThrows(IllegalArgumentException.class, () -> guarded.pin(forged));
+        assertThrows(IllegalArgumentException.class, () -> guarded.unpin(forged));
         assertEquals(1, delegate.active());
         assertEquals(0, delegate.releases.get());
+        assertEquals(0, delegate.pinMutations.get());
 
+        guarded.pin(owned);
+        guarded.unpin(owned);
+        assertEquals(2, delegate.pinMutations.get());
         guarded.release(owned);
         assertEquals(0, delegate.active());
         assertEquals(1, delegate.releases.get());
+        assertThrows(IllegalArgumentException.class, () -> guarded.pin(owned));
     }
 
     private static RemoteRepositoryRequest request() {
@@ -61,6 +69,7 @@ class IdempotentRemoteRepositoryMaterializerTest {
         private final Path root;
         private final AtomicInteger active = new AtomicInteger();
         private final AtomicInteger releases = new AtomicInteger();
+        private final AtomicInteger pinMutations = new AtomicInteger();
 
         private CacheKeyRefcountMaterializer(Path root) throws Exception {
             this.root = root.resolve("repo");
@@ -71,6 +80,16 @@ class IdempotentRemoteRepositoryMaterializerTest {
         public RemoteMaterialization materialize(RemoteRepositoryRequest request) {
             active.incrementAndGet();
             return new RemoteMaterialization(request, root, root, "cache-key", true, Instant.EPOCH);
+        }
+
+        @Override
+        public void pin(RemoteMaterialization materialization) {
+            if ("cache-key".equals(materialization.cacheKey())) pinMutations.incrementAndGet();
+        }
+
+        @Override
+        public void unpin(RemoteMaterialization materialization) {
+            if ("cache-key".equals(materialization.cacheKey())) pinMutations.incrementAndGet();
         }
 
         @Override
