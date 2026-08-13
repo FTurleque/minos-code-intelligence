@@ -14,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,23 +26,33 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
         ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(connections, delegate);
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch writerStarted = new CountDownLatch(1);
         try (var pool = Executors.newFixedThreadPool(2)) {
             var holder = pool.submit(() -> {
                 try {
                     connections.inTransaction(c -> {
                         PostgresProjectMutationLock.acquire(c, id);
                         held.countDown();
-                        try { release.await(10, TimeUnit.SECONDS); }
-                        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                        try {
+                            release.await(10, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
                         return null;
                     });
-                } catch (Exception e) { throw new RuntimeException(e); }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             });
             assertTrue(held.await(10, TimeUnit.SECONDS));
             ProjectIndexState state = new ProjectIndexState(id, ProjectIndexState.Availability.READY,
                     Optional.of("snapshot-1"), Optional.empty(), Instant.EPOCH, Optional.empty());
-            var writer = pool.submit(() -> store.saveProjectState(state));
-            Thread.sleep(200L);
+            var writer = pool.submit(() -> {
+                writerStarted.countDown();
+                store.saveProjectState(state);
+            });
+            assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
+            assertFalse(writer.isDone(), "same-project state mutation must remain blocked by the shared advisory lock");
             assertNull(delegate.state.get());
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);
