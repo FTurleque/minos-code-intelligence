@@ -32,7 +32,7 @@ MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-o
 
 ## État de `remote index`
 
-`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS.
+`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; les backends intégrés actuels n’atteignent pas encore cette qualification complète.
 
 Les backends locaux intégrés bornent aujourd’hui la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste supervisé par MINOS et n’est pas encore un quota stockage `OS_ENFORCED`. La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés actuels restent **fail-closed pour `remote index`**. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
 
@@ -58,7 +58,7 @@ Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine c
 
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
-Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny`, car ces primitives ne prouvent pas un blocage réseau au niveau OS. Il reste également interdit comme repli pour `remote index` avec `allow`, car elles ne prouvent pas le confinement complet de code non fiable.
+Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny` : ces primitives ne prouvent pas un blocage réseau au niveau OS. Il reste également interdit comme repli pour `remote index` avec `allow`, car elles ne prouvent pas le confinement complet de code non fiable.
 
 ## Sécurité et limites
 
