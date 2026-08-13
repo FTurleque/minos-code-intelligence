@@ -1,6 +1,6 @@
 # Indexer une révision distante
 
-MINOS peut matérialiser puis indexer une révision Git distante immuable. Cette surface est opt-in et limitée aux endpoints HTTPS officiels GitHub.com et GitLab.com.
+MINOS peut matérialiser une révision Git distante immuable. Cette surface est opt-in et limitée aux endpoints HTTPS officiels GitHub.com et GitLab.com.
 
 ## Préparer la révision exacte
 
@@ -30,7 +30,13 @@ minos.cmd remote materialize https://github.com/acme/private-project `
 
 MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-only.
 
-## Indexer dans la sandbox locale qualifiée
+## État de `remote index`
+
+`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS.
+
+Les backends locaux intégrés bornent aujourd’hui la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste supervisé par MINOS et n’est pas encore un quota stockage `OS_ENFORCED`. La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés actuels restent **fail-closed pour `remote index`**. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
+
+La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions :
 
 ```powershell
 minos.cmd remote index https://github.com/acme/project `
@@ -45,16 +51,14 @@ minos.cmd remote index https://github.com/acme/project `
 
 `--worker-network` est obligatoire :
 
-- `ALLOW` (`allow` en CLI) laisse le provider accéder au réseau à l’intérieur de la sandbox qualifiée ;
-- `DENY` (`deny` en CLI) bloque le réseau au niveau OS à l’intérieur de cette même sandbox.
+- `ALLOW` (`allow` en CLI) autorise le réseau uniquement dans une sandbox par ailleurs qualifiée ;
+- `DENY` (`deny` en CLI) exige en plus un blocage réseau au niveau OS.
 
-La sandbox OS qualifiée utilise bubblewrap/namespaces plus une frontière de job cgroup v2 sous Linux, et AppContainer + Job Object sous Windows. Cette frontière borne de façon agrégée la mémoire, le nombre de processus et la CPU de tout l’arbre du provider, et garantit qu’aucun descendant ne survit au run. MINOS y ajoute un quota d’écriture (octets et nombre d’entrées) appliqué pendant l’exécution sur toutes les racines accessibles en écriture. Si l’un de ces mécanismes n’est pas disponible — y compris la délégation cgroup v2 sous Linux — l’indexation échoue avant l’exécution. Le backend process-only natif n’est accepté ni avec `allow`, ni avec `deny`; il n’existe pas d’option unsafe de contournement.
+Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`. Cette condition ne remplace pas l’exigence distincte de quota stockage OS-enforced.
 
-Sous Linux, MINOS doit disposer d’une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`.
+Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Les manifests V1 ne sont pas acceptés comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
-Le transport utilise `minos-distributed-artifact-v1` (monorepo : `minos-distributed-artifact-v2` avec `projectRelativeRoot`). Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
-
-Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny`, car ces primitives seules ne prouvent pas un blocage réseau au niveau OS, et le worker distant le refuse aussi avec `allow`, car elles ne prouvent pas le confinement de code non fiable.
+Le backend natif ne fournit qu'une isolation de processus et de workspace. Il ne prouve ni le confinement complet de code non fiable ni le blocage réseau au niveau OS et n’est donc jamais une solution de repli pour `remote index`.
 
 ## Sécurité et limites
 
@@ -64,7 +68,7 @@ Le backend natif ne fournit qu'une isolation de processus et de workspace. Il re
 - cache source et cache artefact locaux, reconstructibles et bornés ;
 - `.gitignore`, `.minosignore`, hard ignores et budgets appliqués à la workspace du provider ;
 - symlinks rejetés ;
-- manifest, checksum et provenance validés avant import ;
+- manifest V2, checksum, provenance et scope validés avant import ;
 - promotion atomique locale inchangée ;
 - aucune capability CFG/def-use/data-flow/security déduite du seul transport SCIP ;
 - aucun scheduler, worker partagé ou hosted mode fourni par cette commande.
