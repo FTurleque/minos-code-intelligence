@@ -6,8 +6,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.IdentityHashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,7 +15,7 @@ class IdempotentRemoteRepositoryMaterializerTest {
 
     @Test
     void doubleReleaseCannotReleaseAnotherAcquisition(@TempDir Path temp) throws Exception {
-        CountingMaterializer delegate = new CountingMaterializer(temp);
+        CacheKeyRefcountMaterializer delegate = new CacheKeyRefcountMaterializer(temp);
         RemoteRepositoryMaterializer guarded = IdempotentRemoteRepositoryMaterializer.wrap(delegate);
         RemoteRepositoryRequest request = request();
 
@@ -38,7 +36,7 @@ class IdempotentRemoteRepositoryMaterializerTest {
 
     @Test
     void structurallyEqualForgedHandleCannotReleaseAnOwnedAcquisition(@TempDir Path temp) throws Exception {
-        CountingMaterializer delegate = new CountingMaterializer(temp);
+        CacheKeyRefcountMaterializer delegate = new CacheKeyRefcountMaterializer(temp);
         RemoteRepositoryMaterializer guarded = IdempotentRemoteRepositoryMaterializer.wrap(delegate);
         var owned = guarded.materialize(request());
         var forged = new RemoteRepositoryMaterializer.RemoteMaterialization(
@@ -58,28 +56,31 @@ class IdempotentRemoteRepositoryMaterializerTest {
         return RemoteRepositoryRequest.of("https://github.com/acme/demo", "main", "a".repeat(40), null, null);
     }
 
-    private static final class CountingMaterializer implements RemoteRepositoryMaterializer {
+    /** Deliberately models the vulnerable cache-key-only release contract. */
+    private static final class CacheKeyRefcountMaterializer implements RemoteRepositoryMaterializer {
         private final Path root;
-        private final Map<RemoteMaterialization, Boolean> active = new IdentityHashMap<>();
+        private final AtomicInteger active = new AtomicInteger();
         private final AtomicInteger releases = new AtomicInteger();
 
-        private CountingMaterializer(Path root) throws Exception {
+        private CacheKeyRefcountMaterializer(Path root) throws Exception {
             this.root = root.resolve("repo");
             Files.createDirectories(this.root);
         }
 
         @Override
         public RemoteMaterialization materialize(RemoteRepositoryRequest request) {
-            var value = new RemoteMaterialization(request, root, root, "cache-key", true, Instant.EPOCH);
-            active.put(value, Boolean.TRUE);
-            return value;
+            active.incrementAndGet();
+            return new RemoteMaterialization(request, root, root, "cache-key", true, Instant.EPOCH);
         }
 
         @Override
         public void release(RemoteMaterialization materialization) {
-            if (active.remove(materialization) != null) releases.incrementAndGet();
+            if ("cache-key".equals(materialization.cacheKey()) && active.get() > 0) {
+                active.decrementAndGet();
+                releases.incrementAndGet();
+            }
         }
 
-        private int active() { return active.size(); }
+        private int active() { return active.get(); }
     }
 }
