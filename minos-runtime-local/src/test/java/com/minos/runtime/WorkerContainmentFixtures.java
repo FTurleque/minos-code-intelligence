@@ -12,11 +12,11 @@ final class WorkerContainmentFixtures {
             WorkerResourceContainment.Disposition.OS_ENFORCED,
             WorkerResourceContainment.Disposition.OS_ENFORCED,
             WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-            WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-            WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+            WorkerResourceContainment.Disposition.OS_ENFORCED,
+            WorkerResourceContainment.Disposition.OS_ENFORCED,
             WorkerResourceContainment.Disposition.OS_ENFORCED,
             WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-            List.of("TEST_FIXTURE_AGGREGATE_JOB_BOUNDARY"));
+            List.of("TEST_FIXTURE_AGGREGATE_JOB_BOUNDARY", "TEST_FIXTURE_HARD_FILESYSTEM_QUOTA"));
 
     private WorkerContainmentFixtures() {
     }
