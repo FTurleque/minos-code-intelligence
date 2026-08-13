@@ -68,10 +68,10 @@ final class PostgresSemanticVectorStore implements SemanticVectorStore {
         try {
             connections.inTransaction(connection -> {
                 PostgresProjectMutationLock.acquire(connection, projectId);
-                // PostgreSQL must re-read the authoritative structural pointer on this exact JDBC
-                // transaction. Calling the external reader here would borrow a second pooled
-                // connection and can deadlock a saturated pool while the advisory locks are held.
-                Optional<String> current = PostgresSemanticReadQueries.activeKnowledgeSnapshotId(connection, projectId);
+                // Keep the generic store contract authoritative. PostgresConnectionFactory reuses
+                // this transaction's connection for nested calls on the same backend, so a
+                // PostgreSQL-backed reader cannot consume a second pool lease or deadlock a full pool.
+                Optional<String> current = activeSnapshotReader.read();
                 String currentId = current.orElse(null);
                 if (!expectedActiveSnapshotId.equals(currentId)) {
                     throw new StaleSemanticSyncException(next.projectId(), expectedActiveSnapshotId,
