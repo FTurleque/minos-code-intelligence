@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
+import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
@@ -30,6 +31,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
     private final MinosApplication application;
     private final RemoteRepositoryMaterializer materializer;
     private final DistributedArtifactBundleStore artifactStore;
+    private final WorkerFactory workerFactory;
     private final Map<String, IndexerDescriptor> descriptors;
 
     public LocalRemoteIndexOperations(MinosApplication application) throws IOException {
@@ -42,9 +44,21 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             RemoteRepositoryMaterializer materializer,
             DistributedArtifactBundleStore artifactStore
     ) {
+        this(application, materializer, artifactStore,
+                (workerId, delegate, store) -> new LocalIsolatedIndexWorker(
+                        workerId, application.home(), delegate, store));
+    }
+
+    LocalRemoteIndexOperations(
+            MinosApplication application,
+            RemoteRepositoryMaterializer materializer,
+            DistributedArtifactBundleStore artifactStore,
+            WorkerFactory workerFactory
+    ) {
         this.application = Objects.requireNonNull(application, "application");
         this.materializer = Objects.requireNonNull(materializer, "materializer");
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
+        this.workerFactory = Objects.requireNonNull(workerFactory, "workerFactory");
         this.descriptors = application.indexerDescriptors().stream().collect(Collectors.toUnmodifiableMap(
                 IndexerDescriptor::id, descriptor -> descriptor));
     }
@@ -94,11 +108,6 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                     .registerProjectWithResult(source.projectRoot(), displayName);
             project = registration.project();
             newlyRegistered = registration.createdByThisCall();
-
-            // Registration ownership remains exclusive for this source until the RemoteIndexLease
-            // closes. Another JVM/process cannot adopt the same remote source between this claim and
-            // a failure rollback, so deleting a registration created here cannot erase a successful
-            // concurrent adoption.
             materializer.pin(source);
             pinned = true;
 
@@ -107,8 +116,8 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 if (descriptor == null) {
                     throw new IllegalStateException("remote execution has no descriptor for provider: " + delegate.indexerId());
                 }
-                LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
-                        workerId, application.home(), delegate, artifactStore);
+                Worker worker = Objects.requireNonNull(
+                        workerFactory.create(workerId, delegate, artifactStore), "workerFactory result");
                 DistributedIndexerExecutor distributed = new DistributedIndexerExecutor(
                         descriptor.id(), descriptor.version(), source, workerNetworkPolicy, worker, artifactStore);
                 distributedExecutors.add(distributed);
@@ -198,5 +207,10 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 manifest.isolation().name(), manifest.networkPolicy().name(), manifest.networkDenyEnforced(),
                 manifest.artifactSha256(), value.bundleSha256(), value.cacheKey(), value.cacheHit(),
                 manifest.projectRelativeRoot());
+    }
+
+    @FunctionalInterface
+    interface WorkerFactory {
+        Worker create(String workerId, IndexerExecutor delegate, DistributedArtifactBundleStore store);
     }
 }
