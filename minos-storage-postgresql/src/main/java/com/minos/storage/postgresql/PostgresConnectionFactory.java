@@ -11,8 +11,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.Locale;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -48,6 +48,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private final AtomicInteger physicalConnections = new AtomicInteger();
     private final AtomicInteger leasedConnections = new AtomicInteger();
     private final AtomicLong acquisitionTimeouts = new AtomicLong();
+    private final ThreadLocal<LeaseContext> currentLease = new ThreadLocal<>();
     private volatile boolean closed;
 
     PostgresConnectionFactory(StorageBackendConfiguration configuration) throws IOException {
@@ -87,31 +88,80 @@ final class PostgresConnectionFactory implements AutoCloseable {
 
     <T> T withConnection(ConnectionWork<T> work) throws SQLException, IOException {
         Objects.requireNonNull(work, "work");
+        LeaseContext nested = currentLease.get();
+        if (nested != null) return executeOnLease(nested, work);
+
         Connection connection = borrow();
-        boolean reusable = true;
+        LeaseContext context = new LeaseContext(connection);
+        currentLease.set(context);
         try {
-            return work.execute(connection);
-        } catch (SQLException exception) {
-            reusable = !isConnectionFailure(exception);
-            throw exception;
+            return executeOnLease(context, work);
         } finally {
-            release(connection, reusable);
+            currentLease.remove();
+            release(connection, context.reusable);
         }
     }
 
     <T> T inTransaction(ConnectionWork<T> work) throws SQLException, IOException {
         Objects.requireNonNull(work, "work");
-        return withConnection(connection -> {
-            connection.setAutoCommit(false);
+        LeaseContext nested = currentLease.get();
+        if (nested != null && nested.transactionDepth > 0) {
+            nested.transactionDepth++;
             try {
-                T result = work.execute(connection);
-                connection.commit();
-                return result;
+                return work.execute(nested.connection);
             } catch (SQLException | IOException | RuntimeException exception) {
-                rollbackPreserving(connection, exception);
+                nested.rollbackOnly = true;
+                if (exception instanceof SQLException sql && isConnectionFailure(sql)) nested.reusable = false;
                 throw exception;
+            } finally {
+                nested.transactionDepth--;
             }
-        });
+        }
+        return withConnection(connection -> executeTransaction(currentLease.get(), work));
+    }
+
+    private <T> T executeTransaction(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
+        if (context == null) throw new SQLException("PostgreSQL transaction has no active connection lease");
+        Connection connection = context.connection;
+        boolean previousAutoCommit = connection.getAutoCommit();
+        Exception primaryFailure = null;
+        context.transactionDepth = 1;
+        context.rollbackOnly = false;
+        try {
+            if (previousAutoCommit) connection.setAutoCommit(false);
+            T result = work.execute(connection);
+            if (context.rollbackOnly) {
+                throw new SQLException("PostgreSQL transaction was marked rollback-only by nested work");
+            }
+            connection.commit();
+            return result;
+        } catch (SQLException | IOException | RuntimeException exception) {
+            primaryFailure = exception;
+            if (exception instanceof SQLException sql && isConnectionFailure(sql)) context.reusable = false;
+            rollbackPreserving(connection, exception);
+            throw exception;
+        } finally {
+            context.transactionDepth = 0;
+            context.rollbackOnly = false;
+            if (previousAutoCommit) {
+                try {
+                    if (!connection.getAutoCommit()) connection.setAutoCommit(true);
+                } catch (SQLException restoreFailure) {
+                    context.reusable = false;
+                    if (primaryFailure != null) primaryFailure.addSuppressed(restoreFailure);
+                    else throw restoreFailure;
+                }
+            }
+        }
+    }
+
+    private <T> T executeOnLease(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
+        try {
+            return work.execute(context.connection);
+        } catch (SQLException exception) {
+            if (isConnectionFailure(exception)) context.reusable = false;
+            throw exception;
+        }
     }
 
     String schema() {
@@ -337,6 +387,17 @@ final class PostgresConnectionFactory implements AutoCloseable {
             throw new IOException("missing required PostgreSQL setting: " + name);
         }
         return value.trim();
+    }
+
+    private static final class LeaseContext {
+        private final Connection connection;
+        private boolean reusable = true;
+        private int transactionDepth;
+        private boolean rollbackOnly;
+
+        private LeaseContext(Connection connection) {
+            this.connection = connection;
+        }
     }
 
     record PoolStats(int maximumSize, int leased, int idle, int physical, long acquisitionTimeouts) {
