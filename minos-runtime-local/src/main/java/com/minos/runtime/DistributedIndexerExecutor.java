@@ -148,10 +148,6 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
                     "distributed execution scope does not match projectRelativeRoot");
         }
 
-        // Normal remote indexing materializes the registered project root and then executes one or
-        // more nested module scopes. A directly materialized subdirectory is also accepted when it
-        // is exactly the requested execution scope. Anything else would make the worker consume a
-        // tree that is not bound to the request provenance.
         if (!materializedRoot.equals(registeredRoot) && !materializedRoot.equals(requestedRoot)) {
             throw new IllegalArgumentException(
                     "distributed execution request is not bound to the materialized project root or exact scope");
@@ -162,7 +158,8 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
         // FORMAT_V1 did not carry projectRelativeRoot on the wire. Treating its absence as root
         // would manufacture provenance, so verified distributed execution is V2-or-newer only.
         if (!DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
-            throw new IllegalStateException("verified distributed artifact requires scope-aware manifest format v2");
+            throw new IllegalStateException(
+                    "verified distributed artifact provenance requires scope-aware manifest format v2");
         }
         if (!request.runId().equals(manifest.runId())
                 || !request.projectId().equals(manifest.projectId())
