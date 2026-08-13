@@ -2,6 +2,7 @@ package com.minos.runtime;
 
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -39,9 +40,13 @@ public record WorkerSandboxQualification(
         }
         if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && !containment.qualifiedForUntrustedCode()) {
-            throw new IllegalArgumentException(
-                    "untrusted-code support requires complete aggregate resource containment: "
-                            + containment.unmetRequirements());
+            // Never let a backend overstate its trust boundary. A supervised filesystem quota can
+            // still be useful defence in depth, but it cannot qualify execution of hostile code.
+            trustDisposition = TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED;
+            List<String> downgraded = new ArrayList<>(limitations);
+            downgraded.add("WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT");
+            downgraded.addAll(containment.unmetRequirements());
+            limitations = List.copyOf(downgraded);
         }
         if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && platforms.values().stream().noneMatch(value -> value == PlatformDisposition.QUALIFIED)) {
