@@ -17,6 +17,7 @@ import com.minos.runtime.LocalIsolatedIndexWorker;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -117,10 +118,17 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                     application, decorator).execute(project.id().toString(), providerOverride, true);
 
             List<ArtifactEvidence> evidence = distributedExecutors.stream()
-                    .map(executor -> executor.verifiedArtifact().orElseThrow(() ->
-                            new IllegalStateException("distributed provider completed without verified artifact evidence")))
+                    .flatMap(executor -> {
+                        List<VerifiedArtifact> verified = executor.verifiedArtifacts();
+                        if (verified.isEmpty()) {
+                            throw new IllegalStateException(
+                                    "distributed provider completed without verified artifact evidence");
+                        }
+                        return verified.stream();
+                    })
                     .map(LocalRemoteIndexOperations::evidence)
-                    .sorted(java.util.Comparator.comparing(ArtifactEvidence::providerId))
+                    .sorted(Comparator.comparing(ArtifactEvidence::providerId)
+                            .thenComparing(ArtifactEvidence::projectRelativeRoot))
                     .toList();
             RemoteIndexView result = new RemoteIndexView(
                     view(source), project.id().toString(), project.displayName(), execution, evidence);
