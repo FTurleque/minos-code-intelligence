@@ -25,7 +25,7 @@ class WorkerResourceContainmentTest {
     }
 
     @Test
-    void supervisionIsNeverAcceptedAsASubstituteForHardOsBoundaries() {
+    void supervisionIsNeverAcceptedAsASubstituteForAnAggregateOsJobBoundary() {
         WorkerResourceContainment supervisedOnly = new WorkerResourceContainment(
                 "supervised-only",
                 WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
