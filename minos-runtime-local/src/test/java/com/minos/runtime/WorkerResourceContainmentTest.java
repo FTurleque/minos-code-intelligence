@@ -25,7 +25,7 @@ class WorkerResourceContainmentTest {
     }
 
     @Test
-    void supervisionIsNeverAcceptedAsASubstituteForAnAggregateOsJobBoundary() {
+    void supervisionIsNeverAcceptedAsASubstituteForHardOsBoundaries() {
         WorkerResourceContainment supervisedOnly = new WorkerResourceContainment(
                 "supervised-only",
                 WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
@@ -39,7 +39,12 @@ class WorkerResourceContainmentTest {
                 List.of("SAMPLING_ONLY"));
 
         assertFalse(supervisedOnly.qualifiedForUntrustedCode());
-        assertEquals(4, supervisedOnly.unmetRequirements().size(), supervisedOnly.unmetRequirements().toString());
+        assertFalse(supervisedOnly.hardFilesystemQuotaEnforced());
+        assertEquals(6, supervisedOnly.unmetRequirements().size(), supervisedOnly.unmetRequirements().toString());
+        assertTrue(supervisedOnly.unmetRequirements().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
+        assertTrue(supervisedOnly.unmetRequirements().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
     }
 
     @Test
@@ -57,6 +62,7 @@ class WorkerResourceContainmentTest {
                 List.of("POST_MORTEM_MEASUREMENT"));
 
         assertTrue(measured.aggregateJobBoundaryEnforced());
+        assertFalse(measured.hardFilesystemQuotaEnforced());
         assertFalse(measured.qualifiedForUntrustedCode());
         assertTrue(measured.unmetRequirements().stream()
                 .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
@@ -65,11 +71,17 @@ class WorkerResourceContainmentTest {
     }
 
     @Test
-    void bothQualifiedBackendsDeclareCompleteContainment() {
-        assertTrue(LinuxBubblewrapWorkerSandboxBackend.containment().qualifiedForUntrustedCode());
-        assertTrue(WindowsAppContainerWorkerSandboxBackend.containment().qualifiedForUntrustedCode());
-        assertTrue(LinuxBubblewrapWorkerSandboxBackend.containment().evidence().contains("CGROUP_V2_CGROUP_KILL"));
-        assertTrue(WindowsAppContainerWorkerSandboxBackend.containment().evidence()
-                .contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE"));
+    void currentOsBackendsFailClosedUntilStorageIsOsEnforced() {
+        WorkerResourceContainment linux = LinuxBubblewrapWorkerSandboxBackend.containment();
+        WorkerResourceContainment windows = WindowsAppContainerWorkerSandboxBackend.containment();
+
+        assertTrue(linux.aggregateJobBoundaryEnforced());
+        assertTrue(windows.aggregateJobBoundaryEnforced());
+        assertFalse(linux.hardFilesystemQuotaEnforced());
+        assertFalse(windows.hardFilesystemQuotaEnforced());
+        assertFalse(linux.qualifiedForUntrustedCode());
+        assertFalse(windows.qualifiedForUntrustedCode());
+        assertTrue(linux.evidence().contains("CGROUP_V2_CGROUP_KILL"));
+        assertTrue(windows.evidence().contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE"));
     }
 }
