@@ -30,7 +30,7 @@ public final class SemanticSearchService {
     public SearchResponse search(String projectReference, SearchRequest request) throws IOException {
         Objects.requireNonNull(request, "request");
         long started = System.nanoTime();
-        EmbeddingProvider provider = null;
+        EmbeddingProvider provider = indexService.embeddingProvider().orElse(null);
         SemanticVector queryVector = null;
         SemanticIndexService.Status latest = null;
         for (int attempt = 1; attempt <= MAX_SNAPSHOT_READ_ATTEMPTS; attempt++) {
@@ -39,7 +39,7 @@ public final class SemanticSearchService {
             if (before.state() != SemanticIndexService.State.READY) {
                 return unavailable(before, request, started, "SEMANTIC_SEARCH_REQUIRES_READY_INDEX");
             }
-            if (provider == null) provider = indexService.embeddingProvider().orElseThrow();
+            if (provider == null) throw new IllegalStateException("ready semantic index has no embedding provider");
             if (queryVector == null) queryVector = queryVector(provider, request.query());
             SemanticVectorStore vectorStore = indexService.vectorStore();
             List<SemanticVectorStore.VectorHit> raw = vectorStore.search(
@@ -52,13 +52,13 @@ public final class SemanticSearchService {
                     && Objects.equals(before.activeSnapshotId(), after.activeSnapshotId())
                     && Objects.equals(before.indexedSnapshotId(), after.indexedSnapshotId());
             if (!hitsAligned || !statusAligned) continue;
+            EmbeddingProvider selectedProvider = provider;
             List<SearchHit> hits = raw.stream()
                     .map(hit -> new SearchHit(hit.document(), hit.score(), InformationNature.HEURISTIC,
-                            provider.id(), provider.modelId()))
+                            selectedProvider.id(), selectedProvider.modelId()))
                     .toList();
-            List<String> limitations = successfulLimitations(after, vectorStore);
-            return new SearchResponse(after.projectId(), after.activeSnapshotId(), request.query(),
-                    "SEMANTIC", hits, limitations, elapsedMillis(started));
+            return new SearchResponse(after.projectId(), after.activeSnapshotId(), request.query(), "SEMANTIC",
+                    hits, successfulLimitations(after, vectorStore), elapsedMillis(started));
         }
         List<String> limitations = new ArrayList<>(latest == null ? List.of() : latest.limitations());
         limitations.add("SEMANTIC_INDEX_CHANGED_DURING_QUERY");
