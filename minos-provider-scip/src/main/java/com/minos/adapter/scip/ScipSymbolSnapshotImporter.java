@@ -10,7 +10,6 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Index;
 
-import java.io.DigestInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
@@ -19,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
