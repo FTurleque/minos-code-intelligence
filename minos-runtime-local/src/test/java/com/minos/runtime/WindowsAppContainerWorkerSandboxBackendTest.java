@@ -35,8 +35,15 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
         if (WorkerSandboxQualification.currentPlatform() == WorkerSandboxQualification.Platform.WINDOWS) {
             assumeTrue(discovered.isPresent(), "Windows PowerShell 5.1 is required for AppContainer qualification");
+            WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
             assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
-            assertTrue(discovered.orElseThrow().qualification().sandboxClaimPermitted());
+            assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
+            assertFalse(qualification.containment().hardFilesystemQuotaEnforced());
+            assertFalse(qualification.sandboxClaimPermitted(),
+                    "sampled filesystem limits must not qualify execution of untrusted code");
+            assertEquals(
+                    WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                    qualification.trustDisposition());
         } else {
             assertTrue(discovered.isEmpty());
         }
