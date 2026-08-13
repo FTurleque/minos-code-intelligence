@@ -2,564 +2,95 @@ package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.IncrementalIndexingPlan;
-import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
-import com.minos.orchestration.IndexingRun.IndexerExecution;
-import com.minos.orchestration.IndexingRun.Phase;
-import com.minos.orchestration.IndexingRun.Status;
-import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
-import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
-import com.minos.orchestration.ProjectIndexState.Availability;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-/**
- * Orchestre un run projet complet sans exposer de type fournisseur.
- *
- * <p>Toutes les sélections négociées doivent réussir, être stagées puis promues
- * atomiquement avant que le nouvel identifiant de snapshot devienne actif.</p>
- */
 public final class IndexingLifecycleService {
-
     private final Map<String, IndexerExecutor> executors;
     private final SnapshotStager stager;
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final Clock clock;
-    private final IndexerExecutionScopeResolver scopeResolver;
     private final ConcurrentMap<UUID, Object> projectLocks = new ConcurrentHashMap<>();
+    private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
-    public IndexingLifecycleService(
-            Collection<IndexerExecutor> executors,
-            SnapshotStager stager,
-            SnapshotPromoter promoter,
-            IndexStateStore stateStore
-    ) {
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore) {
         this(executors, stager, promoter, stateStore, Clock.systemUTC());
     }
 
-    IndexingLifecycleService(
-            Collection<IndexerExecutor> executors,
-            SnapshotStager stager,
-            SnapshotPromoter promoter,
-            IndexStateStore stateStore,
-            Clock clock
-    ) {
-        Objects.requireNonNull(executors, "executors");
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
         this.stager = Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.clock = Objects.requireNonNull(clock, "clock");
-        this.scopeResolver = new IndexerExecutionScopeResolver();
-
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
-        for (IndexerExecutor executor : executors) {
-            Objects.requireNonNull(executor, "executor");
-            String id = requireText(executor.indexerId(), "executor.indexerId");
-            if (byId.putIfAbsent(id, executor) != null) {
-                throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
-            }
+        for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
+            String id = Objects.requireNonNull(executor, "executor").indexerId();
+            if (id == null || id.isBlank()) throw new IllegalStateException("executor.indexerId must not be blank");
+            if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
         this.executors = Map.copyOf(byId);
     }
 
-    /**
-     * Compatibilité M1 : un appel direct reste une indexation complète mono-racine.
-     */
-    public IndexingRun execute(
-            UUID projectId,
-            Path projectRoot,
-            IndexerNegotiationResult negotiation
-    ) {
-        return executeInternal(
-                projectId,
-                projectRoot,
-                negotiation,
-                singleRootTargets(negotiation),
-                IndexingMode.FULL,
-                List.of()
-        );
+    public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
+        plans.validate(id, root, negotiation);
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of());
     }
 
-    /** Executes a full run using the module/build roots discovered for each provider. */
-    public IndexingRun execute(
-            UUID projectId,
-            Path projectRoot,
-            ProjectDiscovery discovery,
-            IndexerNegotiationResult negotiation
-    ) {
-        return executeInternal(
-                projectId,
-                projectRoot,
-                negotiation,
-                scopedTargets(projectRoot, discovery, negotiation),
-                IndexingMode.FULL,
-                List.of()
-        );
+    public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
+                               IndexerNegotiationResult negotiation) {
+        plans.validate(id, root, negotiation);
+        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of());
     }
 
-    /**
-     * Exécute un plan M7. Un plan NONE ne crée aucun run.
-     */
-    public Optional<IndexingRun> executePlanned(
-            UUID projectId,
-            Path projectRoot,
-            IndexerNegotiationResult negotiation,
-            IncrementalIndexingPlan plan
-    ) {
-        return executePlannedInternal(
-                projectId,
-                projectRoot,
-                negotiation,
-                singleRootTargets(negotiation),
-                plan
-        );
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
+                                                IncrementalIndexingPlan plan) {
+        plans.validate(id, root, negotiation);
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan);
     }
 
-    /** Executes a planned run using discovered module/build roots per provider. */
-    public Optional<IndexingRun> executePlanned(
-            UUID projectId,
-            Path projectRoot,
-            ProjectDiscovery discovery,
-            IndexerNegotiationResult negotiation,
-            IncrementalIndexingPlan plan
-    ) {
-        return executePlannedInternal(
-                projectId,
-                projectRoot,
-                negotiation,
-                scopedTargets(projectRoot, discovery, negotiation),
-                plan
-        );
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
+                                                IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan) {
+        plans.validate(id, root, negotiation);
+        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan);
     }
 
-    private Optional<IndexingRun> executePlannedInternal(
-            UUID projectId,
-            Path projectRoot,
-            IndexerNegotiationResult negotiation,
-            List<ExecutionTarget> targets,
-            IncrementalIndexingPlan plan
-    ) {
+    private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
+                                          List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan) {
         Objects.requireNonNull(plan, "plan");
-        if (!Objects.requireNonNull(projectId, "projectId").equals(plan.projectId())) {
-            throw new IllegalArgumentException("plan belongs to another project");
-        }
-        validatePlanAgainstNegotiation(plan, negotiation);
-        if (plan.mode() == IndexingMode.NONE) {
-            return Optional.empty();
-        }
-        List<String> changedFiles = plan.mode() == IndexingMode.INCREMENTAL
-                ? plan.changedFiles()
-                : List.of();
-        return Optional.of(executeInternal(
-                projectId,
-                projectRoot,
-                negotiation,
-                targets,
-                plan.mode(),
-                changedFiles
-        ));
+        if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
+        plans.validatePlan(plan, negotiation);
+        if (plan.mode() == IndexingMode.NONE) return Optional.empty();
+        return Optional.of(run(id, root, targets, plan.mode(),
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of()));
     }
 
-    private IndexingRun executeInternal(
-            UUID projectId,
-            Path projectRoot,
-            IndexerNegotiationResult negotiation,
-            List<ExecutionTarget> targets,
-            IndexingMode mode,
-            List<String> changedFiles
-    ) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(projectRoot, "projectRoot");
-        Objects.requireNonNull(negotiation, "negotiation");
-        Objects.requireNonNull(targets, "targets");
-        Objects.requireNonNull(mode, "mode");
-        Objects.requireNonNull(changedFiles, "changedFiles");
-        if (mode == IndexingMode.NONE) {
-            throw new IllegalArgumentException("NONE must not start an indexing run");
-        }
-        if (!negotiation.complete()) {
-            throw new IllegalArgumentException("indexer negotiation must cover every detected language");
-        }
-        if (negotiation.selections().isEmpty()) {
-            throw new IllegalArgumentException("indexer negotiation must contain at least one selection");
-        }
-        if (targets.isEmpty()) {
-            throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
-        }
-
-        Path root = projectRoot.toAbsolutePath().normalize();
-        if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
-        }
-
-        if (mode == IndexingMode.INCREMENTAL
-                && targets.stream().map(ExecutionTarget::projectRelativeRoot).distinct().count() > 1) {
-            throw new IllegalArgumentException(
-                    "multi-scope incremental indexing is not qualified; planner must require FULL for this topology"
-            );
-        }
-
-        Object projectLock = projectLocks.computeIfAbsent(projectId, ignored -> new Object());
-        UUID runId = UUID.randomUUID();
-        Instant createdAt = clock.instant();
-        ProjectIndexState previousState;
-        IndexingRun run;
-
-        synchronized (projectLock) {
-            previousState = stateStore.findProjectState(projectId)
-                    .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, createdAt));
-            if (previousState.availability() == Availability.INDEXING
-                    || previousState.availability() == Availability.REFRESHING) {
-                throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
-            }
-
-            run = runningRun(
-                    runId,
-                    projectId,
-                    createdAt,
-                    Phase.PROVIDER_EXECUTION,
-                    List.of(),
-                    Optional.empty(),
-                    previousState.activeSnapshotId(),
-                    Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())
-            );
-            stateStore.saveRun(run);
-            stateStore.saveProjectState(new ProjectIndexState(
-                    projectId,
-                    previousState.activeSnapshotId().isPresent()
-                            ? Availability.REFRESHING
-                            : Availability.INDEXING,
-                    previousState.activeSnapshotId(),
-                    Optional.of(runId),
-                    createdAt,
-                    Optional.of("indexing run in progress: mode=" + mode)
-            ));
-        }
-
-        List<IndexingArtifact> artifacts = new ArrayList<>();
-        List<IndexerExecution> executions = new ArrayList<>();
-        Optional<String> stagedSnapshotId = Optional.empty();
-        Phase phase = Phase.PROVIDER_EXECUTION;
-
-        try {
-            for (ExecutionTarget target : targets) {
-                IndexerSelection selection = target.selection();
-                String indexerId = selection.indexer().id();
-                IndexerExecutor executor = executors.get(indexerId);
-                if (executor == null) {
-                    throw new IllegalStateException("No runtime executor registered for indexer: " + indexerId);
-                }
-
-                Path relativeRoot = target.projectRelativeRoot();
-                Path executionRoot = root.resolve(relativeRoot).normalize();
-                if (!executionRoot.startsWith(root) || !Files.isDirectory(executionRoot)) {
-                    throw new IllegalStateException("provider execution root is missing or outside project: "
-                            + portable(relativeRoot));
-                }
-                List<String> scopedChangedFiles = scopedChangedFiles(mode, changedFiles, relativeRoot);
-
-                IndexingArtifact artifact = Objects.requireNonNull(
-                        executor.execute(new IndexingExecutionRequest(
-                                runId,
-                                projectId,
-                                root,
-                                executionRoot,
-                                relativeRoot,
-                                selection,
-                                mode,
-                                scopedChangedFiles
-                        )),
-                        "indexer execution artifact"
-                );
-                Path artifactPath = validateArtifact(selection, artifact, relativeRoot);
-                IndexingArtifact normalizedArtifact = new IndexingArtifact(
-                        artifact.language(),
-                        artifact.indexerId(),
-                        artifactPath,
-                        relativeRoot
-                );
-                artifacts.add(normalizedArtifact);
-                executions.add(new IndexerExecution(
-                        artifact.language(),
-                        artifact.indexerId(),
-                        artifactPath
-                ));
-                stateStore.saveRun(runningRun(
-                        runId,
-                        projectId,
-                        createdAt,
-                        phase,
-                        executions,
-                        stagedSnapshotId,
-                        previousState.activeSnapshotId(),
-                        Optional.of("provider artifacts completed: " + executions.size()
-                                + "/" + targets.size() + ", mode=" + mode
-                                + ", scope=" + portable(relativeRoot))
-                ));
-            }
-
-            phase = Phase.STAGING;
-            stateStore.saveRun(runningRun(
-                    runId,
-                    projectId,
-                    createdAt,
-                    phase,
-                    executions,
-                    stagedSnapshotId,
-                    previousState.activeSnapshotId(),
-                    Optional.of("staging project snapshot: mode=" + mode)
-            ));
-
-            String stagedId = requireText(
-                    stager.stage(new IndexSnapshotStageRequest(runId, projectId, artifacts)),
-                    "stagedSnapshotId"
-            );
-            stagedSnapshotId = Optional.of(stagedId);
-
-            phase = Phase.PROMOTION;
-            stateStore.saveRun(runningRun(
-                    runId,
-                    projectId,
-                    createdAt,
-                    phase,
-                    executions,
-                    stagedSnapshotId,
-                    previousState.activeSnapshotId(),
-                    Optional.of("promoting staged snapshot: mode=" + mode)
-            ));
-
-            promoter.promote(projectId, runId, stagedId);
-
-            Instant completedAt = clock.instant();
-            IndexingRun succeeded = new IndexingRun(
-                    runId,
-                    projectId,
-                    Status.SUCCEEDED,
-                    Phase.COMPLETED,
-                    createdAt,
-                    Optional.of(completedAt),
-                    executions,
-                    stagedSnapshotId,
-                    previousState.activeSnapshotId(),
-                    Optional.of(stagedId),
-                    Optional.of("indexing run completed and snapshot promoted: mode=" + mode
-                            + ", scopes=" + targets.size())
-            );
-
-            synchronized (projectLock) {
-                stateStore.saveRun(succeeded);
-                stateStore.saveProjectState(new ProjectIndexState(
-                        projectId,
-                        Availability.READY,
-                        Optional.of(stagedId),
-                        Optional.of(runId),
-                        completedAt,
-                        Optional.of("active snapshot is current: mode=" + mode)
-                ));
-            }
-            return succeeded;
-        } catch (Exception exception) {
-            Instant completedAt = clock.instant();
-            String failureMessage = failureMessage(exception);
-            IndexingRun failed = new IndexingRun(
-                    runId,
-                    projectId,
-                    Status.FAILED,
-                    phase,
-                    createdAt,
-                    Optional.of(completedAt),
-                    executions,
-                    stagedSnapshotId,
-                    previousState.activeSnapshotId(),
-                    previousState.activeSnapshotId(),
-                    Optional.of(failureMessage)
-            );
-
-            synchronized (projectLock) {
-                stateStore.saveRun(failed);
-                stateStore.saveProjectState(new ProjectIndexState(
-                        projectId,
-                        previousState.activeSnapshotId().isPresent()
-                                ? Availability.STALE
-                                : Availability.FAILED,
-                        previousState.activeSnapshotId(),
-                        Optional.of(runId),
-                        completedAt,
-                        Optional.of(failureMessage)
-                ));
-            }
-            return failed;
-        }
+    private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
+                            IndexingMode mode, List<String> changedFiles) {
+        if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
+        return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
+                executors, stager, promoter, stateStore, clock, projectLocks);
     }
 
-    public ProjectIndexState projectState(UUID projectId) {
-        Objects.requireNonNull(projectId, "projectId");
-        return stateStore.findProjectState(projectId)
-                .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, clock.instant()));
+    public ProjectIndexState projectState(UUID id) {
+        Objects.requireNonNull(id, "projectId");
+        return stateStore.findProjectState(id).orElseGet(() -> ProjectIndexState.neverIndexed(id, clock.instant()));
     }
-
-    public Optional<IndexingRun> findRun(UUID runId) {
-        return stateStore.findRun(Objects.requireNonNull(runId, "runId"));
-    }
-
-    public List<IndexingRun> listRuns(UUID projectId) {
-        return stateStore.listRuns(Objects.requireNonNull(projectId, "projectId"));
-    }
-
-    private List<ExecutionTarget> scopedTargets(
-            Path projectRoot,
-            ProjectDiscovery discovery,
-            IndexerNegotiationResult negotiation
-    ) {
-        Objects.requireNonNull(discovery, "discovery");
-        Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
-        if (!root.equals(discovery.rootPath().toAbsolutePath().normalize())) {
-            throw new IllegalArgumentException("discovery belongs to another project root");
-        }
-        List<ExecutionTarget> targets = new ArrayList<>();
-        for (IndexerSelection selection : negotiation.selections()) {
-            for (Path relativeRoot : scopeResolver.resolve(discovery, negotiation, selection)) {
-                targets.add(new ExecutionTarget(selection, relativeRoot));
-            }
-        }
-        return List.copyOf(targets);
-    }
-
-    private static List<ExecutionTarget> singleRootTargets(IndexerNegotiationResult negotiation) {
-        Objects.requireNonNull(negotiation, "negotiation");
-        return negotiation.selections().stream()
-                .map(selection -> new ExecutionTarget(selection, Path.of("")))
-                .toList();
-    }
-
-    private static List<String> scopedChangedFiles(
-            IndexingMode mode,
-            List<String> changedFiles,
-            Path relativeRoot
-    ) {
-        if (mode != IndexingMode.INCREMENTAL || relativeRoot.toString().isEmpty()) {
-            return changedFiles;
-        }
-        String prefix = portable(relativeRoot) + "/";
-        return changedFiles.stream()
-                .filter(path -> path.startsWith(prefix))
-                .map(path -> path.substring(prefix.length()))
-                .sorted()
-                .toList();
-    }
-
-    private static void validatePlanAgainstNegotiation(
-            IncrementalIndexingPlan plan,
-            IndexerNegotiationResult negotiation
-    ) {
-        Objects.requireNonNull(negotiation, "negotiation");
-        TreeSet<String> negotiated = new TreeSet<>();
-        for (IndexerNegotiationResult.IndexerSelection selection : negotiation.selections()) {
-            negotiated.add(selection.indexer().id());
-        }
-        if (!List.copyOf(negotiated).equals(plan.selectedIndexerIds())) {
-            throw new IllegalArgumentException("plan selections do not match indexer negotiation");
-        }
-        if (plan.mode() == IndexingMode.INCREMENTAL) {
-            for (IndexerNegotiationResult.IndexerSelection selection : negotiation.selections()) {
-                if (!selection.indexer().capabilities().contains(IndexerCapability.INCREMENTAL_INDEXING)) {
-                    throw new IllegalArgumentException(
-                            "incremental plan contains an indexer without INCREMENTAL_INDEXING: "
-                                    + selection.indexer().id()
-                    );
-                }
-            }
-        }
-    }
-
-    private static Path validateArtifact(
-            IndexerSelection selection,
-            IndexingArtifact artifact,
-            Path expectedRelativeRoot
-    ) {
-        if (artifact.language() != selection.language()) {
-            throw new IllegalStateException("executor returned an artifact for an unexpected language");
-        }
-        if (!artifact.indexerId().equals(selection.indexer().id())) {
-            throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
-        }
-        if (!artifact.projectRelativeRoot().normalize().equals(expectedRelativeRoot.normalize())) {
-            throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
-        }
-        Path artifactPath = artifact.finalArtifact().toAbsolutePath().normalize();
-        if (!Files.exists(artifactPath) || !Files.isReadable(artifactPath)) {
-            throw new IllegalStateException("final index artifact is missing or unreadable: " + artifactPath);
-        }
-        return artifactPath;
-    }
-
-    private static IndexingRun runningRun(
-            UUID runId,
-            UUID projectId,
-            Instant createdAt,
-            Phase phase,
-            List<IndexerExecution> executions,
-            Optional<String> stagedSnapshotId,
-            Optional<String> activeSnapshotBefore,
-            Optional<String> message
-    ) {
-        return new IndexingRun(
-                runId,
-                projectId,
-                Status.RUNNING,
-                phase,
-                createdAt,
-                Optional.empty(),
-                executions,
-                stagedSnapshotId,
-                activeSnapshotBefore,
-                activeSnapshotBefore,
-                message
-        );
-    }
-
-    private static String portable(Path path) {
-        return path == null ? "" : path.normalize().toString().replace('\\', '/');
-    }
-
-    private static String requireText(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException(label + " must not be blank");
-        }
-        return value;
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return exception.getClass().getSimpleName()
-                + (message == null || message.isBlank() ? "" : ": " + message);
-    }
-
-    private record ExecutionTarget(IndexerSelection selection, Path projectRelativeRoot) {
-        private ExecutionTarget {
-            Objects.requireNonNull(selection, "selection");
-            projectRelativeRoot = Objects.requireNonNull(projectRelativeRoot, "projectRelativeRoot").normalize();
-            if (projectRelativeRoot.isAbsolute() || projectRelativeRoot.startsWith("..")) {
-                throw new IllegalArgumentException("projectRelativeRoot must stay inside project");
-            }
-        }
-    }
+    public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }
+    public List<IndexingRun> listRuns(UUID id) { return stateStore.listRuns(Objects.requireNonNull(id, "projectId")); }
 }

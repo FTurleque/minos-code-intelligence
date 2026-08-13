@@ -90,16 +90,41 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 new ScipSymbolSnapshotRequest(project.id(), effectiveSnapshotId, blankToNull(moduleId), safeProviderId,
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
                 snapshotStore);
+
+        // importSnapshot() has crossed the active-snapshot commit point. Persist the authoritative
+        // state before secondary history so a history I/O failure can never make a committed import
+        // appear to have retained the previous snapshot.
         Instant completedAt = Instant.now();
-        writeHistory(project.id(), new IndexHistory(
-                effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
-        stateStore.saveProjectState(new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
+        ProjectIndexState committedState = new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
                 Optional.of(effectiveSnapshotId), Optional.empty(), completedAt,
-                Optional.of("active snapshot imported explicitly through import-scip")));
+                Optional.of("active snapshot imported explicitly through import-scip"));
+        saveCommittedState(committedState);
+        try {
+            writeHistory(project.id(), new IndexHistory(
+                    effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
+        } catch (IOException ignored) {
+            // CLI history is secondary evidence. The active snapshot and ProjectIndexState are the
+            // authoritative commit record; retention/reinspection must not be invalidated by history I/O.
+        }
+
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
                 blankToNull(providerVersion), report.normalizedSymbolCount(), report.occurrenceCount(),
                 report.relationshipCount(), report.relatedTestRelationshipCount(), report.unresolvedOccurrenceCount(),
                 report.unresolvedRelationshipCount(), completedAt.toString());
+    }
+
+    private void saveCommittedState(ProjectIndexState state) throws IOException {
+        RuntimeException firstFailure = null;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                stateStore.saveProjectState(state);
+                return;
+            } catch (RuntimeException failure) {
+                if (firstFailure == null) firstFailure = failure;
+                else firstFailure.addSuppressed(failure);
+            }
+        }
+        throw new IOException("snapshot was committed but project index state could not be persisted", firstFailure);
     }
 
     private static ProjectView projectView(ProjectInspectionService.ProjectView view) {

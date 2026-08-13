@@ -1,27 +1,28 @@
 package com.minos.intellij.protocol;
 
 import com.intellij.execution.process.OSProcessUtil;
+import com.intellij.openapi.progress.ProcessCanceledException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Owns the full lifecycle of one MINOS CLI process: start, output drain, cancellation, and
- * guaranteed cleanup of every descendant. Implements AutoCloseable so try-with-resources covers
- * the case where control flow exits before an explicit stop() call.
+ * cleanup of every process that was observed as owned by the command.
  *
  * <p>Cancellation and timeout deliberately keep the CLI root alive while known descendants are
- * signalled first. This prevents the root from disappearing before its provider/build descendants
- * can be enumerated. The final forced phase delegates to IntelliJ's OS-aware
- * {@link OSProcessUtil#killProcessTree(Process)} (WinP/Windows recursive termination on Windows,
- * platform process-tree termination elsewhere) and retains bounded ProcessHandle sweeps only as a
- * fallback/verification layer.</p>
+ * signalled first. The forced phase delegates to IntelliJ's OS-aware
+ * {@link OSProcessUtil#killProcessTree(Process)} and retains ProcessHandle sweeps as a fallback and
+ * verification layer. Cleanup is fail-closed: an explicit stop never hides termination failures,
+ * and close retries while termination has not been proven complete.</p>
  */
 final class MinosProcessSupervisor implements AutoCloseable {
 
@@ -38,10 +39,12 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private final AtomicReference<byte[]> stdout = new AtomicReference<>(new byte[0]);
     private final AtomicReference<byte[]> stderr = new AtomicReference<>(new byte[0]);
     private final AtomicReference<IOException> readFailure = new AtomicReference<>();
-    private final AtomicBoolean stopping = new AtomicBoolean(false);
+    private final AtomicBoolean terminationComplete = new AtomicBoolean(false);
+    private final Map<Long, ProcessHandle> ownedHandles = new LinkedHashMap<>();
 
     MinosProcessSupervisor(Process process) {
         this.process = process;
+        remember(process.descendants().toList());
         this.outReader = Thread.ofVirtual().name("minos-stdout")
                 .start(() -> readBounded(process.getInputStream(), stdout, readFailure));
         this.errReader = Thread.ofVirtual().name("minos-stderr")
@@ -54,56 +57,61 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     /**
-     * Stops the complete MINOS process tree. The original IntelliJ cancellation exception is
-     * rethrown unchanged. A null cause is the timeout/cleanup path and is reported by the caller.
+     * Stops the complete MINOS process tree. Cancellation is rethrown unchanged. A null cause is
+     * the timeout/explicit-cleanup path; any cleanup failure is then surfaced as a protocol error.
      */
-    void stop(Throwable cause) throws MinosProtocolException {
-        stopping.set(true);
-        List<Throwable> suppressed = new ArrayList<>();
+    synchronized void stop(Throwable cause) throws MinosProtocolException {
+        if (terminationComplete.get()) {
+            if (cause instanceof ProcessCanceledException canceled) throw canceled;
+            if (cause != null) throw new MinosProtocolException("MINOS process stopped: " + cause.getMessage(), cause);
+            return;
+        }
 
-        // Capture descendants while the root is definitely still alive. Handles remain valid even
-        // if parent/child relationships disappear later in the shutdown sequence.
-        List<ProcessHandle> snapshot = process.descendants().toList();
+        List<Throwable> failures = new ArrayList<>();
+        remember(process.descendants().toList());
+        List<ProcessHandle> snapshot = rememberedHandles();
 
-        // Give already-known descendants a bounded graceful opportunity without terminating the
-        // CLI root first. Keeping the root alive prevents the original orphaning window.
         terminateDescendantsGracefully(snapshot);
-        waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, suppressed);
+        waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, failures);
+        remember(process.descendants().toList());
 
-        // IntelliJ owns the OS-specific recursive termination implementation. On Windows this goes
-        // through WinP/WinProcessManager rather than Java-only descendant traversal.
         boolean platformTreeKilled = false;
         try {
             platformTreeKilled = OSProcessUtil.killProcessTree(process);
         } catch (RuntimeException exception) {
-            suppressed.add(new IOException("IntelliJ platform process-tree termination failed", exception));
+            failures.add(new IOException("IntelliJ platform process-tree termination failed", exception));
         }
         if (!platformTreeKilled && process.isAlive()) {
-            suppressed.add(new IOException("IntelliJ platform process-tree termination returned false"));
+            failures.add(new IOException("IntelliJ platform process-tree termination returned false"));
         }
 
-        // Defense in depth: kill the pre-stop handles and perform bounded fresh sweeps. This also
-        // covers environments where the native platform implementation is unavailable or partial.
-        terminateDescendantsForcibly(snapshot, suppressed);
+        terminateDescendantsForcibly(rememberedHandles(), failures);
         if (process.isAlive()) process.destroyForcibly();
         try {
             process.waitFor(FORCED_WAIT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            suppressed.add(interrupted);
+            failures.add(interrupted);
         }
 
-        long survivors = process.descendants().filter(ProcessHandle::isAlive).count();
+        remember(process.descendants().toList());
+        terminateRememberedSurvivors();
+        long survivors = rememberedHandles().stream().filter(ProcessHandle::isAlive).count();
         if (process.isAlive() || survivors > 0) {
-            suppressed.add(new IOException(
+            failures.add(new IOException(
                     "MINOS process tree has " + (process.isAlive() ? 1 : 0) + " root + "
-                            + survivors + " descendant(s) still alive after forced termination"));
+                            + survivors + " owned descendant(s) still alive after forced termination"));
         }
 
-        closeQuietly(process.getInputStream(), suppressed);
-        closeQuietly(process.getErrorStream(), suppressed);
-        joinReaders(suppressed);
-        propagate(cause, suppressed);
+        closeQuietly(process.getInputStream(), failures);
+        closeQuietly(process.getErrorStream(), failures);
+        joinReaders(failures);
+
+        boolean readersStopped = !outReader.isAlive() && !errReader.isAlive();
+        boolean processesStopped = !process.isAlive()
+                && rememberedHandles().stream().noneMatch(ProcessHandle::isAlive);
+        terminationComplete.set(processesStopped && readersStopped);
+        propagate(cause, failures);
     }
 
     /**
@@ -127,11 +135,11 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
         closeQuietly(process.getInputStream(), null);
         closeQuietly(process.getErrorStream(), null);
-        List<Throwable> suppressed = new ArrayList<>();
-        joinReaders(suppressed);
-        if (!suppressed.isEmpty()) {
+        List<Throwable> failures = new ArrayList<>();
+        joinReaders(failures);
+        if (!failures.isEmpty()) {
             IOException ioe = new IOException("MINOS process output drain did not terminate");
-            suppressed.forEach(ioe::addSuppressed);
+            failures.forEach(ioe::addSuppressed);
             throw ioe;
         }
         for (Thread reader : new Thread[]{outReader, errReader}) {
@@ -158,13 +166,20 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
     @Override
     public void close() {
-        if (process.isAlive() && stopping.compareAndSet(false, true)) {
-            try {
-                stop(null);
-            } catch (MinosProtocolException ignored) {
-                // AutoCloseable.close() cannot throw checked exceptions.
-            }
+        if (terminationComplete.get()) return;
+        try {
+            stop(null);
+        } catch (MinosProtocolException ignored) {
+            // Explicit stop() surfaces cleanup failures. AutoCloseable still performs this final retry.
         }
+    }
+
+    private synchronized void remember(List<ProcessHandle> handles) {
+        for (ProcessHandle handle : handles) ownedHandles.putIfAbsent(handle.pid(), handle);
+    }
+
+    private synchronized List<ProcessHandle> rememberedHandles() {
+        return new ArrayList<>(ownedHandles.values());
     }
 
     private static void terminateDescendantsGracefully(List<ProcessHandle> snapshot) {
@@ -174,74 +189,91 @@ final class MinosProcessSupervisor implements AutoCloseable {
         });
     }
 
-    private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> suppressed) {
+    private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> failures) {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(maximumMillis);
         while (System.nanoTime() < deadline) {
-            if (process.descendants().noneMatch(ProcessHandle::isAlive)) return;
+            remember(process.descendants().toList());
+            if (rememberedHandles().stream().noneMatch(ProcessHandle::isAlive)) return;
             try {
                 Thread.sleep(50L);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                suppressed.add(interrupted);
+                failures.add(interrupted);
                 return;
             }
         }
     }
 
-    private void terminateDescendantsForcibly(List<ProcessHandle> snapshot, List<Throwable> suppressed) {
+    private void terminateDescendantsForcibly(List<ProcessHandle> snapshot, List<Throwable> failures) {
         List<ProcessHandle> snapshotList = new ArrayList<>(snapshot);
         snapshotList.reversed().forEach(handle -> {
             if (handle.isAlive()) handle.destroyForcibly();
         });
         for (int sweep = 0; sweep < DESCENDANT_SWEEP_COUNT; sweep++) {
             List<ProcessHandle> fresh = new ArrayList<>(process.descendants().toList());
+            remember(fresh);
             fresh.reversed().forEach(handle -> {
                 if (handle.isAlive()) handle.destroyForcibly();
             });
-            if (sweep < DESCENDANT_SWEEP_COUNT - 1 && process.isAlive()) {
+            terminateRememberedSurvivors();
+            if (sweep < DESCENDANT_SWEEP_COUNT - 1
+                    && (process.isAlive() || rememberedHandles().stream().anyMatch(ProcessHandle::isAlive))) {
                 try {
                     Thread.sleep(DESCENDANT_SWEEP_DELAY_MILLIS);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
-                    suppressed.add(interrupted);
+                    failures.add(interrupted);
                     return;
                 }
             }
         }
     }
 
-    private void joinReaders(List<Throwable> suppressed) {
+    private void terminateRememberedSurvivors() {
+        List<ProcessHandle> handles = rememberedHandles();
+        handles.reversed().forEach(handle -> {
+            if (handle.isAlive()) handle.destroyForcibly();
+        });
+    }
+
+    private void joinReaders(List<Throwable> failures) {
         for (Thread reader : new Thread[]{outReader, errReader}) {
             try {
                 reader.join(READER_JOIN_MILLIS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                suppressed.add(interrupted);
+                failures.add(interrupted);
             }
             if (reader.isAlive()) {
-                suppressed.add(new IOException("MINOS output reader thread did not terminate: " + reader.getName()));
+                failures.add(new IOException("MINOS output reader thread did not terminate: " + reader.getName()));
             }
         }
     }
 
-    private static void closeQuietly(java.io.Closeable closeable, List<Throwable> suppressed) {
+    private static void closeQuietly(java.io.Closeable closeable, List<Throwable> failures) {
         try {
             closeable.close();
         } catch (IOException exception) {
-            if (suppressed != null) suppressed.add(exception);
+            if (failures != null) failures.add(exception);
         }
     }
 
-    private void propagate(Throwable cause, List<Throwable> suppressed) throws MinosProtocolException {
-        if (cause instanceof com.intellij.openapi.progress.ProcessCanceledException pce) {
-            suppressed.forEach(pce::addSuppressed);
-            throw pce;
+    private static void propagate(Throwable cause, List<Throwable> failures) throws MinosProtocolException {
+        if (cause instanceof ProcessCanceledException canceled) {
+            failures.forEach(canceled::addSuppressed);
+            throw canceled;
         }
         if (cause != null) {
             MinosProtocolException wrapped = new MinosProtocolException(
                     "MINOS process stopped: " + cause.getMessage(), cause);
-            suppressed.forEach(wrapped::addSuppressed);
+            failures.forEach(wrapped::addSuppressed);
             throw wrapped;
+        }
+        if (!failures.isEmpty()) {
+            MinosProtocolException cleanupFailure = new MinosProtocolException(
+                    "MINOS process cleanup did not complete cleanly", failures.getFirst());
+            failures.stream().skip(1).forEach(cleanupFailure::addSuppressed);
+            throw cleanupFailure;
         }
     }
 
