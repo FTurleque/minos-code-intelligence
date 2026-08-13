@@ -8,237 +8,135 @@ import com.minos.semantic.StaleSemanticSyncException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Verifies that semantic replacement and structural snapshot promotion use the same
- * transaction-scoped per-project advisory lock so stale writers cannot commit across a promotion.
- */
 class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
 
     @Test
-    void replaceConditionallyThrowsWhenActiveSnapshotChanged() throws Exception {
-        String projectId = UUID.randomUUID().toString();
-        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
-
-        store.replace(snap(projectId, "snap-2"));
-
-        Exception ex = assertThrows(StaleSemanticSyncException.class,
-                () -> store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                        () -> Optional.of("snap-2")));
-        assertTrue(ex.getMessage().contains("snap-2"));
-        assertEquals("snap-2", store.metadata(projectId).orElseThrow().snapshotId());
-    }
-
-    @Test
-    void replaceConditionallySucceedsWhenSnapshotIsStillCurrent() throws Exception {
-        String projectId = UUID.randomUUID().toString();
-        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
-
-        store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                () -> Optional.of("snap-1"));
-
-        assertEquals("snap-1", store.metadata(projectId).orElseThrow().snapshotId());
-    }
-
-    @Test
-    void sameProjectWritersAreSerializedByAdvisoryLock() throws Exception {
-        String projectId = UUID.randomUUID().toString();
-        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
-
-        AtomicBoolean aSawStale = new AtomicBoolean(false);
-        AtomicBoolean bSucceeded = new AtomicBoolean(false);
-        CountDownLatch aHoldsAdvisory = new CountDownLatch(1);
-        CountDownLatch releaseA = new CountDownLatch(1);
-        AtomicReference<Throwable> errors = new AtomicReference<>();
-
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            Future<?> futureA = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectId, "snap-1"), "snap-1", () -> {
-                        aHoldsAdvisory.countDown();
-                        try {
-                            releaseA.await(15, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        return Optional.of("snap-2");
-                    });
-                } catch (StaleSemanticSyncException e) {
-                    aSawStale.set(true);
-                } catch (Throwable t) {
-                    errors.compareAndSet(null, t);
-                }
-            });
-
-            assertTrue(aHoldsAdvisory.await(15, TimeUnit.SECONDS));
-
-            Future<?> futureB = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectId, "snap-2"), "snap-2",
-                            () -> Optional.of("snap-2"));
-                    bSucceeded.set(true);
-                } catch (Throwable t) {
-                    errors.compareAndSet(null, t);
-                }
-            });
-
-            releaseA.countDown();
-            futureA.get(15, TimeUnit.SECONDS);
-            futureB.get(15, TimeUnit.SECONDS);
-        }
-
-        assertTrue(aSawStale.get());
-        assertTrue(bSucceeded.get());
-        assertTrue(errors.get() == null, "no unexpected errors: " + errors.get());
-        assertEquals("snap-2", store.metadata(projectId).orElseThrow().snapshotId());
-    }
-
-    @Test
-    void structuralPromotionCannotInterleaveBetweenSemanticRecheckAndCommit() throws Exception {
+    void conditionalCommitUsesAuthoritativeReaderWithoutBorrowingASecondLease() throws Exception {
         UUID projectId = UUID.randomUUID();
-        String projectText = projectId.toString();
-        PostgresCodeKnowledgeSnapshotStore snapshots = new PostgresCodeKnowledgeSnapshotStore(connections);
+        String text = projectId.toString();
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
         PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
-        snapshots.publish(projectId, "snap-1", List.of(), List.of(), List.of());
+        knowledge.publish(projectId, "snap-1", List.of(), List.of(), List.of());
+        AtomicBoolean externalReaderCalled = new AtomicBoolean();
 
-        CountDownLatch semanticHoldsAdvisory = new CountDownLatch(1);
-        CountDownLatch releaseSemantic = new CountDownLatch(1);
-        AtomicBoolean structuralPromoted = new AtomicBoolean(false);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
+        semantic.replaceConditionally(snap(text, "snap-1"), "snap-1", () -> {
+            externalReaderCalled.set(true);
+            assertEquals(1, connections.poolStats().leased(), "nested reader must reuse the transaction lease");
+            return knowledge.loadActiveKnowledge(projectId).map(value -> value.snapshotId());
+        });
+
+        assertTrue(externalReaderCalled.get());
+        assertEquals(0, connections.poolStats().acquisitionTimeouts());
+        assertEquals("snap-1", semantic.metadata(text).orElseThrow().snapshotId());
+    }
+
+    @Test
+    void conditionalCommitRejectsAStaleStructuralSnapshot() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        String text = projectId.toString();
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
+        knowledge.publish(projectId, "snap-2", List.of(), List.of(), List.of());
+
+        assertThrows(StaleSemanticSyncException.class,
+                () -> semantic.replaceConditionally(snap(text, "snap-1"), "snap-1",
+                        () -> knowledge.loadActiveKnowledge(projectId).map(value -> value.snapshotId())));
+        assertTrue(semantic.metadata(text).isEmpty());
+    }
+
+    @Test
+    void rawSemanticMutationsCannotBypassTheProjectMutationLock() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        String text = projectId.toString();
+        PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
+        CountDownLatch lockHeld = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicBoolean replaceDone = new AtomicBoolean();
 
         try (var executor = Executors.newFixedThreadPool(2)) {
-            Future<?> semanticCommit = executor.submit(() -> {
+            var holder = executor.submit(() -> {
                 try {
-                    semantic.replaceConditionally(snap(projectText, "snap-1"), "snap-1", () -> {
-                        semanticHoldsAdvisory.countDown();
-                        try {
-                            releaseSemantic.await(15, TimeUnit.SECONDS);
-                        } catch (InterruptedException interrupted) {
+                    connections.inTransaction(connection -> {
+                        PostgresProjectMutationLock.acquire(connection, projectId);
+                        lockHeld.countDown();
+                        try { release.await(10, TimeUnit.SECONDS); }
+                        catch (InterruptedException exception) {
                             Thread.currentThread().interrupt();
-                            throw new java.io.IOException("semantic test interrupted", interrupted);
+                            throw new java.io.IOException("test interrupted", exception);
                         }
-                        return snapshots.loadActiveKnowledge(projectId).map(value -> value.snapshotId());
+                        return null;
                     });
-                } catch (Throwable throwable) {
-                    failure.compareAndSet(null, throwable);
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
                 }
             });
-
-            assertTrue(semanticHoldsAdvisory.await(15, TimeUnit.SECONDS),
-                    "semantic transaction must own the advisory project lock before promotion starts");
-
-            Future<?> structuralPromotion = executor.submit(() -> {
-                try {
-                    snapshots.publish(projectId, "snap-2", List.of(), List.of(), List.of());
-                    structuralPromoted.set(true);
-                } catch (Throwable throwable) {
-                    failure.compareAndSet(null, throwable);
-                }
+            assertTrue(lockHeld.await(10, TimeUnit.SECONDS));
+            var writer = executor.submit(() -> {
+                try { semantic.replace(snap(text, "snap-1")); replaceDone.set(true); }
+                catch (Exception exception) { throw new RuntimeException(exception); }
             });
-
             Thread.sleep(200);
-            assertFalse(structuralPromoted.get(),
-                    "structural promotion must block while semantic recheck and commit own the advisory lock");
-
-            releaseSemantic.countDown();
-            semanticCommit.get(15, TimeUnit.SECONDS);
-            structuralPromotion.get(15, TimeUnit.SECONDS);
+            assertFalse(replaceDone.get(), "raw replace must wait for the shared project mutation lock");
+            release.countDown();
+            holder.get(10, TimeUnit.SECONDS);
+            writer.get(10, TimeUnit.SECONDS);
         }
-
-        assertTrue(failure.get() == null, "no unexpected concurrency error: " + failure.get());
-        assertTrue(structuralPromoted.get());
-        assertEquals("snap-1", semantic.metadata(projectText).orElseThrow().snapshotId());
-        assertEquals("snap-2", snapshots.loadActiveKnowledge(projectId).orElseThrow().snapshotId());
+        assertTrue(replaceDone.get());
     }
 
     @Test
-    void differentProjectsDoNotShareAdvisoryLock() throws Exception {
-        String projectX = UUID.randomUUID().toString();
-        String projectY = UUID.randomUUID().toString();
-        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
+    void readsIgnoreDocumentsThatDoNotMatchSemanticMetadataSnapshot() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        String text = projectId.toString();
+        PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
+        semantic.replace(snap(text, "snap-1"));
+        connections.withConnection(connection -> {
+            try (var statement = connection.prepareStatement(
+                    "INSERT INTO semantic_documents(project_id,stable_key,document_id,snapshot_id,kind,source_id,"
+                            + "file_id,start_line,end_line,content,checksum,embedding) "
+                            + "VALUES (?,?,?,?,?,?,?,?,?,?,?,CAST(? AS vector))")) {
+                statement.setObject(1, projectId);
+                statement.setString(2, "stray-key");
+                statement.setString(3, "stray-id");
+                statement.setString(4, "snap-other");
+                statement.setString(5, SemanticDocumentKind.SYMBOL.name());
+                statement.setString(6, "fixture");
+                statement.setString(7, "Stray.java");
+                statement.setInt(8, 1); statement.setInt(9, 1);
+                statement.setString(10, "stray"); statement.setString(11, "stray-cs");
+                statement.setString(12, "[1,0,0]");
+                statement.executeUpdate();
+            }
+            return null;
+        });
 
-        CountDownLatch xHoldsLock = new CountDownLatch(1);
-        CountDownLatch xProceed = new CountDownLatch(1);
-        AtomicBoolean yDone = new AtomicBoolean(false);
-        AtomicReference<Throwable> errors = new AtomicReference<>();
-
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            Future<?> futureX = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectX, "snap-x"), "snap-x", () -> {
-                        xHoldsLock.countDown();
-                        try {
-                            xProceed.await(15, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        return Optional.of("snap-x");
-                    });
-                } catch (Throwable t) {
-                    errors.compareAndSet(null, t);
-                }
-            });
-
-            assertTrue(xHoldsLock.await(10, TimeUnit.SECONDS));
-
-            Future<?> futureY = executor.submit(() -> {
-                try {
-                    store.replaceConditionally(snap(projectY, "snap-y"), "snap-y",
-                            () -> Optional.of("snap-y"));
-                    yDone.set(true);
-                } catch (Throwable t) {
-                    errors.compareAndSet(null, t);
-                }
-            });
-            futureY.get(15, TimeUnit.SECONDS);
-
-            assertTrue(yDone.get());
-            assertTrue(errors.get() == null, "no unexpected errors: " + errors.get());
-
-            xProceed.countDown();
-            futureX.get(10, TimeUnit.SECONDS);
-        }
-    }
-
-    @Test
-    void advisoryLockIsReleasedAfterStaleException() throws Exception {
-        String projectId = UUID.randomUUID().toString();
-        PostgresSemanticVectorStore store = new PostgresSemanticVectorStore(connections);
-
-        try {
-            store.replaceConditionally(snap(projectId, "snap-1"), "snap-1",
-                    () -> Optional.of("snap-2"));
-        } catch (StaleSemanticSyncException ignored) {
-        }
-
-        store.replaceConditionally(snap(projectId, "snap-2"), "snap-2",
-                () -> Optional.of("snap-2"));
-        assertEquals("snap-2", store.metadata(projectId).orElseThrow().snapshotId());
+        SemanticVectorStore.IndexSnapshot loaded = semantic.load(text).orElseThrow();
+        assertEquals("snap-1", loaded.snapshotId());
+        assertEquals(1, loaded.documents().size());
+        assertEquals("snap-1", loaded.documents().getFirst().document().snapshotId());
+        List<SemanticVectorStore.VectorHit> hits = semantic.search(
+                text, SemanticVector.fromArray("query", new double[]{1, 0, 0}), 20, -1.0);
+        assertTrue(hits.stream().allMatch(hit -> "snap-1".equals(hit.document().snapshotId())));
     }
 
     private static SemanticVectorStore.IndexSnapshot snap(String projectId, String snapshotId) {
         String stableKey = "symbol:pg:" + snapshotId;
-        SemanticDocument document = new SemanticDocument(
-                "id-" + snapshotId, stableKey, projectId, snapshotId,
-                SemanticDocumentKind.SYMBOL, "pg-fixture", "src/Fixture.java",
-                1, 1, "pg content " + snapshotId, "cs-" + snapshotId);
-        SemanticVector vector = SemanticVector.fromArray(stableKey, new double[]{1.0, 0.0, 0.0});
-        return new SemanticVectorStore.IndexSnapshot(
-                projectId, snapshotId, "provider", "model-v1", 3,
-                System.currentTimeMillis(),
-                List.of(new SemanticVectorStore.IndexedDocument(document, vector)));
+        SemanticDocument document = new SemanticDocument("id-" + snapshotId, stableKey, projectId, snapshotId,
+                SemanticDocumentKind.SYMBOL, "pg-fixture", "src/Fixture.java", 1, 1,
+                "pg content " + snapshotId, "cs-" + snapshotId);
+        return new SemanticVectorStore.IndexSnapshot(projectId, snapshotId, "provider", "model-v1", 3,
+                System.currentTimeMillis(), List.of(new SemanticVectorStore.IndexedDocument(
+                        document, SemanticVector.fromArray(stableKey, new double[]{1, 0, 0}))));
     }
 }

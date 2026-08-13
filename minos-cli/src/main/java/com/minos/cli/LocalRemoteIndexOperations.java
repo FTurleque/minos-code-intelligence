@@ -8,6 +8,7 @@ import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
+import com.minos.remote.IdempotentRemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
@@ -56,7 +57,8 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             WorkerFactory workerFactory
     ) {
         this.application = Objects.requireNonNull(application, "application");
-        this.materializer = Objects.requireNonNull(materializer, "materializer");
+        this.materializer = IdempotentRemoteRepositoryMaterializer.wrap(
+                Objects.requireNonNull(materializer, "materializer"));
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
         this.workerFactory = Objects.requireNonNull(workerFactory, "workerFactory");
         this.descriptors = application.indexerDescriptors().stream().collect(Collectors.toUnmodifiableMap(

@@ -30,6 +30,7 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
         String payload = json.write(snapshot);
         try {
             return connections.inTransaction(connection -> {
+                PostgresProjectMutationLock.acquire(connection, projectId);
                 Optional<ProjectFingerprintSnapshot> existing = findExisting(connection, projectId, indexSnapshotId);
                 if (existing.isPresent()) {
                     ProjectFingerprintSnapshot value = existing.orElseThrow();
@@ -82,19 +83,20 @@ final class PostgresFingerprintSnapshotStore implements ProjectFingerprintSnapsh
 
     @Override
     public void promote(UUID projectId, String indexSnapshotId) throws IOException {
-        if (load(projectId, indexSnapshotId).isEmpty()) {
-            throw new IOException("fingerprint snapshot is not published: " + indexSnapshotId);
-        }
         try {
-            connections.withConnection(connection -> {
+            connections.inTransaction(connection -> {
+                PostgresProjectMutationLock.acquire(connection, projectId);
+                if (findExisting(connection, projectId, indexSnapshotId).isEmpty()) {
+                    throw new IOException("fingerprint snapshot is not published: " + indexSnapshotId);
+                }
                 try (PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO fingerprint_active(project_id,snapshot_id) VALUES (?,?) "
                                 + "ON CONFLICT(project_id) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id")) {
                     statement.setObject(1, projectId);
                     statement.setString(2, indexSnapshotId);
                     statement.executeUpdate();
-                    return null;
                 }
+                return null;
             });
         } catch (SQLException exception) {
             throw new IOException("unable to promote PostgreSQL fingerprint snapshot", exception);
