@@ -34,7 +34,7 @@ class WorkerSandboxQualificationTest {
     }
 
     @Test
-    void qualificationCannotClaimDenyWithoutOsEvidence() {
+    void qualificationCannotClaimDenyOrUntrustedCodeWithoutOsEvidence() {
         assertThrows(IllegalArgumentException.class, () -> new WorkerSandboxQualification(
                 "invalid",
                 com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
