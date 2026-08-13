@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
 
     @Test
-    void conditionalCommitReadsKnowledgePointerOnItsOwnTransaction() throws Exception {
+    void conditionalCommitUsesAuthoritativeReaderWithoutBorrowingASecondLease() throws Exception {
         UUID projectId = UUID.randomUUID();
         String text = projectId.toString();
         PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
@@ -32,10 +32,12 @@ class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
 
         semantic.replaceConditionally(snap(text, "snap-1"), "snap-1", () -> {
             externalReaderCalled.set(true);
-            throw new AssertionError("PostgreSQL must not borrow a second connection for the recheck");
+            assertEquals(1, connections.poolStats().leased(), "nested reader must reuse the transaction lease");
+            return knowledge.loadActiveKnowledge(projectId).map(value -> value.snapshotId());
         });
 
-        assertFalse(externalReaderCalled.get());
+        assertTrue(externalReaderCalled.get());
+        assertEquals(0, connections.poolStats().acquisitionTimeouts());
         assertEquals("snap-1", semantic.metadata(text).orElseThrow().snapshotId());
     }
 
@@ -48,7 +50,8 @@ class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
         knowledge.publish(projectId, "snap-2", List.of(), List.of(), List.of());
 
         assertThrows(StaleSemanticSyncException.class,
-                () -> semantic.replaceConditionally(snap(text, "snap-1"), "snap-1", () -> java.util.Optional.of("snap-1")));
+                () -> semantic.replaceConditionally(snap(text, "snap-1"), "snap-1",
+                        () -> knowledge.loadActiveKnowledge(projectId).map(value -> value.snapshotId())));
         assertTrue(semantic.metadata(text).isEmpty());
     }
 
