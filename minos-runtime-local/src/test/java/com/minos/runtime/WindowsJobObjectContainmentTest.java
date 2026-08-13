@@ -30,8 +30,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Adversarial proof that the Windows Job Object is the real boundary: the provider joins it while
- * still suspended, its limits are read back from the kernel, and no descendant outlives the job.
+ * Adversarial proof that the Windows Job Object is the real process boundary: the provider joins it
+ * while still suspended, its limits are read back from the kernel, and no descendant outlives the
+ * job. Filesystem bytes/entries remain a separate hard-quota requirement.
  */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsJobObjectContainmentTest {
@@ -40,7 +41,7 @@ class WindowsJobObjectContainmentTest {
     void neitherChildNorGrandchildSurvivesTheJobObject() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a qualified Windows AppContainer backend is required");
+        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
         WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
         Path project = Files.createTempDirectory("minos-windows-job-project-");
@@ -49,8 +50,6 @@ class WindowsJobObjectContainmentTest {
         Path providerScript = project.resolve("provider-child.ps1");
         Files.writeString(providerScript, """
                 param([string] $Artifact, [string] $Descendants, [string] $PowerShell)
-                # Only .NET APIs: a sanitized AppContainer environment cannot always initialize the
-                # PowerShell provider stack, so cmdlets are unavailable to a contained provider.
                 $ErrorActionPreference = 'Continue'
                 $journal = "begin`r`n"
                 [System.IO.File]::WriteAllText($Descendants, $journal)
@@ -130,7 +129,7 @@ class WindowsJobObjectContainmentTest {
     void theSandboxPlanCarriesEveryAggregateJobLimit() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-plan-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a qualified Windows AppContainer backend is required");
+        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
         Path working = Files.createTempDirectory("minos-windows-job-plan-working-");
         Path run = Files.createTempDirectory("minos-windows-job-plan-run-");
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
@@ -164,17 +163,24 @@ class WindowsJobObjectContainmentTest {
     void theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces() throws Exception {
         Path home = Files.createTempDirectory("minos-windows-job-claim-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
-        assumeTrue(discovered.isPresent(), "a qualified Windows AppContainer backend is required");
+        assumeTrue(discovered.isPresent(), "a Windows AppContainer backend is required");
         WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
 
         assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
-        assertTrue(qualification.sandboxClaimPermitted());
-        assertTrue(discovered.orElseThrow().supportsUntrustedCode());
+        assertFalse(qualification.containment().hardFilesystemQuotaEnforced());
+        assertFalse(qualification.sandboxClaimPermitted());
+        assertFalse(discovered.orElseThrow().supportsUntrustedCode());
+        assertEquals(
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                qualification.trustDisposition());
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_BREAKAWAY_PROHIBITED"));
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_TERMINATED_ON_EVERY_EXIT_PATH"));
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
     }
 
-    /** Surfaces what the contained provider actually reported, instead of an opaque exit code. */
     private static String providerDiagnostics(Path home) {
         Path runs = home.resolve("runs");
         if (!Files.isDirectory(runs)) return "<no MINOS run directory>";

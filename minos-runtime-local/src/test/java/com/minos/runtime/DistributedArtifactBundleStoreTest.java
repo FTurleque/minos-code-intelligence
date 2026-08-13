@@ -23,6 +23,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -132,6 +133,48 @@ class DistributedArtifactBundleStoreTest {
         } finally {
             store.release(first);
         }
+    }
+
+    @Test
+    void duplicateAndUnknownReleaseCannotConsumeAnotherActiveHandle(@TempDir Path temp) throws Exception {
+        DistributedArtifactBundleStore store = store(temp, 1);
+        Path firstArtifact = Files.writeString(temp.resolve("identity-first.scip"), "first");
+        DistributedArtifactManifest firstManifest = manifest(
+                "provider-identity-one", firstArtifact, Instant.parse("2026-07-29T00:00:01Z"));
+        Path firstBundle = store.createBundle(temp.resolve("identity-first.zip"), firstManifest, firstArtifact);
+
+        var first = store.accept(firstBundle);
+        var second = store.accept(firstBundle);
+        store.release(first);
+        store.release(first);
+
+        var unknown = new DistributedArtifactBundleStore.VerifiedArtifact(
+                second.manifest(), second.artifact(), second.cacheKey(), second.cacheHit(), second.bundleSha256());
+        store.release(unknown);
+
+        Path competingArtifact = Files.writeString(temp.resolve("identity-competing.scip"), "competing");
+        DistributedArtifactManifest competingManifest = manifest(
+                "provider-identity-two", competingArtifact, Instant.parse("2026-07-29T00:00:02Z"));
+        Path competingBundle = store.createBundle(
+                temp.resolve("identity-competing.zip"), competingManifest, competingArtifact);
+
+        assertThrows(java.io.IOException.class, () -> store.accept(competingBundle),
+                "the second accepted handle must still hold the cache lease");
+
+        store.release(second);
+        var accepted = assertDoesNotThrow(() -> store.accept(competingBundle));
+        store.release(accepted);
+    }
+
+    @Test
+    void exactHashRejectsLengthChangesAgainstExpectedBound(@TempDir Path temp) throws Exception {
+        Path artifact = Files.write(temp.resolve("hash-exact.scip"), new byte[65]);
+
+        assertThrows(java.io.IOException.class,
+                () -> DistributedArtifactBundleStore.sha256Exact(artifact, 64L, 64L));
+        assertThrows(java.io.IOException.class,
+                () -> DistributedArtifactBundleStore.sha256Exact(artifact, 66L, 66L));
+        assertDoesNotThrow(() -> DistributedArtifactBundleStore.sha256Exact(artifact, 65L, 65L));
     }
 
     @Test

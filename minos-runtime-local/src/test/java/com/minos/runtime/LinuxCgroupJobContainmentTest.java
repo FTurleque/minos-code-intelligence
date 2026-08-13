@@ -132,7 +132,7 @@ class LinuxCgroupJobContainmentTest {
     void theSandboxJoinsTheJobBeforeItExecutesAnyProviderCode(@TempDir Path temporary) throws Exception {
         Path root = requireDelegatedRoot();
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "a qualified Linux sandbox backend is required");
+        assumeTrue(discovered.isPresent(), "a Linux sandbox backend is required");
         LinuxCgroupJob job = LinuxCgroupJob.create(
                 root, "minos-plan-" + UUID.randomUUID(), LinuxCgroupJob.Limits.DEFAULT);
         try {
@@ -157,16 +157,24 @@ class LinuxCgroupJobContainmentTest {
     @Test
     void theQualifiedBackendDeclaresTheAggregateContainmentItReallyEnforces() {
         var discovered = LinuxBubblewrapWorkerSandboxBackend.discover();
-        assumeTrue(discovered.isPresent(), "a qualified Linux sandbox backend is required");
+        assumeTrue(discovered.isPresent(), "a Linux sandbox backend is required");
         WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
 
         assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
-        assertTrue(qualification.containment().qualifiedForUntrustedCode());
-        assertTrue(discovered.orElseThrow().supportsUntrustedCode());
+        assertFalse(qualification.containment().hardFilesystemQuotaEnforced());
+        assertFalse(qualification.containment().qualifiedForUntrustedCode());
+        assertFalse(discovered.orElseThrow().supportsUntrustedCode());
+        assertEquals(
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                qualification.trustDisposition());
         assertTrue(qualification.limitations()
                 .contains("LINUX_CGROUP_V2_AGGREGATE_MEMORY_PIDS_CPU_JOB_BOUNDARY"));
         assertTrue(qualification.limitations()
                 .contains("LINUX_PRLIMIT_PER_PROCESS_DEFENCE_IN_DEPTH_ONLY"));
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
     }
 
     private static Path requireDelegatedRoot() {

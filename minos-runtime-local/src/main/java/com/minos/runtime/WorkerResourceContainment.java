@@ -21,7 +21,10 @@ import java.util.Objects;
  * </ul>
  *
  * <p>A per-process limit that a provider can multiply by forking is not an aggregate guarantee and
- * must never be declared {@link Disposition#OS_ENFORCED} on an aggregate dimension.</p>
+ * must never be declared {@link Disposition#OS_ENFORCED} on an aggregate dimension. Likewise, a
+ * sampled filesystem quota cannot qualify untrusted execution: a provider can burst above the
+ * limit and delete the evidence between samples, after the host filesystem has already been
+ * exhausted.</p>
  */
 public record WorkerResourceContainment(
         String boundaryId,
@@ -62,6 +65,12 @@ public record WorkerResourceContainment(
                 && descendantTermination == Disposition.OS_ENFORCED;
     }
 
+    /** A hard filesystem boundary must reject bytes and entries before the host is exhausted. */
+    public boolean hardFilesystemQuotaEnforced() {
+        return filesystemWriteBytes == Disposition.OS_ENFORCED
+                && filesystemWriteEntries == Disposition.OS_ENFORCED;
+    }
+
     /** Returns true only when every P1 containment dimension is actually enforced. */
     public boolean qualifiedForUntrustedCode() {
         return unmetRequirements().isEmpty();
@@ -75,8 +84,8 @@ public record WorkerResourceContainment(
         requireOsEnforced(unmet, "AGGREGATE_CPU", aggregateCpu);
         requireOsEnforced(unmet, "DESCENDANT_TERMINATION", descendantTermination);
         requireEnforced(unmet, "WALL_CLOCK", wallClock);
-        requireEnforced(unmet, "FILESYSTEM_WRITE_BYTES", filesystemWriteBytes);
-        requireEnforced(unmet, "FILESYSTEM_WRITE_ENTRIES", filesystemWriteEntries);
+        requireOsEnforced(unmet, "FILESYSTEM_WRITE_BYTES", filesystemWriteBytes);
+        requireOsEnforced(unmet, "FILESYSTEM_WRITE_ENTRIES", filesystemWriteEntries);
         requireEnforced(unmet, "SCRATCH_RECLAMATION", scratchReclamation);
         return List.copyOf(unmet);
     }

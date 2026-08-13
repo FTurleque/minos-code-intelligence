@@ -55,10 +55,7 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
         Objects.requireNonNull(request, "request");
-        Path requestedRoot = request.projectRoot().toRealPath();
-        if (!requestedRoot.equals(source.projectRoot().toRealPath())) {
-            throw new IllegalArgumentException("distributed execution request does not use the materialized project root");
-        }
+        verifyMaterializedScope(request);
         if (!indexerId.equals(request.selection().indexer().id())) {
             throw new IllegalArgumentException("distributed executor selected another provider");
         }
@@ -96,6 +93,18 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
         }
     }
 
+    /**
+     * Returns every verified artifact retained by this provider executor, in execution order.
+     * A provider can execute once per module/build root in a monorepo, so callers must not
+     * collapse provenance to the most recently completed scope.
+     */
+    public List<VerifiedArtifact> verifiedArtifacts() {
+        synchronized (leasedArtifacts) {
+            return List.copyOf(leasedArtifacts);
+        }
+    }
+
+    /** Compatibility accessor for single-scope callers. */
     public Optional<VerifiedArtifact> verifiedArtifact() {
         return Optional.ofNullable(lastVerifiedArtifact);
     }
@@ -119,7 +128,39 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
         if (failure != null) throw failure;
     }
 
+    private void verifyMaterializedScope(IndexingExecutionRequest request) throws IOException {
+        Path repositoryRoot = source.repositoryRoot().toRealPath();
+        Path materializedRoot = source.projectRoot().toRealPath();
+        Path registeredRoot = request.registeredProjectRoot().toRealPath();
+        Path requestedRoot = request.projectRoot().toRealPath();
+
+        if (!materializedRoot.startsWith(repositoryRoot)
+                || !registeredRoot.startsWith(repositoryRoot)
+                || !requestedRoot.startsWith(registeredRoot)) {
+            throw new IllegalArgumentException("distributed execution scope escapes the materialized repository");
+        }
+
+        Path expectedRoot = request.projectRelativeRoot().toString().isEmpty()
+                ? registeredRoot
+                : registeredRoot.resolve(request.projectRelativeRoot()).normalize();
+        if (!expectedRoot.equals(requestedRoot)) {
+            throw new IllegalArgumentException(
+                    "distributed execution scope does not match projectRelativeRoot");
+        }
+
+        if (!materializedRoot.equals(registeredRoot) && !materializedRoot.equals(requestedRoot)) {
+            throw new IllegalArgumentException(
+                    "distributed execution request is not bound to the materialized project root or exact scope");
+        }
+    }
+
     private void verifyManifest(IndexingExecutionRequest request, DistributedArtifactManifest manifest) {
+        // FORMAT_V1 did not carry projectRelativeRoot on the wire. Treating its absence as root
+        // would manufacture provenance, so verified distributed execution is V2-or-newer only.
+        if (!DistributedArtifactManifest.FORMAT_V2.equals(manifest.format())) {
+            throw new IllegalStateException(
+                    "verified distributed artifact provenance requires scope-aware manifest format v2");
+        }
         if (!request.runId().equals(manifest.runId())
                 || !request.projectId().equals(manifest.projectId())
                 || !portableScope(request.projectRelativeRoot()).equals(manifest.projectRelativeRoot())

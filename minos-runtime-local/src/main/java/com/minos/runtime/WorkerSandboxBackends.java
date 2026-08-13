@@ -12,9 +12,11 @@ public final class WorkerSandboxBackends {
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         return switch (WorkerSandboxQualification.currentPlatform()) {
             case LINUX -> LinuxBubblewrapWorkerSandboxBackend.discover(home)
+                    .filter(WorkerSandboxBackend::supportsUntrustedCode)
                     .<WorkerSandboxBackend>map(value -> value)
                     .orElseGet(WorkerSandboxBackend::nativeEphemeralWorkspace);
             case WINDOWS -> WindowsAppContainerWorkerSandboxBackend.discover(home)
+                    .filter(WorkerSandboxBackend::supportsUntrustedCode)
                     .<WorkerSandboxBackend>map(value -> value)
                     .orElseGet(WorkerSandboxBackend::nativeEphemeralWorkspace);
             case OTHER -> WorkerSandboxBackend.nativeEphemeralWorkspace();

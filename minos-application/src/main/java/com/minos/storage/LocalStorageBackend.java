@@ -12,6 +12,7 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.FileRuntimeObservationStore;
 import com.minos.store.FileSemanticVectorStore;
 import com.minos.store.FileSymbolSnapshotStore;
+import com.minos.store.ProjectMutationSemanticVectorStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -32,13 +33,15 @@ public final class LocalStorageBackend implements StorageBackend {
         this.projectRegistry = new InterProcessLocalProjectRegistry(root.resolve("registry"));
         Path knowledgeRoot = root.resolve("symbol-snapshots");
         Path indexRoot = root.resolve("index-state");
+        Path semanticRoot = root.resolve("semantic-index");
         FileIndexStateStore fileIndexState = new FileIndexStateStore(indexRoot);
         FileProjectFingerprintSnapshotStore fileFingerprints =
                 new FileProjectFingerprintSnapshotStore(root.resolve("fingerprint-snapshots"));
         this.snapshotStore = new FileSymbolSnapshotStore(knowledgeRoot);
         this.indexStateStore = fileIndexState;
         this.fingerprintStore = fileFingerprints;
-        this.semanticVectorStore = new FileSemanticVectorStore(root.resolve("semantic-index"));
+        this.semanticVectorStore = new ProjectMutationSemanticVectorStore(
+                semanticRoot, new FileSemanticVectorStore(semanticRoot));
         this.runtimeObservationStore = new SerializedRuntimeObservationStore(
                 new FileRuntimeObservationStore(root.resolve("runtime-observations")));
         this.retentionService = new LocalStorageRetentionService(
