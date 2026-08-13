@@ -129,24 +129,32 @@ public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCl
     }
 
     private void verifyMaterializedScope(IndexingExecutionRequest request) throws IOException {
+        Path repositoryRoot = source.repositoryRoot().toRealPath();
         Path materializedRoot = source.projectRoot().toRealPath();
         Path registeredRoot = request.registeredProjectRoot().toRealPath();
-        if (!registeredRoot.equals(materializedRoot)) {
-            throw new IllegalArgumentException(
-                    "distributed execution request does not use the materialized registered project root");
-        }
-
         Path requestedRoot = request.projectRoot().toRealPath();
-        if (!requestedRoot.startsWith(materializedRoot)) {
-            throw new IllegalArgumentException("distributed execution scope escapes the materialized project root");
+
+        if (!materializedRoot.startsWith(repositoryRoot)
+                || !registeredRoot.startsWith(repositoryRoot)
+                || !requestedRoot.startsWith(registeredRoot)) {
+            throw new IllegalArgumentException("distributed execution scope escapes the materialized repository");
         }
 
         Path expectedRoot = request.projectRelativeRoot().toString().isEmpty()
-                ? materializedRoot
-                : materializedRoot.resolve(request.projectRelativeRoot()).normalize();
+                ? registeredRoot
+                : registeredRoot.resolve(request.projectRelativeRoot()).normalize();
         if (!expectedRoot.equals(requestedRoot)) {
             throw new IllegalArgumentException(
                     "distributed execution scope does not match projectRelativeRoot");
+        }
+
+        // Normal remote indexing materializes the registered project root and then executes one or
+        // more nested module scopes. A directly materialized subdirectory is also accepted when it
+        // is exactly the requested execution scope. Anything else would make the worker consume a
+        // tree that is not bound to the request provenance.
+        if (!materializedRoot.equals(registeredRoot) && !materializedRoot.equals(requestedRoot)) {
+            throw new IllegalArgumentException(
+                    "distributed execution request is not bound to the materialized project root or exact scope");
         }
     }
 
