@@ -34,7 +34,7 @@ class WorkerSandboxQualificationTest {
     }
 
     @Test
-    void qualificationCannotClaimDenyOrUntrustedCodeWithoutOsEvidence() {
+    void qualificationCannotClaimDenyWithoutOsEvidence() {
         assertThrows(IllegalArgumentException.class, () -> new WorkerSandboxQualification(
                 "invalid",
                 com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
@@ -49,20 +49,48 @@ class WorkerSandboxQualificationTest {
     }
 
     @Test
-    void qualificationCannotClaimUntrustedCodeWithoutAggregateResourceContainment() {
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> new WorkerSandboxQualification(
-                        "per-process-limits-only",
-                        com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
-                        WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
-                        WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
-                        WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
-                        WorkerResourceContainment.none("per-process-limits-only"),
-                        java.util.Map.of(
-                                WorkerSandboxQualification.Platform.LINUX,
-                                WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
-                        java.util.List.of()));
+    void incompleteHardContainmentDowngradesUntrustedClaimFailClosed() {
+        WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+                "per-process-limits-only",
+                com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
+                WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                WorkerResourceContainment.none("per-process-limits-only"),
+                java.util.Map.of(
+                        WorkerSandboxQualification.Platform.LINUX,
+                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                java.util.List.of());
 
-        assertTrue(failure.getMessage().contains("AGGREGATE_MEMORY"), failure.getMessage());
+        assertEquals(
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                qualification.trustDisposition());
+        assertFalse(qualification.sandboxClaimPermitted());
+        assertTrue(qualification.limitations().contains(
+                "WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT"));
+        assertTrue(qualification.limitations().stream().anyMatch(value -> value.startsWith("AGGREGATE_MEMORY")));
+    }
+
+    @Test
+    void supervisedFilesystemQuotaAlsoDowngradesOtherwiseQualifiedBoundary() {
+        WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+                "sampled-storage",
+                com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
+                WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                LinuxBubblewrapWorkerSandboxBackend.containment(),
+                java.util.Map.of(
+                        WorkerSandboxQualification.Platform.LINUX,
+                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                java.util.List.of());
+
+        assertEquals(
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                qualification.trustDisposition());
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
+        assertTrue(qualification.limitations().stream()
+                .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
     }
 }
