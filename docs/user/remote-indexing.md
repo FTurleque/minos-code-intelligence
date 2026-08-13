@@ -58,7 +58,7 @@ Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine c
 
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
-Le backend natif ne fournit qu'une isolation de processus et de workspace. Il ne prouve ni le confinement complet de code non fiable ni le blocage réseau au niveau OS et n’est donc jamais une solution de repli pour `remote index`.
+Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny`, car cette primitive ne peut pas prouver un blocage réseau au niveau OS. Il reste également interdit comme repli pour `remote index` avec `allow`, car il ne prouve pas le confinement complet de code non fiable.
 
 ## Sécurité et limites
 
