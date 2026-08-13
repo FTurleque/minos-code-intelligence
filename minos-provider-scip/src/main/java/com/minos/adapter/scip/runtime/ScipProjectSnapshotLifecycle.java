@@ -105,8 +105,6 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                     putUnique(relationships, relationship.id(), relationship, "relationship"));
         }
 
-        // Provider source workspaces are no longer required once every SCIP artifact has been fully
-        // normalized into the staging stores. Delete them before publishing the staged project view.
         cleanupProviderWorkspaces(request.runId(), request.artifacts());
 
         String stagedSnapshotId = "run-" + request.runId();
@@ -136,6 +134,10 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             throw new IllegalStateException("staged snapshot id mismatch: expected "
                     + stagedSnapshotId + ", found " + staged.snapshotId());
         }
+
+        // publish() is the promotion commit point. Once it returns, the active store is authoritative.
+        // Cleanup is intentionally non-fatal after that point: reporting promotion failure after a
+        // committed publication would make callers persist metadata for the previous snapshot.
         activeStore.publish(
                 projectId,
                 staged.snapshotId(),
@@ -143,8 +145,12 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
                 staged.occurrences(),
                 staged.relationships()
         );
-        // The active store is now authoritative; temporary provider/project staging is disposable.
-        deleteRecursively(stagedRunRoot);
+        try {
+            deleteRecursively(stagedRunRoot);
+        } catch (IOException ignored) {
+            // Retention/recovery may reclaim this disposable staging tree later. Never roll the
+            // logical promotion result back merely because post-commit cleanup failed.
+        }
     }
 
     private void cleanupProviderWorkspaces(UUID runId, List<IndexingArtifact> artifacts) throws IOException {
