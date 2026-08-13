@@ -5,7 +5,6 @@ import com.minos.storage.StorageRetentionService;
 
 import java.io.IOException;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Objects;
 import java.util.UUID;
@@ -24,13 +23,7 @@ final class PostgresStorageRetentionService implements StorageRetentionService {
         Objects.requireNonNull(policy, "policy");
         try {
             return connections.inTransaction(connection -> {
-                try (PreparedStatement lock = connection.prepareStatement(
-                        "SELECT pg_advisory_xact_lock(hashtext('minos-retention'), hashtext(?))")) {
-                    lock.setString(1, projectId.toString());
-                    try (ResultSet ignored = lock.executeQuery()) {
-                        if (!ignored.next()) throw new SQLException("retention advisory lock returned no row");
-                    }
-                }
+                PostgresProjectMutationLock.acquire(connection, projectId);
                 int knowledge = deleteHistoricalKnowledge(connection, projectId, policy.maxHistoricalSnapshots());
                 int fingerprints = deleteHistoricalFingerprints(
                         connection, projectId, policy.maxHistoricalSnapshots());
