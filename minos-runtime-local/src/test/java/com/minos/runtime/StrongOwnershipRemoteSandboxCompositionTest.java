@@ -30,17 +30,26 @@ class StrongOwnershipRemoteSandboxCompositionTest {
             throws Exception {
         Path project = Files.createDirectories(temp.resolve("project"));
         Path source = Files.writeString(project.resolve("source.scip"), "fixture");
+        Path copier = temp.resolve("CopyFixture.java");
+        Files.writeString(copier, """
+                import java.nio.file.*;
+                class CopyFixture {
+                    public static void main(String[] args) throws Exception {
+                        Files.copy(Path.of(args[0]), Path.of(args[1]), StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+                """);
         ProcessIndexerExecutor raw = new ProcessIndexerExecutor(
                 "fixture-provider",
                 temp.resolve("home"),
                 (request, runDirectory) -> {
                     Path artifact = runDirectory.resolve("generated.scip");
                     return new IndexerProcessPlan(
-                            List.of("/bin/cp", source.toString(), artifact.toString()),
+                            List.of(javaExecutable().toString(), copier.toString(), source.toString(), artifact.toString()),
                             request.projectRoot(),
                             Map.of(),
                             artifact,
-                            Duration.ofSeconds(10));
+                            Duration.ofSeconds(20));
                 });
         AtomicBoolean standaloneBoundaryUsed = new AtomicBoolean();
         StrongProcessOwnershipIndexerExecutor strong = new StrongProcessOwnershipIndexerExecutor(
@@ -65,6 +74,11 @@ class StrongOwnershipRemoteSandboxCompositionTest {
 
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
         assertFalse(standaloneBoundaryUsed.get());
+    }
+
+    private static Path javaExecutable() {
+        String executable = System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java";
+        return Path.of(System.getProperty("java.home"), "bin", executable).toAbsolutePath().normalize();
     }
 
     private static IndexingExecutionRequest request(Path project) {
