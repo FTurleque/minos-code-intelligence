@@ -73,13 +73,14 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
 
     @Override
     public ProviderRuntimeStatus inspect(String providerId) {
-        return switch (requireProvider(providerId)) {
+        ProviderRuntimeStatus status = switch (requireProvider(providerId)) {
             case ScipIndexerCatalog.SCIP_CLANG_ID -> inspectClang();
             case ScipIndexerCatalog.SCIP_DOTNET_ID -> inspectDotnet();
             case ScipIndexerCatalog.SCIP_GO_ID -> inspectGo();
             case ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID -> inspectRust();
             default -> throw new IllegalArgumentException("unsupported polyglot provider: " + providerId);
         };
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override

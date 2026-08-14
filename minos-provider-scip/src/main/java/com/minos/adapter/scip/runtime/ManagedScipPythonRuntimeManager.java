@@ -92,8 +92,9 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         ProviderRuntimeStatus.State state = diagnostics.isEmpty()
                 ? ProviderRuntimeStatus.State.READY
                 : installed ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
-        return new ProviderRuntimeStatus(PROVIDER_ID, VERSION, state,
+        ProviderRuntimeStatus status = new ProviderRuntimeStatus(PROVIDER_ID, VERSION, state,
                 installed ? Optional.of(executable) : Optional.empty(), diagnostics, false);
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override

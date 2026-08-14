@@ -70,11 +70,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     @Override
     public ProviderRuntimeStatus inspect(String providerId) {
-        return switch (providerId) {
+        ProviderRuntimeStatus status = switch (providerId) {
             case SCIP_TYPESCRIPT_ID -> inspectTypeScript();
             case SCIP_JAVA_ID -> inspectJava();
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override
