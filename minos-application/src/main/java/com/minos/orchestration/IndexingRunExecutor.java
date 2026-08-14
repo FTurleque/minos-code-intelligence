@@ -45,6 +45,7 @@ final class IndexingRunExecutor {
         synchronized (lock) {
             previous = stateStore.findProjectState(projectId)
                     .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, createdAt));
+            previous = reconcilePreviousWithAuthoritativeSnapshot(projectId, previous, promoter, stateStore, createdAt);
             if (previous.availability() == Availability.INDEXING || previous.availability() == Availability.REFRESHING) {
                 throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
             }
@@ -129,6 +130,33 @@ final class IndexingRunExecutor {
                 }
             }
             return failed;
+        }
+    }
+
+    private static ProjectIndexState reconcilePreviousWithAuthoritativeSnapshot(
+            UUID projectId,
+            ProjectIndexState previous,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant now
+    ) {
+        try {
+            Optional<String> authoritative = promoter.activeSnapshotId(projectId);
+            if (authoritative.isEmpty() || authoritative.equals(previous.activeSnapshotId())) return previous;
+            ProjectIndexState repaired = new ProjectIndexState(projectId, Availability.READY, authoritative,
+                    Optional.empty(), now,
+                    Optional.of("reconciled from authoritative active snapshot before new indexing run"));
+            stateStore.saveProjectState(repaired);
+            ProjectIndexState verified = stateStore.findProjectState(projectId)
+                    .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
+            if (!authoritative.equals(verified.activeSnapshotId()) || verified.availability() != Availability.READY) {
+                throw new IllegalStateException("reconciled project state does not match authoritative snapshot");
+            }
+            return verified;
+        } catch (RuntimeException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IllegalStateException("unable to reconcile project state before indexing", failure);
         }
     }
 
