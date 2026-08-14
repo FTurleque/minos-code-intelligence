@@ -100,7 +100,10 @@ public final class SnapshotRepository {
                     StandardCopyOption.REPLACE_EXISTING
             );
         } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            throw new IOException(
+                    "atomic file replacement is required for MINOS snapshot durability: "
+                            + source + " -> " + target,
+                    exception);
         }
     }
 }

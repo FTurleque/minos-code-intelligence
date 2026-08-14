@@ -70,6 +70,11 @@ public final class IndexCommand {
                         options.project(), options.scipFile(), options.providerId(),
                         options.providerVersion(), options.moduleId(), options.snapshotId());
                 output.append(renderImport(imported, options.format())).append('\n');
+                if (imported.commitStatus() == ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING) {
+                    error.append("warning: snapshot committed but project metadata recovery is pending")
+                            .append(imported.diagnostic() == null ? "" : ": " + imported.diagnostic())
+                            .append('\n');
+                }
                 return FindSymbolCommand.SUCCESS;
             }
             if (autonomousOperations == null) {
@@ -176,6 +181,8 @@ public final class IndexCommand {
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
         map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", result.diagnostic());
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -190,7 +197,9 @@ public final class IndexCommand {
                 "relatedTests: " + result.relatedTestRelationshipCount(),
                 "unresolvedOccurrences: " + result.unresolvedOccurrenceCount(),
                 "unresolvedRelationships: " + result.unresolvedRelationshipCount(),
-                "completedAt: " + result.completedAt());
+                "completedAt: " + result.completedAt(),
+                "commitStatus: " + result.commitStatus().name(),
+                "diagnostic: " + nullable(result.diagnostic()));
     }
 
     private static String nullable(String value) {

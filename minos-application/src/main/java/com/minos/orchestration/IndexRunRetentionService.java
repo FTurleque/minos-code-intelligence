@@ -46,22 +46,39 @@ public final class IndexRunRetentionService {
         keep(retained, nonSucceeded, policy.maxNonSucceededRuns());
         latestRunId.ifPresent(retained::add);
 
+        Path projectRunRoot = runRoot.resolve(projectId.toString()).normalize();
+        if (!projectRunRoot.startsWith(runRoot)) {
+            throw new IOException("project run retention path escapes run root");
+        }
+
         List<UUID> deleted = new ArrayList<>();
         for (IndexingRun run : runs) {
             if (retained.contains(run.id())) {
                 continue;
             }
-            Path file = runRoot.resolve(run.id() + ".properties");
+            Path file = projectRunRoot.resolve(run.id() + ".properties");
             if (Files.deleteIfExists(file)) {
                 deleted.add(run.id());
             }
         }
+        removeEmptyProjectDirectory(projectRunRoot);
 
         List<UUID> retainedOrdered = runs.stream()
                 .map(IndexingRun::id)
                 .filter(retained::contains)
                 .toList();
         return new RetentionResult(retainedOrdered, List.copyOf(deleted), latestRunId.orElse(null));
+    }
+
+    private static void removeEmptyProjectDirectory(Path projectRunRoot) throws IOException {
+        if (!Files.isDirectory(projectRunRoot)) {
+            return;
+        }
+        try (var entries = Files.list(projectRunRoot)) {
+            if (entries.findAny().isEmpty()) {
+                Files.deleteIfExists(projectRunRoot);
+            }
+        }
     }
 
     private static Comparator<IndexingRun> newestFirst() {

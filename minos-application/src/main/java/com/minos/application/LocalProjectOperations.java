@@ -91,40 +91,49 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
                 snapshotStore);
 
-        // importSnapshot() has crossed the active-snapshot commit point. Persist the authoritative
-        // state before secondary history so a history I/O failure can never make a committed import
-        // appear to have retained the previous snapshot.
+        // importSnapshot() has crossed the authoritative active-snapshot commit point. A following
+        // metadata failure must therefore be reported as a committed operation requiring recovery,
+        // never as a generic failed import that invites an unsafe blind retry.
         Instant completedAt = Instant.now();
         ProjectIndexState committedState = new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
                 Optional.of(effectiveSnapshotId), Optional.empty(), completedAt,
                 Optional.of("active snapshot imported explicitly through import-scip"));
-        saveCommittedState(committedState);
+        CommitOutcome commitOutcome = saveCommittedState(committedState);
         try {
             writeHistory(project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
         } catch (IOException ignored) {
-            // CLI history is secondary evidence. The active snapshot and ProjectIndexState are the
-            // authoritative commit record; retention/reinspection must not be invalidated by history I/O.
+            // CLI history is secondary evidence. The active snapshot remains authoritative.
         }
 
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
                 blankToNull(providerVersion), report.normalizedSymbolCount(), report.occurrenceCount(),
                 report.relationshipCount(), report.relatedTestRelationshipCount(), report.unresolvedOccurrenceCount(),
-                report.unresolvedRelationshipCount(), completedAt.toString());
+                report.unresolvedRelationshipCount(), completedAt.toString(), commitOutcome.status(),
+                commitOutcome.diagnostic());
     }
 
-    private void saveCommittedState(ProjectIndexState state) throws IOException {
+    private CommitOutcome saveCommittedState(ProjectIndexState state) {
         RuntimeException firstFailure = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 stateStore.saveProjectState(state);
-                return;
+                return new CommitOutcome(IndexImportCommitStatus.COMMITTED, null);
             } catch (RuntimeException failure) {
                 if (firstFailure == null) firstFailure = failure;
                 else firstFailure.addSuppressed(failure);
             }
         }
-        throw new IOException("snapshot was committed but project index state could not be persisted", firstFailure);
+        return new CommitOutcome(
+                IndexImportCommitStatus.COMMITTED_METADATA_PENDING,
+                "active snapshot committed; project index metadata persistence failed after 2 attempts: "
+                        + safeMessage(firstFailure));
+    }
+
+    private static String safeMessage(RuntimeException failure) {
+        if (failure == null) return "unknown state persistence failure";
+        String message = failure.getMessage();
+        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
     }
 
     private static ProjectView projectView(ProjectInspectionService.ProjectView view) {
@@ -158,6 +167,12 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     }
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
+
+    private record CommitOutcome(IndexImportCommitStatus status, String diagnostic) {
+        private CommitOutcome {
+            Objects.requireNonNull(status, "status");
+        }
+    }
 
     private record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
         private IndexHistory {

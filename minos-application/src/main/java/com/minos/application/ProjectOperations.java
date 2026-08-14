@@ -47,6 +47,11 @@ public interface ProjectOperations {
         }
     }
 
+    enum IndexImportCommitStatus {
+        COMMITTED,
+        COMMITTED_METADATA_PENDING
+    }
+
     record IndexImportResult(
             String projectId,
             String snapshotId,
@@ -58,13 +63,35 @@ public interface ProjectOperations {
             int relatedTestRelationshipCount,
             int unresolvedOccurrenceCount,
             int unresolvedRelationshipCount,
-            String completedAt
+            String completedAt,
+            IndexImportCommitStatus commitStatus,
+            String diagnostic
     ) {
         public IndexImportResult {
             requireText(projectId, "projectId");
             requireText(snapshotId, "snapshotId");
             requireText(providerId, "providerId");
             requireText(completedAt, "completedAt");
+            Objects.requireNonNull(commitStatus, "commitStatus");
+            diagnostic = diagnostic == null || diagnostic.isBlank() ? null : diagnostic;
+        }
+
+        public IndexImportResult(
+                String projectId,
+                String snapshotId,
+                String providerId,
+                String providerVersion,
+                int normalizedSymbolCount,
+                int occurrenceCount,
+                int relationshipCount,
+                int relatedTestRelationshipCount,
+                int unresolvedOccurrenceCount,
+                int unresolvedRelationshipCount,
+                String completedAt
+        ) {
+            this(projectId, snapshotId, providerId, providerVersion, normalizedSymbolCount, occurrenceCount,
+                    relationshipCount, relatedTestRelationshipCount, unresolvedOccurrenceCount,
+                    unresolvedRelationshipCount, completedAt, IndexImportCommitStatus.COMMITTED, null);
         }
     }
 
