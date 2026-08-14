@@ -194,8 +194,8 @@ class M29DockerAdministrationContractTest {
                 "runtime image must not depend on a packaged mutable Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
         assertTrue(dockerfile.contains("\\\"aptSnapshot\\\": \\\"${UBUNTU_APT_SNAPSHOT}\\\""));
-        assertTrue(dockerfile.contains("\\\"release\\\": \\\"${RUST_ANALYZER_RELEASE}\\\""));
-        assertTrue(dockerfile.contains("\\\"commit\\\": \\\"${RUST_ANALYZER_COMMIT}\\\""));
+        assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
+        assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
         assertTrue(dockerfile.contains("chmod -R a+rX /opt/minos/provider-tools"),
                 "provider payload must remain readable/executable by uid 10001 without ownership mutation");
         assertTrue(dockerfile.contains("libicu-dev"),
