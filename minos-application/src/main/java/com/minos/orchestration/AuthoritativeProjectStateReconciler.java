@@ -1,5 +1,7 @@
 package com.minos.orchestration;
 
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation.Status;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 
 import java.time.Instant;
@@ -28,26 +30,35 @@ final class AuthoritativeProjectStateReconciler {
         Objects.requireNonNull(detail, "detail");
 
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            Optional<String> activeBefore = activeSnapshotId(promoter, projectId);
+            ActiveSnapshotObservation activeBefore = observe(promoter, projectId);
             ProjectIndexState persisted = stateStore.findProjectState(projectId)
                     .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, observedAt));
 
-            if (activeBefore.isEmpty()) {
+            if (activeBefore.status() == Status.UNSUPPORTED) {
                 return persisted;
             }
 
-            Optional<String> activeAfter = activeSnapshotId(promoter, projectId);
+            ActiveSnapshotObservation activeAfter = observe(promoter, projectId);
             if (!activeBefore.equals(activeAfter)) {
                 continue;
             }
-            if (activeAfter.equals(persisted.activeSnapshotId())) {
+
+            if (activeAfter.status() == Status.NO_ACTIVE_SNAPSHOT) {
+                if (persisted.activeSnapshotId().isPresent()) {
+                    throw missingAuthoritativeSnapshot(projectId, persisted);
+                }
+                return persisted;
+            }
+
+            String authoritativeId = activeAfter.snapshotId().orElseThrow();
+            if (persisted.activeSnapshotId().equals(Optional.of(authoritativeId))) {
                 return persisted;
             }
 
             ProjectIndexState repaired = new ProjectIndexState(
                     projectId,
                     ProjectIndexState.Availability.READY,
-                    activeAfter,
+                    Optional.of(authoritativeId),
                     persisted.latestRunId(),
                     observedAt,
                     Optional.of(detail));
@@ -55,11 +66,11 @@ final class AuthoritativeProjectStateReconciler {
 
             ProjectIndexState verified = stateStore.findProjectState(projectId)
                     .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
-            Optional<String> verifiedActive = activeSnapshotId(promoter, projectId);
+            ActiveSnapshotObservation verifiedActive = observe(promoter, projectId);
             if (!activeAfter.equals(verifiedActive)) {
                 continue;
             }
-            if (verifiedActive.equals(verified.activeSnapshotId())) {
+            if (verified.activeSnapshotId().equals(verifiedActive.snapshotId())) {
                 return verified;
             }
         }
@@ -68,13 +79,22 @@ final class AuthoritativeProjectStateReconciler {
                 "authoritative snapshot or project metadata changed repeatedly while reconciling project " + projectId);
     }
 
-    private static Optional<String> activeSnapshotId(SnapshotPromoter promoter, UUID projectId) {
+    private static ActiveSnapshotObservation observe(SnapshotPromoter promoter, UUID projectId) {
         try {
-            return Objects.requireNonNull(promoter.activeSnapshotId(projectId), "activeSnapshotId");
+            return Objects.requireNonNull(promoter.observeActiveSnapshot(projectId), "observeActiveSnapshot");
         } catch (RuntimeException failure) {
             throw failure;
         } catch (Exception failure) {
             throw new IllegalStateException("unable to read authoritative active snapshot for project " + projectId, failure);
         }
+    }
+
+    private static IllegalStateException missingAuthoritativeSnapshot(
+            UUID projectId,
+            ProjectIndexState persisted
+    ) {
+        return new IllegalStateException(
+                "project metadata references snapshot " + persisted.activeSnapshotId().orElseThrow()
+                        + " but the authoritative snapshot store has no active snapshot for project " + projectId);
     }
 }
