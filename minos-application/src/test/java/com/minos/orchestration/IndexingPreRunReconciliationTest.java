@@ -2,6 +2,7 @@ package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,8 +17,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class IndexingPreRunReconciliationTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-14T09:00:00Z"), ZoneOffset.UTC);
@@ -34,8 +38,8 @@ class IndexingPreRunReconciliationTest {
             public void promote(UUID id, UUID runId, String stagedSnapshotId) { }
 
             @Override
-            public Optional<String> activeSnapshotId(UUID id) {
-                return Optional.of("snapshot-authoritative");
+            public ActiveSnapshotObservation observeActiveSnapshot(UUID id) {
+                return ActiveSnapshotObservation.active("snapshot-authoritative");
             }
         };
         IndexingLifecycleService service = new IndexingLifecycleService(
@@ -60,6 +64,43 @@ class IndexingPreRunReconciliationTest {
         assertEquals(Optional.of("snapshot-next"), store.findProjectState(projectId).orElseThrow().activeSnapshotId());
         assertEquals(ProjectIndexState.Availability.READY,
                 store.findProjectState(projectId).orElseThrow().availability());
+    }
+
+    @Test
+    void newIndexingRunRejectsPersistedSnapshotWhenSupportedAuthorityIsEmpty(@TempDir Path root) {
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
+                Optional.of("snapshot-ghost"), Optional.empty(), CLOCK.instant(), Optional.empty()));
+        AtomicBoolean executed = new AtomicBoolean();
+        SnapshotPromoter promoter = new SnapshotPromoter() {
+            @Override
+            public void promote(UUID id, UUID runId, String stagedSnapshotId) { }
+
+            @Override
+            public ActiveSnapshotObservation observeActiveSnapshot(UUID id) {
+                return ActiveSnapshotObservation.noActiveSnapshot();
+            }
+        };
+        IndexingLifecycleService service = new IndexingLifecycleService(
+                List.of(new IndexingRuntimePorts.IndexerExecutor() {
+                    public String indexerId() { return "java-indexer"; }
+                    public IndexingRuntimePorts.IndexingArtifact execute(IndexingRuntimePorts.IndexingExecutionRequest request) {
+                        executed.set(true);
+                        throw new AssertionError("provider must not execute while metadata references a ghost snapshot");
+                    }
+                }),
+                request -> "snapshot-next",
+                promoter,
+                store,
+                CLOCK
+        );
+
+        assertThrows(IllegalStateException.class, () -> service.execute(projectId, root,
+                new IndexerNegotiationResult(List.of(selection()), Set.of(), List.of())));
+
+        assertFalse(executed.get());
+        assertEquals(Optional.of("snapshot-ghost"), store.findProjectState(projectId).orElseThrow().activeSnapshotId());
     }
 
     private static IndexerSelection selection() {
