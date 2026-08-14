@@ -248,7 +248,9 @@ class MinosProcessSupervisorTest {
             Path script = tmp.resolve("orphan-fixture.cmd");
             Files.writeString(script, """
                     @echo off
-                    start "" /B cmd /d /c "ping -n 3600 127.0.0.1 ^> nul 2^>^&1"
+                    rem Deliberately use a separate console instead of /B: the child remains alive
+                    rem after this wrapper exits, while it is still observable as our descendant first.
+                    start "" /min cmd /d /c "ping -n 3600 127.0.0.1 > nul 2>&1"
                     echo.>"%s"
                     ping -n 3 127.0.0.1 > nul
                     exit /b 0
