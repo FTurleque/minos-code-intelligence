@@ -34,11 +34,11 @@ public final class ProjectInspectionService {
 
     private final ProjectRegistry registry;
     private final ProjectResolver projectResolver;
-    private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
     private final ProjectDiscoveryService discoveryService;
     private final Path historyDirectory;
     private final Map<String, IndexerDescriptor> knownProviders;
+    private final ProjectIndexStateReconciler reconciler;
 
     public ProjectInspectionService(
             Path home,
@@ -63,8 +63,9 @@ public final class ProjectInspectionService {
         Path normalizedHome = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.registry = Objects.requireNonNull(registry, "registry");
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
-        this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
+        CodeKnowledgeSnapshotStore snapshots = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
+        this.reconciler = new ProjectIndexStateReconciler(snapshots, this.stateStore);
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.historyDirectory = normalizedHome.resolve("cli-index-history");
         this.knownProviders = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors")).stream()
@@ -94,9 +95,10 @@ public final class ProjectInspectionService {
             moduleCount = discovery.modules().size();
         }
 
-        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(project.id());
+        ProjectIndexStateReconciler.Reconciliation consistency = reconciler.reconcile(project.id());
+        Optional<CodeKnowledgeSnapshot> active = consistency.activeSnapshot();
         String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
-        Optional<ProjectIndexState> persistedState = stateStore.findProjectState(project.id());
+        Optional<ProjectIndexState> persistedState = consistency.projectState();
         String indexState = persistedState
                 .map(state -> state.availability().name())
                 .orElse(active.isPresent() ? ProjectIndexState.Availability.READY.name()
