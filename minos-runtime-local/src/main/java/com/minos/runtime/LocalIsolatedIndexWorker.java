@@ -32,10 +32,10 @@ import java.util.Objects;
 /**
  * Provider worker with copied ephemeral workspace and explicit sandbox backend.
  *
- * <p>The public constructor selects the strongest qualified OS sandbox only when MINOS owns the
- * actual provider process through {@link ProcessIndexerExecutor}. Other executor implementations
- * fall back to the process-only backend: they cannot be truthfully wrapped by an OS process sandbox,
- * and network {@code DENY} therefore remains fail-closed.</p>
+ * <p>The public constructor selects the strongest qualified OS sandbox only when the executor
+ * explicitly implements {@link ProcessSandboxCapableIndexerExecutor}. This keeps ownership
+ * capability-based instead of concrete-class-based, including wrappers such as
+ * {@link StrongProcessOwnershipIndexerExecutor}. Other executors remain fail-closed.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
@@ -221,7 +221,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
     private static WorkerSandboxBackend defaultSandboxBackend(Path minosHome, IndexerExecutor delegate) {
         Objects.requireNonNull(minosHome, "minosHome");
         Objects.requireNonNull(delegate, "delegate");
-        return delegate instanceof ProcessIndexerExecutor
+        return delegate instanceof ProcessSandboxCapableIndexerExecutor
                 ? WorkerSandboxBackends.strongestAvailable(minosHome)
                 : WorkerSandboxBackend.nativeEphemeralWorkspace();
     }

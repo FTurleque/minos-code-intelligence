@@ -17,7 +17,7 @@ import java.util.Optional;
  * before {@code exec}; Windows uses a Job Object assigned while the provider process is still
  * suspended. Unsupported hosts never silently fall back to process-tree polling.</p>
  */
-public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecutor {
+public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
     private final ProcessIndexerExecutor delegate;
     private final BoundaryProvider boundaryProvider;
@@ -58,6 +58,22 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
         ProcessIndexerExecutor.ProcessPlanTransformer transformer = Objects.requireNonNull(
                 boundaryProvider.transformer(request), "strong ownership transformer");
         return delegate.executeSandboxed(request, transformer);
+    }
+
+    /**
+     * Executes through an independently qualified sandbox boundary supplied by the remote worker.
+     * The sandbox becomes the ownership authority for this execution, so the standalone ownership
+     * boundary is deliberately not nested around it. ProcessOwnershipTracker remains active inside
+     * the delegate as defence in depth.
+     */
+    @Override
+    public IndexingArtifact executeSandboxed(
+            IndexingExecutionRequest request,
+            ProcessIndexerExecutor.ProcessPlanTransformer transformer
+    ) throws Exception {
+        return delegate.executeSandboxed(
+                Objects.requireNonNull(request, "request"),
+                Objects.requireNonNull(transformer, "transformer"));
     }
 
     private static Path normalizedHome(Path minosHome) {

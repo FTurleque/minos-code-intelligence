@@ -155,9 +155,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (!qualification().qualifiedForCurrentPlatform()) {
             throw new IllegalStateException("Windows AppContainer backend is not qualified on this platform");
         }
-        if (!(delegate instanceof ProcessIndexerExecutor processExecutor)) {
+        if (!(delegate instanceof ProcessSandboxCapableIndexerExecutor processExecutor)) {
             throw new IllegalArgumentException(
-                    "qualified OS sandbox requires ProcessIndexerExecutor so MINOS controls the actual provider process");
+                    "qualified OS sandbox requires an executor with explicit process-sandbox capability");
         }
         return processExecutor.executeSandboxed(
                 request,

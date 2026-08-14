@@ -182,6 +182,8 @@ switch ($Action) {
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
             Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
+            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\scip-typescript-package-lock.json') -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
+            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\scip-python-package-lock.json') -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
             $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
             & docker build --file $Dockerfile --tag $Image `
                 --build-arg "MINOS_VERSION=$Version" `
