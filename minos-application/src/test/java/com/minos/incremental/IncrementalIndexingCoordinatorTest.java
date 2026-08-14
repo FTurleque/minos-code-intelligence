@@ -12,6 +12,7 @@ import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.orchestration.ProjectIndexLeaseProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -106,9 +107,14 @@ class IncrementalIndexingCoordinatorTest {
                 List.of(executor),
                 request -> "snapshot-" + snapshots.incrementAndGet(),
                 (projectId, runId, stagedSnapshotId) -> { },
-                new InMemoryIndexStateStore()
+                new InMemoryIndexStateStore(),
+                testLeaseProvider()
         );
         return new IncrementalIndexingCoordinator(fingerprintStore, registry, lifecycle);
+    }
+
+    private static ProjectIndexLeaseProvider testLeaseProvider() {
+        return projectId -> () -> { };
     }
 
     private static IndexerRegistry registry(boolean incremental) {
