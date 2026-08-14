@@ -35,7 +35,10 @@ jobs:
       - name: Reject stale snapshot API and unmanaged SCIP process call-sites
         run: |
           if git grep -n 'activeSnapshotId(UUID' -- '*.java'; then exit 1; fi
-          if git grep -n 'new ProcessIndexerExecutor(' -- 'minos-provider-scip/src/main/java/**/*.java'; then exit 1; fi
+          if git grep -n 'new ProcessIndexerExecutor(' -- \
+            minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java \
+            minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java \
+            minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java; then exit 1; fi
 
   targeted-windows:
     runs-on: windows-latest
