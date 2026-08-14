@@ -45,6 +45,12 @@ public final class IndexingLifecycleService {
         this(executors, stager, promoter, stateStore, Clock.systemUTC(), leaseProvider);
     }
 
+    /** Package-private test fixture constructor; production code cannot omit the lease provider. */
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore) {
+        this(executors, stager, promoter, stateStore, Clock.systemUTC(), inProcessLeaseProvider());
+    }
+
     /** Test-only constructor retaining deterministic clock control with an in-process lease. */
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
