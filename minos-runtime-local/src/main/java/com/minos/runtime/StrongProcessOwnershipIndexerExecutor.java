@@ -23,7 +23,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
     private final BoundaryProvider boundaryProvider;
 
     public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
-        this(delegate, platformBoundary(Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize()));
+        this(delegate, platformBoundary(normalizedHome(minosHome)));
     }
 
     StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, BoundaryProvider boundaryProvider) {
@@ -34,6 +34,13 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
     @Override
     public String indexerId() {
         return delegate.indexerId();
+    }
+
+    /** Probes the same strong-ownership capability used by production execution. */
+    public static Capability detectCapability(Path minosHome) {
+        return Objects.requireNonNull(
+                platformBoundary(normalizedHome(minosHome)).capability(),
+                "ownership capability");
     }
 
     /** Returns the strong-ownership capability of the current host/configuration. */
@@ -51,6 +58,10 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
         ProcessIndexerExecutor.ProcessPlanTransformer transformer = Objects.requireNonNull(
                 boundaryProvider.transformer(request), "strong ownership transformer");
         return delegate.executeSandboxed(request, transformer);
+    }
+
+    private static Path normalizedHome(Path minosHome) {
+        return Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
     }
 
     private static BoundaryProvider platformBoundary(Path minosHome) {
