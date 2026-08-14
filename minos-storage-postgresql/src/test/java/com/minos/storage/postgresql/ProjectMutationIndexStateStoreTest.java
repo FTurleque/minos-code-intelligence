@@ -61,6 +61,25 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
     }
 
     @Test
+    void lifecycleLeaseIsReentrantOnSameThread() {
+        UUID id = UUID.randomUUID();
+        RecordingStore delegate = new RecordingStore();
+        ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(connections, delegate);
+        ProjectIndexState state = ready(id);
+
+        try (IndexStateStore.ProjectLease outer = store.acquireProjectLease(id)) {
+            try (IndexStateStore.ProjectLease nested = store.acquireProjectLease(id)) {
+                store.saveProjectState(state);
+            }
+            assertTrue(delegate.state.get() == state);
+        }
+
+        try (IndexStateStore.ProjectLease reacquired = store.acquireProjectLease(id)) {
+            assertTrue(delegate.state.get() == state);
+        }
+    }
+
+    @Test
     void lifecycleLeaseBlocksSameProjectMutationAcrossConnections() throws Exception {
         UUID id = UUID.randomUUID();
         RecordingStore delegate = new RecordingStore();

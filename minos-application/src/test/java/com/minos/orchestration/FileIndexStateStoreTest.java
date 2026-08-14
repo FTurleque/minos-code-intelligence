@@ -53,6 +53,23 @@ class FileIndexStateStoreTest {
     }
 
     @Test
+    void lifecycleLeaseIsReentrantOnOwnerThread() throws Exception {
+        FileIndexStateStore store = new FileIndexStateStore(root.resolve("reentrant-state"));
+        UUID projectId = UUID.randomUUID();
+
+        try (IndexStateStore.ProjectLease outer = store.acquireProjectLease(projectId)) {
+            try (IndexStateStore.ProjectLease nested = store.acquireProjectLease(projectId)) {
+                store.saveProjectState(ProjectIndexState.neverIndexed(projectId, Instant.EPOCH));
+            }
+            assertTrue(store.findProjectState(projectId).isPresent());
+        }
+
+        try (IndexStateStore.ProjectLease reacquired = store.acquireProjectLease(projectId)) {
+            assertTrue(store.findProjectState(projectId).isPresent());
+        }
+    }
+
+    @Test
     void migratesLegacyFlatRunFilesOnReopen() throws Exception {
         Path stateRoot = root.resolve("legacy-state");
         UUID projectId = UUID.randomUUID();

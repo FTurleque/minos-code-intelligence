@@ -20,6 +20,7 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
 
     private final PostgresConnectionFactory connections;
     private final IndexStateStore delegate;
+    private final ThreadLocal<HeldLifecycleLease> heldLifecycleLease = new ThreadLocal<>();
 
     ProjectMutationIndexStateStore(PostgresConnectionFactory connections, IndexStateStore delegate) {
         this.connections = Objects.requireNonNull(connections, "connections");
@@ -29,6 +30,17 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
     @Override
     public ProjectLease acquireProjectLease(UUID projectId) {
         UUID id = Objects.requireNonNull(projectId, "projectId");
+        HeldLifecycleLease nested = heldLifecycleLease.get();
+        if (nested != null) {
+            if (!nested.projectId.equals(id)) {
+                throw new IllegalStateException(
+                        "cannot acquire a second PostgreSQL project lifecycle lease on the same thread: held="
+                                + nested.projectId + " requested=" + id);
+            }
+            nested.depth++;
+            return logicalLease(nested);
+        }
+
         final PostgresConnectionFactory.ScopedConnectionLease connectionLease;
         try {
             connectionLease = connections.openScopedConnection();
@@ -49,8 +61,9 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
                 }
             }
             acquired = true;
-            AtomicBoolean closed = new AtomicBoolean();
-            return () -> releaseLifecycleLock(connectionLease, id, closed);
+            HeldLifecycleLease held = new HeldLifecycleLease(id, connectionLease);
+            heldLifecycleLease.set(held);
+            return logicalLease(held);
         } finally {
             if (!acquired) connectionLease.close();
         }
@@ -83,6 +96,27 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
         mutate(run.projectId(), () -> delegate.saveRun(run), "save indexing run");
     }
 
+    private ProjectLease logicalLease(HeldLifecycleLease held) {
+        AtomicBoolean closed = new AtomicBoolean();
+        return () -> {
+            if (!closed.compareAndSet(false, true)) return;
+            if (Thread.currentThread() != held.owner) {
+                throw new IllegalStateException("PostgreSQL lifecycle lease must be released by its owner thread");
+            }
+            if (heldLifecycleLease.get() != held) {
+                throw new IllegalStateException("PostgreSQL lifecycle lease lost thread ownership context");
+            }
+            held.depth--;
+            if (held.depth < 0) {
+                throw new IllegalStateException("PostgreSQL lifecycle lease depth underflow");
+            }
+            if (held.depth == 0) {
+                heldLifecycleLease.remove();
+                releasePhysicalLifecycleLock(held.connectionLease, held.projectId);
+            }
+        };
+    }
+
     private boolean tryAcquireLifecycleLock(
             PostgresConnectionFactory.ScopedConnectionLease connectionLease,
             UUID projectId
@@ -101,12 +135,10 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
         }
     }
 
-    private static void releaseLifecycleLock(
+    private static void releasePhysicalLifecycleLock(
             PostgresConnectionFactory.ScopedConnectionLease connectionLease,
-            UUID projectId,
-            AtomicBoolean closed
+            UUID projectId
     ) {
-        if (!closed.compareAndSet(false, true)) return;
         RuntimeException failure = null;
         try (PreparedStatement statement = connectionLease.connection().prepareStatement(
                 "SELECT pg_advisory_unlock(?)")) {
@@ -142,6 +174,18 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
             });
         } catch (SQLException | IOException exception) {
             throw new IllegalStateException("PostgreSQL index state mutation failed to " + action, exception);
+        }
+    }
+
+    private static final class HeldLifecycleLease {
+        private final UUID projectId;
+        private final PostgresConnectionFactory.ScopedConnectionLease connectionLease;
+        private final Thread owner = Thread.currentThread();
+        private int depth = 1;
+
+        private HeldLifecycleLease(UUID projectId, PostgresConnectionFactory.ScopedConnectionLease connectionLease) {
+            this.projectId = projectId;
+            this.connectionLease = connectionLease;
         }
     }
 }

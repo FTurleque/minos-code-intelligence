@@ -24,7 +24,6 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.orchestration.ProjectIndexLease;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -98,7 +97,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     @Override
     public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(application.home(), project.id())) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
             return prepare(projectIdentifier, providerOverride, forceFull).view();
         }
     }
@@ -106,7 +105,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(application.home(), project.id())) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
             return executeLocked(projectIdentifier, providerOverride, forceFull);
         }
     }
@@ -315,7 +314,6 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             ProjectFingerprint fingerprintBefore,
             IndexPlanView view
     ) { }
-
 
     @Override
     public void close() throws IOException {

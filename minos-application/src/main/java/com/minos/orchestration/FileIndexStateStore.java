@@ -16,12 +16,15 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * File-backed indexing state with durable atomic replacement and project-partitioned run history.
@@ -41,6 +44,8 @@ public final class FileIndexStateStore implements IndexStateStore {
     private final Path storageRoot;
     private final Path projectRoot;
     private final Path runRoot;
+    private final ThreadLocal<Map<UUID, HeldProjectLease>> heldProjectLeases =
+            ThreadLocal.withInitial(HashMap::new);
 
     public FileIndexStateStore(Path storageRoot) throws IOException {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
@@ -53,18 +58,52 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     @Override
     public ProjectLease acquireProjectLease(UUID projectId) {
+        UUID id = Objects.requireNonNull(projectId, "projectId");
+        Map<UUID, HeldProjectLease> heldByProject = heldProjectLeases.get();
+        HeldProjectLease nested = heldByProject.get(id);
+        if (nested != null) {
+            nested.depth++;
+            return logicalProjectLease(id, nested, heldByProject);
+        }
         try {
-            ProjectIndexLease lease = ProjectIndexLease.acquire(storageRoot, Objects.requireNonNull(projectId, "projectId"));
-            return () -> {
-                try {
-                    lease.close();
-                } catch (IOException exception) {
-                    throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
-                }
-            };
+            ProjectIndexLease physical = ProjectIndexLease.acquire(storageRoot, id);
+            HeldProjectLease held = new HeldProjectLease(physical);
+            heldByProject.put(id, held);
+            return logicalProjectLease(id, held, heldByProject);
         } catch (IOException exception) {
+            if (heldByProject.isEmpty()) heldProjectLeases.remove();
             throw new UncheckedIOException("cannot acquire project indexing lifecycle lease", exception);
         }
+    }
+
+    private ProjectLease logicalProjectLease(
+            UUID projectId,
+            HeldProjectLease held,
+            Map<UUID, HeldProjectLease> heldByProject
+    ) {
+        AtomicBoolean closed = new AtomicBoolean();
+        Thread owner = Thread.currentThread();
+        return () -> {
+            if (!closed.compareAndSet(false, true)) return;
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("file project lifecycle lease must be released by its owner thread");
+            }
+            if (heldByProject.get(projectId) != held) {
+                throw new IllegalStateException("file project lifecycle lease lost thread ownership context");
+            }
+            held.depth--;
+            if (held.depth < 0) throw new IllegalStateException("file project lifecycle lease depth underflow");
+            if (held.depth == 0) {
+                try {
+                    held.physical.close();
+                } catch (IOException exception) {
+                    throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
+                } finally {
+                    heldByProject.remove(projectId, held);
+                    if (heldByProject.isEmpty()) heldProjectLeases.remove();
+                }
+            }
+        };
     }
 
     @Override
@@ -371,5 +410,14 @@ public final class FileIndexStateStore implements IndexStateStore {
             throw new IllegalStateException("missing property '" + key + "' in " + file);
         }
         return value;
+    }
+
+    private static final class HeldProjectLease {
+        private final ProjectIndexLease physical;
+        private int depth = 1;
+
+        private HeldProjectLease(ProjectIndexLease physical) {
+            this.physical = physical;
+        }
     }
 }
