@@ -43,6 +43,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         this.runRoot = root.resolve("runs");
         Files.createDirectories(projectRoot);
         Files.createDirectories(runRoot);
+        migrateLegacyRuns();
     }
 
     @Override
@@ -68,22 +69,36 @@ public final class FileIndexStateStore implements IndexStateStore {
     @Override
     public synchronized Optional<IndexingRun> findRun(UUID runId) {
         Objects.requireNonNull(runId, "runId");
-        Path file = runRoot.resolve(runId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
+        Path legacy = runRoot.resolve(runId + ".properties");
+        if (Files.isRegularFile(legacy)) {
+            return Optional.of(readRun(legacy, runId));
         }
-        return Optional.of(readRun(file, runId));
+        try (var projects = Files.list(runRoot)) {
+            for (Path directory : projects.filter(Files::isDirectory).sorted().toList()) {
+                Path candidate = directory.resolve(runId + ".properties");
+                if (Files.isRegularFile(candidate)) {
+                    return Optional.of(readRun(candidate, runId));
+                }
+            }
+            return Optional.empty();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("cannot locate MINOS indexing run", exception);
+        }
     }
 
     @Override
     public synchronized List<IndexingRun> listRuns(UUID projectId) {
         Objects.requireNonNull(projectId, "projectId");
-        try (var stream = Files.list(runRoot)) {
+        Path directory = projectRunRoot(projectId);
+        if (!Files.isDirectory(directory)) {
+            return List.of();
+        }
+        try (var stream = Files.list(directory)) {
             return stream
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".properties"))
                     .map(path -> readRun(path, idFromPropertiesFile(path)))
-                    .filter(run -> run.projectId().equals(projectId))
+                    .peek(run -> requireIdentity(projectId, run.projectId(), directory, "indexing run project"))
                     .sorted(Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id))
                     .toList();
         } catch (IOException exception) {
@@ -126,7 +141,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             properties.setProperty(prefix + "indexerId", execution.indexerId());
             properties.setProperty(prefix + "artifact", execution.finalArtifact().toString());
         }
-        store(runRoot.resolve(run.id() + ".properties"), properties, "MINOS indexing run");
+        store(projectRunRoot(run.projectId()).resolve(run.id() + ".properties"), properties, "MINOS indexing run");
     }
 
     private IndexingRun readRun(Path file, UUID expectedRunId) {
@@ -164,6 +179,40 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "activeSnapshotAfter"),
                 optional(properties, "message")
         );
+    }
+
+    private Path projectRunRoot(UUID projectId) {
+        Path directory = runRoot.resolve(Objects.requireNonNull(projectId, "projectId").toString()).normalize();
+        if (!directory.startsWith(runRoot)) {
+            throw new IllegalStateException("project run directory escapes run root");
+        }
+        return directory;
+    }
+
+    /** Moves valid pre-partition runs into their project directory once, preserving corrupt legacy evidence. */
+    private void migrateLegacyRuns() throws IOException {
+        try (var stream = Files.list(runRoot)) {
+            for (Path file : stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".properties"))
+                    .toList()) {
+                try {
+                    UUID runId = idFromPropertiesFile(file);
+                    Properties properties = load(file);
+                    requireIdentity(runId, UUID.fromString(required(properties, "id", file)), file, "indexing run");
+                    UUID projectId = UUID.fromString(required(properties, "projectId", file));
+                    Path destination = projectRunRoot(projectId).resolve(file.getFileName());
+                    Files.createDirectories(destination.getParent());
+                    if (Files.exists(destination)) {
+                        Files.deleteIfExists(file);
+                    } else {
+                        move(file, destination);
+                    }
+                } catch (RuntimeException ignored) {
+                    // Corrupt legacy files are left in place. They no longer affect project-scoped listing.
+                }
+            }
+        }
     }
 
     private static UUID idFromPropertiesFile(Path file) {
@@ -221,7 +270,10 @@ public final class FileIndexStateStore implements IndexStateStore {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            throw new IOException(
+                    "atomic file replacement is required for MINOS index-state durability: "
+                            + source + " -> " + target,
+                    exception);
         }
     }
 
