@@ -66,15 +66,24 @@ class StrongProcessOwnershipIndexerExecutorTest {
         Path project = temporary.resolve("invalid-plan-project");
         Files.createDirectories(project);
         Path missingWorkingDirectory = temporary.resolve("missing-working-directory");
+        Path executionMarker = temporary.resolve("provider-executed.marker");
+        Path source = temporary.resolve("PreStartMarkerProvider.java");
+        Files.writeString(source, """
+                import java.nio.file.*;
+                public class PreStartMarkerProvider {
+                    public static void main(String[] args) throws Exception {
+                        Files.writeString(Path.of(args[0]), "executed");
+                    }
+                }
+                """);
         AtomicBoolean transformed = new AtomicBoolean();
         AtomicBoolean released = new AtomicBoolean();
-        AtomicBoolean providerStarted = new AtomicBoolean();
 
         ProcessIndexerExecutor delegate = new ProcessIndexerExecutor(
                 "fake-provider",
                 temporary.resolve("invalid-plan-home"),
                 (request, runDirectory) -> new IndexerProcessPlan(
-                        List.of(javaExecutable(), "-version"),
+                        List.of(javaExecutable(), source.toString(), executionMarker.toString()),
                         project,
                         Map.of(),
                         runDirectory.resolve("index.scip"),
@@ -94,16 +103,11 @@ class StrongProcessOwnershipIndexerExecutorTest {
                             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) {
                                 transformed.set(true);
                                 return new IndexerProcessPlan(
-                                        List.of(javaExecutable(), "-version"),
+                                        plan.command(),
                                         missingWorkingDirectory,
                                         Map.of(),
                                         runDirectory.resolve("index.scip"),
                                         Duration.ofSeconds(30));
-                            }
-
-                            @Override
-                            public void killContainedJob() {
-                                providerStarted.set(true);
                             }
 
                             @Override
@@ -120,7 +124,8 @@ class StrongProcessOwnershipIndexerExecutorTest {
 
         assertTrue(transformed.get(), "the fixture must create the containment boundary before validation fails");
         assertTrue(released.get(), "pre-start validation failure must reclaim transform-created containment");
-        assertFalse(providerStarted.get(), "provider cleanup must not be needed because no provider was started");
+        assertFalse(Files.exists(executionMarker),
+                "provider code must not execute when transformed-plan validation fails before start");
         assertTrue(failure.getMessage().contains("working directory is missing"));
     }
 
