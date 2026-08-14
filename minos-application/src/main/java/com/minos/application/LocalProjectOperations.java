@@ -91,21 +91,29 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
                 snapshotStore);
 
-        // importSnapshot() has crossed the active-snapshot commit point. Persist the authoritative
-        // state before secondary history so a history I/O failure can never make a committed import
-        // appear to have retained the previous snapshot.
+        // importSnapshot() has crossed the authoritative SnapshotStore commit point. ProjectIndexState
+        // is a materialized view of that commit and ProjectInspectionService reconciles it from the
+        // active snapshot after a crash or persistent metadata failure.
         Instant completedAt = Instant.now();
         ProjectIndexState committedState = new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
                 Optional.of(effectiveSnapshotId), Optional.empty(), completedAt,
                 Optional.of("active snapshot imported explicitly through import-scip"));
-        saveCommittedState(committedState);
+        IOException stateFailure = null;
+        try {
+            saveCommittedState(committedState);
+        } catch (IOException failure) {
+            stateFailure = failure;
+        }
+
+        // Keep provider/version evidence even when the metadata materialization failed. Recovery can
+        // then reconcile ProjectIndexState without losing the provenance of the committed snapshot.
         try {
             writeHistory(project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
-        } catch (IOException ignored) {
-            // CLI history is secondary evidence. The active snapshot and ProjectIndexState are the
-            // authoritative commit record; retention/reinspection must not be invalidated by history I/O.
+        } catch (IOException historyFailure) {
+            if (stateFailure != null) stateFailure.addSuppressed(historyFailure);
         }
+        if (stateFailure != null) throw stateFailure;
 
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
                 blankToNull(providerVersion), report.normalizedSymbolCount(), report.occurrenceCount(),
@@ -124,7 +132,9 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 else firstFailure.addSuppressed(failure);
             }
         }
-        throw new IOException("snapshot was committed but project index state could not be persisted", firstFailure);
+        throw new IOException(
+                "active snapshot is committed; project index state reconciliation is pending",
+                firstFailure);
     }
 
     private static ProjectView projectView(ProjectInspectionService.ProjectView view) {
