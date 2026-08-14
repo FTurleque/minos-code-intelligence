@@ -149,7 +149,8 @@ public final class MinosCliClient {
         }
         if (!settings.minosHome.isBlank()) builder.environment().put("MINOS_HOME", settings.minosHome);
         try {
-            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(builder.start())) {
+            MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, settings.minosHome);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
                 boolean completed = false;
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
                 try {
@@ -161,9 +162,6 @@ public final class MinosCliClient {
                     supervisor.stop(canceled);
                 }
                 if (!completed) {
-                    // Timeout: stop kills the tree and joins reader threads. Throw the
-                    // timeout error here — drainOutput() would surface a misleading
-                    // "stream closed" IOException from the force-close done inside stop().
                     supervisor.stop(null);
                     throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
                 }
