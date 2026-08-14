@@ -18,15 +18,9 @@ import java.util.UUID;
  * Reconciles persisted project metadata against the active snapshot, which is the authoritative
  * commit record once snapshot publication has completed.
  *
- * <p>The active snapshot is observed twice before any repair and once again after a repair. This
- * makes reconciliation self-stabilising when publication races an inspection: a repair based on
- * an obsolete active snapshot is never returned as successful. Concurrent indexing states that
- * already reference the authoritative snapshot are preserved instead of being flattened to
- * {@link ProjectIndexState.Availability#READY}.</p>
- *
- * <p>The service is deliberately fail-closed. A mismatch is either repaired and verified against
- * a stable authoritative snapshot or surfaced as an error; callers must never expose metadata for
- * a different snapshot.</p>
+ * <p>Consistent reads remain lock-free. When a repair is required, reconciliation acquires the
+ * same project lifecycle lease as indexing and re-observes every input before mutating metadata.
+ * A repair therefore cannot race a cross-process snapshot promotion.</p>
  */
 public final class ProjectIndexStateReconciler {
     private static final int MAX_RECONCILIATION_ATTEMPTS = 8;
@@ -40,7 +34,10 @@ public final class ProjectIndexStateReconciler {
     }
 
     public Reconciliation reconcile(UUID projectId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
+        return reconcile(Objects.requireNonNull(projectId, "projectId"), false);
+    }
+
+    private Reconciliation reconcile(UUID projectId, boolean leaseHeld) throws IOException {
         boolean repaired = false;
 
         for (int attempt = 0; attempt < MAX_RECONCILIATION_ATTEMPTS; attempt++) {
@@ -48,9 +45,7 @@ public final class ProjectIndexStateReconciler {
             Optional<ProjectIndexState> persisted = loadProjectState(projectId);
             Optional<CodeKnowledgeSnapshot> activeAfter = loadActive(projectId);
 
-            if (!sameSnapshot(activeBefore, activeAfter)) {
-                continue;
-            }
+            if (!sameSnapshot(activeBefore, activeAfter)) continue;
 
             if (activeAfter.isEmpty()) {
                 if (persisted.flatMap(ProjectIndexState::activeSnapshotId).isPresent()) {
@@ -64,6 +59,15 @@ public final class ProjectIndexStateReconciler {
             String authoritativeSnapshotId = activeAfter.orElseThrow().snapshotId();
             if (referencesSnapshot(persisted, authoritativeSnapshotId)) {
                 return new Reconciliation(activeAfter, persisted, repaired);
+            }
+
+            if (!leaseHeld) {
+                try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
+                    return reconcile(projectId, true);
+                } catch (RuntimeException failure) {
+                    throw new IOException("failed to acquire project lifecycle lease for metadata reconciliation: "
+                            + projectId, failure);
+                }
             }
 
             Optional<IndexingRun> matchingRun = loadRuns(projectId).stream()
@@ -87,14 +91,10 @@ public final class ProjectIndexStateReconciler {
 
             Optional<ProjectIndexState> verifiedState = loadProjectState(projectId);
             Optional<CodeKnowledgeSnapshot> verifiedActive = loadActive(projectId);
-            if (!sameSnapshot(activeAfter, verifiedActive)) {
-                continue;
-            }
+            if (!sameSnapshot(activeAfter, verifiedActive)) continue;
             if (referencesSnapshot(verifiedState, authoritativeSnapshotId)) {
                 return new Reconciliation(verifiedActive, verifiedState, true);
             }
-            // Another state writer won while the authoritative snapshot stayed stable. Re-observe
-            // the pair before deciding whether that write is a legitimate run transition or stale.
         }
 
         throw new IOException("active snapshot or project metadata changed repeatedly while reconciling project "
@@ -133,12 +133,8 @@ public final class ProjectIndexStateReconciler {
         }
     }
 
-    private static boolean sameSnapshot(
-            Optional<CodeKnowledgeSnapshot> first,
-            Optional<CodeKnowledgeSnapshot> second
-    ) {
-        return first.map(CodeKnowledgeSnapshot::snapshotId)
-                .equals(second.map(CodeKnowledgeSnapshot::snapshotId));
+    private static boolean sameSnapshot(Optional<CodeKnowledgeSnapshot> first, Optional<CodeKnowledgeSnapshot> second) {
+        return first.map(CodeKnowledgeSnapshot::snapshotId).equals(second.map(CodeKnowledgeSnapshot::snapshotId));
     }
 
     private static boolean referencesSnapshot(Optional<ProjectIndexState> state, String snapshotId) {

@@ -72,7 +72,16 @@ public final class IncrementalIndexingCoordinator {
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(requirements, "requirements");
+        return lifecycleService.withProjectLease(
+                projectId,
+                () -> refreshLocked(projectId, projectRoot, requirements));
+    }
 
+    private IncrementalIndexingResult refreshLocked(
+            UUID projectId,
+            Path projectRoot,
+            IndexingRequirements requirements
+    ) throws IOException {
         ProjectDiscovery discovery = discoveryService.discover(projectRoot);
         ProjectFingerprint before = fingerprintService.capture(projectRoot);
         ProjectIndexState indexState = lifecycleService.projectState(projectId);

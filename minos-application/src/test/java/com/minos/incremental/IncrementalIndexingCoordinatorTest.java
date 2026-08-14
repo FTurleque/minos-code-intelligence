@@ -12,16 +12,20 @@ import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
-import com.minos.orchestration.ProjectIndexLeaseProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -59,6 +63,50 @@ class IncrementalIndexingCoordinatorTest {
         assertEquals(IndexingMode.NONE, unchanged.plan().mode());
         assertEquals(2, executor.calls.get());
         assertEquals("snapshot-2", fingerprintStore.loadActive(projectId).orElseThrow().indexSnapshotId());
+    }
+
+    @Test
+    void projectLeaseRemainsHeldThroughFingerprintPromotion(@TempDir Path temp) throws Exception {
+        Path project = javaProject(temp.resolve("serialized-project"));
+        Path artifact = Files.writeString(temp.resolve("serialized-java.scip"), "index");
+        RecordingExecutor executor = new RecordingExecutor(artifact, false);
+        InMemoryIndexStateStore stateStore = new InMemoryIndexStateStore();
+        AtomicInteger snapshots = new AtomicInteger();
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                List.of(executor),
+                request -> "snapshot-" + snapshots.incrementAndGet(),
+                (projectId, runId, stagedSnapshotId) -> { },
+                stateStore);
+        BlockingPromoteFingerprintStore fingerprintStore = new BlockingPromoteFingerprintStore(
+                new FileProjectFingerprintSnapshotStore(temp.resolve("serialized-fingerprints")));
+        IncrementalIndexingCoordinator coordinator = new IncrementalIndexingCoordinator(
+                fingerprintStore, registry(true), lifecycle);
+        UUID projectId = UUID.randomUUID();
+        CountDownLatch secondStarted = new CountDownLatch(1);
+
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> coordinator.refresh(projectId, project, IndexingRequirements.baseline()));
+            assertTrue(fingerprintStore.promoteEntered.await(10, TimeUnit.SECONDS));
+            assertEquals(1, executor.calls.get());
+
+            var second = pool.submit(() -> {
+                secondStarted.countDown();
+                return coordinator.refresh(projectId, project, IndexingRequirements.baseline());
+            });
+            assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
+            Thread.sleep(150L);
+            assertFalse(second.isDone(),
+                    "a second refresh must remain behind the project lease while baseline promotion is in progress");
+            assertEquals(1, executor.calls.get(), "no second provider run may begin before baseline promotion completes");
+
+            fingerprintStore.releasePromote.countDown();
+            assertTrue(first.get(10, TimeUnit.SECONDS).fingerprintBaselineAdvanced());
+            IncrementalIndexingResult secondResult = second.get(10, TimeUnit.SECONDS);
+            assertEquals(IndexingMode.NONE, secondResult.plan().mode());
+        }
+
+        assertEquals("snapshot-1", fingerprintStore.loadActive(projectId).orElseThrow().indexSnapshotId());
+        assertEquals(1, executor.calls.get());
     }
 
     @Test
@@ -107,14 +155,9 @@ class IncrementalIndexingCoordinatorTest {
                 List.of(executor),
                 request -> "snapshot-" + snapshots.incrementAndGet(),
                 (projectId, runId, stagedSnapshotId) -> { },
-                new InMemoryIndexStateStore(),
-                testLeaseProvider()
+                new InMemoryIndexStateStore()
         );
         return new IncrementalIndexingCoordinator(fingerprintStore, registry, lifecycle);
-    }
-
-    private static ProjectIndexLeaseProvider testLeaseProvider() {
-        return projectId -> () -> { };
     }
 
     private static IndexerRegistry registry(boolean incremental) {
@@ -122,9 +165,7 @@ class IncrementalIndexingCoordinatorTest {
                 IndexerCapability.SYMBOLS,
                 IndexerCapability.REFERENCES
         );
-        if (incremental) {
-            capabilities.add(IndexerCapability.INCREMENTAL_INDEXING);
-        }
+        if (incremental) capabilities.add(IndexerCapability.INCREMENTAL_INDEXING);
         IndexerRegistry registry = new IndexerRegistry();
         registry.register(new IndexerDescriptor(
                 "java-indexer",
@@ -173,6 +214,51 @@ class IncrementalIndexingCoordinatorTest {
                 Files.writeString(root.resolve("src/main/java/App.java"), "class App { int concurrent = 1; }");
             }
             return new IndexingArtifact(Language.JAVA, indexerId(), artifact);
+        }
+    }
+
+    private static final class BlockingPromoteFingerprintStore implements ProjectFingerprintSnapshotStore {
+        private final ProjectFingerprintSnapshotStore delegate;
+        private final CountDownLatch promoteEntered = new CountDownLatch(1);
+        private final CountDownLatch releasePromote = new CountDownLatch(1);
+
+        private BlockingPromoteFingerprintStore(ProjectFingerprintSnapshotStore delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public ProjectFingerprintSnapshot publish(UUID projectId, String indexSnapshotId, ProjectFingerprint fingerprint)
+                throws IOException {
+            return delegate.publish(projectId, indexSnapshotId, fingerprint);
+        }
+
+        @Override
+        public void promote(UUID projectId, String indexSnapshotId) throws IOException {
+            promoteEntered.countDown();
+            try {
+                if (!releasePromote.await(10, TimeUnit.SECONDS)) {
+                    throw new IOException("test timed out while blocking fingerprint promotion");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("fingerprint promotion test was interrupted", interrupted);
+            }
+            delegate.promote(projectId, indexSnapshotId);
+        }
+
+        @Override
+        public Optional<ProjectFingerprintSnapshot> load(UUID projectId, String indexSnapshotId) throws IOException {
+            return delegate.load(projectId, indexSnapshotId);
+        }
+
+        @Override
+        public Optional<ProjectFingerprintSnapshot> loadActive(UUID projectId) throws IOException {
+            return delegate.loadActive(projectId);
+        }
+
+        @Override
+        public List<String> listIndexSnapshotIds(UUID projectId) throws IOException {
+            return delegate.listIndexSnapshotIds(projectId);
         }
     }
 }

@@ -120,6 +120,21 @@ final class PostgresConnectionFactory implements AutoCloseable {
         return withConnection(connection -> executeTransaction(currentLease.get(), work));
     }
 
+    /**
+     * Reserves one physical/pool connection on the current thread until close(). Nested store
+     * operations automatically reuse it through currentLease, which allows a session advisory lock
+     * to span multiple short transactions without keeping one database transaction open.
+     */
+    ScopedConnectionLease openScopedConnection() throws SQLException {
+        if (currentLease.get() != null) {
+            throw new SQLException("cannot open a scoped PostgreSQL connection inside another connection lease");
+        }
+        Connection connection = borrow();
+        LeaseContext context = new LeaseContext(connection);
+        currentLease.set(context);
+        return new ScopedConnectionLease(connection, context, Thread.currentThread());
+    }
+
     private <T> T executeTransaction(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
         if (context == null) throw new SQLException("PostgreSQL transaction has no active connection lease");
         Connection connection = context.connection;
@@ -168,6 +183,10 @@ final class PostgresConnectionFactory implements AutoCloseable {
         return schema;
     }
 
+    Duration acquireTimeout() {
+        return acquireTimeout;
+    }
+
     PoolStats poolStats() {
         return new PoolStats(
                 maxPoolSize,
@@ -187,6 +206,50 @@ final class PostgresConnectionFactory implements AutoCloseable {
     @FunctionalInterface
     interface ConnectionWork<T> {
         T execute(Connection connection) throws SQLException, IOException;
+    }
+
+    final class ScopedConnectionLease implements AutoCloseable {
+        private final Connection connection;
+        private final LeaseContext context;
+        private final Thread owner;
+        private boolean closedLease;
+
+        private ScopedConnectionLease(Connection connection, LeaseContext context, Thread owner) {
+            this.connection = connection;
+            this.context = context;
+            this.owner = owner;
+        }
+
+        Connection connection() {
+            requireOwner();
+            if (closedLease) throw new IllegalStateException("PostgreSQL scoped connection lease is closed");
+            return connection;
+        }
+
+        void invalidate() {
+            requireOwner();
+            context.reusable = false;
+        }
+
+        @Override
+        public void close() {
+            if (closedLease) return;
+            requireOwner();
+            closedLease = true;
+            LeaseContext active = currentLease.get();
+            if (active != context) {
+                context.reusable = false;
+                throw new IllegalStateException("PostgreSQL scoped connection lease lost thread ownership context");
+            }
+            currentLease.remove();
+            release(connection, context.reusable);
+        }
+
+        private void requireOwner() {
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("PostgreSQL scoped connection lease must be used by its owner thread");
+            }
+        }
     }
 
     private Connection borrow() throws SQLException {
@@ -350,8 +413,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
             String rawKey = separator < 0 ? pair : pair.substring(0, separator);
             String rawValue = separator < 0 ? "" : pair.substring(separator + 1);
             try {
-                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8)
-                        .toLowerCase(Locale.ROOT);
+                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
                 String decoded = URLDecoder.decode(rawValue, StandardCharsets.UTF_8);
                 if (key.isEmpty()) {
                     throw new IOException("MINOS_POSTGRES_URL contains an empty query parameter name");

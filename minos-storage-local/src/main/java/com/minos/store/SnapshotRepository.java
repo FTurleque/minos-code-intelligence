@@ -1,17 +1,20 @@
 package com.minos.store;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Owns snapshot file-system layout and atomic file publication, but not binary encoding. */
+/** Owns snapshot file-system layout and durable atomic file publication, but not binary encoding. */
 public final class SnapshotRepository {
 
     private final Path storageRoot;
@@ -33,7 +36,9 @@ public final class SnapshotRepository {
 
     public Path ensureProjectDirectory(UUID projectId) throws IOException {
         Path directory = projectDirectory(projectId);
+        boolean existed = Files.isDirectory(directory);
         Files.createDirectories(directory);
+        if (!existed) forceDirectory(storageRoot);
         return directory;
     }
 
@@ -76,9 +81,7 @@ public final class SnapshotRepository {
 
     public List<Path> listSnapshotFiles(UUID projectId) throws IOException {
         Path directory = projectDirectory(projectId);
-        if (!Files.isDirectory(directory)) {
-            return List.of();
-        }
+        if (!Files.isDirectory(directory)) return List.of();
         try (var files = Files.list(directory)) {
             return files
                     .filter(Files::isRegularFile)
@@ -92,6 +95,7 @@ public final class SnapshotRepository {
     }
 
     static void moveAtomically(Path source, Path target) throws IOException {
+        forceFile(source);
         try {
             Files.move(
                     source,
@@ -100,10 +104,27 @@ public final class SnapshotRepository {
                     StandardCopyOption.REPLACE_EXISTING
             );
         } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException(
-                    "atomic file replacement is required for MINOS snapshot durability: "
-                            + source + " -> " + target,
-                    exception);
+            throw new IOException("filesystem does not support required atomic snapshot replacement: " + target, exception);
         }
+        forceDirectory(target.getParent());
+    }
+
+    private static void forceFile(Path file) throws IOException {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+            channel.force(true);
+        }
+    }
+
+    private static void forceDirectory(Path directory) throws IOException {
+        if (directory == null || windows()) return;
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
+        } catch (UnsupportedOperationException exception) {
+            throw new IOException("filesystem does not support required directory durability sync: " + directory, exception);
+        }
+    }
+
+    private static boolean windows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 }

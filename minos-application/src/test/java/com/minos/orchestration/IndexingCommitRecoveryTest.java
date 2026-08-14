@@ -74,5 +74,6 @@ class IndexingCommitRecoveryTest {
             }
             run = value;
         }
+        public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
     }
 }

@@ -1,7 +1,6 @@
 package com.minos.orchestration;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,12 +14,10 @@ import java.util.UUID;
 /** Applies bounded retention to persisted indexing-run history without invalidating project state. */
 public final class IndexRunRetentionService {
 
-    private final Path runRoot;
     private final FileIndexStateStore stateStore;
 
     public IndexRunRetentionService(Path storageRoot, FileIndexStateStore stateStore) {
-        Path root = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
-        this.runRoot = root.resolve("runs");
+        Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
     }
 
@@ -46,39 +43,17 @@ public final class IndexRunRetentionService {
         keep(retained, nonSucceeded, policy.maxNonSucceededRuns());
         latestRunId.ifPresent(retained::add);
 
-        Path projectRunRoot = runRoot.resolve(projectId.toString()).normalize();
-        if (!projectRunRoot.startsWith(runRoot)) {
-            throw new IOException("project run retention path escapes run root");
-        }
-
         List<UUID> deleted = new ArrayList<>();
         for (IndexingRun run : runs) {
-            if (retained.contains(run.id())) {
-                continue;
-            }
-            Path file = projectRunRoot.resolve(run.id() + ".properties");
-            if (Files.deleteIfExists(file)) {
-                deleted.add(run.id());
-            }
+            if (retained.contains(run.id())) continue;
+            if (stateStore.deleteRun(projectId, run.id())) deleted.add(run.id());
         }
-        removeEmptyProjectDirectory(projectRunRoot);
 
         List<UUID> retainedOrdered = runs.stream()
                 .map(IndexingRun::id)
                 .filter(retained::contains)
                 .toList();
         return new RetentionResult(retainedOrdered, List.copyOf(deleted), latestRunId.orElse(null));
-    }
-
-    private static void removeEmptyProjectDirectory(Path projectRunRoot) throws IOException {
-        if (!Files.isDirectory(projectRunRoot)) {
-            return;
-        }
-        try (var entries = Files.list(projectRunRoot)) {
-            if (entries.findAny().isEmpty()) {
-                Files.deleteIfExists(projectRunRoot);
-            }
-        }
     }
 
     private static Comparator<IndexingRun> newestFirst() {
@@ -89,9 +64,7 @@ public final class IndexRunRetentionService {
     }
 
     private static void keep(Set<UUID> retained, List<IndexingRun> runs, int count) {
-        for (int index = 0; index < Math.min(count, runs.size()); index++) {
-            retained.add(runs.get(index).id());
-        }
+        for (int index = 0; index < Math.min(count, runs.size()); index++) retained.add(runs.get(index).id());
     }
 
     public record RetentionResult(

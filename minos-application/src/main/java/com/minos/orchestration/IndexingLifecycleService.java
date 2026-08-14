@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Collection;
@@ -17,7 +18,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.locks.ReentrantLock;
 
 public final class IndexingLifecycleService {
     private final Map<String, IndexerExecutor> executors;
@@ -25,51 +25,20 @@ public final class IndexingLifecycleService {
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final Clock clock;
-    private final ProjectIndexLeaseProvider leaseProvider;
     private final ConcurrentMap<UUID, Object> projectLocks = new ConcurrentHashMap<>();
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
-    /**
-     * Creates a production lifecycle with an explicit cross-process project lease authority.
-     *
-     * <p>The lease is owned by this layer so direct application consumers cannot bypass the
-     * single-indexing-run invariant by skipping an adapter-level lock.</p>
-     */
-    public IndexingLifecycleService(
-            Collection<IndexerExecutor> executors,
-            SnapshotStager stager,
-            SnapshotPromoter promoter,
-            IndexStateStore stateStore,
-            ProjectIndexLeaseProvider leaseProvider
-    ) {
-        this(executors, stager, promoter, stateStore, Clock.systemUTC(), leaseProvider);
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore) {
+        this(executors, stager, promoter, stateStore, Clock.systemUTC());
     }
 
-    /** Package-private test fixture constructor; production code cannot omit the lease provider. */
-    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
-                             SnapshotPromoter promoter, IndexStateStore stateStore) {
-        this(executors, stager, promoter, stateStore, Clock.systemUTC(), inProcessLeaseProvider());
-    }
-
-    /** Test-only constructor retaining deterministic clock control with an in-process lease. */
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
-        this(executors, stager, promoter, stateStore, clock, inProcessLeaseProvider());
-    }
-
-    private IndexingLifecycleService(
-            Collection<IndexerExecutor> executors,
-            SnapshotStager stager,
-            SnapshotPromoter promoter,
-            IndexStateStore stateStore,
-            Clock clock,
-            ProjectIndexLeaseProvider leaseProvider
-    ) {
         this.stager = Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.clock = Objects.requireNonNull(clock, "clock");
-        this.leaseProvider = Objects.requireNonNull(leaseProvider, "leaseProvider");
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
         for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
             String id = Objects.requireNonNull(executor, "executor").indexerId();
@@ -79,15 +48,28 @@ public final class IndexingLifecycleService {
         this.executors = Map.copyOf(byId);
     }
 
+    /**
+     * Extends the same project lifecycle authority across orchestration work that surrounds a
+     * structured run, such as fingerprint-baseline publication. Nested lifecycle calls are safe
+     * because qualified stores provide owner-thread/project reentrant leases.
+     */
+    public <T> T withProjectLease(UUID projectId, ProjectLeaseWork<T> work) throws IOException {
+        UUID id = Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(work, "work");
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+            return work.execute();
+        }
+    }
+
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of());
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null);
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
                                IndexerNegotiationResult negotiation) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of());
+        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(), null);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
@@ -107,38 +89,59 @@ public final class IndexingLifecycleService {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
-        if (plan.mode() == IndexingMode.NONE) return Optional.empty();
+        if (plan.mode() == IndexingMode.NONE) {
+            try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+                validatePlanStillCurrent(id, plan);
+                return Optional.empty();
+            }
+        }
         return Optional.of(run(id, root, targets, plan.mode(),
-                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of()));
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
-                            IndexingMode mode, List<String> changedFiles) {
+                            IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
-        try (ProjectIndexLeaseProvider.Lease ignored = leaseProvider.acquire(id)) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+            if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
                     executors, stager, promoter, stateStore, clock, projectLocks);
         }
     }
 
-    public ProjectIndexState projectState(UUID id) {
-        return AuthoritativeProjectStateReconciler.reconcile(
-                Objects.requireNonNull(id, "projectId"),
+    private void validatePlanStillCurrent(UUID projectId, IncrementalIndexingPlan plan) {
+        ProjectIndexState current = AuthoritativeProjectStateReconciler.reconcile(
+                projectId,
                 promoter,
                 stateStore,
                 clock.instant(),
-                "reconciled from authoritative active snapshot during project-state read");
+                "reconciled from authoritative active snapshot before validating indexing plan");
+        Optional<String> plannedAgainst = plan.invalidation().activeIndexSnapshotId();
+        if (!current.activeSnapshotId().equals(plannedAgainst)) {
+            throw new IllegalStateException(
+                    "indexing plan is stale for project " + projectId
+                            + ": plannedAgainst=" + plannedAgainst.orElse("<none>")
+                            + " current=" + current.activeSnapshotId().orElse("<none>"));
+        }
+    }
+
+    public ProjectIndexState projectState(UUID id) {
+        UUID projectId = Objects.requireNonNull(id, "projectId");
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
+            return AuthoritativeProjectStateReconciler.reconcile(
+                    projectId,
+                    promoter,
+                    stateStore,
+                    clock.instant(),
+                    "reconciled from authoritative active snapshot during project-state read");
+        }
     }
 
     public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }
     public List<IndexingRun> listRuns(UUID id) { return stateStore.listRuns(Objects.requireNonNull(id, "projectId")); }
 
-    private static ProjectIndexLeaseProvider inProcessLeaseProvider() {
-        ConcurrentMap<UUID, ReentrantLock> locks = new ConcurrentHashMap<>();
-        return projectId -> {
-            ReentrantLock lock = locks.computeIfAbsent(Objects.requireNonNull(projectId, "projectId"), ignored -> new ReentrantLock());
-            lock.lock();
-            return lock::unlock;
-        };
+    @FunctionalInterface
+    public interface ProjectLeaseWork<T> {
+        T execute() throws IOException;
     }
 }
