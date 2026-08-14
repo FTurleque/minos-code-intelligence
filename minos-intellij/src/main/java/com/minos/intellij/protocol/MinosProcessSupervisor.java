@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -193,7 +194,6 @@ final class MinosProcessSupervisor implements AutoCloseable {
         while (!stopOwnershipWatcher.get()) {
             remember(process.descendants().toList());
             if (!process.isAlive()) {
-                // One final sample closes the normal-exit window before this watcher retires.
                 remember(process.descendants().toList());
                 return;
             }
