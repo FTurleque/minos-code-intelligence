@@ -48,6 +48,9 @@ class M29DockerReleaseCiGateContractTest {
         assertTrue(qualification.contains("minos_search_code"));
         assertTrue(qualification.contains("minos_impact"));
         assertTrue(qualification.contains("--network none --read-only"));
+        assertTrue(qualification.contains(
+                        "--tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001"),
+                "MCP smoke writable state must remain owned by the non-root runtime user");
     }
 
     private static String normalizedText(Path path) throws IOException {
