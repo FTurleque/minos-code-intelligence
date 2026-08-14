@@ -41,22 +41,25 @@ final class IndexingRunExecutor {
         Object lock = projectLocks.computeIfAbsent(projectId, ignored -> new Object());
         UUID runId = UUID.randomUUID();
         Instant createdAt = clock.instant();
-        ProjectIndexState previous;
+        ProjectIndexState resolvedPrevious;
         synchronized (lock) {
-            previous = stateStore.findProjectState(projectId)
+            ProjectIndexState persistedPrevious = stateStore.findProjectState(projectId)
                     .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, createdAt));
-            previous = reconcilePreviousWithAuthoritativeSnapshot(projectId, previous, promoter, stateStore, createdAt);
-            if (previous.availability() == Availability.INDEXING || previous.availability() == Availability.REFRESHING) {
+            resolvedPrevious = reconcilePreviousWithAuthoritativeSnapshot(
+                    projectId, persistedPrevious, promoter, stateStore, createdAt);
+            if (resolvedPrevious.availability() == Availability.INDEXING
+                    || resolvedPrevious.availability() == Availability.REFRESHING) {
                 throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
             }
             stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
-                    Optional.empty(), previous.activeSnapshotId(),
+                    Optional.empty(), resolvedPrevious.activeSnapshotId(),
                     Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
             stateStore.saveProjectState(new ProjectIndexState(projectId,
-                    previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
-                    previous.activeSnapshotId(), Optional.of(runId), createdAt,
+                    resolvedPrevious.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
+                    resolvedPrevious.activeSnapshotId(), Optional.of(runId), createdAt,
                     Optional.of("indexing run in progress: mode=" + mode)));
         }
+        ProjectIndexState previous = resolvedPrevious;
 
         List<IndexingArtifact> artifacts = new ArrayList<>();
         List<IndexerExecution> executions = new ArrayList<>();
