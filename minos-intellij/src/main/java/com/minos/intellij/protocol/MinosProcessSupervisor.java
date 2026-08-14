@@ -122,8 +122,10 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
 
         stopOwnershipWatcher(failures);
-        closeQuietly(process.getInputStream(), failures);
-        closeQuietly(process.getErrorStream(), failures);
+        // The reader threads own these streams and may already have closed them after EOF. Repeated
+        // pipe close is teardown hygiene, not proof of process ownership, so it must remain idempotent.
+        closeQuietly(process.getInputStream(), null);
+        closeQuietly(process.getErrorStream(), null);
         joinReaders(failures);
 
         boolean readersStopped = !outReader.isAlive() && !errReader.isAlive();
