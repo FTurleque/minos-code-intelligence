@@ -1,0 +1,46 @@
+name: Temporary managed-provider ownership patch
+
+on:
+  push:
+    branches: [fix/post-audit-p2-followup-20260814]
+    paths: [.github/workflows/post-audit-source-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/post-audit-p2-followup-20260814
+          fetch-depth: 0
+      - name: Route every managed SCIP process through strong ownership
+        shell: python
+        run: |
+          from pathlib import Path
+          paths = [
+              Path('minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java'),
+              Path('minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java'),
+              Path('minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java'),
+          ]
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              count = text.count('new ProcessIndexerExecutor(')
+              if count < 1:
+                  raise SystemExit(f'{path}: no ProcessIndexerExecutor construction found')
+              text = text.replace('new ProcessIndexerExecutor(', 'StrongOwnedProcessExecutors.required(')
+              text = text.replace('import com.minos.runtime.ProcessIndexerExecutor;\n', '')
+              path.write_text(text, encoding='utf-8')
+              print(f'{path}: replaced {count} constructor(s)')
+      - name: Commit exact source transformation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java \
+                  minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java \
+                  minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java
+          git diff --cached --check
+          git commit -m "fix: enforce strong ownership for managed SCIP providers"
+          git push origin HEAD:fix/post-audit-p2-followup-20260814
