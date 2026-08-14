@@ -20,11 +20,15 @@ import java.util.Optional;
 public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecutor {
 
     private final ProcessIndexerExecutor delegate;
-    private final Path minosHome;
+    private final BoundaryProvider boundaryProvider;
 
     public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
+        this(delegate, platformBoundary(Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize()));
+    }
+
+    StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, BoundaryProvider boundaryProvider) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
-        this.minosHome = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
+        this.boundaryProvider = Objects.requireNonNull(boundaryProvider, "boundaryProvider");
     }
 
     @Override
@@ -34,38 +38,61 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
 
     /** Returns the strong-ownership capability of the current host/configuration. */
     public Capability capability() {
-        return switch (WorkerSandboxQualification.currentPlatform()) {
-            case LINUX -> {
-                Optional<Path> root = LinuxCgroupJob.delegatedRoot();
-                Optional<Path> shell = CommandLocator.find("sh");
-                if (root.isPresent() && shell.isPresent()) {
-                    yield Capability.available("linux-cgroup-v2");
-                }
-                yield Capability.unavailable("linux-cgroup-v2",
-                        root.isEmpty() ? "delegated cgroup v2 root is unavailable" : "POSIX sh is unavailable");
-            }
-            case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome).isPresent()
-                    ? Capability.available("windows-job-object")
-                    : Capability.unavailable("windows-job-object", "PowerShell/native Job Object launcher is unavailable");
-            case OTHER -> Capability.unavailable("none", "strong process ownership is unsupported on this platform");
-        };
+        return Objects.requireNonNull(boundaryProvider.capability(), "ownership capability");
     }
 
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
         Objects.requireNonNull(request, "request");
-        ProcessIndexerExecutor.ProcessPlanTransformer transformer = switch (
-                WorkerSandboxQualification.currentPlatform()) {
-            case LINUX -> linuxTransformer(request);
-            case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome)
-                    .orElseThrow(() -> unavailable("Windows Job Object ownership is unavailable"))
-                    .transformer();
-            case OTHER -> throw unavailable("strong process ownership is unsupported on this platform");
-        };
+        Capability capability = capability();
+        if (!capability.strong()) {
+            throw unavailable(String.join("; ", capability.diagnostics()));
+        }
+        ProcessIndexerExecutor.ProcessPlanTransformer transformer = Objects.requireNonNull(
+                boundaryProvider.transformer(request), "strong ownership transformer");
         return delegate.executeSandboxed(request, transformer);
     }
 
-    private ProcessIndexerExecutor.ProcessPlanTransformer linuxTransformer(IndexingExecutionRequest request) {
+    private static BoundaryProvider platformBoundary(Path minosHome) {
+        return new BoundaryProvider() {
+            @Override
+            public Capability capability() {
+                return switch (WorkerSandboxQualification.currentPlatform()) {
+                    case LINUX -> {
+                        Optional<Path> root = LinuxCgroupJob.delegatedRoot();
+                        Optional<Path> shell = CommandLocator.find("sh");
+                        if (root.isPresent() && shell.isPresent()) {
+                            yield Capability.available("linux-cgroup-v2");
+                        }
+                        yield Capability.unavailable("linux-cgroup-v2",
+                                root.isEmpty()
+                                        ? "delegated cgroup v2 root is unavailable"
+                                        : "POSIX sh is unavailable");
+                    }
+                    case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome).isPresent()
+                            ? Capability.available("windows-job-object")
+                            : Capability.unavailable(
+                                    "windows-job-object",
+                                    "PowerShell/native Job Object launcher is unavailable");
+                    case OTHER -> Capability.unavailable(
+                            "none", "strong process ownership is unsupported on this platform");
+                };
+            }
+
+            @Override
+            public ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request) {
+                return switch (WorkerSandboxQualification.currentPlatform()) {
+                    case LINUX -> linuxTransformer(request);
+                    case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome)
+                            .orElseThrow(() -> unavailable("Windows Job Object ownership is unavailable"))
+                            .transformer();
+                    case OTHER -> throw unavailable("strong process ownership is unsupported on this platform");
+                };
+            }
+        };
+    }
+
+    private static ProcessIndexerExecutor.ProcessPlanTransformer linuxTransformer(IndexingExecutionRequest request) {
         Path root = LinuxCgroupJob.delegatedRoot()
                 .orElseThrow(() -> unavailable("delegated cgroup v2 ownership is unavailable"));
         Path shell = CommandLocator.find("sh")
@@ -105,6 +132,12 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
         return new IllegalStateException("strong provider process ownership is required but unavailable: " + detail);
     }
 
+    interface BoundaryProvider {
+        Capability capability();
+
+        ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request);
+    }
+
     public record Capability(Status status, String mechanism, List<String> diagnostics) {
         public enum Status { STRONG, UNAVAILABLE }
 
@@ -121,7 +154,10 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
         }
 
         public static Capability unavailable(String mechanism, String diagnostic) {
-            return new Capability(Status.UNAVAILABLE, mechanism, List.of(Objects.requireNonNull(diagnostic, "diagnostic")));
+            return new Capability(
+                    Status.UNAVAILABLE,
+                    mechanism,
+                    List.of(Objects.requireNonNull(diagnostic, "diagnostic")));
         }
 
         public boolean strong() {
