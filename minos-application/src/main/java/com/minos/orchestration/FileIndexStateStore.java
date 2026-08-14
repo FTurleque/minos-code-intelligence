@@ -139,9 +139,8 @@ public final class FileIndexStateStore implements IndexStateStore {
                     requireIdentity(projectId, run.projectId(), candidate, "indexing run project");
                     return Optional.of(run);
                 }
-                // A locator is intentionally published before the first run file. A crash or a
-                // concurrent first save may therefore leave it temporarily dangling; it is not a run.
-                removeDanglingLocator(runId);
+                // The locator is published before a run's first durable state. Keep a dangling
+                // locator: another process may still be completing that first publication.
             }
 
             Path legacy = runRoot.resolve(runId + ".properties");
@@ -366,10 +365,6 @@ public final class FileIndexStateStore implements IndexStateStore {
         } catch (IllegalArgumentException invalid) {
             throw new IllegalStateException("invalid project id in run locator: " + locator, invalid);
         }
-    }
-
-    private void removeDanglingLocator(UUID runId) throws IOException {
-        DurableAtomicFile.deleteIfExists(runLocatorFile(runId), "dangling index run locator cleanup");
     }
 
     private Path projectRunDirectory(UUID projectId) {
