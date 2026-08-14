@@ -6,10 +6,12 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,17 +20,25 @@ import java.util.concurrent.atomic.AtomicReference;
  * Owns the full lifecycle of one MINOS CLI process: start, output drain, cancellation, and
  * cleanup of every process that was observed as owned by the command.
  *
+ * <p>Ownership is recorded continuously while the CLI root is alive, rather than only when a stop
+ * begins. A descendant that is observed and later orphaned therefore remains in the ownership
+ * ledger after the root exits. Entries include process start identity when the OS exposes it, so a
+ * recycled PID cannot silently turn an old ownership record into permission to kill another
+ * process.</p>
+ *
  * <p>Cancellation and timeout deliberately keep the CLI root alive while known descendants are
  * signalled first. The forced phase delegates to IntelliJ's OS-aware
- * {@link OSProcessUtil#killProcessTree(Process)} and retains ProcessHandle sweeps as a fallback and
- * verification layer. Cleanup is fail-closed: an explicit stop never hides termination failures,
- * and close retries while termination has not been proven complete.</p>
+ * {@link OSProcessUtil#killProcessTree(Process)} while the root is alive and retains the ownership
+ * ledger plus fresh ProcessHandle sweeps as fallback and verification layers. Cleanup is fail-closed:
+ * close never converts an unproven cleanup into a successful command.</p>
  */
 final class MinosProcessSupervisor implements AutoCloseable {
 
     private static final int MAX_PROCESS_STREAM_BYTES = 16 * 1024 * 1024;
     private static final int DESCENDANT_SWEEP_COUNT = 3;
     private static final long DESCENDANT_SWEEP_DELAY_MILLIS = 100L;
+    private static final long OWNERSHIP_POLL_MILLIS = 20L;
+    private static final long OWNERSHIP_JOIN_MILLIS = 1_000L;
     private static final long GRACEFUL_DESCENDANT_WAIT_MILLIS = 1_000L;
     private static final long FORCED_WAIT_MILLIS = 5_000L;
     private static final long READER_JOIN_MILLIS = 5_000L;
@@ -36,11 +46,13 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private final Process process;
     private final Thread outReader;
     private final Thread errReader;
+    private final Thread ownershipWatcher;
     private final AtomicReference<byte[]> stdout = new AtomicReference<>(new byte[0]);
     private final AtomicReference<byte[]> stderr = new AtomicReference<>(new byte[0]);
     private final AtomicReference<IOException> readFailure = new AtomicReference<>();
     private final AtomicBoolean terminationComplete = new AtomicBoolean(false);
-    private final Map<Long, ProcessHandle> ownedHandles = new LinkedHashMap<>();
+    private final AtomicBoolean stopOwnershipWatcher = new AtomicBoolean(false);
+    private final Map<ProcessIdentity, OwnedProcess> ownedProcesses = new LinkedHashMap<>();
 
     MinosProcessSupervisor(Process process) {
         this.process = process;
@@ -49,6 +61,8 @@ final class MinosProcessSupervisor implements AutoCloseable {
                 .start(() -> readBounded(process.getInputStream(), stdout, readFailure));
         this.errReader = Thread.ofVirtual().name("minos-stderr")
                 .start(() -> readBounded(process.getErrorStream(), stderr, readFailure));
+        this.ownershipWatcher = Thread.ofVirtual().name("minos-process-ownership")
+                .start(this::watchOwnership);
     }
 
     /** Waits up to {@code millis} for the process to exit. */
@@ -57,8 +71,9 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     /**
-     * Stops the complete MINOS process tree. Cancellation is rethrown unchanged. A null cause is
-     * the timeout/explicit-cleanup path; any cleanup failure is then surfaced as a protocol error.
+     * Stops the complete observed MINOS process tree. Cancellation is rethrown unchanged. A null
+     * cause is the timeout/explicit-cleanup path; any cleanup failure is then surfaced as a protocol
+     * error.
      */
     synchronized void stop(Throwable cause) throws MinosProtocolException {
         if (terminationComplete.get()) {
@@ -69,23 +84,25 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
         List<Throwable> failures = new ArrayList<>();
         remember(process.descendants().toList());
-        List<ProcessHandle> snapshot = rememberedHandles();
+        List<OwnedProcess> snapshot = rememberedProcesses();
 
         terminateDescendantsGracefully(snapshot);
         waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, failures);
         remember(process.descendants().toList());
 
-        boolean platformTreeKilled = false;
-        try {
-            platformTreeKilled = OSProcessUtil.killProcessTree(process);
-        } catch (RuntimeException exception) {
-            failures.add(new IOException("IntelliJ platform process-tree termination failed", exception));
-        }
-        if (!platformTreeKilled && process.isAlive()) {
-            failures.add(new IOException("IntelliJ platform process-tree termination returned false"));
+        if (process.isAlive()) {
+            boolean platformTreeKilled = false;
+            try {
+                platformTreeKilled = OSProcessUtil.killProcessTree(process);
+            } catch (RuntimeException exception) {
+                failures.add(new IOException("IntelliJ platform process-tree termination failed", exception));
+            }
+            if (!platformTreeKilled && process.isAlive()) {
+                failures.add(new IOException("IntelliJ platform process-tree termination returned false"));
+            }
         }
 
-        terminateDescendantsForcibly(rememberedHandles(), failures);
+        terminateDescendantsForcibly(rememberedProcesses(), failures);
         if (process.isAlive()) process.destroyForcibly();
         try {
             process.waitFor(FORCED_WAIT_MILLIS, TimeUnit.MILLISECONDS);
@@ -96,21 +113,23 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
         remember(process.descendants().toList());
         terminateRememberedSurvivors();
-        long survivors = rememberedHandles().stream().filter(ProcessHandle::isAlive).count();
+        long survivors = rememberedProcesses().stream().filter(OwnedProcess::isAlive).count();
         if (process.isAlive() || survivors > 0) {
             failures.add(new IOException(
                     "MINOS process tree has " + (process.isAlive() ? 1 : 0) + " root + "
                             + survivors + " owned descendant(s) still alive after forced termination"));
         }
 
+        stopOwnershipWatcher(failures);
         closeQuietly(process.getInputStream(), failures);
         closeQuietly(process.getErrorStream(), failures);
         joinReaders(failures);
 
         boolean readersStopped = !outReader.isAlive() && !errReader.isAlive();
+        boolean ownershipStopped = !ownershipWatcher.isAlive();
         boolean processesStopped = !process.isAlive()
-                && rememberedHandles().stream().noneMatch(ProcessHandle::isAlive);
-        terminationComplete.set(processesStopped && readersStopped);
+                && rememberedProcesses().stream().noneMatch(OwnedProcess::isAlive);
+        terminationComplete.set(processesStopped && readersStopped && ownershipStopped);
         propagate(cause, failures);
     }
 
@@ -165,35 +184,64 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public void close() throws MinosProtocolException {
         if (terminationComplete.get()) return;
+        stop(null);
+    }
+
+    private void watchOwnership() {
+        while (!stopOwnershipWatcher.get()) {
+            remember(process.descendants().toList());
+            if (!process.isAlive()) {
+                // One final sample closes the normal-exit window before this watcher retires.
+                remember(process.descendants().toList());
+                return;
+            }
+            try {
+                Thread.sleep(OWNERSHIP_POLL_MILLIS);
+            } catch (InterruptedException interrupted) {
+                if (stopOwnershipWatcher.get()) return;
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private void stopOwnershipWatcher(List<Throwable> failures) {
+        stopOwnershipWatcher.set(true);
+        ownershipWatcher.interrupt();
         try {
-            stop(null);
-        } catch (MinosProtocolException ignored) {
-            // Explicit stop() surfaces cleanup failures. AutoCloseable still performs this final retry.
+            ownershipWatcher.join(OWNERSHIP_JOIN_MILLIS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            failures.add(interrupted);
+        }
+        if (ownershipWatcher.isAlive()) {
+            failures.add(new IOException("MINOS process ownership watcher did not terminate"));
         }
     }
 
     private synchronized void remember(List<ProcessHandle> handles) {
-        for (ProcessHandle handle : handles) ownedHandles.putIfAbsent(handle.pid(), handle);
+        for (ProcessHandle handle : handles) {
+            ProcessIdentity identity = ProcessIdentity.capture(handle);
+            ownedProcesses.putIfAbsent(identity, new OwnedProcess(identity, handle));
+        }
     }
 
-    private synchronized List<ProcessHandle> rememberedHandles() {
-        return new ArrayList<>(ownedHandles.values());
+    private synchronized List<OwnedProcess> rememberedProcesses() {
+        return new ArrayList<>(ownedProcesses.values());
     }
 
-    private static void terminateDescendantsGracefully(List<ProcessHandle> snapshot) {
-        List<ProcessHandle> handles = new ArrayList<>(snapshot);
-        handles.reversed().forEach(handle -> {
-            if (handle.isAlive()) handle.destroy();
-        });
+    private static void terminateDescendantsGracefully(List<OwnedProcess> snapshot) {
+        List<OwnedProcess> processes = new ArrayList<>(snapshot);
+        processes.reversed().forEach(OwnedProcess::destroy);
     }
 
     private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> failures) {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(maximumMillis);
         while (System.nanoTime() < deadline) {
             remember(process.descendants().toList());
-            if (rememberedHandles().stream().noneMatch(ProcessHandle::isAlive)) return;
+            if (rememberedProcesses().stream().noneMatch(OwnedProcess::isAlive)) return;
             try {
                 Thread.sleep(50L);
             } catch (InterruptedException interrupted) {
@@ -204,20 +252,16 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    private void terminateDescendantsForcibly(List<ProcessHandle> snapshot, List<Throwable> failures) {
-        List<ProcessHandle> snapshotList = new ArrayList<>(snapshot);
-        snapshotList.reversed().forEach(handle -> {
-            if (handle.isAlive()) handle.destroyForcibly();
-        });
+    private void terminateDescendantsForcibly(List<OwnedProcess> snapshot, List<Throwable> failures) {
+        List<OwnedProcess> snapshotList = new ArrayList<>(snapshot);
+        snapshotList.reversed().forEach(OwnedProcess::destroyForcibly);
         for (int sweep = 0; sweep < DESCENDANT_SWEEP_COUNT; sweep++) {
             List<ProcessHandle> fresh = new ArrayList<>(process.descendants().toList());
             remember(fresh);
-            fresh.reversed().forEach(handle -> {
-                if (handle.isAlive()) handle.destroyForcibly();
-            });
+            fresh.reversed().forEach(handle -> new OwnedProcess(ProcessIdentity.capture(handle), handle).destroyForcibly());
             terminateRememberedSurvivors();
             if (sweep < DESCENDANT_SWEEP_COUNT - 1
-                    && (process.isAlive() || rememberedHandles().stream().anyMatch(ProcessHandle::isAlive))) {
+                    && (process.isAlive() || rememberedProcesses().stream().anyMatch(OwnedProcess::isAlive))) {
                 try {
                     Thread.sleep(DESCENDANT_SWEEP_DELAY_MILLIS);
                 } catch (InterruptedException interrupted) {
@@ -230,10 +274,8 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     private void terminateRememberedSurvivors() {
-        List<ProcessHandle> handles = rememberedHandles();
-        handles.reversed().forEach(handle -> {
-            if (handle.isAlive()) handle.destroyForcibly();
-        });
+        List<OwnedProcess> processes = rememberedProcesses();
+        processes.reversed().forEach(OwnedProcess::destroyForcibly);
     }
 
     private void joinReaders(List<Throwable> failures) {
@@ -297,6 +339,39 @@ final class MinosProcessSupervisor implements AutoCloseable {
             }
         } catch (IOException exception) {
             failure.compareAndSet(null, exception);
+        }
+    }
+
+    private record ProcessIdentity(long pid, Optional<Instant> startInstant) {
+        private ProcessIdentity {
+            startInstant = Objects.requireNonNull(startInstant, "startInstant");
+        }
+
+        private static ProcessIdentity capture(ProcessHandle handle) {
+            return new ProcessIdentity(handle.pid(), handle.info().startInstant());
+        }
+    }
+
+    private record OwnedProcess(ProcessIdentity identity, ProcessHandle handle) {
+        private OwnedProcess {
+            Objects.requireNonNull(identity, "identity");
+            Objects.requireNonNull(handle, "handle");
+        }
+
+        private boolean isAlive() {
+            if (!handle.isAlive()) return false;
+            Optional<Instant> currentStart = handle.info().startInstant();
+            return identity.startInstant().isEmpty()
+                    || currentStart.isEmpty()
+                    || identity.startInstant().equals(currentStart);
+        }
+
+        private void destroy() {
+            if (isAlive()) handle.destroy();
+        }
+
+        private void destroyForcibly() {
+            if (isAlive()) handle.destroyForcibly();
         }
     }
 }
