@@ -6,6 +6,7 @@ import com.minos.orchestration.ProjectIndexState;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -113,6 +115,58 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
             holder.get(10, TimeUnit.SECONDS);
             writer.get(10, TimeUnit.SECONDS);
             assertTrue(delegate.state.get() == state);
+        }
+    }
+
+    @Test
+    void sameProjectLifecycleWaitersDoNotConsumeQueryPool() throws Exception {
+        UUID id = UUID.randomUUID();
+        ProjectMutationIndexStateStore store = new ProjectMutationIndexStateStore(connections, new RecordingStore());
+        CountDownLatch firstHeld = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch waitersStarted = new CountDownLatch(6);
+
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            var first = pool.submit(() -> {
+                try (IndexStateStore.ProjectLease ignored = store.acquireProjectLease(id)) {
+                    firstHeld.countDown();
+                    if (!releaseFirst.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("test timed out while holding lifecycle lease");
+                    }
+                }
+                return null;
+            });
+            assertTrue(firstHeld.await(10, TimeUnit.SECONDS));
+
+            List<java.util.concurrent.Future<?>> waiters = new ArrayList<>();
+            for (int index = 0; index < 6; index++) {
+                waiters.add(pool.submit(() -> {
+                    waitersStarted.countDown();
+                    try (IndexStateStore.ProjectLease ignored = store.acquireProjectLease(id)) {
+                        return null;
+                    }
+                }));
+            }
+            assertTrue(waitersStarted.await(10, TimeUnit.SECONDS));
+            Thread.sleep(200L);
+
+            PostgresConnectionFactory.PoolStats duringWait = connections.poolStats();
+            assertEquals(0, duringWait.leased(),
+                    "lifecycle holder and same-project waiters must not reserve ordinary query connections");
+            assertEquals(1, duringWait.dedicated(),
+                    "the local project gate must allow only the current lifecycle owner to reserve a dedicated session");
+
+            int one = connections.withConnection(connection -> {
+                try (var statement = connection.createStatement(); var result = statement.executeQuery("SELECT 1")) {
+                    assertTrue(result.next());
+                    return result.getInt(1);
+                }
+            });
+            assertEquals(1, one, "unrelated query traffic must remain serviceable while lifecycle waiters queue");
+
+            releaseFirst.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            for (var waiter : waiters) waiter.get(10, TimeUnit.SECONDS);
         }
     }
 

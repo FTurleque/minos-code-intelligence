@@ -1,14 +1,13 @@
 package com.minos.registry;
 
 import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,7 +65,7 @@ public final class ProjectPathMappingStore {
 
     public void save(ProjectPathMapping mapping) throws IOException {
         Objects.requireNonNull(mapping, "mapping");
-        Files.createDirectories(file.getParent());
+        DurableAtomicFile.ensureDirectory(file.getParent(), "project path mapping directory");
         Properties properties = new Properties();
         properties.setProperty("formatVersion", Integer.toString(CURRENT_FORMAT_VERSION));
         properties.setProperty("hostRoot", mapping.hostRoot());
@@ -78,11 +77,7 @@ public final class ProjectPathMappingStore {
                     StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS project path mapping v1");
             }
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            DurableAtomicFile.replace(temporary, file, "project path mapping replacement");
         } finally {
             Files.deleteIfExists(temporary);
         }

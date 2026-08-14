@@ -8,6 +8,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +20,45 @@ class MinosStrongProcessLauncherTest {
 
     @TempDir
     Path temp;
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void ownershipPlanIsDeletedBeforeOwnedChildCompletes() throws Exception {
+        Path home = temp.resolve("plan-home");
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-Command", "Start-Sleep -Seconds 30"));
+        builder.directory(temp.toFile());
+        builder.environment().put("MINOS_TEST_SECRET", "must-not-remain-on-disk");
+
+        MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, home.toString());
+        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+            Path ownership = home.resolve("intellij/process-ownership");
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (hasPlans(ownership) && System.nanoTime() < deadline) Thread.sleep(20L);
+            assertFalse(hasPlans(ownership),
+                    "the environment-bearing ownership plan must be deleted before the child exits");
+            assertTrue(launch.process().isAlive(), "fixture child must still be alive after plan deletion");
+            supervisor.stop(null);
+        }
+    }
+
+    @Test
+    void staleOwnershipCleanupKeepsRecentPlansAndRemovesOnlyOldRegularFiles() throws Exception {
+        Path ownership = Files.createDirectories(temp.resolve("cleanup"));
+        Path stale = Files.writeString(ownership.resolve("cli-stale.plan"), "old-secret");
+        Path recent = Files.writeString(ownership.resolve("cli-recent.plan"), "current-secret");
+        Path unrelated = Files.writeString(ownership.resolve("other.plan"), "other");
+        Instant cutoff = Instant.parse("2026-08-15T00:00:00Z");
+        Files.setLastModifiedTime(stale, FileTime.from(cutoff.minusSeconds(1)));
+        Files.setLastModifiedTime(recent, FileTime.from(cutoff.plusSeconds(1)));
+
+        MinosStrongProcessLauncher.cleanupStaleWindowsPlans(ownership, cutoff);
+
+        assertFalse(Files.exists(stale));
+        assertTrue(Files.isRegularFile(recent));
+        assertTrue(Files.isRegularFile(unrelated));
+    }
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
@@ -77,6 +118,13 @@ class MinosStrongProcessLauncherTest {
         awaitDead(pid);
         assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
                 "setsid child must remain owned by the systemd cgroup scope");
+    }
+
+    private static boolean hasPlans(Path ownership) throws Exception {
+        if (!Files.isDirectory(ownership)) return false;
+        try (var plans = Files.newDirectoryStream(ownership, "cli-*.plan")) {
+            return plans.iterator().hasNext();
+        }
     }
 
     private static Path powershell() {

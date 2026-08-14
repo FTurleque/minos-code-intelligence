@@ -1,11 +1,14 @@
 package com.minos.storage.postgresql;
 
+import com.minos.io.CommitUncertainException;
 import com.minos.storage.StorageBackendConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -138,6 +141,42 @@ class PostgresConnectionFactoryTest {
                 new SQLException("connection lost", "08006")));
         assertFalse(PostgresConnectionFactory.isConnectionFailure(
                 new SQLException("constraint", "23505")));
+    }
+
+    @Test
+    void connectionLossWhileAcknowledgingCommitIsExplicitlyUncertain() {
+        Connection connection = commitFailingConnection(new SQLException("connection lost after COMMIT", "08006"));
+
+        assertThrows(CommitUncertainException.class,
+                () -> PostgresConnectionFactory.commitTransaction(connection));
+    }
+
+    @Test
+    void nonConnectionCommitFailureRemainsDefinitiveSqlFailure() {
+        Connection connection = commitFailingConnection(new SQLException("constraint", "23505"));
+
+        assertThrows(SQLException.class,
+                () -> PostgresConnectionFactory.commitTransaction(connection));
+    }
+
+    private static Connection commitFailingConnection(SQLException failure) {
+        return (Connection) Proxy.newProxyInstance(
+                PostgresConnectionFactoryTest.class.getClassLoader(),
+                new Class<?>[]{Connection.class},
+                (proxy, method, arguments) -> {
+                    if ("commit".equals(method.getName())) throw failure;
+                    if ("toString".equals(method.getName())) return "commit-failing-connection";
+                    Class<?> type = method.getReturnType();
+                    if (type == boolean.class) return false;
+                    if (type == byte.class) return (byte) 0;
+                    if (type == short.class) return (short) 0;
+                    if (type == int.class) return 0;
+                    if (type == long.class) return 0L;
+                    if (type == float.class) return 0F;
+                    if (type == double.class) return 0D;
+                    if (type == char.class) return '\0';
+                    return null;
+                });
     }
 
     private static PostgresConnectionFactory factory(

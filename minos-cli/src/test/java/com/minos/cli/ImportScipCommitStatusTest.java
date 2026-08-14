@@ -13,7 +13,30 @@ class ImportScipCommitStatusTest {
 
     @Test
     void committedSnapshotWithPendingMetadataReturnsSuccessAndExplicitWarning() throws Exception {
-        ProjectOperations operations = new PendingMetadataOperations();
+        assertCommittedWarning(
+                ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING,
+                "snapshot committed but project metadata recovery is pending");
+    }
+
+    @Test
+    void committedSnapshotWithPendingDurabilityReturnsSuccessAndExplicitWarning() throws Exception {
+        assertCommittedWarning(
+                ProjectOperations.IndexImportCommitStatus.COMMITTED_DURABILITY_PENDING,
+                "snapshot committed and authoritative but durability acknowledgement is pending");
+    }
+
+    @Test
+    void committedSnapshotWithPendingDurabilityAndMetadataReturnsSuccessAndExplicitWarning() throws Exception {
+        assertCommittedWarning(
+                ProjectOperations.IndexImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING,
+                "durability acknowledgement and metadata recovery are pending");
+    }
+
+    private static void assertCommittedWarning(
+            ProjectOperations.IndexImportCommitStatus status,
+            String expectedWarning
+    ) throws Exception {
+        ProjectOperations operations = new PendingOperations(status);
         ImportScipCommand command = new ImportScipCommand(operations);
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();
@@ -23,12 +46,18 @@ class ImportScipCommitStatusTest {
         }, output, error);
 
         assertEquals(FindSymbolCommand.SUCCESS, exit);
-        assertTrue(output.toString().contains("commitStatus: COMMITTED_METADATA_PENDING"));
-        assertTrue(error.toString().contains("snapshot committed but project metadata recovery is pending"));
+        assertTrue(output.toString().contains("commitStatus: " + status.name()));
+        assertTrue(error.toString().contains(expectedWarning));
         assertFalse(error.toString().contains("import-scip failed"));
     }
 
-    private static final class PendingMetadataOperations implements ProjectOperations {
+    private static final class PendingOperations implements ProjectOperations {
+        private final IndexImportCommitStatus status;
+
+        private PendingOperations(IndexImportCommitStatus status) {
+            this.status = status;
+        }
+
         @Override
         public ProjectView addProject(Path rootPath, String displayName) {
             throw new UnsupportedOperationException();
@@ -65,8 +94,8 @@ class ImportScipCommitStatusTest {
                     0,
                     0,
                     "2026-08-14T21:30:00Z",
-                    IndexImportCommitStatus.COMMITTED_METADATA_PENDING,
-                    "state store unavailable");
+                    status,
+                    "synthetic pending commit follow-up");
         }
     }
 }

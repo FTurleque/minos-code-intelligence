@@ -1,11 +1,11 @@
 package com.minos.registry;
 
 import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -67,8 +67,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         this.workspacesDirectory = this.storageRoot.resolve(WORKSPACES_DIRECTORY);
         this.pathMapping = Objects.requireNonNull(pathMapping, "pathMapping");
         this.runtimeLocation = Objects.requireNonNull(runtimeLocation, "runtimeLocation");
-        Files.createDirectories(projectsDirectory);
-        Files.createDirectories(workspacesDirectory);
+        DurableAtomicFile.ensureDirectory(projectsDirectory, "project registry directory");
+        DurableAtomicFile.ensureDirectory(workspacesDirectory, "workspace registry directory");
     }
 
     @Override
@@ -341,7 +341,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
-        Files.createDirectories(target.getParent());
+        DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
         Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
@@ -349,11 +349,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                     StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS local registry");
             }
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            DurableAtomicFile.replace(temporary, target, "local registry metadata replacement");
         } finally {
             Files.deleteIfExists(temporary);
         }

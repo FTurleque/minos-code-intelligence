@@ -42,8 +42,9 @@ public final class ImportScipCommand {
                     options.project, options.file, options.provider, options.providerVersion,
                     options.module, options.snapshot);
             output.append(render(result, options.format)).append('\n');
-            if (result.commitStatus() == ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING) {
-                error.append("warning: snapshot committed but project metadata recovery is pending")
+            String warning = warning(result.commitStatus());
+            if (warning != null) {
+                error.append("warning: ").append(warning)
                         .append(result.diagnostic() == null ? "" : ": " + result.diagnostic())
                         .append('\n');
             }
@@ -58,6 +59,18 @@ public final class ImportScipCommand {
                     .append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
+    }
+
+    private static String warning(ProjectOperations.IndexImportCommitStatus status) {
+        return switch (status) {
+            case COMMITTED -> null;
+            case COMMITTED_DURABILITY_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement is pending";
+            case COMMITTED_METADATA_PENDING ->
+                    "snapshot committed but project metadata recovery is pending";
+            case COMMITTED_DURABILITY_AND_METADATA_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement and metadata recovery are pending";
+        };
     }
 
     private static String render(ProjectOperations.IndexImportResult result, SymbolOutputFormat format) {

@@ -6,6 +6,7 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.io.BoundedInputStream;
+import com.minos.io.CommitUncertainException;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Index;
@@ -66,18 +67,45 @@ public final class ScipSymbolSnapshotImporter {
                     new ScipIngestionRequest(request.projectId().toString(), request.moduleId(), request.providerId(),
                             request.providerVersion(), request.indexRunId(), fileIds, request.projectRelativeRoot()),
                     capture);
-            snapshotStore.publish(request.projectId(), request.snapshotId(),
-                    capture.symbols(), capture.occurrences(), capture.relationships());
+            ScipSymbolSnapshotReport.CommitStatus commitStatus = ScipSymbolSnapshotReport.CommitStatus.COMMITTED;
+            String commitDiagnostic = null;
+            try {
+                snapshotStore.publish(request.projectId(), request.snapshotId(),
+                        capture.symbols(), capture.occurrences(), capture.relationships());
+            } catch (CommitUncertainException uncertain) {
+                try {
+                    boolean targetIsActive = snapshotStore.loadActiveKnowledge(request.projectId())
+                            .map(snapshot -> request.snapshotId().equals(snapshot.snapshotId()))
+                            .orElse(false);
+                    if (!targetIsActive) throw uncertain;
+                } catch (IOException observationFailure) {
+                    if (observationFailure != uncertain) uncertain.addSuppressed(observationFailure);
+                    throw uncertain;
+                }
+                commitStatus = ScipSymbolSnapshotReport.CommitStatus.COMMITTED_DURABILITY_PENDING;
+                commitDiagnostic = "authoritative snapshot is active but durable commit acknowledgement was lost: "
+                        + safeMessage(uncertain);
+            }
 
-            return new ScipSymbolSnapshotReport(request.snapshotId(), ingestion.catalogSymbolCount(),
-                    ingestion.normalizedSymbolCount(), ingestion.skippedSymbolCount(), ingestion.occurrenceCount(),
-                    ingestion.resolvedOccurrenceCount(), ingestion.unresolvedOccurrenceCount(),
-                    ingestion.skippedOccurrenceCount(), ingestion.providerRelationshipCount(),
-                    ingestion.providerRelationshipFactCount(), ingestion.relationshipCount(),
-                    ingestion.derivedRelationshipCount(), ingestion.relatedTestRelationshipCount(),
-                    ingestion.resolvedRelationshipCount(), ingestion.unresolvedRelationshipCount(),
-                    ingestion.skippedRelationshipFactCount(), ingestion.duplicateRelationshipCount());
+            return report(request.snapshotId(), ingestion, commitStatus, commitDiagnostic);
         }
+    }
+
+    private static ScipSymbolSnapshotReport report(
+            String snapshotId,
+            ScipIngestionReport ingestion,
+            ScipSymbolSnapshotReport.CommitStatus commitStatus,
+            String commitDiagnostic
+    ) {
+        return new ScipSymbolSnapshotReport(snapshotId, ingestion.catalogSymbolCount(),
+                ingestion.normalizedSymbolCount(), ingestion.skippedSymbolCount(), ingestion.occurrenceCount(),
+                ingestion.resolvedOccurrenceCount(), ingestion.unresolvedOccurrenceCount(),
+                ingestion.skippedOccurrenceCount(), ingestion.providerRelationshipCount(),
+                ingestion.providerRelationshipFactCount(), ingestion.relationshipCount(),
+                ingestion.derivedRelationshipCount(), ingestion.relatedTestRelationshipCount(),
+                ingestion.resolvedRelationshipCount(), ingestion.unresolvedRelationshipCount(),
+                ingestion.skippedRelationshipFactCount(), ingestion.duplicateRelationshipCount(),
+                commitStatus, commitDiagnostic);
     }
 
     private FrozenArtifact freeze(Path indexFile) throws IOException {
@@ -159,6 +187,11 @@ public final class ScipSymbolSnapshotImporter {
             if (path.isAbsolute() || path.getNameCount() == 0 || path.startsWith("..")) return null;
             return path.toString().replace('\\', '/');
         } catch (RuntimeException exception) { return null; }
+    }
+
+    private static String safeMessage(Throwable failure) {
+        String message = failure.getMessage();
+        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
     }
 
     private static final class FrozenArtifact implements AutoCloseable {

@@ -4,6 +4,7 @@ import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotReport;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.io.BoundedFileDigest;
+import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.ProjectIndexState;
@@ -14,11 +15,9 @@ import com.minos.store.CodeKnowledgeSnapshotStore;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
@@ -90,14 +89,14 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
                 snapshotStore);
 
-        // importSnapshot() has crossed the authoritative active-snapshot commit point. A following
-        // metadata failure must therefore be reported as a committed operation requiring recovery,
-        // never as a generic failed import that invites an unsafe blind retry.
         Instant completedAt = Instant.now();
         ProjectIndexState committedState = new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
                 Optional.of(effectiveSnapshotId), Optional.empty(), completedAt,
                 Optional.of("active snapshot imported explicitly through import-scip"));
-        CommitOutcome commitOutcome = saveCommittedState(committedState);
+        boolean snapshotDurabilityPending = report.commitStatus()
+                == ScipSymbolSnapshotReport.CommitStatus.COMMITTED_DURABILITY_PENDING;
+        CommitOutcome commitOutcome = saveCommittedState(
+                committedState, snapshotDurabilityPending, report.commitDiagnostic());
         try {
             writeHistory(project.id(), new IndexHistory(
                     effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
@@ -112,21 +111,42 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 commitOutcome.diagnostic());
     }
 
-    private CommitOutcome saveCommittedState(ProjectIndexState state) {
+    private CommitOutcome saveCommittedState(
+            ProjectIndexState state,
+            boolean snapshotDurabilityPending,
+            String snapshotDiagnostic
+    ) {
         RuntimeException firstFailure = null;
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 stateStore.saveProjectState(state);
+                if (snapshotDurabilityPending) {
+                    return new CommitOutcome(
+                            IndexImportCommitStatus.COMMITTED_DURABILITY_PENDING,
+                            diagnostic(snapshotDiagnostic,
+                                    "active snapshot is authoritative; durable commit acknowledgement remains pending"));
+                }
                 return new CommitOutcome(IndexImportCommitStatus.COMMITTED, null);
             } catch (RuntimeException failure) {
                 if (firstFailure == null) firstFailure = failure;
                 else firstFailure.addSuppressed(failure);
             }
         }
-        return new CommitOutcome(
-                IndexImportCommitStatus.COMMITTED_METADATA_PENDING,
-                "active snapshot committed; project index metadata persistence failed after 2 attempts: "
-                        + safeMessage(firstFailure));
+        String metadataDiagnostic = "project index metadata persistence failed after 2 attempts: "
+                + safeMessage(firstFailure);
+        return snapshotDurabilityPending
+                ? new CommitOutcome(
+                        IndexImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING,
+                        diagnostic(snapshotDiagnostic, metadataDiagnostic))
+                : new CommitOutcome(
+                        IndexImportCommitStatus.COMMITTED_METADATA_PENDING,
+                        "active snapshot committed; " + metadataDiagnostic);
+    }
+
+    private static String diagnostic(String first, String second) {
+        if (first == null || first.isBlank()) return second;
+        if (second == null || second.isBlank()) return first;
+        return first + "; " + second;
     }
 
     private static String safeMessage(RuntimeException failure) {
@@ -142,7 +162,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     }
 
     private void writeHistory(UUID projectId, IndexHistory history) throws IOException {
-        Files.createDirectories(historyDirectory);
+        DurableAtomicFile.ensureDirectory(historyDirectory, "CLI import history directory");
         Path target = historyDirectory.resolve(projectId + ".properties");
         Path temporary = Files.createTempFile(historyDirectory, projectId + ".", ".tmp");
         Properties properties = new Properties();
@@ -155,11 +175,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                     temporary, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(output, "MINOS project index history");
             }
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                throw new IOException("filesystem does not support atomic CLI import-history replacement", exception);
-            }
+            DurableAtomicFile.replace(temporary, target, "CLI import history replacement");
         } finally {
             Files.deleteIfExists(temporary);
         }

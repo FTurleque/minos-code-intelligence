@@ -4,12 +4,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.UserPrincipal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,6 +37,7 @@ final class MinosStrongProcessLauncher {
 
     private static final long CONTROL_TIMEOUT_SECONDS = 5L;
     private static final int MAX_CONTROL_OUTPUT_BYTES = 64 * 1024;
+    private static final Duration STALE_PLAN_AGE = Duration.ofHours(24);
     private static final Object WINDOWS_INSTALL_LOCK = new Object();
     private static final Object LINUX_PROBE_LOCK = new Object();
     private static volatile Boolean linuxCapability;
@@ -58,10 +68,12 @@ final class MinosStrongProcessLauncher {
         Path ownership = ownershipHome(configuredMinosHome)
                 .resolve("intellij").resolve("process-ownership").toAbsolutePath().normalize();
         Files.createDirectories(ownership);
+        cleanupStaleWindowsPlans(ownership, Instant.now().minus(STALE_PLAN_AGE));
         Path launcher = installWindowsLauncher(ownership);
         Path plan = Files.createTempFile(ownership, "cli-", ".plan");
         boolean started = false;
         try {
+            restrictWindowsPlan(plan);
             writeWindowsPlan(plan, original);
             List<String> wrapperCommand = List.of(
                     windowsPowerShell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
@@ -71,6 +83,42 @@ final class MinosStrongProcessLauncher {
             return new Launch(process, new WindowsJobBoundary(process, plan));
         } finally {
             if (!started) Files.deleteIfExists(plan);
+        }
+    }
+
+    static void cleanupStaleWindowsPlans(Path ownership, Instant cutoff) throws IOException {
+        Path root = Objects.requireNonNull(ownership, "ownership").toAbsolutePath().normalize();
+        Objects.requireNonNull(cutoff, "cutoff");
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
+        try (var plans = Files.newDirectoryStream(root, "cli-*.plan")) {
+            for (Path plan : plans) {
+                if (Files.isSymbolicLink(plan) || !Files.isRegularFile(plan, LinkOption.NOFOLLOW_LINKS)) continue;
+                if (Files.getLastModifiedTime(plan, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) {
+                    Files.deleteIfExists(plan);
+                }
+            }
+        }
+    }
+
+    static void restrictWindowsPlan(Path plan) throws IOException {
+        Path file = Objects.requireNonNull(plan, "plan").toAbsolutePath().normalize();
+        AclFileAttributeView view = Files.getFileAttributeView(
+                file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        if (view == null) {
+            throw new IOException("Windows ownership plan filesystem does not expose ACLs: " + file);
+        }
+        UserPrincipal owner = Files.getOwner(file, LinkOption.NOFOLLOW_LINKS);
+        AclEntry ownerOnly = AclEntry.newBuilder()
+                .setType(AclEntryType.ALLOW)
+                .setPrincipal(owner)
+                .setPermissions(EnumSet.allOf(AclEntryPermission.class))
+                .build();
+        view.setAcl(List.of(ownerOnly));
+        List<AclEntry> applied = view.getAcl();
+        boolean ownerOnlyApplied = !applied.isEmpty() && applied.stream()
+                .allMatch(entry -> entry.type() == AclEntryType.ALLOW && entry.principal().equals(owner));
+        if (!ownerOnlyApplied) {
+            throw new IOException("Windows ownership plan ACL is not restricted to its owner: " + file);
         }
     }
 
