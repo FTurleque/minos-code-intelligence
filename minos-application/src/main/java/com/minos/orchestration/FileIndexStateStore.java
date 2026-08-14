@@ -53,8 +53,10 @@ public final class FileIndexStateStore implements IndexStateStore {
             return Optional.empty();
         }
         Properties properties = load(file);
+        UUID persistedProjectId = UUID.fromString(required(properties, "projectId", file));
+        requireIdentity(projectId, persistedProjectId, file, "project state");
         return Optional.of(new ProjectIndexState(
-                UUID.fromString(required(properties, "projectId", file)),
+                persistedProjectId,
                 ProjectIndexState.Availability.valueOf(required(properties, "availability", file)),
                 optional(properties, "activeSnapshotId"),
                 optional(properties, "latestRunId").map(UUID::fromString),
@@ -70,7 +72,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         if (!Files.isRegularFile(file)) {
             return Optional.empty();
         }
-        return Optional.of(readRun(file));
+        return Optional.of(readRun(file, runId));
     }
 
     @Override
@@ -80,7 +82,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             return stream
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".properties"))
-                    .map(this::readRun)
+                    .map(path -> readRun(path, idFromPropertiesFile(path)))
                     .filter(run -> run.projectId().equals(projectId))
                     .sorted(Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id))
                     .toList();
@@ -127,8 +129,10 @@ public final class FileIndexStateStore implements IndexStateStore {
         store(runRoot.resolve(run.id() + ".properties"), properties, "MINOS indexing run");
     }
 
-    private IndexingRun readRun(Path file) {
+    private IndexingRun readRun(Path file, UUID expectedRunId) {
         Properties properties = load(file);
+        UUID persistedRunId = UUID.fromString(required(properties, "id", file));
+        requireIdentity(expectedRunId, persistedRunId, file, "indexing run");
         int executionCount;
         try {
             executionCount = Integer.parseInt(required(properties, "execution.count", file));
@@ -148,7 +152,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             ));
         }
         return new IndexingRun(
-                UUID.fromString(required(properties, "id", file)),
+                persistedRunId,
                 UUID.fromString(required(properties, "projectId", file)),
                 IndexingRun.Status.valueOf(required(properties, "status", file)),
                 IndexingRun.Phase.valueOf(required(properties, "phase", file)),
@@ -160,6 +164,26 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "activeSnapshotAfter"),
                 optional(properties, "message")
         );
+    }
+
+    private static UUID idFromPropertiesFile(Path file) {
+        String name = file.getFileName().toString();
+        String suffix = ".properties";
+        if (!name.endsWith(suffix)) {
+            throw new IllegalStateException("unexpected index-state metadata filename: " + file);
+        }
+        try {
+            return UUID.fromString(name.substring(0, name.length() - suffix.length()));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("index-state metadata filename is not a UUID: " + file, exception);
+        }
+    }
+
+    private static void requireIdentity(UUID expected, UUID actual, Path file, String label) {
+        if (!expected.equals(actual)) {
+            throw new IllegalStateException(label + " identity mismatch in " + file
+                    + ": expected=" + expected + " persisted=" + actual);
+        }
     }
 
     private static Properties load(Path file) {
