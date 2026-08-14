@@ -1,8 +1,12 @@
-FROM rust@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3 AS rust-toolchain # rust:1.97.1-bookworm
-FROM golang@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS go-toolchain # golang:1.26.5-bookworm
-FROM mcr.microsoft.com/dotnet/sdk@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS dotnet-toolchain # 10.0.302-noble
+# rust:1.97.1-bookworm
+FROM rust@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3 AS rust-toolchain
+# golang:1.26.5-bookworm
+FROM golang@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS go-toolchain
+# 10.0.302-noble
+FROM mcr.microsoft.com/dotnet/sdk@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS dotnet-toolchain
 
-FROM eclipse-temurin@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e # eclipse-temurin:24-jdk
+# eclipse-temurin:24-jdk
+FROM eclipse-temurin@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
