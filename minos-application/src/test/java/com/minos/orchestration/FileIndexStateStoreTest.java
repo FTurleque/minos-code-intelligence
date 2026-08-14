@@ -65,6 +65,54 @@ class FileIndexStateStoreTest {
     }
 
     @Test
+    void rejectsProjectStateWhoseEmbeddedIdentityDoesNotMatchLookupKey() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID otherProjectId = UUID.randomUUID();
+        Path stateRoot = root.resolve("project-identity-state");
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        store.saveProjectState(ProjectIndexState.neverIndexed(projectId, Instant.parse("2026-08-14T12:00:00Z")));
+
+        Path file = stateRoot.resolve("projects").resolve(projectId + ".properties");
+        Files.writeString(file, Files.readString(file).replace(
+                "projectId=" + projectId,
+                "projectId=" + otherProjectId));
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> store.findProjectState(projectId));
+        assertTrue(failure.getMessage().contains("identity mismatch"));
+    }
+
+    @Test
+    void rejectsRunWhoseEmbeddedIdentityDoesNotMatchFilenameOnLookupAndListing() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        UUID otherRunId = UUID.randomUUID();
+        Path stateRoot = root.resolve("run-identity-state");
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        store.saveRun(new IndexingRun(
+                runId,
+                projectId,
+                IndexingRun.Status.SUCCEEDED,
+                IndexingRun.Phase.COMPLETED,
+                Instant.parse("2026-08-14T12:00:00Z"),
+                Optional.of(Instant.parse("2026-08-14T12:01:00Z")),
+                List.of(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()));
+
+        Path file = stateRoot.resolve("runs").resolve(runId + ".properties");
+        Files.writeString(file, Files.readString(file).replace(
+                "id=" + runId,
+                "id=" + otherRunId));
+
+        assertThrows(IllegalStateException.class, () -> store.findRun(runId));
+        assertThrows(IllegalStateException.class, () -> store.listRuns(projectId));
+    }
+
+    @Test
     void rejectsOversizedPersistedMetadataBeforePropertiesParsing() throws Exception {
         UUID projectId = UUID.randomUUID();
         Path stateRoot = root.resolve("state");
