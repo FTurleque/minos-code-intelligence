@@ -172,9 +172,10 @@ final class MinosStrongProcessLauncher {
         value.append("environment.count=").append(environment.size()).append('\n');
         for (int index = 0; index < environment.size(); index++) {
             Map.Entry<String, String> entry = environment.get(index);
-            if (entry.getKey().isEmpty() || entry.getKey().indexOf('=') >= 0
-                    || entry.getKey().indexOf('\0') >= 0 || entry.getValue().indexOf('\0') >= 0) {
-                throw new IOException("invalid environment entry for Windows ownership launcher");
+            if (!validWindowsEnvironmentKey(entry.getKey())
+                    || entry.getValue().indexOf('\0') >= 0) {
+                throw new IOException("invalid environment entry for Windows ownership launcher: "
+                        + entry.getKey());
             }
             value.append("environment.").append(index).append(".key=").append(encoded(entry.getKey())).append('\n');
             value.append("environment.").append(index).append(".value=").append(encoded(entry.getValue())).append('\n');
@@ -182,6 +183,15 @@ final class MinosStrongProcessLauncher {
         value.append("working=").append(encoded(working.toString())).append('\n');
         Files.writeString(plan, value, StandardCharsets.UTF_8,
                 StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    private static boolean validWindowsEnvironmentKey(String key) {
+        if (key == null || key.isEmpty() || key.indexOf('\0') >= 0) return false;
+        if (key.length() == 3 && key.charAt(0) == '='
+                && Character.isLetter(key.charAt(1)) && key.charAt(2) == ':') {
+            return true;
+        }
+        return key.indexOf('=') < 0;
     }
 
     private static Path resolveWindowsExecutable(String executable) throws IOException {
