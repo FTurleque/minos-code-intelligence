@@ -8,8 +8,10 @@ ARG TARGETARCH
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
+ARG UBUNTU_APT_SNAPSHOT=20260814T000000Z
 ARG NODE_VERSION=20.20.2
 ARG MAVEN_VERSION=3.9.16
+ARG MAVEN_ZIP_SHA256=5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce
 ARG COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61
 ARG COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b
 ARG SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784
@@ -20,6 +22,7 @@ ARG SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT
 ARG SCIP_PYTHON_VERSION=0.6.6
 ARG SCIP_CLANG_VERSION=0.4.0
 ARG SCIP_DOTNET_VERSION=0.2.14
+ARG SCIP_DOTNET_NUPKG_SHA256=e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52
 ARG SCIP_GO_VERSION=0.2.7
 ARG RUST_ANALYZER_RELEASE=2026-07-27
 ARG RUST_ANALYZER_VERSION=0.3.2989
@@ -49,11 +52,21 @@ ENV MINOS_HOME=/var/lib/minos \
 USER root
 RUN test "${TARGETARCH}" = "amd64" || (echo "MINOS M29 provider-complete image is qualified only for linux/amd64" >&2; exit 1)
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+# Resolve OS packages from one immutable Ubuntu archive snapshot instead of the moving archive/security mirrors.
+RUN set -eux; \
+    snapshot="https://snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"; \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+      sed -i -E "s#https?://(archive|security)\\.ubuntu\\.com/ubuntu/?#${snapshot}/#g" /etc/apt/sources.list.d/ubuntu.sources; \
+      grep -F "${snapshot}" /etc/apt/sources.list.d/ubuntu.sources >/dev/null; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i -E "s#https?://(archive|security)\\.ubuntu\\.com/ubuntu/?#${snapshot}/#g" /etc/apt/sources.list; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
        bash ca-certificates curl file git gzip python3 python3-pip tar unzip xz-utils \
-       build-essential pkg-config libicu-dev \
-    && rm -rf /var/lib/apt/lists/*
+       build-essential pkg-config libicu-dev; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
 COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
@@ -67,16 +80,15 @@ RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
     && dotnet --version
 
 # scip-java's Maven build is executed at runtime against a writable staging copy of the project.
-# Package an exact Maven 3.9 line in the image so the provider never depends on a host Maven install.
+# Package an exact Maven distribution and verify it against a checksum owned by this Dockerfile.
 RUN set -eux; \
     maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \
     maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
     curl -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
-    curl -fsSLo /tmp/maven.sha512 "${maven_base}/${maven_archive}.sha512"; \
-    printf '%s  %s\n' "$(cat /tmp/maven.sha512)" "/tmp/${maven_archive}" | sha512sum -c -; \
+    printf '%s  %s\n' "${MAVEN_ZIP_SHA256}" "/tmp/${maven_archive}" | sha256sum -c -; \
     unzip -q "/tmp/${maven_archive}" -d /opt; \
     ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \
-    rm -f "/tmp/${maven_archive}" /tmp/maven.sha512; \
+    rm -f "/tmp/${maven_archive}"; \
     mvn --version | grep -F "Apache Maven ${MAVEN_VERSION}"
 
 # scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line
@@ -136,20 +148,43 @@ RUN set -eux; \
     rm -rf /tmp/minos-locks; \
     python3 --version; pip3 --version
 
+# Match the native runtime provenance contract: verify the exact NuGet tool package before
+# allowing dotnet to install from a local-only package source. Go uses the public checksum DB
+# with every private/no-sumdb bypass explicitly cleared.
 RUN set -eux; \
-    dotnet tool install --tool-path "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}" \
-      scip-dotnet --version "${SCIP_DOTNET_VERSION}"; \
-    printf '%s\n' "${SCIP_DOTNET_VERSION}" > "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/.minos-version"; \
-    test -x "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet"; \
-    GOBIN="/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}" \
+    dotnet_root="/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}"; \
+    nuget_source=/tmp/minos-pinned-nuget; \
+    nuget_package="${nuget_source}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
+    mkdir -p "$nuget_source" "$dotnet_root"; \
+    curl -fsSLo "$nuget_package" \
+      "https://api.nuget.org/v3-flatcontainer/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
+    printf '%s  %s\n' "${SCIP_DOTNET_NUPKG_SHA256}" "$nuget_package" | sha256sum -c -; \
+    printf '%s\n' \
+      '<?xml version="1.0" encoding="utf-8"?>' \
+      '<configuration><packageSources><clear/><add key="minos-pinned" value="/tmp/minos-pinned-nuget"/></packageSources></configuration>' \
+      > /tmp/minos-nuget.config; \
+    dotnet tool install --tool-path "$dotnet_root" scip-dotnet --version "${SCIP_DOTNET_VERSION}" \
+      --configfile /tmp/minos-nuget.config --no-cache --ignore-failed-sources; \
+    rm -rf "$nuget_source" /tmp/minos-nuget.config; \
+    printf '%s\n' "${SCIP_DOTNET_VERSION}" > "$dotnet_root/.minos-version"; \
+    test -x "$dotnet_root/scip-dotnet"; \
+    go_root="/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}"; \
+    mkdir -p "$go_root"; \
+    GOBIN="$go_root" \
+      GOPROXY="https://proxy.golang.org" \
+      GOSUMDB="sum.golang.org" \
+      GONOSUMDB="" \
+      GOPRIVATE="" \
+      GONOPROXY="" \
       go install "github.com/scip-code/scip-go/cmd/scip-go@v${SCIP_GO_VERSION}"; \
-    printf '%s\n' "${SCIP_GO_VERSION}" > "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/.minos-version"; \
-    test -x "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go"
+    printf '%s\n' "${SCIP_GO_VERSION}" > "$go_root/.minos-version"; \
+    test -x "$go_root/scip-go"
 
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
-# embeds the exact 0.13.1 artifact. The standalone launcher still materializes its embedded JAR
-# resources into COURSIER_CACHE at startup; Compose points that cache at writable MINOS/tmp roots.
+# embeds the exact 0.13.1 artifact. Coursier coordinates are immutable upstream inputs but their
+# full transitive graph is not represented by a repository-owned lockfile; the produced executable
+# is therefore recorded in provider evidence rather than advertised as bit-for-bit reproducible.
 # Project dependency resolution for the real Maven build is a separate indexing concern handled by
 # the ephemeral admin plane; the persistent MCP query plane remains networkless.
 RUN set -eux; \
@@ -192,15 +227,16 @@ RUN set -eux; \
       '  "platform": "linux/amd64",' \
       "  \"minosVersion\": \"${MINOS_VERSION}\"," \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
+      "  \"aptSnapshot\": \"${UBUNTU_APT_SNAPSHOT}\"," \
       '  "networkPolicy": "provider payload is build-time prepared; persistent query runtime network none; ephemeral indexing may resolve project dependencies",' \
       "  \"buildTools\": {\"maven\":\"${MAVEN_VERSION}\"}," \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; embedded JARs materialize into a writable runtime COURSIER_CACHE without provider downloads; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
-      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
-      "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
-      "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
-      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"dotnet tool\",\"sdk\":\"10.0.302\"}," \
-      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go install\",\"toolchain\":\"1.26.5\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; Coursier transitive graph is not repository-lockfile-backed; produced binary hash is retained as build evidence; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
+      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm-lockfile+ci\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
+      "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm-lockfile+ci\"}," \
+      "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary+sha256\"}," \
+      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"pinned NuGet nupkg+sha256 local source\",\"sdk\":\"10.0.302\"}," \
+      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go proxy+sumdb\",\"toolchain\":\"1.26.5\"}," \
       "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"1.97.1\"}" \
       '  ]' \
       '}' > /opt/minos/provider-evidence/provider-inventory.json; \

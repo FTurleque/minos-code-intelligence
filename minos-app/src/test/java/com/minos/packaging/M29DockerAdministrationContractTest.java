@@ -133,13 +133,20 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.matches("(?s).*FROM rust@sha256:[0-9a-f]{64} AS rust-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM golang@sha256:[0-9a-f]{64} AS go-toolchain.*"));
         assertTrue(dockerfile.matches("(?s).*FROM mcr\\.microsoft\\.com/dotnet/sdk@sha256:[0-9a-f]{64} AS dotnet-toolchain.*"));
+        assertTrue(dockerfile.contains("UBUNTU_APT_SNAPSHOT=20260814T000000Z"));
+        assertTrue(dockerfile.contains("snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"),
+                "OS packages must resolve from one dated Ubuntu archive snapshot");
         assertTrue(dockerfile.contains("COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61"));
         assertTrue(dockerfile.contains("COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b"));
         assertTrue(dockerfile.contains("SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115"));
         assertTrue(dockerfile.contains("MAVEN_VERSION=3.9.16"));
+        assertTrue(dockerfile.contains("MAVEN_ZIP_SHA256=5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce"));
         assertTrue(dockerfile.contains("apache-maven-${MAVEN_VERSION}-bin.zip"));
-        assertTrue(dockerfile.contains("sha512sum -c -"));
+        assertTrue(dockerfile.contains("${MAVEN_ZIP_SHA256}"));
+        assertTrue(dockerfile.contains("sha256sum -c -"));
+        assertFalse(dockerfile.contains("maven.sha512"),
+                "Maven integrity must not depend on a checksum downloaded beside the payload");
         assertTrue(dockerfile.contains("mvn --version | grep -F \"Apache Maven ${MAVEN_VERSION}\""));
         assertTrue(dockerfile.contains("SCIP_TYPESCRIPT_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_JAVA_VERSION=0.13.1"));
@@ -147,7 +154,16 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("SCIP_PYTHON_VERSION=0.6.6"));
         assertTrue(dockerfile.contains("SCIP_CLANG_VERSION=0.4.0"));
         assertTrue(dockerfile.contains("SCIP_DOTNET_VERSION=0.2.14"));
+        assertTrue(dockerfile.contains("SCIP_DOTNET_NUPKG_SHA256=e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52"));
+        assertTrue(dockerfile.contains("v3-flatcontainer/scip-dotnet/${SCIP_DOTNET_VERSION}"));
+        assertTrue(dockerfile.contains("<packageSources><clear/><add key=\"minos-pinned\""));
+        assertTrue(dockerfile.contains("--configfile /tmp/minos-nuget.config --no-cache --ignore-failed-sources"));
         assertTrue(dockerfile.contains("SCIP_GO_VERSION=0.2.7"));
+        assertTrue(dockerfile.contains("GOPROXY=\"https://proxy.golang.org\""));
+        assertTrue(dockerfile.contains("GOSUMDB=\"sum.golang.org\""));
+        assertTrue(dockerfile.contains("GONOSUMDB=\"\""));
+        assertTrue(dockerfile.contains("GOPRIVATE=\"\""));
+        assertTrue(dockerfile.contains("GONOPROXY=\"\""));
         assertTrue(dockerfile.contains("RUST_ANALYZER_VERSION=0.3.2989"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_RELEASE=2026-07-27"));
         assertTrue(dockerfile.contains("RUST_ANALYZER_COMMIT=12c3381"));
@@ -170,11 +186,14 @@ class M29DockerAdministrationContractTest {
         assertTrue(dockerfile.contains("Coursier standalone bootstrap"));
         assertTrue(dockerfile.contains("\\\"reportedVersion\\\":\\\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\\\""));
         assertTrue(dockerfile.contains("artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}"));
-        assertTrue(dockerfile.contains("embedded JARs materialize into a writable runtime COURSIER_CACHE without provider downloads"));
+        assertTrue(dockerfile.contains("Coursier transitive graph is not repository-lockfile-backed"),
+                "provider evidence must remain capability-honest about unresolved transitive-locking limits");
+        assertTrue(dockerfile.contains("produced binary hash is retained as build evidence"));
         assertTrue(dockerfile.contains("real Maven indexing executes from a writable MINOS staging tree"));
         assertFalse(dockerfile.contains("COURSIER_CACHE=/opt/minos/coursier-cache"),
                 "runtime image must not depend on a packaged mutable Coursier cache for scip-java");
         assertTrue(dockerfile.contains("provider-evidence/provider-inventory.json"));
+        assertTrue(dockerfile.contains("\\\"aptSnapshot\\\": \\\"${UBUNTU_APT_SNAPSHOT}\\\""));
         assertTrue(dockerfile.contains("\\\"release\\\":\\\"${RUST_ANALYZER_RELEASE}\\\""));
         assertTrue(dockerfile.contains("\\\"commit\\\":\\\"${RUST_ANALYZER_COMMIT}\\\""));
         assertTrue(dockerfile.contains("chmod -R a+rX /opt/minos/provider-tools"),

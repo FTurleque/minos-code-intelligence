@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectIndexStateReconciler;
 import com.minos.application.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.IncrementalIndexingPlan;
@@ -48,6 +49,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
+    private final ProjectIndexStateReconciler projectIndexStateReconciler;
     private final ProjectFingerprintSnapshotStore fingerprintStore;
     private final ProviderRuntimeManager runtimeManager;
     private final SnapshotStager snapshotStager;
@@ -82,6 +84,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.projectResolver = new ProjectResolver(application.projectRegistry());
         this.snapshotStore = application.snapshotStore();
         this.stateStore = application.indexStateStore();
+        this.projectIndexStateReconciler = new ProjectIndexStateReconciler(snapshotStore, stateStore);
         this.fingerprintStore = application.fingerprintStore();
         this.runtimeManager = application.providerRuntimeManager();
         this.snapshotStager = application.snapshotStager();
@@ -289,38 +292,13 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     }
 
     private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
-        Optional<ProjectIndexState> stored = stateStore.findProjectState(projectId);
-        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(projectId);
-        Instant now = Instant.now();
-
-        if (active.isPresent()) {
-            String activeSnapshotId = active.orElseThrow().snapshotId();
-            boolean aligned = stored.isPresent()
-                    && stored.orElseThrow().availability() == ProjectIndexState.Availability.READY
-                    && stored.orElseThrow().activeSnapshotId().filter(activeSnapshotId::equals).isPresent();
-            if (aligned) {
-                return stored.orElseThrow();
-            }
-            ProjectIndexState reconciled = new ProjectIndexState(
-                    projectId,
-                    ProjectIndexState.Availability.READY,
-                    Optional.of(activeSnapshotId),
-                    stored.flatMap(ProjectIndexState::latestRunId),
-                    now,
-                    Optional.of("state reconciled from authoritative active symbol snapshot"));
-            stateStore.saveProjectState(reconciled);
-            return reconciled;
+        ProjectIndexStateReconciler.Reconciliation reconciliation = projectIndexStateReconciler.reconcile(projectId);
+        if (reconciliation.projectState().isPresent()) {
+            return reconciliation.projectState().orElseThrow();
         }
-
-        if (stored.isPresent()
-                && stored.orElseThrow().activeSnapshotId().isEmpty()
-                && stored.orElseThrow().availability() != ProjectIndexState.Availability.INDEXING
-                && stored.orElseThrow().availability() != ProjectIndexState.Availability.REFRESHING) {
-            return stored.orElseThrow();
-        }
-        ProjectIndexState reconciled = ProjectIndexState.neverIndexed(projectId, now);
-        stateStore.saveProjectState(reconciled);
-        return reconciled;
+        ProjectIndexState neverIndexed = ProjectIndexState.neverIndexed(projectId, Instant.now());
+        stateStore.saveProjectState(neverIndexed);
+        return neverIndexed;
     }
 
     private static ProviderView view(ProviderRuntimeStatus status) {

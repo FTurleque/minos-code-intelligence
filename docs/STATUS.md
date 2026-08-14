@@ -4,9 +4,23 @@ Dernière mise à jour : **14 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
 
-## Réconciliation post-audit — 14 août 2026
+## Réconciliation post-PR #183 — 14 août 2026
 
-Après le merge de la PR #182, `develop@20440b353d6a89e40b949cc1e56214d550dbdca6` a été relu intégralement. Cette campagne de correction ferme les écarts découverts lors de ce réaudit :
+Après le merge de la PR #183, `develop@20ce803ea43fbfa579b463f79e04e9272b2b81ce` a été réaudité intégralement. La campagne de remédiation ouverte depuis ce HEAD traite les écarts découverts par ce nouvel audit sans modifier directement `develop` :
+
+- diagnostics du provider ouverts par MINOS **avant** l'exécution de code non fiable et conservés via des descripteurs déjà ouverts ; un provider qui remplace `provider.stdout.log`, `provider.stderr.log` ou `process.txt` par un symlink ne peut plus rediriger les écritures hôte hors sandbox ;
+- lifecycle de containment armé avant `transform()` : une frontière cgroup/Job créée pendant la transformation est libérée même si la validation du plan ou la préparation pré-start échoue ;
+- `LocalAutonomousIndexOperations` utilise le `ProjectIndexStateReconciler` commun et échoue fermé lorsqu'un état persistant référence un snapshot autoritatif absent, au lieu de masquer la divergence en `NEVER_INDEXED` ;
+- stores file-backed renforcés : projet, workspace, project index state et run vérifient l'identité UUID embarquée contre la clé/nom de fichier lors des lookups **et** des listings ;
+- Maven Wrapper 3.9.16 vérifié par SHA-256 possédé par le dépôt ;
+- image Docker provider-complete durcie : archive Ubuntu datée, Maven Docker vérifié par SHA-256 local, npm lockfiles + `npm ci --ignore-scripts`, `scip-dotnet` depuis un `.nupkg` exact vérifié puis source NuGet locale, Go via version exacte + `proxy.golang.org`/`sum.golang.org` sans bypass privé ;
+- documentation Docker et registre des risques rendus capability-honest : le bootstrap Coursier de `scip-java` reste versionné et observable par hash du binaire produit, mais **aucune reproductibilité bit-à-bit n'est revendiquée** tant que son graphe transitif n'est pas représenté par un lockfile possédé par le dépôt.
+
+Des tests déterministes couvrent les divergences snapshot, les identités file-backed, l'échec pré-start après création de containment et le remplacement adversarial des pathnames diagnostics par symlink.
+
+## Réconciliation post-audit précédente — PR #182 / #183
+
+Après le merge de la PR #182, `develop@20440b353d6a89e40b949cc1e56214d550dbdca6` avait été relu intégralement. Cette campagne avait fermé :
 
 - composition M25 restaurée entre `StrongProcessOwnershipIndexerExecutor` et les sandboxes workers Linux/Windows via une capability explicite, sans nesting de frontières OS ;
 - plugin IntelliJ lancé derrière une autorité d'ownership établie avant le CLI : Job Object Windows avec création suspendue, scope systemd/cgroup sous Linux, absence de fallback silencieux ;
@@ -33,6 +47,7 @@ v1.0.0                          PUBLIÉE / IMMUTABLE
 v1.0.1                          PUBLIÉE / IMMUTABLE
 post-audit #132 / PR #135       REMÉDIATION IMPLÉMENTÉE / QUALIFICATION FINALE
 #98 sandbox OS réelle           IMPLÉMENTÉE + QUALIFIÉE LINUX/WINDOWS dans #135
+PR #182 / #183                  HARDENING SNAPSHOT / OWNERSHIP / M25 / SUPPLY-CHAIN INTÉGRÉ
 ```
 
 ## Campagne post-audit — #132 / PR #135
@@ -41,7 +56,7 @@ La campagne post-audit a traité les findings P1/P2/P3 sans réduire les garanti
 
 Principales corrections :
 
-- supply-chain Coursier/provider rendue immuable et vérifiée par SHA-256 ;
+- launcher Coursier, providers directs et images de base épinglés ; les claims supply-chain distinguent désormais les entrées vérifiées des graphes transitifs non lockés ;
 - images de base Docker épinglées par digest OCI ;
 - GitHub Actions épinglées par SHA et gate anti-régression ;
 - sandbox worker OS réelle avec confinement agrégé : Linux `bubblewrap`/namespaces + frontière de job cgroup v2, Windows AppContainer + Job Object ;
@@ -54,7 +69,7 @@ Principales corrections :
 - parser Ollama migré vers Jackson ;
 - sorties des processus IntelliJ bornées ;
 - quoting `.cmd/.bat` Windows qualifié avec cas adversariaux ;
-- seuils JaCoCo relevés progressivement et contrats packaging alignés sur la provenance immuable.
+- seuils JaCoCo relevés progressivement et contrats packaging alignés sur la provenance effectivement démontrée.
 
 ### Preuve sandbox #98
 
@@ -68,7 +83,7 @@ La PR #135 contient une qualification exact-head dédiée qui :
 
 Linux n'annonce `OS_ENFORCED` qu'après une sonde runtime réussie des namespaces/userns/LSM. Windows vérifie `TokenIsAppContainer` avant reprise du child et l'attache à un Job Object borné : ensemble de capabilities vide pour `DENY`, seule capability `internetClient` pour `ALLOW`. En absence de mécanisme qualifié, le worker distant refuse `ALLOW` comme `DENY` avant l’exécution.
 
-L'issue #98 est donc techniquement résolue par #135 ; sa fermeture intervient avec l'intégration finale de cette PR.
+L'issue #98 est donc techniquement résolue par #135.
 
 ## Release 1.0.1 — publiée
 
@@ -123,7 +138,7 @@ La qualification ayant mené à 1.0.1 comprend :
 - contrôle des artefacts durables ;
 - validation utilisateur réelle du wizard et de l'exécutable final.
 
-La qualification post-audit ajoute notamment la supply-chain immuable, les courses PostgreSQL corrigées, les fitness functions d'architecture renforcées et les sandboxes OS Linux/Windows réelles.
+La qualification post-audit ajoute notamment les courses PostgreSQL corrigées, les fitness functions d'architecture renforcées, les sandboxes OS Linux/Windows réelles et des entrées supply-chain explicitement épinglées/vérifiées.
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 
@@ -141,6 +156,8 @@ native   docker
 
 Les clients ne contiennent aucune logique Docker. Le choix `native|docker` est résolu derrière le point d'entrée stable et aucun fallback silencieux Docker→native n'est autorisé.
 
+Les anciens checkpoints S3/S4/S5 décrits dans l'historique M29 sont des preuves intermédiaires ; ils ne constituent plus l'état produit courant. Le guide Docker distingue désormais explicitement ces checkpoints historiques de la capacité intégrée actuelle.
+
 ## M30 — Advanced Installer, Ollama Docker & PostgreSQL/pgvector
 
 M30 est livré. Capacités intégrées :
@@ -157,7 +174,7 @@ M30 est livré. Capacités intégrées :
 
 ## Hardening et release engineering
 
-Les PR #113/#117/#118/#119, les correctifs #122–#127 et la campagne #132/#135 ont notamment livré :
+Les PR #113/#117/#118/#119, les correctifs #122–#127 et les campagnes post-audit ont notamment livré :
 
 - Jackson 2/3 corrigés et centralisés ;
 - OSV bloquant ;
@@ -171,8 +188,11 @@ Les PR #113/#117/#118/#119, les correctifs #122–#127 et la campagne #132/#135 
 - réutilisation d'une image Docker locale exactement labellisée ;
 - génération locale Windows répétable malgré les locks jpackage transitoires ;
 - publication fail-closed et vérification post-upload des checksums ;
-- supply-chain provider/Docker/Actions épinglée et vérifiée ;
-- worker sandbox OS qualifié Linux/Windows.
+- actions/images/providers directs/lockfiles et distributions outillées épinglés selon leur mécanisme de provenance ;
+- worker sandbox OS qualifié Linux/Windows ;
+- diagnostics provider préouverts et résistants aux races de symlink ;
+- réconciliation snapshot unique et fail-closed ;
+- validation d'identité durable dans les stores fichier.
 
 ## Release 1.0.0
 
@@ -186,5 +206,6 @@ Les PR #113/#117/#118/#119, les correctifs #122–#127 et la campagne #132/#135 
 - registre des risques : `docs/architecture/risks/register.md` ;
 - quality gates : `docs/developer/quality-gates.md` ;
 - guide production Windows : `docs/user/production-installation.md` ;
+- guide Docker courant : `docs/user/docker-runtime.md` ;
 - release 1.0.1 : `docs/releases/1.0.1.md` ;
 - historique de livraison 1.0.1 : issue #106.

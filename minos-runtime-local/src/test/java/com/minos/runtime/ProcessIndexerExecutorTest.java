@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,6 +65,68 @@ class ProcessIndexerExecutorTest {
         assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));
         assertTrue(Files.isRegularFile(artifact.finalArtifact().getParent().resolve("provider.stdout.log")));
         assertTrue(Files.isRegularFile(artifact.finalArtifact().getParent().resolve("provider.stderr.log")));
+    }
+
+    @Test
+    void replacingDiagnosticPathsWithSymlinksCannotRedirectMinosHostWrites() throws Exception {
+        Assumptions.assumeFalse(CommandLocator.isWindows(), "symbolic-link fixture is qualified on Unix CI");
+        Path project = temporary.resolve("symlink-project");
+        Files.createDirectories(project);
+        Path outsideStdout = temporary.resolve("outside-stdout.txt");
+        Path outsideMetadata = temporary.resolve("outside-metadata.txt");
+        Files.writeString(outsideStdout, "stdout-safe");
+        Files.writeString(outsideMetadata, "metadata-safe");
+        Path source = temporary.resolve("SymlinkProvider.java");
+        Files.writeString(source, """
+                import java.nio.file.*;
+                public class SymlinkProvider {
+                    public static void main(String[] args) throws Exception {
+                        Path stdout = Path.of(args[0]);
+                        Path stdoutTarget = Path.of(args[1]).toAbsolutePath();
+                        Path metadata = Path.of(args[2]);
+                        Path metadataTarget = Path.of(args[3]).toAbsolutePath();
+                        Path artifact = Path.of(args[4]);
+                        Files.deleteIfExists(stdout);
+                        Files.createSymbolicLink(stdout, stdoutTarget);
+                        Files.deleteIfExists(metadata);
+                        Files.createSymbolicLink(metadata, metadataTarget);
+                        System.out.print("provider-output");
+                        System.out.flush();
+                        Files.writeString(artifact, "fresh-scip");
+                    }
+                }
+                """);
+
+        String java = javaExecutable();
+        ProcessIndexerExecutor executor = new ProcessIndexerExecutor(
+                "fake-provider",
+                temporary.resolve("symlink-home"),
+                (request, runDirectory) -> new IndexerProcessPlan(
+                        List.of(
+                                java,
+                                source.toString(),
+                                runDirectory.resolve("provider.stdout.log").toString(),
+                                outsideStdout.toString(),
+                                runDirectory.resolve("process.txt").toString(),
+                                outsideMetadata.toString(),
+                                runDirectory.resolve("generated.scip").toString()),
+                        project,
+                        Map.of(),
+                        runDirectory.resolve("generated.scip"),
+                        Duration.ofMinutes(1)));
+
+        var artifact = executor.execute(request(project));
+        Path runDirectory = artifact.finalArtifact().getParent();
+
+        assertEquals("fresh-scip", Files.readString(artifact.finalArtifact()));
+        assertEquals("stdout-safe", Files.readString(outsideStdout),
+                "provider stdout must stay bound to the pre-opened MINOS descriptor");
+        assertEquals("metadata-safe", Files.readString(outsideMetadata),
+                "post-exit metadata appends must stay bound to the pre-opened MINOS descriptor");
+        assertTrue(Files.isSymbolicLink(runDirectory.resolve("provider.stdout.log")),
+                "fixture must prove the provider replaced the visible stdout pathname");
+        assertTrue(Files.isSymbolicLink(runDirectory.resolve("process.txt")),
+                "fixture must prove the provider replaced the visible metadata pathname");
     }
 
     @Test

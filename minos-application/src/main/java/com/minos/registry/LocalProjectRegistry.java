@@ -132,7 +132,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(projectId, "projectId");
         Path file = projectsDirectory.resolve(projectId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
-        return Optional.of(readProject(file));
+        return Optional.of(readProject(file, projectId));
     }
 
     @Override
@@ -140,7 +140,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Path file = workspacesDirectory.resolve(workspaceId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
-        WorkspaceMetadata metadata = readWorkspaceMetadata(file);
+        WorkspaceMetadata metadata = readWorkspaceMetadata(file, workspaceId);
         List<UUID> projectIds = listProjects().stream()
                 .filter(project -> project.workspaceId().filter(workspaceId::equals).isPresent())
                 .map(RegisteredProject::id)
@@ -152,7 +152,9 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     @Override
     public synchronized List<RegisteredProject> listProjects() throws IOException {
         List<RegisteredProject> projects = new ArrayList<>();
-        for (Path file : propertyFiles(projectsDirectory)) projects.add(readProject(file));
+        for (Path file : propertyFiles(projectsDirectory)) {
+            projects.add(readProject(file, idFromPropertiesFile(file)));
+        }
         projects.sort(Comparator.comparing(project -> project.id().toString()));
         return List.copyOf(projects);
     }
@@ -162,7 +164,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         List<RegisteredProject> projects = listProjects();
         List<RegisteredWorkspace> workspaces = new ArrayList<>();
         for (Path file : propertyFiles(workspacesDirectory)) {
-            WorkspaceMetadata metadata = readWorkspaceMetadata(file);
+            WorkspaceMetadata metadata = readWorkspaceMetadata(file, idFromPropertiesFile(file));
             List<UUID> projectIds = projects.stream()
                     .filter(project -> project.workspaceId().filter(metadata.id()::equals).isPresent())
                     .map(RegisteredProject::id)
@@ -217,9 +219,10 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         writePropertiesAtomically(workspacesDirectory.resolve(workspace.id() + ".properties"), properties);
     }
 
-    private RegisteredProject readProject(Path file) throws IOException {
+    private RegisteredProject readProject(Path file, UUID expectedId) throws IOException {
         Properties properties = readProperties(file);
         UUID id = UUID.fromString(required(properties, "id", file));
+        requireIdentity(expectedId, id, file, "project");
         String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
         String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
         if (!relativeRoot.isEmpty() && !legacyRoot.isEmpty()) {
@@ -278,13 +281,35 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         writePropertiesAtomically(file, properties);
     }
 
-    private static WorkspaceMetadata readWorkspaceMetadata(Path file) throws IOException {
+    private static WorkspaceMetadata readWorkspaceMetadata(Path file, UUID expectedId) throws IOException {
         Properties properties = readProperties(file);
+        UUID id = UUID.fromString(required(properties, "id", file));
+        requireIdentity(expectedId, id, file, "workspace");
         return new WorkspaceMetadata(
-                UUID.fromString(required(properties, "id", file)),
+                id,
                 required(properties, "name", file),
                 Instant.parse(required(properties, "createdAt", file)),
                 Instant.parse(required(properties, "updatedAt", file)));
+    }
+
+    private static UUID idFromPropertiesFile(Path file) throws IOException {
+        String name = file.getFileName().toString();
+        String suffix = ".properties";
+        if (!name.endsWith(suffix)) {
+            throw new IOException("unexpected registry metadata filename: " + file);
+        }
+        try {
+            return UUID.fromString(name.substring(0, name.length() - suffix.length()));
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("registry metadata filename is not a UUID: " + file, exception);
+        }
+    }
+
+    private static void requireIdentity(UUID expected, UUID actual, Path file, String label) throws IOException {
+        if (!expected.equals(actual)) {
+            throw new IOException(label + " identity mismatch in " + file
+                    + ": expected=" + expected + " persisted=" + actual);
+        }
     }
 
     private static Properties readProperties(Path file) throws IOException {
