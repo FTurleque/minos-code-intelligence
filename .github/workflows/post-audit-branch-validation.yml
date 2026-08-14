@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  snapshot-targeted:
+  targeted:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch HEAD
@@ -28,5 +28,7 @@ jobs:
           cache: maven
       - name: Prepare Maven Wrapper
         run: chmod +x mvnw
-      - name: Snapshot authority targeted tests
-        run: ./mvnw -B -ntp -pl minos-application,minos-provider-scip -am test
+      - name: Delegate cgroup v2 for ownership integration tests
+        run: bash scripts/ci/delegate-linux-cgroup.sh
+      - name: Snapshot and process ownership targeted tests
+        run: ./mvnw -B -ntp -pl minos-runtime-local,minos-application,minos-provider-scip -am test
