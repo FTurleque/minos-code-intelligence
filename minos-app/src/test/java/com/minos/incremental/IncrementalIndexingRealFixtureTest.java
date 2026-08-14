@@ -10,6 +10,7 @@ import com.minos.orchestration.IndexingRequirements;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.orchestration.ProjectIndexLeaseProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,7 +42,8 @@ class IncrementalIndexingRealFixtureTest {
                 List.of(executor),
                 request -> "snapshot-" + snapshots.incrementAndGet(),
                 (projectId, runId, stagedSnapshotId) -> { },
-                new InMemoryIndexStateStore()
+                new InMemoryIndexStateStore(),
+                ProjectIndexLeaseProvider.file(temp.resolve("minos-home"))
         );
         FileProjectFingerprintSnapshotStore fingerprintStore =
                 new FileProjectFingerprintSnapshotStore(temp.resolve("fingerprints"));
