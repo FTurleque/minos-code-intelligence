@@ -42,6 +42,11 @@ public final class ImportScipCommand {
                     options.project, options.file, options.provider, options.providerVersion,
                     options.module, options.snapshot);
             output.append(render(result, options.format)).append('\n');
+            if (result.commitStatus() == ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING) {
+                error.append("warning: snapshot committed but project metadata recovery is pending")
+                        .append(result.diagnostic() == null ? "" : ": " + result.diagnostic())
+                        .append('\n');
+            }
             return FindSymbolCommand.SUCCESS;
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
@@ -68,6 +73,8 @@ public final class ImportScipCommand {
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
         map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", result.diagnostic());
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -76,7 +83,9 @@ public final class ImportScipCommand {
                 + "providerId: " + result.providerId() + "\n"
                 + "normalizedSymbols: " + result.normalizedSymbolCount() + "\n"
                 + "occurrences: " + result.occurrenceCount() + "\n"
-                + "relationships: " + result.relationshipCount();
+                + "relationships: " + result.relationshipCount() + "\n"
+                + "commitStatus: " + result.commitStatus().name()
+                + (result.diagnostic() == null ? "" : "\ndiagnostic: " + result.diagnostic());
     }
 
     private static final class Options {
