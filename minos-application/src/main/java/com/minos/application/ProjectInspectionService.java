@@ -6,7 +6,6 @@ import com.minos.io.BoundedProperties;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRun;
-import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
@@ -27,7 +26,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Shared read-only project/index view used by transport adapters. */
+/** Shared project/index view used by transport adapters, with active-snapshot/state reconciliation. */
 public final class ProjectInspectionService {
 
     private static final long MAX_HISTORY_PROPERTIES_BYTES = 64L * 1024L;
@@ -36,6 +35,7 @@ public final class ProjectInspectionService {
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
+    private final ProjectIndexConsistencyCoordinator consistencyCoordinator;
     private final ProjectDiscoveryService discoveryService;
     private final Path historyDirectory;
     private final Map<String, IndexerDescriptor> knownProviders;
@@ -65,6 +65,7 @@ public final class ProjectInspectionService {
         this.projectResolver = Objects.requireNonNull(projectResolver, "projectResolver");
         this.snapshotStore = Objects.requireNonNull(snapshotStore, "snapshotStore");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
+        this.consistencyCoordinator = new ProjectIndexConsistencyCoordinator(this.snapshotStore, this.stateStore);
         this.discoveryService = Objects.requireNonNull(discoveryService, "discoveryService");
         this.historyDirectory = normalizedHome.resolve("cli-index-history");
         this.knownProviders = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors")).stream()
@@ -94,13 +95,10 @@ public final class ProjectInspectionService {
             moduleCount = discovery.modules().size();
         }
 
-        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(project.id());
+        ProjectIndexConsistencyCoordinator.Resolution consistency = consistencyCoordinator.resolve(project.id());
+        Optional<CodeKnowledgeSnapshot> active = consistency.activeSnapshot();
         String activeSnapshotId = active.map(CodeKnowledgeSnapshot::snapshotId).orElse(null);
-        Optional<ProjectIndexState> persistedState = stateStore.findProjectState(project.id());
-        String indexState = persistedState
-                .map(state -> state.availability().name())
-                .orElse(active.isPresent() ? ProjectIndexState.Availability.READY.name()
-                        : ProjectIndexState.Availability.NEVER_INDEXED.name());
+        String indexState = consistency.indexState().availability().name();
 
         Optional<IndexingRun> activeRun = activeSnapshotId == null
                 ? Optional.empty()
