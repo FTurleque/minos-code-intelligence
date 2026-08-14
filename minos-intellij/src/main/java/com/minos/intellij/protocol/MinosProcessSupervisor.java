@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,15 +60,10 @@ final class MinosProcessSupervisor implements AutoCloseable {
                 .start(() -> readBounded(process.getErrorStream(), stderr, readFailure));
     }
 
-    /** Waits up to {@code millis} for the process to exit. */
     boolean waitFor(long millis) throws InterruptedException {
         return process.waitFor(millis, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * Stops the complete MINOS process tree. Cancellation is rethrown unchanged. A null cause is
-     * the timeout/explicit-cleanup path; any cleanup failure is then surfaced as a protocol error.
-     */
     synchronized void stop(Throwable cause) throws MinosProtocolException {
         if (terminationComplete.get()) {
             if (cause instanceof ProcessCanceledException canceled) throw canceled;
@@ -126,10 +122,6 @@ final class MinosProcessSupervisor implements AutoCloseable {
         propagate(cause, failures);
     }
 
-    /**
-     * Waits for reader threads to finish after normal process exit. Force-closes pipes after the
-     * bounded join so a descendant cannot hold the IDE command indefinitely through inherited I/O.
-     */
     void drainOutput() throws IOException {
         boolean alive = false;
         for (Thread reader : new Thread[]{outReader, errReader}) {
