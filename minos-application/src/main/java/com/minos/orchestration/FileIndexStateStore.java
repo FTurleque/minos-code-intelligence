@@ -10,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -295,8 +296,13 @@ public final class FileIndexStateStore implements IndexStateStore {
             forceDirectory(runRoot);
             return;
         }
-        forceFile(legacy);
-        move(legacy, target);
+        if (!Files.isRegularFile(legacy)) return;
+        try {
+            forceFile(legacy);
+            move(legacy, target);
+        } catch (NoSuchFileException racedMigration) {
+            if (!Files.isRegularFile(target)) throw racedMigration;
+        }
     }
 
     private Path projectRunDirectory(UUID projectId) {
