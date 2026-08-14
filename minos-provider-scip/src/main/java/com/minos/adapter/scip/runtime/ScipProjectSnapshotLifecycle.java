@@ -8,6 +8,7 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
@@ -27,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 /** Staging et promotion projet pour les artefacts SCIP exécutés par M14. */
@@ -155,9 +155,11 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
     }
 
     @Override
-    public Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+    public ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        return activeStore.loadActiveKnowledge(projectId).map(CodeKnowledgeSnapshot::snapshotId);
+        return activeStore.loadActiveKnowledge(projectId)
+                .map(snapshot -> ActiveSnapshotObservation.active(snapshot.snapshotId()))
+                .orElseGet(ActiveSnapshotObservation::noActiveSnapshot);
     }
 
     private void cleanupProviderWorkspaces(UUID runId, List<IndexingArtifact> artifacts) throws IOException {
