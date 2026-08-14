@@ -49,7 +49,9 @@ public interface ProjectOperations {
 
     enum IndexImportCommitStatus {
         COMMITTED,
-        COMMITTED_METADATA_PENDING
+        COMMITTED_DURABILITY_PENDING,
+        COMMITTED_METADATA_PENDING,
+        COMMITTED_DURABILITY_AND_METADATA_PENDING
     }
 
     record IndexImportResult(

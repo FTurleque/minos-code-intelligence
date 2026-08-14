@@ -1,7 +1,9 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.io.CommitUncertainException;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IndexingCommitRecoveryTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-13T16:00:00Z"), ZoneOffset.UTC);
@@ -51,12 +54,58 @@ class IndexingCommitRecoveryTest {
         assertEquals(Optional.of("snapshot-new"), store.state.activeSnapshotId());
     }
 
+    @Test
+    void lostPromotionAcknowledgementIsRecoveredFromAuthoritativeSnapshot(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        Path artifact = Files.writeString(root.resolve("uncertain.scip"), "index");
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
+                Optional.of("snapshot-old"), Optional.empty(), CLOCK.instant(), Optional.empty()));
+        UncertainPromoter promoter = new UncertainPromoter("snapshot-old");
+        IndexingLifecycleService service = new IndexingLifecycleService(
+                List.of(new IndexingRuntimePorts.IndexerExecutor() {
+                    public String indexerId() { return "java-indexer"; }
+                    public IndexingRuntimePorts.IndexingArtifact execute(IndexingRuntimePorts.IndexingExecutionRequest request) {
+                        return new IndexingRuntimePorts.IndexingArtifact(Language.JAVA, "java-indexer", artifact);
+                    }
+                }),
+                request -> "snapshot-new",
+                promoter,
+                store,
+                CLOCK
+        );
+
+        IndexingRun result = service.execute(projectId, root,
+                new IndexerNegotiationResult(List.of(selection()), Set.of(), List.of()));
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, result.status());
+        assertEquals(Optional.of("snapshot-new"), result.activeSnapshotAfter());
+        assertTrue(result.message().orElseThrow().contains("lost durability acknowledgement"));
+        ProjectIndexState state = store.findProjectState(projectId).orElseThrow();
+        assertEquals(ProjectIndexState.Availability.READY, state.availability());
+        assertEquals(Optional.of("snapshot-new"), state.activeSnapshotId());
+    }
+
     private static IndexerSelection selection() {
         IndexerDescriptor descriptor = new IndexerDescriptor("java-indexer", "1", "java-indexer",
                 Set.of(Language.JAVA), Set.of(),
                 EnumSet.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES),
                 IndexerQualification.QUALIFIED, 100, List.of());
         return new IndexerSelection(Language.JAVA, descriptor);
+    }
+
+    private static final class UncertainPromoter implements IndexingRuntimePorts.SnapshotPromoter {
+        private String active;
+        private UncertainPromoter(String active) { this.active = active; }
+        @Override
+        public void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception {
+            active = stagedSnapshotId;
+            throw new CommitUncertainException("synthetic post-commit acknowledgement failure");
+        }
+        @Override
+        public ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) {
+            return ActiveSnapshotObservation.active(active);
+        }
     }
 
     private static final class FailingSuccessRunStore implements IndexStateStore {

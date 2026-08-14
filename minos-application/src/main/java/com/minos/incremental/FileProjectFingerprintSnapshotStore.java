@@ -1,5 +1,8 @@
 package com.minos.incremental;
 
+import com.minos.io.CommitUncertainException;
+import com.minos.io.DurableAtomicFile;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -9,10 +12,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
@@ -54,7 +55,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot")
                 .toAbsolutePath()
                 .normalize();
-        Files.createDirectories(this.storageRoot);
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "fingerprint storage root");
     }
 
     @Override
@@ -74,7 +75,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                 fingerprint
         );
         Path projectDirectory = projectDirectory(projectId);
-        Files.createDirectories(projectDirectory);
+        DurableAtomicFile.ensureDirectory(projectDirectory, "fingerprint project directory");
         String idHash = sha256(indexSnapshotId);
         Path temporary = Files.createTempFile(projectDirectory, ".fingerprint-", ".tmp");
         try {
@@ -94,7 +95,15 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                 throw new IOException("fingerprint snapshot already exists with different content for index snapshot: "
                         + indexSnapshotId);
             }
-            publishAtomically(temporary, target);
+            try {
+                DurableAtomicFile.publish(temporary, target, "fingerprint snapshot publication");
+            } catch (CommitUncertainException uncertain) {
+                if (Files.isRegularFile(target)) {
+                    ProjectFingerprintSnapshot visible = readVerifiedSnapshot(projectId, target);
+                    if (visible.equals(snapshot)) return visible;
+                }
+                throw uncertain;
+            }
             return snapshot;
         } finally {
             Files.deleteIfExists(temporary);
@@ -130,7 +139,18 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                     snapshot.fingerprint().buildSha256(),
                     snapshot.fingerprint().fileCount()
             ));
-            replaceAtomically(temporaryPointer, projectDirectory.resolve(ACTIVE_FILE));
+            try {
+                DurableAtomicFile.replace(
+                        temporaryPointer,
+                        projectDirectory.resolve(ACTIVE_FILE),
+                        "active fingerprint pointer replacement");
+            } catch (CommitUncertainException uncertain) {
+                Optional<ProjectFingerprintSnapshot> visible = loadActive(projectId);
+                if (visible.map(ProjectFingerprintSnapshot::indexSnapshotId).filter(indexSnapshotId::equals).isPresent()) {
+                    return;
+                }
+                throw uncertain;
+            }
         } finally {
             Files.deleteIfExists(temporaryPointer);
         }
@@ -273,11 +293,12 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                     historical.add(candidate);
                 } else if (maxHistoricalSnapshots > 0
                         && oldestFirst.compare(candidate, historical.element()) > 0) {
-                    Files.deleteIfExists(historical.remove().path());
+                    DurableAtomicFile.deleteIfExists(
+                            historical.remove().path(), "fingerprint retention deletion");
                     deleted++;
                     historical.add(candidate);
                 } else {
-                    Files.deleteIfExists(candidate.path());
+                    DurableAtomicFile.deleteIfExists(candidate.path(), "fingerprint retention deletion");
                     deleted++;
                 }
             }
@@ -363,9 +384,6 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         if (currentBuild.equals(fingerprint.buildSha256())) {
             return;
         }
-        // FORMAT_VERSION=1 snapshots created before M24 used the M17 descriptor set.
-        // Accept that exact legacy hash so additive build markers do not invalidate
-        // an otherwise immutable historical snapshot.
         String legacyBuild = buildHash(fingerprint.files(), LEGACY_BUILD_DESCRIPTOR_POLICY);
         if (!legacyBuild.equals(fingerprint.buildSha256())) {
             throw new IOException("build fingerprint aggregate mismatch");
@@ -574,27 +592,6 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             throw new IllegalArgumentException(label + " must not be blank");
         }
         return value;
-    }
-
-    private static void publishAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target);
-        }
-    }
-
-    private static void replaceAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(
-                    source,
-                    target,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
     }
 
     private record ActivePointer(

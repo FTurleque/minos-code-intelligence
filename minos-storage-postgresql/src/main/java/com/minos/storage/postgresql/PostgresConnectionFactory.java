@@ -1,5 +1,6 @@
 package com.minos.storage.postgresql;
 
+import com.minos.io.CommitUncertainException;
 import com.minos.storage.StorageBackendConfiguration;
 
 import java.io.IOException;
@@ -44,10 +45,13 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private final int connectTimeoutSeconds;
     private final int socketTimeoutSeconds;
     private final Semaphore leases;
+    private final Semaphore dedicatedLeases;
     private final ConcurrentLinkedQueue<Connection> idle = new ConcurrentLinkedQueue<>();
     private final AtomicInteger physicalConnections = new AtomicInteger();
     private final AtomicInteger leasedConnections = new AtomicInteger();
+    private final AtomicInteger dedicatedConnections = new AtomicInteger();
     private final AtomicLong acquisitionTimeouts = new AtomicLong();
+    private final AtomicLong dedicatedAcquisitionTimeouts = new AtomicLong();
     private final ThreadLocal<LeaseContext> currentLease = new ThreadLocal<>();
     private volatile boolean closed;
 
@@ -84,6 +88,9 @@ final class PostgresConnectionFactory implements AutoCloseable {
         this.connectTimeoutSeconds = connectTimeoutSeconds;
         this.socketTimeoutSeconds = socketTimeoutSeconds;
         this.leases = new Semaphore(maxPoolSize, true);
+        // Lifecycle advisory locks are long-lived control-plane resources. They deliberately use a
+        // separate bounded connection budget so lock waiters cannot starve ordinary query traffic.
+        this.dedicatedLeases = new Semaphore(maxPoolSize, true);
     }
 
     <T> T withConnection(ConnectionWork<T> work) throws SQLException, IOException {
@@ -120,11 +127,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
         return withConnection(connection -> executeTransaction(currentLease.get(), work));
     }
 
-    /**
-     * Reserves one physical/pool connection on the current thread until close(). Nested store
-     * operations automatically reuse it through currentLease, which allows a session advisory lock
-     * to span multiple short transactions without keeping one database transaction open.
-     */
+    /** Compatibility scoped lease for short-lived code that intentionally reuses the pool connection. */
     ScopedConnectionLease openScopedConnection() throws SQLException {
         if (currentLease.get() != null) {
             throw new SQLException("cannot open a scoped PostgreSQL connection inside another connection lease");
@@ -133,6 +136,37 @@ final class PostgresConnectionFactory implements AutoCloseable {
         LeaseContext context = new LeaseContext(connection);
         currentLease.set(context);
         return new ScopedConnectionLease(connection, context, Thread.currentThread());
+    }
+
+    /**
+     * Opens a bounded connection outside the query pool. This is reserved for session advisory
+     * lifecycle locks whose lifetime can span provider execution and must not consume query capacity.
+     */
+    DedicatedConnectionLease openDedicatedConnection() throws SQLException {
+        if (closed) throw new SQLException("PostgreSQL connection pool is closed");
+        final boolean acquired;
+        try {
+            acquired = dedicatedLeases.tryAcquire(acquireTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("interrupted while acquiring dedicated PostgreSQL connection", exception);
+        }
+        if (!acquired) {
+            dedicatedAcquisitionTimeouts.incrementAndGet();
+            throw new SQLException("PostgreSQL dedicated connection budget exhausted after " + acquireTimeout);
+        }
+        if (closed) {
+            dedicatedLeases.release();
+            throw new SQLException("PostgreSQL connection pool is closed");
+        }
+        try {
+            Connection connection = openRawConnection();
+            dedicatedConnections.incrementAndGet();
+            return new DedicatedConnectionLease(connection, Thread.currentThread());
+        } catch (SQLException | RuntimeException exception) {
+            dedicatedLeases.release();
+            throw exception;
+        }
     }
 
     private <T> T executeTransaction(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
@@ -148,8 +182,15 @@ final class PostgresConnectionFactory implements AutoCloseable {
             if (context.rollbackOnly) {
                 throw new SQLException("PostgreSQL transaction was marked rollback-only by nested work");
             }
-            connection.commit();
+            commitTransaction(connection);
             return result;
+        } catch (CommitUncertainException uncertain) {
+            primaryFailure = uncertain;
+            // Once COMMIT was sent and the connection-level acknowledgement was lost, rollback
+            // cannot establish the outcome and could mislead callers. Discard the connection and
+            // force the application to re-observe its authoritative commit record instead.
+            context.reusable = false;
+            throw uncertain;
         } catch (SQLException | IOException | RuntimeException exception) {
             primaryFailure = exception;
             if (exception instanceof SQLException sql && isConnectionFailure(sql)) context.reusable = false;
@@ -167,6 +208,18 @@ final class PostgresConnectionFactory implements AutoCloseable {
                     else throw restoreFailure;
                 }
             }
+        }
+    }
+
+    static void commitTransaction(Connection connection) throws SQLException, CommitUncertainException {
+        try {
+            connection.commit();
+        } catch (SQLException failure) {
+            if (isConnectionFailure(failure)) {
+                throw new CommitUncertainException(
+                        "PostgreSQL transaction commit acknowledgement was lost", failure);
+            }
+            throw failure;
         }
     }
 
@@ -193,14 +246,16 @@ final class PostgresConnectionFactory implements AutoCloseable {
                 leasedConnections.get(),
                 idle.size(),
                 physicalConnections.get(),
-                acquisitionTimeouts.get());
+                acquisitionTimeouts.get(),
+                dedicatedConnections.get(),
+                dedicatedAcquisitionTimeouts.get());
     }
 
     @Override
     public void close() {
         closed = true;
         Connection connection;
-        while ((connection = idle.poll()) != null) closePhysical(connection);
+        while ((connection = idle.poll()) != null) closePooledPhysical(connection);
     }
 
     @FunctionalInterface
@@ -252,6 +307,51 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
+    final class DedicatedConnectionLease implements AutoCloseable {
+        private final Connection connection;
+        private final Thread owner;
+        private boolean reusable = true;
+        private boolean closedLease;
+
+        private DedicatedConnectionLease(Connection connection, Thread owner) {
+            this.connection = connection;
+            this.owner = owner;
+        }
+
+        Connection connection() {
+            requireOwner();
+            if (closedLease) throw new IllegalStateException("PostgreSQL dedicated connection lease is closed");
+            return connection;
+        }
+
+        void invalidate() {
+            requireOwner();
+            reusable = false;
+        }
+
+        @Override
+        public void close() {
+            if (closedLease) return;
+            requireOwner();
+            closedLease = true;
+            try {
+                if (reusable && !connection.isClosed()) connection.close();
+                else closeQuietly(connection);
+            } catch (SQLException ignored) {
+                closeQuietly(connection);
+            } finally {
+                dedicatedConnections.decrementAndGet();
+                dedicatedLeases.release();
+            }
+        }
+
+        private void requireOwner() {
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("PostgreSQL dedicated connection lease must be used by its owner thread");
+            }
+        }
+    }
+
     private Connection borrow() throws SQLException {
         if (closed) throw new SQLException("PostgreSQL connection pool is closed");
         final boolean acquired;
@@ -276,9 +376,9 @@ final class PostgresConnectionFactory implements AutoCloseable {
                     leasedConnections.incrementAndGet();
                     return connection;
                 }
-                closePhysical(connection);
+                closePooledPhysical(connection);
             }
-            Connection created = openPhysical();
+            Connection created = openPooledPhysical();
             leasedConnections.incrementAndGet();
             return created;
         } catch (SQLException | RuntimeException exception) {
@@ -290,7 +390,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private void release(Connection connection, boolean reusable) {
         try {
             if (!reusable || !usable(connection)) {
-                closePhysical(connection);
+                closePooledPhysical(connection);
                 return;
             }
             try {
@@ -300,10 +400,10 @@ final class PostgresConnectionFactory implements AutoCloseable {
                 }
                 connection.clearWarnings();
             } catch (SQLException exception) {
-                closePhysical(connection);
+                closePooledPhysical(connection);
                 return;
             }
-            if (closed) closePhysical(connection);
+            if (closed) closePooledPhysical(connection);
             else idle.offer(connection);
         } finally {
             leasedConnections.decrementAndGet();
@@ -311,7 +411,13 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
-    private Connection openPhysical() throws SQLException {
+    private Connection openPooledPhysical() throws SQLException {
+        Connection connection = openRawConnection();
+        physicalConnections.incrementAndGet();
+        return connection;
+    }
+
+    private Connection openRawConnection() throws SQLException {
         Properties properties = new Properties();
         properties.setProperty("user", user);
         properties.setProperty("password", password);
@@ -320,9 +426,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
         properties.setProperty("socketTimeout", Integer.toString(socketTimeoutSeconds));
         properties.setProperty("tcpKeepAlive", "true");
         properties.setProperty("ApplicationName", "MINOS");
-        Connection connection = DriverManager.getConnection(url, properties);
-        physicalConnections.incrementAndGet();
-        return connection;
+        return DriverManager.getConnection(url, properties);
     }
 
     private boolean usable(Connection connection) {
@@ -335,7 +439,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
-    private void closePhysical(Connection connection) {
+    private void closePooledPhysical(Connection connection) {
         if (connection == null) return;
         try {
             if (!connection.isClosed()) connection.close();
@@ -344,6 +448,11 @@ final class PostgresConnectionFactory implements AutoCloseable {
         } finally {
             physicalConnections.updateAndGet(value -> Math.max(0, value - 1));
         }
+    }
+
+    private static void closeQuietly(Connection connection) {
+        if (connection == null) return;
+        try { connection.close(); } catch (SQLException ignored) { }
     }
 
     static boolean isConnectionFailure(SQLException exception) {
@@ -462,6 +571,14 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
-    record PoolStats(int maximumSize, int leased, int idle, int physical, long acquisitionTimeouts) {
+    record PoolStats(
+            int maximumSize,
+            int leased,
+            int idle,
+            int physical,
+            long acquisitionTimeouts,
+            int dedicated,
+            long dedicatedAcquisitionTimeouts
+    ) {
     }
 }

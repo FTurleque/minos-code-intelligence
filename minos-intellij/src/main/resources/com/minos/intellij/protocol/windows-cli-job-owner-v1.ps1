@@ -322,5 +322,8 @@ $values = Read-Plan $Plan
 $command = Read-List $values 'command'
 $environment = Read-Environment $values
 $workingDirectory = Decode ([string]$values['working'])
+# The plan contains the complete inherited environment. Delete it before the CLI is allowed to
+# start so a JVM/IDE crash cannot leave credentials behind on disk for the duration of the child.
+Remove-Item -LiteralPath $Plan -Force -ErrorAction Stop
 $exitCode = [MinosJobObjectOwnerV1]::Run($command, $environment, $workingDirectory)
 exit $exitCode

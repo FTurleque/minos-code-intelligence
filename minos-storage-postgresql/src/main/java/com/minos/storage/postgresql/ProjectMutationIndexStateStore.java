@@ -12,11 +12,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Serializes project-scoped index-state mutations with every other PostgreSQL project mutation. */
 final class ProjectMutationIndexStateStore implements IndexStateStore {
     private static final long LEASE_POLL_MILLIS = 50L;
+    private static final int LOCAL_GATE_STRIPES = 256;
+    private static final ReentrantLock[] LOCAL_GATES = gates();
 
     private final PostgresConnectionFactory connections;
     private final IndexStateStore delegate;
@@ -41,31 +45,37 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
             return logicalLease(nested);
         }
 
-        final PostgresConnectionFactory.ScopedConnectionLease connectionLease;
+        ReentrantLock gate = gate(id);
+        boolean gateAcquired = false;
+        PostgresConnectionFactory.DedicatedConnectionLease connectionLease = null;
+        boolean sessionLockAcquired = false;
         try {
-            connectionLease = connections.openScopedConnection();
-        } catch (SQLException exception) {
-            throw new IllegalStateException("PostgreSQL lifecycle lease could not reserve a connection", exception);
-        }
-
-        boolean acquired = false;
-        try {
+            gateAcquired = tryAcquireGate(gate, id);
+            connectionLease = connections.openDedicatedConnection();
+            long deadline = System.nanoTime() + connections.acquireTimeout().toNanos();
             while (!tryAcquireLifecycleLock(connectionLease, id)) {
-                try {
-                    Thread.sleep(LEASE_POLL_MILLIS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
+                if (System.nanoTime() >= deadline) {
                     throw new IllegalStateException(
-                            "interrupted while waiting for PostgreSQL project lifecycle lease: " + id,
-                            interrupted);
+                            "timed out waiting for PostgreSQL project lifecycle lease after "
+                                    + connections.acquireTimeout() + ": " + id);
                 }
+                sleepForLease(id);
             }
-            acquired = true;
-            HeldLifecycleLease held = new HeldLifecycleLease(id, connectionLease);
+            sessionLockAcquired = true;
+            PostgresProjectMutationLock.enterLifecycle(id);
+            HeldLifecycleLease held = new HeldLifecycleLease(id, connectionLease, gate);
             heldLifecycleLease.set(held);
             return logicalLease(held);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("PostgreSQL lifecycle lease could not reserve a dedicated connection", exception);
         } finally {
-            if (!acquired) connectionLease.close();
+            if (heldLifecycleLease.get() == null) {
+                if (sessionLockAcquired && connectionLease != null) {
+                    releaseSessionLockBestEffort(connectionLease, id);
+                }
+                if (connectionLease != null) connectionLease.close();
+                if (gateAcquired) gate.unlock();
+            }
         }
     }
 
@@ -112,13 +122,38 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
             }
             if (held.depth == 0) {
                 heldLifecycleLease.remove();
-                releasePhysicalLifecycleLock(held.connectionLease, held.projectId);
+                releasePhysicalLifecycleLock(held);
             }
         };
     }
 
+    private boolean tryAcquireGate(ReentrantLock gate, UUID projectId) {
+        try {
+            if (gate.tryLock(connections.acquireTimeout().toMillis(), TimeUnit.MILLISECONDS)) return true;
+            throw new IllegalStateException(
+                    "timed out waiting for local PostgreSQL lifecycle gate after "
+                            + connections.acquireTimeout() + ": " + projectId);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "interrupted while waiting for local PostgreSQL lifecycle gate: " + projectId,
+                    interrupted);
+        }
+    }
+
+    private static void sleepForLease(UUID projectId) {
+        try {
+            Thread.sleep(LEASE_POLL_MILLIS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "interrupted while waiting for PostgreSQL project lifecycle lease: " + projectId,
+                    interrupted);
+        }
+    }
+
     private boolean tryAcquireLifecycleLock(
-            PostgresConnectionFactory.ScopedConnectionLease connectionLease,
+            PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
             UUID projectId
     ) {
         try (PreparedStatement statement = connectionLease.connection().prepareStatement(
@@ -135,34 +170,58 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
         }
     }
 
-    private static void releasePhysicalLifecycleLock(
-            PostgresConnectionFactory.ScopedConnectionLease connectionLease,
+    private static void releasePhysicalLifecycleLock(HeldLifecycleLease held) {
+        RuntimeException failure = null;
+        try {
+            releaseSessionLock(held.connectionLease, held.projectId);
+        } catch (RuntimeException unlockFailure) {
+            failure = unlockFailure;
+        }
+        try {
+            PostgresProjectMutationLock.exitLifecycle(held.projectId);
+        } catch (RuntimeException contextFailure) {
+            if (failure == null) failure = contextFailure; else failure.addSuppressed(contextFailure);
+        }
+        try {
+            held.connectionLease.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
+        } finally {
+            held.gate.unlock();
+        }
+        if (failure != null) throw failure;
+    }
+
+    private static void releaseSessionLock(
+            PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
             UUID projectId
     ) {
-        RuntimeException failure = null;
         try (PreparedStatement statement = connectionLease.connection().prepareStatement(
                 "SELECT pg_advisory_unlock(?)")) {
             statement.setLong(1, PostgresProjectMutationLock.key(projectId));
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next() || !result.getBoolean(1)) {
                     connectionLease.invalidate();
-                    failure = new IllegalStateException(
+                    throw new IllegalStateException(
                             "PostgreSQL lifecycle lease was not owned while releasing project " + projectId);
                 }
             }
         } catch (SQLException exception) {
             connectionLease.invalidate();
-            failure = new IllegalStateException(
+            throw new IllegalStateException(
                     "PostgreSQL lifecycle lease release failed for project " + projectId, exception);
-        } finally {
-            try {
-                connectionLease.close();
-            } catch (RuntimeException closeFailure) {
-                if (failure == null) failure = closeFailure;
-                else failure.addSuppressed(closeFailure);
-            }
         }
-        if (failure != null) throw failure;
+    }
+
+    private static void releaseSessionLockBestEffort(
+            PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
+            UUID projectId
+    ) {
+        try {
+            releaseSessionLock(connectionLease, projectId);
+        } catch (RuntimeException ignored) {
+            connectionLease.invalidate();
+        }
     }
 
     private void mutate(UUID projectId, Runnable mutation, String action) {
@@ -177,15 +236,31 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
         }
     }
 
+    private static ReentrantLock gate(UUID projectId) {
+        return LOCAL_GATES[Math.floorMod(projectId.hashCode(), LOCAL_GATES.length)];
+    }
+
+    private static ReentrantLock[] gates() {
+        ReentrantLock[] values = new ReentrantLock[LOCAL_GATE_STRIPES];
+        for (int index = 0; index < values.length; index++) values[index] = new ReentrantLock(true);
+        return values;
+    }
+
     private static final class HeldLifecycleLease {
         private final UUID projectId;
-        private final PostgresConnectionFactory.ScopedConnectionLease connectionLease;
+        private final PostgresConnectionFactory.DedicatedConnectionLease connectionLease;
+        private final ReentrantLock gate;
         private final Thread owner = Thread.currentThread();
         private int depth = 1;
 
-        private HeldLifecycleLease(UUID projectId, PostgresConnectionFactory.ScopedConnectionLease connectionLease) {
+        private HeldLifecycleLease(
+                UUID projectId,
+                PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
+                ReentrantLock gate
+        ) {
             this.projectId = projectId;
             this.connectionLease = connectionLease;
+            this.gate = gate;
         }
     }
 }

@@ -1,8 +1,10 @@
 package com.minos.orchestration;
 
+import com.minos.io.CommitUncertainException;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
 import com.minos.orchestration.IndexingRun.Phase;
 import com.minos.orchestration.IndexingRun.Status;
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.IndexSnapshotStageRequest;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -68,6 +70,7 @@ final class IndexingRunExecutor {
         Optional<String> staged = Optional.empty();
         Phase phase = Phase.PROVIDER_EXECUTION;
         boolean committed = false;
+        boolean durabilityAcknowledgementPending = false;
         try {
             for (IndexingExecutionTarget target : targets) {
                 var selection = target.selection();
@@ -100,27 +103,41 @@ final class IndexingRunExecutor {
             stateStore.saveRun(running(runId, projectId, createdAt, phase, executions, staged,
                     previous.activeSnapshotId(), Optional.of("promoting staged snapshot: mode=" + mode)));
 
-            promoter.promote(projectId, runId, stagedId);
-            committed = true;
+            try {
+                promoter.promote(projectId, runId, stagedId);
+                committed = true;
+            } catch (CommitUncertainException uncertain) {
+                if (!authoritativeTargetIsActive(promoter, projectId, stagedId, uncertain)) throw uncertain;
+                committed = true;
+                durabilityAcknowledgementPending = true;
+            }
             Instant completedAt = clock.instant();
+            String successMessage = "indexing run completed and snapshot promoted: mode=" + mode
+                    + ", scopes=" + targets.size()
+                    + (durabilityAcknowledgementPending
+                    ? "; authoritative snapshot confirmed after lost durability acknowledgement" : "");
             IndexingRun succeeded = new IndexingRun(runId, projectId, Status.SUCCEEDED, Phase.COMPLETED,
                     createdAt, Optional.of(completedAt), executions, staged, previous.activeSnapshotId(),
-                    Optional.of(stagedId), Optional.of("indexing run completed and snapshot promoted: mode=" + mode
-                            + ", scopes=" + targets.size()));
+                    Optional.of(stagedId), Optional.of(successMessage));
             synchronized (lock) {
                 stateStore.saveRun(succeeded);
                 stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
                         Optional.of(stagedId), Optional.of(runId), completedAt,
-                        Optional.of("active snapshot is current: mode=" + mode)));
+                        Optional.of("active snapshot is current: mode=" + mode
+                                + (durabilityAcknowledgementPending
+                                ? "; durability acknowledgement pending" : ""))));
             }
             return succeeded;
         } catch (Exception failure) {
             Instant completedAt = clock.instant();
             String message = failureMessage(failure);
             Optional<String> activeAfter = committed ? staged : previous.activeSnapshotId();
+            String committedPrefix = durabilityAcknowledgementPending
+                    ? "snapshot promotion is authoritative after lost durability acknowledgement; metadata finalization failed: "
+                    : "snapshot promotion committed; metadata finalization failed: ";
             IndexingRun failed = new IndexingRun(runId, projectId, Status.FAILED, phase, createdAt,
                     Optional.of(completedAt), executions, staged, previous.activeSnapshotId(), activeAfter,
-                    Optional.of(committed ? "snapshot promotion committed; metadata finalization failed: " + message : message));
+                    Optional.of(committed ? committedPrefix + message : message));
             synchronized (lock) {
                 if (committed) {
                     persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
@@ -135,6 +152,22 @@ final class IndexingRunExecutor {
                 }
             }
             return failed;
+        }
+    }
+
+    private static boolean authoritativeTargetIsActive(
+            SnapshotPromoter promoter,
+            UUID projectId,
+            String stagedId,
+            CommitUncertainException uncertain
+    ) {
+        try {
+            ActiveSnapshotObservation observation = promoter.observeActiveSnapshot(projectId);
+            return observation.status() == ActiveSnapshotObservation.Status.ACTIVE
+                    && observation.snapshotId().filter(stagedId::equals).isPresent();
+        } catch (Exception observationFailure) {
+            uncertain.addSuppressed(observationFailure);
+            return false;
         }
     }
 

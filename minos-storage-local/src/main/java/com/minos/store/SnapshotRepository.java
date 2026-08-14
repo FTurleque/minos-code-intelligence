@@ -1,16 +1,13 @@
 package com.minos.store;
 
+import com.minos.io.DurableAtomicFile;
+
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -23,7 +20,7 @@ public final class SnapshotRepository {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot")
                 .toAbsolutePath()
                 .normalize();
-        Files.createDirectories(this.storageRoot);
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "snapshot storage root");
     }
 
     public Path storageRoot() {
@@ -36,9 +33,7 @@ public final class SnapshotRepository {
 
     public Path ensureProjectDirectory(UUID projectId) throws IOException {
         Path directory = projectDirectory(projectId);
-        boolean existed = Files.isDirectory(directory);
-        Files.createDirectories(directory);
-        if (!existed) forceDirectory(storageRoot);
+        DurableAtomicFile.ensureDirectory(directory, "snapshot project directory");
         return directory;
     }
 
@@ -52,13 +47,13 @@ public final class SnapshotRepository {
 
     public Path publishSnapshot(UUID projectId, String fileName, Path temporary) throws IOException {
         Path target = resolveSnapshotFile(projectId, fileName);
-        moveAtomically(temporary, target);
+        DurableAtomicFile.replace(temporary, target, "snapshot publication");
         return target;
     }
 
     public void replaceActivePointer(UUID projectId, Path temporary, String activeFileName) throws IOException {
         Path target = ensureProjectDirectory(projectId).resolve(activeFileName);
-        moveAtomically(temporary, target);
+        DurableAtomicFile.replace(temporary, target, "active snapshot pointer replacement");
     }
 
     public Path resolveSnapshotFile(UUID projectId, String fileName) throws IOException {
@@ -92,39 +87,5 @@ public final class SnapshotRepository {
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList();
         }
-    }
-
-    static void moveAtomically(Path source, Path target) throws IOException {
-        forceFile(source);
-        try {
-            Files.move(
-                    source,
-                    target,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException("filesystem does not support required atomic snapshot replacement: " + target, exception);
-        }
-        forceDirectory(target.getParent());
-    }
-
-    private static void forceFile(Path file) throws IOException {
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
-            channel.force(true);
-        }
-    }
-
-    private static void forceDirectory(Path directory) throws IOException {
-        if (directory == null || windows()) return;
-        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
-            channel.force(true);
-        } catch (UnsupportedOperationException exception) {
-            throw new IOException("filesystem does not support required directory durability sync: " + directory, exception);
-        }
-    }
-
-    private static boolean windows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 }

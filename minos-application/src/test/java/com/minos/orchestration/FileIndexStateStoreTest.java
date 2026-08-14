@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,8 +29,9 @@ class FileIndexStateStoreTest {
         Instant createdAt = Instant.parse("2026-07-24T10:00:00Z");
         Instant completedAt = Instant.parse("2026-07-24T10:01:00Z");
         Path artifact = root.resolve("run/index.scip").toAbsolutePath().normalize();
+        Path stateRoot = root.resolve("state");
 
-        FileIndexStateStore first = new FileIndexStateStore(root.resolve("state"));
+        FileIndexStateStore first = new FileIndexStateStore(stateRoot);
         first.saveProjectState(new ProjectIndexState(
                 projectId,
                 ProjectIndexState.Availability.READY,
@@ -40,7 +42,9 @@ class FileIndexStateStoreTest {
         ));
         first.saveRun(run(runId, projectId, createdAt, completedAt, artifact));
 
-        FileIndexStateStore reopened = new FileIndexStateStore(root.resolve("state"));
+        assertTrue(Files.isRegularFile(
+                stateRoot.resolve("runs/.by-id").resolve(runId + ".properties")));
+        FileIndexStateStore reopened = new FileIndexStateStore(stateRoot);
         ProjectIndexState state = reopened.findProjectState(projectId).orElseThrow();
         IndexingRun run = reopened.findRun(runId).orElseThrow();
 
@@ -88,6 +92,40 @@ class FileIndexStateStoreTest {
         assertTrue(Files.isRegularFile(partitioned));
         assertTrue(Files.notExists(legacy));
         assertEquals(List.of(runId), reopened.listRuns(projectId).stream().map(IndexingRun::id).toList());
+        assertEquals(runId, reopened.findRun(runId).orElseThrow().id());
+    }
+
+    @Test
+    void rebuildsRunLocatorsForExistingPartitionedHistory() throws Exception {
+        Path stateRoot = root.resolve("locator-migration");
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        FileIndexStateStore initial = new FileIndexStateStore(stateRoot);
+        initial.saveRun(run(runId, projectId, Instant.EPOCH, Instant.EPOCH.plusSeconds(1),
+                root.resolve("locator.scip")));
+
+        Path locatorRoot = stateRoot.resolve("runs/.by-id");
+        Files.deleteIfExists(locatorRoot.resolve(runId + ".properties"));
+        Files.deleteIfExists(locatorRoot.resolve("v1.ready"));
+
+        FileIndexStateStore reopened = new FileIndexStateStore(stateRoot);
+
+        assertTrue(Files.isRegularFile(locatorRoot.resolve(runId + ".properties")));
+        assertEquals(projectId, reopened.findRun(runId).orElseThrow().projectId());
+    }
+
+    @Test
+    void runDeletionRemovesPartitionAndGlobalLocator() throws Exception {
+        Path stateRoot = root.resolve("run-delete");
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        store.saveRun(run(runId, projectId, Instant.EPOCH, Instant.EPOCH.plusSeconds(1),
+                root.resolve("delete.scip")));
+
+        assertTrue(store.deleteRun(projectId, runId));
+        assertFalse(Files.exists(stateRoot.resolve("runs/.by-id").resolve(runId + ".properties")));
+        assertTrue(store.findRun(runId).isEmpty());
     }
 
     @Test
@@ -109,6 +147,7 @@ class FileIndexStateStoreTest {
 
         assertEquals(List.of(healthyRun), store.listRuns(healthyProject).stream().map(IndexingRun::id).toList());
         assertThrows(IllegalStateException.class, () -> store.listRuns(corruptProject));
+        assertThrows(IllegalStateException.class, () -> store.findRun(corruptRun));
     }
 
     @Test
@@ -152,7 +191,7 @@ class FileIndexStateStoreTest {
     @Test
     void rejectsOversizedPersistedMetadataBeforePropertiesParsing() throws Exception {
         UUID projectId = UUID.randomUUID();
-        Path stateRoot = root.resolve("state");
+        Path stateRoot = root.resolve("state-oversized");
         FileIndexStateStore store = new FileIndexStateStore(stateRoot);
         Files.write(stateRoot.resolve("projects").resolve(projectId + ".properties"),
                 new byte[4 * 1024 * 1024 + 1]);
