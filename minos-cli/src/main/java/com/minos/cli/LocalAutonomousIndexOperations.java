@@ -24,8 +24,6 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
-import com.minos.orchestration.ProjectIndexLease;
-import com.minos.orchestration.ProjectIndexLeaseProvider;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -99,14 +97,17 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     @Override
     public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(application.home(), project.id())) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
             return prepare(projectIdentifier, providerOverride, forceFull).view();
         }
     }
 
     @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        return executeLocked(projectIdentifier, providerOverride, forceFull);
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
+            return executeLocked(projectIdentifier, providerOverride, forceFull);
+        }
     }
 
     private IndexExecutionView executeLocked(
@@ -132,12 +133,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 .map(executorDecorator)
                 .map(executor -> Objects.requireNonNull(executor, "decorated executor"))
                 .toList();
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
-                executors,
-                snapshotStager,
-                snapshotPromoter,
-                stateStore,
-                ProjectIndexLeaseProvider.file(application.home()));
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore);
         IndexingRun run = forceFull
                 ? lifecycle.execute(
                         prepared.project().id(),

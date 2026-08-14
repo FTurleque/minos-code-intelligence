@@ -7,6 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Baseline légère M1 du stockage d'état d'indexation.
@@ -15,6 +17,8 @@ public final class InMemoryIndexStateStore implements IndexStateStore {
 
     private final ConcurrentMap<UUID, ProjectIndexState> projectStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, IndexingRun> runs = new ConcurrentHashMap<>();
+    private final Object leaseMonitor = new Object();
+    private final ConcurrentMap<UUID, LeaseState> projectLeases = new ConcurrentHashMap<>();
 
     @Override
     public Optional<ProjectIndexState> findProjectState(UUID projectId) {
@@ -45,5 +49,34 @@ public final class InMemoryIndexStateStore implements IndexStateStore {
     public void saveRun(IndexingRun run) {
         Objects.requireNonNull(run, "run");
         runs.put(run.id(), run);
+    }
+
+    @Override
+    public ProjectLease acquireProjectLease(UUID projectId) {
+        UUID id = Objects.requireNonNull(projectId, "projectId");
+        LeaseState state;
+        synchronized (leaseMonitor) {
+            state = projectLeases.computeIfAbsent(id, ignored -> new LeaseState());
+            state.references++;
+        }
+        state.lock.lock();
+        AtomicBoolean closed = new AtomicBoolean();
+        LeaseState acquired = state;
+        return () -> {
+            if (!closed.compareAndSet(false, true)) return;
+            acquired.lock.unlock();
+            synchronized (leaseMonitor) {
+                acquired.references--;
+                if (acquired.references < 0) {
+                    throw new IllegalStateException("in-memory project lease reference underflow");
+                }
+                if (acquired.references == 0) projectLeases.remove(id, acquired);
+            }
+        };
+    }
+
+    private static final class LeaseState {
+        private final ReentrantLock lock = new ReentrantLock(true);
+        private int references;
     }
 }

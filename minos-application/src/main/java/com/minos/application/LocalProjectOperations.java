@@ -6,7 +6,6 @@ import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.io.BoundedFileDigest;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexStateStore;
-import com.minos.orchestration.ProjectIndexLease;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProviderId;
 import com.minos.registry.ProjectRegistry;
@@ -68,7 +67,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     public IndexImportResult importScip(String projectIdentifier, Path indexFile, String providerId,
                                         String providerVersion, String moduleId, String snapshotId) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(home, project.id())) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
             return importScipLocked(project, indexFile, providerId, providerVersion, moduleId, snapshotId);
         }
     }
@@ -159,7 +158,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                throw new IOException("filesystem does not support atomic CLI import-history replacement", exception);
             }
         } finally {
             Files.deleteIfExists(temporary);

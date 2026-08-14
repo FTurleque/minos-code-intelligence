@@ -64,6 +64,7 @@ class ProjectIndexStateReconcilerTest {
             public List<IndexingRun> listRuns(UUID id) { return List.of(); }
             public void saveProjectState(ProjectIndexState state) { throw new IllegalStateException("synthetic disk failure"); }
             public void saveRun(IndexingRun run) { }
+            public ProjectLease acquireProjectLease(UUID id) { return () -> { }; }
         };
 
         IOException failure = assertThrows(IOException.class,
@@ -228,6 +229,11 @@ class ProjectIndexStateReconcilerTest {
         @Override
         public void saveRun(IndexingRun run) {
             delegate.saveRun(run);
+        }
+
+        @Override
+        public ProjectLease acquireProjectLease(UUID projectId) {
+            return delegate.acquireProjectLease(projectId);
         }
     }
 }
