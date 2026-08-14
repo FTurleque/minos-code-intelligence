@@ -184,9 +184,9 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         if (!qualification().qualifiedForCurrentPlatform()) {
             throw new IllegalStateException("Linux bubblewrap backend is not qualified on this platform");
         }
-        if (!(delegate instanceof ProcessIndexerExecutor processExecutor)) {
+        if (!(delegate instanceof ProcessSandboxCapableIndexerExecutor processExecutor)) {
             throw new IllegalArgumentException(
-                    "qualified OS sandbox requires ProcessIndexerExecutor so MINOS controls the actual provider process");
+                    "qualified OS sandbox requires an executor with explicit process-sandbox capability");
         }
         String jobName = "minos-" + request.runId() + "-" + Long.toHexString(System.nanoTime());
         try (ContainedSandboxSession session = new ContainedSandboxSession(networkPolicy, jobName)) {

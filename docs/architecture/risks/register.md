@@ -2,7 +2,7 @@
 
 > Référence : [Section 11 — Risques et dette](../arc42/11-risques-dette.md)
 
-Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135.
+Dernière réconciliation : **14 août 2026**, réaudit complet de `develop` après PR #182.
 
 ---
 
@@ -13,7 +13,8 @@ Dernière réconciliation : **9 août 2026**, campagne post-audit #132 / PR #135
 | R-04 | ANN non encore décidé | Faible | Moyen | Faible | Équipe MINOS | Watchlist | Aucun claim ANN ; évolution uniquement après mesure d'un besoin réel. |
 | R-09 | Disponibilité des primitives sandbox et de la délégation cgroup selon l'OS / LSM | Moyenne | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`, les user namespaces **et** la délégation cgroup v2 avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object vérifié. `WorkerResourceContainment` distingue garantie OS, supervision MINOS et simple mesure. En absence d'une primitive qualifiée, toute exécution distante (`ALLOW` ou `DENY`) échoue de façon fail-closed. |
 | R-11 | Absence de quota disque par job non privilégié sur Linux et Windows | Moyenne | Moyen | Moyenne | Équipe MINOS | Mitigé / assumé | Le budget d'écriture (octets et entrées) est appliqué pendant l'exécution par `ProviderWriteQuotaSupervisor`, qui détruit la frontière de job au dépassement, et est déclaré `SUPERVISED_HARD_KILL` — jamais `OS_ENFORCED`. |
-| R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Équipe MINOS | Mitigé / surveillé | GitHub Actions épinglées par SHA, images OCI par digest, providers binaires par checksum attendu, gate `check-workflow-pins.py`. |
+| R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Équipe MINOS | Mitigé / surveillé | GitHub Actions épinglées par SHA, images OCI par digest, providers binaires par checksum attendu ; le Docker provider-complete consomme les lockfiles npm v3 du dépôt via `npm ci --ignore-scripts`, comme le runtime natif. Gate `check-workflow-pins.py`. |
+| R-12 | Disponibilité de la frontière forte du CLI IntelliJ selon la plateforme | Faible | Moyen | Faible | Équipe MINOS / opérateur | Mitigé / capability-honest | Windows utilise un Job Object établi avant reprise du CLI ; Linux exige un user manager systemd capable de créer un scope transitoire. Une plateforme non qualifiée ou sans primitive disponible échoue fermée au lieu de revenir au polling `ProcessHandle`. |
 
 ---
 

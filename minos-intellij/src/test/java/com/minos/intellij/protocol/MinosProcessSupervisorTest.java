@@ -57,14 +57,25 @@ class MinosProcessSupervisorTest {
     @Test
     void timeoutKillsEntireTree() throws Exception {
         Path marker = tmp.resolve("ready.txt");
+        if (isWindows()) {
+            Path script = writeCmdTreeFixture(marker);
+            MinosStrongProcessLauncher.Launch launch = strongWindowsLaunch(
+                    List.of("cmd", "/d", "/c", script.toString()), "timeout");
+            awaitFile(marker, 15);
+            List<ProcessHandle> handles = collectHandles(launch.process());
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+                supervisor.stop(null);
+            }
+            assertAllDead(handles);
+            return;
+        }
+
         Process root = startTreeFixture(marker);
         awaitFile(marker, 10);
         List<ProcessHandle> handles = collectHandles(root);
-
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
             supervisor.stop(null);
         }
-
         assertAllDead(handles);
     }
 
@@ -72,17 +83,31 @@ class MinosProcessSupervisorTest {
     @Test
     void cancelKillsEntireTree() throws Exception {
         Path marker = tmp.resolve("ready.txt");
+        if (isWindows()) {
+            Path script = writeCmdTreeFixture(marker);
+            MinosStrongProcessLauncher.Launch launch = strongWindowsLaunch(
+                    List.of("cmd", "/d", "/c", script.toString()), "cancel");
+            awaitFile(marker, 15);
+            List<ProcessHandle> handles = collectHandles(launch.process());
+            ProcessCanceledException pce = new ProcessCanceledException();
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+                ProcessCanceledException thrown = assertThrows(ProcessCanceledException.class,
+                        () -> supervisor.stop(pce));
+                assertSame(pce, thrown, "original PCE instance must be rethrown");
+            }
+            assertAllDead(handles);
+            return;
+        }
+
         Process root = startTreeFixture(marker);
         awaitFile(marker, 10);
         List<ProcessHandle> handles = collectHandles(root);
-
         ProcessCanceledException pce = new ProcessCanceledException();
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
             ProcessCanceledException thrown = assertThrows(ProcessCanceledException.class,
                     () -> supervisor.stop(pce));
             assertSame(pce, thrown, "original PCE instance must be rethrown");
         }
-
         assertAllDead(handles);
     }
 
@@ -196,13 +221,24 @@ class MinosProcessSupervisorTest {
     @Test
     void twoSimultaneousCommandsCancelADoesNotKillB() throws Exception {
         List<String> longRunning = longRunningCommand();
+        if (isWindows()) {
+            MinosStrongProcessLauncher.Launch launchA = strongWindowsLaunch(longRunning, "isolation-a");
+            MinosStrongProcessLauncher.Launch launchB = strongWindowsLaunch(longRunning, "isolation-b");
+            assertTrue(launchB.process().isAlive(), "B must be running before the test");
+            try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(launchB)) {
+                try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(launchA)) {
+                    ProcessCanceledException pce = new ProcessCanceledException();
+                    assertThrows(ProcessCanceledException.class, () -> supervisorA.stop(pce));
+                }
+                assertTrue(launchB.process().isAlive(),
+                        "independent Job Object B must still be alive after cancelling A");
+            }
+            return;
+        }
 
         Process pA = new ProcessBuilder(longRunning).start();
         Process pB = new ProcessBuilder(longRunning).start();
         assertTrue(pB.isAlive(), "B must be running before the test");
-
-        // Nested try-with-resources: supervisorB closes B after we verify A's cancel didn't
-        // affect it; supervisorA is closed (no-op — stop already ran) after the assertThrows.
         try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB)) {
             try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA)) {
                 ProcessCanceledException pce = new ProcessCanceledException();
@@ -215,6 +251,16 @@ class MinosProcessSupervisorTest {
     // -----------------------------------------------------------------------------------------
     // Fixture builders
     // -----------------------------------------------------------------------------------------
+
+    private MinosStrongProcessLauncher.Launch strongWindowsLaunch(
+            List<String> command,
+            String name
+    ) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(tmp.toFile());
+        return MinosStrongProcessLauncher.start(
+                builder, tmp.resolve("home-" + name).toString());
+    }
 
     private Process startTreeFixture(Path marker) throws IOException {
         if (isWindows()) {

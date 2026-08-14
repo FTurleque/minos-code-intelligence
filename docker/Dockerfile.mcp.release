@@ -118,15 +118,22 @@ RUN set -eux; \
     grep -F "rust-analyzer ${RUST_ANALYZER_VERSION}" /tmp/rust-analyzer.version; \
     rm -f /tmp/rust-analyzer.version
 
+COPY scip-typescript-package-lock.json /tmp/minos-locks/scip-typescript-package-lock.json
+COPY scip-python-package-lock.json /tmp/minos-locks/scip-python-package-lock.json
+
 RUN set -eux; \
-    mkdir -p "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \
-    npm install --prefix "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}" \
-      --no-audit --no-fund --ignore-scripts "@sourcegraph/scip-typescript@${SCIP_TYPESCRIPT_VERSION}"; \
-    test -x "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}/node_modules/.bin/scip-typescript"; \
-    mkdir -p "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \
-    npm install --prefix "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}" \
-      --no-audit --no-fund "@sourcegraph/scip-python@${SCIP_PYTHON_VERSION}"; \
-    test -x "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}/node_modules/.bin/scip-python"; \
+    ts_root="/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \
+    py_root="/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \
+    mkdir -p "$ts_root" "$py_root"; \
+    printf '{"private":true,"dependencies":{"@sourcegraph/scip-typescript":"%s"}}\n' "${SCIP_TYPESCRIPT_VERSION}" > "$ts_root/package.json"; \
+    cp /tmp/minos-locks/scip-typescript-package-lock.json "$ts_root/package-lock.json"; \
+    npm ci --prefix "$ts_root" --no-audit --no-fund --ignore-scripts; \
+    test -x "$ts_root/node_modules/.bin/scip-typescript"; \
+    printf '{"private":true,"dependencies":{"@sourcegraph/scip-python":"%s"}}\n' "${SCIP_PYTHON_VERSION}" > "$py_root/package.json"; \
+    cp /tmp/minos-locks/scip-python-package-lock.json "$py_root/package-lock.json"; \
+    npm ci --prefix "$py_root" --no-audit --no-fund --ignore-scripts; \
+    test -x "$py_root/node_modules/.bin/scip-python"; \
+    rm -rf /tmp/minos-locks; \
     python3 --version; pip3 --version
 
 RUN set -eux; \

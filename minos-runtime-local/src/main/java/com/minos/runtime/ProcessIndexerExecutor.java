@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
-public final class ProcessIndexerExecutor implements IndexerExecutor {
+public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
     private final String indexerId;
     private final Path runsRoot;
@@ -54,7 +54,8 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         return executeSandboxed(request, (plan, runDirectory) -> plan);
     }
 
-    IndexingArtifact executeSandboxed(IndexingExecutionRequest request, ProcessPlanTransformer transformer) throws Exception {
+    @Override
+    public IndexingArtifact executeSandboxed(IndexingExecutionRequest request, ProcessPlanTransformer transformer) throws Exception {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(transformer, "transformer");
         if (!indexerId.equals(request.selection().indexer().id())) {
