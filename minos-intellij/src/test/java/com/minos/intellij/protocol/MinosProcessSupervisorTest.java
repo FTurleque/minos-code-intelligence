@@ -110,10 +110,8 @@ class MinosProcessSupervisorTest {
     @EnabledOnOs(OS.WINDOWS)
     void cmdWrapperWindowsAllDescendantsKilled() throws Exception {
         Path marker = tmp.resolve("ready.txt");
-        // Script has the marker path embedded — MinosCommandLine needs no extra arguments here
         Path cmdScript = writeCmdTreeFixture(marker);
 
-        // Route through cmd.exe via MinosCommandLine — mirrors real plugin invocation
         List<String> cmd = MinosCommandLine.build(cmdScript.toString(), List.of(), "Windows 10");
         Process root = new ProcessBuilder(cmd).start();
         awaitFile(marker, 15);
@@ -201,8 +199,6 @@ class MinosProcessSupervisorTest {
         Process pB = new ProcessBuilder(longRunning).start();
         assertTrue(pB.isAlive(), "B must be running before the test");
 
-        // Nested try-with-resources: supervisorB closes B after we verify A's cancel didn't
-        // affect it; supervisorA is closed (no-op — stop already ran) after the assertThrows.
         try (MinosProcessSupervisor supervisorB = new MinosProcessSupervisor(pB)) {
             try (MinosProcessSupervisor supervisorA = new MinosProcessSupervisor(pA)) {
                 ProcessCanceledException pce = new ProcessCanceledException();
@@ -212,6 +208,28 @@ class MinosProcessSupervisorTest {
         }
     }
 
+    // 11 — Root exits successfully after spawning a child: close must still kill the orphan.
+    @Test
+    void normalExitCleansDescendantThatOutlivesRoot() throws Exception {
+        Path marker = tmp.resolve("orphan-ready.txt");
+        Process root = startOrphanFixture(marker);
+        List<ProcessHandle> descendants;
+
+        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
+            awaitFile(marker, 10);
+            descendants = root.descendants().toList();
+            assertFalse(descendants.isEmpty(), "fixture must expose an owned descendant before root exit");
+
+            assertTrue(supervisor.waitFor(10_000), "root should exit normally");
+            assertEquals(0, supervisor.exitValue());
+            supervisor.drainOutput();
+            assertTrue(descendants.stream().anyMatch(ProcessHandle::isAlive),
+                    "at least one descendant must still be alive after the root exits");
+        }
+
+        assertAllDead(descendants);
+    }
+
     // -----------------------------------------------------------------------------------------
     // Fixture builders
     // -----------------------------------------------------------------------------------------
@@ -219,11 +237,35 @@ class MinosProcessSupervisorTest {
     private Process startTreeFixture(Path marker) throws IOException {
         if (isWindows()) {
             Path script = writeCmdTreeFixture(marker);
-            // Direct cmd.exe invocation (not via MinosCommandLine) — for the generic tree tests
             return new ProcessBuilder("cmd", "/d", "/c", script.toString()).start();
         } else {
             return new ProcessBuilder(writeUnixTreeFixture(marker).toString()).start();
         }
+    }
+
+    private Process startOrphanFixture(Path marker) throws IOException {
+        if (isWindows()) {
+            Path script = tmp.resolve("orphan-fixture.cmd");
+            Files.writeString(script, """
+                    @echo off
+                    start "" /B cmd /d /c "ping -n 3600 127.0.0.1 ^> nul 2^>^&1"
+                    echo.>"%s"
+                    ping -n 3 127.0.0.1 > nul
+                    exit /b 0
+                    """.formatted(marker.toString()));
+            return new ProcessBuilder("cmd", "/d", "/c", script.toString()).start();
+        }
+
+        Path script = tmp.resolve("orphan-fixture.sh");
+        Files.writeString(script, """
+                #!/bin/sh
+                sh -c 'trap "" HUP TERM; while true; do sleep 1; done' </dev/null >/dev/null 2>&1 &
+                printf ready > '%s'
+                sleep 1
+                exit 0
+                """.formatted(marker.toString()));
+        makeExecutable(script);
+        return new ProcessBuilder(script.toString()).start();
     }
 
     /** Unix: shell → sleep grandchild; writes marker when both are running. */
@@ -250,13 +292,9 @@ class MinosProcessSupervisorTest {
      *   │    └─ ping.exe                   (Level 3a — child of Level 2 cmd.exe)
      *   └─ ping.exe                        (Level 2b — batch file's own ping call)
      * </pre>
-     *
-     * <p>The marker path is embedded directly so no argument passing through MinosCommandLine
-     * quoting is needed — keeps test 6 independent of MinosCommandLine's quote rules.
      */
     private Path writeCmdTreeFixture(Path marker) throws IOException {
         Path script = tmp.resolve("tree-fixture.cmd");
-        // Marker path embedded as a literal: backslashes are safe in cmd.exe paths
         Files.writeString(script, """
                 @echo off
                 start "" /B cmd /d /c "ping -n 3600 127.0.0.1 > nul"
@@ -317,8 +355,6 @@ class MinosProcessSupervisorTest {
     }
 
     private static void assertAllDead(List<ProcessHandle> handles) throws InterruptedException {
-        // Poll briefly to allow the kernel to reap SIGKILL'd descendants as zombies. In practice
-        // this loop exits on the first iteration — the sleep is a safety valve for slow CI reaping.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (handles.stream().anyMatch(ProcessHandle::isAlive) && System.nanoTime() < deadline) {
             Thread.sleep(100); // NOSONAR: polling loop — no shared state to synchronize
