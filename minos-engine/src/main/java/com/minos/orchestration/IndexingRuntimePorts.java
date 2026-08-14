@@ -28,18 +28,63 @@ public final class IndexingRuntimePorts {
     }
 
     /**
+     * Explicit observation of the authoritative active snapshot state.
+     *
+     * <p>The status deliberately distinguishes an authority that cannot be observed from an
+     * observable authority that currently has no active snapshot. This prevents persistent
+     * lifecycle metadata from treating a missing authoritative snapshot as an unsupported
+     * capability.</p>
+     */
+    public record ActiveSnapshotObservation(Status status, Optional<String> snapshotId) {
+        public enum Status {
+            UNSUPPORTED,
+            NO_ACTIVE_SNAPSHOT,
+            ACTIVE
+        }
+
+        public ActiveSnapshotObservation {
+            status = Objects.requireNonNull(status, "status");
+            snapshotId = Objects.requireNonNull(snapshotId, "snapshotId");
+            if (status == Status.ACTIVE) {
+                String id = snapshotId.orElseThrow(() ->
+                        new IllegalArgumentException("ACTIVE observation requires a snapshot id"));
+                if (id.isBlank()) {
+                    throw new IllegalArgumentException("active snapshot id must not be blank");
+                }
+            } else if (snapshotId.isPresent()) {
+                throw new IllegalArgumentException(status + " observation must not carry a snapshot id");
+            }
+        }
+
+        public static ActiveSnapshotObservation unsupported() {
+            return new ActiveSnapshotObservation(Status.UNSUPPORTED, Optional.empty());
+        }
+
+        public static ActiveSnapshotObservation noActiveSnapshot() {
+            return new ActiveSnapshotObservation(Status.NO_ACTIVE_SNAPSHOT, Optional.empty());
+        }
+
+        public static ActiveSnapshotObservation active(String snapshotId) {
+            return new ActiveSnapshotObservation(Status.ACTIVE, Optional.of(
+                    Objects.requireNonNull(snapshotId, "snapshotId")));
+        }
+    }
+
+    /**
      * La promotion fournie par ce port doit être atomique au sens de l'ADR-0006.
      */
     public interface SnapshotPromoter {
         void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception;
 
         /**
-         * Returns the authoritative active snapshot when the promoter can observe it. Real
-         * persistent implementations should override this so lifecycle metadata can be
-         * reconciled before a subsequent indexing run. Test/dummy promoters may remain empty.
+         * Observes the authoritative snapshot state when supported by this promoter.
+         *
+         * <p>The default is explicitly {@link ActiveSnapshotObservation.Status#UNSUPPORTED}; a
+         * supported promoter must return {@code NO_ACTIVE_SNAPSHOT} when its authority is
+         * observable but empty.</p>
          */
-        default Optional<String> activeSnapshotId(UUID projectId) throws Exception {
-            return Optional.empty();
+        default ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws Exception {
+            return ActiveSnapshotObservation.unsupported();
         }
     }
 
