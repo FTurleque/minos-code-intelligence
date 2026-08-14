@@ -98,10 +98,10 @@ class FileIndexStateStoreTest {
                 Instant.parse("2026-08-14T12:00:00Z"),
                 Optional.of(Instant.parse("2026-08-14T12:01:00Z")),
                 List.of(),
+                Optional.of("snapshot-run-identity"),
                 Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty()));
+                Optional.of("snapshot-run-identity"),
+                Optional.of("completed")));
 
         Path file = stateRoot.resolve("runs").resolve(runId + ".properties");
         Files.writeString(file, Files.readString(file).replace(
