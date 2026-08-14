@@ -8,7 +8,6 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -89,29 +88,12 @@ public final class IndexingLifecycleService {
     }
 
     public ProjectIndexState projectState(UUID id) {
-        Objects.requireNonNull(id, "projectId");
-        Instant now = clock.instant();
-        ProjectIndexState persisted = stateStore.findProjectState(id)
-                .orElseGet(() -> ProjectIndexState.neverIndexed(id, now));
-        try {
-            Optional<String> authoritative = promoter.activeSnapshotId(id);
-            if (authoritative.isEmpty() || authoritative.equals(persisted.activeSnapshotId())) return persisted;
-            ProjectIndexState repaired = new ProjectIndexState(id, ProjectIndexState.Availability.READY,
-                    authoritative, Optional.empty(), now,
-                    Optional.of("reconciled from authoritative active snapshot during project-state read"));
-            stateStore.saveProjectState(repaired);
-            ProjectIndexState verified = stateStore.findProjectState(id)
-                    .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
-            if (!authoritative.equals(verified.activeSnapshotId())
-                    || verified.availability() != ProjectIndexState.Availability.READY) {
-                throw new IllegalStateException("reconciled project state does not match authoritative snapshot");
-            }
-            return verified;
-        } catch (RuntimeException failure) {
-            throw failure;
-        } catch (Exception failure) {
-            throw new IllegalStateException("unable to reconcile project state", failure);
-        }
+        return AuthoritativeProjectStateReconciler.reconcile(
+                Objects.requireNonNull(id, "projectId"),
+                promoter,
+                stateStore,
+                clock.instant(),
+                "reconciled from authoritative active snapshot during project-state read");
     }
 
     public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }

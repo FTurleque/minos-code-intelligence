@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -81,5 +83,151 @@ class ProjectIndexStateReconcilerTest {
         IOException failure = assertThrows(IOException.class,
                 () -> new ProjectIndexStateReconciler(snapshots, states).reconcile(projectId));
         assertTrue(failure.getMessage().contains("snapshot store has none"));
+    }
+
+    @Test
+    void movingActiveSnapshotDuringObservationCannotTriggerAStaleRepair() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-moving-read"));
+        snapshots.publish(projectId, "snapshot-one", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-moving-read"));
+        durable.saveProjectState(state(projectId, ProjectIndexState.Availability.READY, "snapshot-one"));
+        List<String> writes = new ArrayList<>();
+
+        IndexStateStore moving = new DelegatingIndexStateStore(durable) {
+            private boolean moved;
+
+            @Override
+            public Optional<ProjectIndexState> findProjectState(UUID id) {
+                Optional<ProjectIndexState> state = super.findProjectState(id);
+                if (!moved) {
+                    moved = true;
+                    publishUnchecked(snapshots, projectId, "snapshot-two");
+                }
+                return state;
+            }
+
+            @Override
+            public void saveProjectState(ProjectIndexState state) {
+                writes.add(state.activeSnapshotId().orElse("<none>"));
+                super.saveProjectState(state);
+            }
+        };
+
+        ProjectIndexStateReconciler.Reconciliation result =
+                new ProjectIndexStateReconciler(snapshots, moving).reconcile(projectId);
+
+        assertTrue(result.repaired());
+        assertEquals(Optional.of("snapshot-two"), result.activeSnapshot().map(snapshot -> snapshot.snapshotId()));
+        assertEquals(Optional.of("snapshot-two"), result.projectState().orElseThrow().activeSnapshotId());
+        assertEquals(List.of("snapshot-two"), writes,
+                "the stale snapshot observed before the move must never be written as a repair");
+    }
+
+    @Test
+    void snapshotMoveAfterRepairWriteIsReobservedBeforeReturning() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-moving-write"));
+        snapshots.publish(projectId, "snapshot-one", List.of(), List.of(), List.of());
+        FileIndexStateStore durable = new FileIndexStateStore(tmp.resolve("state-moving-write"));
+        durable.saveProjectState(state(projectId, ProjectIndexState.Availability.READY, "snapshot-zero"));
+        List<String> writes = new ArrayList<>();
+
+        IndexStateStore moving = new DelegatingIndexStateStore(durable) {
+            private boolean moved;
+
+            @Override
+            public void saveProjectState(ProjectIndexState state) {
+                writes.add(state.activeSnapshotId().orElse("<none>"));
+                super.saveProjectState(state);
+                if (!moved) {
+                    moved = true;
+                    publishUnchecked(snapshots, projectId, "snapshot-two");
+                }
+            }
+        };
+
+        ProjectIndexStateReconciler.Reconciliation result =
+                new ProjectIndexStateReconciler(snapshots, moving).reconcile(projectId);
+
+        assertTrue(result.repaired());
+        assertEquals(List.of("snapshot-one", "snapshot-two"), writes);
+        assertEquals(Optional.of("snapshot-two"), result.activeSnapshot().map(snapshot -> snapshot.snapshotId()));
+        assertEquals(Optional.of("snapshot-two"), result.projectState().orElseThrow().activeSnapshotId());
+        assertEquals(Optional.of("snapshot-two"), durable.findProjectState(projectId).orElseThrow().activeSnapshotId());
+    }
+
+    @Test
+    void refreshingStateForAuthoritativeSnapshotIsPreserved() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        FileSymbolSnapshotStore snapshots = new FileSymbolSnapshotStore(tmp.resolve("snapshots-refreshing"));
+        snapshots.publish(projectId, "snapshot-current", List.of(), List.of(), List.of());
+        FileIndexStateStore states = new FileIndexStateStore(tmp.resolve("state-refreshing"));
+        ProjectIndexState refreshing = new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.REFRESHING,
+                Optional.of("snapshot-current"),
+                Optional.of(runId),
+                Instant.parse("2026-08-14T08:00:00Z"),
+                Optional.of("indexing run in progress"));
+        states.saveProjectState(refreshing);
+
+        ProjectIndexStateReconciler.Reconciliation result =
+                new ProjectIndexStateReconciler(snapshots, states).reconcile(projectId);
+
+        assertFalse(result.repaired());
+        assertEquals(ProjectIndexState.Availability.REFRESHING, result.projectState().orElseThrow().availability());
+        assertEquals(Optional.of(runId), result.projectState().orElseThrow().latestRunId());
+    }
+
+    private static ProjectIndexState state(
+            UUID projectId,
+            ProjectIndexState.Availability availability,
+            String snapshotId
+    ) {
+        return new ProjectIndexState(projectId, availability, Optional.of(snapshotId), Optional.empty(),
+                Instant.parse("2026-08-14T08:00:00Z"), Optional.empty());
+    }
+
+    private static void publishUnchecked(FileSymbolSnapshotStore snapshots, UUID projectId, String snapshotId) {
+        try {
+            snapshots.publish(projectId, snapshotId, List.of(), List.of(), List.of());
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    private static class DelegatingIndexStateStore implements IndexStateStore {
+        private final IndexStateStore delegate;
+
+        private DelegatingIndexStateStore(IndexStateStore delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Optional<ProjectIndexState> findProjectState(UUID projectId) {
+            return delegate.findProjectState(projectId);
+        }
+
+        @Override
+        public Optional<IndexingRun> findRun(UUID runId) {
+            return delegate.findRun(runId);
+        }
+
+        @Override
+        public List<IndexingRun> listRuns(UUID projectId) {
+            return delegate.listRuns(projectId);
+        }
+
+        @Override
+        public void saveProjectState(ProjectIndexState state) {
+            delegate.saveProjectState(state);
+        }
+
+        @Override
+        public void saveRun(IndexingRun run) {
+            delegate.saveRun(run);
+        }
     }
 }

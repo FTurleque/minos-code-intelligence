@@ -23,8 +23,9 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>Ownership is tracked continuously while the root is alive instead of being reconstructed
  * only when cleanup starts. This preserves descendants that become re-parented after the root
- * exits. Handles are keyed by PID plus process start instant so PID reuse can never turn a stale
- * ownership record into permission to terminate an unrelated process.</p>
+ * exits. Handles are keyed by PID plus process start instant. If the JVM/OS cannot provide a
+ * start instant, cleanup deliberately keeps using the originally observed handle and never
+ * re-acquires a process by bare PID, preventing PID reuse from authorizing collateral kills.</p>
  */
 final class MinosProcessSupervisor implements AutoCloseable {
 
@@ -74,7 +75,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
         List<Throwable> failures = new ArrayList<>();
         remember(process.descendants().toList());
-        List<ProcessHandle> snapshot = rememberedHandles();
+        List<OwnedProcess> snapshot = rememberedProcesses();
 
         terminateDescendantsGracefully(snapshot);
         waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, failures);
@@ -92,7 +93,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
             }
         }
 
-        terminateDescendantsForcibly(rememberedHandles(), failures);
+        terminateDescendantsForcibly(rememberedProcesses(), failures);
         if (process.isAlive()) process.destroyForcibly();
         try {
             process.waitFor(FORCED_WAIT_MILLIS, TimeUnit.MILLISECONDS);
@@ -104,7 +105,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
         remember(process.descendants().toList());
         stopOwnershipTracker(failures);
         terminateRememberedSurvivors();
-        long survivors = rememberedHandles().stream().filter(this::isSameOwnedProcessAlive).count();
+        long survivors = rememberedProcesses().stream().filter(this::isSameOwnedProcessAlive).count();
         if (process.isAlive() || survivors > 0) {
             failures.add(new IOException(
                     "MINOS process tree has " + (process.isAlive() ? 1 : 0) + " root + "
@@ -119,7 +120,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
         boolean readersStopped = !outReader.isAlive() && !errReader.isAlive();
         boolean processesStopped = !process.isAlive()
-                && rememberedHandles().stream().noneMatch(this::isSameOwnedProcessAlive);
+                && rememberedProcesses().stream().noneMatch(this::isSameOwnedProcessAlive);
         boolean trackerStopped = !ownershipTracker.isAlive();
         terminationComplete.set(processesStopped && readersStopped && trackerStopped);
         propagate(cause, failures);
@@ -223,9 +224,11 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    private List<ProcessHandle> rememberedHandles() {
+    private List<OwnedProcess> rememberedProcesses() {
         synchronized (ownershipLock) {
-            return new ArrayList<>(ownedHandles.values());
+            return ownedHandles.entrySet().stream()
+                    .map(entry -> new OwnedProcess(entry.getKey(), entry.getValue()))
+                    .toList();
         }
     }
 
@@ -233,30 +236,35 @@ final class MinosProcessSupervisor implements AutoCloseable {
         return new ProcessIdentity(handle.pid(), handle.info().startInstant());
     }
 
-    private boolean isSameOwnedProcessAlive(ProcessHandle remembered) {
-        ProcessIdentity expected = identity(remembered);
-        return ProcessHandle.of(expected.pid())
-                .filter(current -> identity(current).equals(expected))
-                .map(ProcessHandle::isAlive)
-                .orElse(false);
+    static boolean mayReacquireByPid(Optional<Instant> observedStartInstant) {
+        return Objects.requireNonNull(observedStartInstant, "observedStartInstant").isPresent();
     }
 
-    private static void terminateDescendantsGracefully(List<ProcessHandle> snapshot) {
-        List<ProcessHandle> handles = new ArrayList<>(snapshot);
-        handles.reversed().forEach(handle -> {
-            ProcessIdentity expected = identity(handle);
-            ProcessHandle.of(expected.pid())
-                    .filter(current -> identity(current).equals(expected))
-                    .filter(ProcessHandle::isAlive)
-                    .ifPresent(ProcessHandle::destroy);
-        });
+    private boolean isSameOwnedProcessAlive(OwnedProcess remembered) {
+        return resolveSameProcess(remembered).map(ProcessHandle::isAlive).orElse(false);
+    }
+
+    private static Optional<ProcessHandle> resolveSameProcess(OwnedProcess remembered) {
+        ProcessIdentity expected = remembered.identity();
+        if (!mayReacquireByPid(expected.startInstant())) {
+            return remembered.handle().isAlive() ? Optional.of(remembered.handle()) : Optional.empty();
+        }
+        return ProcessHandle.of(expected.pid())
+                .filter(current -> identity(current).equals(expected));
+    }
+
+    private static void terminateDescendantsGracefully(List<OwnedProcess> snapshot) {
+        List<OwnedProcess> handles = new ArrayList<>(snapshot);
+        handles.reversed().forEach(remembered -> resolveSameProcess(remembered)
+                .filter(ProcessHandle::isAlive)
+                .ifPresent(ProcessHandle::destroy));
     }
 
     private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> failures) {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(maximumMillis);
         while (System.nanoTime() < deadline) {
             remember(process.descendants().toList());
-            if (rememberedHandles().stream().noneMatch(this::isSameOwnedProcessAlive)) return;
+            if (rememberedProcesses().stream().noneMatch(this::isSameOwnedProcessAlive)) return;
             try {
                 Thread.sleep(50L);
             } catch (InterruptedException interrupted) {
@@ -267,16 +275,17 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    private void terminateDescendantsForcibly(List<ProcessHandle> snapshot, List<Throwable> failures) {
-        List<ProcessHandle> snapshotList = new ArrayList<>(snapshot);
+    private void terminateDescendantsForcibly(List<OwnedProcess> snapshot, List<Throwable> failures) {
+        List<OwnedProcess> snapshotList = new ArrayList<>(snapshot);
         snapshotList.reversed().forEach(this::destroySameProcessForcibly);
         for (int sweep = 0; sweep < DESCENDANT_SWEEP_COUNT; sweep++) {
             List<ProcessHandle> fresh = new ArrayList<>(process.descendants().toList());
             remember(fresh);
-            fresh.reversed().forEach(this::destroySameProcessForcibly);
+            fresh.reversed().forEach(handle -> destroySameProcessForcibly(
+                    new OwnedProcess(identity(handle), handle)));
             terminateRememberedSurvivors();
             if (sweep < DESCENDANT_SWEEP_COUNT - 1
-                    && (process.isAlive() || rememberedHandles().stream().anyMatch(this::isSameOwnedProcessAlive))) {
+                    && (process.isAlive() || rememberedProcesses().stream().anyMatch(this::isSameOwnedProcessAlive))) {
                 try {
                     Thread.sleep(DESCENDANT_SWEEP_DELAY_MILLIS);
                 } catch (InterruptedException interrupted) {
@@ -289,14 +298,12 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     private void terminateRememberedSurvivors() {
-        List<ProcessHandle> handles = rememberedHandles();
+        List<OwnedProcess> handles = rememberedProcesses();
         handles.reversed().forEach(this::destroySameProcessForcibly);
     }
 
-    private void destroySameProcessForcibly(ProcessHandle remembered) {
-        ProcessIdentity expected = identity(remembered);
-        ProcessHandle.of(expected.pid())
-                .filter(current -> identity(current).equals(expected))
+    private void destroySameProcessForcibly(OwnedProcess remembered) {
+        resolveSameProcess(remembered)
                 .filter(ProcessHandle::isAlive)
                 .ifPresent(ProcessHandle::destroyForcibly);
     }
@@ -362,6 +369,13 @@ final class MinosProcessSupervisor implements AutoCloseable {
             }
         } catch (IOException exception) {
             failure.compareAndSet(null, exception);
+        }
+    }
+
+    private record OwnedProcess(ProcessIdentity identity, ProcessHandle handle) {
+        private OwnedProcess {
+            Objects.requireNonNull(identity, "identity");
+            Objects.requireNonNull(handle, "handle");
         }
     }
 

@@ -7,7 +7,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,6 +19,14 @@ class MinosProcessSupervisorOrphanTest {
 
     @TempDir
     Path tmp;
+
+    @Test
+    void pidReacquisitionRequiresAnObservedStartInstant() {
+        assertFalse(MinosProcessSupervisor.mayReacquireByPid(Optional.empty()),
+                "a bare PID must never authorize termination of a re-acquired process");
+        assertTrue(MinosProcessSupervisor.mayReacquireByPid(Optional.of(Instant.EPOCH)),
+                "PID reacquisition is allowed only when a strong start-time identity can be verified");
+    }
 
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
