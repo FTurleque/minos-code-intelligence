@@ -1,8 +1,19 @@
 # État courant — MINOS
 
-Dernière mise à jour : **9 août 2026**.
+Dernière mise à jour : **14 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
+
+## Réconciliation post-audit — 14 août 2026
+
+Après le merge de la PR #182, `develop@20440b353d6a89e40b949cc1e56214d550dbdca6` a été relu intégralement. Cette campagne de correction ferme les écarts découverts lors de ce réaudit :
+
+- composition M25 restaurée entre `StrongProcessOwnershipIndexerExecutor` et les sandboxes workers Linux/Windows via une capability explicite, sans nesting de frontières OS ;
+- plugin IntelliJ lancé derrière une autorité d'ownership établie avant le CLI : Job Object Windows avec création suspendue, scope systemd/cgroup sous Linux, absence de fallback silencieux ;
+- build Docker provider-complete aligné sur les lockfiles npm v3 possédés par le dépôt et `npm ci --ignore-scripts` pour `scip-typescript` et `scip-python` ;
+- documentation et registre des risques réconciliés avec ces garanties et leurs limitations d'exploitation.
+
+Les protections `ProcessHandle`/PID-start-time et les trackers Java restent des défenses en profondeur ; elles ne sont plus présentées comme autorité kernel-backed. Les plateformes sans frontière forte qualifiée restent fail-closed.
 
 ## Synthèse
 

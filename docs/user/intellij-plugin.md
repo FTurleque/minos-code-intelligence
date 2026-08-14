@@ -13,6 +13,16 @@ M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité e
 
 Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 24 indépendant.
 
+### Ownership OS des commandes CLI
+
+Le plugin ne lance plus le CLI sous une simple supervision PID. La frontière d'ownership doit être disponible **avant** l'exécution du CLI :
+
+- **Windows** : Job Object `KILL_ON_JOB_CLOSE`, processus CLI créé suspendu, assigné/vérifié dans le job puis repris ;
+- **Linux** : scope utilisateur systemd/cgroup transitoire ; un user manager systemd opérationnel est requis ;
+- **autres plateformes** : aucune garantie forte n'est annoncée et les commandes du plugin restent fail-closed tant qu'une primitive équivalente n'est pas qualifiée.
+
+Le polling `ProcessHandle` reste actif uniquement comme défense en profondeur et protection PID-reuse.
+
 ## Installation du plugin
 
 Artefact :
