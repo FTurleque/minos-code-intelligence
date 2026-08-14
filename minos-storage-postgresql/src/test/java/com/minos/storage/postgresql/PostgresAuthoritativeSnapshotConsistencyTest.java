@@ -3,6 +3,7 @@ package com.minos.storage.postgresql;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
+import com.minos.orchestration.ProjectIndexLeaseProvider;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.registry.RegisteredProject;
 import org.junit.jupiter.api.Test;
@@ -43,11 +44,13 @@ class PostgresAuthoritativeSnapshotConsistencyTest extends PostgresTestSupport {
                 return ActiveSnapshotObservation.noActiveSnapshot();
             }
         };
+        ProjectIndexLeaseProvider unusedLease = projectId -> () -> { };
         IndexingLifecycleService lifecycle = new IndexingLifecycleService(
                 List.of(),
                 request -> { throw new AssertionError("staging is not part of projectState consistency"); },
                 emptyAuthority,
-                states);
+                states,
+                unusedLease);
 
         assertThrows(IllegalStateException.class, () -> lifecycle.projectState(project.id()));
         assertEquals(Optional.of("snapshot-ghost"),
