@@ -48,3 +48,13 @@ jobs:
       - name: Run process ownership tests
         working-directory: minos-intellij
         run: gradle --no-daemon test --tests com.minos.intellij.protocol.MinosProcessSupervisorTest
+
+      - name: Print failing JUnit diagnostics
+        if: failure()
+        shell: powershell
+        run: |
+          Get-ChildItem -Path 'minos-intellij/build/test-results/test' -Filter '*.xml' -ErrorAction SilentlyContinue |
+            ForEach-Object {
+              Write-Host "===== $($_.FullName) ====="
+              Get-Content -Raw $_.FullName
+            }
