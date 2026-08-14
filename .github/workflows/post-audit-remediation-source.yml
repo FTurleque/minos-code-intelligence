@@ -1,0 +1,124 @@
+name: Post-audit remediation source patch
+
+on:
+  push:
+    branches: [fix/post-audit-remediation-20260814]
+    paths: [.github/workflows/post-audit-remediation-source.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/post-audit-remediation-20260814
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Apply P1 and Docker reproducibility fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one match for {old!r}, got {text.count(old)}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Explicit process-sandbox capability instead of concrete-class coupling.
+          Path('minos-runtime-local/src/main/java/com/minos/runtime/ProcessSandboxCapableIndexerExecutor.java').write_text('''package com.minos.runtime;\n\nimport com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;\nimport com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;\nimport com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;\n\n/**\n * Internal capability contract for executors whose provider process can be launched through a\n * caller-supplied, independently qualified OS sandbox boundary.\n *\n * <p>The contract is package-private on purpose: only MINOS runtime code may replace the normal\n * ownership boundary. Remote workers use it to make their stronger sandbox boundary authoritative\n * without relying on concrete executor types or nesting incompatible cgroup/Job Object owners.</p>\n */\ninterface ProcessSandboxCapableIndexerExecutor extends IndexerExecutor {\n    IndexingArtifact executeSandboxed(\n            IndexingExecutionRequest request,\n            ProcessIndexerExecutor.ProcessPlanTransformer transformer\n    ) throws Exception;\n}\n''', encoding='utf-8')
+
+          replace_once(
+              'minos-runtime-local/src/main/java/com/minos/runtime/ProcessIndexerExecutor.java',
+              'public final class ProcessIndexerExecutor implements IndexerExecutor {',
+              'public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {'
+          )
+          replace_once(
+              'minos-runtime-local/src/main/java/com/minos/runtime/ProcessIndexerExecutor.java',
+              '    IndexingArtifact executeSandboxed(IndexingExecutionRequest request, ProcessPlanTransformer transformer) throws Exception {',
+              '    @Override\n    public IndexingArtifact executeSandboxed(IndexingExecutionRequest request, ProcessPlanTransformer transformer) throws Exception {'
+          )
+
+          replace_once(
+              'minos-runtime-local/src/main/java/com/minos/runtime/StrongProcessOwnershipIndexerExecutor.java',
+              'public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecutor {',
+              'public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {'
+          )
+          marker = '''    @Override\n    public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {\n        Objects.requireNonNull(request, "request");\n        Capability capability = capability();\n        if (!capability.strong()) {\n            throw unavailable(String.join("; ", capability.diagnostics()));\n        }\n        ProcessIndexerExecutor.ProcessPlanTransformer transformer = Objects.requireNonNull(\n                boundaryProvider.transformer(request), "strong ownership transformer");\n        return delegate.executeSandboxed(request, transformer);\n    }\n'''
+          replacement = marker + '''\n    /**\n     * Executes through an independently qualified sandbox boundary supplied by the remote worker.\n     * The sandbox becomes the ownership authority for this execution, so the standalone ownership\n     * boundary is deliberately not nested around it. ProcessOwnershipTracker remains active inside\n     * the delegate as defence in depth.\n     */\n    @Override\n    public IndexingArtifact executeSandboxed(\n            IndexingExecutionRequest request,\n            ProcessIndexerExecutor.ProcessPlanTransformer transformer\n    ) throws Exception {\n        return delegate.executeSandboxed(\n                Objects.requireNonNull(request, "request"),\n                Objects.requireNonNull(transformer, "transformer"));\n    }\n'''
+          replace_once('minos-runtime-local/src/main/java/com/minos/runtime/StrongProcessOwnershipIndexerExecutor.java', marker, replacement)
+
+          replace_once(
+              'minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java',
+              '<p>The public constructor selects the strongest qualified OS sandbox only when MINOS owns the\n * actual provider process through {@link ProcessIndexerExecutor}. Other executor implementations\n * fall back to the process-only backend: they cannot be truthfully wrapped by an OS process sandbox,\n * and network {@code DENY} therefore remains fail-closed.</p>',
+              '<p>The public constructor selects the strongest qualified OS sandbox only when the executor\n * explicitly implements {@link ProcessSandboxCapableIndexerExecutor}. This keeps ownership\n * capability-based instead of concrete-class-based, including wrappers such as\n * {@link StrongProcessOwnershipIndexerExecutor}. Other executors remain fail-closed.</p>'
+          )
+          replace_once(
+              'minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java',
+              '        return delegate instanceof ProcessIndexerExecutor\n                ? WorkerSandboxBackends.strongestAvailable(minosHome)\n                : WorkerSandboxBackend.nativeEphemeralWorkspace();',
+              '        return delegate instanceof ProcessSandboxCapableIndexerExecutor\n                ? WorkerSandboxBackends.strongestAvailable(minosHome)\n                : WorkerSandboxBackend.nativeEphemeralWorkspace();'
+          )
+
+          for path, platform in [
+              ('minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java', 'Linux'),
+              ('minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java', 'Windows'),
+          ]:
+              replace_once(
+                  path,
+                  '        if (!(delegate instanceof ProcessIndexerExecutor processExecutor)) {\n            throw new IllegalArgumentException(\n                    "qualified OS sandbox requires ProcessIndexerExecutor so MINOS controls the actual provider process");\n        }',
+                  '        if (!(delegate instanceof ProcessSandboxCapableIndexerExecutor processExecutor)) {\n            throw new IllegalArgumentException(\n                    "qualified OS sandbox requires an executor with explicit process-sandbox capability");\n        }'
+              )
+
+          # Regression test: the strong wrapper must accept a worker sandbox transformer without
+          # invoking its standalone ownership provider.
+          Path('minos-runtime-local/src/test/java/com/minos/runtime/StrongOwnershipRemoteSandboxCompositionTest.java').write_text('''package com.minos.runtime;\n\nimport com.minos.discovery.ProjectDiscovery.BuildSystem;\nimport com.minos.discovery.ProjectDiscovery.Language;\nimport com.minos.orchestration.IndexerCapability;\nimport com.minos.orchestration.IndexerDescriptor;\nimport com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;\nimport com.minos.orchestration.IndexerQualification;\nimport com.minos.orchestration.IndexingMode;\nimport com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.api.io.TempDir;\n\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.time.Duration;\nimport java.util.List;\nimport java.util.Map;\nimport java.util.Set;\nimport java.util.UUID;\nimport java.util.concurrent.atomic.AtomicBoolean;\n\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\nclass StrongOwnershipRemoteSandboxCompositionTest {\n\n    @Test\n    void qualifiedRemoteSandboxCanControlStrongOwnershipWrapperWithoutNestedStandaloneBoundary(@TempDir Path temp)\n            throws Exception {\n        Path project = Files.createDirectories(temp.resolve("project"));\n        Path source = Files.writeString(project.resolve("source.scip"), "fixture");\n        ProcessIndexerExecutor raw = new ProcessIndexerExecutor(\n                "fixture-provider",\n                temp.resolve("home"),\n                (request, runDirectory) -> {\n                    Path artifact = runDirectory.resolve("generated.scip");\n                    return new IndexerProcessPlan(\n                            List.of("/bin/cp", source.toString(), artifact.toString()),\n                            request.projectRoot(),\n                            Map.of(),\n                            artifact,\n                            Duration.ofSeconds(10));\n                });\n        AtomicBoolean standaloneBoundaryUsed = new AtomicBoolean();\n        StrongProcessOwnershipIndexerExecutor strong = new StrongProcessOwnershipIndexerExecutor(\n                raw,\n                new StrongProcessOwnershipIndexerExecutor.BoundaryProvider() {\n                    @Override\n                    public StrongProcessOwnershipIndexerExecutor.Capability capability() {\n                        return StrongProcessOwnershipIndexerExecutor.Capability.available("fixture-standalone");\n                    }\n\n                    @Override\n                    public ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request) {\n                        standaloneBoundaryUsed.set(true);\n                        throw new AssertionError("remote sandbox must replace, not nest, standalone ownership");\n                    }\n                });\n\n        assertTrue(strong instanceof ProcessSandboxCapableIndexerExecutor);\n        IndexingExecutionRequest request = request(project);\n        var artifact = ((ProcessSandboxCapableIndexerExecutor) strong).executeSandboxed(\n                request, (plan, runDirectory) -> plan);\n\n        assertTrue(Files.isRegularFile(artifact.finalArtifact()));\n        assertFalse(standaloneBoundaryUsed.get());\n    }\n\n    private static IndexingExecutionRequest request(Path project) {\n        IndexerDescriptor descriptor = new IndexerDescriptor(\n                "fixture-provider", "1", "fixture", Set.of(Language.JAVA), Set.of(BuildSystem.MAVEN),\n                Set.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES),\n                IndexerQualification.QUALIFIED, 100, List.of("TEST"));\n        return new IndexingExecutionRequest(\n                UUID.randomUUID(), UUID.randomUUID(), project,\n                new IndexerSelection(Language.JAVA, descriptor, List.of()),\n                IndexingMode.FULL, List.of());\n    }\n}\n''', encoding='utf-8')
+
+          # Docker build consumes repository-owned npm lockfiles and npm ci, matching native runtime policy.
+          replace_once(
+              'docker/scripts/prod-mcp-release.ps1',
+              "            Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')\n            $Dockerfile = Join-Path $RepoRoot 'docker\\Dockerfile.mcp.release'",
+              "            Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')\n            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\\src\\main\\resources\\com\\minos\\adapter\\scip\\runtime\\scip-typescript-package-lock.json') -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')\n            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\\src\\main\\resources\\com\\minos\\adapter\\scip\\runtime\\scip-python-package-lock.json') -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')\n            $Dockerfile = Join-Path $RepoRoot 'docker\\Dockerfile.mcp.release'"
+          )
+
+          dockerfile = Path('docker/Dockerfile.mcp.release')
+          text = dockerfile.read_text(encoding='utf-8')
+          old = '''RUN set -eux; \\\n    mkdir -p "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \\\n    npm install --prefix "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}" \\\n      --no-audit --no-fund --ignore-scripts "@sourcegraph/scip-typescript@${SCIP_TYPESCRIPT_VERSION}"; \\\n    test -x "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}/node_modules/.bin/scip-typescript"; \\\n    mkdir -p "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \\\n    npm install --prefix "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}" \\\n      --no-audit --no-fund "@sourcegraph/scip-python@${SCIP_PYTHON_VERSION}"; \\\n    test -x "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}/node_modules/.bin/scip-python"; \\\n    python3 --version; pip3 --version\n'''
+          new = '''COPY scip-typescript-package-lock.json /tmp/minos-locks/scip-typescript-package-lock.json\nCOPY scip-python-package-lock.json /tmp/minos-locks/scip-python-package-lock.json\n\nRUN set -eux; \\\n    ts_root="/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \\\n    py_root="/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \\\n    mkdir -p "$ts_root" "$py_root"; \\\n    printf '{"private":true,"dependencies":{"@sourcegraph/scip-typescript":"%s"}}\\n' "${SCIP_TYPESCRIPT_VERSION}" > "$ts_root/package.json"; \\\n    cp /tmp/minos-locks/scip-typescript-package-lock.json "$ts_root/package-lock.json"; \\\n    npm ci --prefix "$ts_root" --no-audit --no-fund --ignore-scripts; \\\n    test -x "$ts_root/node_modules/.bin/scip-typescript"; \\\n    printf '{"private":true,"dependencies":{"@sourcegraph/scip-python":"%s"}}\\n' "${SCIP_PYTHON_VERSION}" > "$py_root/package.json"; \\\n    cp /tmp/minos-locks/scip-python-package-lock.json "$py_root/package-lock.json"; \\\n    npm ci --prefix "$py_root" --no-audit --no-fund --ignore-scripts; \\\n    test -x "$py_root/node_modules/.bin/scip-python"; \\\n    rm -rf /tmp/minos-locks; \\\n    python3 --version; pip3 --version\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Dockerfile npm block match count={text.count(old)}')
+          dockerfile.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Static regression test for packaged Docker dependency locking.
+          Path('minos-app/src/test/java/com/minos/packaging/M29DockerNpmLockContractTest.java').write_text('''package com.minos.packaging;\n\nimport org.junit.jupiter.api.Test;\n\nimport java.nio.file.Files;\nimport java.nio.file.Path;\n\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\nclass M29DockerNpmLockContractTest {\n    @Test\n    void releaseImageUsesRepositoryOwnedLockfilesAndNpmCi() throws Exception {\n        Path root = Path.of("..").toAbsolutePath().normalize();\n        String dockerfile = Files.readString(root.resolve("docker/Dockerfile.mcp.release"));\n        String release = Files.readString(root.resolve("docker/scripts/prod-mcp-release.ps1"));\n\n        assertTrue(dockerfile.contains("COPY scip-typescript-package-lock.json"));\n        assertTrue(dockerfile.contains("COPY scip-python-package-lock.json"));\n        assertTrue(dockerfile.contains("npm ci --prefix \\\"$ts_root\\\" --no-audit --no-fund --ignore-scripts"));\n        assertTrue(dockerfile.contains("npm ci --prefix \\\"$py_root\\\" --no-audit --no-fund --ignore-scripts"));\n        assertFalse(dockerfile.contains("npm install --prefix \\\"/opt/minos/provider-tools/scip-typescript"));\n        assertFalse(dockerfile.contains("npm install --prefix \\\"/opt/minos/provider-tools/scip-python"));\n        assertTrue(release.contains("scip-typescript-package-lock.json"));\n        assertTrue(release.contains("scip-python-package-lock.json"));\n    }\n}\n''', encoding='utf-8')
+
+      - name: Targeted Maven tests
+        shell: bash
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp -pl minos-runtime-local,minos-app -am -Dtest=StrongOwnershipRemoteSandboxCompositionTest,M29DockerNpmLockContractTest -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Module boundary and remediation gates
+        run: |
+          python scripts/architecture/check-module-boundaries.py
+          python scripts/remediation/check-p0-p2.py
+
+      - name: Commit source corrections
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add minos-runtime-local minos-app docker
+          git commit -m 'fix: restore remote sandbox composition and lock docker npm providers'
+          git push origin HEAD:fix/post-audit-remediation-20260814
