@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
@@ -75,8 +74,11 @@ class LinuxStrongProcessOwnershipContainmentTest {
                 });
         StrongProcessOwnershipIndexerExecutor executor = new StrongProcessOwnershipIndexerExecutor(delegate, home);
         assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
+        IndexingExecutionRequest request = request(project);
+        Path jobDirectory = LinuxCgroupJob.delegatedRoot().orElseThrow()
+                .resolve("minos-provider-" + request.runId());
 
-        var artifact = executor.execute(request(project));
+        var artifact = executor.execute(request);
         long detachedPid = Long.parseLong(Files.readString(pidFile).trim());
 
         assertEquals("linux-cgroup-v2", executor.capability().mechanism());
@@ -84,8 +86,7 @@ class LinuxStrongProcessOwnershipContainmentTest {
         awaitDead(detachedPid);
         assertFalse(ProcessHandle.of(detachedPid).map(ProcessHandle::isAlive).orElse(false),
                 "setsid descendant must be killed by its inherited cgroup membership");
-        assertTrue(LinuxCgroupJob.delegatedRoot().orElseThrow().resolve("minos-provider-" + request(project).runId())
-                .getFileName() != null); // capability remains usable after job reclamation
+        assertFalse(Files.exists(jobDirectory), "per-run cgroup must be reclaimed after provider cleanup");
     }
 
     private static IndexingExecutionRequest request(Path project) {
