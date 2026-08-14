@@ -18,14 +18,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Owns the full lifecycle of one MINOS CLI process: start, output drain, cancellation, and
- * cleanup of every process that was observed as owned by the command.
+ * Owns the full lifecycle of one MINOS CLI process.
  *
- * <p>Ownership is tracked continuously while the root is alive instead of being reconstructed
- * only when cleanup starts. This preserves descendants that become re-parented after the root
- * exits. Handles are keyed by PID plus process start instant. If the JVM/OS cannot provide a
- * start instant, cleanup deliberately keeps using the originally observed handle and never
- * re-acquires a process by bare PID, preventing PID reuse from authorizing collateral kills.</p>
+ * <p>Production launches carry a kernel-backed boundary established before the CLI starts:
+ * Windows Job Object or Linux systemd/cgroup scope. The ProcessHandle tracker remains active as
+ * defence in depth and for direct unit fixtures, but it is no longer the ownership authority for
+ * production CLI cleanup. PID re-acquisition still requires a matching observed start instant.</p>
  */
 final class MinosProcessSupervisor implements AutoCloseable {
 
@@ -39,6 +37,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private static final long POST_ROOT_EXIT_TRACK_MILLIS = 250L;
 
     private final Process process;
+    private final MinosStrongProcessLauncher.ProcessBoundary strongBoundary;
     private final Thread outReader;
     private final Thread errReader;
     private final Thread ownershipTracker;
@@ -51,8 +50,21 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private final Object ownershipLock = new Object();
     private final Map<ProcessIdentity, ProcessHandle> ownedHandles = new LinkedHashMap<>();
 
+    /** Test/defence-in-depth constructor; production uses the Launch constructor below. */
     MinosProcessSupervisor(Process process) {
-        this.process = process;
+        this(process, MinosStrongProcessLauncher.ProcessBoundary.none());
+    }
+
+    MinosProcessSupervisor(MinosStrongProcessLauncher.Launch launch) {
+        this(Objects.requireNonNull(launch, "launch").process(), launch.boundary());
+    }
+
+    private MinosProcessSupervisor(
+            Process process,
+            MinosStrongProcessLauncher.ProcessBoundary strongBoundary
+    ) {
+        this.process = Objects.requireNonNull(process, "process");
+        this.strongBoundary = Objects.requireNonNull(strongBoundary, "strongBoundary");
         remember(process.descendants().toList());
         this.ownershipTracker = Thread.ofVirtual().name("minos-process-ownership")
                 .start(this::trackOwnership);
@@ -74,6 +86,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
 
         List<Throwable> failures = new ArrayList<>();
+        terminateStrongBoundary(failures);
         remember(process.descendants().toList());
         List<OwnedProcess> snapshot = rememberedProcesses();
 
@@ -127,6 +140,17 @@ final class MinosProcessSupervisor implements AutoCloseable {
     }
 
     void drainOutput() throws IOException {
+        // On normal root exit, reclaim the OS boundary before joining readers. Otherwise a detached
+        // descendant that inherited stdout/stderr could keep the pipe open even though the CLI root exited.
+        List<Throwable> boundaryFailures = new ArrayList<>();
+        terminateStrongBoundary(boundaryFailures);
+        if (!boundaryFailures.isEmpty()) {
+            IOException failure = new IOException(
+                    "MINOS strong process ownership cleanup failed", boundaryFailures.getFirst());
+            boundaryFailures.stream().skip(1).forEach(failure::addSuppressed);
+            throw failure;
+        }
+
         boolean alive = false;
         for (Thread reader : new Thread[]{outReader, errReader}) {
             try {
@@ -175,6 +199,14 @@ final class MinosProcessSupervisor implements AutoCloseable {
     @Override
     public void close() throws MinosProtocolException {
         if (!terminationComplete.get()) stop(null);
+    }
+
+    private void terminateStrongBoundary(List<Throwable> failures) {
+        try {
+            strongBoundary.terminate();
+        } catch (IOException | RuntimeException failure) {
+            failures.add(failure);
+        }
     }
 
     private void trackOwnership() {
