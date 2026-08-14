@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  targeted-linux:
+  full-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch HEAD
@@ -26,12 +26,35 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
+      - name: Set up Python 3.13
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Quality and architecture preflight
+        run: |
+          python scripts/quality/check-workflow-pins.py
+          python scripts/remediation/check-p0-p2.py
+          python scripts/remediation/check-minos-01.py
+          python scripts/architecture/check-module-boundaries.py
+      - name: Install and authorize Linux sandbox runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap util-linux apparmor apparmor-profiles
+          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
+          test -f "$profile"
+          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+      - name: Delegate cgroup v2
+        run: bash scripts/ci/delegate-linux-cgroup.sh
       - name: Prepare Maven Wrapper
         run: chmod +x mvnw
-      - name: Delegate cgroup v2 for ownership integration tests
-        run: bash scripts/ci/delegate-linux-cgroup.sh
-      - name: Snapshot, process ownership and PostgreSQL targeted tests
-        run: ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -pl minos-runtime-local,minos-application,minos-provider-scip,minos-storage-postgresql -am test
+      - name: Maven clean verify full reactor with PostgreSQL required
+        run: ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
+      - name: Targeted JaCoCo gate
+        run: python scripts/quality/check-jacoco.py
+      - name: Product facts consistency
+        run: python scripts/docs/product-facts.py --check
       - name: Reject stale snapshot API and unmanaged SCIP process call-sites
         run: |
           if git grep -n 'activeSnapshotId(UUID' -- '*.java'; then exit 1; fi
@@ -40,7 +63,7 @@ jobs:
             minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipPythonRuntimeManager.java \
             minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java; then exit 1; fi
 
-  targeted-windows:
+  full-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout exact branch HEAD
@@ -54,6 +77,21 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
-      - name: Snapshot and Windows ownership targeted tests
+      - name: Set up Python 3.13
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Quality and architecture preflight
         shell: pwsh
-        run: .\mvnw.cmd -B -ntp -pl minos-runtime-local,minos-application,minos-provider-scip -am test
+        run: |
+          python scripts/quality/check-workflow-pins.py
+          python scripts/remediation/check-p0-p2.py
+          python scripts/remediation/check-minos-01.py
+          python scripts/architecture/check-module-boundaries.py
+      - name: Maven clean verify full reactor
+        shell: pwsh
+        run: .\mvnw.cmd -B -ntp clean verify
+      - name: Targeted JaCoCo gate
+        run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
+      - name: Product facts consistency
+        run: python scripts/docs/product-facts.py --check
