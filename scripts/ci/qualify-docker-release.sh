@@ -125,7 +125,7 @@ cat > "$MCP_INPUT" <<'EOF'
 EOF
 
 timeout 30s docker run --rm -i --network none --read-only \
-  --tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700 \
+  --tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001 \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
   --tmpfs /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777 \
   "$IMAGE" \
