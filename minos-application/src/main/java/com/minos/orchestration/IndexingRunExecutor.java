@@ -41,21 +41,25 @@ final class IndexingRunExecutor {
         Object lock = projectLocks.computeIfAbsent(projectId, ignored -> new Object());
         UUID runId = UUID.randomUUID();
         Instant createdAt = clock.instant();
-        ProjectIndexState previous;
+        ProjectIndexState resolvedPrevious;
         synchronized (lock) {
-            previous = stateStore.findProjectState(projectId)
+            ProjectIndexState persistedPrevious = stateStore.findProjectState(projectId)
                     .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, createdAt));
-            if (previous.availability() == Availability.INDEXING || previous.availability() == Availability.REFRESHING) {
+            resolvedPrevious = reconcilePreviousWithAuthoritativeSnapshot(
+                    projectId, persistedPrevious, promoter, stateStore, createdAt);
+            if (resolvedPrevious.availability() == Availability.INDEXING
+                    || resolvedPrevious.availability() == Availability.REFRESHING) {
                 throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
             }
             stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
-                    Optional.empty(), previous.activeSnapshotId(),
+                    Optional.empty(), resolvedPrevious.activeSnapshotId(),
                     Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
             stateStore.saveProjectState(new ProjectIndexState(projectId,
-                    previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
-                    previous.activeSnapshotId(), Optional.of(runId), createdAt,
+                    resolvedPrevious.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
+                    resolvedPrevious.activeSnapshotId(), Optional.of(runId), createdAt,
                     Optional.of("indexing run in progress: mode=" + mode)));
         }
+        ProjectIndexState previous = resolvedPrevious;
 
         List<IndexingArtifact> artifacts = new ArrayList<>();
         List<IndexerExecution> executions = new ArrayList<>();
@@ -129,6 +133,33 @@ final class IndexingRunExecutor {
                 }
             }
             return failed;
+        }
+    }
+
+    private static ProjectIndexState reconcilePreviousWithAuthoritativeSnapshot(
+            UUID projectId,
+            ProjectIndexState previous,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant now
+    ) {
+        try {
+            Optional<String> authoritative = promoter.activeSnapshotId(projectId);
+            if (authoritative.isEmpty() || authoritative.equals(previous.activeSnapshotId())) return previous;
+            ProjectIndexState repaired = new ProjectIndexState(projectId, Availability.READY, authoritative,
+                    Optional.empty(), now,
+                    Optional.of("reconciled from authoritative active snapshot before new indexing run"));
+            stateStore.saveProjectState(repaired);
+            ProjectIndexState verified = stateStore.findProjectState(projectId)
+                    .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
+            if (!authoritative.equals(verified.activeSnapshotId()) || verified.availability() != Availability.READY) {
+                throw new IllegalStateException("reconciled project state does not match authoritative snapshot");
+            }
+            return verified;
+        } catch (RuntimeException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IllegalStateException("unable to reconcile project state before indexing", failure);
         }
     }
 

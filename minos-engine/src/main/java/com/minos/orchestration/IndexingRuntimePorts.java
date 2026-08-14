@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -31,6 +32,15 @@ public final class IndexingRuntimePorts {
      */
     public interface SnapshotPromoter {
         void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception;
+
+        /**
+         * Returns the authoritative active snapshot when the promoter can observe it. Real
+         * persistent implementations should override this so lifecycle metadata can be
+         * reconciled before a subsequent indexing run. Test/dummy promoters may remain empty.
+         */
+        default Optional<String> activeSnapshotId(UUID projectId) throws Exception {
+            return Optional.empty();
+        }
     }
 
     /**

@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Staging et promotion projet pour les artefacts SCIP exécutés par M14. */
@@ -151,6 +152,12 @@ public final class ScipProjectSnapshotLifecycle implements SnapshotStager, Snaps
             // Retention/recovery may reclaim this disposable staging tree later. Never roll the
             // logical promotion result back merely because post-commit cleanup failed.
         }
+    }
+
+    @Override
+    public Optional<String> activeSnapshotId(UUID projectId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        return activeStore.loadActiveKnowledge(projectId).map(CodeKnowledgeSnapshot::snapshotId);
     }
 
     private void cleanupProviderWorkspaces(UUID runId, List<IndexingArtifact> artifacts) throws IOException {
