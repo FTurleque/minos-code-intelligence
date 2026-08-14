@@ -39,9 +39,6 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private static final int DESCENDANT_SWEEP_COUNT = 3;
     private static final long DESCENDANT_SWEEP_DELAY_MILLIS = 100L;
     private static final long OWNERSHIP_POLL_MILLIS = 20L;
-    // Native ProcessHandle descendant enumeration can take more than one second on Windows CI.
-    // Keep cleanup fail-closed, but give an in-flight enumeration the same bounded budget as the
-    // process/readers before declaring the ownership watcher leaked.
     private static final long OWNERSHIP_JOIN_MILLIS = 5_000L;
     private static final long GRACEFUL_DESCENDANT_WAIT_MILLIS = 1_000L;
     private static final long FORCED_WAIT_MILLIS = 5_000L;
@@ -56,6 +53,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private final AtomicReference<IOException> readFailure = new AtomicReference<>();
     private final AtomicBoolean terminationComplete = new AtomicBoolean(false);
     private final AtomicBoolean stopOwnershipWatcher = new AtomicBoolean(false);
+    private final Object ownershipLock = new Object();
     private final Map<ProcessIdentity, OwnedProcess> ownedProcesses = new LinkedHashMap<>();
 
     MinosProcessSupervisor(Process process) {
@@ -226,15 +224,19 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    private synchronized void remember(List<ProcessHandle> handles) {
-        for (ProcessHandle handle : handles) {
-            ProcessIdentity identity = ProcessIdentity.capture(handle);
-            ownedProcesses.putIfAbsent(identity, new OwnedProcess(identity, handle));
+    private void remember(List<ProcessHandle> handles) {
+        synchronized (ownershipLock) {
+            for (ProcessHandle handle : handles) {
+                ProcessIdentity identity = ProcessIdentity.capture(handle);
+                ownedProcesses.putIfAbsent(identity, new OwnedProcess(identity, handle));
+            }
         }
     }
 
-    private synchronized List<OwnedProcess> rememberedProcesses() {
-        return new ArrayList<>(ownedProcesses.values());
+    private List<OwnedProcess> rememberedProcesses() {
+        synchronized (ownershipLock) {
+            return new ArrayList<>(ownedProcesses.values());
+        }
     }
 
     private static void terminateDescendantsGracefully(List<OwnedProcess> snapshot) {
