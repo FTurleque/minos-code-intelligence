@@ -6,6 +6,7 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Collection;
@@ -45,6 +46,19 @@ public final class IndexingLifecycleService {
             if (byId.putIfAbsent(id, executor) != null) throw new IllegalArgumentException("Duplicate executor for indexer: " + id);
         }
         this.executors = Map.copyOf(byId);
+    }
+
+    /**
+     * Extends the same project lifecycle authority across orchestration work that surrounds a
+     * structured run, such as fingerprint-baseline publication. Nested lifecycle calls are safe
+     * because qualified stores provide owner-thread/project reentrant leases.
+     */
+    public <T> T withProjectLease(UUID projectId, ProjectLeaseWork<T> work) throws IOException {
+        UUID id = Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(work, "work");
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+            return work.execute();
+        }
     }
 
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
@@ -125,4 +139,9 @@ public final class IndexingLifecycleService {
 
     public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }
     public List<IndexingRun> listRuns(UUID id) { return stateStore.listRuns(Objects.requireNonNull(id, "projectId")); }
+
+    @FunctionalInterface
+    public interface ProjectLeaseWork<T> {
+        T execute() throws IOException;
+    }
 }
