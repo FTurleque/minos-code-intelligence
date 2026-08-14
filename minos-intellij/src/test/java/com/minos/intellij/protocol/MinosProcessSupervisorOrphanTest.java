@@ -60,29 +60,38 @@ class MinosProcessSupervisorOrphanTest {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void normalRootExitStillCleansPreviouslyOwnedDetachedChildOnWindows() throws Exception {
+    void normalRootExitStillCleansDetachedChildThroughProductionJobBoundaryOnWindows() throws Exception {
         Path pidFile = tmp.resolve("child.pid");
         String command = "$p=Start-Process -PassThru ping -ArgumentList '-n','3600','127.0.0.1';"
-                + "Set-Content -NoNewline -Path '" + pidFile.toString().replace("'", "''") + "' -Value $p.Id;"
-                + "Start-Sleep -Milliseconds 1000";
-        Process root = new ProcessBuilder(List.of(
-                "powershell", "-NoProfile", "-NonInteractive", "-Command", command)).start();
-        awaitFile(pidFile);
-        long childPid = Long.parseLong(Files.readString(pidFile).trim());
-        ProcessHandle child = ProcessHandle.of(childPid).orElseThrow();
-        assertTrue(child.isAlive(), "fixture child must be alive before root exits");
+                + "Set-Content -NoNewline -LiteralPath '" + pidFile.toString().replace("'", "''") + "' -Value $p.Id;"
+                + "Start-Sleep -Milliseconds 500; exit 0";
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command));
+        builder.directory(tmp.toFile());
 
-        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(root)) {
-            assertTrue(supervisor.waitFor(15_000), "root should exit normally");
+        MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(
+                builder, tmp.resolve("home").toString());
+        long childPid;
+        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+            awaitFile(pidFile);
+            childPid = Long.parseLong(Files.readString(pidFile).trim());
+            assertTrue(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false),
+                    "fixture child must be alive while the CLI root is still running");
+            assertTrue(supervisor.waitFor(45_000), "Job Object launcher should finish after CLI root exit");
             supervisor.drainOutput();
         }
 
-        awaitDead(child);
-        assertFalse(child.isAlive(), "owned child must not survive a normal root exit");
+        awaitDead(childPid);
+        assertFalse(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false),
+                "detached child must not survive normal production CLI completion");
+    }
+
+    private static Path powershell() {
+        return Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     }
 
     private static void awaitFile(Path file) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (!Files.exists(file) && System.nanoTime() < deadline) Thread.sleep(25L);
         assertTrue(Files.exists(file), "timed out waiting for child pid file");
     }
@@ -90,5 +99,12 @@ class MinosProcessSupervisorOrphanTest {
     private static void awaitDead(ProcessHandle process) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (process.isAlive() && System.nanoTime() < deadline) Thread.sleep(50L);
+    }
+
+    private static void awaitDead(long pid) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false) && System.nanoTime() < deadline) {
+            Thread.sleep(50L);
+        }
     }
 }
