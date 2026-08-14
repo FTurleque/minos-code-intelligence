@@ -82,21 +82,24 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         Instant startedAt = Instant.now();
         writeMetadata(metadata, plan, request, startedAt);
         ProviderWriteQuotaSupervisor supervisor = null;
+        ProcessOwnershipLedger ownership = null;
         try {
             Process process = startProvider(plan, transformer);
-            supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
+            ownership = new ProcessOwnershipLedger(process);
+            supervisor = startWriteQuotaSupervisor(
+                    writeQuota, plan, runDirectory, transformer, ownership);
             BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
             boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
             Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
             if (breach.isPresent()) {
                 transformer.killContainedJob();
-                terminate(process);
+                ownership.terminateAll();
                 appendQuietly(metadata, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
                 throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
             }
             if (!completed) {
                 transformer.killContainedJob();
-                terminate(process);
+                ownership.terminateAll();
                 BoundedProcessOutput.Result output = outputCapture.await();
                 appendOutputMetadata(metadata, output);
                 append(metadata, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
@@ -104,12 +107,12 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             }
             int exitCode = process.exitValue();
             transformer.killContainedJob();
-            terminateDescendants(process);
+            ownership.terminateOwnedDescendants();
             BoundedProcessOutput.Result output;
             try {
                 output = outputCapture.await();
             } catch (IOException exception) {
-                terminate(process);
+                ownership.terminateAll();
                 throw exception;
             }
             appendOutputMetadata(metadata, output);
@@ -123,18 +126,50 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             return new IndexingArtifact(
                     request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
         } finally {
-            if (supervisor != null) supervisor.close();
-            transformer.releaseContainment();
-            if (artifactOutsideRun) {
-                Files.deleteIfExists(generatedArtifact);
-                if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
-                    move(preservedArtifact, generatedArtifact);
+            RuntimeException cleanupFailure = null;
+            if (ownership != null) {
+                try {
+                    ownership.close();
+                } catch (RuntimeException failure) {
+                    cleanupFailure = failure;
                 }
             }
-            if (writeQuota.isPresent()) {
-                ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
+            if (supervisor != null) {
+                try {
+                    supervisor.close();
+                } catch (RuntimeException failure) {
+                    cleanupFailure = mergeCleanupFailure(cleanupFailure, failure);
+                }
             }
+            try {
+                transformer.releaseContainment();
+            } catch (RuntimeException failure) {
+                cleanupFailure = mergeCleanupFailure(cleanupFailure, failure);
+            }
+            try {
+                if (artifactOutsideRun) {
+                    Files.deleteIfExists(generatedArtifact);
+                    if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
+                        move(preservedArtifact, generatedArtifact);
+                    }
+                }
+                if (writeQuota.isPresent()) {
+                    ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
+                }
+            } catch (IOException failure) {
+                if (cleanupFailure == null) {
+                    throw failure;
+                }
+                cleanupFailure.addSuppressed(failure);
+            }
+            if (cleanupFailure != null) throw cleanupFailure;
         }
+    }
+
+    private static RuntimeException mergeCleanupFailure(RuntimeException existing, RuntimeException additional) {
+        if (existing == null) return additional;
+        existing.addSuppressed(additional);
+        return existing;
     }
 
     private static Process startProvider(IndexerProcessPlan plan, ProcessPlanTransformer transformer)
@@ -158,7 +193,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
             IndexerProcessPlan plan,
             Path runDirectory,
             ProcessPlanTransformer transformer,
-            Process process
+            ProcessOwnershipLedger ownership
     ) {
         if (writeQuota.isEmpty()) return null;
         return ProviderWriteQuotaSupervisor.start(
@@ -166,7 +201,7 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
                 writeQuota.orElseThrow(),
                 () -> {
                     transformer.killContainedJob();
-                    terminate(process);
+                    ownership.terminateAllQuietly();
                 });
     }
 
@@ -302,23 +337,6 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
 
     private static boolean regularFileNoFollow(Path file) {
         return !Files.isSymbolicLink(file) && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS);
-    }
-
-    private static void terminateDescendants(Process process) {
-        List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
-        descendants.reversed().forEach(handle -> {
-            if (handle.isAlive()) handle.destroyForcibly();
-        });
-    }
-
-    private static void terminate(Process process) {
-        terminateDescendants(process);
-        if (process.isAlive()) process.destroyForcibly();
-        try {
-            process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private static void writeMetadata(
