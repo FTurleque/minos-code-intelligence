@@ -47,6 +47,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private final AtomicReference<IOException> ownershipFailure = new AtomicReference<>();
     private final AtomicBoolean trackerStop = new AtomicBoolean(false);
     private final AtomicBoolean terminationComplete = new AtomicBoolean(false);
+    private final Object ownershipLock = new Object();
     private final Map<ProcessIdentity, ProcessHandle> ownedHandles = new LinkedHashMap<>();
 
     MinosProcessSupervisor(Process process) {
@@ -79,14 +80,16 @@ final class MinosProcessSupervisor implements AutoCloseable {
         waitForDescendantsToSettle(GRACEFUL_DESCENDANT_WAIT_MILLIS, failures);
         remember(process.descendants().toList());
 
-        boolean platformTreeKilled = false;
-        try {
-            platformTreeKilled = OSProcessUtil.killProcessTree(process);
-        } catch (RuntimeException exception) {
-            failures.add(new IOException("IntelliJ platform process-tree termination failed", exception));
-        }
-        if (!platformTreeKilled && process.isAlive()) {
-            failures.add(new IOException("IntelliJ platform process-tree termination returned false"));
+        if (process.isAlive()) {
+            boolean platformTreeKilled = false;
+            try {
+                platformTreeKilled = OSProcessUtil.killProcessTree(process);
+            } catch (RuntimeException exception) {
+                failures.add(new IOException("IntelliJ platform process-tree termination failed", exception));
+            }
+            if (!platformTreeKilled && process.isAlive()) {
+                failures.add(new IOException("IntelliJ platform process-tree termination returned false"));
+            }
         }
 
         terminateDescendantsForcibly(rememberedHandles(), failures);
@@ -211,15 +214,19 @@ final class MinosProcessSupervisor implements AutoCloseable {
         }
     }
 
-    private synchronized void remember(List<ProcessHandle> handles) {
-        for (ProcessHandle handle : handles) {
-            ProcessIdentity identity = identity(handle);
-            ownedHandles.putIfAbsent(identity, handle);
+    private void remember(List<ProcessHandle> handles) {
+        synchronized (ownershipLock) {
+            for (ProcessHandle handle : handles) {
+                ProcessIdentity identity = identity(handle);
+                ownedHandles.putIfAbsent(identity, handle);
+            }
         }
     }
 
-    private synchronized List<ProcessHandle> rememberedHandles() {
-        return new ArrayList<>(ownedHandles.values());
+    private List<ProcessHandle> rememberedHandles() {
+        synchronized (ownershipLock) {
+            return new ArrayList<>(ownedHandles.values());
+        }
     }
 
     private static ProcessIdentity identity(ProcessHandle handle) {
