@@ -39,7 +39,10 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private static final int DESCENDANT_SWEEP_COUNT = 3;
     private static final long DESCENDANT_SWEEP_DELAY_MILLIS = 100L;
     private static final long OWNERSHIP_POLL_MILLIS = 20L;
-    private static final long OWNERSHIP_JOIN_MILLIS = 1_000L;
+    // Native ProcessHandle descendant enumeration can take more than one second on Windows CI.
+    // Keep cleanup fail-closed, but give an in-flight enumeration the same bounded budget as the
+    // process/readers before declaring the ownership watcher leaked.
+    private static final long OWNERSHIP_JOIN_MILLIS = 5_000L;
     private static final long GRACEFUL_DESCENDANT_WAIT_MILLIS = 1_000L;
     private static final long FORCED_WAIT_MILLIS = 5_000L;
     private static final long READER_JOIN_MILLIS = 5_000L;
