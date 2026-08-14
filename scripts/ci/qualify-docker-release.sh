@@ -16,6 +16,7 @@ if [[ "$(uname -m)" != "x86_64" ]]; then
 fi
 
 command -v docker >/dev/null
+command -v java >/dev/null
 command -v python3 >/dev/null
 docker version --format '{{.Server.Version}}'
 
@@ -38,7 +39,11 @@ BUILD_CONTEXT="$WORK_ROOT/build"
 mkdir -p "$BUILD_CONTEXT"
 SHORT_HEAD="${ACTUAL_HEAD:0:12}"
 IMAGE="minos-code-intelligence:docker-release-ci-$SHORT_HEAD"
+MCP_CONTAINER=""
 cleanup() {
+  if [[ -n "$MCP_CONTAINER" ]]; then
+    docker rm --force "$MCP_CONTAINER" >/dev/null 2>&1 || true
+  fi
   docker image rm --force "$IMAGE" >/dev/null 2>&1 || true
   rm -rf "$WORK_ROOT"
 }
@@ -63,9 +68,13 @@ docker image inspect "$IMAGE" > "$QUALIFICATION_ROOT/image-inspect.json"
 REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")"
 VERSION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$IMAGE")"
 PREPARED="$(docker image inspect --format '{{ index .Config.Labels "io.minos.providers.prepared" }}' "$IMAGE")"
+RUNTIME_USER="$(docker image inspect --format '{{.Config.User}}' "$IMAGE")"
+ENTRYPOINT="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$IMAGE")"
 [[ "$REVISION" == "$ACTUAL_HEAD" ]]
 [[ "$VERSION" == "ci" ]]
 [[ "$PREPARED" == "true" ]]
+[[ "$RUNTIME_USER" == "10001:10001" ]]
+[[ "$ENTRYPOINT" == '["java","-cp","/opt/minos/minos.jar","com.minos.mcp.MinosMcpServer"]' ]]
 
 docker run --rm --network none --read-only --entrypoint cat "$IMAGE" \
   /opt/minos/provider-evidence/provider-inventory.json \
@@ -117,31 +126,36 @@ docker run --rm --network none --read-only \
   > "$QUALIFICATION_ROOT/cli-help.txt"
 grep -F 'MINOS' "$QUALIFICATION_ROOT/cli-help.txt" >/dev/null
 
-MCP_INPUT="$WORK_ROOT/mcp-input.jsonl"
-cat > "$MCP_INPUT" <<'EOF'
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"minos-docker-release-ci","version":"1"}}}
-{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-EOF
-
-timeout 30s docker run --rm -i --network none --read-only \
+# Run the repository's production MCP smoke client against the exact built image. The helper
+# intentionally waits for initialize(id=1) before sending notifications/initialized + tools/list;
+# sending all three JSON-RPC messages up front races the MCP initialization state machine and can
+# drop the post-initialize request even when the server is healthy.
+MCP_CONTAINER="minos-docker-release-ci-mcp-${SHORT_HEAD}-$$"
+docker run --rm --detach \
+  --name "$MCP_CONTAINER" \
+  --network none --read-only \
   --tmpfs /var/lib/minos:rw,nosuid,nodev,noexec,size=64m,mode=700,uid=10001,gid=10001 \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
   --tmpfs /run/minos-native:rw,nosuid,nodev,exec,size=16m,mode=1777 \
-  "$IMAGE" \
-  < "$MCP_INPUT" \
-  > "$QUALIFICATION_ROOT/mcp-stdout.jsonl" \
-  2> "$QUALIFICATION_ROOT/mcp-stderr.log"
+  --entrypoint sleep "$IMAGE" 600 \
+  > "$QUALIFICATION_ROOT/mcp-container-id.txt"
 
-grep -F '"id":1' "$QUALIFICATION_ROOT/mcp-stdout.jsonl" >/dev/null
-grep -F 'minos-code-intelligence' "$QUALIFICATION_ROOT/mcp-stdout.jsonl" >/dev/null
-grep -F '"id":2' "$QUALIFICATION_ROOT/mcp-stdout.jsonl" >/dev/null
-grep -F 'minos_search_code' "$QUALIFICATION_ROOT/mcp-stdout.jsonl" >/dev/null
-grep -F 'minos_impact' "$QUALIFICATION_ROOT/mcp-stdout.jsonl" >/dev/null
+MCP_COMPOSE_SENTINEL="$WORK_ROOT/mcp-compose-sentinel.yaml"
+MCP_ENV_SENTINEL="$WORK_ROOT/mcp-env-sentinel"
+: > "$MCP_COMPOSE_SENTINEL"
+: > "$MCP_ENV_SENTINEL"
+java docker/scripts/MinosDockerMcpSmoke.java \
+  "$MCP_COMPOSE_SENTINEL" "$MCP_ENV_SENTINEL" "$MCP_CONTAINER" \
+  > "$QUALIFICATION_ROOT/mcp-smoke.txt" \
+  2> "$QUALIFICATION_ROOT/mcp-stderr.log"
+grep -F 'MINOS Docker MCP smoke SUCCESS' "$QUALIFICATION_ROOT/mcp-smoke.txt" >/dev/null
 if grep -E 'NoClassDefFoundError|Exception in thread "main"' "$QUALIFICATION_ROOT/mcp-stderr.log" >/dev/null; then
   cat "$QUALIFICATION_ROOT/mcp-stderr.log" >&2
   exit 1
 fi
+
+docker rm --force "$MCP_CONTAINER" >/dev/null
+MCP_CONTAINER=""
 
 cat > "$QUALIFICATION_ROOT/qualification.json" <<EOF
 {
