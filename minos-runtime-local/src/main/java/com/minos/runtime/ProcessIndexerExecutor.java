@@ -84,44 +84,40 @@ public final class ProcessIndexerExecutor implements IndexerExecutor {
         ProviderWriteQuotaSupervisor supervisor = null;
         try {
             Process process = startProvider(plan, transformer);
-            supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
-            BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
-            boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
-            Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
-            if (breach.isPresent()) {
+            try (ProcessOwnershipTracker ownership = new ProcessOwnershipTracker(process)) {
+                supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
+                BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
+                boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
+                Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
+                if (breach.isPresent()) {
+                    transformer.killContainedJob();
+                    ownership.terminate();
+                    appendQuietly(metadata, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
+                    throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
+                }
+                if (!completed) {
+                    transformer.killContainedJob();
+                    ownership.terminate();
+                    BoundedProcessOutput.Result output = outputCapture.await();
+                    appendOutputMetadata(metadata, output);
+                    append(metadata, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
+                    throw new IllegalStateException("provider timed out after " + plan.timeout());
+                }
+                int exitCode = process.exitValue();
                 transformer.killContainedJob();
-                terminate(process);
-                appendQuietly(metadata, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
-                throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
-            }
-            if (!completed) {
-                transformer.killContainedJob();
-                terminate(process);
+                ownership.terminate();
                 BoundedProcessOutput.Result output = outputCapture.await();
                 appendOutputMetadata(metadata, output);
-                append(metadata, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
-                throw new IllegalStateException("provider timed out after " + plan.timeout());
-            }
-            int exitCode = process.exitValue();
-            transformer.killContainedJob();
-            terminateDescendants(process);
-            BoundedProcessOutput.Result output;
-            try {
-                output = outputCapture.await();
-            } catch (IOException exception) {
-                terminate(process);
-                throw exception;
-            }
-            appendOutputMetadata(metadata, output);
-            append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
-            if (exitCode != 0) {
-                archiveFailedArtifact(generatedArtifact, runDirectory);
-                throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
-            }
-            promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
+                append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
+                if (exitCode != 0) {
+                    archiveFailedArtifact(generatedArtifact, runDirectory);
+                    throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
+                }
+                promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
 
-            return new IndexingArtifact(
-                    request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
+                return new IndexingArtifact(
+                        request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
+            }
         } finally {
             if (supervisor != null) supervisor.close();
             transformer.releaseContainment();
