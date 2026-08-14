@@ -64,6 +64,18 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         }
 
         Path runDirectory = prepareRunDirectory(request);
+        // Arm containment cleanup before transform(): Linux transforms may create the cgroup and
+        // then fail during plan validation or diagnostics preparation before a provider is started.
+        try (ContainmentRelease ignored = new ContainmentRelease(transformer)) {
+            return executePrepared(request, transformer, runDirectory);
+        }
+    }
+
+    private IndexingArtifact executePrepared(
+            IndexingExecutionRequest request,
+            ProcessPlanTransformer transformer,
+            Path runDirectory
+    ) throws Exception {
         IndexerProcessPlan plan = preparePlan(request, transformer, runDirectory);
 
         Path stdout = runDirectory.resolve("provider.stdout.log");
@@ -74,54 +86,63 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         Path preservedArtifact = runDirectory.resolve("preexisting-artifact.scip");
         boolean artifactOutsideRun = !generatedArtifact.equals(finalArtifact);
         boolean preserveExisting = artifactOutsideRun && regularFileNoFollow(generatedArtifact);
-
-        if (preserveExisting) {
-            move(generatedArtifact, preservedArtifact);
-        }
-
         Optional<ProviderWriteQuota> writeQuota = transformer.providerWriteQuota();
-        Instant startedAt = Instant.now();
-        writeMetadata(metadata, plan, request, startedAt);
         ProviderWriteQuotaSupervisor supervisor = null;
+
         try {
-            Process process = startProvider(plan, transformer);
-            try (ProcessOwnershipTracker ownership = new ProcessOwnershipTracker(process)) {
-                supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
-                BoundedProcessOutput.Capture outputCapture = BoundedProcessOutput.capture(process, stdout, stderr);
-                boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
-                Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
-                if (breach.isPresent()) {
-                    transformer.killContainedJob();
-                    ownership.terminate();
-                    appendQuietly(metadata, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
-                    throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
-                }
-                if (!completed) {
+            if (preserveExisting) {
+                move(generatedArtifact, preservedArtifact);
+            }
+
+            // Open every MINOS-owned diagnostic sink before untrusted provider code starts. The
+            // provider may later replace these pathnames in a shared writable directory, but host
+            // writes continue through already-open descriptors and can never be redirected by a
+            // symlink race outside the sandbox boundary.
+            try (OutputStream stdoutSink = BoundedProcessOutput.openTarget(stdout);
+                 OutputStream stderrSink = BoundedProcessOutput.openTarget(stderr);
+                 OutputStream metadataSink = BoundedProcessOutput.openTarget(metadata)) {
+                Instant startedAt = Instant.now();
+                writeMetadata(metadataSink, plan, request, startedAt);
+
+                Process process = startProvider(plan, transformer);
+                try (ProcessOwnershipTracker ownership = new ProcessOwnershipTracker(process)) {
+                    supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
+                    BoundedProcessOutput.Capture outputCapture =
+                            BoundedProcessOutput.capture(process, stdoutSink, stderrSink);
+                    boolean completed = process.waitFor(plan.timeout().toMillis(), TimeUnit.MILLISECONDS);
+                    Optional<String> breach = supervisor == null ? Optional.empty() : supervisor.breach();
+                    if (breach.isPresent()) {
+                        transformer.killContainedJob();
+                        ownership.terminate();
+                        appendQuietly(metadataSink, "status=WRITE_QUOTA_BREACH\ncompletedAt=" + Instant.now() + "\n");
+                        throw new IllegalStateException("provider write containment breached: " + breach.orElseThrow());
+                    }
+                    if (!completed) {
+                        transformer.killContainedJob();
+                        ownership.terminate();
+                        BoundedProcessOutput.Result output = outputCapture.await();
+                        appendOutputMetadata(metadataSink, output);
+                        append(metadataSink, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
+                        throw new IllegalStateException("provider timed out after " + plan.timeout());
+                    }
+                    int exitCode = process.exitValue();
                     transformer.killContainedJob();
                     ownership.terminate();
                     BoundedProcessOutput.Result output = outputCapture.await();
-                    appendOutputMetadata(metadata, output);
-                    append(metadata, "status=TIMEOUT\ncompletedAt=" + Instant.now() + "\n");
-                    throw new IllegalStateException("provider timed out after " + plan.timeout());
-                }
-                int exitCode = process.exitValue();
-                transformer.killContainedJob();
-                ownership.terminate();
-                BoundedProcessOutput.Result output = outputCapture.await();
-                appendOutputMetadata(metadata, output);
-                append(metadata, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
-                if (exitCode != 0) {
-                    archiveFailedArtifact(generatedArtifact, runDirectory);
-                    throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
-                }
-                promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
+                    appendOutputMetadata(metadataSink, output);
+                    append(metadataSink, "exitCode=" + exitCode + "\ncompletedAt=" + Instant.now() + "\n");
+                    if (exitCode != 0) {
+                        archiveFailedArtifact(generatedArtifact, runDirectory);
+                        throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
+                    }
+                    promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
 
-                return new IndexingArtifact(
-                        request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
+                    return new IndexingArtifact(
+                            request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
+                }
             }
         } finally {
             if (supervisor != null) supervisor.close();
-            transformer.releaseContainment();
             if (artifactOutsideRun) {
                 Files.deleteIfExists(generatedArtifact);
                 if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
@@ -248,6 +269,20 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         }
     }
 
+    /** Ensures transform-created OS resources are reclaimed even if validation fails pre-start. */
+    private static final class ContainmentRelease implements AutoCloseable {
+        private final ProcessPlanTransformer transformer;
+
+        private ContainmentRelease(ProcessPlanTransformer transformer) {
+            this.transformer = transformer;
+        }
+
+        @Override
+        public void close() {
+            transformer.releaseContainment();
+        }
+    }
+
     private static Path scopedRunDirectory(Path providerRunDirectory, Path relativeRoot) {
         if (relativeRoot == null || relativeRoot.toString().isEmpty()) return providerRunDirectory;
         return providerRunDirectory.resolve("scopes").resolve("module-" + scopeHash(relativeRoot));
@@ -319,7 +354,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     }
 
     private static void writeMetadata(
-            Path file,
+            OutputStream output,
             IndexerProcessPlan plan,
             IndexingExecutionRequest request,
             Instant startedAt
@@ -338,10 +373,10 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                     .append(String.join(",", plan.environment().keySet().stream().sorted().toList()))
                     .append('\n');
         }
-        Files.writeString(file, value, StandardCharsets.UTF_8);
+        append(output, value.toString());
     }
 
-    private static void appendOutputMetadata(Path metadata, BoundedProcessOutput.Result output) throws IOException {
+    private static void appendOutputMetadata(OutputStream metadata, BoundedProcessOutput.Result output) throws IOException {
         append(metadata, "stdoutTruncated=" + output.stdoutTruncated()
                 + "\nstderrTruncated=" + output.stderrTruncated() + "\n");
     }
@@ -371,13 +406,14 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         return String.join(" ", rendered);
     }
 
-    private static void append(Path file, String value) throws IOException {
-        Files.writeString(file, value, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+    private static void append(OutputStream output, String value) throws IOException {
+        output.write(value.getBytes(StandardCharsets.UTF_8));
+        output.flush();
     }
 
-    private static void appendQuietly(Path file, String value) {
+    private static void appendQuietly(OutputStream output, String value) {
         try {
-            append(file, value);
+            append(output, value);
         } catch (IOException ignored) {
             // A containment breach is reported by the thrown failure, never hidden behind metadata IO.
         }
