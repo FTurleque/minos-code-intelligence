@@ -13,9 +13,9 @@ import java.util.Optional;
  * Fail-closed wrapper for provider executions that require kernel-backed descendant ownership.
  *
  * <p>{@link ProcessOwnershipTracker} remains active inside the delegate as defence in depth, but it
- * is deliberately not the ownership authority. Linux uses a cgroup v2 joined before {@code exec};
- * Windows uses a Job Object assigned while the provider process is still suspended. Unsupported
- * hosts never silently fall back to process-tree polling.</p>
+ * is deliberately not the ownership authority. Linux uses an ownership-only cgroup v2 joined
+ * before {@code exec}; Windows uses a Job Object assigned while the provider process is still
+ * suspended. Unsupported hosts never silently fall back to process-tree polling.</p>
  */
 public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecutor {
 
@@ -104,7 +104,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements IndexerExecu
             @Override
             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
                 if (job != null) throw new IllegalStateException("process ownership transformer is single-use");
-                job = LinuxCgroupJob.create(root, jobName, LinuxCgroupJob.Limits.DEFAULT);
+                job = LinuxCgroupJob.createOwnershipOnly(root, jobName);
                 return new IndexerProcessPlan(
                         job.enterThenExec(shell, plan.command()),
                         plan.workingDirectory(),
