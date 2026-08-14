@@ -51,22 +51,50 @@ final class ProcessOwnershipLedger implements AutoCloseable {
         verifyNoOwnedSurvivors();
     }
 
-    /** Kills every observed descendant and the root itself, then proves that observed ownership is empty. */
+    /**
+     * Kills every observed descendant and the root itself, then proves that observed ownership is
+     * empty. A resistant descendant never prevents the root and the remaining ownership set from
+     * receiving their own termination attempts before failure is surfaced.
+     */
     void terminateAll() {
-        terminateOwnedDescendants();
+        RuntimeException preliminaryFailure = null;
+        try {
+            terminateOwnedDescendants();
+        } catch (RuntimeException failure) {
+            preliminaryFailure = failure;
+        }
+
         if (root.isAlive()) root.destroyForcibly();
         try {
             root.waitFor(ROOT_WAIT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("provider process termination was interrupted", interrupted);
+            IllegalStateException failure = new IllegalStateException(
+                    "provider process termination was interrupted", interrupted);
+            if (preliminaryFailure != null) failure.addSuppressed(preliminaryFailure);
+            preliminaryFailure = failure;
         }
-        remember(root.descendants().toList());
-        terminateRemembered();
-        if (root.isAlive()) {
-            throw new IllegalStateException("provider root process is still alive after forced termination");
+
+        for (int sweep = 0; sweep < TERMINATION_SWEEPS; sweep++) {
+            remember(root.descendants().toList());
+            terminateRemembered();
+            if (!root.isAlive() && remembered().stream().noneMatch(OwnedProcess::isAlive)) return;
+            if (sweep < TERMINATION_SWEEPS - 1) {
+                try {
+                    sleepSweep();
+                } catch (RuntimeException failure) {
+                    if (preliminaryFailure == null) preliminaryFailure = failure;
+                    else preliminaryFailure.addSuppressed(failure);
+                    break;
+                }
+            }
         }
-        verifyNoOwnedSurvivors();
+
+        IllegalStateException terminalFailure = new IllegalStateException(
+                "provider process cleanup did not prove complete: rootAlive=" + root.isAlive()
+                        + ", survivingDescendants=" + survivingOwnedCount());
+        if (preliminaryFailure != null) terminalFailure.addSuppressed(preliminaryFailure);
+        throw terminalFailure;
     }
 
     /** Callback-safe variant used by quota containment; explicit execution paths verify again. */
@@ -106,7 +134,11 @@ final class ProcessOwnershipLedger implements AutoCloseable {
                 else cleanupFailure.addSuppressed(watcherFailure);
             }
         }
-        if (cleanupFailure != null) throw cleanupFailure;
+        if (cleanupFailure != null) {
+            // Keep close retryable after an unproven cleanup; remembered ownership is retained.
+            closed.set(false);
+            throw cleanupFailure;
+        }
     }
 
     private void watch() {
@@ -143,8 +175,12 @@ final class ProcessOwnershipLedger implements AutoCloseable {
         snapshot.reversed().forEach(OwnedProcess::destroyForcibly);
     }
 
+    private long survivingOwnedCount() {
+        return remembered().stream().filter(OwnedProcess::isAlive).count();
+    }
+
     private void verifyNoOwnedSurvivors() {
-        long survivors = remembered().stream().filter(OwnedProcess::isAlive).count();
+        long survivors = survivingOwnedCount();
         if (survivors > 0L) {
             throw new IllegalStateException(
                     "provider process ownership contains " + survivors + " surviving descendant(s)");
