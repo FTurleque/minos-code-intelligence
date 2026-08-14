@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  targeted:
+  targeted-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch HEAD
@@ -30,5 +30,27 @@ jobs:
         run: chmod +x mvnw
       - name: Delegate cgroup v2 for ownership integration tests
         run: bash scripts/ci/delegate-linux-cgroup.sh
-      - name: Snapshot and process ownership targeted tests
-        run: ./mvnw -B -ntp -pl minos-runtime-local,minos-application,minos-provider-scip -am test
+      - name: Snapshot, process ownership and PostgreSQL targeted tests
+        run: ./mvnw -B -ntp -Dminos.postgresql.tests.required=true -pl minos-runtime-local,minos-application,minos-provider-scip,minos-storage-postgresql -am test
+      - name: Reject stale snapshot API and unmanaged SCIP process call-sites
+        run: |
+          if git grep -n 'activeSnapshotId(UUID' -- '*.java'; then exit 1; fi
+          if git grep -n 'new ProcessIndexerExecutor(' -- 'minos-provider-scip/src/main/java/**/*.java'; then exit 1; fi
+
+  targeted-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact branch HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+      - name: Snapshot and Windows ownership targeted tests
+        shell: pwsh
+        run: .\mvnw.cmd -B -ntp -pl minos-runtime-local,minos-application,minos-provider-scip -am test
