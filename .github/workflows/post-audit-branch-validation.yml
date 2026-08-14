@@ -1,0 +1,32 @@
+name: Temporary post-audit branch validation
+
+on:
+  push:
+    branches: [fix/post-audit-p2-followup-20260814]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-audit-branch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot-targeted:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+      - name: Prepare Maven Wrapper
+        run: chmod +x mvnw
+      - name: Snapshot authority targeted tests
+        run: ./mvnw -B -ntp -pl minos-application,minos-provider-scip -am test
