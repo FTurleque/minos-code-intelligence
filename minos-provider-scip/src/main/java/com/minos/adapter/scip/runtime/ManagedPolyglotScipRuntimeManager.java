@@ -6,7 +6,6 @@ import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
-import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -74,13 +73,14 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
 
     @Override
     public ProviderRuntimeStatus inspect(String providerId) {
-        return switch (requireProvider(providerId)) {
+        ProviderRuntimeStatus status = switch (requireProvider(providerId)) {
             case ScipIndexerCatalog.SCIP_CLANG_ID -> inspectClang();
             case ScipIndexerCatalog.SCIP_DOTNET_ID -> inspectDotnet();
             case ScipIndexerCatalog.SCIP_GO_ID -> inspectGo();
             case ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID -> inspectRust();
             default -> throw new IllegalArgumentException("unsupported polyglot provider: " + providerId);
         };
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override
@@ -105,13 +105,13 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         }
         Path executable = status.executable().orElseThrow();
         return switch (providerId) {
-            case ScipIndexerCatalog.SCIP_CLANG_ID -> new ProcessIndexerExecutor(
+            case ScipIndexerCatalog.SCIP_CLANG_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipClangProcessPlanFactory(executable));
-            case ScipIndexerCatalog.SCIP_DOTNET_ID -> new ProcessIndexerExecutor(
+            case ScipIndexerCatalog.SCIP_DOTNET_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipDotnetProcessPlanFactory(executable));
-            case ScipIndexerCatalog.SCIP_GO_ID -> new ProcessIndexerExecutor(
+            case ScipIndexerCatalog.SCIP_GO_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipGoProcessPlanFactory(executable));
-            case ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID -> new ProcessIndexerExecutor(
+            case ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new RustAnalyzerScipProcessPlanFactory(executable));
             default -> throw new IllegalArgumentException("unsupported polyglot provider: " + providerId);
         };

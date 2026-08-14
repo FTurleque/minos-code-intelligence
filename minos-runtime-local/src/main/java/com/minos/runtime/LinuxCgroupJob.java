@@ -16,22 +16,17 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Aggregate Linux job boundary for one untrusted provider execution, backed by cgroup v2.
+ * Aggregate Linux job boundary for one provider execution, backed by cgroup v2.
  *
- * <p>{@code prlimit} bounds a single process and is multiplied by every {@code fork}: it is a
- * defence in depth, never an aggregate guarantee. This class owns the real boundary:</p>
+ * <p>The cgroup membership itself is the process-ownership authority: a provider joins the cgroup
+ * before any provider code executes and every descendant inherits that membership across
+ * {@code fork}, {@code setsid} and reparenting. Resource limits are an optional additional policy
+ * used by sandboxed workers; ownership-only callers deliberately leave controller limits unchanged.</p>
  *
- * <ul>
- *   <li>{@code memory.max} and {@code memory.swap.max} bound the memory of the entire process tree,
- *       including the private {@code tmpfs} scratch the sandbox mounts on {@code /tmp};</li>
- *   <li>{@code pids.max} bounds the aggregate number of processes and threads;</li>
- *   <li>{@code cpu.max} bounds aggregate CPU bandwidth;</li>
- *   <li>{@code cgroup.kill} terminates every member atomically, so no descendant survives.</li>
- * </ul>
- *
- * <p>The sandbox process joins the cgroup before it executes any provider code and the cgroup
- * filesystem is never exposed inside the sandbox mount namespace, so the provider can neither
- * escape the group nor relax its limits.</p>
+ * <p>When resource limits are requested, {@code memory.max}, {@code pids.max} and {@code cpu.max}
+ * bound the aggregate process tree. In every mode {@code cgroup.kill} (when exposed by the kernel)
+ * terminates all remaining members atomically, with explicit member termination as defence in
+ * depth.</p>
  */
 final class LinuxCgroupJob implements AutoCloseable {
 
@@ -173,8 +168,8 @@ final class LinuxCgroupJob implements AutoCloseable {
     }
 
     /**
-     * Kills and removes sandbox cgroups left behind by a MINOS process that was itself killed.
-     * The delegated root must never accumulate residue a hostile provider could rely on.
+     * Kills and removes cgroups left behind by a MINOS process that was itself killed.
+     * The delegated root must never accumulate residue a provider could rely on.
      */
     private static void reclaimStaleJobs(Path root) {
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
@@ -185,7 +180,7 @@ final class LinuxCgroupJob implements AutoCloseable {
                     .forEach(child -> new LinuxCgroupJob(child).close());
         } catch (IOException | RuntimeException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not reclaim stale sandbox cgroups in " + root, exception);
+                    "MINOS could not reclaim stale cgroups in " + root, exception);
         }
     }
 
@@ -210,19 +205,47 @@ final class LinuxCgroupJob implements AutoCloseable {
         }
     }
 
-    /** Creates and configures a job boundary for one provider execution. */
+    /** Creates and configures a resource-limited job boundary for one sandboxed provider execution. */
     static LinuxCgroupJob create(Path root, String name, Limits limits) throws IOException {
-        Objects.requireNonNull(root, "root");
         Objects.requireNonNull(limits, "limits");
+        return configure(jobDirectory(root, name), limits);
+    }
+
+    /**
+     * Creates a cgroup used strictly as a process-ownership boundary.
+     *
+     * <p>No memory, pids, swap or CPU limit is changed. This is intentionally distinct from the
+     * sandbox resource policy: managed providers get strong descendant ownership without receiving
+     * an unrelated resource-limit behavior change.</p>
+     */
+    static LinuxCgroupJob createOwnershipOnly(Path root, String name) throws IOException {
+        Path directory = jobDirectory(root, name);
+        Files.createDirectory(directory);
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
+        try {
+            if (!Files.exists(directory.resolve(PROCS_FILE), LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("cgroup ownership file is missing: " + directory.resolve(PROCS_FILE));
+            }
+            return job;
+        } catch (IOException | RuntimeException failure) {
+            job.close();
+            throw failure;
+        }
+    }
+
+    private static Path jobDirectory(Path root, String name) throws IOException {
+        Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         String safe = Objects.requireNonNull(name, "name");
         if (!SAFE_JOB_NAME.matcher(safe).matches()) {
             throw new IOException("cgroup job name is not a safe single path segment: " + name);
         }
-        Path directory = root.resolve(safe).toAbsolutePath().normalize();
-        if (!directory.startsWith(root) || directory.equals(root) || !directory.startsWith(CGROUP_MOUNT)) {
+        Path directory = normalizedRoot.resolve(safe).toAbsolutePath().normalize();
+        if (!directory.startsWith(normalizedRoot)
+                || directory.equals(normalizedRoot)
+                || !directory.startsWith(CGROUP_MOUNT)) {
             throw new IOException("cgroup job directory escapes the delegated cgroup root: " + directory);
         }
-        return configure(directory, limits);
+        return directory;
     }
 
     private static LinuxCgroupJob configure(Path directory, Limits limits) throws IOException {
@@ -249,7 +272,8 @@ final class LinuxCgroupJob implements AutoCloseable {
 
     /**
      * Wraps a command so that the launching process joins this cgroup before it execs anything
-     * else. Every descendant inherits the cgroup, so no {@code fork} can leave the boundary.
+     * else. Every descendant inherits the cgroup, so no {@code fork}, {@code setsid} or reparenting
+     * can leave the ownership boundary.
      */
     List<String> enterThenExec(Path shell, List<String> command) {
         Objects.requireNonNull(shell, "shell");
@@ -326,7 +350,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         try {
             Files.deleteIfExists(directory);
         } catch (IOException exception) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim sandbox cgroup " + directory, exception);
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim cgroup " + directory, exception);
         }
     }
 
@@ -338,7 +362,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         try {
             if (Files.exists(directory.resolve(file), LinkOption.NOFOLLOW_LINKS)) write(file, value);
         } catch (IOException ignored) {
-            // Swap accounting is optional; memory.max still bounds anonymous memory.
+            // Swap accounting is optional; memory.max still bounds anonymous memory in limited mode.
         }
     }
 
@@ -355,7 +379,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         }
     }
 
-    /** Aggregate limits applied to the whole provider process tree. */
+    /** Aggregate limits applied to the whole provider process tree in sandbox resource mode. */
     record Limits(long memoryBytes, long processes, long cpuMicrosPerPeriod) {
 
         static final Limits DEFAULT = new Limits(

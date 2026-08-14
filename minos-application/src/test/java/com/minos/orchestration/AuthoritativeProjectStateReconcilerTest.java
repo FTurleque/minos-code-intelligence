@@ -1,5 +1,6 @@
 package com.minos.orchestration;
 
+import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +12,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AuthoritativeProjectStateReconcilerTest {
     private static final Instant NOW = Instant.parse("2026-08-14T12:00:00Z");
@@ -99,6 +102,64 @@ class AuthoritativeProjectStateReconcilerTest {
         assertEquals(Optional.of(runId), result.latestRunId());
     }
 
+    @Test
+    void supportedNoActiveSnapshotRejectsPersistedReadySnapshot() {
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore states = new InMemoryIndexStateStore();
+        states.saveProjectState(state(projectId, ProjectIndexState.Availability.READY, "snapshot-ghost"));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, () ->
+                AuthoritativeProjectStateReconciler.reconcile(
+                        projectId, noActivePromoter(), states, NOW, "test repair"));
+
+        assertEquals(Optional.of("snapshot-ghost"), states.findProjectState(projectId).orElseThrow().activeSnapshotId());
+        org.junit.jupiter.api.Assertions.assertTrue(failure.getMessage().contains("snapshot-ghost"));
+    }
+
+    @Test
+    void supportedNoActiveSnapshotRejectsPersistedRefreshingSnapshot() {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        InMemoryIndexStateStore states = new InMemoryIndexStateStore();
+        states.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.REFRESHING,
+                Optional.of("snapshot-ghost"),
+                Optional.of(runId),
+                NOW,
+                Optional.of("run in progress")));
+
+        assertThrows(IllegalStateException.class, () ->
+                AuthoritativeProjectStateReconciler.reconcile(
+                        projectId, noActivePromoter(), states, NOW, "test repair"));
+    }
+
+    @Test
+    void unsupportedObservationPreservesPersistedState() {
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore states = new InMemoryIndexStateStore();
+        ProjectIndexState persisted = state(projectId, ProjectIndexState.Availability.READY, "snapshot-local-only");
+        states.saveProjectState(persisted);
+        SnapshotPromoter unsupported = (id, runId, stagedSnapshotId) -> { };
+
+        ProjectIndexState result = AuthoritativeProjectStateReconciler.reconcile(
+                projectId, unsupported, states, NOW, "test repair");
+
+        assertSame(persisted, result);
+    }
+
+    @Test
+    void supportedEmptyAuthorityWithoutPersistedSnapshotRemainsConsistent() {
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore states = new InMemoryIndexStateStore();
+
+        ProjectIndexState result = AuthoritativeProjectStateReconciler.reconcile(
+                projectId, noActivePromoter(), states, NOW, "test repair");
+
+        assertEquals(ProjectIndexState.Availability.NEVER_INDEXED, result.availability());
+        assertEquals(Optional.empty(), result.activeSnapshotId());
+    }
+
     private static SnapshotPromoter promoter(AtomicReference<String> active) {
         return new SnapshotPromoter() {
             @Override
@@ -107,8 +168,23 @@ class AuthoritativeProjectStateReconcilerTest {
             }
 
             @Override
-            public Optional<String> activeSnapshotId(UUID projectId) {
-                return Optional.ofNullable(active.get());
+            public ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) {
+                String snapshotId = active.get();
+                return snapshotId == null
+                        ? ActiveSnapshotObservation.noActiveSnapshot()
+                        : ActiveSnapshotObservation.active(snapshotId);
+            }
+        };
+    }
+
+    private static SnapshotPromoter noActivePromoter() {
+        return new SnapshotPromoter() {
+            @Override
+            public void promote(UUID projectId, UUID runId, String stagedSnapshotId) { }
+
+            @Override
+            public ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) {
+                return ActiveSnapshotObservation.noActiveSnapshot();
             }
         };
     }

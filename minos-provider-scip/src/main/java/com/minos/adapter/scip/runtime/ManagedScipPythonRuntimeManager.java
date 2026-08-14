@@ -6,7 +6,6 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -93,8 +92,9 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         ProviderRuntimeStatus.State state = diagnostics.isEmpty()
                 ? ProviderRuntimeStatus.State.READY
                 : installed ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
-        return new ProviderRuntimeStatus(PROVIDER_ID, VERSION, state,
+        ProviderRuntimeStatus status = new ProviderRuntimeStatus(PROVIDER_ID, VERSION, state,
                 installed ? Optional.of(executable) : Optional.empty(), diagnostics, false);
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override
@@ -176,7 +176,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         } else {
             delegate = new ScipPythonProcessPlanFactory(status.executable().orElseThrow());
         }
-        return new ProcessIndexerExecutor(providerId, home,
+        return StrongOwnedProcessExecutors.required(providerId, home,
                 (request, runDirectory) -> withEnvironment(delegate.create(request, runDirectory), providerEnvironment));
     }
 

@@ -6,7 +6,6 @@ import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
-import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -71,11 +70,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     @Override
     public ProviderRuntimeStatus inspect(String providerId) {
-        return switch (providerId) {
+        ProviderRuntimeStatus status = switch (providerId) {
             case SCIP_TYPESCRIPT_ID -> inspectTypeScript();
             case SCIP_JAVA_ID -> inspectJava();
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override
@@ -95,9 +95,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     + String.join("; ", status.diagnostics()));
         }
         return switch (providerId) {
-            case SCIP_TYPESCRIPT_ID -> new ProcessIndexerExecutor(
+            case SCIP_TYPESCRIPT_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow()));
-            case SCIP_JAVA_ID -> new ProcessIndexerExecutor(
+            case SCIP_JAVA_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner()));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
