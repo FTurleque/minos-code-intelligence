@@ -5,20 +5,55 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 
 import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Serializes project-scoped index-state mutations with every other PostgreSQL project mutation. */
 final class ProjectMutationIndexStateStore implements IndexStateStore {
+    private static final long LEASE_POLL_MILLIS = 50L;
+
     private final PostgresConnectionFactory connections;
     private final IndexStateStore delegate;
 
     ProjectMutationIndexStateStore(PostgresConnectionFactory connections, IndexStateStore delegate) {
         this.connections = Objects.requireNonNull(connections, "connections");
         this.delegate = Objects.requireNonNull(delegate, "delegate");
+    }
+
+    @Override
+    public ProjectLease acquireProjectLease(UUID projectId) {
+        UUID id = Objects.requireNonNull(projectId, "projectId");
+        final PostgresConnectionFactory.ScopedConnectionLease connectionLease;
+        try {
+            connectionLease = connections.openScopedConnection();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("PostgreSQL lifecycle lease could not reserve a connection", exception);
+        }
+
+        boolean acquired = false;
+        try {
+            while (!tryAcquireLifecycleLock(connectionLease, id)) {
+                try {
+                    Thread.sleep(LEASE_POLL_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "interrupted while waiting for PostgreSQL project lifecycle lease: " + id,
+                            interrupted);
+                }
+            }
+            acquired = true;
+            AtomicBoolean closed = new AtomicBoolean();
+            return () -> releaseLifecycleLock(connectionLease, id, closed);
+        } finally {
+            if (!acquired) connectionLease.close();
+        }
     }
 
     @Override
@@ -46,6 +81,56 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
     public void saveRun(IndexingRun run) {
         Objects.requireNonNull(run, "run");
         mutate(run.projectId(), () -> delegate.saveRun(run), "save indexing run");
+    }
+
+    private boolean tryAcquireLifecycleLock(
+            PostgresConnectionFactory.ScopedConnectionLease connectionLease,
+            UUID projectId
+    ) {
+        try (PreparedStatement statement = connectionLease.connection().prepareStatement(
+                "SELECT pg_try_advisory_lock(?)")) {
+            statement.setLong(1, PostgresProjectMutationLock.key(projectId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new SQLException("PostgreSQL lifecycle lock query returned no row");
+                return result.getBoolean(1);
+            }
+        } catch (SQLException exception) {
+            connectionLease.invalidate();
+            throw new IllegalStateException("PostgreSQL lifecycle lease acquisition failed for project " + projectId,
+                    exception);
+        }
+    }
+
+    private static void releaseLifecycleLock(
+            PostgresConnectionFactory.ScopedConnectionLease connectionLease,
+            UUID projectId,
+            AtomicBoolean closed
+    ) {
+        if (!closed.compareAndSet(false, true)) return;
+        RuntimeException failure = null;
+        try (PreparedStatement statement = connectionLease.connection().prepareStatement(
+                "SELECT pg_advisory_unlock(?)")) {
+            statement.setLong(1, PostgresProjectMutationLock.key(projectId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next() || !result.getBoolean(1)) {
+                    connectionLease.invalidate();
+                    failure = new IllegalStateException(
+                            "PostgreSQL lifecycle lease was not owned while releasing project " + projectId);
+                }
+            }
+        } catch (SQLException exception) {
+            connectionLease.invalidate();
+            failure = new IllegalStateException(
+                    "PostgreSQL lifecycle lease release failed for project " + projectId, exception);
+        } finally {
+            try {
+                connectionLease.close();
+            } catch (RuntimeException closeFailure) {
+                if (failure == null) failure = closeFailure;
+                else failure.addSuppressed(closeFailure);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private void mutate(UUID projectId, Runnable mutation, String action) {

@@ -4,17 +4,17 @@ import com.minos.discovery.ProjectDiscovery.Language;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Path;
-import java.nio.file.Files;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FileIndexStateStoreTest {
 
@@ -38,19 +38,7 @@ class FileIndexStateStoreTest {
                 completedAt,
                 Optional.of("ready")
         ));
-        first.saveRun(new IndexingRun(
-                runId,
-                projectId,
-                IndexingRun.Status.SUCCEEDED,
-                IndexingRun.Phase.COMPLETED,
-                createdAt,
-                Optional.of(completedAt),
-                List.of(new IndexingRun.IndexerExecution(Language.JAVA, "scip-java", artifact)),
-                Optional.of("snapshot-1"),
-                Optional.empty(),
-                Optional.of("snapshot-1"),
-                Optional.of("completed")
-        ));
+        first.saveRun(run(runId, projectId, createdAt, completedAt, artifact));
 
         FileIndexStateStore reopened = new FileIndexStateStore(root.resolve("state"));
         ProjectIndexState state = reopened.findProjectState(projectId).orElseThrow();
@@ -62,6 +50,48 @@ class FileIndexStateStoreTest {
         assertEquals(artifact, run.executions().getFirst().finalArtifact());
         assertEquals(List.of(runId), reopened.listRuns(projectId).stream().map(IndexingRun::id).toList());
         assertTrue(reopened.listRuns(UUID.randomUUID()).isEmpty());
+    }
+
+    @Test
+    void migratesLegacyFlatRunFilesOnReopen() throws Exception {
+        Path stateRoot = root.resolve("legacy-state");
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        FileIndexStateStore initial = new FileIndexStateStore(stateRoot);
+        initial.saveRun(run(runId, projectId, Instant.EPOCH, Instant.EPOCH.plusSeconds(1),
+                root.resolve("legacy.scip")));
+
+        Path partitioned = stateRoot.resolve("runs").resolve(projectId.toString()).resolve(runId + ".properties");
+        Path legacy = stateRoot.resolve("runs").resolve(runId + ".properties");
+        Files.move(partitioned, legacy);
+        Files.deleteIfExists(partitioned.getParent());
+
+        FileIndexStateStore reopened = new FileIndexStateStore(stateRoot);
+
+        assertTrue(Files.isRegularFile(partitioned));
+        assertTrue(Files.notExists(legacy));
+        assertEquals(List.of(runId), reopened.listRuns(projectId).stream().map(IndexingRun::id).toList());
+    }
+
+    @Test
+    void corruptRunFromAnotherProjectCannotPoisonListing() throws Exception {
+        Path stateRoot = root.resolve("isolated-runs");
+        UUID healthyProject = UUID.randomUUID();
+        UUID corruptProject = UUID.randomUUID();
+        UUID healthyRun = UUID.randomUUID();
+        UUID corruptRun = UUID.randomUUID();
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        store.saveRun(run(healthyRun, healthyProject, Instant.EPOCH, Instant.EPOCH.plusSeconds(1),
+                root.resolve("healthy.scip")));
+        store.saveRun(run(corruptRun, corruptProject, Instant.EPOCH, Instant.EPOCH.plusSeconds(1),
+                root.resolve("corrupt.scip")));
+
+        Path corruptFile = stateRoot.resolve("runs").resolve(corruptProject.toString())
+                .resolve(corruptRun + ".properties");
+        Files.writeString(corruptFile, "not-a-valid-run");
+
+        assertEquals(List.of(healthyRun), store.listRuns(healthyProject).stream().map(IndexingRun::id).toList());
+        assertThrows(IllegalStateException.class, () -> store.listRuns(corruptProject));
     }
 
     @Test
@@ -90,20 +120,10 @@ class FileIndexStateStoreTest {
         UUID otherRunId = UUID.randomUUID();
         Path stateRoot = root.resolve("run-identity-state");
         FileIndexStateStore store = new FileIndexStateStore(stateRoot);
-        store.saveRun(new IndexingRun(
-                runId,
-                projectId,
-                IndexingRun.Status.SUCCEEDED,
-                IndexingRun.Phase.COMPLETED,
-                Instant.parse("2026-08-14T12:00:00Z"),
-                Optional.of(Instant.parse("2026-08-14T12:01:00Z")),
-                List.of(),
-                Optional.of("snapshot-run-identity"),
-                Optional.empty(),
-                Optional.of("snapshot-run-identity"),
-                Optional.of("completed")));
+        store.saveRun(run(runId, projectId, Instant.parse("2026-08-14T12:00:00Z"),
+                Instant.parse("2026-08-14T12:01:00Z"), root.resolve("identity.scip")));
 
-        Path file = stateRoot.resolve("runs").resolve(runId + ".properties");
+        Path file = stateRoot.resolve("runs").resolve(projectId.toString()).resolve(runId + ".properties");
         Files.writeString(file, Files.readString(file).replace(
                 "id=" + runId,
                 "id=" + otherRunId));
@@ -121,5 +141,28 @@ class FileIndexStateStoreTest {
                 new byte[4 * 1024 * 1024 + 1]);
 
         assertThrows(UncheckedIOException.class, () -> store.findProjectState(projectId));
+    }
+
+    private static IndexingRun run(
+            UUID runId,
+            UUID projectId,
+            Instant createdAt,
+            Instant completedAt,
+            Path artifact
+    ) {
+        return new IndexingRun(
+                runId,
+                projectId,
+                IndexingRun.Status.SUCCEEDED,
+                IndexingRun.Phase.COMPLETED,
+                createdAt,
+                Optional.of(completedAt),
+                List.of(new IndexingRun.IndexerExecution(Language.JAVA, "scip-java",
+                        artifact.toAbsolutePath().normalize())),
+                Optional.of("snapshot-1"),
+                Optional.empty(),
+                Optional.of("snapshot-1"),
+                Optional.of("completed")
+        );
     }
 }

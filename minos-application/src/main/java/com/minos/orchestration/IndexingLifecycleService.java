@@ -49,13 +49,13 @@ public final class IndexingLifecycleService {
 
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of());
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null);
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
                                IndexerNegotiationResult negotiation) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of());
+        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(), null);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
@@ -75,25 +75,52 @@ public final class IndexingLifecycleService {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
-        if (plan.mode() == IndexingMode.NONE) return Optional.empty();
+        if (plan.mode() == IndexingMode.NONE) {
+            try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+                validatePlanStillCurrent(id, plan);
+                return Optional.empty();
+            }
+        }
         return Optional.of(run(id, root, targets, plan.mode(),
-                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of()));
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
-                            IndexingMode mode, List<String> changedFiles) {
+                            IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
-        return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                executors, stager, promoter, stateStore, clock, projectLocks);
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
+            if (plan != null) validatePlanStillCurrent(id, plan);
+            return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
+                    executors, stager, promoter, stateStore, clock, projectLocks);
+        }
     }
 
-    public ProjectIndexState projectState(UUID id) {
-        return AuthoritativeProjectStateReconciler.reconcile(
-                Objects.requireNonNull(id, "projectId"),
+    private void validatePlanStillCurrent(UUID projectId, IncrementalIndexingPlan plan) {
+        ProjectIndexState current = AuthoritativeProjectStateReconciler.reconcile(
+                projectId,
                 promoter,
                 stateStore,
                 clock.instant(),
-                "reconciled from authoritative active snapshot during project-state read");
+                "reconciled from authoritative active snapshot before validating indexing plan");
+        Optional<String> plannedAgainst = plan.invalidation().activeIndexSnapshotId();
+        if (!current.activeSnapshotId().equals(plannedAgainst)) {
+            throw new IllegalStateException(
+                    "indexing plan is stale for project " + projectId
+                            + ": plannedAgainst=" + plannedAgainst.orElse("<none>")
+                            + " current=" + current.activeSnapshotId().orElse("<none>"));
+        }
+    }
+
+    public ProjectIndexState projectState(UUID id) {
+        UUID projectId = Objects.requireNonNull(id, "projectId");
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
+            return AuthoritativeProjectStateReconciler.reconcile(
+                    projectId,
+                    promoter,
+                    stateStore,
+                    clock.instant(),
+                    "reconciled from authoritative active snapshot during project-state read");
+        }
     }
 
     public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }

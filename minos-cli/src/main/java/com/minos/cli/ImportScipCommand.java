@@ -42,6 +42,9 @@ public final class ImportScipCommand {
                     options.project, options.file, options.provider, options.providerVersion,
                     options.module, options.snapshot);
             output.append(render(result, options.format)).append('\n');
+            if (result.metadataReconciliationRequired()) {
+                error.append("warning: snapshot committed; project metadata reconciliation is required\n");
+            }
             return FindSymbolCommand.SUCCESS;
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
@@ -67,16 +70,16 @@ public final class ImportScipCommand {
         map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
+        map.put("metadataReconciliationRequired", result.metadataReconciliationRequired());
         map.put("completedAt", result.completedAt());
-        if (format == SymbolOutputFormat.JSON) {
-            return CliJson.render(map);
-        }
+        if (format == SymbolOutputFormat.JSON) return CliJson.render(map);
         return "projectId: " + result.projectId() + "\n"
                 + "snapshotId: " + result.snapshotId() + "\n"
                 + "providerId: " + result.providerId() + "\n"
                 + "normalizedSymbols: " + result.normalizedSymbolCount() + "\n"
                 + "occurrences: " + result.occurrenceCount() + "\n"
-                + "relationships: " + result.relationshipCount();
+                + "relationships: " + result.relationshipCount() + "\n"
+                + "metadataReconciliationRequired: " + result.metadataReconciliationRequired();
     }
 
     private static final class Options {
@@ -100,9 +103,7 @@ public final class ImportScipCommand {
         }
 
         private static Options parse(String[] arguments) {
-            if (arguments.length < 1) {
-                throw new IllegalArgumentException("expected <project>");
-            }
+            if (arguments.length < 1) throw new IllegalArgumentException("expected <project>");
             String project = arguments[0];
             if (project == null || project.isBlank() || project.startsWith("-")) {
                 throw new IllegalArgumentException("invalid <project> operand");
@@ -133,12 +134,8 @@ public final class ImportScipCommand {
                     default -> throw new IllegalStateException("unhandled option: " + option);
                 }
             }
-            if (file == null) {
-                throw new IllegalArgumentException("--file is required");
-            }
-            if (provider == null || provider.isBlank()) {
-                throw new IllegalArgumentException("--provider is required");
-            }
+            if (file == null) throw new IllegalArgumentException("--file is required");
+            if (provider == null || provider.isBlank()) throw new IllegalArgumentException("--provider is required");
             return new Options(project, file, provider, providerVersion, module, snapshot, format);
         }
     }

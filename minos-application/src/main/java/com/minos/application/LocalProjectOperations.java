@@ -6,7 +6,6 @@ import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.io.BoundedFileDigest;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexStateStore;
-import com.minos.orchestration.ProjectIndexLease;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.orchestration.ProviderId;
 import com.minos.registry.ProjectRegistry;
@@ -68,7 +67,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     public IndexImportResult importScip(String projectIdentifier, Path indexFile, String providerId,
                                         String providerVersion, String moduleId, String snapshotId) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
-        try (ProjectIndexLease ignored = ProjectIndexLease.acquire(home, project.id())) {
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
             return importScipLocked(project, indexFile, providerId, providerVersion, moduleId, snapshotId);
         }
     }
@@ -91,40 +90,44 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
                 snapshotStore);
 
-        // importSnapshot() has crossed the active-snapshot commit point. Persist the authoritative
-        // state before secondary history so a history I/O failure can never make a committed import
-        // appear to have retained the previous snapshot.
+        // importSnapshot() has crossed the authoritative active-snapshot commit point. From here on
+        // the operation must never report a generic failure that invites a caller to repeat an
+        // already-committed import. Metadata persistence is retried and any remaining repair need
+        // is returned explicitly while later inspection remains fail-closed/reconciling.
         Instant completedAt = Instant.now();
         ProjectIndexState committedState = new ProjectIndexState(project.id(), ProjectIndexState.Availability.READY,
                 Optional.of(effectiveSnapshotId), Optional.empty(), completedAt,
                 Optional.of("active snapshot imported explicitly through import-scip"));
-        saveCommittedState(committedState);
+        boolean metadataReconciliationRequired = !saveCommittedState(committedState);
         try {
             writeHistory(project.id(), new IndexHistory(
-                    effectiveSnapshotId, safeProviderId, blankToNull(providerVersion), completedAt));
+                    effectiveSnapshotId,
+                    safeProviderId,
+                    blankToNull(providerVersion),
+                    completedAt,
+                    metadataReconciliationRequired));
         } catch (IOException ignored) {
-            // CLI history is secondary evidence. The active snapshot and ProjectIndexState are the
-            // authoritative commit record; retention/reinspection must not be invalidated by history I/O.
+            // CLI history is secondary evidence. Snapshot authority and reconciliation do not
+            // depend on it, so a history failure cannot change the already-committed outcome.
         }
 
         return new IndexImportResult(project.id().toString(), report.snapshotId(), safeProviderId,
                 blankToNull(providerVersion), report.normalizedSymbolCount(), report.occurrenceCount(),
                 report.relationshipCount(), report.relatedTestRelationshipCount(), report.unresolvedOccurrenceCount(),
-                report.unresolvedRelationshipCount(), completedAt.toString());
+                report.unresolvedRelationshipCount(), metadataReconciliationRequired, completedAt.toString());
     }
 
-    private void saveCommittedState(ProjectIndexState state) throws IOException {
-        RuntimeException firstFailure = null;
+    private boolean saveCommittedState(ProjectIndexState state) {
         for (int attempt = 0; attempt < 2; attempt++) {
             try {
                 stateStore.saveProjectState(state);
-                return;
-            } catch (RuntimeException failure) {
-                if (firstFailure == null) firstFailure = failure;
-                else firstFailure.addSuppressed(failure);
+                return true;
+            } catch (RuntimeException ignored) {
+                // The snapshot is already committed. A later inspection/restart will reconcile from
+                // the authoritative snapshot; returning false preserves that fact for the caller.
             }
         }
-        throw new IOException("snapshot was committed but project index state could not be persisted", firstFailure);
+        return false;
     }
 
     private static ProjectView projectView(ProjectInspectionService.ProjectView view) {
@@ -142,6 +145,8 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         properties.setProperty("providerId", history.providerId());
         properties.setProperty("providerVersion", history.providerVersion() == null ? "" : history.providerVersion());
         properties.setProperty("completedAt", history.completedAt().toString());
+        properties.setProperty("metadataReconciliationRequired",
+                Boolean.toString(history.metadataReconciliationRequired()));
         try {
             try (OutputStream output = Files.newOutputStream(
                     temporary, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -150,7 +155,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                throw new IOException("filesystem does not support atomic CLI import-history replacement", exception);
             }
         } finally {
             Files.deleteIfExists(temporary);
@@ -159,7 +164,13 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
 
     private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
 
-    private record IndexHistory(String snapshotId, String providerId, String providerVersion, Instant completedAt) {
+    private record IndexHistory(
+            String snapshotId,
+            String providerId,
+            String providerVersion,
+            Instant completedAt,
+            boolean metadataReconciliationRequired
+    ) {
         private IndexHistory {
             if (snapshotId == null || snapshotId.isBlank()) throw new IllegalArgumentException("snapshotId must not be blank");
             ProviderId.require(providerId);

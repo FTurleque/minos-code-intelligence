@@ -7,25 +7,29 @@ import com.minos.orchestration.IndexingRun.IndexerExecution;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 
 /**
- * Persistance locale simple des états d'indexation et des runs M14.
+ * File-backed indexing state with durable atomic replacement and project-partitioned run history.
  *
- * <p>L'interface historique n'expose pas d'IOException ; les erreurs de stockage
- * sont donc propagées comme {@link UncheckedIOException} et ne sont jamais
- * transformées en succès.</p>
+ * <p>Authoritative metadata is never replaced through a non-atomic fallback. If the filesystem
+ * cannot provide {@link StandardCopyOption#ATOMIC_MOVE}, the mutation fails closed. New run files
+ * live below {@code runs/<projectId>/}; legacy flat run files are migrated on open so one corrupt
+ * project's history cannot break another project's listing.</p>
  */
 public final class FileIndexStateStore implements IndexStateStore {
 
@@ -34,24 +38,40 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final int MAX_PROPERTY_KEY_CHARS = 128;
     private static final int MAX_PROPERTY_VALUE_CHARS = 32_768;
 
+    private final Path storageRoot;
     private final Path projectRoot;
     private final Path runRoot;
 
     public FileIndexStateStore(Path storageRoot) throws IOException {
-        Path root = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
-        this.projectRoot = root.resolve("projects");
-        this.runRoot = root.resolve("runs");
+        this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        this.projectRoot = this.storageRoot.resolve("projects");
+        this.runRoot = this.storageRoot.resolve("runs");
         Files.createDirectories(projectRoot);
         Files.createDirectories(runRoot);
+        migrateLegacyRuns();
+    }
+
+    @Override
+    public ProjectLease acquireProjectLease(UUID projectId) {
+        try {
+            ProjectIndexLease lease = ProjectIndexLease.acquire(storageRoot, Objects.requireNonNull(projectId, "projectId"));
+            return () -> {
+                try {
+                    lease.close();
+                } catch (IOException exception) {
+                    throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
+                }
+            };
+        } catch (IOException exception) {
+            throw new UncheckedIOException("cannot acquire project indexing lifecycle lease", exception);
+        }
     }
 
     @Override
     public synchronized Optional<ProjectIndexState> findProjectState(UUID projectId) {
         Objects.requireNonNull(projectId, "projectId");
         Path file = projectRoot.resolve(projectId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
-        }
+        if (!Files.isRegularFile(file)) return Optional.empty();
         Properties properties = load(file);
         UUID persistedProjectId = UUID.fromString(required(properties, "projectId", file));
         requireIdentity(projectId, persistedProjectId, file, "project state");
@@ -68,22 +88,40 @@ public final class FileIndexStateStore implements IndexStateStore {
     @Override
     public synchronized Optional<IndexingRun> findRun(UUID runId) {
         Objects.requireNonNull(runId, "runId");
-        Path file = runRoot.resolve(runId + ".properties");
-        if (!Files.isRegularFile(file)) {
-            return Optional.empty();
+        try {
+            Path match = null;
+            try (var projects = Files.list(runRoot)) {
+                for (Path projectDirectory : projects.filter(Files::isDirectory).toList()) {
+                    Path candidate = projectDirectory.resolve(runId + ".properties");
+                    if (!Files.isRegularFile(candidate)) continue;
+                    if (match != null) {
+                        throw new IllegalStateException("duplicate indexing run id across project partitions: " + runId);
+                    }
+                    match = candidate;
+                }
+            }
+            if (match != null) return Optional.of(readRun(match, runId));
+
+            Path legacy = runRoot.resolve(runId + ".properties");
+            if (!Files.isRegularFile(legacy)) return Optional.empty();
+            IndexingRun run = readRun(legacy, runId);
+            migrateLegacyRun(legacy, run);
+            return Optional.of(run);
+        } catch (IOException exception) {
+            throw new UncheckedIOException("cannot find MINOS indexing run", exception);
         }
-        return Optional.of(readRun(file, runId));
     }
 
     @Override
     public synchronized List<IndexingRun> listRuns(UUID projectId) {
         Objects.requireNonNull(projectId, "projectId");
-        try (var stream = Files.list(runRoot)) {
+        Path projectRuns = projectRunDirectory(projectId);
+        if (!Files.isDirectory(projectRuns)) return List.of();
+        try (var stream = Files.list(projectRuns)) {
             return stream
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".properties"))
                     .map(path -> readRun(path, idFromPropertiesFile(path)))
-                    .filter(run -> run.projectId().equals(projectId))
                     .sorted(Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id))
                     .toList();
         } catch (IOException exception) {
@@ -107,6 +145,25 @@ public final class FileIndexStateStore implements IndexStateStore {
     @Override
     public synchronized void saveRun(IndexingRun run) {
         Objects.requireNonNull(run, "run");
+        Properties properties = properties(run);
+        store(runFile(run.projectId(), run.id()), properties, "MINOS indexing run");
+    }
+
+    synchronized boolean deleteRun(UUID projectId, UUID runId) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(runId, "runId");
+        Path file = runFile(projectId, runId);
+        boolean deleted = Files.deleteIfExists(file);
+        Path legacy = runRoot.resolve(runId + ".properties");
+        deleted |= Files.deleteIfExists(legacy);
+        if (deleted) {
+            if (Files.isDirectory(file.getParent())) forceDirectory(file.getParent());
+            forceDirectory(runRoot);
+        }
+        return deleted;
+    }
+
+    private Properties properties(IndexingRun run) {
         Properties properties = new Properties();
         properties.setProperty("id", run.id().toString());
         properties.setProperty("projectId", run.projectId().toString());
@@ -126,7 +183,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             properties.setProperty(prefix + "indexerId", execution.indexerId());
             properties.setProperty(prefix + "artifact", execution.finalArtifact().toString());
         }
-        store(runRoot.resolve(run.id() + ".properties"), properties, "MINOS indexing run");
+        return properties;
     }
 
     private IndexingRun readRun(Path file, UUID expectedRunId) {
@@ -166,6 +223,51 @@ public final class FileIndexStateStore implements IndexStateStore {
         );
     }
 
+    private void migrateLegacyRuns() throws IOException {
+        try (var stream = Files.list(runRoot)) {
+            for (Path legacy : stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".properties"))
+                    .toList()) {
+                final UUID runId;
+                try {
+                    runId = idFromPropertiesFile(legacy);
+                } catch (IllegalStateException ignored) {
+                    continue;
+                }
+                final IndexingRun run;
+                try {
+                    run = readRun(legacy, runId);
+                } catch (RuntimeException corruptLegacyMetadata) {
+                    // Legacy corruption remains addressable through findRun(runId), but it must not
+                    // poison listing for unrelated projects after the partitioned layout is active.
+                    continue;
+                }
+                migrateLegacyRun(legacy, run);
+            }
+        }
+    }
+
+    private void migrateLegacyRun(Path legacy, IndexingRun run) throws IOException {
+        Path target = runFile(run.projectId(), run.id());
+        ensureDirectory(target.getParent());
+        if (Files.isRegularFile(target)) {
+            Files.deleteIfExists(legacy);
+            forceDirectory(runRoot);
+            return;
+        }
+        forceFile(legacy);
+        move(legacy, target);
+    }
+
+    private Path projectRunDirectory(UUID projectId) {
+        return runRoot.resolve(projectId.toString());
+    }
+
+    private Path runFile(UUID projectId, UUID runId) {
+        return projectRunDirectory(projectId).resolve(runId + ".properties");
+    }
+
     private static UUID idFromPropertiesFile(Path file) {
         String name = file.getFileName().toString();
         String suffix = ".properties";
@@ -202,12 +304,13 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     private static void store(Path file, Properties properties, String comment) {
         try {
-            Files.createDirectories(file.getParent());
+            ensureDirectory(file.getParent());
             Path temporary = Files.createTempFile(file.getParent(), ".state-", ".tmp");
             try {
                 try (OutputStream output = Files.newOutputStream(temporary)) {
                     properties.store(output, comment);
                 }
+                forceFile(temporary);
                 move(temporary, file);
             } finally {
                 Files.deleteIfExists(temporary);
@@ -217,12 +320,40 @@ public final class FileIndexStateStore implements IndexStateStore {
         }
     }
 
+    private static void ensureDirectory(Path directory) throws IOException {
+        boolean existed = Files.isDirectory(directory);
+        Files.createDirectories(directory);
+        if (!existed && directory.getParent() != null && Files.isDirectory(directory.getParent())) {
+            forceDirectory(directory.getParent());
+        }
+    }
+
+    private static void forceFile(Path file) throws IOException {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+            channel.force(true);
+        }
+    }
+
     private static void move(Path source, Path target) throws IOException {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            throw new IOException("filesystem does not support required atomic metadata replacement: " + target, exception);
         }
+        forceDirectory(target.getParent());
+    }
+
+    private static void forceDirectory(Path directory) throws IOException {
+        if (directory == null || windows()) return;
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
+        } catch (UnsupportedOperationException exception) {
+            throw new IOException("filesystem does not support required directory durability sync: " + directory, exception);
+        }
+    }
+
+    private static boolean windows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
     private static void putOptional(Properties properties, String key, Optional<String> value) {

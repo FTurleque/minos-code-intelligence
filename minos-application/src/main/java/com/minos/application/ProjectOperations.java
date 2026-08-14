@@ -58,6 +58,7 @@ public interface ProjectOperations {
             int relatedTestRelationshipCount,
             int unresolvedOccurrenceCount,
             int unresolvedRelationshipCount,
+            boolean metadataReconciliationRequired,
             String completedAt
     ) {
         public IndexImportResult {

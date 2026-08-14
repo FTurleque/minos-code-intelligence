@@ -70,6 +70,9 @@ public final class IndexCommand {
                         options.project(), options.scipFile(), options.providerId(),
                         options.providerVersion(), options.moduleId(), options.snapshotId());
                 output.append(renderImport(imported, options.format())).append('\n');
+                if (imported.metadataReconciliationRequired()) {
+                    error.append("warning: snapshot committed; project metadata reconciliation is required\n");
+                }
                 return FindSymbolCommand.SUCCESS;
             }
             if (autonomousOperations == null) {
@@ -95,9 +98,7 @@ public final class IndexCommand {
 
     static String renderPlan(AutonomousIndexOperations.IndexPlanView plan, SymbolOutputFormat format) {
         Map<String, Object> map = planMap(plan);
-        if (format == SymbolOutputFormat.JSON) {
-            return CliJson.render(map);
-        }
+        if (format == SymbolOutputFormat.JSON) return CliJson.render(map);
         List<String> lines = new ArrayList<>();
         lines.add("projectId: " + plan.projectId());
         lines.add("project: " + plan.projectName());
@@ -126,9 +127,7 @@ public final class IndexCommand {
         map.put("activeSnapshotId", execution.activeSnapshotId());
         map.put("fingerprintPromoted", execution.fingerprintPromoted());
         map.put("diagnostic", execution.diagnostic());
-        if (format == SymbolOutputFormat.JSON) {
-            return CliJson.render(map);
-        }
+        if (format == SymbolOutputFormat.JSON) return CliJson.render(map);
         return renderPlan(execution.plan(), SymbolOutputFormat.TEXT) + "\n"
                 + "runId: " + nullable(execution.runId()) + "\n"
                 + "status: " + execution.status() + "\n"
@@ -175,10 +174,9 @@ public final class IndexCommand {
         map.put("relatedTestRelationshipCount", result.relatedTestRelationshipCount());
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
+        map.put("metadataReconciliationRequired", result.metadataReconciliationRequired());
         map.put("completedAt", result.completedAt());
-        if (format == SymbolOutputFormat.JSON) {
-            return CliJson.render(map);
-        }
+        if (format == SymbolOutputFormat.JSON) return CliJson.render(map);
         return String.join("\n",
                 "projectId: " + result.projectId(),
                 "snapshotId: " + result.snapshotId(),
@@ -190,6 +188,7 @@ public final class IndexCommand {
                 "relatedTests: " + result.relatedTestRelationshipCount(),
                 "unresolvedOccurrences: " + result.unresolvedOccurrenceCount(),
                 "unresolvedRelationships: " + result.unresolvedRelationshipCount(),
+                "metadataReconciliationRequired: " + result.metadataReconciliationRequired(),
                 "completedAt: " + result.completedAt());
     }
 
@@ -220,9 +219,7 @@ public final class IndexCommand {
             String snapshotId
     ) {
         private static Options parse(String[] arguments) {
-            if (arguments.length < 1) {
-                throw new IllegalArgumentException("expected <project>");
-            }
+            if (arguments.length < 1) throw new IllegalArgumentException("expected <project>");
             String project = operand(arguments[0], "project");
             String provider = null;
             boolean forceFull = false;
@@ -238,9 +235,7 @@ public final class IndexCommand {
                 if (option == null || !SUPPORTED_OPTIONS.contains(option)) {
                     throw new IllegalArgumentException("unknown option: " + option);
                 }
-                if (!seen.add(option)) {
-                    throw new IllegalArgumentException("duplicate option: " + option);
-                }
+                if (!seen.add(option)) throw new IllegalArgumentException("duplicate option: " + option);
                 if ("--force-full".equals(option)) {
                     forceFull = true;
                     continue;
