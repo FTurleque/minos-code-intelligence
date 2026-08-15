@@ -1,48 +1,35 @@
 package com.minos.adapter.scip.runtime;
 
-import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 
 /** Fail-closed process plan for the managed scip-dotnet provider. */
-public final class ScipDotnetProcessPlanFactory implements IndexerProcessPlanFactory {
-    private final Path executable;
+public final class ScipDotnetProcessPlanFactory extends AbstractScipProcessPlanFactory {
 
     public ScipDotnetProcessPlanFactory(Path executable) {
-        this.executable = Objects.requireNonNull(executable, "executable").toAbsolutePath().normalize();
+        super(executable, "scip-dotnet", "scip-dotnet incremental execution is not qualified by MINOS M24");
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
-        Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (request.mode() == IndexingMode.INCREMENTAL) {
-            throw new IllegalStateException("scip-dotnet incremental execution is not qualified by MINOS M24");
-        }
+    protected void validateProject(Path root) throws IOException {
         if (!containsDotnetProject(root)) {
             throw new IllegalArgumentException("scip-dotnet requires a .csproj or .sln project: " + root);
         }
-        if (!Files.isRegularFile(executable)) {
-            throw new IllegalStateException("scip-dotnet executable is missing: " + executable);
-        }
-        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
-        Files.createDirectories(output.getParent());
-        return new IndexerProcessPlan(
-                CommandLocator.invocation(executable, "index", "--output", output.toString()),
-                root,
-                Map.of(),
-                output,
-                Duration.ofMinutes(30)
-        );
+    }
+
+    @Override
+    protected List<String> command(
+            IndexingExecutionRequest request,
+            Path root,
+            Path runRoot,
+            Path output
+    ) {
+        return CommandLocator.invocation(executable(), "index", "--output", output.toString());
     }
 
     private static boolean containsDotnetProject(Path root) throws IOException {
