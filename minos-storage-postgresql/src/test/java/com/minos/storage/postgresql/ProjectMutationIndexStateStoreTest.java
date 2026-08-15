@@ -219,6 +219,8 @@ class ProjectMutationIndexStateStoreTest extends PostgresTestSupport {
         public Optional<IndexingRun> findRun(UUID id) { return Optional.empty(); }
         public List<IndexingRun> listRuns(UUID id) { return List.of(); }
         public void saveProjectState(ProjectIndexState value) { state.set(value); }
-        public void saveRun(IndexingRun run) { }
+        public void saveRun(IndexingRun run) {
+            // This delegate records only project-state mutations for the synchronization tests above.
+        }
     }
 }

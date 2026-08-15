@@ -6,6 +6,7 @@ import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -61,7 +62,7 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
         );
     }
 
-    private static boolean containsPythonSource(Path root) throws Exception {
+    private static boolean containsPythonSource(Path root) throws IOException {
         return BoundedProviderSourceProbe.contains(
                 root,
                 Integer.MAX_VALUE,

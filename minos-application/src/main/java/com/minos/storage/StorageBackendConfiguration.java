@@ -33,6 +33,7 @@ public record StorageBackendConfiguration(
     public static final String POSTGRES_SCHEMA_PROPERTY = "minos.postgres.schema";
     public static final String POSTGRES_MANAGED_ENV = "MINOS_POSTGRES_MANAGED";
     public static final String POSTGRES_MANAGED_PROPERTY = "minos.postgres.managed";
+    private static final String REDACTED_POSTGRES_URL = "jdbc:postgresql:<redacted>";
 
     public StorageBackendConfiguration {
         backend = requireBackend(backend);
@@ -127,11 +128,11 @@ public record StorageBackendConfiguration(
     static String safePostgresUrl(String value) {
         if (value == null || value.isBlank()) return String.valueOf(value);
         String raw = value.trim();
-        if (!raw.startsWith("jdbc:postgresql://")) return "jdbc:postgresql:<redacted>";
+        if (!raw.startsWith("jdbc:postgresql://")) return REDACTED_POSTGRES_URL;
         try {
             URI uri = new URI(raw.substring("jdbc:".length()));
             String host = uri.getHost();
-            if (host == null || host.isBlank()) return "jdbc:postgresql:<redacted>";
+            if (host == null || host.isBlank()) return REDACTED_POSTGRES_URL;
             StringBuilder safe = new StringBuilder("jdbc:postgresql://");
             if (host.indexOf(':') >= 0) safe.append('[').append(host).append(']');
             else safe.append(host);
@@ -140,7 +141,7 @@ public record StorageBackendConfiguration(
             if (path != null && !path.isBlank()) safe.append(path);
             return safe.toString();
         } catch (URISyntaxException exception) {
-            return "jdbc:postgresql:<redacted>";
+            return REDACTED_POSTGRES_URL;
         }
     }
 }

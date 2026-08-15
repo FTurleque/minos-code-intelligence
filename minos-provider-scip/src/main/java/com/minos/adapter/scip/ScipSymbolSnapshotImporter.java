@@ -194,16 +194,16 @@ public final class ScipSymbolSnapshotImporter {
         return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
     }
 
-    private static final class FrozenArtifact implements AutoCloseable {
-        private final Path path;
-        private final String sha256;
-        private FrozenArtifact(Path path, String sha256) {
-            this.path = path;
-            this.sha256 = sha256;
+    private record FrozenArtifact(Path path, String sha256) implements AutoCloseable {
+        private FrozenArtifact {
+            Objects.requireNonNull(path, "path");
+            Objects.requireNonNull(sha256, "sha256");
         }
-        private Path path() { return path; }
-        private String sha256() { return sha256; }
-        @Override public void close() throws IOException { Files.deleteIfExists(path); }
+
+        @Override
+        public void close() throws IOException {
+            Files.deleteIfExists(path);
+        }
     }
 
     /** Write-only capture used only to atomically publish one normalized snapshot. */
