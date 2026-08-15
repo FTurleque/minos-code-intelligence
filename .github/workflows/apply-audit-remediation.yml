@@ -4,7 +4,7 @@ on:
   push:
     branches: [fix/audit-remediation-20260815]
     paths:
-      - '.github/audit-remediation.patch.gz.b64'
+      - '.github/audit-patch/**'
       - '.github/workflows/apply-audit-remediation.yml'
 
 permissions:
@@ -25,12 +25,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(wc -c < .github/audit-remediation.patch.gz.b64)" -eq 20316
-          echo '8113fc5f488aab474bc6a79070663d1edeea4484643743a60a5edbd974defc8b  .github/audit-remediation.patch.gz.b64' | sha256sum -c -
-          base64 -d .github/audit-remediation.patch.gz.b64 | gzip -d > /tmp/audit-remediation.patch
+          echo '84fbe1c5d2dda927aac8fb633af45de44ae5ba24113ecbe782fc8d87407d4420  .github/audit-patch/part-00' | sha256sum -c -
+          echo 'a816ba55d6dea0b50039dc6c1011381a32798798e47bf6459530456d828ccebb  .github/audit-patch/part-01' | sha256sum -c -
+          echo '9f50989a21fbe0124b51e6a33d44825d443bd21f6c6c1dde066389b6f40b2a45  .github/audit-patch/part-02' | sha256sum -c -
+          echo 'c3c6a28f26c63a6a78d710f30a19b9c167aeb9d4c95c9aa0d1fdbb7b75123ce6  .github/audit-patch/part-03' | sha256sum -c -
+          echo '55602077473ed525a1909ea0e51f03376cb1d0a2686acff14acfa2c8640e23d8  .github/audit-patch/part-04' | sha256sum -c -
+          cat .github/audit-patch/part-* > /tmp/audit-remediation.patch.gz.b64
+          test "$(wc -c < /tmp/audit-remediation.patch.gz.b64)" -eq 20316
+          echo '8113fc5f488aab474bc6a79070663d1edeea4484643743a60a5edbd974defc8b  /tmp/audit-remediation.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/audit-remediation.patch.gz.b64 | gzip -d > /tmp/audit-remediation.patch
           git apply --check /tmp/audit-remediation.patch
           git apply /tmp/audit-remediation.patch
-          rm .github/audit-remediation.patch.gz.b64
+          rm -rf .github/audit-patch
+          rm -f .github/audit-remediation.patch.gz.b64
           rm .github/workflows/apply-audit-remediation.yml
           git add -A
           git config user.name 'MINOS audit remediation'
