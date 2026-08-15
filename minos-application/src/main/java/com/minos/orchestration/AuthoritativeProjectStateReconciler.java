@@ -150,16 +150,14 @@ final class AuthoritativeProjectStateReconciler {
                 .filter(run -> run.status() == Status.RUNNING)
                 .sorted(RUN_ORDER)
                 .toList();
-        boolean recoveredCommittedRun = false;
         for (IndexingRun run : running) {
             boolean committed = active.status() == ActiveSnapshotObservation.Status.ACTIVE
                     && run.phase() == Phase.PROMOTION
                     && run.stagedSnapshotId().equals(active.snapshotId());
-            recoveredCommittedRun |= committed;
             stateStore.saveRun(terminalRecovery(run, active.snapshotId(), observedAt, committed));
         }
         Optional<IndexingRun> latest = stateStore.listRuns(projectId).stream().max(RUN_ORDER);
-        return new Recovery(running.size(), recoveredCommittedRun, latest);
+        return new Recovery(running.size(), latest);
     }
 
     private static IndexingRun terminalRecovery(
@@ -216,10 +214,9 @@ final class AuthoritativeProjectStateReconciler {
                 .flatMap(IndexingRun::activeSnapshotAfter)
                 .filter(authoritativeId::equals)
                 .isPresent();
-        ProjectIndexState.Availability availability =
-                latestSucceededForAuthority || recovery.recoveredCommittedRun()
-                        ? ProjectIndexState.Availability.READY
-                        : ProjectIndexState.Availability.STALE;
+        ProjectIndexState.Availability availability = latestSucceededForAuthority
+                ? ProjectIndexState.Availability.READY
+                : ProjectIndexState.Availability.STALE;
         return new ProjectIndexState(
                 projectId,
                 availability,
@@ -253,7 +250,7 @@ final class AuthoritativeProjectStateReconciler {
                         + " but the authoritative snapshot store has no active snapshot for project " + projectId);
     }
 
-    private record Recovery(int recoveredCount, boolean recoveredCommittedRun, Optional<IndexingRun> latestRun) {
+    private record Recovery(int recoveredCount, Optional<IndexingRun> latestRun) {
         private Recovery {
             if (recoveredCount < 0) throw new IllegalArgumentException("recoveredCount must not be negative");
             latestRun = Objects.requireNonNull(latestRun, "latestRun");
