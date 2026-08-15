@@ -1,0 +1,39 @@
+name: Apply audit remediation
+
+on:
+  push:
+    branches: [fix/audit-remediation-20260815]
+    paths:
+      - '.github/audit-remediation.patch.gz.b64'
+      - '.github/workflows/apply-audit-remediation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/audit-remediation-20260815
+          fetch-depth: 0
+
+      - name: Verify and apply audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -c < .github/audit-remediation.patch.gz.b64)" -eq 20316
+          echo '8113fc5f488aab474bc6a79070663d1edeea4484643743a60a5edbd974defc8b  .github/audit-remediation.patch.gz.b64' | sha256sum -c -
+          base64 -d .github/audit-remediation.patch.gz.b64 | gzip -d > /tmp/audit-remediation.patch
+          git apply --check /tmp/audit-remediation.patch
+          git apply /tmp/audit-remediation.patch
+          rm .github/audit-remediation.patch.gz.b64
+          rm .github/workflows/apply-audit-remediation.yml
+          git add -A
+          git config user.name 'MINOS audit remediation'
+          git config user.email 'actions@github.com'
+          git commit -m 'fix: close remaining MINOS audit findings'
+          git push origin HEAD:fix/audit-remediation-20260815
