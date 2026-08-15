@@ -40,24 +40,16 @@ final class IndexingRunExecutor {
 
         UUID runId = UUID.randomUUID();
         Instant createdAt = clock.instant();
-        ProjectIndexState resolvedPrevious = AuthoritativeProjectStateReconciler.reconcile(
+        ProjectIndexState previous = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
                 projectId,
                 promoter,
                 stateStore,
                 createdAt,
                 "reconciled from authoritative active snapshot before new indexing run");
-        if (resolvedPrevious.availability() == Availability.INDEXING
-                || resolvedPrevious.availability() == Availability.REFRESHING) {
+        if (previous.availability() == Availability.INDEXING
+                || previous.availability() == Availability.REFRESHING) {
             throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
         }
-        stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
-                Optional.empty(), resolvedPrevious.activeSnapshotId(),
-                Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
-        stateStore.saveProjectState(new ProjectIndexState(projectId,
-                resolvedPrevious.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
-                resolvedPrevious.activeSnapshotId(), Optional.of(runId), createdAt,
-                Optional.of("indexing run in progress: mode=" + mode)));
-        ProjectIndexState previous = resolvedPrevious;
 
         List<IndexingArtifact> artifacts = new ArrayList<>();
         List<IndexerExecution> executions = new ArrayList<>();
@@ -66,6 +58,17 @@ final class IndexingRunExecutor {
         boolean committed = false;
         boolean durabilityAcknowledgementPending = false;
         try {
+            // Publish the run and project in-progress state inside the same recovery envelope. If
+            // either write fails, the catch path terminalizes the run and restores a terminal
+            // project state instead of leaving a RUNNING/indexing half-commit behind.
+            stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
+                    Optional.empty(), previous.activeSnapshotId(),
+                    Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
+            stateStore.saveProjectState(new ProjectIndexState(projectId,
+                    previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
+                    previous.activeSnapshotId(), Optional.of(runId), createdAt,
+                    Optional.of("indexing run in progress: mode=" + mode)));
+
             for (IndexingExecutionTarget target : targets) {
                 var selection = target.selection();
                 String indexerId = selection.indexer().id();
