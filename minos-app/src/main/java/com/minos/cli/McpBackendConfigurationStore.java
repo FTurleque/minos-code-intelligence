@@ -1,14 +1,13 @@
 package com.minos.cli;
 
 import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
@@ -73,7 +72,7 @@ public final class McpBackendConfigurationStore {
 
     public synchronized void save(McpBackendConfiguration configuration) throws IOException {
         Objects.requireNonNull(configuration, "configuration");
-        Files.createDirectories(file.getParent());
+        DurableAtomicFile.ensureDirectory(file.getParent(), "MCP backend configuration directory");
         Properties properties = new Properties();
         properties.setProperty("formatVersion", Integer.toString(configuration.formatVersion()));
         properties.setProperty("backend", configuration.backend().configurationValue());
@@ -89,11 +88,7 @@ public final class McpBackendConfigurationStore {
                     StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS MCP backend configuration v1");
             }
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            DurableAtomicFile.replace(temporary, file, "MCP backend configuration replacement");
         } finally {
             Files.deleteIfExists(temporary);
         }

@@ -68,7 +68,7 @@ final class HostedAuthorizationService {
                     safeRequestId,
                     state.keyId(),
                     state.version() + 1);
-            store.save(denied, state.version());
+            HostedCommitRecovery.save(store, denied, state.version());
             HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
             throw new SecurityException("hosted permission denied: " + permission);
         }

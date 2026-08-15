@@ -16,8 +16,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public final class IndexingLifecycleService {
     private final Map<String, IndexerExecutor> executors;
@@ -25,7 +23,6 @@ public final class IndexingLifecycleService {
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final Clock clock;
-    private final ConcurrentMap<UUID, Object> projectLocks = new ConcurrentHashMap<>();
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
@@ -105,7 +102,7 @@ public final class IndexingLifecycleService {
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, clock, projectLocks);
+                    executors, stager, promoter, stateStore, clock);
         }
     }
 

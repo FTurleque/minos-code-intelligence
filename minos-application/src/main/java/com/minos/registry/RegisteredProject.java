@@ -24,9 +24,7 @@ public record RegisteredProject(
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(rootPath, "rootPath");
         rootPath = rootPath.toAbsolutePath().normalize();
-        if (displayName == null || displayName.isBlank()) {
-            throw new IllegalArgumentException("displayName must not be blank");
-        }
+        ProjectRegistryLimits.requireName(displayName, "displayName");
         workspaceId = Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");

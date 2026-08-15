@@ -1,6 +1,7 @@
 package com.minos.store;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.DurableAtomicFile;
 import com.minos.hosted.HostedAuditEvent;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedPrincipal;
@@ -25,11 +26,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -73,7 +72,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         if (Files.exists(this.root, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(this.root)) {
             throw new IOException("hosted control-plane root must not be a symbolic link");
         }
-        Files.createDirectories(this.root);
+        DurableAtomicFile.ensureDirectory(this.root, "hosted control-plane root");
         if (!Files.isDirectory(this.root, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("hosted control-plane root is not a directory");
         }
@@ -89,7 +88,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("hosted tenant already exists: " + state.tenantId());
             }
-            writeAtomically(target, state);
+            writeAtomically(target, state, false);
         }
     }
 
@@ -122,7 +121,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
                         + expectedVersion + " but found " + current.version());
             }
             if (!current.tenantId().equals(state.tenantId())) throw new IOException("hosted tenant identity mutation");
-            writeAtomically(target, state);
+            writeAtomically(target, state, true);
         }
     }
 
@@ -171,7 +170,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         }
     }
 
-    private void writeAtomically(Path target, HostedTenantState state) throws IOException {
+    private void writeAtomically(Path target, HostedTenantState state, boolean replaceExisting) throws IOException {
         byte[] plaintext = encodePlaintext(state);
         byte[] nonce = new byte[NONCE_BYTES];
         random.nextBytes(nonce);
@@ -200,7 +199,11 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         Path temporary = Files.createTempFile(root, ".hosted-tenant-", ".tmp");
         try {
             Files.write(temporary, envelope, StandardOpenOption.TRUNCATE_EXISTING);
-            moveAtomically(temporary, target);
+            if (replaceExisting) {
+                DurableAtomicFile.replace(temporary, target, "hosted tenant state replacement");
+            } else {
+                DurableAtomicFile.publish(temporary, target, "hosted tenant state publication");
+            }
         } finally {
             Files.deleteIfExists(temporary);
             java.util.Arrays.fill(envelope, (byte) 0);
@@ -388,14 +391,6 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         rejectUnsafeEntry(path);
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("hosted tenant entry is not a regular file");
-        }
-    }
-
-    private static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException("atomic move is required for hosted tenant state", exception);
         }
     }
 

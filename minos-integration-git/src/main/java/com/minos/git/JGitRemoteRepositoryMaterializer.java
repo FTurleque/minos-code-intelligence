@@ -1,6 +1,7 @@
 package com.minos.git;
 
 import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.remote.RemoteRepositoryRequest.RemoteHost;
@@ -513,13 +514,15 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     private static void moveDirectory(Path source, Path target) throws IOException {
-        try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE); }
-        catch (AtomicMoveNotSupportedException exception) { Files.move(source, target); }
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException exception) {
+            throw new IOException("remote repository cache requires atomic directory publication", exception);
+        }
     }
 
     private static void moveFile(Path source, Path target) throws IOException {
-        try { Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-        catch (AtomicMoveNotSupportedException exception) { Files.move(source, target, StandardCopyOption.REPLACE_EXISTING); }
+        DurableAtomicFile.replace(source, target, "remote repository cache metadata replacement");
     }
 
     interface RemoteGitClient {

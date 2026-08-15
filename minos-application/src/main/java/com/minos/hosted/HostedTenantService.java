@@ -82,7 +82,7 @@ final class HostedTenantService {
                 tenantId, ownerId, safeKeyId, now,
                 safeLifetime, UUID.randomUUID().toString());
 
-        store.create(audited);
+        HostedCommitRecovery.create(store, audited);
         HostedAuditDelivery.publishAfterCommit(auditSink, audited.auditEvents().getLast());
         return new Bootstrap(audited, token);
     }
