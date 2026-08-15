@@ -6,7 +6,9 @@ import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.semantic.StaleSemanticSyncException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -21,11 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
 
+    @TempDir Path tempDir;
+
     @Test
     void conditionalCommitUsesAuthoritativeReaderWithoutBorrowingASecondLease() throws Exception {
         UUID projectId = UUID.randomUUID();
         String text = projectId.toString();
-        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
         knowledge.publish(projectId, "snap-1", List.of(), List.of(), List.of());
         AtomicBoolean externalReaderCalled = new AtomicBoolean();
@@ -45,7 +49,7 @@ class PostgresSemanticSyncConsistencyTest extends PostgresTestSupport {
     void conditionalCommitRejectsAStaleStructuralSnapshot() throws Exception {
         UUID projectId = UUID.randomUUID();
         String text = projectId.toString();
-        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         PostgresSemanticVectorStore semantic = new PostgresSemanticVectorStore(connections);
         knowledge.publish(projectId, "snap-2", List.of(), List.of(), List.of());
 
