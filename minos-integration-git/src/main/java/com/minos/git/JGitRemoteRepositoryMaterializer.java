@@ -2,6 +2,7 @@ package com.minos.git;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
@@ -93,9 +94,12 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         this.gitClient = Objects.requireNonNull(gitClient, "gitClient");
         this.secretResolver = Objects.requireNonNull(secretResolver, "secretResolver");
         this.clock = Objects.requireNonNull(clock, "clock");
-        Files.createDirectories(cacheRoot);
-        Files.createDirectories(locksRoot);
-        Files.createDirectories(leasesRoot);
+        // A cache entry is a full clone of a possibly private repository, so the whole remote
+        // cache tree is owner-only and an installation predating this policy is hardened here.
+        PrivateLocalStorage.ensurePrivateDirectory(remoteRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(cacheRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(locksRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(leasesRoot);
         this.leases = new SharedCacheLeaseRegistry(leasesRoot, LOCK_ACQUIRE_TIMEOUT, "remote cache");
     }
 
@@ -168,7 +172,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         if (Files.exists(entry)) deleteCacheTree(entry);
 
         Path temporary = cacheRoot.resolve(".entry-" + UUID.randomUUID() + ".tmp");
-        Files.createDirectory(temporary);
+        PrivateLocalStorage.ensurePrivateDirectory(temporary);
         try {
             Path repositoryRoot = temporary.resolve(REPOSITORY_DIRECTORY);
             char[] secret = resolveSecret(request);
@@ -386,7 +390,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static void touch(Path entry, Properties metadata, Instant instant) throws IOException {
         metadata.setProperty("lastAccessAt", instant.toString());
         Path target = entry.resolve(METADATA_FILE);
-        Path temporary = Files.createTempFile(entry, ".metadata-", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(entry, ".metadata-", ".tmp");
         try {
             writeProperties(temporary, metadata);
             moveFile(temporary, target);
