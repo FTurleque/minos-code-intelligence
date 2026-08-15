@@ -35,6 +35,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private static final long READER_JOIN_MILLIS = 5_000L;
     private static final long OWNERSHIP_POLL_MILLIS = 10L;
     private static final long POST_ROOT_EXIT_TRACK_MILLIS = 250L;
+    private static final long HOST_PID = ProcessHandle.current().pid();
 
     private final Process process;
     private final MinosStrongProcessLauncher.ProcessBoundary strongBoundary;
@@ -250,10 +251,39 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private void remember(List<ProcessHandle> handles) {
         synchronized (ownershipLock) {
             for (ProcessHandle handle : handles) {
+                if (isHostProcess(handle)) continue;
                 ProcessIdentity identity = identity(handle);
                 ownedHandles.putIfAbsent(identity, handle);
             }
         }
+    }
+
+    /** Package-visible so containment tests can inject hostile observations deterministically. */
+    void rememberForTesting(List<ProcessHandle> handles) {
+        remember(handles);
+    }
+
+    boolean ownsPidForTesting(long pid) {
+        synchronized (ownershipLock) {
+            return ownedHandles.keySet().stream().anyMatch(identity -> identity.pid() == pid);
+        }
+    }
+
+    /**
+     * The IDE JVM is never a CLI-owned process. The plugin deliberately depends on no MINOS
+     * artifact, so this mirrors the runtime's ProcessTreeTermination policy rather than sharing it:
+     * the host PID is excluded when a handle is observed, when it is resolved again, and once more
+     * immediately before the destroy call, because tree enumeration can surface anomalies under PID
+     * reuse and on platforms with less precise parent tracking.
+     */
+    private static boolean isHostProcess(ProcessHandle handle) {
+        return handle.pid() == HOST_PID;
+    }
+
+    private static void destroyIfNotHost(ProcessHandle handle, boolean forcibly) {
+        if (isHostProcess(handle)) return;
+        if (forcibly) handle.destroyForcibly();
+        else handle.destroy();
     }
 
     private List<OwnedProcess> rememberedProcesses() {
@@ -278,10 +308,13 @@ final class MinosProcessSupervisor implements AutoCloseable {
 
     private static Optional<ProcessHandle> resolveSameProcess(OwnedProcess remembered) {
         ProcessIdentity expected = remembered.identity();
+        if (expected.pid() == HOST_PID) return Optional.empty();
         if (!mayReacquireByPid(expected.startInstant())) {
-            return remembered.handle().isAlive() ? Optional.of(remembered.handle()) : Optional.empty();
+            ProcessHandle original = remembered.handle();
+            return !isHostProcess(original) && original.isAlive() ? Optional.of(original) : Optional.empty();
         }
         return ProcessHandle.of(expected.pid())
+                .filter(current -> !isHostProcess(current))
                 .filter(current -> identity(current).equals(expected));
     }
 
@@ -289,7 +322,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
         List<OwnedProcess> handles = new ArrayList<>(snapshot);
         handles.reversed().forEach(remembered -> resolveSameProcess(remembered)
                 .filter(ProcessHandle::isAlive)
-                .ifPresent(ProcessHandle::destroy));
+                .ifPresent(handle -> destroyIfNotHost(handle, false)));
     }
 
     private void waitForDescendantsToSettle(long maximumMillis, List<Throwable> failures) {
@@ -337,7 +370,7 @@ final class MinosProcessSupervisor implements AutoCloseable {
     private void destroySameProcessForcibly(OwnedProcess remembered) {
         resolveSameProcess(remembered)
                 .filter(ProcessHandle::isAlive)
-                .ifPresent(ProcessHandle::destroyForcibly);
+                .ifPresent(handle -> destroyIfNotHost(handle, true));
     }
 
     private void joinReaders(List<Throwable> failures) {
