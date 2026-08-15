@@ -75,8 +75,8 @@ public final class SearchCodeCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <query>");
             }
-            String project = operand(arguments[0], "project");
-            String text = operand(arguments[1], "query");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String text = CliCommandSupport.operand(arguments[1], "query");
             String qualifiedName = null;
             String module = null;
             SymbolKind kind = null;
@@ -137,12 +137,6 @@ public final class SearchCodeCommand {
             );
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
 
         private static SymbolKind parseKind(String value) {
             try {

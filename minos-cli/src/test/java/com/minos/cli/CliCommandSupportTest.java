@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -102,6 +103,31 @@ class CliCommandSupportTest {
         assertEquals(checked, CliCommandSupport.unwrapRuntime(checked));
         IllegalStateException causeless = new IllegalStateException("causeless");
         assertEquals(causeless, CliCommandSupport.unwrapRuntime(causeless));
+    }
+
+    @Test
+    void operandRejectsAnythingThatWouldSwallowAFollowingFlag() {
+        assertEquals("alpha", CliCommandSupport.operand("alpha", "project"));
+        for (String rejected : new String[]{null, "", "   ", "-h", "--limit"}) {
+            IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                    () -> CliCommandSupport.operand(rejected, "project"));
+            assertEquals("invalid <project> operand", failure.getMessage());
+        }
+    }
+
+    @Test
+    void parseLimitEnforcesTheInclusiveRangeAndReportsNonNumericInput() {
+        assertEquals(1, CliCommandSupport.parseLimit("1", 1000));
+        assertEquals(1000, CliCommandSupport.parseLimit("1000", 1000));
+        assertEquals("limit must be between 1 and 1000",
+                assertThrows(IllegalArgumentException.class,
+                        () -> CliCommandSupport.parseLimit("0", 1000)).getMessage());
+        assertEquals("limit must be between 1 and 1000",
+                assertThrows(IllegalArgumentException.class,
+                        () -> CliCommandSupport.parseLimit("1001", 1000)).getMessage());
+        assertEquals("invalid limit: abc",
+                assertThrows(IllegalArgumentException.class,
+                        () -> CliCommandSupport.parseLimit("abc", 1000)).getMessage());
     }
 
     @Test

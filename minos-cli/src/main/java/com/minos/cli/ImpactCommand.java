@@ -57,8 +57,8 @@ public final class ImpactCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
             }
-            String project = operand(arguments[0], "project");
-            String symbol = operand(arguments[1], "symbol-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
             int depth = 4;
             int limit = 200;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
@@ -97,11 +97,5 @@ public final class ImpactCommand {
             }
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

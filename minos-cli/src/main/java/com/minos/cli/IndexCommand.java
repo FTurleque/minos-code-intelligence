@@ -207,7 +207,7 @@ public final class IndexCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = operand(arguments[0], "project");
+            String project = CliCommandSupport.operand(arguments[0], "project");
             String provider = null;
             boolean forceFull = false;
             boolean dryRun = false;
@@ -261,11 +261,5 @@ public final class IndexCommand {
             return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

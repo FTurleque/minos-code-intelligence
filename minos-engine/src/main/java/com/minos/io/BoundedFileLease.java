@@ -18,7 +18,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * duplicate subtle timeout, interruption and partial-acquisition handling.</p>
  */
 public final class BoundedFileLease implements AutoCloseable {
-    private static final long FILE_LOCK_POLL_MILLIS = 50L;
 
     private final ReentrantLock jvmLock;
     private final FileChannel channel;
@@ -42,7 +41,7 @@ public final class BoundedFileLease implements AutoCloseable {
         Path file = Objects.requireNonNull(lockFile, "lockFile").toAbsolutePath().normalize();
         ReentrantLock localLock = Objects.requireNonNull(jvmLock, "jvmLock");
         String label = requireDescription(description);
-        Deadline deadline = Deadline.after(timeout);
+        LeaseDeadline deadline = LeaseDeadline.after(timeout);
         boolean localAcquired = false;
         FileChannel channel = null;
         try {
@@ -86,7 +85,7 @@ public final class BoundedFileLease implements AutoCloseable {
         }
     }
 
-    private static void acquireJvmLock(ReentrantLock lock, Deadline deadline, String description) throws IOException {
+    private static void acquireJvmLock(ReentrantLock lock, LeaseDeadline deadline, String description) throws IOException {
         try {
             if (!lock.tryLock(deadline.remainingNanos(), TimeUnit.NANOSECONDS)) {
                 throw deadline.timeout(description + " JVM lease");
@@ -99,7 +98,7 @@ public final class BoundedFileLease implements AutoCloseable {
 
     private static FileLock acquireFileLock(
             FileChannel channel,
-            Deadline deadline,
+            LeaseDeadline deadline,
             String description
     ) throws IOException {
         FileLock lock = tryFileLock(channel);
@@ -138,62 +137,5 @@ public final class BoundedFileLease implements AutoCloseable {
         String value = Objects.requireNonNull(description, "description").trim();
         if (value.isEmpty()) throw new IllegalArgumentException("description must not be blank");
         return value;
-    }
-
-    private static final class Deadline {
-        private final Duration timeout;
-        private final long startedAtNanos;
-        private final long timeoutNanos;
-
-        private Deadline(Duration timeout, long startedAtNanos, long timeoutNanos) {
-            this.timeout = timeout;
-            this.startedAtNanos = startedAtNanos;
-            this.timeoutNanos = timeoutNanos;
-        }
-
-        private static Deadline after(Duration timeout) {
-            Duration wait = Objects.requireNonNull(timeout, "timeout");
-            if (wait.isZero() || wait.isNegative()) {
-                throw new IllegalArgumentException("lock timeout must be positive");
-            }
-            long nanos;
-            try {
-                nanos = wait.toNanos();
-            } catch (ArithmeticException overflow) {
-                nanos = Long.MAX_VALUE;
-            }
-            return new Deadline(wait, System.nanoTime(), nanos);
-        }
-
-        private long remainingNanos() {
-            long elapsed = System.nanoTime() - startedAtNanos;
-            if (elapsed <= 0L) return timeoutNanos;
-            if (elapsed >= timeoutNanos) return 0L;
-            return timeoutNanos - elapsed;
-        }
-
-        private void pauseBeforeRetry(String description) throws IOException {
-            long remainingNanos = remainingNanos();
-            if (remainingNanos <= 0L) throw timeout(description);
-            long convertedMillis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
-            long sleepMillis = boundedSleepMillis(convertedMillis);
-            try {
-                Thread.sleep(sleepMillis);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new IOException("interrupted while waiting for " + description, interrupted);
-            }
-            if (remainingNanos() <= 0L) throw timeout(description);
-        }
-
-        private IOException timeout(String description) {
-            return new IOException("timed out waiting for " + description + " after " + timeout);
-        }
-
-        private static long boundedSleepMillis(long convertedMillis) {
-            if (convertedMillis <= 0L) return 1L;
-            if (convertedMillis > FILE_LOCK_POLL_MILLIS) return FILE_LOCK_POLL_MILLIS;
-            return convertedMillis;
-        }
     }
 }

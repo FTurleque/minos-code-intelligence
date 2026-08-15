@@ -163,11 +163,12 @@ public final class RuntimeCommand {
                 case "symbol" -> Action.SYMBOL;
                 default -> throw new IllegalArgumentException("unknown runtime action: " + arguments[0]);
             };
-            String project = operand(arguments[1], "project");
+            String project = CliCommandSupport.operand(arguments[1], "project");
             Path file = null;
             String session = null;
             String symbol = null;
-            int limit = action == Action.SESSIONS ? 20 : 20;
+            // Every action defaults to 20; only the accepted ceiling is action-specific (see --limit).
+            int limit = 20;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
             Set<String> allowed = switch (action) {
@@ -199,12 +200,6 @@ public final class RuntimeCommand {
             return new Options(action, project, file, session, symbol, limit, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
 
         private static int boundedInt(String value, int maximum) {
             try {

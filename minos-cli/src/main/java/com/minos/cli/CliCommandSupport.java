@@ -87,6 +87,30 @@ final class CliCommandSupport {
     }
 
     /**
+     * Validates a positional operand. A value starting with {@code -} is rejected rather than
+     * consumed, so a forgotten operand cannot silently swallow the following option flag.
+     */
+    static String operand(String value, String name) {
+        if (value == null || value.isBlank() || value.startsWith("-")) {
+            throw new IllegalArgumentException("invalid <" + name + "> operand");
+        }
+        return value;
+    }
+
+    /** Parses a {@code --limit} value, rejecting anything outside {@code 1..maximum}. */
+    static int parseLimit(String value, int maximum) {
+        try {
+            int limit = Integer.parseInt(value);
+            if (limit < 1 || limit > maximum) {
+                throw new IllegalArgumentException("limit must be between 1 and " + maximum);
+            }
+            return limit;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("invalid limit: " + value, exception);
+        }
+    }
+
+    /**
      * Single-line operator-facing text for a failure: a blank message degrades to the exception type
      * and embedded line breaks are flattened so one failure stays one diagnostic line.
      */

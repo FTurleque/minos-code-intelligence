@@ -217,7 +217,7 @@ public final class RemoteIndexCommand {
                 case "index" -> Action.INDEX;
                 default -> throw new IllegalArgumentException("unknown remote action: " + arguments[0]);
             };
-            String repository = operand(arguments[1], "https-url");
+            String repository = CliCommandSupport.operand(arguments[1], "https-url");
             String reference = null;
             String commit = null;
             String subdirectory = null;
@@ -282,11 +282,5 @@ public final class RemoteIndexCommand {
             };
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

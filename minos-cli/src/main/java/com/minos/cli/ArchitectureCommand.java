@@ -69,7 +69,7 @@ public final class ArchitectureCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = operand(arguments[0], "project");
+            String project = CliCommandSupport.operand(arguments[0], "project");
             String module = null;
             ArchitectureOutputFormat format = ArchitectureOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
@@ -93,11 +93,5 @@ public final class ArchitectureCommand {
             return new Options(project, module, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

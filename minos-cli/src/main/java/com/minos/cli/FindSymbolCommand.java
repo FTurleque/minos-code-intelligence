@@ -141,7 +141,7 @@ public final class FindSymbolCommand {
                     case "--qualified-name" -> qualifiedName = requireValue(value, option);
                     case "--kind" -> kind = parseKind(requireValue(value, option));
                     case "--module" -> moduleId = requireValue(value, option);
-                    case "--limit" -> limit = parseLimit(requireValue(value, option));
+                    case "--limit" -> limit = CliCommandSupport.parseLimit(requireValue(value, option), MAX_LIMIT);
                     case "--format" -> format = SymbolOutputFormat.parse(
                             requireValue(value, option)
                     );
@@ -185,19 +185,5 @@ public final class FindSymbolCommand {
             }
         }
 
-        private static int parseLimit(String value) {
-            int limit;
-            try {
-                limit = Integer.parseInt(value);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid limit: " + value, exception);
-            }
-            if (limit < 1 || limit > MAX_LIMIT) {
-                throw new IllegalArgumentException(
-                        "limit must be between 1 and " + MAX_LIMIT
-                );
-            }
-            return limit;
-        }
     }
 }

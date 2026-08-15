@@ -120,8 +120,8 @@ public final class RelationshipCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
             }
-            String project = operand(arguments[0], "project");
-            String symbol = operand(arguments[1], "symbol-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
             int limit = FindSymbolCommand.DEFAULT_LIMIT;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
@@ -141,7 +141,7 @@ public final class RelationshipCommand {
                     throw new IllegalArgumentException("missing value for " + option);
                 }
                 if ("--limit".equals(option)) {
-                    limit = parseLimit(value);
+                    limit = CliCommandSupport.parseLimit(value, FindSymbolCommand.MAX_LIMIT);
                 } else {
                     format = SymbolOutputFormat.parse(value);
                 }
@@ -149,25 +149,6 @@ public final class RelationshipCommand {
             return new Options(project, symbol, limit, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
 
-        private static int parseLimit(String value) {
-            try {
-                int limit = Integer.parseInt(value);
-                if (limit < 1 || limit > FindSymbolCommand.MAX_LIMIT) {
-                    throw new IllegalArgumentException(
-                            "limit must be between 1 and " + FindSymbolCommand.MAX_LIMIT
-                    );
-                }
-                return limit;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid limit: " + value, exception);
-            }
-        }
     }
 }
