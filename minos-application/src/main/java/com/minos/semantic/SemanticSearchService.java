@@ -18,6 +18,7 @@ public final class SemanticSearchService {
     public static final int MAX_QUERY_UTF8_BYTES = 64 * 1024;
     public static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 8L * 1024L * 1024L;
     private static final int MAX_SNAPSHOT_READ_ATTEMPTS = 3;
+    private static final String SEMANTIC_MODE = "SEMANTIC";
 
     private final SemanticIndexService indexService;
     private final Map<QueryCacheKey, SemanticVector> queryCache = new LinkedHashMap<>(32, 0.75f, true);
@@ -57,13 +58,13 @@ public final class SemanticSearchService {
                     .map(hit -> new SearchHit(hit.document(), hit.score(), InformationNature.HEURISTIC,
                             selectedProvider.id(), selectedProvider.modelId()))
                     .toList();
-            return new SearchResponse(after.projectId(), after.activeSnapshotId(), request.query(), "SEMANTIC",
+            return new SearchResponse(after.projectId(), after.activeSnapshotId(), request.query(), SEMANTIC_MODE,
                     hits, successfulLimitations(after, vectorStore), elapsedMillis(started));
         }
         List<String> limitations = new ArrayList<>(latest == null ? List.of() : latest.limitations());
         limitations.add("SEMANTIC_INDEX_CHANGED_DURING_QUERY");
         return new SearchResponse(latest == null ? "unknown" : latest.projectId(),
-                latest == null ? null : latest.activeSnapshotId(), request.query(), "SEMANTIC", List.of(),
+                latest == null ? null : latest.activeSnapshotId(), request.query(), SEMANTIC_MODE, List.of(),
                 List.copyOf(limitations), elapsedMillis(started));
     }
 
@@ -72,7 +73,7 @@ public final class SemanticSearchService {
         List<String> limitations = new ArrayList<>(status.limitations());
         limitations.add(limitation);
         return new SearchResponse(status.projectId(), status.activeSnapshotId(), request.query(),
-                "SEMANTIC", List.of(), List.copyOf(limitations), elapsedMillis(started));
+                SEMANTIC_MODE, List.of(), List.copyOf(limitations), elapsedMillis(started));
     }
 
     private static List<String> successfulLimitations(
@@ -123,13 +124,28 @@ public final class SemanticSearchService {
     }
 
     private static long checkedAdd(long left, long right) {
-        try { return Math.addExact(left, right); }
-        catch (ArithmeticException exception) { return Long.MAX_VALUE; }
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
     }
 
-    private static long elapsedMillis(long started) { return (System.nanoTime() - started) / 1_000_000L; }
-    int queryCacheSize() { synchronized (queryCache) { return queryCache.size(); } }
-    long queryCacheWeightBytes() { synchronized (queryCache) { return queryCacheWeightBytes; } }
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000L;
+    }
+
+    int queryCacheSize() {
+        synchronized (queryCache) {
+            return queryCache.size();
+        }
+    }
+
+    long queryCacheWeightBytes() {
+        synchronized (queryCache) {
+            return queryCacheWeightBytes;
+        }
+    }
 
     private record QueryCacheKey(String providerId, String modelId, int dimensions, String query) {
         private QueryCacheKey {
@@ -151,12 +167,18 @@ public final class SemanticSearchService {
                 throw new IllegalArgumentException("minimumScore must be between -1 and 1");
             }
         }
-        public static SearchRequest defaults(String query) { return new SearchRequest(query, 20, 0.0); }
+
+        public static SearchRequest defaults(String query) {
+            return new SearchRequest(query, 20, 0.0);
+        }
     }
 
     public record SearchHit(SemanticDocument document, double score, InformationNature nature,
                             String providerId, String modelId) {
-        public SearchHit { Objects.requireNonNull(document, "document"); Objects.requireNonNull(nature, "nature"); }
+        public SearchHit {
+            Objects.requireNonNull(document, "document");
+            Objects.requireNonNull(nature, "nature");
+        }
     }
 
     public record SearchResponse(String projectId, String snapshotId, String query, String mode,

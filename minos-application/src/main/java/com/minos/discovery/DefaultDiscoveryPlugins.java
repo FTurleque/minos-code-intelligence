@@ -19,6 +19,7 @@ import java.util.Set;
 
 /** Built-in discovery extensions. The orchestration service only consumes the SPI lists. */
 public final class DefaultDiscoveryPlugins {
+    private static final String JAVA_EXTENSION = ".java";
 
     private DefaultDiscoveryPlugins() { }
 
@@ -52,7 +53,7 @@ public final class DefaultDiscoveryPlugins {
 
     public static List<LanguageDetector> languageDetectors() {
         return List.of(
-                extensionLanguage(Language.JAVA, ".java"),
+                extensionLanguage(Language.JAVA, JAVA_EXTENSION),
                 extensionLanguage(Language.KOTLIN, ".kt", ".kts"),
                 extensionLanguage(Language.TYPESCRIPT, ".ts", ".tsx"),
                 extensionLanguage(Language.PYTHON, ".py"),
@@ -66,8 +67,8 @@ public final class DefaultDiscoveryPlugins {
 
     public static List<SourceRootDetector> sourceRootDetectors() {
         return List.of(
-                conventionalRoot("src/main/java", SourceRootKind.SOURCE, Language.JAVA, ".java"),
-                conventionalRoot("src/test/java", SourceRootKind.TEST, Language.JAVA, ".java"),
+                conventionalRoot("src/main/java", SourceRootKind.SOURCE, Language.JAVA, JAVA_EXTENSION),
+                conventionalRoot("src/test/java", SourceRootKind.TEST, Language.JAVA, JAVA_EXTENSION),
                 conventionalRoot("src/main/kotlin", SourceRootKind.SOURCE, Language.KOTLIN, ".kt", ".kts"),
                 conventionalRoot("src/test/kotlin", SourceRootKind.TEST, Language.KOTLIN, ".kt", ".kts"),
                 conventionalRoot("src", SourceRootKind.SOURCE, Language.TYPESCRIPT, ".ts", ".tsx"),
