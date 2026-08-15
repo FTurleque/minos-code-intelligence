@@ -219,17 +219,34 @@ class M29DockerAdministrationContractTest {
     @Test
     void providerProcessPlansKeepGeneratedIndexesOutOfProjectRoots() throws Exception {
         Path root = repoRoot();
-        for (String relative : new String[]{
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipTypeScriptProcessPlanFactory.java",
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java",
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory.java",
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory.java",
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory.java",
-                "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory.java"
+        Path runtime = root.resolve("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime");
+
+        // Executable-backed plans now inherit run-directory resolution from a single skeleton, so the
+        // invariant is enforced there once instead of being restated in every provider factory.
+        String skeleton = normalizedText(runtime.resolve("AbstractScipProcessPlanFactory.java"));
+        assertTrue(skeleton.contains(
+                        "Objects.requireNonNull(runDirectory, \"runDirectory\").toAbsolutePath().normalize()"),
+                "shared SCIP plan skeleton must normalise the caller-provided run directory");
+        assertTrue(skeleton.contains("runRoot.resolve(\"index.scip\")"),
+                "shared SCIP plan skeleton must emit index.scip under the run directory");
+        assertFalse(skeleton.contains("root.resolve(\"index.scip\")"),
+                "shared SCIP plan skeleton must never emit index.scip into the project root");
+
+        for (String factory : new String[]{
+                "ScipTypeScriptProcessPlanFactory.java",
+                "ScipJavaProcessPlanFactory.java",
+                "ScipClangProcessPlanFactory.java",
+                "ScipDotnetProcessPlanFactory.java",
+                "ScipGoProcessPlanFactory.java",
+                "RustAnalyzerScipProcessPlanFactory.java"
         }) {
-            String source = normalizedText(root.resolve(relative));
-            assertTrue(source.contains("runDirectory"));
-            assertFalse(source.contains("root.resolve(\"index.scip\")"));
+            String source = normalizedText(runtime.resolve(factory));
+            assertTrue(source.contains("extends AbstractScipProcessPlanFactory") || source.contains("runDirectory"),
+                    factory + " must inherit the shared run-directory skeleton or resolve the run directory itself");
+            assertFalse(source.contains("root.resolve(\"index.scip\")"),
+                    factory + " must never emit index.scip into the project root");
+            assertFalse(source.contains("projectRoot.resolve(\"index.scip\")"),
+                    factory + " must never emit index.scip into the project root");
         }
         String javaPlan = normalizedText(root.resolve(
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));
