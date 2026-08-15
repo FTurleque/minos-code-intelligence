@@ -34,14 +34,14 @@ final class IndexingRunExecutor {
         Path root = validateExecutionRoot(projectRoot, targets, mode);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, createdAt);
-        RunContext context = new RunContext(UUID.randomUUID(), projectId, createdAt, previous);
+        RunContext context = new RunContext(UUID.randomUUID(), projectId, createdAt, previous, targets.size());
 
         try {
-            publishInProgress(context, mode, targets.size(), stateStore);
+            publishInProgress(context, mode, stateStore);
             executeProviders(context, root, targets, mode, changedFiles, executors, stateStore);
             stageSnapshot(context, mode, stager, stateStore);
             promoteSnapshot(context, promoter);
-            return persistSuccess(context, mode, targets.size(), stateStore, clock.instant());
+            return persistSuccess(context, mode, stateStore, clock.instant());
         } catch (Exception failure) {
             return persistFailure(context, failure, stateStore, clock.instant());
         }
@@ -86,7 +86,6 @@ final class IndexingRunExecutor {
     private static void publishInProgress(
             RunContext context,
             IndexingMode mode,
-            int scopeCount,
             IndexStateStore stateStore
     ) {
         stateStore.saveRun(running(
@@ -97,7 +96,7 @@ final class IndexingRunExecutor {
                 List.of(),
                 Optional.empty(),
                 context.previous.activeSnapshotId(),
-                Optional.of("provider execution started: mode=" + mode + ", scopes=" + scopeCount)));
+                Optional.of("provider execution started: mode=" + mode + ", scopes=" + context.totalTargets)));
         stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
                 context.previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
@@ -117,7 +116,7 @@ final class IndexingRunExecutor {
             IndexStateStore stateStore
     ) throws Exception {
         for (IndexingExecutionTarget target : targets) {
-            executeProvider(context, root, target, mode, changedFiles, executors, targets.size(), stateStore);
+            executeProvider(context, root, target, mode, changedFiles, executors, stateStore);
         }
     }
 
@@ -128,7 +127,6 @@ final class IndexingRunExecutor {
             IndexingMode mode,
             List<String> changedFiles,
             Map<String, IndexerExecutor> executors,
-            int totalTargets,
             IndexStateStore stateStore
     ) throws Exception {
         var selection = target.selection();
@@ -158,7 +156,7 @@ final class IndexingRunExecutor {
                 context.staged,
                 context.previous.activeSnapshotId(),
                 Optional.of("provider artifacts completed: " + context.executions.size()
-                        + "/" + totalTargets + ", mode=" + mode + ", scope=" + portable(relative))));
+                        + "/" + context.totalTargets + ", mode=" + mode + ", scope=" + portable(relative))));
     }
 
     private static IndexerExecutor requireExecutor(Map<String, IndexerExecutor> executors, String indexerId) {
@@ -233,7 +231,6 @@ final class IndexingRunExecutor {
     private static IndexingRun persistSuccess(
             RunContext context,
             IndexingMode mode,
-            int scopeCount,
             IndexStateStore stateStore,
             Instant completedAt
     ) {
@@ -242,7 +239,7 @@ final class IndexingRunExecutor {
                 ? "; authoritative snapshot confirmed after lost durability acknowledgement"
                 : "";
         String successMessage = "indexing run completed and snapshot promoted: mode=" + mode
-                + ", scopes=" + scopeCount + durabilitySuffix;
+                + ", scopes=" + context.totalTargets + durabilitySuffix;
         IndexingRun succeeded = new IndexingRun(
                 context.runId,
                 context.projectId,
@@ -409,6 +406,7 @@ final class IndexingRunExecutor {
         private final UUID projectId;
         private final Instant createdAt;
         private final ProjectIndexState previous;
+        private final int totalTargets;
         private final List<IndexingArtifact> artifacts = new ArrayList<>();
         private final List<IndexerExecution> executions = new ArrayList<>();
         private Optional<String> staged = Optional.empty();
@@ -416,11 +414,18 @@ final class IndexingRunExecutor {
         private boolean committed;
         private boolean durabilityAcknowledgementPending;
 
-        private RunContext(UUID runId, UUID projectId, Instant createdAt, ProjectIndexState previous) {
+        private RunContext(
+                UUID runId,
+                UUID projectId,
+                Instant createdAt,
+                ProjectIndexState previous,
+                int totalTargets
+        ) {
             this.runId = runId;
             this.projectId = projectId;
             this.createdAt = createdAt;
             this.previous = previous;
+            this.totalTargets = totalTargets;
         }
     }
 }

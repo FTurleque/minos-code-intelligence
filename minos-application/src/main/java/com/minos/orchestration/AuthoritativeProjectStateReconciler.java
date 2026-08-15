@@ -86,7 +86,6 @@ final class AuthoritativeProjectStateReconciler {
         Optional<Decision> recovery = recoverIfRequired(
                 projectId,
                 activeAfter,
-                persisted,
                 promoter,
                 stateStore,
                 observedAt,
@@ -99,7 +98,6 @@ final class AuthoritativeProjectStateReconciler {
     private static Optional<Decision> recoverIfRequired(
             UUID projectId,
             ActiveSnapshotObservation active,
-            ProjectIndexState persisted,
             SnapshotPromoter promoter,
             IndexStateStore stateStore,
             Instant observedAt,
