@@ -138,52 +138,67 @@ public final class ProjectIgnoreRules {
         StringBuilder regex = new StringBuilder();
         int index = 0;
         while (index < glob.length()) {
-            char current = glob.charAt(index);
-            if (current == '\\' && index + 1 < glob.length()) {
-                appendRegexLiteral(regex, glob.charAt(index + 1));
-                index += 2;
-                continue;
-            }
-            if (current == '*') {
-                if (index + 1 < glob.length() && glob.charAt(index + 1) == '*') {
-                    index += 2;
-                    while (index < glob.length() && glob.charAt(index) == '*') index++;
-                    if (index < glob.length() && glob.charAt(index) == '/') {
-                        regex.append("(?:.*/)?");
-                        index++;
-                    } else {
-                        regex.append(".*");
-                    }
-                } else {
-                    regex.append("[^/]*");
-                    index++;
-                }
-                continue;
-            }
-            if (current == '?') {
-                regex.append("[^/]");
-                index++;
-                continue;
-            }
-            if (current == '[') {
-                int closing = glob.indexOf(']', index + 1);
-                if (closing > index + 1) {
-                    String characterClass = glob.substring(index + 1, closing);
-                    regex.append('[');
-                    if (characterClass.startsWith("!")) {
-                        regex.append('^');
-                        characterClass = characterClass.substring(1);
-                    }
-                    regex.append(characterClass.replace("\\", "\\\\"));
-                    regex.append(']');
-                    index = closing + 1;
-                    continue;
-                }
-            }
-            appendRegexLiteral(regex, current);
-            index++;
+            index = appendGlobToken(regex, glob, index);
         }
         return regex.toString();
+    }
+
+    private static int appendGlobToken(StringBuilder regex, String glob, int index) {
+        char current = glob.charAt(index);
+        return switch (current) {
+            case '\\' -> appendEscapedLiteral(regex, glob, index);
+            case '*' -> appendWildcard(regex, glob, index);
+            case '?' -> {
+                regex.append("[^/]");
+                yield index + 1;
+            }
+            case '[' -> appendCharacterClassOrLiteral(regex, glob, index);
+            default -> {
+                appendRegexLiteral(regex, current);
+                yield index + 1;
+            }
+        };
+    }
+
+    private static int appendEscapedLiteral(StringBuilder regex, String glob, int index) {
+        if (index + 1 >= glob.length()) {
+            appendRegexLiteral(regex, '\\');
+            return index + 1;
+        }
+        appendRegexLiteral(regex, glob.charAt(index + 1));
+        return index + 2;
+    }
+
+    private static int appendWildcard(StringBuilder regex, String glob, int index) {
+        if (index + 1 >= glob.length() || glob.charAt(index + 1) != '*') {
+            regex.append("[^/]*");
+            return index + 1;
+        }
+        int cursor = index + 2;
+        while (cursor < glob.length() && glob.charAt(cursor) == '*') cursor++;
+        if (cursor < glob.length() && glob.charAt(cursor) == '/') {
+            regex.append("(?:.*/)?");
+            return cursor + 1;
+        }
+        regex.append(".*");
+        return cursor;
+    }
+
+    private static int appendCharacterClassOrLiteral(StringBuilder regex, String glob, int index) {
+        int closing = glob.indexOf(']', index + 1);
+        if (closing <= index + 1) {
+            appendRegexLiteral(regex, '[');
+            return index + 1;
+        }
+        String characterClass = glob.substring(index + 1, closing);
+        regex.append('[');
+        if (characterClass.startsWith("!")) {
+            regex.append('^');
+            characterClass = characterClass.substring(1);
+        }
+        regex.append(characterClass.replace("\\", "\\\\"));
+        regex.append(']');
+        return closing + 1;
     }
 
     private static void appendRegexLiteral(StringBuilder regex, char value) {
