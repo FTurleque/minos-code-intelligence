@@ -7,4 +7,6 @@ MINOS classifies local writes by authority before choosing a publication primiti
 - **Ephemeral provider artifacts** may cross filesystems. MINOS copies them under the existing artifact byte budget into the target filesystem and only then performs durable atomic publication; source cleanup is not the commit point.
 - **Packaged IntelliJ launcher copies** are not persistent authority. The plugin resource is authoritative and the installed launcher is reconstructed before each Windows launch. A stale or incomplete installed copy is therefore replaceable rather than recoverable state; it must never be treated as project/control-plane data.
 
+Milestone structural gates must assert the selected persistence primitive and its recovery contract (for example `DurableAtomicFile.publish/replace`), rather than depending on a lower-level implementation token such as a direct `ATOMIC_MOVE` call in each store.
+
 This policy deliberately separates crash-consistency guarantees from cache availability and prevents new file-backed stores from inventing weaker fallback semantics.
