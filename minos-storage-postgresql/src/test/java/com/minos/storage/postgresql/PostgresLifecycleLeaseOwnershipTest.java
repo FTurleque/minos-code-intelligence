@@ -31,6 +31,7 @@ class PostgresLifecycleLeaseOwnershipTest extends PostgresTestSupport {
         assertInstanceOf(IllegalStateException.class, failure.get());
 
         lease.close();
+        lease.close();
         try (IndexStateStore.ProjectLease reacquired = store.acquireProjectLease(projectId)) {
             assertNotNull(reacquired);
         }
