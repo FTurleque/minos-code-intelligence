@@ -33,7 +33,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private static final int VALIDATION_TIMEOUT_SECONDS = 5;
     private static final String MANAGED_DOCKER_HOST = "minos-postgres";
     private static final String SSL_MODE_PARAMETER = "sslmode";
-    private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of(SSL_MODE_PARAMETER);
+    private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of("sslmode");
     private static final Set<String> ALLOWED_SSL_MODES = Set.of(
             "disable", "allow", "prefer", "require", "verify-ca", "verify-full");
 
