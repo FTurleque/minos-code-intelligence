@@ -32,6 +32,7 @@ def main() -> int:
     try:
         remote = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
         remote_lease = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexLease.java")
+        bounded_file_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         linux = read("minos-runtime-local/src/main/java/com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend.java")
         windows = read("minos-runtime-local/src/main/java/com/minos/runtime/WindowsAppContainerWorkerSandboxBackend.java")
         windows_script = read("minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1")
@@ -56,7 +57,11 @@ def main() -> int:
         require("LocalRemoteIndexOperations.java", remote,
                 "RemoteIndexLease.acquire(application.home(), source.cacheKey())",
                 "indexUnderSourceLease")
-        require("RemoteIndexLease.java", remote_lease, "FileLock", "LOCK_STRIPES", "channel.lock()")
+        require("RemoteIndexLease.java", remote_lease,
+                "BoundedFileLease", "LOCK_STRIPES", "ACQUIRE_TIMEOUT", "BoundedFileLease.acquire")
+        require("BoundedFileLease.java", bounded_file_lease,
+                "FileLock", "tryLock()", "OverlappingFileLockException", "deadline")
+        forbid("RemoteIndexLease.java", remote_lease, "channel.lock()")
 
         require("LinuxBubblewrapWorkerSandboxBackend.java", linux,
                 "addReadOnlyFile", "managedRuntimeRoot", "LINUX_EXACT_FILE_BIND_FOR_EXTERNAL_PROVIDER_ARGUMENTS")
