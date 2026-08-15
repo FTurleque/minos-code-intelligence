@@ -3,7 +3,6 @@ package com.minos.orchestration;
 import com.minos.orchestration.IndexingRun.Phase;
 import com.minos.orchestration.IndexingRun.Status;
 import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation;
-import com.minos.orchestration.IndexingRuntimePorts.ActiveSnapshotObservation.Status;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 
 import java.time.Instant;
@@ -68,7 +67,7 @@ final class AuthoritativeProjectStateReconciler {
             ProjectIndexState persisted = stateStore.findProjectState(projectId)
                     .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, observedAt));
 
-            if (activeBefore.status() == Status.UNSUPPORTED) {
+            if (activeBefore.status() == ActiveSnapshotObservation.Status.UNSUPPORTED) {
                 return persisted;
             }
 
@@ -105,7 +104,7 @@ final class AuthoritativeProjectStateReconciler {
                 }
             }
 
-            if (activeAfter.status() == Status.NO_ACTIVE_SNAPSHOT) {
+            if (activeAfter.status() == ActiveSnapshotObservation.Status.NO_ACTIVE_SNAPSHOT) {
                 if (persisted.activeSnapshotId().isPresent()) {
                     throw missingAuthoritativeSnapshot(projectId, persisted);
                 }
@@ -153,7 +152,7 @@ final class AuthoritativeProjectStateReconciler {
                 .toList();
         boolean recoveredCommittedRun = false;
         for (IndexingRun run : running) {
-            boolean committed = active.status() == Status.ACTIVE
+            boolean committed = active.status() == ActiveSnapshotObservation.Status.ACTIVE
                     && run.phase() == Phase.PROMOTION
                     && run.stagedSnapshotId().equals(active.snapshotId());
             recoveredCommittedRun |= committed;
@@ -201,7 +200,7 @@ final class AuthoritativeProjectStateReconciler {
         String recoveryDetail = detail + "; recovered abandoned indexing lifecycle"
                 + (recovery.recoveredCount() == 0 ? " metadata" : " runs=" + recovery.recoveredCount());
 
-        if (active.status() == Status.NO_ACTIVE_SNAPSHOT) {
+        if (active.status() == ActiveSnapshotObservation.Status.NO_ACTIVE_SNAPSHOT) {
             return new ProjectIndexState(
                     projectId,
                     ProjectIndexState.Availability.FAILED,
