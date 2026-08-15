@@ -74,9 +74,17 @@ public final class ProjectIndexLease implements AutoCloseable {
             FileLock lock = acquireFileLock(channel, deadline, wait, projectId);
             return new ProjectIndexLease(lockPath, state, channel, lock);
         } catch (IOException | RuntimeException exception) {
-            if (channel != null) channel.close();
+            IOException cleanupFailure = null;
+            if (channel != null) {
+                try {
+                    channel.close();
+                } catch (IOException closeFailure) {
+                    cleanupFailure = closeFailure;
+                }
+            }
             if (jvmAcquired) state.lock.unlock();
             releaseState(lockPath, state);
+            if (cleanupFailure != null) exception.addSuppressed(cleanupFailure);
             throw exception;
         }
     }
