@@ -791,7 +791,22 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
-    private record Extracted(byte[] manifestBytes, Path artifact) {
+    private static final class Extracted {
+        private final byte[] manifestBytes;
+        private final Path artifact;
+
+        private Extracted(byte[] manifestBytes, Path artifact) {
+            this.manifestBytes = Objects.requireNonNull(manifestBytes, "manifestBytes").clone();
+            this.artifact = Objects.requireNonNull(artifact, "artifact");
+        }
+
+        private byte[] manifestBytes() {
+            return manifestBytes.clone();
+        }
+
+        private Path artifact() {
+            return artifact;
+        }
     }
 
     private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) {
