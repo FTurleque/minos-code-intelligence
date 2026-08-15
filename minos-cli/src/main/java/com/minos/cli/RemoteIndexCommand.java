@@ -52,42 +52,31 @@ public final class RemoteIndexCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
-            RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
-                    options.repository(),
-                    options.reference(),
-                    options.commit(),
-                    options.subdirectory(),
-                    options.credentialEnvironmentVariable()
-            );
-            if (options.action() == Action.MATERIALIZE) {
-                output.append(renderMaterialization(operations.materialize(request), options.format())).append('\n');
-            } else {
-                output.append(renderIndex(operations.index(
-                        request,
-                        options.displayName(),
-                        options.provider(),
-                        options.workerId(),
-                        options.workerNetworkPolicy()
-                ), options.format())).append('\n');
-            }
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: remote ").append(options.action().command()).append(" failed: ")
-                    .append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
+                (options, exception) -> "remote " + options.action().command() + " failed: "
+                        + CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception)),
+                options -> {
+                    RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                            options.repository(),
+                            options.reference(),
+                            options.commit(),
+                            options.subdirectory(),
+                            options.credentialEnvironmentVariable()
+                    );
+                    if (options.action() == Action.MATERIALIZE) {
+                        output.append(renderMaterialization(operations.materialize(request), options.format()))
+                                .append('\n');
+                    } else {
+                        output.append(renderIndex(operations.index(
+                                request,
+                                options.displayName(),
+                                options.provider(),
+                                options.workerId(),
+                                options.workerNetworkPolicy()
+                        ), options.format())).append('\n');
+                    }
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage() {
@@ -187,23 +176,8 @@ public final class RemoteIndexCommand {
         return map;
     }
 
-    private static String failureMessage(Exception exception) {
-        Throwable effective = exception;
-        while (effective.getCause() != null && effective instanceof RuntimeException) {
-            effective = effective.getCause();
-        }
-        String message = effective.getMessage();
-        return message == null || message.isBlank()
-                ? effective.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
     private static String nullable(String value) {
         return value == null ? "-" : value;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
     }
 
     private enum Action {

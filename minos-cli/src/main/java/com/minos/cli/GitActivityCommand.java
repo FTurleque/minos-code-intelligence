@@ -38,35 +38,22 @@ public final class GitActivityCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-
-        try {
-            ProjectOperations.ProjectView project = projects.inspectProject(options.project());
-            GitIntelligenceService.ActivityReport report = git.analyze(
-                    Path.of(project.rootPath()),
-                    new GitIntelligenceService.ActivityQuery(
-                            Instant.now().minus(Duration.ofDays(options.days())),
-                            options.maxCommits(),
-                            options.maxFiles(),
-                            options.zoneDepth()
-                    )
-            );
-            output.append(render(report, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: git-activity failed: ").append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
+                (options, exception) -> NAME + " failed: " + failureMessage(exception),
+                options -> {
+                    ProjectOperations.ProjectView project = projects.inspectProject(options.project());
+                    GitIntelligenceService.ActivityReport report = git.analyze(
+                            Path.of(project.rootPath()),
+                            new GitIntelligenceService.ActivityQuery(
+                                    Instant.now().minus(Duration.ofDays(options.days())),
+                                    options.maxCommits(),
+                                    options.maxFiles(),
+                                    options.zoneDepth()
+                            )
+                    );
+                    output.append(render(report, options.format())).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage() {
@@ -158,22 +145,16 @@ public final class GitActivityCommand {
         );
     }
 
+    /** Reports the immediate cause of a runtime wrapper: git plumbing rethrows once, never deeper. */
     private static String failureMessage(Exception exception) {
-        Throwable effective = exception instanceof RuntimeException && exception.getCause() != null
-                ? exception.getCause()
-                : exception;
-        String message = effective.getMessage();
-        return message == null || message.isBlank()
-                ? effective.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
+        return CliCommandSupport.failureMessage(
+                exception instanceof RuntimeException && exception.getCause() != null
+                        ? exception.getCause()
+                        : exception);
     }
 
     private static String nullable(String value) {
         return value == null ? "-" : value;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
     }
 
     private record Options(

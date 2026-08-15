@@ -32,19 +32,7 @@ public final class ArchitectureCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             String rendered;
             if (options.format().isGraph()) {
                 ArchitectureIntelligenceView view = query.getArchitectureIntelligence(options.project());
@@ -69,26 +57,11 @@ public final class ArchitectureCommand {
             }
             output.append(rendered).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: architecture failed: ")
-                    .append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() {
         return USAGE;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     private record Options(String project, String module, ArchitectureOutputFormat format) {

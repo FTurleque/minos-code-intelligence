@@ -49,31 +49,19 @@ public final class RuntimeCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
-            String rendered = switch (options.action()) {
-                case IMPORT -> renderImport(options);
-                case SESSIONS -> renderSessions(options);
-                case REPORT -> renderReport(options);
-                case SYMBOL -> renderSymbol(options);
-            };
-            output.append(rendered).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: runtime ").append(options.action().token).append(" failed: ")
-                    .append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
+                (options, exception) -> "runtime " + options.action().token + " failed: "
+                        + CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception)),
+                options -> {
+                    String rendered = switch (options.action()) {
+                        case IMPORT -> renderImport(options);
+                        case SESSIONS -> renderSessions(options);
+                        case REPORT -> renderReport(options);
+                        case SYMBOL -> renderSymbol(options);
+                    };
+                    output.append(rendered).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage() { return USAGE; }
@@ -150,16 +138,6 @@ public final class RuntimeCommand {
                 "outgoingCalls: " + report.outgoingCalls().size(),
                 "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS");
     }
-
-    private static String failureMessage(Exception exception) {
-        Throwable effective = exception;
-        while (effective instanceof RuntimeException && effective.getCause() != null) effective = effective.getCause();
-        String message = effective.getMessage();
-        return message == null || message.isBlank() ? effective.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    private static boolean isHelp(String value) { return "--help".equals(value) || "-h".equals(value); }
 
     private enum Action {
         IMPORT("import"), SESSIONS("sessions"), REPORT("report"), SYMBOL("symbol");
