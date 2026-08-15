@@ -57,14 +57,15 @@ public final class RelationshipProgramGraphProvider implements ProgramGraphProvi
         boolean edgeBudgetReached = false;
 
         for (Relationship relationship : snapshot.relationships()) {
-            if (!resolvedSymbolToSymbol(relationship) || !supported(relationship.kind())) continue;
-            if (selected.size() >= budget.maxEdges()) {
-                edgeBudgetReached = true;
-                break;
+            if (resolvedSymbolToSymbol(relationship) && supported(relationship.kind())) {
+                if (selected.size() >= budget.maxEdges()) {
+                    edgeBudgetReached = true;
+                    break;
+                }
+                selected.add(relationship);
+                requiredSymbolIds.add(relationship.source().id());
+                requiredSymbolIds.add(relationship.target().id());
             }
-            selected.add(relationship);
-            requiredSymbolIds.add(relationship.source().id());
-            requiredSymbolIds.add(relationship.target().id());
         }
 
         Map<String, Symbol> symbols = new LinkedHashMap<>();
@@ -86,25 +87,24 @@ public final class RelationshipProgramGraphProvider implements ProgramGraphProvi
         for (Relationship relationship : selected) {
             Symbol source = symbols.get(relationship.source().id());
             Symbol target = symbols.get(relationship.target().id());
-            if (source == null || target == null) continue;
-            if (!ensureNode(nodes, source, budget) || !ensureNode(nodes, target, budget)) {
-                limitations.add("PROGRAM_GRAPH_NODE_LIMIT_REACHED");
-                continue;
-            }
-            if (relationship.kind() == RelationshipKind.CALLS) {
-                edges.add(new ProgramGraphEdge(
-                        "call:" + relationship.id(), projectId, nodeId(source.id()), nodeId(target.id()),
-                        ProgramEdgeKind.CALL, relationship.nature(), relationship.confidence(),
-                        relationship.origin(), relationship.evidence()));
-                callObserved = true;
-            } else if (relationship.kind() == RelationshipKind.WRITES) {
-                edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, source, target, true));
-                localFlowObserved = true;
-                limitations.add("EXECUTION_ORDER_NOT_PROVEN");
-            } else if (relationship.kind() == RelationshipKind.READS) {
-                edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, target, source, false));
-                localFlowObserved = true;
-                limitations.add("EXECUTION_ORDER_NOT_PROVEN");
+            if (source != null && target != null) {
+                if (!ensureNode(nodes, source, budget) || !ensureNode(nodes, target, budget)) {
+                    limitations.add("PROGRAM_GRAPH_NODE_LIMIT_REACHED");
+                } else if (relationship.kind() == RelationshipKind.CALLS) {
+                    edges.add(new ProgramGraphEdge(
+                            "call:" + relationship.id(), projectId, nodeId(source.id()), nodeId(target.id()),
+                            ProgramEdgeKind.CALL, relationship.nature(), relationship.confidence(),
+                            relationship.origin(), relationship.evidence()));
+                    callObserved = true;
+                } else if (relationship.kind() == RelationshipKind.WRITES) {
+                    edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, source, target, true));
+                    localFlowObserved = true;
+                    limitations.add("EXECUTION_ORDER_NOT_PROVEN");
+                } else if (relationship.kind() == RelationshipKind.READS) {
+                    edges.add(derivedFlowEdge(snapshot.snapshotId(), relationship, target, source, false));
+                    localFlowObserved = true;
+                    limitations.add("EXECUTION_ORDER_NOT_PROVEN");
+                }
             }
         }
 

@@ -1,6 +1,7 @@
 package com.minos.storage.postgresql;
 
 import java.io.IOException;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -18,9 +19,19 @@ final class PostgresSchemaMigrator {
         try {
             connections.inTransaction(connection -> {
                 try (Statement statement = connection.createStatement()) {
-                    String schema = statement.enquoteIdentifier(connections.schema(), true);
+                    String quotedSchema = statement.enquoteIdentifier(connections.schema(), true);
+                    if (quotedSchema.isBlank()) {
+                        throw new SQLException("PostgreSQL schema quoting produced an empty identifier");
+                    }
+                    try (PreparedStatement schemaSetting = connection.prepareStatement(
+                            "SELECT set_config('minos.migration_schema', ?, true)")) {
+                        schemaSetting.setString(1, connections.schema());
+                        schemaSetting.execute();
+                    }
                     statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
-                    statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                    statement.execute("DO $minos$ DECLARE target_schema text := "
+                            + "current_setting('minos.migration_schema', true); "
+                            + "BEGIN EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', target_schema); END $minos$");
                     statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
                     statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
                     int version = currentVersion(statement);
@@ -89,6 +100,7 @@ final class PostgresSchemaMigrator {
                 + "ON fingerprint_snapshots(project_id, created_at DESC, snapshot_id DESC)");
         s.execute("INSERT INTO schema_version(version) VALUES (3) ON CONFLICT(version) DO NOTHING");
     }
+
     private static void applyV4(Statement s) throws SQLException {
         try (ResultSet duplicates = s.executeQuery(
                 "SELECT name, COUNT(*) FROM workspaces GROUP BY name HAVING COUNT(*) > 1 LIMIT 1")) {
@@ -99,5 +111,4 @@ final class PostgresSchemaMigrator {
         s.execute("CREATE UNIQUE INDEX IF NOT EXISTS workspaces_name_uq ON workspaces(name)");
         s.execute("INSERT INTO schema_version(version) VALUES (4) ON CONFLICT(version) DO NOTHING");
     }
-
 }

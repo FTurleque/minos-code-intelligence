@@ -91,8 +91,8 @@ public final class ProjectIndexStateReconciler {
 
             Optional<ProjectIndexState> verifiedState = loadProjectState(projectId);
             Optional<CodeKnowledgeSnapshot> verifiedActive = loadActive(projectId);
-            if (!sameSnapshot(activeAfter, verifiedActive)) continue;
-            if (referencesSnapshot(verifiedState, authoritativeSnapshotId)) {
+            if (sameSnapshot(activeAfter, verifiedActive)
+                    && referencesSnapshot(verifiedState, authoritativeSnapshotId)) {
                 return new Reconciliation(verifiedActive, verifiedState, true);
             }
         }

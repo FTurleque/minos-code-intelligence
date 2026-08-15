@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * still matches. When the JVM/OS cannot provide a start instant, cleanup uses the originally
  * observed {@link ProcessHandle} only; a bare PID is never treated as sufficient authority to
  * terminate a process.</p>
+ *
+ * <p>The MINOS host JVM is an explicit non-ownable process. This invariant is enforced when a
+ * handle is observed, when it is resolved again, and immediately before termination.</p>
  */
 final class ProcessOwnershipTracker implements AutoCloseable {
     private static final long OWNERSHIP_POLL_MILLIS = 10L;
@@ -28,6 +31,7 @@ final class ProcessOwnershipTracker implements AutoCloseable {
     private static final long TRACKER_JOIN_MILLIS = 2_000L;
 
     private final Process process;
+    private final long hostPid = ProcessHandle.current().pid();
     private final Object lifecycleLock = new Object();
     private final Object ownershipLock = new Object();
     private final Map<ProcessIdentity, OwnedProcess> owned = new LinkedHashMap<>();
@@ -123,12 +127,20 @@ final class ProcessOwnershipTracker implements AutoCloseable {
         if (tracker.isAlive()) failures.add(new IOException("provider process ownership tracker did not terminate"));
     }
 
-    private void remember(List<ProcessHandle> handles) {
+    /** Package-visible so containment tests can inject hostile/invalid observations deterministically. */
+    void remember(List<ProcessHandle> handles) {
         synchronized (ownershipLock) {
             for (ProcessHandle handle : handles) {
+                if (handle.pid() == hostPid) continue;
                 ProcessIdentity identity = identity(handle);
                 owned.putIfAbsent(identity, new OwnedProcess(handle, identity));
             }
+        }
+    }
+
+    boolean ownsPid(long pid) {
+        synchronized (ownershipLock) {
+            return owned.keySet().stream().anyMatch(identity -> identity.pid() == pid);
         }
     }
 
@@ -142,10 +154,15 @@ final class ProcessOwnershipTracker implements AutoCloseable {
         List<OwnedProcess> snapshot = snapshotOwned();
         snapshot.reversed().forEach(ownedProcess -> resolveSameProcess(ownedProcess)
                 .filter(ProcessHandle::isAlive)
-                .ifPresent(handle -> {
-                    if (forcibly) handle.destroyForcibly();
-                    else handle.destroy();
-                }));
+                .ifPresent(handle -> destroyIfOwned(handle, forcibly)));
+    }
+
+    private void destroyIfOwned(ProcessHandle handle, boolean forcibly) {
+        // Defence in depth against corrupted bookkeeping, PID reuse and platform-specific tree
+        // enumeration anomalies: the host JVM is never a valid provider-owned process.
+        if (handle.pid() == hostPid) return;
+        if (forcibly) handle.destroyForcibly();
+        else handle.destroy();
     }
 
     private void waitForOwnedToSettle(long maximumMillis, List<Throwable> failures) {
@@ -177,13 +194,15 @@ final class ProcessOwnershipTracker implements AutoCloseable {
         return resolveSameProcess(ownedProcess).map(ProcessHandle::isAlive).orElse(false);
     }
 
-    private static Optional<ProcessHandle> resolveSameProcess(OwnedProcess ownedProcess) {
+    private Optional<ProcessHandle> resolveSameProcess(OwnedProcess ownedProcess) {
         ProcessIdentity expected = ownedProcess.identity();
+        if (expected.pid() == hostPid) return Optional.empty();
         if (expected.startInstant().isEmpty()) {
             ProcessHandle original = ownedProcess.handle();
-            return original.isAlive() ? Optional.of(original) : Optional.empty();
+            return original.pid() != hostPid && original.isAlive() ? Optional.of(original) : Optional.empty();
         }
         return ProcessHandle.of(expected.pid())
+                .filter(current -> current.pid() != hostPid)
                 .filter(current -> current.info().startInstant().equals(expected.startInstant()));
     }
 

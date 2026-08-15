@@ -32,6 +32,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private static final int DEFAULT_SOCKET_TIMEOUT_SECONDS = 120;
     private static final int VALIDATION_TIMEOUT_SECONDS = 5;
     private static final String MANAGED_DOCKER_HOST = "minos-postgres";
+    private static final String SSL_MODE_PARAMETER = "sslmode";
     private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of("sslmode");
     private static final Set<String> ALLOWED_SSL_MODES = Set.of(
             "disable", "allow", "prefer", "require", "verify-ca", "verify-full");
@@ -169,6 +170,21 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
+    /**
+     * Binds a dedicated lifecycle session to the normal connection context for the current thread.
+     * Every nested store operation then reuses the exact session that owns the advisory lock. A
+     * connection loss therefore fails closed instead of silently borrowing another pooled session.
+     */
+    DedicatedConnectionContext bindDedicatedConnection(DedicatedConnectionLease lease) {
+        DedicatedConnectionLease dedicated = Objects.requireNonNull(lease, "lease");
+        if (currentLease.get() != null) {
+            throw new IllegalStateException("cannot bind a PostgreSQL dedicated connection inside another lease");
+        }
+        LeaseContext context = new LeaseContext(dedicated.connection());
+        currentLease.set(context);
+        return new DedicatedConnectionContext(dedicated, context, Thread.currentThread());
+    }
+
     private <T> T executeTransaction(LeaseContext context, ConnectionWork<T> work) throws SQLException, IOException {
         if (context == null) throw new SQLException("PostgreSQL transaction has no active connection lease");
         Connection connection = context.connection;
@@ -205,7 +221,6 @@ final class PostgresConnectionFactory implements AutoCloseable {
                 } catch (SQLException restoreFailure) {
                     context.reusable = false;
                     if (primaryFailure != null) primaryFailure.addSuppressed(restoreFailure);
-                    else throw restoreFailure;
                 }
             }
         }
@@ -352,6 +367,46 @@ final class PostgresConnectionFactory implements AutoCloseable {
         }
     }
 
+    final class DedicatedConnectionContext implements AutoCloseable {
+        private final DedicatedConnectionLease lease;
+        private final LeaseContext context;
+        private final Thread owner;
+        private boolean closedContext;
+
+        private DedicatedConnectionContext(
+                DedicatedConnectionLease lease,
+                LeaseContext context,
+                Thread owner
+        ) {
+            this.lease = lease;
+            this.context = context;
+            this.owner = owner;
+        }
+
+        @Override
+        public void close() {
+            requireOwner();
+            if (closedContext) return;
+            if (currentLease.get() != context) {
+                context.reusable = false;
+                throw new IllegalStateException("PostgreSQL dedicated connection lost thread binding context");
+            }
+            if (context.transactionDepth != 0) {
+                context.reusable = false;
+                throw new IllegalStateException("cannot unbind PostgreSQL dedicated connection during a transaction");
+            }
+            closedContext = true;
+            currentLease.remove();
+            if (!context.reusable) lease.invalidate();
+        }
+
+        private void requireOwner() {
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("PostgreSQL dedicated connection context must be released by its owner thread");
+            }
+        }
+    }
+
     private Connection borrow() throws SQLException {
         if (closed) throw new SQLException("PostgreSQL connection pool is closed");
         final boolean acquired;
@@ -452,7 +507,11 @@ final class PostgresConnectionFactory implements AutoCloseable {
 
     private static void closeQuietly(Connection connection) {
         if (connection == null) return;
-        try { connection.close(); } catch (SQLException ignored) { }
+        try {
+            connection.close();
+        } catch (SQLException ignored) {
+            // Best effort for a connection that is already unusable.
+        }
     }
 
     static boolean isConnectionFailure(SQLException exception) {
@@ -464,40 +523,53 @@ final class PostgresConnectionFactory implements AutoCloseable {
     }
 
     private static void validateJdbcUrl(String value, boolean managed) throws IOException {
+        URI uri = parseJdbcUri(value);
+        validateJdbcUriShape(uri);
+        Map<String, String> query = queryParameters(uri.getRawQuery());
+        validateJdbcParameters(query);
+        validateJdbcHostPolicy(uri.getHost(), query.get(SSL_MODE_PARAMETER), managed);
+    }
+
+    private static URI parseJdbcUri(String value) throws IOException {
         if (!value.startsWith("jdbc:postgresql://")) {
             throw new IOException("MINOS_POSTGRES_URL must use jdbc:postgresql://");
         }
-        final URI uri;
         try {
-            uri = new URI(value.substring("jdbc:".length()));
+            return new URI(value.substring("jdbc:".length()));
         } catch (URISyntaxException exception) {
             throw new IOException("MINOS_POSTGRES_URL is invalid", exception);
         }
+    }
+
+    private static void validateJdbcUriShape(URI uri) throws IOException {
         if (uri.getUserInfo() != null) {
             throw new IOException("MINOS_POSTGRES_URL must not contain user-info credentials");
         }
         if (uri.getRawFragment() != null) {
             throw new IOException("MINOS_POSTGRES_URL must not contain a fragment");
         }
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
+        if (uri.getHost() == null || uri.getHost().isBlank()) {
             throw new IOException("MINOS_POSTGRES_URL must contain a host");
         }
         String database = uri.getRawPath();
         if (database == null || database.isBlank() || "/".equals(database)) {
             throw new IOException("MINOS_POSTGRES_URL must contain a database name");
         }
-        Map<String, String> query = queryParameters(uri.getRawQuery());
+    }
+
+    private static void validateJdbcParameters(Map<String, String> query) throws IOException {
         for (String key : query.keySet()) {
             if (!ALLOWED_URL_PARAMETERS.contains(key)) {
                 throw new IOException("MINOS_POSTGRES_URL contains unsupported parameter: " + key);
             }
         }
-        String sslMode = query.get("sslmode");
+        String sslMode = query.get(SSL_MODE_PARAMETER);
         if (sslMode != null && !ALLOWED_SSL_MODES.contains(sslMode.toLowerCase(Locale.ROOT))) {
             throw new IOException("MINOS_POSTGRES_URL contains an unsupported sslmode");
         }
+    }
 
+    private static void validateJdbcHostPolicy(String host, String sslMode, boolean managed) throws IOException {
         if (managed) {
             if (!MANAGED_DOCKER_HOST.equalsIgnoreCase(host) && !loopbackHost(host)) {
                 throw new IOException("managed PostgreSQL must use the MINOS Docker service or loopback");
@@ -505,8 +577,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
             return;
         }
         if (loopbackHost(host)) return;
-
-        if (sslMode == null || !"verify-full".equalsIgnoreCase(sslMode)) {
+        if (!"verify-full".equalsIgnoreCase(sslMode)) {
             throw new IOException("external PostgreSQL requires sslmode=verify-full");
         }
     }

@@ -122,7 +122,7 @@ public final class DeterministicJson {
         }
 
         private void appendCodePoint(int codePoint) {
-            account(codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4);
+            account(utf8Bytes(codePoint));
             builder.appendCodePoint(codePoint);
         }
 
@@ -150,6 +150,13 @@ public final class DeterministicJson {
 
         private static int utf8Bytes(char value) {
             return value <= 0x7f ? 1 : value <= 0x7ff ? 2 : 3;
+        }
+
+        private static int utf8Bytes(int codePoint) {
+            if (codePoint <= 0x7f) return 1;
+            if (codePoint <= 0x7ff) return 2;
+            if (codePoint <= 0xffff) return 3;
+            return 4;
         }
 
         private static long safeAdd(long left, long right) {

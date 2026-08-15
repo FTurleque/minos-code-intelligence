@@ -6,8 +6,6 @@ import com.minos.io.FixedTsv;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,9 +16,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.UUID;
 
 /** Strict UTF-8 TSV codec for {@code minos-runtime-observation-v1}. */
@@ -90,7 +88,7 @@ public final class RuntimeObservationEnvelopeCodec {
         RuntimeObservationSession session = new RuntimeObservationSession(
                 RuntimeObservationSession.FORMAT, sessionId, projectId, snapshotId,
                 startedAt, endedAt, collector[1], collector[2], environment, completeness, observations);
-        return new DecodedSession(session, HexFormat.of().formatHex(digest.digest()), sourceBytes);
+        return new DecodedSession(session, sha256(digest), sourceBytes);
     }
 
     private static MessageDigest digest() {
@@ -99,6 +97,10 @@ public final class RuntimeObservationEnvelopeCodec {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+    }
+
+    private static String sha256(MessageDigest digest) {
+        return HexFormat.of().formatHex(java.util.Objects.requireNonNull(digest, "digest").digest());
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {
@@ -161,7 +163,8 @@ public final class RuntimeObservationEnvelopeCodec {
 
     private static String required(String value, String field, int lineNumber) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException((lineNumber > 0 ? "line " + lineNumber + ": " : "") + field + " must not be blank");
+            throw new IllegalArgumentException((lineNumber > 0 ? "line " + lineNumber + ": " : "")
+                    + field + " must not be blank");
         }
         return value;
     }
@@ -176,7 +179,8 @@ public final class RuntimeObservationEnvelopeCodec {
             if (parsed < 1) throw new NumberFormatException("not positive");
             return parsed;
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException((lineNumber > 0 ? "line " + lineNumber + ": " : "") + field + " must be a positive integer");
+            throw new IllegalArgumentException((lineNumber > 0 ? "line " + lineNumber + ": " : "")
+                    + field + " must be a positive integer");
         }
     }
 
@@ -212,32 +216,15 @@ public final class RuntimeObservationEnvelopeCodec {
         }
     }
 
-    private static String decodeUtf8(byte[] bytes) throws IOException {
-        try {
-            return StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException exception) {
-            throw new IOException("runtime observation input is not valid UTF-8", exception);
-        }
-    }
-
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
-
     public record DecodedSession(RuntimeObservationSession session, String sourceSha256, long sourceBytes) {
         public DecodedSession {
             java.util.Objects.requireNonNull(session, "session");
             if (sourceSha256 == null || !sourceSha256.matches("[0-9a-f]{64}")) {
                 throw new IllegalArgumentException("sourceSha256 must be lowercase SHA-256");
             }
-            if (sourceBytes < 1 || sourceBytes > MAX_INPUT_BYTES) throw new IllegalArgumentException("sourceBytes is invalid");
+            if (sourceBytes < 1 || sourceBytes > MAX_INPUT_BYTES) {
+                throw new IllegalArgumentException("sourceBytes is invalid");
+            }
         }
     }
 }

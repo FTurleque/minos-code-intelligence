@@ -119,6 +119,76 @@ class AbandonedIndexingLifecycleRecoveryTest {
     }
 
     @Test
+    void projectStateReadRecoversAbandonedFirstIndex() {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveRun(running(runId, projectId, IndexingRun.Phase.PROVIDER_EXECUTION,
+                Optional.empty(), Optional.empty()));
+        store.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.INDEXING,
+                Optional.empty(),
+                Optional.of(runId),
+                CREATED,
+                Optional.of("crashed first index")));
+
+        ProjectIndexState recovered = inspectionService(store, promoter(new AtomicReference<>()))
+                .projectState(projectId);
+
+        assertEquals(ProjectIndexState.Availability.FAILED, recovered.availability());
+        assertEquals(IndexingRun.Status.FAILED, store.findRun(runId).orElseThrow().status());
+        assertTrue(store.listRuns(projectId).stream().noneMatch(run -> run.status() == IndexingRun.Status.RUNNING));
+    }
+
+    @Test
+    void projectStateReadRecoversAbandonedRefreshAsStale() {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveRun(running(runId, projectId, IndexingRun.Phase.PROVIDER_EXECUTION,
+                Optional.empty(), Optional.of("snapshot-old")));
+        store.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.REFRESHING,
+                Optional.of("snapshot-old"),
+                Optional.of(runId),
+                CREATED,
+                Optional.of("refresh died")));
+
+        ProjectIndexState recovered = inspectionService(
+                store, promoter(new AtomicReference<>("snapshot-old"))).projectState(projectId);
+
+        assertEquals(ProjectIndexState.Availability.STALE, recovered.availability());
+        assertEquals(Optional.of("snapshot-old"), recovered.activeSnapshotId());
+        assertEquals(IndexingRun.Status.FAILED, store.findRun(runId).orElseThrow().status());
+    }
+
+    @Test
+    void projectStateReadRecoversAlreadyPromotedRunAsReady() {
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveRun(running(runId, projectId, IndexingRun.Phase.PROMOTION,
+                Optional.of("snapshot-new"), Optional.of("snapshot-old")));
+        store.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.REFRESHING,
+                Optional.of("snapshot-old"),
+                Optional.of(runId),
+                CREATED,
+                Optional.of("crashed after promotion")));
+
+        ProjectIndexState recovered = inspectionService(
+                store, promoter(new AtomicReference<>("snapshot-new"))).projectState(projectId);
+
+        assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
+        assertEquals(Optional.of("snapshot-new"), recovered.activeSnapshotId());
+        assertEquals(IndexingRun.Status.SUCCEEDED, store.findRun(runId).orElseThrow().status());
+        assertEquals(IndexingRun.Phase.COMPLETED, store.findRun(runId).orElseThrow().phase());
+    }
+
+    @Test
     void unreferencedRunningRunFromPartialStartupIsRecovered() {
         UUID projectId = UUID.randomUUID();
         UUID ghostRunId = UUID.randomUUID();
@@ -184,6 +254,14 @@ class AbandonedIndexingLifecycleRecoveryTest {
         assertTrue(durable.listRuns(projectId).stream().noneMatch(run -> run.status() == IndexingRun.Status.RUNNING));
         assertEquals(ProjectIndexState.Availability.FAILED,
                 durable.findProjectState(projectId).orElseThrow().availability());
+    }
+
+    private static IndexingLifecycleService inspectionService(
+            IndexStateStore store,
+            SnapshotPromoter promoter
+    ) {
+        return new IndexingLifecycleService(
+                List.of(), request -> "unused", promoter, store, CLOCK);
     }
 
     private static IndexingLifecycleService service(

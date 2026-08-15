@@ -48,7 +48,9 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
 
         LocalGateLease gateLease = null;
         PostgresConnectionFactory.DedicatedConnectionLease connectionLease = null;
+        PostgresConnectionFactory.DedicatedConnectionContext connectionContext = null;
         boolean sessionLockAcquired = false;
+        boolean lifecycleContextEntered = false;
         try {
             gateLease = acquireLocalGate(id);
             connectionLease = connections.openDedicatedConnection();
@@ -62,19 +64,29 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
                 sleepForLease(id);
             }
             sessionLockAcquired = true;
-            PostgresProjectMutationLock.enterLifecycle(id);
-            HeldLifecycleLease held = new HeldLifecycleLease(id, connectionLease, gateLease);
+
+            // From this point until physical release every nested PostgreSQL store operation reuses
+            // the exact session that owns pg_advisory_lock. If that session dies, no fallback pooled
+            // connection can continue mutating under a stale Java ownership marker.
+            connectionContext = connections.bindDedicatedConnection(connectionLease);
+            PostgresProjectMutationLock.enterLifecycle(id, connectionLease.connection());
+            lifecycleContextEntered = true;
+
+            HeldLifecycleLease held = new HeldLifecycleLease(
+                    id, connectionLease, connectionContext, gateLease);
             heldLifecycleLease.set(held);
             return logicalLease(held);
         } catch (SQLException exception) {
             throw new IllegalStateException("PostgreSQL lifecycle lease could not reserve a dedicated connection", exception);
         } finally {
             if (heldLifecycleLease.get() == null) {
-                if (sessionLockAcquired && connectionLease != null) {
-                    releaseSessionLockBestEffort(connectionLease, id);
-                }
-                if (connectionLease != null) connectionLease.close();
-                if (gateLease != null) gateLease.close();
+                cleanupFailedAcquisition(
+                        id,
+                        connectionLease,
+                        connectionContext,
+                        gateLease,
+                        sessionLockAcquired,
+                        lifecycleContextEntered);
             }
         }
     }
@@ -200,18 +212,59 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
             failure = unlockFailure;
         }
         try {
-            PostgresProjectMutationLock.exitLifecycle(held.projectId);
+            PostgresProjectMutationLock.exitLifecycle(
+                    held.projectId, held.connectionLease.connection());
         } catch (RuntimeException contextFailure) {
-            if (failure == null) failure = contextFailure; else failure.addSuppressed(contextFailure);
+            failure = append(failure, contextFailure);
+        }
+        try {
+            held.connectionContext.close();
+        } catch (RuntimeException contextCloseFailure) {
+            failure = append(failure, contextCloseFailure);
         }
         try {
             held.connectionLease.close();
         } catch (RuntimeException closeFailure) {
-            if (failure == null) failure = closeFailure; else failure.addSuppressed(closeFailure);
+            failure = append(failure, closeFailure);
         } finally {
             held.gateLease.close();
         }
         if (failure != null) throw failure;
+    }
+
+    private static RuntimeException append(RuntimeException current, RuntimeException additional) {
+        if (current == null) return additional;
+        current.addSuppressed(additional);
+        return current;
+    }
+
+    private static void cleanupFailedAcquisition(
+            UUID projectId,
+            PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
+            PostgresConnectionFactory.DedicatedConnectionContext connectionContext,
+            LocalGateLease gateLease,
+            boolean sessionLockAcquired,
+            boolean lifecycleContextEntered
+    ) {
+        if (sessionLockAcquired && connectionLease != null) {
+            releaseSessionLockBestEffort(connectionLease, projectId);
+        }
+        if (lifecycleContextEntered && connectionLease != null) {
+            try {
+                PostgresProjectMutationLock.exitLifecycle(projectId, connectionLease.connection());
+            } catch (RuntimeException ignored) {
+                connectionLease.invalidate();
+            }
+        }
+        if (connectionContext != null) {
+            try {
+                connectionContext.close();
+            } catch (RuntimeException ignored) {
+                if (connectionLease != null) connectionLease.invalidate();
+            }
+        }
+        if (connectionLease != null) connectionLease.close();
+        if (gateLease != null) gateLease.close();
     }
 
     private static void releaseSessionLock(
@@ -261,6 +314,7 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
     private static final class HeldLifecycleLease {
         private final UUID projectId;
         private final PostgresConnectionFactory.DedicatedConnectionLease connectionLease;
+        private final PostgresConnectionFactory.DedicatedConnectionContext connectionContext;
         private final LocalGateLease gateLease;
         private final Thread owner = Thread.currentThread();
         private int depth = 1;
@@ -268,10 +322,12 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
         private HeldLifecycleLease(
                 UUID projectId,
                 PostgresConnectionFactory.DedicatedConnectionLease connectionLease,
+                PostgresConnectionFactory.DedicatedConnectionContext connectionContext,
                 LocalGateLease gateLease
         ) {
             this.projectId = projectId;
             this.connectionLease = connectionLease;
+            this.connectionContext = connectionContext;
             this.gateLease = gateLease;
         }
     }

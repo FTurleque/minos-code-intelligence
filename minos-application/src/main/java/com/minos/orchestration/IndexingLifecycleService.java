@@ -18,6 +18,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class IndexingLifecycleService {
+    private static final String PROJECT_ID = "projectId";
+
     private final Map<String, IndexerExecutor> executors;
     private final SnapshotStager stager;
     private final SnapshotPromoter promoter;
@@ -51,7 +53,7 @@ public final class IndexingLifecycleService {
      * because qualified stores provide owner-thread/project reentrant leases.
      */
     public <T> T withProjectLease(UUID projectId, ProjectLeaseWork<T> work) throws IOException {
-        UUID id = Objects.requireNonNull(projectId, "projectId");
+        UUID id = Objects.requireNonNull(projectId, PROJECT_ID);
         Objects.requireNonNull(work, "work");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             return work.execute();
@@ -125,19 +127,27 @@ public final class IndexingLifecycleService {
     }
 
     public ProjectIndexState projectState(UUID id) {
-        UUID projectId = Objects.requireNonNull(id, "projectId");
+        UUID projectId = Objects.requireNonNull(id, PROJECT_ID);
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(projectId)) {
-            return AuthoritativeProjectStateReconciler.reconcile(
+            // The read already owns the same exclusive lifecycle authority as an index mutation.
+            // Therefore any pre-existing RUNNING run is necessarily abandoned and must be
+            // terminalized instead of exposing an indefinitely stale INDEXING/REFRESHING state.
+            return AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
                     projectId,
                     promoter,
                     stateStore,
                     clock.instant(),
-                    "reconciled from authoritative active snapshot during project-state read");
+                    "reconciled abandoned lifecycle state during project-state read");
         }
     }
 
-    public Optional<IndexingRun> findRun(UUID id) { return stateStore.findRun(Objects.requireNonNull(id, "runId")); }
-    public List<IndexingRun> listRuns(UUID id) { return stateStore.listRuns(Objects.requireNonNull(id, "projectId")); }
+    public Optional<IndexingRun> findRun(UUID id) {
+        return stateStore.findRun(Objects.requireNonNull(id, "runId"));
+    }
+
+    public List<IndexingRun> listRuns(UUID id) {
+        return stateStore.listRuns(Objects.requireNonNull(id, PROJECT_ID));
+    }
 
     @FunctionalInterface
     public interface ProjectLeaseWork<T> {

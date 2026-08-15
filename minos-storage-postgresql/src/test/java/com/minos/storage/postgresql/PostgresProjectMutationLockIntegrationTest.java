@@ -1,7 +1,9 @@
 package com.minos.storage.postgresql;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -14,10 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PostgresProjectMutationLockIntegrationTest extends PostgresTestSupport {
 
+    @TempDir Path tempDir;
+
     @Test
     void structuralPublicationUsesTheSameProjectMutationKey() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore snapshots = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore snapshots = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         CountDownLatch lockHeld = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         AtomicBoolean published = new AtomicBoolean();

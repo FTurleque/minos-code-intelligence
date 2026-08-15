@@ -2,6 +2,7 @@ package com.minos.git;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.remote.RemoteRepositoryRequest.RemoteHost;
@@ -33,7 +34,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +42,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * JGit HTTPS materializer with immutable revision checks, active-use leases and a bounded local cache.
@@ -67,10 +66,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private final RemoteGitClient gitClient;
     private final SecretResolver secretResolver;
     private final Clock clock;
-    private static final int LEASE_STRIPE_COUNT = 64;
-    private final Object leaseMonitor = new Object();
-    private final ReentrantLock[] leaseStripes = createLeaseStripes();
-    private final Map<String, LeaseState> activeLeases = new HashMap<>();
+    private final SharedCacheLeaseRegistry leases;
 
     public JGitRemoteRepositoryMaterializer(Path minosHome) throws IOException {
         this(minosHome, RemoteRepositoryCachePolicy.DEFAULT);
@@ -100,13 +96,14 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         Files.createDirectories(cacheRoot);
         Files.createDirectories(locksRoot);
         Files.createDirectories(leasesRoot);
+        this.leases = new SharedCacheLeaseRegistry(leasesRoot, LOCK_ACQUIRE_TIMEOUT, "remote cache");
     }
 
     @Override
     public RemoteMaterialization materialize(RemoteRepositoryRequest request) throws Exception {
         Objects.requireNonNull(request, "request");
         String cacheKey = cacheKey(request);
-        acquireLease(cacheKey);
+        leases.acquire(cacheKey);
         boolean success = false;
         try {
             Path lockFile = locksRoot.resolve(cacheKey + ".lock");
@@ -118,7 +115,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
                 return result;
             }
         } finally {
-            if (!success) releaseLease(cacheKey);
+            if (!success) leases.release(cacheKey);
         }
     }
 
@@ -144,7 +141,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     @Override
     public void release(RemoteMaterialization materialization) throws IOException {
         Objects.requireNonNull(materialization, "materialization");
-        releaseLease(materialization.cacheKey());
+        leases.release(materialization.cacheKey());
     }
 
     private Path validatedEntry(RemoteMaterialization materialization) throws IOException {
@@ -204,55 +201,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         }
     }
 
-    private void acquireLease(String cacheKey) throws IOException {
-        ReentrantLock stripe = leaseStripe(cacheKey);
-        boolean stripeAcquired = false;
-        try {
-            stripeAcquired = stripe.tryLock(LOCK_ACQUIRE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            if (!stripeAcquired) {
-                throw new IOException("timed out waiting for remote cache JVM lease after "
-                        + LOCK_ACQUIRE_TIMEOUT + ": " + cacheKey);
-            }
-            synchronized (leaseMonitor) {
-                LeaseState existing = activeLeases.get(cacheKey);
-                if (existing != null) {
-                    existing.references++;
-                    return;
-                }
-            }
-            LeaseState created = openActiveLease(cacheKey);
-            synchronized (leaseMonitor) {
-                activeLeases.put(cacheKey, created);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted while waiting for remote cache JVM lease: " + cacheKey, interrupted);
-        } finally {
-            if (stripeAcquired) stripe.unlock();
-        }
-    }
-
-    private LeaseState openActiveLease(String cacheKey) throws IOException {
-        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        try {
-            FileLock lock = acquireFileLock(
-                    channel, LOCK_ACQUIRE_TIMEOUT, "remote cache active-use lease " + cacheKey);
-            return new LeaseState(channel, lock);
-        } catch (IOException | RuntimeException failure) {
-            closeLeaseChannelAfterFailure(channel, failure);
-            throw failure;
-        }
-    }
-
-    private static void closeLeaseChannelAfterFailure(FileChannel channel, Throwable failure) {
-        try {
-            channel.close();
-        } catch (IOException closeFailure) {
-            failure.addSuppressed(closeFailure);
-        }
-    }
-
     static FileLock acquireFileLock(FileChannel channel, Duration timeout, String description) throws IOException {
         Objects.requireNonNull(channel, "channel");
         Duration wait = Objects.requireNonNull(timeout, "timeout");
@@ -301,63 +249,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         if (convertedMillis <= 0L) return 1L;
         if (convertedMillis > LOCK_POLL_MILLIS) return LOCK_POLL_MILLIS;
         return convertedMillis;
-    }
-
-    private ReentrantLock leaseStripe(String cacheKey) {
-        return leaseStripes[Math.floorMod(cacheKey.hashCode(), leaseStripes.length)];
-    }
-
-    private static ReentrantLock[] createLeaseStripes() {
-        ReentrantLock[] stripes = new ReentrantLock[LEASE_STRIPE_COUNT];
-        for (int index = 0; index < stripes.length; index++) stripes[index] = new ReentrantLock();
-        return stripes;
-    }
-
-    private void releaseLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            LeaseState state = activeLeases.get(cacheKey);
-            if (state == null) return;
-            state.references--;
-            if (state.references > 0) return;
-            activeLeases.remove(cacheKey);
-            IOException failure = null;
-            try {
-                state.lock.release();
-            } catch (IOException exception) {
-                failure = exception;
-            }
-            try {
-                state.channel.close();
-            } catch (IOException exception) {
-                if (failure == null) failure = exception; else failure.addSuppressed(exception);
-            }
-            if (failure != null) throw failure;
-        }
-    }
-
-    private EvictionLease tryAcquireEvictionLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            if (activeLeases.containsKey(cacheKey)) return null;
-        }
-        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        try {
-            FileLock lock;
-            try {
-                lock = channel.tryLock();
-            } catch (OverlappingFileLockException exception) {
-                channel.close();
-                return null;
-            }
-            if (lock == null) {
-                channel.close();
-                return null;
-            }
-            return new EvictionLease(channel, lock);
-        } catch (IOException | RuntimeException exception) {
-            channel.close();
-            throw exception;
-        }
     }
 
     private char[] resolveSecret(RemoteRepositoryRequest request) {
@@ -464,7 +355,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             if (protectedKey.equals(candidate.cacheKey()) || Files.isRegularFile(candidate.path().resolve(PIN_FILE))) {
                 continue;
             }
-            try (EvictionLease lease = tryAcquireEvictionLease(candidate.cacheKey())) {
+            try (SharedCacheLeaseRegistry.EvictionLease lease = leases.tryAcquireEviction(candidate.cacheKey())) {
                 if (lease == null) continue;
                 deleteCacheTree(candidate.path());
                 count--;
@@ -760,27 +651,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             finally { lastCheckpointNanos = now; }
         }
         private IOException failure() { return failure; }
-    }
-
-    private static final class LeaseState {
-        private final FileChannel channel;
-        private final FileLock lock;
-        private int references = 1;
-        private LeaseState(FileChannel channel, FileLock lock) { this.channel = channel; this.lock = lock; }
-    }
-
-    private static final class EvictionLease implements AutoCloseable {
-        private final FileChannel channel;
-        private final FileLock lock;
-        private EvictionLease(FileChannel channel, FileLock lock) { this.channel = channel; this.lock = lock; }
-        @Override public void close() throws IOException {
-            IOException failure = null;
-            try { lock.release(); } catch (IOException exception) { failure = exception; }
-            try { channel.close(); } catch (IOException exception) {
-                if (failure == null) failure = exception; else failure.addSuppressed(exception);
-            }
-            if (failure != null) throw failure;
-        }
     }
 
     private record CacheEntry(Path repositoryRoot, Properties metadata, Instant materializedAt) { }

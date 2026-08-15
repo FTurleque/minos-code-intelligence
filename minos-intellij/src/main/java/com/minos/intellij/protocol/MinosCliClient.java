@@ -27,6 +27,8 @@ public final class MinosCliClient {
     public static final String PROTOCOL_VERSION = "1";
 
     private static final long PROCESS_POLL_MILLIS = 200L;
+    private static final String LIMIT_OPTION = "--limit";
+    private static final String SYMBOL_ID_LABEL = "symbolId";
 
     private final Project project;
     private volatile String verifiedConfiguration;
@@ -75,12 +77,12 @@ public final class MinosCliClient {
     public JsonObject indexStatus(String projectId) throws MinosProtocolException { return executeJson(List.of("index-status", projectId, "--format", "json")); }
 
     public JsonObject findSymbols(String projectId, String text, int limit) throws MinosProtocolException {
-        return executeJson(List.of("find-symbol", projectId, requireText(text, "symbol"), "--limit",
+        return executeJson(List.of("find-symbol", projectId, requireText(text, "symbol"), LIMIT_OPTION,
                 Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
     public JsonObject findUsages(String projectId, String symbolId, int limit) throws MinosProtocolException {
-        return executeJson(List.of("find-usages", projectId, requireText(symbolId, "symbolId"), "--limit",
+        return executeJson(List.of("find-usages", projectId, requireText(symbolId, SYMBOL_ID_LABEL), LIMIT_OPTION,
                 Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
@@ -88,12 +90,12 @@ public final class MinosCliClient {
         if (!List.of("find-implementations", "dependencies", "dependents", "related-tests", "find-callers", "find-callees").contains(command)) {
             throw new IllegalArgumentException("Unsupported relationship command: " + command);
         }
-        return executeJson(List.of(command, projectId, requireText(symbolId, "symbolId"), "--limit",
+        return executeJson(List.of(command, projectId, requireText(symbolId, SYMBOL_ID_LABEL), LIMIT_OPTION,
                 Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
     public JsonObject architecture(String projectId) throws MinosProtocolException { return executeJson(List.of("architecture", projectId, "--format", "json")); }
-    public JsonObject impact(String projectId, String symbolId) throws MinosProtocolException { return executeJson(List.of("impact", projectId, requireText(symbolId, "symbolId"), "--format", "json")); }
+    public JsonObject impact(String projectId, String symbolId) throws MinosProtocolException { return executeJson(List.of("impact", projectId, requireText(symbolId, SYMBOL_ID_LABEL), "--format", "json")); }
 
     public JsonObject index(String projectId, boolean forceFull, boolean dryRun) throws MinosProtocolException {
         List<String> arguments = new ArrayList<>();

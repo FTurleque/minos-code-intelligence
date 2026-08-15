@@ -40,7 +40,7 @@ public final class BoundedProcessOutput {
                 Capture capture = capture(process, out, err, maxBytesPerStream);
                 success = true;
                 return capture;
-            } catch (RuntimeException | Error failure) {
+            } catch (RuntimeException failure) {
                 err.close();
                 throw failure;
             }

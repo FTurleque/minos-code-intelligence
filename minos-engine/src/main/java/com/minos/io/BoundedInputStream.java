@@ -43,7 +43,7 @@ public final class BoundedInputStream extends FilterInputStream {
             return 0;
         }
         long remaining = maximumBytes - consumedBytes;
-        int boundedLength = (int) Math.min((long) length, Math.min((long) Integer.MAX_VALUE, remaining + 1L));
+        int boundedLength = (int) Math.min((long) length, Math.min(Integer.MAX_VALUE, remaining + 1L));
         int read = super.read(buffer, offset, Math.max(1, boundedLength));
         if (read > 0) {
             account(read);

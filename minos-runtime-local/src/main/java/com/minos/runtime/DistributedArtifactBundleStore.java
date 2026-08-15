@@ -2,6 +2,7 @@ package com.minos.runtime;
 
 import com.minos.io.BoundedProperties;
 import com.minos.io.FileTreeOperations;
+import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
@@ -14,9 +15,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -30,10 +28,10 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.IdentityHashMap;
@@ -78,10 +76,16 @@ public final class DistributedArtifactBundleStore {
     private final Path cacheRoot;
     private final Path leasesRoot;
     private final DistributedArtifactCachePolicy policy;
-    private static final int LEASE_STRIPE_COUNT = 64;
-    private final Object leaseMonitor = new Object();
-    private final ReentrantLock[] leaseStripes = createLeaseStripes();
-    private final Map<String, LeaseState> activeLeases = new HashMap<>();
+    private static final Duration LEASE_ACQUIRE_TIMEOUT = Duration.ofMinutes(2);
+    private static final int OPERATION_STRIPE_COUNT = 64;
+    private final SharedCacheLeaseRegistry leases;
+    private final Object handleMonitor = new Object();
+    /**
+     * Serialises cache mutations for one key inside this JVM. Distinct from the cross-process
+     * lease: this only guards the local accept/evict critical section, which always completes,
+     * so it is taken unbounded. Lock order is always operation stripe then lease.
+     */
+    private final ReentrantLock[] operationStripes = createOperationStripes();
     private final Map<VerifiedArtifact, Boolean> activeHandles = new IdentityHashMap<>();
 
     public DistributedArtifactBundleStore(Path minosHome) throws IOException {
@@ -98,6 +102,8 @@ public final class DistributedArtifactBundleStore {
         this.policy = Objects.requireNonNull(policy, "policy");
         Files.createDirectories(cacheRoot);
         Files.createDirectories(leasesRoot);
+        this.leases = new SharedCacheLeaseRegistry(
+                leasesRoot, LEASE_ACQUIRE_TIMEOUT, "distributed artifact cache");
     }
 
     public Path createBundle(
@@ -182,10 +188,10 @@ public final class DistributedArtifactBundleStore {
             }
 
             String cacheKey = cacheKey(manifest);
-            ReentrantLock operationLock = leaseStripe(cacheKey);
+            ReentrantLock operationLock = operationStripe(cacheKey);
             operationLock.lock();
             try {
-                acquireLease(cacheKey);
+                leases.acquire(cacheKey);
                 leasedKey = cacheKey;
                 Path entry = cacheRoot.resolve(cacheKey);
                 Path cachedArtifact = entry.resolve(DistributedArtifactManifest.ARTIFACT_PATH);
@@ -223,7 +229,7 @@ public final class DistributedArtifactBundleStore {
             }
         } finally {
             if (leasedKey != null) {
-                releaseLease(leasedKey);
+                leases.release(leasedKey);
             }
             if (Files.exists(extraction)) {
                 deleteCacheTree(extraction);
@@ -234,18 +240,18 @@ public final class DistributedArtifactBundleStore {
     public void release(VerifiedArtifact artifact) throws IOException {
         Objects.requireNonNull(artifact, "artifact");
         if (!unregisterHandle(artifact)) return;
-        releaseLease(artifact.cacheKey());
+        leases.release(artifact.cacheKey());
     }
 
     private VerifiedArtifact registerHandle(VerifiedArtifact artifact) {
-        synchronized (leaseMonitor) {
+        synchronized (handleMonitor) {
             activeHandles.put(artifact, Boolean.TRUE);
         }
         return artifact;
     }
 
     private boolean unregisterHandle(VerifiedArtifact artifact) {
-        synchronized (leaseMonitor) {
+        synchronized (handleMonitor) {
             return activeHandles.remove(artifact) != null;
         }
     }
@@ -500,7 +506,7 @@ public final class DistributedArtifactBundleStore {
             if (protectedKey.equals(entry.key())) {
                 continue;
             }
-            try (EvictionLease lease = tryAcquireEvictionLease(entry.key())) {
+            try (SharedCacheLeaseRegistry.EvictionLease lease = leases.tryAcquireEviction(entry.key())) {
                 if (lease == null) continue;
                 deleteCacheTree(entry.path());
                 count--;
@@ -512,90 +518,14 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
-    private void acquireLease(String cacheKey) throws IOException {
-        ReentrantLock stripe = leaseStripe(cacheKey);
-        stripe.lock();
-        try {
-            synchronized (leaseMonitor) {
-                LeaseState existing = activeLeases.get(cacheKey);
-                if (existing != null) {
-                    existing.references++;
-                    return;
-                }
-            }
-            Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-            FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-            try {
-                // Deliberately outside leaseMonitor: another process may hold this lock indefinitely.
-                FileLock lock = channel.lock();
-                synchronized (leaseMonitor) {
-                    activeLeases.put(cacheKey, new LeaseState(channel, lock));
-                }
-            } catch (IOException | RuntimeException exception) {
-                channel.close();
-                throw exception;
-            }
-        } finally {
-            stripe.unlock();
-        }
+    private ReentrantLock operationStripe(String cacheKey) {
+        return operationStripes[Math.floorMod(cacheKey.hashCode(), operationStripes.length)];
     }
 
-    private ReentrantLock leaseStripe(String cacheKey) {
-        return leaseStripes[Math.floorMod(cacheKey.hashCode(), leaseStripes.length)];
-    }
-
-    private static ReentrantLock[] createLeaseStripes() {
-        ReentrantLock[] stripes = new ReentrantLock[LEASE_STRIPE_COUNT];
+    private static ReentrantLock[] createOperationStripes() {
+        ReentrantLock[] stripes = new ReentrantLock[OPERATION_STRIPE_COUNT];
         for (int index = 0; index < stripes.length; index++) stripes[index] = new ReentrantLock();
         return stripes;
-    }
-
-    private void releaseLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            LeaseState state = activeLeases.get(cacheKey);
-            if (state == null) return;
-            state.references--;
-            if (state.references > 0) return;
-            activeLeases.remove(cacheKey);
-            IOException failure = null;
-            try {
-                state.lock.release();
-            } catch (IOException exception) {
-                failure = exception;
-            }
-            try {
-                state.channel.close();
-            } catch (IOException exception) {
-                if (failure == null) failure = exception;
-                else failure.addSuppressed(exception);
-            }
-            if (failure != null) throw failure;
-        }
-    }
-
-    private EvictionLease tryAcquireEvictionLease(String cacheKey) throws IOException {
-        synchronized (leaseMonitor) {
-            if (activeLeases.containsKey(cacheKey)) return null;
-        }
-        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        try {
-            FileLock lock;
-            try {
-                lock = channel.tryLock();
-            } catch (OverlappingFileLockException exception) {
-                channel.close();
-                return null;
-            }
-            if (lock == null) {
-                channel.close();
-                return null;
-            }
-            return new EvictionLease(channel, lock);
-        } catch (IOException | RuntimeException exception) {
-            channel.close();
-            throw exception;
-        }
     }
 
     private static String cacheKey(DistributedArtifactManifest manifest) {
@@ -753,45 +683,22 @@ public final class DistributedArtifactBundleStore {
         }
     }
 
-    private static final class LeaseState {
-        private final FileChannel channel;
-        private final FileLock lock;
-        private int references = 1;
+    private static final class Extracted {
+        private final byte[] manifestBytes;
+        private final Path artifact;
 
-        private LeaseState(FileChannel channel, FileLock lock) {
-            this.channel = channel;
-            this.lock = lock;
-        }
-    }
-
-    private static final class EvictionLease implements AutoCloseable {
-        private final FileChannel channel;
-        private final FileLock lock;
-
-        private EvictionLease(FileChannel channel, FileLock lock) {
-            this.channel = channel;
-            this.lock = lock;
+        private Extracted(byte[] manifestBytes, Path artifact) {
+            this.manifestBytes = Objects.requireNonNull(manifestBytes, "manifestBytes").clone();
+            this.artifact = Objects.requireNonNull(artifact, "artifact");
         }
 
-        @Override
-        public void close() throws IOException {
-            IOException failure = null;
-            try {
-                lock.release();
-            } catch (IOException exception) {
-                failure = exception;
-            }
-            try {
-                channel.close();
-            } catch (IOException exception) {
-                if (failure == null) failure = exception;
-                else failure.addSuppressed(exception);
-            }
-            if (failure != null) throw failure;
+        private byte[] manifestBytes() {
+            return manifestBytes.clone();
         }
-    }
 
-    private record Extracted(byte[] manifestBytes, Path artifact) {
+        private Path artifact() {
+            return artifact;
+        }
     }
 
     private record CacheEntry(Path path, String key, Instant lastAccessAt, long size) {

@@ -52,18 +52,7 @@ public final class IndexCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             if (options.scipFile() != null) {
                 error.append("warning: `minos index --scip` is deprecated; use `minos import-scip`\n");
                 ProjectOperations.IndexImportResult imported = projectOperations.importScip(
@@ -88,10 +77,7 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: index failed: ").append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() {
@@ -206,17 +192,6 @@ public final class IndexCommand {
         return value == null ? "-" : value;
     }
 
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
     private record Options(
             String project,
             String providerId,
@@ -232,7 +207,7 @@ public final class IndexCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = operand(arguments[0], "project");
+            String project = CliCommandSupport.operand(arguments[0], "project");
             String provider = null;
             boolean forceFull = false;
             boolean dryRun = false;
@@ -286,11 +261,5 @@ public final class IndexCommand {
             return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

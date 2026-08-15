@@ -68,8 +68,8 @@ public final class GetSourceCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <file-id>");
             }
-            String project = operand(arguments[0], "project");
-            String fileId = operand(arguments[1], "file-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String fileId = CliCommandSupport.operand(arguments[1], "file-id");
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             if (arguments.length > 2) {
                 if (arguments.length != 4 || !"--format".equals(arguments[2])) {
@@ -80,11 +80,5 @@ public final class GetSourceCommand {
             return new Options(project, fileId, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

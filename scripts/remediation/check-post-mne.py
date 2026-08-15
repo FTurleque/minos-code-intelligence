@@ -97,6 +97,7 @@ def main() -> int:
         retention_policy = read("minos-application/src/main/java/com/minos/storage/PersistentRetentionPolicy.java")
         indexing = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
         distributed = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
+        shared_cache_leases = read("minos-engine/src/main/java/com/minos/io/SharedCacheLeaseRegistry.java")
         file_tree = read("minos-engine/src/main/java/com/minos/io/FileTreeOperations.java")
         managed_java = read(
             "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
@@ -182,11 +183,20 @@ def main() -> int:
         require("configure-m30-docker-services.ps1", docker_services,
                 "Read-BoundedUtf8", "'minos.postgres.managed'] = 'true'")
 
-        # 06: accept must not reacquire a global Java monitor around blocking file locks.
+        # 06: accept must not reacquire a global Java monitor around blocking file locks. The local
+        # critical section stays striped per cache key, and the cross-process lease is delegated to
+        # the bounded registry rather than a raw unbounded channel lock.
         if re.search(r"public\s+synchronized\s+VerifiedArtifact\s+accept", distributed):
             raise RuntimeError("DistributedArtifactBundleStore.java: accept is globally synchronized")
         require("DistributedArtifactBundleStore.java", distributed,
-                "ReentrantLock operationLock = leaseStripe(cacheKey)")
+                "ReentrantLock operationLock = operationStripe(cacheKey)",
+                "operationStripes[Math.floorMod(cacheKey.hashCode(), operationStripes.length)]",
+                "SharedCacheLeaseRegistry", "leases.acquire(cacheKey)", "LEASE_ACQUIRE_TIMEOUT")
+        forbid("DistributedArtifactBundleStore.java", distributed, "channel.lock()")
+        require("SharedCacheLeaseRegistry.java", shared_cache_leases,
+                "FileLock", "tryLock()", "OverlappingFileLockException", "LeaseDeadline",
+                "deadline.pauseBeforeRetry")
+        forbid("SharedCacheLeaseRegistry.java", shared_cache_leases, "channel.lock()")
 
         # 06b: cache/runtime cleanup and diagnostic reads stay streaming and bounded.
         require("FileTreeOperations.java", file_tree,

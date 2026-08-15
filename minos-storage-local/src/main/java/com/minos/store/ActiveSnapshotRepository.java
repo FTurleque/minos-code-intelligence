@@ -22,7 +22,6 @@ public final class ActiveSnapshotRepository {
     private static final int MAX_SYMBOLS = 10_000_000;
     private static final int MAX_OCCURRENCES = 100_000_000;
     private static final int MAX_RELATIONSHIPS = 100_000_000;
-    private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
     private static final String ACTIVE_FILE = "active.pointer";
 
     private final SnapshotRepository repository;
@@ -62,9 +61,9 @@ public final class ActiveSnapshotRepository {
         ))) {
             output.writeInt(POINTER_MAGIC);
             output.writeInt(pointer.formatVersion());
-            writeString(output, pointer.snapshotId());
-            writeString(output, pointer.fileName());
-            writeString(output, pointer.sha256());
+            SnapshotBinaryCodecSupport.writeString(output, pointer.snapshotId());
+            SnapshotBinaryCodecSupport.writeString(output, pointer.fileName());
+            SnapshotBinaryCodecSupport.writeString(output, pointer.sha256());
             output.writeInt(pointer.symbolCount());
             if (pointer.formatVersion() >= FORMAT_VERSION_V2) {
                 output.writeInt(pointer.occurrenceCount());
@@ -77,21 +76,21 @@ public final class ActiveSnapshotRepository {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
-            int version = readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
+            int version = SnapshotBinaryCodecSupport.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
             if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2) {
                 throw new IOException("unsupported active snapshot pointer version: " + version);
             }
             SnapshotDescriptor pointer = new SnapshotDescriptor(
                     version,
-                    readRequiredString(input, "snapshotId"),
-                    readRequiredString(input, "fileName"),
-                    readRequiredString(input, "sha256"),
-                    readCount(input, MAX_SYMBOLS, "symbol count"),
+                    SnapshotBinaryCodecSupport.readRequiredString(input, "snapshotId"),
+                    SnapshotBinaryCodecSupport.readRequiredString(input, "fileName"),
+                    SnapshotBinaryCodecSupport.readRequiredString(input, "sha256"),
+                    SnapshotBinaryCodecSupport.readCount(input, MAX_SYMBOLS, "symbol count"),
                     version >= FORMAT_VERSION_V2
-                            ? readCount(input, MAX_OCCURRENCES, "occurrence count")
+                            ? SnapshotBinaryCodecSupport.readCount(input, MAX_OCCURRENCES, "occurrence count")
                             : 0,
                     version >= FORMAT_VERSION_V2
-                            ? readCount(input, MAX_RELATIONSHIPS, "relationship count")
+                            ? SnapshotBinaryCodecSupport.readCount(input, MAX_RELATIONSHIPS, "relationship count")
                             : 0
             );
             if (input.read() != -1) {
@@ -101,61 +100,5 @@ public final class ActiveSnapshotRepository {
         } catch (EOFException exception) {
             throw new IOException("truncated active snapshot pointer", exception);
         }
-    }
-
-    private static int readHeaderVersion(
-            DataInputStream input,
-            int expectedMagic,
-            String name
-    ) throws IOException {
-        if (input.readInt() != expectedMagic) {
-            throw new IOException("invalid " + name + " magic");
-        }
-        return input.readInt();
-    }
-
-    private static void writeString(DataOutputStream output, String value) throws IOException {
-        if (value == null) {
-            output.writeInt(-1);
-            return;
-        }
-        if (value.length() > MAX_STRING_CHARS) {
-            throw new IOException("string exceeds snapshot limit");
-        }
-        output.writeInt(value.length());
-        for (int index = 0; index < value.length(); index++) {
-            output.writeChar(value.charAt(index));
-        }
-    }
-
-    private static String readString(DataInputStream input) throws IOException {
-        int length = input.readInt();
-        if (length == -1) {
-            return null;
-        }
-        if (length < 0 || length > MAX_STRING_CHARS) {
-            throw new IOException("invalid string length in symbol snapshot: " + length);
-        }
-        StringBuilder value = new StringBuilder(length);
-        for (int index = 0; index < length; index++) {
-            value.append(input.readChar());
-        }
-        return value.toString();
-    }
-
-    private static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
-        String value = readString(input);
-        if (value == null || value.isBlank()) {
-            throw new IOException(fieldName + " must not be blank");
-        }
-        return value;
-    }
-
-    private static int readCount(DataInputStream input, int maximum, String name) throws IOException {
-        int count = input.readInt();
-        if (count < 0 || count > maximum) {
-            throw new IOException("invalid " + name + ": " + count);
-        }
-        return count;
     }
 }

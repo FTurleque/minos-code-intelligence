@@ -1,5 +1,6 @@
 package com.minos.application;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -7,11 +8,11 @@ import java.util.Objects;
 /** Application-level project administration and SCIP import port shared by public surfaces. */
 public interface ProjectOperations {
 
-    ProjectView addProject(Path rootPath, String displayName) throws Exception;
+    ProjectView addProject(Path rootPath, String displayName) throws IOException;
 
-    List<ProjectView> listProjects() throws Exception;
+    List<ProjectView> listProjects() throws IOException;
 
-    ProjectView inspectProject(String projectIdentifier) throws Exception;
+    ProjectView inspectProject(String projectIdentifier) throws IOException;
 
     IndexImportResult importScip(
             String projectIdentifier,
@@ -20,7 +21,7 @@ public interface ProjectOperations {
             String providerVersion,
             String moduleId,
             String snapshotId
-    ) throws Exception;
+    ) throws IOException;
 
     record ProjectView(
             String id,

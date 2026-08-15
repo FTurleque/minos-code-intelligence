@@ -276,7 +276,7 @@ public final class ProjectCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = operand(arguments[0], "project");
+            String project = CliCommandSupport.operand(arguments[0], "project");
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             if (arguments.length > 1) {
                 if (arguments.length != 3 || !"--format".equals(arguments[1])) {
@@ -293,7 +293,7 @@ public final class ProjectCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <path>");
             }
-            String rawPath = operand(arguments[0], "path");
+            String rawPath = CliCommandSupport.operand(arguments[0], "path");
             Path path = Path.of(rawPath);
             String name = defaultName(path);
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
@@ -324,10 +324,4 @@ public final class ProjectCommand {
         }
     }
 
-    private static String operand(String value, String name) {
-        if (value == null || value.isBlank() || value.startsWith("-")) {
-            throw new IllegalArgumentException("invalid <" + name + "> operand");
-        }
-        return value;
-    }
 }

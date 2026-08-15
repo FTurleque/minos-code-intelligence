@@ -38,6 +38,9 @@ final class MinosStrongProcessLauncher {
     private static final long CONTROL_TIMEOUT_SECONDS = 5L;
     private static final int MAX_CONTROL_OUTPUT_BYTES = 64 * 1024;
     private static final Duration STALE_PLAN_AGE = Duration.ofHours(24);
+    private static final String SYSTEMCTL = "systemctl";
+    private static final String USER_SCOPE = "--user";
+    private static final String QUIET = "--quiet";
     private static final Object WINDOWS_INSTALL_LOCK = new Object();
     private static final Object LINUX_PROBE_LOCK = new Object();
     private static volatile Boolean linuxCapability;
@@ -127,9 +130,9 @@ final class MinosStrongProcessLauncher {
         String unit = "minos-intellij-" + UUID.randomUUID().toString().replace("-", "");
         List<String> command = new ArrayList<>();
         command.add("systemd-run");
-        command.add("--user");
+        command.add(USER_SCOPE);
         command.add("--scope");
-        command.add("--quiet");
+        command.add(QUIET);
         command.add("--unit=" + unit);
         command.add("--");
         command.addAll(original.command());
@@ -153,9 +156,9 @@ final class MinosStrongProcessLauncher {
     private static boolean probeLinuxCapability() {
         String unit = "minos-intellij-probe-" + UUID.randomUUID().toString().replace("-", "");
         try {
-            if (runControl(List.of("systemctl", "--user", "show-environment"), false) != 0) return false;
+            if (runControl(List.of(SYSTEMCTL, USER_SCOPE, "show-environment"), false) != 0) return false;
             return runControl(List.of(
-                    "systemd-run", "--user", "--scope", "--quiet", "--unit=" + unit,
+                    "systemd-run", USER_SCOPE, "--scope", QUIET, "--unit=" + unit,
                     "--", "/bin/true"), false) == 0;
         } catch (IOException failure) {
             return false;
@@ -252,7 +255,8 @@ final class MinosStrongProcessLauncher {
                 return Path.of(comSpec).toAbsolutePath().normalize();
             }
         }
-        Process process = new ProcessBuilder("where.exe", value).redirectErrorStream(true).start();
+        Process process = new ProcessBuilder(windowsSystemExecutable("where.exe").toString(), value)
+                .redirectErrorStream(true).start();
         byte[] output;
         try {
             if (!process.waitFor(CONTROL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -272,6 +276,16 @@ final class MinosStrongProcessLauncher {
             throw new IOException("resolved Windows executable is not a regular file: " + value);
         }
         return Path.of(first).toAbsolutePath().normalize();
+    }
+
+    private static Path windowsSystemExecutable(String executable) throws IOException {
+        String root = System.getenv("SystemRoot");
+        if (root == null || root.isBlank()) throw new IOException("SystemRoot is unavailable");
+        Path resolved = Path.of(root, "System32", executable).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(resolved)) {
+            throw new IOException("Windows system executable is unavailable: " + resolved);
+        }
+        return resolved;
     }
 
     private static Path windowsPowerShell() throws IOException {
@@ -376,9 +390,9 @@ final class MinosStrongProcessLauncher {
             if (!terminated.compareAndSet(false, true)) return;
             IOException failure = null;
             try {
-                int stop = runControl(List.of("systemctl", "--user", "stop", scope), true);
+                int stop = runControl(List.of(SYSTEMCTL, USER_SCOPE, "stop", scope), true);
                 if (stop != 0) {
-                    int active = runControl(List.of("systemctl", "--user", "is-active", "--quiet", scope), true);
+                    int active = runControl(List.of(SYSTEMCTL, USER_SCOPE, "is-active", QUIET, scope), true);
                     if (active == 0) failure = new IOException(
                             "systemd scope remained active after stop failure: " + scope);
                 }

@@ -38,6 +38,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final int MAX_PROPERTY_VALUE_CHARS = 32_768;
     private static final String RUN_LOCATOR_DIRECTORY = ".by-id";
     private static final String RUN_LOCATOR_READY = "v1.ready";
+    private static final String PROJECT_ID_PROPERTY = "projectId";
 
     private final Path storageRoot;
     private final Path projectRoot;
@@ -60,7 +61,7 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     @Override
     public ProjectLease acquireProjectLease(UUID projectId) {
-        UUID id = Objects.requireNonNull(projectId, "projectId");
+        UUID id = Objects.requireNonNull(projectId, PROJECT_ID_PROPERTY);
         Map<UUID, HeldProjectLease> heldByProject = heldProjectLeases.get();
         HeldProjectLease nested = heldByProject.get(id);
         if (nested != null) {
@@ -136,11 +137,11 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     @Override
     public synchronized Optional<ProjectIndexState> findProjectState(UUID projectId) {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_PROPERTY);
         Path file = projectRoot.resolve(projectId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
         Properties properties = load(file);
-        UUID persistedProjectId = UUID.fromString(required(properties, "projectId", file));
+        UUID persistedProjectId = UUID.fromString(required(properties, PROJECT_ID_PROPERTY, file));
         requireIdentity(projectId, persistedProjectId, file, "project state");
         return Optional.of(new ProjectIndexState(
                 persistedProjectId,
@@ -179,7 +180,7 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     @Override
     public synchronized List<IndexingRun> listRuns(UUID projectId) {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_PROPERTY);
         Path projectRuns = projectRunDirectory(projectId);
         if (!Files.isDirectory(projectRuns)) return List.of();
         try (var stream = Files.list(projectRuns)) {
@@ -187,7 +188,7 @@ public final class FileIndexStateStore implements IndexStateStore {
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".properties"))
                     .map(path -> readRun(path, idFromPropertiesFile(path)))
-                    .peek(run -> requireIdentity(projectId, run.projectId(), projectRuns, "indexing run project"))
+                    .map(run -> requireProjectRunIdentity(projectId, projectRuns, run))
                     .sorted(Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id))
                     .toList();
         } catch (IOException exception) {
@@ -195,11 +196,16 @@ public final class FileIndexStateStore implements IndexStateStore {
         }
     }
 
+    private static IndexingRun requireProjectRunIdentity(UUID projectId, Path projectRuns, IndexingRun run) {
+        requireIdentity(projectId, run.projectId(), projectRuns, "indexing run project");
+        return run;
+    }
+
     @Override
     public synchronized void saveProjectState(ProjectIndexState state) {
         Objects.requireNonNull(state, "state");
         Properties properties = new Properties();
-        properties.setProperty("projectId", state.projectId().toString());
+        properties.setProperty(PROJECT_ID_PROPERTY, state.projectId().toString());
         properties.setProperty("availability", state.availability().name());
         putOptional(properties, "activeSnapshotId", state.activeSnapshotId());
         putOptional(properties, "latestRunId", state.latestRunId().map(UUID::toString));
@@ -220,7 +226,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     }
 
     synchronized boolean deleteRun(UUID projectId, UUID runId) throws IOException {
-        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(projectId, PROJECT_ID_PROPERTY);
         Objects.requireNonNull(runId, "runId");
         boolean deleted = DurableAtomicFile.deleteIfExists(
                 runFile(projectId, runId), "index run deletion");
@@ -233,7 +239,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private Properties properties(IndexingRun run) {
         Properties properties = new Properties();
         properties.setProperty("id", run.id().toString());
-        properties.setProperty("projectId", run.projectId().toString());
+        properties.setProperty(PROJECT_ID_PROPERTY, run.projectId().toString());
         properties.setProperty("status", run.status().name());
         properties.setProperty("phase", run.phase().name());
         properties.setProperty("createdAt", run.createdAt().toString());
@@ -277,7 +283,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         }
         return new IndexingRun(
                 persistedRunId,
-                UUID.fromString(required(properties, "projectId", file)),
+                UUID.fromString(required(properties, PROJECT_ID_PROPERTY, file)),
                 IndexingRun.Status.valueOf(required(properties, "status", file)),
                 IndexingRun.Phase.valueOf(required(properties, "phase", file)),
                 Instant.parse(required(properties, "createdAt", file)),
@@ -376,7 +382,7 @@ public final class FileIndexStateStore implements IndexStateStore {
             return;
         }
         Properties properties = new Properties();
-        properties.setProperty("projectId", projectId.toString());
+        properties.setProperty(PROJECT_ID_PROPERTY, projectId.toString());
         storeIo(locator, properties, "MINOS run locator");
     }
 
@@ -385,7 +391,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         if (!Files.isRegularFile(locator)) return Optional.empty();
         Properties properties = load(locator);
         try {
-            return Optional.of(UUID.fromString(required(properties, "projectId", locator)));
+            return Optional.of(UUID.fromString(required(properties, PROJECT_ID_PROPERTY, locator)));
         } catch (IllegalArgumentException invalid) {
             throw new IllegalStateException("invalid project id in run locator: " + locator, invalid);
         }

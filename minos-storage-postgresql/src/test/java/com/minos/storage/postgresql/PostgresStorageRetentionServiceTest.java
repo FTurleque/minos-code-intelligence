@@ -5,7 +5,9 @@ import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.ProjectIndexState;
 import com.minos.storage.PersistentRetentionPolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,10 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
 
+    @TempDir Path tempDir;
+
     @Test
     void compactsTransactionallyAndPreservesEveryActiveReference() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore knowledge = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         PostgresFingerprintSnapshotStore fingerprints =
                 new PostgresFingerprintSnapshotStore(connections, new PostgresJsonCodec());
         PostgresIndexStateStore states = new PostgresIndexStateStore(connections, new PostgresJsonCodec());
@@ -53,7 +57,7 @@ class PostgresStorageRetentionServiceTest extends PostgresTestSupport {
         assertEquals(5, count("fingerprint_snapshots", projectId));
         assertEquals(31, states.listRuns(projectId).size());
         assertTrue(states.findRun(protectedLatest).isPresent());
-        assertEquals("snapshot-5", new PostgresCodeKnowledgeSnapshotStore(connections)
+        assertEquals("snapshot-5", new PostgresCodeKnowledgeSnapshotStore(connections, tempDir)
                 .loadActiveKnowledge(projectId).orElseThrow().snapshotId());
         assertEquals("snapshot-4", new PostgresFingerprintSnapshotStore(connections, new PostgresJsonCodec())
                 .loadActive(projectId).orElseThrow().indexSnapshotId());
