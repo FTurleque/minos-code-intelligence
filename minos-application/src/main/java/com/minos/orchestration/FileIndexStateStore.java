@@ -89,6 +89,10 @@ public final class FileIndexStateStore implements IndexStateStore {
             if (Thread.currentThread() != owner) {
                 throw new IllegalStateException("file project lifecycle lease must be released by its owner thread");
             }
+            // Preserve owner-thread idempotence after the physical lease and ThreadLocal context
+            // have already been released, while still rejecting foreign threads before they can
+            // mutate the handle state.
+            if (closed.get()) return;
             if (heldByProject.get(projectId) != held) {
                 throw new IllegalStateException("file project lifecycle lease lost thread ownership context");
             }
