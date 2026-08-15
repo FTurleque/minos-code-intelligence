@@ -249,7 +249,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         return first + "; " + second;
     }
 
-    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
