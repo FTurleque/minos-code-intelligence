@@ -90,12 +90,26 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public synchronized RegisteredWorkspace createWorkspace(String name) throws IOException {
-        validateName(name, "name");
+        return createWorkspaceWithResult(name).workspace();
+    }
+
+    @Override
+    public synchronized WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        ProjectRegistryLimits.requireName(name, "name");
+        List<RegisteredWorkspace> matches = listWorkspaces().stream()
+                .filter(workspace -> workspace.name().equals(name))
+                .toList();
+        if (matches.size() > 1) {
+            throw new IOException("duplicate workspace names in local registry: " + name);
+        }
+        if (!matches.isEmpty()) {
+            return new WorkspaceRegistrationResult(matches.getFirst(), false);
+        }
         Instant now = Instant.now();
         RegisteredWorkspace workspace = new RegisteredWorkspace(
                 UUID.randomUUID(), name, List.of(), now, now);
         writeWorkspace(workspace);
-        return workspace;
+        return new WorkspaceRegistrationResult(workspace, true);
     }
 
     @Override
@@ -371,9 +385,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static void validateName(String value, String label) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(label + " must not be blank");
-        }
+        ProjectRegistryLimits.requireName(value, label);
     }
 
     private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {

@@ -1,5 +1,6 @@
 package com.minos.store;
 
+import com.minos.io.DurableAtomicFile;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
@@ -16,24 +17,24 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /** Local versioned vector store. Rebuild from active snapshots is always authoritative. */
 public final class FileSemanticVectorStore implements SemanticVectorStore {
 
-    private static final ConcurrentHashMap<Path, ReentrantLock> JVM_SYNC_LOCKS = new ConcurrentHashMap<>();
+    private static final Object JVM_SYNC_LOCK_MONITOR = new Object();
+    private static final Map<Path, SyncLockState> JVM_SYNC_LOCKS = new HashMap<>();
 
     private static final int MAGIC = 0x4D53454D; // MSEM
     private static final int LEGACY_FORMAT_VERSION = 1;
@@ -208,7 +209,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                 }
             }
             requireIndexFileSize(temporary);
-            moveAtomically(temporary, target);
+            DurableAtomicFile.replace(temporary, target, "semantic index replacement");
             Files.deleteIfExists(directory.resolve(LEGACY_FILE));
             // Do not construct a second normalized vector graph while the caller still owns `snapshot`.
             // The next load reconstructs the canonical float32 representation from disk under decode budgets.
@@ -232,9 +233,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (!lockFile.startsWith(lockDirectory)) {
             throw new IOException("semantic sync lock file escapes store directory");
         }
-        ReentrantLock jvmLock = JVM_SYNC_LOCKS.computeIfAbsent(lockFile, ignored -> new ReentrantLock());
-        jvmLock.lock();
-        try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (SyncLockLease ignored = acquireJvmSyncLock(lockFile);
+             FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              FileLock fileLock = channel.lock()) {
             Optional<String> currentActive = activeSnapshotReader.read();
             String currentId = currentActive.orElse(null);
@@ -244,8 +244,6 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                         currentId != null ? currentId : "absent");
             }
             replace(next);
-        } finally {
-            jvmLock.unlock();
         }
     }
 
@@ -329,11 +327,45 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         return projectId;
     }
 
-    private static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+    private static SyncLockLease acquireJvmSyncLock(Path lockFile) {
+        SyncLockState state;
+        synchronized (JVM_SYNC_LOCK_MONITOR) {
+            state = JVM_SYNC_LOCKS.computeIfAbsent(lockFile, ignored -> new SyncLockState());
+            state.references++;
+        }
+        state.lock.lock();
+        return new SyncLockLease(lockFile, state);
+    }
+
+    private static void releaseJvmSyncLock(Path lockFile, SyncLockState state) {
+        synchronized (JVM_SYNC_LOCK_MONITOR) {
+            state.references--;
+            if (state.references < 0) throw new IllegalStateException("semantic JVM sync lock underflow");
+            if (state.references == 0) JVM_SYNC_LOCKS.remove(lockFile, state);
+        }
+    }
+
+    private static final class SyncLockState {
+        private final ReentrantLock lock = new ReentrantLock();
+        private int references;
+    }
+
+    private static final class SyncLockLease implements AutoCloseable {
+        private final Path lockFile;
+        private final SyncLockState state;
+        private boolean closed;
+
+        private SyncLockLease(Path lockFile, SyncLockState state) {
+            this.lockFile = lockFile;
+            this.state = state;
+        }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            closed = true;
+            state.lock.unlock();
+            releaseJvmSyncLock(lockFile, state);
         }
     }
 

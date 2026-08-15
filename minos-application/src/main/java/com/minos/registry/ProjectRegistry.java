@@ -27,6 +27,14 @@ public interface ProjectRegistry {
 
     RegisteredWorkspace createWorkspace(String name) throws IOException;
 
+    /**
+     * Atomically gets or creates the unique workspace identified by its exact name. Implementations
+     * that cannot prove creation return createdByThisCall=false.
+     */
+    default WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        return new WorkspaceRegistrationResult(createWorkspace(name), false);
+    }
+
     RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException;
 
     RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException;
@@ -50,6 +58,12 @@ public interface ProjectRegistry {
     record RegistrationResult(RegisteredProject project, boolean createdByThisCall) {
         public RegistrationResult {
             java.util.Objects.requireNonNull(project, "project");
+        }
+    }
+
+    record WorkspaceRegistrationResult(RegisteredWorkspace workspace, boolean createdByThisCall) {
+        public WorkspaceRegistrationResult {
+            java.util.Objects.requireNonNull(workspace, "workspace");
         }
     }
 }

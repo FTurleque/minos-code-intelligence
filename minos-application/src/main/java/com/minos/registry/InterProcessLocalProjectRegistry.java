@@ -60,7 +60,12 @@ public final class InterProcessLocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredWorkspace createWorkspace(String name) throws IOException {
-        return withLock(() -> delegate.createWorkspace(name));
+        return createWorkspaceWithResult(name).workspace();
+    }
+
+    @Override
+    public WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        return withLock(() -> delegate.createWorkspaceWithResult(name));
     }
 
     @Override

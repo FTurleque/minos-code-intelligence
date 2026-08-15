@@ -1,6 +1,7 @@
 package com.minos.runtime;
 
 import com.minos.io.BoundedInputStream;
+import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
@@ -15,7 +16,6 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -420,11 +420,26 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
     }
 
     private static void move(Path source, Path target) throws IOException {
-        Files.createDirectories(target.toAbsolutePath().normalize().getParent());
+        Path normalizedTarget = target.toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(normalizedTarget.getParent(), "provider artifact target directory");
         try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            DurableAtomicFile.replace(source, normalizedTarget, "provider artifact replacement");
+            return;
+        } catch (IOException failure) {
+            if (!(failure.getCause() instanceof AtomicMoveNotSupportedException)) throw failure;
+        }
+
+        // Provider plans may place their generated artifact on another filesystem. Never degrade to a
+        // non-atomic move: copy under the existing SCIP byte budget into the target filesystem, then
+        // publish that copy with the same durable atomic primitive used by authoritative local stores.
+        Path localCopy = Files.createTempFile(normalizedTarget.getParent(), ".artifact-transfer-", ".tmp");
+        Files.deleteIfExists(localCopy);
+        try {
+            copyArtifactBounded(source, localCopy);
+            DurableAtomicFile.replace(localCopy, normalizedTarget, "cross-filesystem provider artifact replacement");
+            Files.delete(source);
+        } finally {
+            Files.deleteIfExists(localCopy);
         }
     }
 }

@@ -1,13 +1,12 @@
 package com.minos.storage.postgresql;
 
 import java.io.IOException;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 final class PostgresSchemaMigrator {
-    static final int CURRENT_VERSION = 3;
+    static final int CURRENT_VERSION = 4;
 
     private final PostgresConnectionFactory connections;
 
@@ -17,40 +16,26 @@ final class PostgresSchemaMigrator {
 
     void migrate() throws IOException {
         try {
-            connections.withConnection(connection -> {
+            connections.inTransaction(connection -> {
                 try (Statement statement = connection.createStatement()) {
-                    connection.setAutoCommit(false);
-                    try {
-                        String schema = statement.enquoteIdentifier(connections.schema(), true);
-                        statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
-                        statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
-                        statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
-                        statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-                        int version = currentVersion(statement);
-                        if (version > CURRENT_VERSION) throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
-                        if (version < 1) applyV1(statement);
-                        if (version < 2) applyV2(statement);
-                        if (version < 3) applyV3(statement);
-                        connection.commit();
-                        return null;
-                    } catch (Exception exception) {
-                        rollbackPreserving(connection, exception);
-                        if (exception instanceof IOException io) throw io;
-                        if (exception instanceof SQLException sql) throw sql;
-                        throw new IOException("unable to migrate MINOS PostgreSQL schema", exception);
+                    String schema = statement.enquoteIdentifier(connections.schema(), true);
+                    statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
+                    statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                    statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
+                    statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
+                    int version = currentVersion(statement);
+                    if (version > CURRENT_VERSION) {
+                        throw new IOException("PostgreSQL schema is newer than this MINOS runtime: " + version);
                     }
+                    if (version < 1) applyV1(statement);
+                    if (version < 2) applyV2(statement);
+                    if (version < 3) applyV3(statement);
+                    if (version < 4) applyV4(statement);
+                    return null;
                 }
             });
         } catch (SQLException exception) {
             throw new IOException("unable to initialize MINOS PostgreSQL backend", exception);
-        }
-    }
-
-    private static void rollbackPreserving(Connection connection, Exception original) {
-        try {
-            connection.rollback();
-        } catch (SQLException rollbackFailure) {
-            original.addSuppressed(rollbackFailure);
         }
     }
 
@@ -104,4 +89,15 @@ final class PostgresSchemaMigrator {
                 + "ON fingerprint_snapshots(project_id, created_at DESC, snapshot_id DESC)");
         s.execute("INSERT INTO schema_version(version) VALUES (3) ON CONFLICT(version) DO NOTHING");
     }
+    private static void applyV4(Statement s) throws SQLException {
+        try (ResultSet duplicates = s.executeQuery(
+                "SELECT name, COUNT(*) FROM workspaces GROUP BY name HAVING COUNT(*) > 1 LIMIT 1")) {
+            if (duplicates.next()) {
+                throw new SQLException("duplicate workspace names prevent schema v4 uniqueness migration");
+            }
+        }
+        s.execute("CREATE UNIQUE INDEX IF NOT EXISTS workspaces_name_uq ON workspaces(name)");
+        s.execute("INSERT INTO schema_version(version) VALUES (4) ON CONFLICT(version) DO NOTHING");
+    }
+
 }

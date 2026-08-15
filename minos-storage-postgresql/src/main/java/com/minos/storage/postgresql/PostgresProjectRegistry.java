@@ -1,8 +1,10 @@
 package com.minos.storage.postgresql;
 
+import com.minos.io.CommitUncertainException;
 import com.minos.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappingStore;
 import com.minos.registry.ProjectRegistry;
+import com.minos.registry.ProjectRegistryLimits;
 import com.minos.registry.RegisteredProject;
 import com.minos.registry.RegisteredWorkspace;
 
@@ -49,9 +51,7 @@ final class PostgresProjectRegistry implements ProjectRegistry {
     @Override
     public RegistrationResult registerProjectWithResult(Path rootPath, String displayName) throws IOException {
         Path canonical = canonicalExistingDirectory(rootPath);
-        if (displayName == null || displayName.isBlank()) {
-            throw new IllegalArgumentException("displayName must not be blank");
-        }
+        ProjectRegistryLimits.requireName(displayName, "displayName");
         RootIdentity root = rootIdentity(canonical);
         Instant now = Instant.now();
         UUID candidateId = UUID.randomUUID();
@@ -84,23 +84,42 @@ final class PostgresProjectRegistry implements ProjectRegistry {
 
     @Override
     public RegisteredWorkspace createWorkspace(String name) throws IOException {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
-        }
+        return createWorkspaceWithResult(name).workspace();
+    }
+
+    @Override
+    public WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        ProjectRegistryLimits.requireName(name, "name");
         Instant now = Instant.now();
-        RegisteredWorkspace workspace = new RegisteredWorkspace(UUID.randomUUID(), name, List.of(), now, now);
+        UUID candidateId = UUID.randomUUID();
         try {
-            return connections.withConnection(connection -> {
+            return connections.inTransaction(connection -> {
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "INSERT INTO workspaces(id,name,created_at,updated_at) VALUES (?,?,?,?)")) {
-                    statement.setObject(1, workspace.id());
-                    statement.setString(2, workspace.name());
-                    statement.setObject(3, sqlTimestamp(workspace.createdAt()));
-                    statement.setObject(4, sqlTimestamp(workspace.updatedAt()));
-                    statement.executeUpdate();
-                    return workspace;
+                        "INSERT INTO workspaces(id,name,created_at,updated_at) VALUES (?,?,?,?) "
+                                + "ON CONFLICT(name) DO UPDATE SET name=workspaces.name "
+                                + "RETURNING id,name,created_at,updated_at")) {
+                    statement.setObject(1, candidateId);
+                    statement.setString(2, name);
+                    statement.setObject(3, sqlTimestamp(now));
+                    statement.setObject(4, sqlTimestamp(now));
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) throw new SQLException("workspace registration did not return a row");
+                        RegisteredWorkspace workspace = readWorkspace(result);
+                        return new WorkspaceRegistrationResult(workspace, candidateId.equals(workspace.id()));
+                    }
                 }
             });
+        } catch (CommitUncertainException uncertain) {
+            try {
+                Optional<RegisteredWorkspace> observed = findWorkspaceByExactName(name);
+                if (observed.isPresent()) {
+                    RegisteredWorkspace workspace = observed.orElseThrow();
+                    return new WorkspaceRegistrationResult(workspace, candidateId.equals(workspace.id()));
+                }
+            } catch (IOException observationFailure) {
+                uncertain.addSuppressed(observationFailure);
+            }
+            throw uncertain;
         } catch (SQLException exception) {
             throw io("create workspace", exception);
         }
@@ -190,6 +209,34 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         } catch (SQLException exception) {
             throw io("find workspace", exception);
         }
+    }
+
+    private Optional<RegisteredWorkspace> findWorkspaceByExactName(String name) throws IOException {
+        try {
+            return connections.withConnection(connection -> {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT id,name,created_at,updated_at FROM workspaces WHERE name=?")) {
+                    statement.setString(1, name);
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (!result.next()) return Optional.empty();
+                        RegisteredWorkspace workspace = readWorkspace(result);
+                        if (result.next()) throw new SQLException("workspace name uniqueness invariant violated: " + name);
+                        return Optional.of(workspace);
+                    }
+                }
+            });
+        } catch (SQLException exception) {
+            throw io("find workspace by name", exception);
+        }
+    }
+
+    private static RegisteredWorkspace readWorkspace(ResultSet result) throws SQLException {
+        return new RegisteredWorkspace(
+                (UUID) result.getObject(1),
+                result.getString(2),
+                List.of(),
+                result.getObject(3, OffsetDateTime.class).toInstant(),
+                result.getObject(4, OffsetDateTime.class).toInstant());
     }
 
     @Override

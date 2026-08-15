@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentMap;
 
 final class IndexingRunExecutor {
     private IndexingRunExecutor() { }
@@ -31,8 +30,7 @@ final class IndexingRunExecutor {
     static IndexingRun execute(UUID projectId, Path projectRoot, List<IndexingExecutionTarget> targets,
                                IndexingMode mode, List<String> changedFiles,
                                Map<String, IndexerExecutor> executors, SnapshotStager stager,
-                               SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock,
-                               ConcurrentMap<UUID, Object> projectLocks) {
+                               SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
         Path root = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
         if (mode == IndexingMode.INCREMENTAL
@@ -40,29 +38,25 @@ final class IndexingRunExecutor {
             throw new IllegalArgumentException("multi-scope incremental indexing is not qualified; planner must require FULL for this topology");
         }
 
-        Object lock = projectLocks.computeIfAbsent(projectId, ignored -> new Object());
         UUID runId = UUID.randomUUID();
         Instant createdAt = clock.instant();
-        ProjectIndexState resolvedPrevious;
-        synchronized (lock) {
-            resolvedPrevious = AuthoritativeProjectStateReconciler.reconcile(
-                    projectId,
-                    promoter,
-                    stateStore,
-                    createdAt,
-                    "reconciled from authoritative active snapshot before new indexing run");
-            if (resolvedPrevious.availability() == Availability.INDEXING
-                    || resolvedPrevious.availability() == Availability.REFRESHING) {
-                throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
-            }
-            stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
-                    Optional.empty(), resolvedPrevious.activeSnapshotId(),
-                    Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
-            stateStore.saveProjectState(new ProjectIndexState(projectId,
-                    resolvedPrevious.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
-                    resolvedPrevious.activeSnapshotId(), Optional.of(runId), createdAt,
-                    Optional.of("indexing run in progress: mode=" + mode)));
+        ProjectIndexState resolvedPrevious = AuthoritativeProjectStateReconciler.reconcile(
+                projectId,
+                promoter,
+                stateStore,
+                createdAt,
+                "reconciled from authoritative active snapshot before new indexing run");
+        if (resolvedPrevious.availability() == Availability.INDEXING
+                || resolvedPrevious.availability() == Availability.REFRESHING) {
+            throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
         }
+        stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
+                Optional.empty(), resolvedPrevious.activeSnapshotId(),
+                Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
+        stateStore.saveProjectState(new ProjectIndexState(projectId,
+                resolvedPrevious.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
+                resolvedPrevious.activeSnapshotId(), Optional.of(runId), createdAt,
+                Optional.of("indexing run in progress: mode=" + mode)));
         ProjectIndexState previous = resolvedPrevious;
 
         List<IndexingArtifact> artifacts = new ArrayList<>();
@@ -119,14 +113,12 @@ final class IndexingRunExecutor {
             IndexingRun succeeded = new IndexingRun(runId, projectId, Status.SUCCEEDED, Phase.COMPLETED,
                     createdAt, Optional.of(completedAt), executions, staged, previous.activeSnapshotId(),
                     Optional.of(stagedId), Optional.of(successMessage));
-            synchronized (lock) {
-                stateStore.saveRun(succeeded);
-                stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
-                        Optional.of(stagedId), Optional.of(runId), completedAt,
-                        Optional.of("active snapshot is current: mode=" + mode
-                                + (durabilityAcknowledgementPending
-                                ? "; durability acknowledgement pending" : ""))));
-            }
+            stateStore.saveRun(succeeded);
+            stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
+                    Optional.of(stagedId), Optional.of(runId), completedAt,
+                    Optional.of("active snapshot is current: mode=" + mode
+                            + (durabilityAcknowledgementPending
+                            ? "; durability acknowledgement pending" : ""))));
             return succeeded;
         } catch (Exception failure) {
             Instant completedAt = clock.instant();
@@ -138,18 +130,16 @@ final class IndexingRunExecutor {
             IndexingRun failed = new IndexingRun(runId, projectId, Status.FAILED, phase, createdAt,
                     Optional.of(completedAt), executions, staged, previous.activeSnapshotId(), activeAfter,
                     Optional.of(committed ? committedPrefix + message : message));
-            synchronized (lock) {
-                if (committed) {
-                    persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
-                            activeAfter, Optional.of(runId), completedAt,
-                            Optional.of("active snapshot committed; run metadata recovery required: " + message))), failure);
-                    persist(() -> stateStore.saveRun(failed), failure);
-                } else {
-                    persist(() -> stateStore.saveRun(failed), failure);
-                    persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId,
-                            previous.activeSnapshotId().isPresent() ? Availability.STALE : Availability.FAILED,
-                            previous.activeSnapshotId(), Optional.of(runId), completedAt, Optional.of(message))), failure);
-                }
+            if (committed) {
+                persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
+                        activeAfter, Optional.of(runId), completedAt,
+                        Optional.of("active snapshot committed; run metadata recovery required: " + message))), failure);
+                persist(() -> stateStore.saveRun(failed), failure);
+            } else {
+                persist(() -> stateStore.saveRun(failed), failure);
+                persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId,
+                        previous.activeSnapshotId().isPresent() ? Availability.STALE : Availability.FAILED,
+                        previous.activeSnapshotId(), Optional.of(runId), completedAt, Optional.of(message))), failure);
             }
             return failed;
         }
