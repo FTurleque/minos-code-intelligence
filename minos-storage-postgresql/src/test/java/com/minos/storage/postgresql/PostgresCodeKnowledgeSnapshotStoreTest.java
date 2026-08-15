@@ -11,8 +11,10 @@ import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
 import com.minos.store.CodeKnowledgeSnapshot;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Optional;
@@ -25,10 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
 
+    @TempDir Path tempDir;
+
     @Test
     void publishesAndLoadsActiveKnowledgeSnapshot() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         CodeKnowledgeSnapshot snapshot = snapshot(projectId, "snap-1",
                 symbol(projectId, "sym-a"), symbol(projectId, "sym-b"));
 
@@ -42,7 +46,7 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
     @Test
     void activePointerFollowsLatestPublish() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         CodeKnowledgeSnapshot first = snapshot(projectId, "snap-1", symbol(projectId, "sym-a"));
         CodeKnowledgeSnapshot second = snapshot(projectId, "snap-2", symbol(projectId, "sym-b"));
 
@@ -57,7 +61,7 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
     @Test
     void isIdempotentForSameContent() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         CodeKnowledgeSnapshot snapshot = snapshot(projectId, "snap-1", symbol(projectId, "sym-a"));
 
         store.publish(projectId, "snap-1", snapshot.symbols(), snapshot.occurrences(), snapshot.relationships());
@@ -67,7 +71,7 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
     @Test
     void rejectsIdentityMutationWithDifferentContent() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         store.publish(projectId, "snap-1", List.of(symbol(projectId, "sym-a")), List.of(), List.of());
 
         IOException exception = assertThrows(IOException.class,
@@ -78,14 +82,14 @@ class PostgresCodeKnowledgeSnapshotStoreTest extends PostgresTestSupport {
 
     @Test
     void returnsEmptyForUnknownProject() throws Exception {
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         assertTrue(store.loadActiveKnowledge(UUID.randomUUID()).isEmpty());
     }
 
     @Test
     void detectsChecksumMismatchBeforeDeserializing() throws Exception {
         UUID projectId = UUID.randomUUID();
-        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections);
+        PostgresCodeKnowledgeSnapshotStore store = new PostgresCodeKnowledgeSnapshotStore(connections, tempDir);
         store.publish(projectId, "snap-1", List.of(symbol(projectId, "sym-a")), List.of(), List.of());
 
         connections.withConnection(c -> {

@@ -27,7 +27,7 @@ final class PostgresStorageBackend implements StorageBackend {
         new PostgresSchemaMigrator(connections).migrate();
         PostgresJsonCodec json = new PostgresJsonCodec();
         this.projectRegistry = new PostgresProjectRegistry(connections, home);
-        this.snapshotStore = new PostgresCodeKnowledgeSnapshotStore(connections);
+        this.snapshotStore = new PostgresCodeKnowledgeSnapshotStore(connections, home);
         this.indexStateStore = new ProjectMutationIndexStateStore(
                 connections, new PostgresIndexStateStore(connections, json));
         this.fingerprintStore = new PostgresFingerprintSnapshotStore(connections, json);
