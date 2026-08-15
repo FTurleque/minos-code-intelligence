@@ -32,7 +32,8 @@ final class PostgresConnectionFactory implements AutoCloseable {
     private static final int DEFAULT_SOCKET_TIMEOUT_SECONDS = 120;
     private static final int VALIDATION_TIMEOUT_SECONDS = 5;
     private static final String MANAGED_DOCKER_HOST = "minos-postgres";
-    private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of("sslmode");
+    private static final String SSL_MODE_PARAMETER = "sslmode";
+    private static final Set<String> ALLOWED_URL_PARAMETERS = Set.of(SSL_MODE_PARAMETER);
     private static final Set<String> ALLOWED_SSL_MODES = Set.of(
             "disable", "allow", "prefer", "require", "verify-ca", "verify-full");
 
@@ -220,7 +221,6 @@ final class PostgresConnectionFactory implements AutoCloseable {
                 } catch (SQLException restoreFailure) {
                     context.reusable = false;
                     if (primaryFailure != null) primaryFailure.addSuppressed(restoreFailure);
-                    else throw restoreFailure;
                 }
             }
         }
@@ -527,7 +527,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
         validateJdbcUriShape(uri);
         Map<String, String> query = queryParameters(uri.getRawQuery());
         validateJdbcParameters(query);
-        validateJdbcHostPolicy(uri.getHost(), query.get("sslmode"), managed);
+        validateJdbcHostPolicy(uri.getHost(), query.get(SSL_MODE_PARAMETER), managed);
     }
 
     private static URI parseJdbcUri(String value) throws IOException {
@@ -563,7 +563,7 @@ final class PostgresConnectionFactory implements AutoCloseable {
                 throw new IOException("MINOS_POSTGRES_URL contains unsupported parameter: " + key);
             }
         }
-        String sslMode = query.get("sslmode");
+        String sslMode = query.get(SSL_MODE_PARAMETER);
         if (sslMode != null && !ALLOWED_SSL_MODES.contains(sslMode.toLowerCase(Locale.ROOT))) {
             throw new IOException("MINOS_POSTGRES_URL contains an unsupported sslmode");
         }
