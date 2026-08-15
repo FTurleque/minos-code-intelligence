@@ -43,7 +43,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** Shared binary primitives used by the explicit v1/v2 snapshot codecs. */
+/**
+ * Shared binary primitives used by the explicit v1/v2 snapshot codecs.
+ *
+ * <p>The framing helpers ({@code readHeaderVersion}, {@code writeString}, {@code readString},
+ * {@code readRequiredString}, {@code readCount}) are package-private rather than private because
+ * {@link ActiveSnapshotRepository} writes the pointer file with the same framing. They must stay a
+ * single implementation: a divergence between the two would silently produce pointer files this
+ * package can no longer read back.</p>
+ */
 final class SnapshotBinaryCodecSupport {
 
     static final int FORMAT_VERSION_V1 = 1;
@@ -662,7 +670,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static int readHeaderVersion(
+    static int readHeaderVersion(
             DataInputStream input,
             int expectedMagic,
             String name
@@ -673,7 +681,7 @@ final class SnapshotBinaryCodecSupport {
         return input.readInt();
     }
 
-    private static void writeString(DataOutputStream output, String value) throws IOException {
+    static void writeString(DataOutputStream output, String value) throws IOException {
         if (value == null) {
             output.writeInt(-1);
             return;
@@ -687,7 +695,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static String readString(DataInputStream input) throws IOException {
+    static String readString(DataInputStream input) throws IOException {
         int length = input.readInt();
         if (length == -1) {
             return null;
@@ -702,7 +710,7 @@ final class SnapshotBinaryCodecSupport {
         return value.toString();
     }
 
-    private static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
+    static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
         String value = readString(input);
         if (value == null || value.isBlank()) {
             throw new IOException(fieldName + " must not be blank");
@@ -710,7 +718,7 @@ final class SnapshotBinaryCodecSupport {
         return value;
     }
 
-    private static int readCount(DataInputStream input, int maximum, String name) throws IOException {
+    static int readCount(DataInputStream input, int maximum, String name) throws IOException {
         int count = input.readInt();
         if (count < 0 || count > maximum) {
             throw new IOException("invalid " + name + ": " + count);

@@ -4,7 +4,6 @@ import com.minos.application.MinosApplication;
 import com.minos.git.GitIntelligenceService;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -253,45 +252,14 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     }
 
     private static <T> T required(T value, String field) {
-        if (value == null) {
-            throw new IllegalArgumentException(field + " must not be null");
-        }
-        return value;
+        return MinosApiSupport.required(value, field);
     }
 
-    private static <T> T execute(ApiCall<T> call) throws MinosApiException {
-        try {
-            return call.call();
-        } catch (MinosApiException exception) {
-            throw exception;
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApiException(ErrorCode.INVALID_REQUEST, failureMessage(exception), exception);
-        } catch (IllegalStateException exception) {
-            throw new MinosApiException(ErrorCode.UNAVAILABLE, failureMessage(exception), exception);
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, failureMessage(exception), exception);
-        } catch (Exception exception) {
-            throw new MinosApiException(ErrorCode.EXECUTION_FAILURE, failureMessage(exception), exception);
-        }
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 
     private static MinosApplication openApplication(Path home) throws MinosApiException {
-        try {
-            return MinosApplication.open(Objects.requireNonNull(home, "home"));
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS M12 API bootstrap failed", exception);
-        }
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    @FunctionalInterface
-    private interface ApiCall<T> {
-        T call() throws Exception;
+        return MinosApiSupport.openApplication(home, "MINOS M12 API bootstrap failed");
     }
 }
