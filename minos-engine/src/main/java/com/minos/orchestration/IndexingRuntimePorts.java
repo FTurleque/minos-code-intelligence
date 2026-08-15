@@ -3,6 +3,7 @@ package com.minos.orchestration;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -83,7 +84,7 @@ public final class IndexingRuntimePorts {
          * supported promoter must return {@code NO_ACTIVE_SNAPSHOT} when its authority is
          * observable but empty.</p>
          */
-        default ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws Exception {
+        default ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws IOException {
             return ActiveSnapshotObservation.unsupported();
         }
     }
