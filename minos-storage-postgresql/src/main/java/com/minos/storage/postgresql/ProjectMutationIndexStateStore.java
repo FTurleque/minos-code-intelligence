@@ -112,6 +112,9 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
             if (Thread.currentThread() != held.owner) {
                 throw new IllegalStateException("PostgreSQL lifecycle lease must be released by its owner thread");
             }
+            // Owner-thread close remains idempotent even after the physical context has been removed.
+            // A foreign thread is rejected above before it can alter the closed flag.
+            if (closed.get()) return;
             if (heldLifecycleLease.get() != held) {
                 throw new IllegalStateException("PostgreSQL lifecycle lease lost thread ownership context");
             }
