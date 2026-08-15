@@ -86,13 +86,13 @@ public final class FileIndexStateStore implements IndexStateStore {
         AtomicBoolean closed = new AtomicBoolean();
         Thread owner = Thread.currentThread();
         return () -> {
-            if (!closed.compareAndSet(false, true)) return;
             if (Thread.currentThread() != owner) {
                 throw new IllegalStateException("file project lifecycle lease must be released by its owner thread");
             }
             if (heldByProject.get(projectId) != held) {
                 throw new IllegalStateException("file project lifecycle lease lost thread ownership context");
             }
+            if (!closed.compareAndSet(false, true)) return;
             held.depth--;
             if (held.depth < 0) throw new IllegalStateException("file project lifecycle lease depth underflow");
             if (held.depth == 0) {
