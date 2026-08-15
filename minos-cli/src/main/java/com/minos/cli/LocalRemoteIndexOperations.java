@@ -104,6 +104,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         boolean newlyRegistered = false;
         boolean pinned = false;
         boolean completed = false;
+        RemoteIndexView result = null;
         Exception primaryFailure = null;
         try {
             ProjectRegistry.RegistrationResult registration = application.projectRegistry()
@@ -141,40 +142,37 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                     .sorted(Comparator.comparing(ArtifactEvidence::providerId)
                             .thenComparing(ArtifactEvidence::projectRelativeRoot))
                     .toList();
-            RemoteIndexView result = new RemoteIndexView(
+            result = new RemoteIndexView(
                     view(source), project.id().toString(), project.displayName(), execution, evidence);
             completed = true;
-            return result;
         } catch (Exception exception) {
             primaryFailure = exception;
-            throw exception;
-        } finally {
-            Exception cleanupFailure = closeExecutors(distributedExecutors);
-            if (!completed && newlyRegistered && project != null) {
-                try {
-                    boolean removed = application.projectRegistry().deleteProject(project.id());
-                    boolean absent = removed || application.projectRegistry().findProject(project.id()).isEmpty();
-                    if (absent && pinned) {
-                        materializer.unpin(source);
-                        pinned = false;
-                    }
-                } catch (Exception exception) {
-                    cleanupFailure = combine(cleanupFailure, exception);
-                }
-            }
+        }
+
+        Exception cleanupFailure = closeExecutors(distributedExecutors);
+        if (!completed && newlyRegistered && project != null) {
             try {
-                materializer.release(source);
+                boolean removed = application.projectRegistry().deleteProject(project.id());
+                boolean absent = removed || application.projectRegistry().findProject(project.id()).isEmpty();
+                if (absent && pinned) {
+                    materializer.unpin(source);
+                }
             } catch (Exception exception) {
                 cleanupFailure = combine(cleanupFailure, exception);
             }
-            if (cleanupFailure != null) {
-                if (primaryFailure != null) {
-                    primaryFailure.addSuppressed(cleanupFailure);
-                } else {
-                    throw cleanupFailure;
-                }
-            }
         }
+        try {
+            materializer.release(source);
+        } catch (Exception exception) {
+            cleanupFailure = combine(cleanupFailure, exception);
+        }
+
+        if (primaryFailure != null) {
+            if (cleanupFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+            throw primaryFailure;
+        }
+        if (cleanupFailure != null) throw cleanupFailure;
+        return Objects.requireNonNull(result, "remote index result");
     }
 
     private static Exception closeExecutors(List<DistributedIndexerExecutor> executors) {
