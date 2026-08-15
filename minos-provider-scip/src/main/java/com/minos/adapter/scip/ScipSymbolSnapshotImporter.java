@@ -15,14 +15,23 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.UserPrincipal;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,20 +39,30 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /** Pont explicite entre un artefact SCIP et le snapshot persistant MINOS. */
 public final class ScipSymbolSnapshotImporter {
 
     private static final Pattern HASH_DERIVED_SNAPSHOT_ID = Pattern.compile("scip-[0-9a-f]{24}");
+    private static final String DEFAULT_SCRATCH_DIRECTORY = ".minos-scip-import-scratch";
+    private static final int MAX_SCRATCH_NAME_ATTEMPTS = 8;
+
     private final ScipIngestionLimits limits;
+    private final Path scratchRoot;
 
     public ScipSymbolSnapshotImporter() {
-        this(ScipIngestionLimits.DEFAULT);
+        this(ScipIngestionLimits.DEFAULT, defaultScratchRoot());
     }
 
     ScipSymbolSnapshotImporter(ScipIngestionLimits limits) {
+        this(limits, defaultScratchRoot());
+    }
+
+    ScipSymbolSnapshotImporter(ScipIngestionLimits limits, Path scratchRoot) {
         this.limits = Objects.requireNonNull(limits, "limits");
+        this.scratchRoot = Objects.requireNonNull(scratchRoot, "scratchRoot").toAbsolutePath().normalize();
     }
 
     public ScipSymbolSnapshotReport importSnapshot(
@@ -113,15 +132,16 @@ public final class ScipSymbolSnapshotImporter {
         if (Files.isSymbolicLink(source) || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("SCIP index does not exist or is not a regular file: " + source);
         }
-        Path frozen = Files.createTempFile("minos-scip-import-", ".scip");
+        Path frozen = createScratchFile();
         boolean success = false;
         try {
             long expectedBytes;
             String sha256;
             try (SeekableByteChannel sourceChannel = Files.newByteChannel(
                          source, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
-                 OutputStream output = Files.newOutputStream(
-                         frozen, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                 SeekableByteChannel frozenChannel = Files.newByteChannel(
+                         frozen, Set.of(StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS));
+                 OutputStream output = Channels.newOutputStream(frozenChannel)) {
                 expectedBytes = sourceChannel.size();
                 if (expectedBytes < 1L || expectedBytes > limits.maxArtifactBytes()) {
                     throw new IOException("SCIP artifact size is outside configured byte limit: "
@@ -147,6 +167,58 @@ public final class ScipSymbolSnapshotImporter {
         } finally {
             if (!success) Files.deleteIfExists(frozen);
         }
+    }
+
+    private Path createScratchFile() throws IOException {
+        prepareScratchRoot();
+        for (int attempt = 0; attempt < MAX_SCRATCH_NAME_ATTEMPTS; attempt++) {
+            Path candidate = scratchRoot.resolve("artifact-" + UUID.randomUUID() + ".scip").normalize();
+            if (!scratchRoot.equals(candidate.getParent())) {
+                throw new IOException("SCIP import scratch file escapes its private directory");
+            }
+            try {
+                return Files.createFile(candidate);
+            } catch (FileAlreadyExistsException collision) {
+                // UUID collisions are not expected; CREATE_NEW semantics remain fail-closed.
+            }
+        }
+        throw new IOException("unable to allocate a unique SCIP import scratch file");
+    }
+
+    private void prepareScratchRoot() throws IOException {
+        Files.createDirectories(scratchRoot);
+        if (Files.isSymbolicLink(scratchRoot)
+                || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("SCIP import scratch path must be a real directory");
+        }
+        PosixFileAttributeView posix = Files.getFileAttributeView(
+                scratchRoot, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        if (posix != null) {
+            Files.setPosixFilePermissions(scratchRoot, EnumSet.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE));
+            return;
+        }
+        AclFileAttributeView acl = Files.getFileAttributeView(
+                scratchRoot, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        if (acl != null) {
+            UserPrincipal owner = Files.getOwner(scratchRoot, LinkOption.NOFOLLOW_LINKS);
+            AclEntry ownerOnly = AclEntry.newBuilder()
+                    .setType(AclEntryType.ALLOW)
+                    .setPrincipal(owner)
+                    .setPermissions(EnumSet.allOf(AclEntryPermission.class))
+                    .build();
+            acl.setAcl(List.of(ownerOnly));
+        }
+    }
+
+    private static Path defaultScratchRoot() {
+        String home = System.getProperty("user.home", "").trim();
+        if (home.isEmpty()) {
+            throw new IllegalStateException("user.home is required for private SCIP import scratch storage");
+        }
+        return Path.of(home).toAbsolutePath().normalize().resolve(DEFAULT_SCRATCH_DIRECTORY);
     }
 
     private static void verifyHashDerivedSnapshotId(String snapshotId, String sha256) throws IOException {
