@@ -26,6 +26,7 @@ public final class SemanticDocumentFactory {
     private static final int SYMBOL_MAX_TOKENS = 768;
     private static final int CHUNK_MAX_TOKENS = 768;
     private static final int FILE_MAX_TOKENS = 2_048;
+    private static final String HASH_SEPARATOR = "\u001f";
 
     public List<SemanticDocument> build(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
         return build(project, snapshot, SemanticIndexBudget.DEFAULT, 1);
@@ -116,8 +117,8 @@ public final class SemanticDocumentFactory {
             int endLine,
             String content
     ) {
-        String checksum = sha256(kind.name() + "\u001f" + stableKey + "\u001f" + content);
-        String id = "semantic:" + sha256(snapshotId + "\u001f" + stableKey + "\u001f" + checksum);
+        String checksum = sha256(kind.name() + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + content);
+        String id = "semantic:" + sha256(snapshotId + HASH_SEPARATOR + stableKey + HASH_SEPARATOR + checksum);
         return new SemanticDocument(id, stableKey, projectId, snapshotId, kind, sourceId,
                 fileId, startLine, endLine, content, checksum);
     }
