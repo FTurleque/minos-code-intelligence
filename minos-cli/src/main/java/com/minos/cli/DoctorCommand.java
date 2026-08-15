@@ -42,42 +42,62 @@ public final class DoctorCommand {
                 .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
                 .allMatch(provider -> "READY".equals(provider.state()));
         if (format == SymbolOutputFormat.JSON) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("minosHome", home.toString());
-            map.put("javaRuntime", System.getProperty("java.runtime.version"));
-            map.put("javaHome", System.getProperty("java.home"));
-            map.put("commands", commands);
-            List<Map<String, Object>> values = new ArrayList<>();
-            for (var provider : providers) {
-                Map<String, Object> value = new LinkedHashMap<>();
-                value.put("id", provider.id());
-                value.put("version", provider.version());
-                value.put("state", provider.state());
-                value.put("requiredByDefault", provider.requiredByDefault());
-                value.put("executable", provider.executable());
-                value.put("diagnostics", provider.diagnostics());
-                values.add(value);
-            }
-            map.put("providers", values);
-            map.put("privateStoragePermissions", privateStorage);
-            map.put("ready", ready);
-            output.append(CliJson.render(map)).append('\n');
+            renderJson(output, providers, commands, privateStorage, ready);
         } else {
-            output.append("MINOS_HOME: ").append(home.toString()).append('\n');
-            output.append("Java runtime: ").append(System.getProperty("java.runtime.version", "unknown")).append('\n');
-            output.append("Java home: ").append(System.getProperty("java.home", "unknown")).append('\n');
-            for (Map.Entry<String, String> entry : commands.entrySet()) {
-                output.append("command[").append(entry.getKey()).append("]: ")
-                        .append(entry.getValue() == null ? "NOT_FOUND" : entry.getValue()).append('\n');
-            }
-            output.append(ToolsCommand.render(providers, SymbolOutputFormat.TEXT)).append('\n');
-            for (Map.Entry<String, String> entry : privateStorage.entrySet()) {
-                output.append("privateStorage[").append(entry.getKey()).append("]: ")
-                        .append(entry.getValue()).append('\n');
-            }
-            output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
+            renderText(output, providers, commands, privateStorage, ready);
         }
         return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
+    }
+
+    private void renderJson(
+            Appendable output,
+            List<AutonomousIndexOperations.ProviderView> providers,
+            Map<String, String> commands,
+            Map<String, String> privateStorage,
+            boolean ready
+    ) throws IOException {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("minosHome", home.toString());
+        map.put("javaRuntime", System.getProperty("java.runtime.version"));
+        map.put("javaHome", System.getProperty("java.home"));
+        map.put("commands", commands);
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (var provider : providers) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("id", provider.id());
+            value.put("version", provider.version());
+            value.put("state", provider.state());
+            value.put("requiredByDefault", provider.requiredByDefault());
+            value.put("executable", provider.executable());
+            value.put("diagnostics", provider.diagnostics());
+            values.add(value);
+        }
+        map.put("providers", values);
+        map.put("privateStoragePermissions", privateStorage);
+        map.put("ready", ready);
+        output.append(CliJson.render(map)).append('\n');
+    }
+
+    private void renderText(
+            Appendable output,
+            List<AutonomousIndexOperations.ProviderView> providers,
+            Map<String, String> commands,
+            Map<String, String> privateStorage,
+            boolean ready
+    ) throws IOException {
+        output.append("MINOS_HOME: ").append(home.toString()).append('\n');
+        output.append("Java runtime: ").append(System.getProperty("java.runtime.version", "unknown")).append('\n');
+        output.append("Java home: ").append(System.getProperty("java.home", "unknown")).append('\n');
+        for (Map.Entry<String, String> entry : commands.entrySet()) {
+            output.append("command[").append(entry.getKey()).append("]: ")
+                    .append(entry.getValue() == null ? "NOT_FOUND" : entry.getValue()).append('\n');
+        }
+        output.append(ToolsCommand.render(providers, SymbolOutputFormat.TEXT)).append('\n');
+        for (Map.Entry<String, String> entry : privateStorage.entrySet()) {
+            output.append("privateStorage[").append(entry.getKey()).append("]: ")
+                    .append(entry.getValue()).append('\n');
+        }
+        output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
     }
 
     /**

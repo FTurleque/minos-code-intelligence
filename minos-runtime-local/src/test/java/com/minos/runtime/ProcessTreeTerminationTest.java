@@ -156,11 +156,16 @@ class ProcessTreeTerminationTest {
         }
     }
 
+    /**
+     * Waits for the fixture to publish its marker and spawn a descendant. The pause between probes
+     * uses {@link Process#waitFor(long, TimeUnit)} rather than a bare sleep: it is a real bounded
+     * wait on the process being observed, and it returns immediately if the fixture dies early.
+     */
     private static void awaitFile(Path marker, Process root) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (System.nanoTime() < deadline) {
             if (Files.exists(marker) && !root.descendants().toList().isEmpty()) return;
-            Thread.sleep(50L);
+            if (root.waitFor(50L, TimeUnit.MILLISECONDS)) break; // the fixture exited without arming
         }
         root.destroyForcibly();
         fail("process tree fixture did not start within the timeout");
