@@ -56,88 +56,140 @@ final class AuthoritativeProjectStateReconciler {
             String detail,
             boolean exclusiveLeaseHeld
     ) {
-        Objects.requireNonNull(projectId, "projectId");
-        Objects.requireNonNull(promoter, "promoter");
-        Objects.requireNonNull(stateStore, "stateStore");
-        Objects.requireNonNull(observedAt, "observedAt");
-        Objects.requireNonNull(detail, "detail");
-
+        validateArguments(projectId, promoter, stateStore, observedAt, detail);
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            ActiveSnapshotObservation activeBefore = observe(promoter, projectId);
-            ProjectIndexState persisted = stateStore.findProjectState(projectId)
-                    .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, observedAt));
-
-            if (activeBefore.status() == ActiveSnapshotObservation.Status.UNSUPPORTED) {
-                return persisted;
-            }
-
-            ActiveSnapshotObservation activeAfter = observe(promoter, projectId);
-            if (!activeBefore.equals(activeAfter)) {
-                continue;
-            }
-
-            if (exclusiveLeaseHeld) {
-                Recovery recovery = recoverAbandonedRuns(projectId, activeAfter, stateStore, observedAt);
-                persisted = stateStore.findProjectState(projectId)
-                        .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, observedAt));
-                if (recovery.recoveredCount() > 0 || inProgress(persisted)) {
-                    ProjectIndexState recovered = recoveredProjectState(
-                            projectId, activeAfter, persisted, recovery, stateStore, observedAt, detail);
-                    stateStore.saveProjectState(recovered);
-                    ProjectIndexState verified = stateStore.findProjectState(projectId)
-                            .orElseThrow(() -> new IllegalStateException("recovered project state was not persisted"));
-                    ActiveSnapshotObservation verifiedActive = observe(promoter, projectId);
-                    if (!activeAfter.equals(verifiedActive)) {
-                        continue;
-                    }
-                    if (stateStore.listRuns(projectId).stream().anyMatch(run -> run.status() == Status.RUNNING)) {
-                        throw new IllegalStateException(
-                                "RUNNING indexing run remained after exclusive lifecycle recovery for project "
-                                        + projectId);
-                    }
-                    if (!verified.activeSnapshotId().equals(verifiedActive.snapshotId()) || inProgress(verified)) {
-                        throw new IllegalStateException(
-                                "project metadata remained inconsistent after exclusive lifecycle recovery for project "
-                                        + projectId);
-                    }
-                    return verified;
-                }
-            }
-
-            if (activeAfter.status() == ActiveSnapshotObservation.Status.NO_ACTIVE_SNAPSHOT) {
-                if (persisted.activeSnapshotId().isPresent()) {
-                    throw missingAuthoritativeSnapshot(projectId, persisted);
-                }
-                return persisted;
-            }
-
-            String authoritativeId = activeAfter.snapshotId().orElseThrow();
-            if (persisted.activeSnapshotId().equals(Optional.of(authoritativeId))) {
-                return persisted;
-            }
-
-            ProjectIndexState repaired = new ProjectIndexState(
-                    projectId,
-                    ProjectIndexState.Availability.READY,
-                    Optional.of(authoritativeId),
-                    persisted.latestRunId(),
-                    observedAt,
-                    Optional.of(detail));
-            stateStore.saveProjectState(repaired);
-
-            ProjectIndexState verified = stateStore.findProjectState(projectId)
-                    .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
-            ActiveSnapshotObservation verifiedActive = observe(promoter, projectId);
-            if (!activeAfter.equals(verifiedActive)) {
-                continue;
-            }
-            if (verified.activeSnapshotId().equals(verifiedActive.snapshotId())) {
-                return verified;
-            }
+            Decision decision = reconcileAttempt(
+                    projectId, promoter, stateStore, observedAt, detail, exclusiveLeaseHeld);
+            if (decision.resolved()) return decision.state().orElseThrow();
         }
-
         throw new IllegalStateException(
                 "authoritative snapshot or project metadata changed repeatedly while reconciling project " + projectId);
+    }
+
+    private static Decision reconcileAttempt(
+            UUID projectId,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant observedAt,
+            String detail,
+            boolean exclusiveLeaseHeld
+    ) {
+        ActiveSnapshotObservation activeBefore = observe(promoter, projectId);
+        ProjectIndexState persisted = persistedState(projectId, stateStore, observedAt);
+        if (activeBefore.status() == ActiveSnapshotObservation.Status.UNSUPPORTED) {
+            return Decision.resolved(persisted);
+        }
+
+        ActiveSnapshotObservation activeAfter = observe(promoter, projectId);
+        if (!activeBefore.equals(activeAfter)) return Decision.retry();
+
+        Optional<Decision> recovery = recoverIfRequired(
+                projectId,
+                activeAfter,
+                persisted,
+                promoter,
+                stateStore,
+                observedAt,
+                detail,
+                exclusiveLeaseHeld);
+        return recovery.orElseGet(() -> reconcileStableSnapshot(
+                projectId, activeAfter, persisted, promoter, stateStore, observedAt, detail));
+    }
+
+    private static Optional<Decision> recoverIfRequired(
+            UUID projectId,
+            ActiveSnapshotObservation active,
+            ProjectIndexState persisted,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant observedAt,
+            String detail,
+            boolean exclusiveLeaseHeld
+    ) {
+        if (!exclusiveLeaseHeld) return Optional.empty();
+        Recovery recovery = recoverAbandonedRuns(projectId, active, stateStore, observedAt);
+        ProjectIndexState current = persistedState(projectId, stateStore, observedAt);
+        if (recovery.recoveredCount() == 0 && !inProgress(current)) return Optional.empty();
+
+        ProjectIndexState recovered = recoveredProjectState(
+                projectId, active, current, recovery, stateStore, observedAt, detail);
+        stateStore.saveProjectState(recovered);
+        ProjectIndexState verified = stateStore.findProjectState(projectId)
+                .orElseThrow(() -> new IllegalStateException("recovered project state was not persisted"));
+        ActiveSnapshotObservation verifiedActive = observe(promoter, projectId);
+        if (!active.equals(verifiedActive)) return Optional.of(Decision.retry());
+
+        verifyRecoveredState(projectId, verified, verifiedActive, stateStore);
+        return Optional.of(Decision.resolved(verified));
+    }
+
+    private static Decision reconcileStableSnapshot(
+            UUID projectId,
+            ActiveSnapshotObservation active,
+            ProjectIndexState persisted,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant observedAt,
+            String detail
+    ) {
+        if (active.status() == ActiveSnapshotObservation.Status.NO_ACTIVE_SNAPSHOT) {
+            return noActiveSnapshotDecision(projectId, persisted);
+        }
+
+        String authoritativeId = active.snapshotId().orElseThrow();
+        if (persisted.activeSnapshotId().equals(Optional.of(authoritativeId))) {
+            return Decision.resolved(persisted);
+        }
+
+        ProjectIndexState repaired = new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.READY,
+                Optional.of(authoritativeId),
+                persisted.latestRunId(),
+                observedAt,
+                Optional.of(detail));
+        stateStore.saveProjectState(repaired);
+        return verifyRepair(projectId, active, promoter, stateStore);
+    }
+
+    private static Decision noActiveSnapshotDecision(UUID projectId, ProjectIndexState persisted) {
+        if (persisted.activeSnapshotId().isPresent()) {
+            throw missingAuthoritativeSnapshot(projectId, persisted);
+        }
+        return Decision.resolved(persisted);
+    }
+
+    private static Decision verifyRepair(
+            UUID projectId,
+            ActiveSnapshotObservation expectedActive,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore
+    ) {
+        ProjectIndexState verified = stateStore.findProjectState(projectId)
+                .orElseThrow(() -> new IllegalStateException("reconciled project state was not persisted"));
+        ActiveSnapshotObservation verifiedActive = observe(promoter, projectId);
+        if (!expectedActive.equals(verifiedActive)) return Decision.retry();
+        return verified.activeSnapshotId().equals(verifiedActive.snapshotId())
+                ? Decision.resolved(verified)
+                : Decision.retry();
+    }
+
+    private static void verifyRecoveredState(
+            UUID projectId,
+            ProjectIndexState verified,
+            ActiveSnapshotObservation verifiedActive,
+            IndexStateStore stateStore
+    ) {
+        boolean runningRemains = stateStore.listRuns(projectId).stream()
+                .anyMatch(run -> run.status() == Status.RUNNING);
+        if (runningRemains) {
+            throw new IllegalStateException(
+                    "RUNNING indexing run remained after exclusive lifecycle recovery for project " + projectId);
+        }
+        if (!verified.activeSnapshotId().equals(verifiedActive.snapshotId()) || inProgress(verified)) {
+            throw new IllegalStateException(
+                    "project metadata remained inconsistent after exclusive lifecycle recovery for project " + projectId);
+        }
     }
 
     private static Recovery recoverAbandonedRuns(
@@ -226,6 +278,29 @@ final class AuthoritativeProjectStateReconciler {
                 Optional.of(recoveryDetail));
     }
 
+    private static ProjectIndexState persistedState(
+            UUID projectId,
+            IndexStateStore stateStore,
+            Instant observedAt
+    ) {
+        return stateStore.findProjectState(projectId)
+                .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, observedAt));
+    }
+
+    private static void validateArguments(
+            UUID projectId,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant observedAt,
+            String detail
+    ) {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(promoter, "promoter");
+        Objects.requireNonNull(stateStore, "stateStore");
+        Objects.requireNonNull(observedAt, "observedAt");
+        Objects.requireNonNull(detail, "detail");
+    }
+
     private static boolean inProgress(ProjectIndexState state) {
         return state.availability() == ProjectIndexState.Availability.INDEXING
                 || state.availability() == ProjectIndexState.Availability.REFRESHING;
@@ -248,6 +323,24 @@ final class AuthoritativeProjectStateReconciler {
         return new IllegalStateException(
                 "project metadata references snapshot " + persisted.activeSnapshotId().orElseThrow()
                         + " but the authoritative snapshot store has no active snapshot for project " + projectId);
+    }
+
+    private record Decision(Optional<ProjectIndexState> state) {
+        private Decision {
+            state = Objects.requireNonNull(state, "state");
+        }
+
+        private static Decision resolved(ProjectIndexState state) {
+            return new Decision(Optional.of(Objects.requireNonNull(state, "state")));
+        }
+
+        private static Decision retry() {
+            return new Decision(Optional.empty());
+        }
+
+        private boolean resolved() {
+            return state.isPresent();
+        }
     }
 
     private record Recovery(int recoveredCount, Optional<IndexingRun> latestRun) {

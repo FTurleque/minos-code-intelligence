@@ -31,15 +31,45 @@ final class IndexingRunExecutor {
                                IndexingMode mode, List<String> changedFiles,
                                Map<String, IndexerExecutor> executors, SnapshotStager stager,
                                SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
-        Path root = projectRoot.toAbsolutePath().normalize();
-        if (!Files.isDirectory(root)) throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
-        if (mode == IndexingMode.INCREMENTAL
-                && targets.stream().map(IndexingExecutionTarget::projectRelativeRoot).distinct().count() > 1) {
-            throw new IllegalArgumentException("multi-scope incremental indexing is not qualified; planner must require FULL for this topology");
-        }
-
-        UUID runId = UUID.randomUUID();
+        Path root = validateExecutionRoot(projectRoot, targets, mode);
         Instant createdAt = clock.instant();
+        ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, createdAt);
+        RunContext context = new RunContext(UUID.randomUUID(), projectId, createdAt, previous);
+
+        try {
+            publishInProgress(context, mode, targets.size(), stateStore);
+            executeProviders(context, root, targets, mode, changedFiles, executors, stateStore);
+            stageSnapshot(context, mode, stager, stateStore);
+            promoteSnapshot(context, promoter);
+            return persistSuccess(context, mode, targets.size(), stateStore, clock.instant());
+        } catch (Exception failure) {
+            return persistFailure(context, failure, stateStore, clock.instant());
+        }
+    }
+
+    private static Path validateExecutionRoot(
+            Path projectRoot,
+            List<IndexingExecutionTarget> targets,
+            IndexingMode mode
+    ) {
+        Path root = projectRoot.toAbsolutePath().normalize();
+        if (!Files.isDirectory(root)) {
+            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+        }
+        long scopes = targets.stream().map(IndexingExecutionTarget::projectRelativeRoot).distinct().count();
+        if (mode == IndexingMode.INCREMENTAL && scopes > 1) {
+            throw new IllegalArgumentException(
+                    "multi-scope incremental indexing is not qualified; planner must require FULL for this topology");
+        }
+        return root;
+    }
+
+    private static ProjectIndexState reconcilePreviousState(
+            UUID projectId,
+            SnapshotPromoter promoter,
+            IndexStateStore stateStore,
+            Instant createdAt
+    ) {
         ProjectIndexState previous = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
                 projectId,
                 promoter,
@@ -50,102 +80,272 @@ final class IndexingRunExecutor {
                 || previous.availability() == Availability.REFRESHING) {
             throw new IllegalStateException("project already has an indexing run in progress: " + projectId);
         }
+        return previous;
+    }
 
-        List<IndexingArtifact> artifacts = new ArrayList<>();
-        List<IndexerExecution> executions = new ArrayList<>();
-        Optional<String> staged = Optional.empty();
-        Phase phase = Phase.PROVIDER_EXECUTION;
-        boolean committed = false;
-        boolean durabilityAcknowledgementPending = false;
-        try {
-            // Publish the run and project in-progress state inside the same recovery envelope. If
-            // either write fails, the catch path terminalizes the run and restores a terminal
-            // project state instead of leaving a RUNNING/indexing half-commit behind.
-            stateStore.saveRun(running(runId, projectId, createdAt, Phase.PROVIDER_EXECUTION, List.of(),
-                    Optional.empty(), previous.activeSnapshotId(),
-                    Optional.of("provider execution started: mode=" + mode + ", scopes=" + targets.size())));
-            stateStore.saveProjectState(new ProjectIndexState(projectId,
-                    previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
-                    previous.activeSnapshotId(), Optional.of(runId), createdAt,
-                    Optional.of("indexing run in progress: mode=" + mode)));
+    private static void publishInProgress(
+            RunContext context,
+            IndexingMode mode,
+            int scopeCount,
+            IndexStateStore stateStore
+    ) {
+        stateStore.saveRun(running(
+                context.runId,
+                context.projectId,
+                context.createdAt,
+                Phase.PROVIDER_EXECUTION,
+                List.of(),
+                Optional.empty(),
+                context.previous.activeSnapshotId(),
+                Optional.of("provider execution started: mode=" + mode + ", scopes=" + scopeCount)));
+        stateStore.saveProjectState(new ProjectIndexState(
+                context.projectId,
+                context.previous.activeSnapshotId().isPresent() ? Availability.REFRESHING : Availability.INDEXING,
+                context.previous.activeSnapshotId(),
+                Optional.of(context.runId),
+                context.createdAt,
+                Optional.of("indexing run in progress: mode=" + mode)));
+    }
 
-            for (IndexingExecutionTarget target : targets) {
-                var selection = target.selection();
-                String indexerId = selection.indexer().id();
-                IndexerExecutor executor = executors.get(indexerId);
-                if (executor == null) throw new IllegalStateException("No runtime executor registered for indexer: " + indexerId);
-                Path relative = target.projectRelativeRoot();
-                Path executionRoot = root.resolve(relative).normalize();
-                if (!executionRoot.startsWith(root) || !Files.isDirectory(executionRoot)) {
-                    throw new IllegalStateException("provider execution root is missing or outside project: " + portable(relative));
-                }
-                IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
-                        runId, projectId, root, executionRoot, relative, selection, mode,
-                        scopedChangedFiles(mode, changedFiles, relative))), "indexer execution artifact");
-                Path artifactPath = validateArtifact(selection, artifact, relative);
-                artifacts.add(new IndexingArtifact(artifact.language(), artifact.indexerId(), artifactPath, relative));
-                executions.add(new IndexerExecution(artifact.language(), artifact.indexerId(), artifactPath));
-                stateStore.saveRun(running(runId, projectId, createdAt, phase, executions, staged,
-                        previous.activeSnapshotId(), Optional.of("provider artifacts completed: " + executions.size()
-                                + "/" + targets.size() + ", mode=" + mode + ", scope=" + portable(relative))));
-            }
-
-            phase = Phase.STAGING;
-            stateStore.saveRun(running(runId, projectId, createdAt, phase, executions, staged,
-                    previous.activeSnapshotId(), Optional.of("staging project snapshot: mode=" + mode)));
-            String stagedId = requireText(stager.stage(new IndexSnapshotStageRequest(runId, projectId, artifacts)),
-                    "stagedSnapshotId");
-            staged = Optional.of(stagedId);
-            phase = Phase.PROMOTION;
-            stateStore.saveRun(running(runId, projectId, createdAt, phase, executions, staged,
-                    previous.activeSnapshotId(), Optional.of("promoting staged snapshot: mode=" + mode)));
-
-            try {
-                promoter.promote(projectId, runId, stagedId);
-                committed = true;
-            } catch (CommitUncertainException uncertain) {
-                if (!authoritativeTargetIsActive(promoter, projectId, stagedId, uncertain)) throw uncertain;
-                committed = true;
-                durabilityAcknowledgementPending = true;
-            }
-            Instant completedAt = clock.instant();
-            String successMessage = "indexing run completed and snapshot promoted: mode=" + mode
-                    + ", scopes=" + targets.size()
-                    + (durabilityAcknowledgementPending
-                    ? "; authoritative snapshot confirmed after lost durability acknowledgement" : "");
-            IndexingRun succeeded = new IndexingRun(runId, projectId, Status.SUCCEEDED, Phase.COMPLETED,
-                    createdAt, Optional.of(completedAt), executions, staged, previous.activeSnapshotId(),
-                    Optional.of(stagedId), Optional.of(successMessage));
-            stateStore.saveRun(succeeded);
-            stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
-                    Optional.of(stagedId), Optional.of(runId), completedAt,
-                    Optional.of("active snapshot is current: mode=" + mode
-                            + (durabilityAcknowledgementPending
-                            ? "; durability acknowledgement pending" : ""))));
-            return succeeded;
-        } catch (Exception failure) {
-            Instant completedAt = clock.instant();
-            String message = failureMessage(failure);
-            Optional<String> activeAfter = committed ? staged : previous.activeSnapshotId();
-            String committedPrefix = durabilityAcknowledgementPending
-                    ? "snapshot promotion is authoritative after lost durability acknowledgement; metadata finalization failed: "
-                    : "snapshot promotion committed; metadata finalization failed: ";
-            IndexingRun failed = new IndexingRun(runId, projectId, Status.FAILED, phase, createdAt,
-                    Optional.of(completedAt), executions, staged, previous.activeSnapshotId(), activeAfter,
-                    Optional.of(committed ? committedPrefix + message : message));
-            if (committed) {
-                persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId, Availability.READY,
-                        activeAfter, Optional.of(runId), completedAt,
-                        Optional.of("active snapshot committed; run metadata recovery required: " + message))), failure);
-                persist(() -> stateStore.saveRun(failed), failure);
-            } else {
-                persist(() -> stateStore.saveRun(failed), failure);
-                persist(() -> stateStore.saveProjectState(new ProjectIndexState(projectId,
-                        previous.activeSnapshotId().isPresent() ? Availability.STALE : Availability.FAILED,
-                        previous.activeSnapshotId(), Optional.of(runId), completedAt, Optional.of(message))), failure);
-            }
-            return failed;
+    private static void executeProviders(
+            RunContext context,
+            Path root,
+            List<IndexingExecutionTarget> targets,
+            IndexingMode mode,
+            List<String> changedFiles,
+            Map<String, IndexerExecutor> executors,
+            IndexStateStore stateStore
+    ) throws Exception {
+        for (IndexingExecutionTarget target : targets) {
+            executeProvider(context, root, target, mode, changedFiles, executors, targets.size(), stateStore);
         }
+    }
+
+    private static void executeProvider(
+            RunContext context,
+            Path root,
+            IndexingExecutionTarget target,
+            IndexingMode mode,
+            List<String> changedFiles,
+            Map<String, IndexerExecutor> executors,
+            int totalTargets,
+            IndexStateStore stateStore
+    ) throws Exception {
+        var selection = target.selection();
+        String indexerId = selection.indexer().id();
+        IndexerExecutor executor = requireExecutor(executors, indexerId);
+        Path relative = target.projectRelativeRoot();
+        Path executionRoot = requireExecutionRoot(root, relative);
+        IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
+                context.runId,
+                context.projectId,
+                root,
+                executionRoot,
+                relative,
+                selection,
+                mode,
+                scopedChangedFiles(mode, changedFiles, relative))), "indexer execution artifact");
+        Path artifactPath = validateArtifact(selection, artifact, relative);
+        context.artifacts.add(new IndexingArtifact(
+                artifact.language(), artifact.indexerId(), artifactPath, relative));
+        context.executions.add(new IndexerExecution(artifact.language(), artifact.indexerId(), artifactPath));
+        stateStore.saveRun(running(
+                context.runId,
+                context.projectId,
+                context.createdAt,
+                context.phase,
+                context.executions,
+                context.staged,
+                context.previous.activeSnapshotId(),
+                Optional.of("provider artifacts completed: " + context.executions.size()
+                        + "/" + totalTargets + ", mode=" + mode + ", scope=" + portable(relative))));
+    }
+
+    private static IndexerExecutor requireExecutor(Map<String, IndexerExecutor> executors, String indexerId) {
+        IndexerExecutor executor = executors.get(indexerId);
+        if (executor == null) {
+            throw new IllegalStateException("No runtime executor registered for indexer: " + indexerId);
+        }
+        return executor;
+    }
+
+    private static Path requireExecutionRoot(Path root, Path relative) {
+        Path executionRoot = root.resolve(relative).normalize();
+        if (!executionRoot.startsWith(root) || !Files.isDirectory(executionRoot)) {
+            throw new IllegalStateException(
+                    "provider execution root is missing or outside project: " + portable(relative));
+        }
+        return executionRoot;
+    }
+
+    private static void stageSnapshot(
+            RunContext context,
+            IndexingMode mode,
+            SnapshotStager stager,
+            IndexStateStore stateStore
+    ) throws Exception {
+        context.phase = Phase.STAGING;
+        stateStore.saveRun(running(
+                context.runId,
+                context.projectId,
+                context.createdAt,
+                context.phase,
+                context.executions,
+                context.staged,
+                context.previous.activeSnapshotId(),
+                Optional.of("staging project snapshot: mode=" + mode)));
+        String stagedId = requireText(stager.stage(new IndexSnapshotStageRequest(
+                context.runId, context.projectId, context.artifacts)), "stagedSnapshotId");
+        context.staged = Optional.of(stagedId);
+        context.phase = Phase.PROMOTION;
+        stateStore.saveRun(running(
+                context.runId,
+                context.projectId,
+                context.createdAt,
+                context.phase,
+                context.executions,
+                context.staged,
+                context.previous.activeSnapshotId(),
+                Optional.of("promoting staged snapshot: mode=" + mode)));
+    }
+
+    private static void promoteSnapshot(RunContext context, SnapshotPromoter promoter) throws Exception {
+        String stagedId = context.staged.orElseThrow();
+        try {
+            promoter.promote(context.projectId, context.runId, stagedId);
+            context.committed = true;
+        } catch (CommitUncertainException uncertain) {
+            recoverUncertainPromotion(context, promoter, stagedId, uncertain);
+        }
+    }
+
+    private static void recoverUncertainPromotion(
+            RunContext context,
+            SnapshotPromoter promoter,
+            String stagedId,
+            CommitUncertainException uncertain
+    ) throws CommitUncertainException {
+        if (!authoritativeTargetIsActive(promoter, context.projectId, stagedId, uncertain)) throw uncertain;
+        context.committed = true;
+        context.durabilityAcknowledgementPending = true;
+    }
+
+    private static IndexingRun persistSuccess(
+            RunContext context,
+            IndexingMode mode,
+            int scopeCount,
+            IndexStateStore stateStore,
+            Instant completedAt
+    ) {
+        String stagedId = context.staged.orElseThrow();
+        String durabilitySuffix = context.durabilityAcknowledgementPending
+                ? "; authoritative snapshot confirmed after lost durability acknowledgement"
+                : "";
+        String successMessage = "indexing run completed and snapshot promoted: mode=" + mode
+                + ", scopes=" + scopeCount + durabilitySuffix;
+        IndexingRun succeeded = new IndexingRun(
+                context.runId,
+                context.projectId,
+                Status.SUCCEEDED,
+                Phase.COMPLETED,
+                context.createdAt,
+                Optional.of(completedAt),
+                context.executions,
+                context.staged,
+                context.previous.activeSnapshotId(),
+                Optional.of(stagedId),
+                Optional.of(successMessage));
+        stateStore.saveRun(succeeded);
+        stateStore.saveProjectState(new ProjectIndexState(
+                context.projectId,
+                Availability.READY,
+                Optional.of(stagedId),
+                Optional.of(context.runId),
+                completedAt,
+                Optional.of("active snapshot is current: mode=" + mode
+                        + (context.durabilityAcknowledgementPending
+                        ? "; durability acknowledgement pending" : ""))));
+        return succeeded;
+    }
+
+    private static IndexingRun persistFailure(
+            RunContext context,
+            Exception failure,
+            IndexStateStore stateStore,
+            Instant completedAt
+    ) {
+        String message = failureMessage(failure);
+        Optional<String> activeAfter = context.committed ? context.staged : context.previous.activeSnapshotId();
+        IndexingRun failed = failedRun(context, completedAt, activeAfter, message);
+        if (context.committed) {
+            persistCommittedFailure(context, failed, activeAfter, message, stateStore, completedAt, failure);
+        } else {
+            persistUncommittedFailure(context, failed, message, stateStore, completedAt, failure);
+        }
+        return failed;
+    }
+
+    private static IndexingRun failedRun(
+            RunContext context,
+            Instant completedAt,
+            Optional<String> activeAfter,
+            String message
+    ) {
+        String committedPrefix = context.durabilityAcknowledgementPending
+                ? "snapshot promotion is authoritative after lost durability acknowledgement; metadata finalization failed: "
+                : "snapshot promotion committed; metadata finalization failed: ";
+        return new IndexingRun(
+                context.runId,
+                context.projectId,
+                Status.FAILED,
+                context.phase,
+                context.createdAt,
+                Optional.of(completedAt),
+                context.executions,
+                context.staged,
+                context.previous.activeSnapshotId(),
+                activeAfter,
+                Optional.of(context.committed ? committedPrefix + message : message));
+    }
+
+    private static void persistCommittedFailure(
+            RunContext context,
+            IndexingRun failed,
+            Optional<String> activeAfter,
+            String message,
+            IndexStateStore stateStore,
+            Instant completedAt,
+            Exception original
+    ) {
+        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+                context.projectId,
+                Availability.READY,
+                activeAfter,
+                Optional.of(context.runId),
+                completedAt,
+                Optional.of("active snapshot committed; run metadata recovery required: " + message))), original);
+        persist(() -> stateStore.saveRun(failed), original);
+    }
+
+    private static void persistUncommittedFailure(
+            RunContext context,
+            IndexingRun failed,
+            String message,
+            IndexStateStore stateStore,
+            Instant completedAt,
+            Exception original
+    ) {
+        persist(() -> stateStore.saveRun(failed), original);
+        Availability availability = context.previous.activeSnapshotId().isPresent()
+                ? Availability.STALE
+                : Availability.FAILED;
+        persist(() -> stateStore.saveProjectState(new ProjectIndexState(
+                context.projectId,
+                availability,
+                context.previous.activeSnapshotId(),
+                Optional.of(context.runId),
+                completedAt,
+                Optional.of(message))), original);
     }
 
     private static boolean authoritativeTargetIsActive(
@@ -193,12 +393,34 @@ final class IndexingRunExecutor {
     }
 
     private static String portable(Path path) { return path == null ? "" : path.normalize().toString().replace('\\', '/'); }
+
     private static String requireText(String value, String label) {
         if (value == null || value.isBlank()) throw new IllegalStateException(label + " must not be blank");
         return value;
     }
+
     private static String failureMessage(Exception exception) {
         String message = exception.getMessage();
         return exception.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
+    }
+
+    private static final class RunContext {
+        private final UUID runId;
+        private final UUID projectId;
+        private final Instant createdAt;
+        private final ProjectIndexState previous;
+        private final List<IndexingArtifact> artifacts = new ArrayList<>();
+        private final List<IndexerExecution> executions = new ArrayList<>();
+        private Optional<String> staged = Optional.empty();
+        private Phase phase = Phase.PROVIDER_EXECUTION;
+        private boolean committed;
+        private boolean durabilityAcknowledgementPending;
+
+        private RunContext(UUID runId, UUID projectId, Instant createdAt, ProjectIndexState previous) {
+            this.runId = runId;
+            this.projectId = projectId;
+            this.createdAt = createdAt;
+            this.previous = previous;
+        }
     }
 }

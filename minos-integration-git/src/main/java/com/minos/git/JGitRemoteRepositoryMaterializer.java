@@ -220,27 +220,36 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
                     return;
                 }
             }
-            Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-            FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-            try {
-                FileLock lock = acquireFileLock(
-                        channel, LOCK_ACQUIRE_TIMEOUT, "remote cache active-use lease " + cacheKey);
-                synchronized (leaseMonitor) {
-                    activeLeases.put(cacheKey, new LeaseState(channel, lock));
-                }
-            } catch (IOException | RuntimeException exception) {
-                try {
-                    channel.close();
-                } catch (IOException closeFailure) {
-                    exception.addSuppressed(closeFailure);
-                }
-                throw exception;
+            LeaseState created = openActiveLease(cacheKey);
+            synchronized (leaseMonitor) {
+                activeLeases.put(cacheKey, created);
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted while waiting for remote cache JVM lease: " + cacheKey, interrupted);
         } finally {
             if (stripeAcquired) stripe.unlock();
+        }
+    }
+
+    private LeaseState openActiveLease(String cacheKey) throws IOException {
+        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
+        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock = acquireFileLock(
+                    channel, LOCK_ACQUIRE_TIMEOUT, "remote cache active-use lease " + cacheKey);
+            return new LeaseState(channel, lock);
+        } catch (IOException | RuntimeException failure) {
+            closeLeaseChannelAfterFailure(channel, failure);
+            throw failure;
+        }
+    }
+
+    private static void closeLeaseChannelAfterFailure(FileChannel channel, Throwable failure) {
+        try {
+            channel.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
         }
     }
 
@@ -278,15 +287,20 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static void sleepUntilRetry(long deadline, String description) throws IOException {
         long remainingNanos = deadline - System.nanoTime();
         if (remainingNanos <= 0L) return;
-        long sleepMillis = Math.max(1L, Math.min(
-                LOCK_POLL_MILLIS,
-                TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
+        long convertedMillis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
+        long sleepMillis = boundedPollMillis(convertedMillis);
         try {
             Thread.sleep(sleepMillis);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted while waiting for " + description, interrupted);
         }
+    }
+
+    private static long boundedPollMillis(long convertedMillis) {
+        if (convertedMillis <= 0L) return 1L;
+        if (convertedMillis > LOCK_POLL_MILLIS) return LOCK_POLL_MILLIS;
+        return convertedMillis;
     }
 
     private ReentrantLock leaseStripe(String cacheKey) {
