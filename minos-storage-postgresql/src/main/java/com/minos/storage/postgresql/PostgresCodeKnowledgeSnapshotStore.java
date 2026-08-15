@@ -13,6 +13,7 @@ import com.minos.store.SymbolSnapshot;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -38,6 +39,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
     private static final long MAX_QUERY_CACHE_WEIGHT_BYTES = 512L * 1024L * 1024L;
     private static final int BUILD_LOCK_STRIPES = 64;
+    private static final int MAX_SCRATCH_NAME_ATTEMPTS = 8;
     private static final String SCRATCH_DIRECTORY = "postgresql-snapshot-scratch";
 
     private final PostgresConnectionFactory connections;
@@ -60,10 +62,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
             throw new IOException("PostgreSQL snapshot scratch directory escapes MINOS home");
         }
         Files.createDirectories(scratchRoot);
-        if (Files.isSymbolicLink(scratchRoot)
-                || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("PostgreSQL snapshot scratch path must be a real directory under MINOS home");
-        }
+        requireSafeScratchRoot();
     }
 
     @Override
@@ -206,7 +205,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
-        Path payload = Files.createTempFile(scratchRoot, "snapshot-write-", ".knowledge");
+        Path payload = createScratchFile("snapshot-write-");
         try {
             String sha = codec.encode(payload, snapshot).sha256();
             long payloadBytes = Files.size(payload);
@@ -321,7 +320,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                     statement.setObject(1, projectId);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) return Optional.empty();
-                        Path payload = Files.createTempFile(scratchRoot, "snapshot-read-", ".knowledge");
+                        Path payload = createScratchFile("snapshot-read-");
                         try (InputStream input = result.getBinaryStream(2);
                              OutputStream output = Files.newOutputStream(payload)) {
                             copyBounded(input, output, MAX_PERSISTED_SNAPSHOT_BYTES);
@@ -335,6 +334,29 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
             });
         } catch (SQLException exception) {
             throw new IOException("unable to load PostgreSQL knowledge snapshot", exception);
+        }
+    }
+
+    private Path createScratchFile(String prefix) throws IOException {
+        requireSafeScratchRoot();
+        for (int attempt = 0; attempt < MAX_SCRATCH_NAME_ATTEMPTS; attempt++) {
+            Path candidate = scratchRoot.resolve(prefix + UUID.randomUUID() + ".knowledge").normalize();
+            if (!scratchRoot.equals(candidate.getParent())) {
+                throw new IOException("PostgreSQL snapshot scratch file escapes its private directory");
+            }
+            try {
+                return Files.createFile(candidate);
+            } catch (FileAlreadyExistsException collision) {
+                // UUID collisions are not expected, but CREATE_NEW semantics remain fail-closed.
+            }
+        }
+        throw new IOException("unable to allocate a unique PostgreSQL snapshot scratch file");
+    }
+
+    private void requireSafeScratchRoot() throws IOException {
+        if (Files.isSymbolicLink(scratchRoot)
+                || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("PostgreSQL snapshot scratch path must be a real directory under MINOS home");
         }
     }
 
@@ -372,9 +394,9 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
 
     private static long estimateWeight(ActiveMetadata metadata, long persistedBytes) {
         long countWeight = 64L * 1024L;
-        countWeight = safeAdd(countWeight, (long) metadata.symbolCount() * 1024L);
-        countWeight = safeAdd(countWeight, (long) metadata.occurrenceCount() * 640L);
-        countWeight = safeAdd(countWeight, (long) metadata.relationshipCount() * 1024L);
+        countWeight = safeAdd(countWeight, metadata.symbolCount() * 1024L);
+        countWeight = safeAdd(countWeight, metadata.occurrenceCount() * 640L);
+        countWeight = safeAdd(countWeight, metadata.relationshipCount() * 1024L);
         long persistedWeight = safeMultiply(Math.max(0L, persistedBytes), QUERY_VIEW_PERSISTED_AMPLIFICATION);
         return Math.max(countWeight, persistedWeight);
     }
