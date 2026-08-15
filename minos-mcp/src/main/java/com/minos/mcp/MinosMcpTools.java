@@ -26,6 +26,8 @@ public final class MinosMcpTools implements AutoCloseable {
     private static final String GENERIC_TOOL_ERROR = "error: MINOS tool execution failed";
     private static final String RESULT_BUDGET_ERROR =
             "error: MCP_RESULT_BUDGET_EXCEEDED; reduce limits or paginate the request";
+    private static final String ARG_LIMIT = "limit";
+    private static final String ARG_MODULE = "module";
     private static final int MAX_CLIENT_ERROR_CHARS = 240;
     private static final System.Logger LOGGER = System.getLogger(MinosMcpTools.class.getName());
 
@@ -82,7 +84,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 tool("minos_symbol_context", "Build one-root compact context for a symbol query, including bounded usages, relationships and relevant source.", symbolContextSchema(), args ->
                         backend.symbolContext(symbolContextRequest(args))),
                 tool("minos_module_context", "Read the compact M6 architecture context for one module.", moduleSchema(), args ->
-                        backend.moduleContext(required(args, "project"), required(args, "module"))),
+                        backend.moduleContext(required(args, "project"), required(args, ARG_MODULE))),
                 tool("minos_architecture", "Read the composed M6 architecture intelligence view for a project, including explicit module dependency edges.", projectSchema(), args ->
                         backend.architecture(required(args, "project"))),
                 tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), args ->
@@ -227,7 +229,7 @@ public final class MinosMcpTools implements AutoCloseable {
     private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.searchDefaults(
                 required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, "module"), optionalInteger(args, "limit", 1, 20),
+                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, ARG_LIMIT, 1, 20),
                 optionalInteger(args, "depth", 0, 3), optionalInteger(args, "usages", 0, 50),
                 optionalInteger(args, "relationships", 0, 50), optionalInteger(args, "contextLines", 0, 50),
                 optionalInteger(args, "maxTokens", 256, 32768), optionalBoolean(args, "includeSource", true));
@@ -236,18 +238,18 @@ public final class MinosMcpTools implements AutoCloseable {
     private static MinosMcpBackend.SymbolSearchRequest symbolSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.symbolDefaults(
                 required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, "module"), optionalInteger(args, "limit", 1, 1000));
+                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.RelationRequest relationRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.relationDefaults(
-                required(args, "project"), required(args, "symbolId"), optionalInteger(args, "limit", 1, 1000));
+                required(args, "project"), required(args, "symbolId"), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.SymbolContextRequest symbolContextRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.symbolContextDefaults(
                 required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, "module"), optionalInteger(args, "depth", 0, 3),
+                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, "depth", 0, 3),
                 optionalInteger(args, "contextLines", 0, 50), optionalInteger(args, "maxTokens", 256, 32768),
                 optionalBoolean(args, "includeSource", true));
     }
@@ -257,13 +259,13 @@ public final class MinosMcpTools implements AutoCloseable {
         if (!ARCHITECTURE_GRAPH_FORMATS.contains(format)) {
             throw new IllegalArgumentException("unsupported architecture graph format: " + format);
         }
-        return new MinosMcpBackend.ArchitectureGraphRequest(required(args, "project"), optionalString(args, "module"), format);
+        return new MinosMcpBackend.ArchitectureGraphRequest(required(args, "project"), optionalString(args, ARG_MODULE), format);
     }
 
     private static MinosMcpBackend.ImpactRequest impactRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.impactDefaults(
                 required(args, "project"), required(args, "symbolId"),
-                optionalInteger(args, "depth", 1, 32), optionalInteger(args, "limit", 1, 10000));
+                optionalInteger(args, "depth", 1, 32), optionalInteger(args, ARG_LIMIT, 1, 10000));
     }
 
     private static MinosMcpBackend.ProgramGraphRequest programGraphRequest(Map<String, Object> args) {
@@ -275,18 +277,18 @@ public final class MinosMcpTools implements AutoCloseable {
     private static MinosMcpBackend.SecurityRequest securityRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.securityDefaults(
                 required(args, "project"), optionalString(args, "sourceNodeId"),
-                optionalInteger(args, "depth", 1, 32), optionalInteger(args, "limit", 1, 1000));
+                optionalInteger(args, "depth", 1, 32), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.SemanticSearchRequest semanticSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.semanticDefaults(
-                required(args, "project"), required(args, "query"), optionalInteger(args, "limit", 1, 1000),
+                required(args, "project"), required(args, "query"), optionalInteger(args, ARG_LIMIT, 1, 1000),
                 optionalDouble(args, "minimumScore", -1.0, 1.0));
     }
 
     private static MinosMcpBackend.HybridSearchRequest hybridSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.hybridDefaults(
-                required(args, "project"), required(args, "query"), optionalInteger(args, "limit", 1, 500),
+                required(args, "project"), required(args, "query"), optionalInteger(args, ARG_LIMIT, 1, 500),
                 optionalDouble(args, "minimumScore", 0.0, 1.0));
     }
 
@@ -299,19 +301,19 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static MinosMcpBackend.RuntimeSessionsRequest runtimeSessionsRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeSessionsDefaults(
-                required(args, "project"), optionalInteger(args, "limit", 1, 128));
+                required(args, "project"), optionalInteger(args, ARG_LIMIT, 1, 128));
     }
 
     private static MinosMcpBackend.RuntimeReportRequest runtimeReportRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeReportDefaults(
                 required(args, "project"), optionalString(args, "sessionId"),
-                optionalInteger(args, "limit", 1, 1000));
+                optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.RuntimeSymbolRequest runtimeSymbolRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeSymbolDefaults(
                 required(args, "project"), required(args, "symbolId"), optionalString(args, "sessionId"),
-                optionalInteger(args, "limit", 1, 1000));
+                optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static String required(Map<String, Object> args, String key) {
@@ -512,7 +514,7 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private static int teamAuditLimit(Map<String, Object> args) {
-        Integer value = optionalInteger(args, "limit", 1, 10_000);
+        Integer value = optionalInteger(args, ARG_LIMIT, 1, 10_000);
         return value == null ? 200 : value;
     }
 
@@ -545,7 +547,6 @@ public final class MinosMcpTools implements AutoCloseable {
     private interface ToolInvocation {
         String execute(Map<String, Object> arguments) throws Exception;
     }
-
 
     @Override
     public void close() throws IOException {

@@ -29,6 +29,7 @@ public final class HybridSearchService {
     public static final int MAX_QUERY_UTF8_BYTES = 64 * 1024;
     public static final int DEFAULT_MAX_CORPUS_CACHE_ENTRIES = 64;
     public static final long DEFAULT_MAX_CORPUS_CACHE_WEIGHT_BYTES = 256L * 1024L * 1024L;
+    private static final String LEXICAL_SIGNAL = "LEXICAL";
 
     private final ProjectResolver projects;
     private final CodeKnowledgeSnapshotStore snapshots;
@@ -78,7 +79,7 @@ public final class HybridSearchService {
                     ? corpus.graphDegree().getOrDefault(document.sourceId(), 0) / (double) corpus.maxDegree() : 0.0;
             if (lexical <= 0.0 && semantic <= 0.0) continue;
             List<RankingSignal> signals = new ArrayList<>();
-            if (lexical > 0.0) signals.add(new RankingSignal("LEXICAL", lexical, InformationNature.DERIVED));
+            if (lexical > 0.0) signals.add(new RankingSignal(LEXICAL_SIGNAL, lexical, InformationNature.DERIVED));
             if (graph > 0.0) signals.add(new RankingSignal("GRAPH", graph, InformationNature.DERIVED));
             if (semanticAvailable) signals.add(new RankingSignal("SEMANTIC", semantic, InformationNature.HEURISTIC));
             double score = semanticAvailable
@@ -106,8 +107,8 @@ public final class HybridSearchService {
         List<HybridHit> hits = new ArrayList<>();
         for (SemanticDocument document : corpus.documents()) {
             double lexical = lexicalQuery.score(document.content());
-            if (lexical > 0.0) hits.add(new HybridHit(document, lexical, lexical, 0.0, 0.0, "LEXICAL",
-                    List.of(new RankingSignal("LEXICAL", lexical, InformationNature.DERIVED))));
+            if (lexical > 0.0) hits.add(new HybridHit(document, lexical, lexical, 0.0, 0.0, LEXICAL_SIGNAL,
+                    List.of(new RankingSignal(LEXICAL_SIGNAL, lexical, InformationNature.DERIVED))));
         }
         return hits.stream().sorted(Comparator.comparingDouble(HybridHit::score).reversed()
                 .thenComparing(hit -> hit.document().stableKey())).limit(limit).toList();
@@ -248,7 +249,7 @@ public final class HybridSearchService {
         return false;
     }
     private static double normalizedSemantic(double score) { return clamp01(score); }
-    private static double clamp01(double value) { return Math.max(0.0, Math.min(1.0, value)); }
+    private static double clamp01(double value) { return Math.clamp(value, 0.0, 1.0); }
     private static long elapsedMillis(long started) { return (System.nanoTime() - started) / 1_000_000L; }
 
     private static String requireQuery(String query) {
