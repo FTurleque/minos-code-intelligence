@@ -38,6 +38,8 @@ final class MinosStrongProcessLauncher {
     private static final long CONTROL_TIMEOUT_SECONDS = 5L;
     private static final int MAX_CONTROL_OUTPUT_BYTES = 64 * 1024;
     private static final Duration STALE_PLAN_AGE = Duration.ofHours(24);
+    private static final String SYSTEMCTL = "systemctl";
+    private static final String QUIET = "--quiet";
     private static final Object WINDOWS_INSTALL_LOCK = new Object();
     private static final Object LINUX_PROBE_LOCK = new Object();
     private static volatile Boolean linuxCapability;
@@ -129,7 +131,7 @@ final class MinosStrongProcessLauncher {
         command.add("systemd-run");
         command.add("--user");
         command.add("--scope");
-        command.add("--quiet");
+        command.add(QUIET);
         command.add("--unit=" + unit);
         command.add("--");
         command.addAll(original.command());
@@ -153,9 +155,9 @@ final class MinosStrongProcessLauncher {
     private static boolean probeLinuxCapability() {
         String unit = "minos-intellij-probe-" + UUID.randomUUID().toString().replace("-", "");
         try {
-            if (runControl(List.of("systemctl", "--user", "show-environment"), false) != 0) return false;
+            if (runControl(List.of(SYSTEMCTL, "--user", "show-environment"), false) != 0) return false;
             return runControl(List.of(
-                    "systemd-run", "--user", "--scope", "--quiet", "--unit=" + unit,
+                    "systemd-run", "--user", "--scope", QUIET, "--unit=" + unit,
                     "--", "/bin/true"), false) == 0;
         } catch (IOException failure) {
             return false;
@@ -376,9 +378,9 @@ final class MinosStrongProcessLauncher {
             if (!terminated.compareAndSet(false, true)) return;
             IOException failure = null;
             try {
-                int stop = runControl(List.of("systemctl", "--user", "stop", scope), true);
+                int stop = runControl(List.of(SYSTEMCTL, "--user", "stop", scope), true);
                 if (stop != 0) {
-                    int active = runControl(List.of("systemctl", "--user", "is-active", "--quiet", scope), true);
+                    int active = runControl(List.of(SYSTEMCTL, "--user", "is-active", QUIET, scope), true);
                     if (active == 0) failure = new IOException(
                             "systemd scope remained active after stop failure: " + scope);
                 }
