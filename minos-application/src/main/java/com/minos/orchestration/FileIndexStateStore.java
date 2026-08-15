@@ -85,27 +85,53 @@ public final class FileIndexStateStore implements IndexStateStore {
     ) {
         AtomicBoolean closed = new AtomicBoolean();
         Thread owner = Thread.currentThread();
-        return () -> {
-            if (!closed.compareAndSet(false, true)) return;
-            if (Thread.currentThread() != owner) {
-                throw new IllegalStateException("file project lifecycle lease must be released by its owner thread");
-            }
-            if (heldByProject.get(projectId) != held) {
-                throw new IllegalStateException("file project lifecycle lease lost thread ownership context");
-            }
-            held.depth--;
-            if (held.depth < 0) throw new IllegalStateException("file project lifecycle lease depth underflow");
-            if (held.depth == 0) {
-                try {
-                    held.physical.close();
-                } catch (IOException exception) {
-                    throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
-                } finally {
-                    heldByProject.remove(projectId, held);
-                    if (heldByProject.isEmpty()) heldProjectLeases.remove();
-                }
-            }
-        };
+        return () -> closeLogicalProjectLease(projectId, held, heldByProject, closed, owner);
+    }
+
+    private void closeLogicalProjectLease(
+            UUID projectId,
+            HeldProjectLease held,
+            Map<UUID, HeldProjectLease> heldByProject,
+            AtomicBoolean closed,
+            Thread owner
+    ) {
+        if (Thread.currentThread() != owner) {
+            throw new IllegalStateException("file project lifecycle lease must be released by its owner thread");
+        }
+        if (closed.get()) return;
+        if (heldByProject.get(projectId) != held) {
+            throw new IllegalStateException("file project lifecycle lease lost thread ownership context");
+        }
+        if (!closed.compareAndSet(false, true)) return;
+        releaseLogicalProjectLease(projectId, held, heldByProject);
+    }
+
+    private void releaseLogicalProjectLease(
+            UUID projectId,
+            HeldProjectLease held,
+            Map<UUID, HeldProjectLease> heldByProject
+    ) {
+        held.depth--;
+        if (held.depth < 0) {
+            throw new IllegalStateException("file project lifecycle lease depth underflow");
+        }
+        if (held.depth != 0) return;
+        closePhysicalProjectLease(projectId, held, heldByProject);
+    }
+
+    private void closePhysicalProjectLease(
+            UUID projectId,
+            HeldProjectLease held,
+            Map<UUID, HeldProjectLease> heldByProject
+    ) {
+        try {
+            held.physical.close();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("cannot release project indexing lifecycle lease", exception);
+        } finally {
+            heldByProject.remove(projectId, held);
+            if (heldByProject.isEmpty()) heldProjectLeases.remove();
+        }
     }
 
     @Override
@@ -139,8 +165,6 @@ public final class FileIndexStateStore implements IndexStateStore {
                     requireIdentity(projectId, run.projectId(), candidate, "indexing run project");
                     return Optional.of(run);
                 }
-                // The locator is published before a run's first durable state. Keep a dangling
-                // locator: another process may still be completing that first publication.
             }
 
             Path legacy = runRoot.resolve(runId + ".properties");

@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -56,6 +57,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static final String PIN_FILE = "registered.pin";
     private static final String REPOSITORY_DIRECTORY = "repository";
     private static final int MAX_CACHE_ROOT_SCAN_ENTRIES = 4_096;
+    static final Duration LOCK_ACQUIRE_TIMEOUT = Duration.ofMinutes(2);
+    private static final long LOCK_POLL_MILLIS = 50L;
 
     private final Path cacheRoot;
     private final Path locksRoot;
@@ -108,7 +111,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         try {
             Path lockFile = locksRoot.resolve(cacheKey + ".lock");
             try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 FileLock ignored = channel.lock()) {
+                 FileLock ignored = acquireFileLock(
+                         channel, LOCK_ACQUIRE_TIMEOUT, "remote materialization lock " + cacheKey)) {
                 RemoteMaterialization result = materializeLocked(request, cacheKey);
                 success = true;
                 return result;
@@ -202,8 +206,13 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
 
     private void acquireLease(String cacheKey) throws IOException {
         ReentrantLock stripe = leaseStripe(cacheKey);
-        stripe.lock();
+        boolean stripeAcquired = false;
         try {
+            stripeAcquired = stripe.tryLock(LOCK_ACQUIRE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            if (!stripeAcquired) {
+                throw new IOException("timed out waiting for remote cache JVM lease after "
+                        + LOCK_ACQUIRE_TIMEOUT + ": " + cacheKey);
+            }
             synchronized (leaseMonitor) {
                 LeaseState existing = activeLeases.get(cacheKey);
                 if (existing != null) {
@@ -211,21 +220,87 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
                     return;
                 }
             }
-            Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
-            FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-            try {
-                // Deliberately outside leaseMonitor: another process may hold this lock indefinitely.
-                FileLock lock = channel.lock();
-                synchronized (leaseMonitor) {
-                    activeLeases.put(cacheKey, new LeaseState(channel, lock));
-                }
-            } catch (IOException | RuntimeException exception) {
-                channel.close();
-                throw exception;
+            LeaseState created = openActiveLease(cacheKey);
+            synchronized (leaseMonitor) {
+                activeLeases.put(cacheKey, created);
             }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while waiting for remote cache JVM lease: " + cacheKey, interrupted);
         } finally {
-            stripe.unlock();
+            if (stripeAcquired) stripe.unlock();
         }
+    }
+
+    private LeaseState openActiveLease(String cacheKey) throws IOException {
+        Path leaseFile = leasesRoot.resolve(cacheKey + ".lease");
+        FileChannel channel = FileChannel.open(leaseFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock = acquireFileLock(
+                    channel, LOCK_ACQUIRE_TIMEOUT, "remote cache active-use lease " + cacheKey);
+            return new LeaseState(channel, lock);
+        } catch (IOException | RuntimeException failure) {
+            closeLeaseChannelAfterFailure(channel, failure);
+            throw failure;
+        }
+    }
+
+    private static void closeLeaseChannelAfterFailure(FileChannel channel, Throwable failure) {
+        try {
+            channel.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
+        }
+    }
+
+    static FileLock acquireFileLock(FileChannel channel, Duration timeout, String description) throws IOException {
+        Objects.requireNonNull(channel, "channel");
+        Duration wait = Objects.requireNonNull(timeout, "timeout");
+        if (wait.isZero() || wait.isNegative()) throw new IllegalArgumentException("lock timeout must be positive");
+        String label = Objects.requireNonNull(description, "description");
+        long deadline = deadline(wait);
+        while (true) {
+            try {
+                FileLock lock = channel.tryLock();
+                if (lock != null) return lock;
+            } catch (OverlappingFileLockException unavailableInThisJvm) {
+                // A lock held through another channel in this JVM is still unavailable to this caller.
+            }
+            if (System.nanoTime() >= deadline) {
+                throw new IOException("timed out waiting for " + label + " after " + wait);
+            }
+            sleepUntilRetry(deadline, label);
+        }
+    }
+
+    private static long deadline(Duration timeout) {
+        long now = System.nanoTime();
+        long nanos;
+        try {
+            nanos = timeout.toNanos();
+        } catch (ArithmeticException overflow) {
+            return Long.MAX_VALUE;
+        }
+        return nanos > Long.MAX_VALUE - now ? Long.MAX_VALUE : now + nanos;
+    }
+
+    private static void sleepUntilRetry(long deadline, String description) throws IOException {
+        long remainingNanos = deadline - System.nanoTime();
+        if (remainingNanos <= 0L) return;
+        long convertedMillis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
+        long sleepMillis = boundedPollMillis(convertedMillis);
+        try {
+            Thread.sleep(sleepMillis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while waiting for " + description, interrupted);
+        }
+    }
+
+    private static long boundedPollMillis(long convertedMillis) {
+        if (convertedMillis <= 0L) return 1L;
+        if (convertedMillis > LOCK_POLL_MILLIS) return LOCK_POLL_MILLIS;
+        return convertedMillis;
     }
 
     private ReentrantLock leaseStripe(String cacheKey) {

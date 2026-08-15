@@ -107,7 +107,9 @@ public final class IndexingLifecycleService {
     }
 
     private void validatePlanStillCurrent(UUID projectId, IncrementalIndexingPlan plan) {
-        ProjectIndexState current = AuthoritativeProjectStateReconciler.reconcile(
+        // Every caller reaches this method with the exclusive project lifecycle lease held. Recover
+        // abandoned RUNNING/indexing metadata before deciding whether the plan is still current.
+        ProjectIndexState current = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
                 projectId,
                 promoter,
                 stateStore,

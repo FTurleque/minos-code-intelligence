@@ -62,7 +62,11 @@ public final class InMemoryIndexStateStore implements IndexStateStore {
         state.lock.lock();
         AtomicBoolean closed = new AtomicBoolean();
         LeaseState acquired = state;
+        Thread owner = Thread.currentThread();
         return () -> {
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("in-memory project lease must be released by its owner thread");
+            }
             if (!closed.compareAndSet(false, true)) return;
             acquired.lock.unlock();
             synchronized (leaseMonitor) {

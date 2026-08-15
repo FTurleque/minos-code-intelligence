@@ -109,13 +109,16 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
     private ProjectLease logicalLease(HeldLifecycleLease held) {
         AtomicBoolean closed = new AtomicBoolean();
         return () -> {
-            if (!closed.compareAndSet(false, true)) return;
             if (Thread.currentThread() != held.owner) {
                 throw new IllegalStateException("PostgreSQL lifecycle lease must be released by its owner thread");
             }
+            // Owner-thread close remains idempotent even after the physical context has been removed.
+            // A foreign thread is rejected above before it can alter the closed flag.
+            if (closed.get()) return;
             if (heldLifecycleLease.get() != held) {
                 throw new IllegalStateException("PostgreSQL lifecycle lease lost thread ownership context");
             }
+            if (!closed.compareAndSet(false, true)) return;
             held.depth--;
             if (held.depth < 0) {
                 throw new IllegalStateException("PostgreSQL lifecycle lease depth underflow");
@@ -291,10 +294,10 @@ final class ProjectMutationIndexStateStore implements IndexStateStore {
 
         @Override
         public void close() {
-            if (!closed.compareAndSet(false, true)) return;
             if (Thread.currentThread() != owner) {
                 throw new IllegalStateException("PostgreSQL local lifecycle gate must be released by its owner thread");
             }
+            if (!closed.compareAndSet(false, true)) return;
             state.lock.unlock();
             releaseLocalGateReference(projectId, state);
         }
