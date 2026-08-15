@@ -88,7 +88,7 @@ public final class RuntimeObservationEnvelopeCodec {
         RuntimeObservationSession session = new RuntimeObservationSession(
                 RuntimeObservationSession.FORMAT, sessionId, projectId, snapshotId,
                 startedAt, endedAt, collector[1], collector[2], environment, completeness, observations);
-        return new DecodedSession(session, HexFormat.of().formatHex(digest.digest()), sourceBytes);
+        return new DecodedSession(session, sha256(digest), sourceBytes);
     }
 
     private static MessageDigest digest() {
@@ -97,6 +97,10 @@ public final class RuntimeObservationEnvelopeCodec {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+    }
+
+    private static String sha256(MessageDigest digest) {
+        return HexFormat.of().formatHex(Objects.requireNonNull(digest, "digest").digest());
     }
 
     private static RuntimeObservation parseObservation(String line, int lineNumber) throws IOException {
@@ -214,7 +218,7 @@ public final class RuntimeObservationEnvelopeCodec {
 
     public record DecodedSession(RuntimeObservationSession session, String sourceSha256, long sourceBytes) {
         public DecodedSession {
-            java.util.Objects.requireNonNull(session, "session");
+            Objects.requireNonNull(session, "session");
             if (sourceSha256 == null || !sourceSha256.matches("[0-9a-f]{64}")) {
                 throw new IllegalArgumentException("sourceSha256 must be lowercase SHA-256");
             }
