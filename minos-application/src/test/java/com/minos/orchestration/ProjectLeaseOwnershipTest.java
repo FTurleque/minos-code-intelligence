@@ -32,6 +32,7 @@ class ProjectLeaseOwnershipTest {
         assertInstanceOf(IllegalStateException.class, wrongThread);
 
         lease.close();
+        lease.close();
         try (IndexStateStore.ProjectLease reacquired = store.acquireProjectLease(projectId)) {
             assertTrue(true);
         }
@@ -47,6 +48,7 @@ class ProjectLeaseOwnershipTest {
         assertInstanceOf(IllegalStateException.class, wrongThread);
 
         lease.close();
+        lease.close();
         try (IndexStateStore.ProjectLease reacquired = store.acquireProjectLease(projectId)) {
             assertTrue(true);
         }
@@ -60,6 +62,7 @@ class ProjectLeaseOwnershipTest {
         Throwable wrongThread = closeFromAnotherThread(lease::close);
         assertInstanceOf(IllegalStateException.class, wrongThread);
 
+        lease.close();
         lease.close();
         try (ProjectIndexLease reacquired = ProjectIndexLease.acquire(
                 root.resolve("home"), projectId, Duration.ofSeconds(1))) {
