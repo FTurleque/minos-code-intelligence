@@ -341,7 +341,9 @@ public final class PrivateLocalStorage {
      * <p>Public so that tests in other modules that build on {@code PrivateLocalStorage} (e.g.
      * {@code MinosApplication.open}) can inject the same deterministic fault without depending on
      * minos-engine's test sources or duplicating this seam. It is a fault-injection hook, not part
-     * of the storage policy itself -- production code never references it.</p>
+     * of the storage policy itself -- production code never references it, and {@link
+     * #useForTesting} refuses to install one outside a test runtime (see there for why that is, and
+     * is not, a security boundary).</p>
      */
     public interface CapabilityProbe {
         boolean supportsPosix(Path target);
@@ -366,13 +368,39 @@ public final class PrivateLocalStorage {
     private static final ThreadLocal<CapabilityProbe> CAPABILITY_PROBE =
             ThreadLocal.withInitial(CapabilityProbe::real);
 
-    /** Test-only: overrides filesystem capability probing for the calling thread. */
+    /**
+     * Test-only: overrides filesystem capability probing for the calling thread.
+     *
+     * <p>This is {@code public} so tests in other modules can use it, which means any code sharing
+     * this JVM process could technically call it too -- that alone is not a security boundary
+     * against code already running in-process (nothing expressible with Java visibility modifiers
+     * is: such code could just as easily call the real enforcement methods' own private internals
+     * via reflection). MINOS's actual containment boundary for untrusted code is process isolation
+     * (the AppContainer/Job Object and bubblewrap/cgroup sandboxes), not this method's visibility.
+     * What this check <em>does</em> defend against is the realistic accident: a shipped MINOS
+     * artifact does not bundle a JUnit dependency, so in an actual deployed process this throws
+     * unconditionally, regardless of who calls it.</p>
+     *
+     * @throws IllegalStateException if called outside a test runtime (no JUnit Jupiter on the
+     *         classpath)
+     */
     public static void useForTesting(CapabilityProbe probe) {
+        requireTestRuntime();
         CAPABILITY_PROBE.set(Objects.requireNonNull(probe, "probe"));
     }
 
     /** Test-only: restores real filesystem capability probing for the calling thread. */
     public static void resetCapabilityProbeForTesting() {
         CAPABILITY_PROBE.remove();
+    }
+
+    private static void requireTestRuntime() {
+        try {
+            Class.forName("org.junit.jupiter.api.Test", false, PrivateLocalStorage.class.getClassLoader());
+        } catch (ClassNotFoundException notATestRuntime) {
+            throw new IllegalStateException(
+                    "PrivateLocalStorage.useForTesting is a test-only fault-injection hook; "
+                            + "it refuses to run outside a JUnit test runtime");
+        }
     }
 }

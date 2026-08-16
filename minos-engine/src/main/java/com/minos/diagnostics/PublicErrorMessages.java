@@ -21,6 +21,18 @@ public final class PublicErrorMessages {
     /** {@code scheme://user:pass@host}, independent of whether the credential itself contains a keyword below. */
     private static final Pattern URL_CREDENTIALS = Pattern.compile("://[^/\\s@]+:[^/\\s@]+@");
 
+    /**
+     * {@code token":} / {@code token:} -- the JSON/HTTP-header shape (e.g. an OAuth error body like
+     * {@code {"access_token":"eyJ..."}}), which {@code token=} alone does not cover. Deliberately
+     * scoped to "token", not the bare word "key": "key" alone is far too common in this codebase's
+     * own vocabulary (cache key, symbol key, map key, primary key) to trigger on safely -- API keys
+     * are instead covered narrowly by {@link #API_KEY_MENTION}.
+     */
+    private static final Pattern TOKEN_ASSIGNMENT = Pattern.compile("token\\s*[\"']?\\s*:");
+
+    /** {@code api key} / {@code api-key} / {@code api_key} / {@code apikey}, however punctuated. */
+    private static final Pattern API_KEY_MENTION = Pattern.compile("api[-_ ]?key");
+
     private PublicErrorMessages() {
     }
 
@@ -46,6 +58,8 @@ public final class PublicErrorMessages {
                 || lower.contains("key=") || lower.contains("pwd=") || lower.contains("uid=")) {
             return true;
         }
+        if (TOKEN_ASSIGNMENT.matcher(lower).find()) return true;
+        if (API_KEY_MENTION.matcher(lower).find()) return true;
         if (URL_CREDENTIALS.matcher(detail).find()) return true;
         return containsAbsolutePath(detail) || containsUncPath(detail);
     }

@@ -118,4 +118,25 @@ class PublicErrorMessagesTest {
     void odbcStyleCredentialAssignmentsAreRejected() {
         assertTrue(PublicErrorMessages.looksSensitive("Server=db;Uid=admin;Pwd=hunter2;"));
     }
+
+    @Test
+    void jsonStyleAccessTokenFieldIsRejected() {
+        assertTrue(PublicErrorMessages.looksSensitive(
+                "authentication failed: {\"error\":\"invalid_token\",\"access_token\":\"eyJhbGciOiJIUzI1NiJ9.abc\"}"));
+    }
+
+    @Test
+    void colonStyleApiKeyMentionsAreRejectedRegardlessOfPunctuation() {
+        assertTrue(PublicErrorMessages.looksSensitive("invalid API key: AIzaSyD-abcdef1234"));
+        assertTrue(PublicErrorMessages.looksSensitive("Api-Key: abc123"));
+        assertTrue(PublicErrorMessages.looksSensitive("rejected api_key: abc123"));
+    }
+
+    @Test
+    void ordinaryMessagesMentioningKeyWithoutApiContextAreNotFlagged() {
+        // "key" alone is far too common in this codebase's own vocabulary (symbol/cache/map/primary
+        // key) to trigger redaction on -- only "api key" and its punctuation variants should.
+        assertFalse(PublicErrorMessages.looksSensitive("duplicate primary key: project_id"));
+        assertFalse(PublicErrorMessages.looksSensitive("cache key not found: symbol-index-7"));
+    }
 }
