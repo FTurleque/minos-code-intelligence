@@ -69,7 +69,7 @@ public final class DoctorCommand {
             value.put("state", provider.state());
             value.put("requiredByDefault", provider.requiredByDefault());
             value.put("executable", provider.executable());
-            value.put("diagnostics", provider.diagnostics());
+            value.put("diagnostics", CliCommandSupport.publicDiagnostics(provider.diagnostics()));
             values.add(value);
         }
         map.put("providers", values);
