@@ -24,13 +24,13 @@ import java.util.Objects;
  * exception message. {@link #failureMessage} is the one place that decides what is safe to expose;
  * see {@link PublicErrorMessages} for the redaction policy itself.</p>
  *
- * <p><b>The original exception is never attached to the public {@link MinosApiException}.</b>
- * {@code MinosApiException} is part of the published contract: a caller holds the actual object, so
- * anything reachable from it -- {@code getCause()}, a nested cause chain, suppressed exceptions --
- * is just as observable as {@code getMessage()} itself. Attaching a redacted message while leaving
- * the raw cause attached would not actually close the leak, only rename it. The original exception
- * is logged here instead, for whatever internal diagnostics a process configures; only {@link
- * ErrorCode} and a redacted message cross into the object the public API hands back.</p>
+ * <p><b>The original exception is never attached to the public {@link MinosApiException} and is
+ * never passed raw to the logger.</b> {@code MinosApiException} is part of the published contract: a
+ * caller holds the actual object, so anything reachable from it -- {@code getCause()}, a nested
+ * cause chain, suppressed exceptions -- is just as observable as {@code getMessage()} itself.
+ * Likewise, moving a credential from the public exception into a warning log would merely relocate
+ * the leak. Internal diagnostics therefore record only structural information that is independent
+ * of exception messages: the stable {@link ErrorCode} and the exception type.</p>
  */
 final class MinosApiSupport {
 
@@ -46,16 +46,17 @@ final class MinosApiSupport {
 
     /**
      * Runs {@code call}, translating anything it throws into the published error taxonomy.
-     * A {@link MinosApiException} that already crossed this boundary once is passed through as-is;
-     * one that somehow still carries a cause (e.g. constructed directly by a call site instead of
-     * through this method) is treated like any other internal failure rather than trusted, since a
-     * {@code MinosApiException} must never carry a cause once it reaches a public caller.
+     *
+     * <p>An already-classified {@link MinosApiException} is only passed through unchanged when the
+     * entire observable exception object is already safe: no cause, no suppressed exceptions, and a
+     * message that survives the public sanitizer byte-for-byte. Otherwise it is republished as a
+     * clean cause-less, suppression-free exception with the same {@link ErrorCode}.</p>
      */
     static <T> T execute(ApiCall<T> call) throws MinosApiException {
         try {
             return call.call();
         } catch (MinosApiException exception) {
-            throw exception.getCause() == null ? exception : republish(exception);
+            throw publishClassified(exception);
         } catch (SecurityException exception) {
             throw publicFailure(ErrorCode.ACCESS_DENIED, exception);
         } catch (AccessDeniedException exception) {
@@ -88,32 +89,62 @@ final class MinosApiSupport {
 
     /**
      * Builds the {@link MinosApiException} a public caller receives for {@code exception}: {@code
-     * code} plus a redacted message derived from it, with the original logged internally and never
-     * attached as the public exception's cause.
+     * code} plus a redacted message, with no cause or inherited suppressed exceptions.
      */
     static MinosApiException publicFailure(ErrorCode code, Exception exception) {
         return publicFailure(code, failureMessage(exception), exception);
     }
 
-    /** As {@link #publicFailure(ErrorCode, Exception)}, but with an explicit, already-safe message. */
+    /**
+     * As {@link #publicFailure(ErrorCode, Exception)}, but with an explicit caller-supplied message.
+     * The message is still sanitized defensively so a future call site cannot accidentally publish
+     * sensitive content merely by labelling it "safe".
+     */
     static MinosApiException publicFailure(ErrorCode code, String safeMessage, Exception exception) {
-        LOGGER.log(Level.WARNING, "MINOS API call failed internally (" + exception.getClass().getName() + ")", exception);
-        return new MinosApiException(code, safeMessage);
+        logFailure(code, exception);
+        String published = PublicErrorMessages.sanitize(
+                safeMessage,
+                exception.getClass().getSimpleName());
+        return new MinosApiException(code, published);
     }
 
     /**
-     * A {@link MinosApiException} reaching this point still carries a cause, which should not be
-     * possible for anything built through {@link #publicFailure}: something constructed one
-     * directly. Re-derive a clean public exception from it rather than propagating whatever it
-     * holds -- its message is re-sanitized rather than trusted, since it did not necessarily come
-     * from {@link #failureMessage}.
+     * Publishes an already-classified exception only after checking every observable channel. Safe,
+     * cause-less and suppression-free instances retain identity for compatibility; everything else
+     * is rebuilt through the same sanitizer and therefore cannot carry raw internal state across the
+     * public boundary.
      */
-    private static MinosApiException republish(MinosApiException exception) {
-        LOGGER.log(Level.WARNING,
-                "MINOS API produced a MinosApiException carrying a cause; stripping it before publication ("
-                        + exception.getCause().getClass().getName() + ")", exception.getCause());
-        return new MinosApiException(exception.code(),
-                PublicErrorMessages.sanitize(exception.getMessage(), exception.getClass().getSimpleName()));
+    private static MinosApiException publishClassified(MinosApiException exception) {
+        String sanitized = PublicErrorMessages.sanitize(
+                exception.getMessage(),
+                exception.getClass().getSimpleName());
+        boolean messageAlreadySafe = Objects.equals(exception.getMessage(), sanitized);
+        boolean observableStateAlreadySafe = exception.getCause() == null
+                && exception.getSuppressed().length == 0
+                && messageAlreadySafe;
+        if (observableStateAlreadySafe) {
+            return exception;
+        }
+        logFailure(exception.code(), exception);
+        return new MinosApiException(exception.code(), sanitized);
+    }
+
+    /**
+     * Logs only structural diagnostics. In particular, the raw {@link Throwable}, its message,
+     * causes and suppressed exceptions are deliberately not handed to the logger because those
+     * values may contain credentials, absolute paths or other private deployment details.
+     */
+    private static void logFailure(ErrorCode code, Exception exception) {
+        LOGGER.log(Level.WARNING, diagnosticSummary(code, exception));
+    }
+
+    /** Package-private for deterministic tests of the no-secret logging invariant. */
+    static String diagnosticSummary(ErrorCode code, Exception exception) {
+        return "MINOS API call failed internally (code="
+                + Objects.requireNonNull(code, "code")
+                + ", type="
+                + Objects.requireNonNull(exception, "exception").getClass().getName()
+                + ")";
     }
 
     /**
