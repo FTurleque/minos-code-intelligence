@@ -100,7 +100,15 @@ final class JGitCloneDeadline {
             effectiveArgs = new Object[]{budget.clampTimeoutMillis(configured)};
         }
 
-        Object result = invokeDelegate(connection, method, effectiveArgs);
+        Object result;
+        try {
+            result = invokeDelegate(connection, method, effectiveArgs);
+        } catch (Throwable failure) {
+            // If the underlying connection failed because the clamped timeout expired, make the
+            // absolute clone deadline the observable cause. Otherwise preserve the transport error.
+            budget.enforceTimeoutUnchecked();
+            throw failure;
+        }
         budget.enforceTimeoutUnchecked();
         if (result instanceof InputStream input) {
             return new DeadlineInputStream(input, connection, budget);
@@ -136,25 +144,40 @@ final class JGitCloneDeadline {
         @Override
         public int read() throws IOException {
             prepareRead();
-            int value = super.read();
-            budget.enforceTimeout();
-            return value;
+            try {
+                int value = super.read();
+                budget.enforceTimeout();
+                return value;
+            } catch (IOException failure) {
+                budget.enforceTimeout();
+                throw failure;
+            }
         }
 
         @Override
         public int read(byte[] bytes, int offset, int length) throws IOException {
             prepareRead();
-            int count = super.read(bytes, offset, length);
-            budget.enforceTimeout();
-            return count;
+            try {
+                int count = super.read(bytes, offset, length);
+                budget.enforceTimeout();
+                return count;
+            } catch (IOException failure) {
+                budget.enforceTimeout();
+                throw failure;
+            }
         }
 
         @Override
         public long skip(long count) throws IOException {
             prepareRead();
-            long skipped = super.skip(count);
-            budget.enforceTimeout();
-            return skipped;
+            try {
+                long skipped = super.skip(count);
+                budget.enforceTimeout();
+                return skipped;
+            } catch (IOException failure) {
+                budget.enforceTimeout();
+                throw failure;
+            }
         }
 
         private void prepareRead() throws IOException {
