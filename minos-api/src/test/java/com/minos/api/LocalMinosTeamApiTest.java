@@ -12,6 +12,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LocalMinosTeamApiTest {
@@ -34,6 +35,9 @@ class LocalMinosTeamApiTest {
         MinosApi.MinosApiException denied = assertThrows(MinosApi.MinosApiException.class,
                 () -> api.tenant("invalid-token"));
         assertEquals(MinosApi.ErrorCode.ACCESS_DENIED, denied.code());
+        // A real facade path, not just MinosApiSupport directly: this end-to-end failure must not
+        // let a public caller recover the internal rejection detail through getCause() either.
+        assertNull(denied.getCause());
     }
 
     @Test
@@ -42,6 +46,7 @@ class LocalMinosTeamApiTest {
         MinosApi.MinosApiException failure = assertThrows(MinosApi.MinosApiException.class,
                 () -> api.tenant("not-a-token"));
         assertEquals(MinosApi.ErrorCode.UNAVAILABLE, failure.code());
+        assertNull(failure.getCause());
     }
 
     private static HostedTenantKeyProvider keys() {

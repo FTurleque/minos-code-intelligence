@@ -8,25 +8,32 @@ import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The public {@code MinosApi} contract is consumed by third parties that only see {@link
- * MinosApi.ErrorCode} and {@link MinosApi.MinosApiException#getMessage()} -- never the original
- * cause's message directly. These tests inject exceptions carrying exactly the kind of internal
- * detail a real failure could contain (absolute paths, JDBC URLs with credentials, bearer tokens)
- * and verify none of it survives into the public message, regardless of which internal layer threw
- * it or which of the local API facades it passed through.
+ * The public {@code MinosApi} contract is consumed by third parties that hold the actual {@link
+ * MinosApi.MinosApiException} object -- not just its {@code getMessage()}. Everything reachable
+ * from that object is part of the observable surface: {@code getMessage()}, {@code getCause()}, a
+ * cause's own cause, and suppressed exceptions. These tests inject exceptions carrying exactly the
+ * kind of internal detail a real failure could contain (absolute paths, a UNC path, JDBC/URL
+ * credentials, bearer tokens, ODBC-style connection strings) and verify none of it is reachable
+ * through any of those paths, regardless of which internal layer threw it or which facade it passed
+ * through.
  */
 class MinosApiSupportTest {
 
     private static final String[] SENSITIVE_MESSAGES = {
             "cannot open MINOS_HOME at C:\\Users\\secret-user\\.minos\\data",
             "cannot open MINOS_HOME at /home/private-user/.minos/index",
+            "cannot reach \\\\server\\private-share\\secret",
             "connection failed: jdbc:postgresql://user:password@database.example/minos",
             "request failed: https://user:secret@example.org/private",
             "authentication rejected: token=super-secret-value",
+            "authentication rejected: password=super-secret-value",
+            "authentication rejected: key=super-secret-value",
+            "authentication rejected: pwd=super-secret-value",
     };
 
     @Test
@@ -36,7 +43,7 @@ class MinosApiSupportTest {
                 throw new IOException(detail);
             });
             assertEquals(MinosApi.ErrorCode.IO_FAILURE, failure.code());
-            assertPublicMessageIsSafe(failure, detail);
+            assertNoSensitiveDetailIsReachable(failure, detail);
         }
     }
 
@@ -47,7 +54,7 @@ class MinosApiSupportTest {
                 throw new SQLException(detail);
             });
             assertEquals(MinosApi.ErrorCode.EXECUTION_FAILURE, failure.code());
-            assertPublicMessageIsSafe(failure, detail);
+            assertNoSensitiveDetailIsReachable(failure, detail);
         }
     }
 
@@ -58,19 +65,66 @@ class MinosApiSupportTest {
                 throw new IllegalArgumentException(detail);
             });
             assertEquals(MinosApi.ErrorCode.INVALID_REQUEST, failure.code());
-            assertPublicMessageIsSafe(failure, detail);
+            assertNoSensitiveDetailIsReachable(failure, detail);
         }
     }
 
     @Test
-    void theOriginalExceptionRemainsAvailableAsTheCauseForInternalDiagnosis() {
+    void theOriginalExceptionIsNeverAttachedAsThePublicCause() {
         String detail = "connection failed: jdbc:postgresql://user:password@database.example/minos";
         IOException original = new IOException(detail);
+
         MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
             throw original;
         });
-        assertSame(original, failure.getCause());
-        assertEquals(detail, failure.getCause().getMessage());
+
+        // getCause() is part of the observable public surface -- a caller holds the actual
+        // exception object, not just its message. The original exception (and whatever it or its
+        // own cause chain contains) must not be reachable through it.
+        assertNull(failure.getCause(), "the public exception must not expose the internal exception as its cause");
+    }
+
+    @Test
+    void aNestedCauseChainOnTheOriginalExceptionNeverReachesThePublicException() {
+        IOException root = new IOException("connection reset by jdbc:postgresql://user:password@database.example/minos");
+        SQLException wrapped = new SQLException("query failed", root);
+
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw wrapped;
+        });
+
+        assertNull(failure.getCause(), "no cause -- nested or otherwise -- may be attached to the public exception");
+    }
+
+    @Test
+    void suppressedExceptionsOnTheOriginalExceptionNeverReachThePublicException() {
+        IOException primary = new IOException("primary failure");
+        primary.addSuppressed(new IOException("cleanup also failed: token=super-secret-value"));
+
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw primary;
+        });
+
+        assertEquals(0, failure.getSuppressed().length,
+                "the public exception must not inherit suppressed exceptions from the internal failure");
+    }
+
+    @Test
+    void aMinosApiExceptionConstructedDirectlyWithARawCauseIsStrippedByExecute() {
+        // Simulates a call site that built a MinosApiException itself instead of going through
+        // publicFailure(): execute()'s pass-through for an already-classified exception must not
+        // trust that it is actually safe just because it is already the right type.
+        IOException rawCause = new IOException("cannot open C:\\Users\\secret-user\\.minos\\data");
+        MinosApi.MinosApiException constructedDirectly =
+                new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, "shutdown failed", rawCause);
+
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw constructedDirectly;
+        });
+
+        assertEquals(MinosApi.ErrorCode.IO_FAILURE, failure.code());
+        assertNull(failure.getCause());
+        assertNoSensitiveDetailIsReachable(failure, "C:\\Users\\secret-user\\.minos\\data");
     }
 
     @Test
@@ -87,7 +141,7 @@ class MinosApiSupportTest {
             throw new SecurityException("cannot open C:\\Users\\secret-user\\.minos\\credentials");
         });
         assertEquals(MinosApi.ErrorCode.ACCESS_DENIED, failure.code());
-        assertPublicMessageIsSafe(failure, "cannot open C:\\Users\\secret-user\\.minos\\credentials");
+        assertNoSensitiveDetailIsReachable(failure, "cannot open C:\\Users\\secret-user\\.minos\\credentials");
     }
 
     @Test
@@ -99,7 +153,7 @@ class MinosApiSupportTest {
     }
 
     @Test
-    void anAlreadyClassifiedApiExceptionPassesThroughUnchanged() {
+    void anAlreadyClassifiedApiExceptionWithNoCausePassesThroughUnchanged() {
         MinosApi.MinosApiException original =
                 new MinosApi.MinosApiException(MinosApi.ErrorCode.UNAVAILABLE, "team mode is disabled");
         MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
@@ -116,14 +170,24 @@ class MinosApiSupportTest {
         assertEquals("IOException", failure.getMessage());
     }
 
-    private static void assertPublicMessageIsSafe(MinosApi.MinosApiException failure, String originalDetail) {
+    /**
+     * Checks every path a public caller could use to recover {@code originalDetail} from the
+     * exception object it holds: the message, the cause chain (should not exist at all), and
+     * suppressed exceptions.
+     */
+    private static void assertNoSensitiveDetailIsReachable(MinosApi.MinosApiException failure, String originalDetail) {
+        assertNull(failure.getCause(), "public exception must carry no cause at all");
+        assertEquals(0, failure.getSuppressed().length, "public exception must carry no suppressed exceptions");
         String message = failure.getMessage();
         assertFalse(message.contains(originalDetail), "public message must not repeat the internal detail: " + message);
-        assertFalse(message.toLowerCase(java.util.Locale.ROOT).contains("password"), message);
-        assertFalse(message.toLowerCase(java.util.Locale.ROOT).contains("secret"), message);
+        String lower = message.toLowerCase(java.util.Locale.ROOT);
+        assertFalse(lower.contains("password"), message);
+        assertFalse(lower.contains("secret"), message);
         assertFalse(message.contains("jdbc:"), message);
         assertFalse(message.contains("token="), message);
-        assertTrue(message.equals(failure.getCause().getClass().getSimpleName()) || !message.isBlank());
+        assertFalse(message.contains("key="), message);
+        assertFalse(message.contains("pwd="), message);
+        assertTrue(!message.isBlank());
     }
 
     private static MinosApi.MinosApiException assertThrowsApiException(MinosApiSupport.ApiCall<?> call) {

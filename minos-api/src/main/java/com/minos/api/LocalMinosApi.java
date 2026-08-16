@@ -205,7 +205,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
         try {
             application.close();
         } catch (Exception exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS API shutdown failed", exception);
+            throw MinosApiSupport.publicFailure(ErrorCode.IO_FAILURE, "MINOS API shutdown failed", exception);
         }
     }
 
