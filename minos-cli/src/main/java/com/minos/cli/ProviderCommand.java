@@ -69,7 +69,7 @@ public final class ProviderCommand {
                 "stableIdentityBehavior: " + provider.stableIdentityBehavior(),
                 "provenanceBehavior: " + provider.provenanceBehavior(),
                 "runtimeState: " + provider.runtimeState(),
-                "runtimeDiagnostics: " + provider.runtimeDiagnostics());
+                "runtimeDiagnostics: " + CliCommandSupport.publicDiagnostics(provider.runtimeDiagnostics()));
     }
 
     private static Map<String, Object> map(ProviderPlatformService.ProviderView provider) {
@@ -90,7 +90,7 @@ public final class ProviderCommand {
         value.put("stableIdentityBehavior", provider.stableIdentityBehavior());
         value.put("provenanceBehavior", provider.provenanceBehavior());
         value.put("runtimeState", provider.runtimeState());
-        value.put("runtimeDiagnostics", provider.runtimeDiagnostics());
+        value.put("runtimeDiagnostics", CliCommandSupport.publicDiagnostics(provider.runtimeDiagnostics()));
         return value;
     }
 
