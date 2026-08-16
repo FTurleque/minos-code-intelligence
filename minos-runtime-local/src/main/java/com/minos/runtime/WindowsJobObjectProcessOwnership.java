@@ -1,11 +1,12 @@
 package com.minos.runtime;
 
+import com.minos.io.PrivateLocalStorage;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -100,15 +101,16 @@ final class WindowsJobObjectProcessOwnership {
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
         Path target = directory.resolve(LAUNCHER_NAME);
-        try (InputStream input = WindowsJobObjectProcessOwnership.class.getResourceAsStream(RESOURCE)) {
-            if (input == null) throw new IOException("embedded Windows Job Object launcher is missing: " + RESOURCE);
-            Path partial = Files.createTempFile(directory, ".windows-job-owner-", ".ps1");
-            try {
-                Files.copy(input, partial, StandardCopyOption.REPLACE_EXISTING);
-                Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
-            } finally {
-                Files.deleteIfExists(partial);
-            }
+        // Assembled from its template and the shared Win32 fragments, then published as one
+        // self-contained file: the script that executes still has a single hash and no include path.
+        String launcher = WindowsContainmentScript.assemble(LAUNCHER_NAME);
+        Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-job-owner-", ".ps1");
+        try {
+            Files.writeString(partial, launcher, StandardCharsets.UTF_8,
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(partial);
         }
         return target;
     }

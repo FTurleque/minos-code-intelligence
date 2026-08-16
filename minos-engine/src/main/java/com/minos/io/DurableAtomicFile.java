@@ -16,21 +16,25 @@ public final class DurableAtomicFile {
     private DurableAtomicFile() {
     }
 
-    /** Creates one directory hierarchy and durably publishes every newly created directory entry. */
+    /**
+     * Creates one directory hierarchy, owner-only, and durably publishes every newly created entry.
+     *
+     * <p>Every caller of this helper stores material derived from user code — snapshots, registry
+     * metadata, index state, fingerprints, hosted control-plane records — so the directory is
+     * created through {@link PrivateLocalStorage}: permissions are requested at creation rather
+     * than applied afterwards, a hierarchy left world-readable by an installation that predates the
+     * policy is hardened in place, and the result is verified before any caller writes into it.</p>
+     */
     public static void ensureDirectory(Path directory, String label) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
         String operation = requireLabel(label);
-        if (Files.isDirectory(target)) return;
+        boolean existed = Files.isDirectory(target);
         Path parent = target.getParent();
-        if (parent != null && !Files.isDirectory(parent)) {
+        if (!existed && parent != null && !Files.isDirectory(parent)) {
             ensureDirectory(parent, operation + " parent");
         }
-        try {
-            Files.createDirectory(target);
-        } catch (java.nio.file.FileAlreadyExistsException racedCreation) {
-            if (!Files.isDirectory(target)) throw racedCreation;
-            return;
-        }
+        PrivateLocalStorage.ensurePrivateDirectory(target);
+        if (existed) return;
         try {
             forceDirectory(parent);
         } catch (IOException failure) {

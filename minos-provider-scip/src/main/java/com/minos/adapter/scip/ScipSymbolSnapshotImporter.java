@@ -7,6 +7,7 @@ import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.CodeKnowledgeStore;
 import org.scip_code.scip.Index;
@@ -20,18 +21,10 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.AclEntry;
-import java.nio.file.attribute.AclEntryPermission;
-import java.nio.file.attribute.AclEntryType;
-import java.nio.file.attribute.AclFileAttributeView;
-import java.nio.file.attribute.PosixFileAttributeView;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.UserPrincipal;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -177,7 +170,7 @@ public final class ScipSymbolSnapshotImporter {
                 throw new IOException("SCIP import scratch file escapes its private directory");
             }
             try {
-                return Files.createFile(candidate);
+                return PrivateLocalStorage.createPrivateFile(candidate);
             } catch (FileAlreadyExistsException collision) {
                 // UUID collisions are not expected; CREATE_NEW semantics remain fail-closed.
             }
@@ -185,31 +178,16 @@ public final class ScipSymbolSnapshotImporter {
         throw new IOException("unable to allocate a unique SCIP import scratch file");
     }
 
+    /**
+     * A frozen SCIP artifact is a verbatim copy of the indexed code, so the scratch root follows the
+     * shared owner-only policy. It is re-validated on every allocation rather than only at
+     * construction: the directory must still be a real directory and must still be private.
+     */
     private void prepareScratchRoot() throws IOException {
-        Files.createDirectories(scratchRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(scratchRoot);
         if (Files.isSymbolicLink(scratchRoot)
                 || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("SCIP import scratch path must be a real directory");
-        }
-        PosixFileAttributeView posix = Files.getFileAttributeView(
-                scratchRoot, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        if (posix != null) {
-            Files.setPosixFilePermissions(scratchRoot, EnumSet.of(
-                    PosixFilePermission.OWNER_READ,
-                    PosixFilePermission.OWNER_WRITE,
-                    PosixFilePermission.OWNER_EXECUTE));
-            return;
-        }
-        AclFileAttributeView acl = Files.getFileAttributeView(
-                scratchRoot, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        if (acl != null) {
-            UserPrincipal owner = Files.getOwner(scratchRoot, LinkOption.NOFOLLOW_LINKS);
-            AclEntry ownerOnly = AclEntry.newBuilder()
-                    .setType(AclEntryType.ALLOW)
-                    .setPrincipal(owner)
-                    .setPermissions(EnumSet.allOf(AclEntryPermission.class))
-                    .build();
-            acl.setAcl(List.of(ownerOnly));
         }
     }
 

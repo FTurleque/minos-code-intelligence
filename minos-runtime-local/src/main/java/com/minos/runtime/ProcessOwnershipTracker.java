@@ -31,7 +31,7 @@ final class ProcessOwnershipTracker implements AutoCloseable {
     private static final long TRACKER_JOIN_MILLIS = 2_000L;
 
     private final Process process;
-    private final long hostPid = ProcessHandle.current().pid();
+    private final long hostPid = ProcessTreeTermination.hostPid();
     private final Object lifecycleLock = new Object();
     private final Object ownershipLock = new Object();
     private final Map<ProcessIdentity, OwnedProcess> owned = new LinkedHashMap<>();
@@ -159,10 +159,9 @@ final class ProcessOwnershipTracker implements AutoCloseable {
 
     private void destroyIfOwned(ProcessHandle handle, boolean forcibly) {
         // Defence in depth against corrupted bookkeeping, PID reuse and platform-specific tree
-        // enumeration anomalies: the host JVM is never a valid provider-owned process.
-        if (handle.pid() == hostPid) return;
-        if (forcibly) handle.destroyForcibly();
-        else handle.destroy();
+        // enumeration anomalies: the host JVM is never a valid provider-owned process. The check
+        // lives in the shared policy so this tracker and the process executor cannot diverge.
+        ProcessTreeTermination.destroyIfNotHost(handle, forcibly);
     }
 
     private void waitForOwnedToSettle(long maximumMillis, List<Throwable> failures) {

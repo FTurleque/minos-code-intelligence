@@ -1,0 +1,137 @@
+#minos-include:script-preamble
+public static class MinosJobObjectOwnerV1 {
+    private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    private const uint CREATE_SUSPENDED = 0x00000004;
+    private const uint CREATE_NO_WINDOW = 0x08000000;
+    private const uint STARTF_USESTDHANDLES = 0x00000100;
+    private const uint INFINITE = 0xffffffff;
+
+    private const uint JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800;
+    private const uint JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK = 0x00001000;
+    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+    private const int JobObjectExtendedLimitInformation = 9;
+#minos-include:startupinfo-struct
+    private struct PROCESS_INFORMATION {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public uint dwProcessId;
+        public uint dwThreadId;
+#minos-include:job-limit-structs
+#minos-include:createprocess-import
+        ref STARTUPINFO lpStartupInfo,
+#minos-include:kernel32-imports
+    private static extern bool IsProcessInJob(IntPtr processHandle, IntPtr jobHandle, out bool result);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateJobObject(IntPtr hJob, uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint ResumeThread(IntPtr hThread);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint WaitForSingleObject(IntPtr hHandle, uint milliseconds);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetExitCodeProcess(IntPtr hProcess, out uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    public static int Run(string[] command, string[] environment, string workingDirectory) {
+        if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
+        if (environment == null) throw new ArgumentNullException("environment");
+
+        IntPtr environmentBlock = IntPtr.Zero;
+        IntPtr job = IntPtr.Zero;
+        PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
+        try {
+            // The ownership authority exists before the provider process exists.
+            job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+            ConfigureAndVerifyJob(job);
+
+            STARTUPINFO startup = new STARTUPINFO();
+            startup.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO));
+            startup.dwFlags = STARTF_USESTDHANDLES;
+            startup.hStdInput = GetStdHandle(-10);
+            startup.hStdOutput = GetStdHandle(-11);
+            startup.hStdError = GetStdHandle(-12);
+
+            StringBuilder commandLine = new StringBuilder(BuildCommandLine(command));
+            environmentBlock = BuildEnvironmentBlock(environment);
+            uint flags = CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW;
+#minos-include:createprocess-call
+            // The child is still suspended here and therefore cannot have spawned anything.
+            if (!AssignProcessToJobObject(job, pi.hProcess)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            bool inJob;
+            if (!IsProcessInJob(pi.hProcess, job, out inJob)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            if (!inJob) throw new InvalidOperationException("provider is not a member of the MINOS Job Object");
+
+#minos-include:resume-and-verify
+                // Normal exit, failure, or wrapper teardown: descendants cannot outlive this handle.
+                TerminateJobObject(job, 1);
+            }
+            if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
+            if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
+            if (job != IntPtr.Zero) CloseHandle(job);
+            if (environmentBlock != IntPtr.Zero) Marshal.FreeHGlobal(environmentBlock);
+        }
+    }
+
+    private static void ConfigureAndVerifyJob(IntPtr job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        int size = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try {
+            Marshal.StructureToPtr(limits, buffer, false);
+            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)size)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            Marshal.StructureToPtr(new JOBOBJECT_EXTENDED_LIMIT_INFORMATION(), buffer, true);
+            if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)size, IntPtr.Zero)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION applied =
+                (JOBOBJECT_EXTENDED_LIMIT_INFORMATION)Marshal.PtrToStructure(
+                    buffer, typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+            uint flags = applied.BasicLimitInformation.LimitFlags;
+            if ((flags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) == 0) {
+                throw new InvalidOperationException("KILL_ON_JOB_CLOSE was not applied");
+            }
+            if ((flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK) != 0
+                    || (flags & JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK) != 0) {
+                throw new InvalidOperationException("MINOS ownership Job Object must not allow breakaway");
+            }
+        } finally {
+            Marshal.FreeHGlobal(buffer);
+#minos-include:job-configuration-verify
+#minos-include:command-line-builder
+            if (char.IsWhiteSpace(c) || c == '"') { quote = true; break; }
+        }
+        if (!quote) return value;
+        StringBuilder result = new StringBuilder();
+        result.Append('"');
+        int slashes = 0;
+        foreach (char c in value) {
+            if (c == '\\') { slashes++; continue; }
+#minos-include:command-line-quoting
+        if ($separator -lt 1) { throw "Invalid ownership plan line: $line" }
+#minos-include:plan-parsing
+            throw 'Invalid provider environment entry in ownership plan'
+        }
+        $result.Add($key + '=' + $value)
+    }
+    return [string[]]$result.ToArray()
+}
+
+$values = Read-Plan $Plan
+$command = Read-List $values 'command'
+$environment = Read-Environment $values
+$workingDirectory = Decode ([string]$values['working'])
+$exitCode = [MinosJobObjectOwnerV1]::Run($command, $environment, $workingDirectory)
+exit $exitCode

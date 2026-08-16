@@ -7,6 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from windows_launcher import assemble, is_assembled_launcher  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_MILESTONE_GATES = (
     "scripts/m21/check-s7-provider.py",
@@ -23,6 +26,9 @@ ACTIVE_MILESTONE_GATES = (
 
 def read(relative: str) -> str:
     path = ROOT / relative
+    if is_assembled_launcher(ROOT, relative):
+        # Assert against the launcher the runtime actually writes, not a template.
+        return assemble(ROOT, relative)
     if not path.is_file():
         raise RuntimeError(f"missing post-MNE evidence file: {relative}")
     return path.read_text(encoding="utf-8")

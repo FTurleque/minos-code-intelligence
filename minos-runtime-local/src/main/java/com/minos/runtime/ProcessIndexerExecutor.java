@@ -22,6 +22,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +33,9 @@ import java.util.concurrent.TimeUnit;
 
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
 public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
+
+    private static final Duration GRACEFUL_TERMINATION_WAIT = Duration.ofMillis(500);
+    private static final Duration FORCED_TERMINATION_WAIT = Duration.ofSeconds(10);
 
     private final String indexerId;
     private final Path runsRoot;
@@ -336,21 +340,14 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         return !Files.isSymbolicLink(file) && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS);
     }
 
-    private static void terminateDescendants(Process process) {
-        List<ProcessHandle> descendants = new ArrayList<>(process.descendants().toList());
-        descendants.reversed().forEach(handle -> {
-            if (handle.isAlive()) handle.destroyForcibly();
-        });
-    }
-
+    /**
+     * Fallback teardown for the provider tree. The contained job is destroyed by the caller first;
+     * this only sweeps the handles MINOS observed, under the shared policy that never targets the
+     * host JVM and never waits without a bound. The grace window is deliberately short because this
+     * also serves the write-quota breach path, where containment latency matters.
+     */
     private static void terminate(Process process) {
-        terminateDescendants(process);
-        if (process.isAlive()) process.destroyForcibly();
-        try {
-            process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-        }
+        ProcessTreeTermination.terminateTree(process, GRACEFUL_TERMINATION_WAIT, FORCED_TERMINATION_WAIT);
     }
 
     private static void writeMetadata(

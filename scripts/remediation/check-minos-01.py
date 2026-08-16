@@ -11,6 +11,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from windows_launcher import assemble, is_assembled_launcher  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 
 RUNTIME = "minos-runtime-local/src/main/java/com/minos/runtime"
@@ -58,6 +61,9 @@ ADVERSARIAL_TESTS = {
 
 def read(relative: str) -> str:
     path = ROOT / relative
+    if is_assembled_launcher(ROOT, relative):
+        # Assert against the launcher the runtime actually writes, not a template.
+        return assemble(ROOT, relative)
     if not path.is_file():
         raise RuntimeError(f"missing MINOS-01 evidence file: {relative}")
     return path.read_text(encoding="utf-8")
@@ -134,6 +140,8 @@ def main() -> int:
 
         # 4. Windows proves job membership, refuses breakaway and never leaves a survivor.
         require("windows-appcontainer-sandbox-v4.ps1", launcher,
+                # Fragment-borne: only present once the shared Win32 surface is assembled in.
+                "CreateProcessW", "AssignProcessToJobObject", "ResumeThread",
                 "CREATE_SUSPENDED", "IsProcessInJob", "TerminateJobObject", "QueryInformationJobObject",
                 "JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", "JOB_OBJECT_LIMIT_ACTIVE_PROCESS",
                 "JOB_OBJECT_LIMIT_JOB_MEMORY", "JOB_OBJECT_LIMIT_JOB_TIME",

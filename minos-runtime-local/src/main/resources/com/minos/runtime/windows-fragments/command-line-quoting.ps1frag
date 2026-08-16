@@ -1,0 +1,22 @@
+            if (c == '"') {
+                result.Append('\\', slashes * 2 + 1);
+                result.Append('"');
+                slashes = 0;
+                continue;
+            }
+            result.Append('\\', slashes);
+            slashes = 0;
+            result.Append(c);
+        }
+        result.Append('\\', slashes * 2);
+        result.Append('"');
+        return result.ToString();
+    }
+}
+'@
+
+function Read-Plan([string] $Path) {
+    $values = @{}
+    foreach ($line in [System.IO.File]::ReadAllLines($Path, [System.Text.Encoding]::UTF8)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $separator = $line.IndexOf('=')

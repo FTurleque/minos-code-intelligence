@@ -3,6 +3,7 @@ package com.minos.storage.postgresql;
 import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
@@ -61,7 +62,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         if (!scratchRoot.startsWith(home)) {
             throw new IOException("PostgreSQL snapshot scratch directory escapes MINOS home");
         }
-        Files.createDirectories(scratchRoot);
+        PrivateLocalStorage.ensurePrivateDirectory(scratchRoot);
         requireSafeScratchRoot();
     }
 
@@ -345,7 +346,7 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
                 throw new IOException("PostgreSQL snapshot scratch file escapes its private directory");
             }
             try {
-                return Files.createFile(candidate);
+                return PrivateLocalStorage.createPrivateFile(candidate);
             } catch (FileAlreadyExistsException collision) {
                 // UUID collisions are not expected, but CREATE_NEW semantics remain fail-closed.
             }
@@ -353,11 +354,17 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
         throw new IOException("unable to allocate a unique PostgreSQL snapshot scratch file");
     }
 
+    /**
+     * A decoded snapshot is as confidential as the code it describes, so the scratch root is
+     * re-validated on every allocation: it must still be a real owner-only directory, never a
+     * symlink swapped in after construction.
+     */
     private void requireSafeScratchRoot() throws IOException {
         if (Files.isSymbolicLink(scratchRoot)
                 || !Files.isDirectory(scratchRoot, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("PostgreSQL snapshot scratch path must be a real directory under MINOS home");
         }
+        PrivateLocalStorage.verifyPrivateDirectory(scratchRoot);
     }
 
     private CodeKnowledgeSnapshot decodeVerified(UUID projectId, Row row) throws IOException {

@@ -1,0 +1,13 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string] $Plan
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;

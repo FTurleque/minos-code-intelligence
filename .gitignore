@@ -34,3 +34,5 @@ glean-db/
 
 # Journaux
 *.log
+__pycache__/
+*.pyc

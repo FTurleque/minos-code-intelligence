@@ -6,12 +6,13 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
+import com.minos.io.PrivateLocalStorage;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -259,15 +260,16 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
         Files.createDirectories(directory);
         Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
-        try (InputStream input = WindowsAppContainerWorkerSandboxBackend.class.getResourceAsStream(RESOURCE)) {
-            if (input == null) throw new IOException("embedded Windows AppContainer launcher is missing: " + RESOURCE);
-            Path partial = Files.createTempFile(directory, ".windows-appcontainer-", ".ps1");
-            try {
-                Files.copy(input, partial, StandardCopyOption.REPLACE_EXISTING);
-                Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
-            } finally {
-                Files.deleteIfExists(partial);
-            }
+        // Assembled from its template and the shared Win32 fragments, then published as one
+        // self-contained file: the script that executes still has a single hash and no include path.
+        String launcher = WindowsContainmentScript.assemble(LAUNCHER_SCRIPT_NAME);
+        Path partial = PrivateLocalStorage.createPrivateTempFile(directory, ".windows-appcontainer-", ".ps1");
+        try {
+            Files.writeString(partial, launcher, StandardCharsets.UTF_8,
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(partial);
         }
         return target;
     }
