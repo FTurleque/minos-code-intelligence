@@ -28,7 +28,8 @@ public interface AutonomousIndexOperations {
             requireText(id, "id");
             requireText(version, "version");
             requireText(state, "state");
-            diagnostics = List.copyOf(Objects.requireNonNull(diagnostics, "diagnostics"));
+            diagnostics = CliCommandSupport.publicDiagnostics(
+                    List.copyOf(Objects.requireNonNull(diagnostics, "diagnostics")));
         }
 
         /** Compatibility constructor for historical baseline-required providers. */
@@ -75,6 +76,7 @@ public interface AutonomousIndexOperations {
         public IndexExecutionView {
             Objects.requireNonNull(plan, "plan");
             requireText(status, "status");
+            diagnostic = CliCommandSupport.publicDiagnostic(diagnostic);
         }
     }
 
