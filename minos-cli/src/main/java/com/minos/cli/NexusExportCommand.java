@@ -165,7 +165,7 @@ public final class NexusExportCommand {
 
     private static Map<String, Object> evidenceJson(NexusExportContract.ExportEvidence evidence) {
         Map<String, Object> json = new LinkedHashMap<>();
-        json.put("type", evidence.type().name());
+        json.put("type", evidence.type());
         json.put("description", evidence.description());
         json.put("weight", evidence.weight());
         return json;
