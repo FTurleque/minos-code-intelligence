@@ -282,7 +282,11 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             validateCheckout(repositoryRoot, request);
             ensureProjectRoot(repositoryRoot, request.projectSubdirectory());
             return Optional.of(new CacheEntry(repositoryRoot, metadata, Instant.parse(required(metadata, "materializedAt"))));
-        } catch (Exception ignored) {
+        } catch (Exception unusableEntry) {
+            // Any failure to prove a cached entry still matches the request -- unreadable metadata,
+            // a budget checkpoint breach, a checkout that no longer validates -- means this entry
+            // cannot be served. Reporting a miss re-materialises it, which is the fail-closed
+            // outcome; the alternative would be handing the caller an unverified working tree.
             return Optional.empty();
         }
     }
