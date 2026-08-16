@@ -31,6 +31,24 @@ class CliBoundaryHardeningTest {
     }
 
     @Test
+    void toolsStructuredProviderDiagnosticsAreRedactedInJson() throws Exception {
+        AutonomousIndexOperations operations = new StubAutonomousOperations() {
+            @Override
+            public List<ProviderView> providers() {
+                return List.of(sensitiveProvider());
+            }
+        };
+        StringBuilder output = new StringBuilder();
+
+        int exit = new ToolsCommand(operations)
+                .run(new String[]{"list", "--format", "json"}, output, new StringBuilder());
+
+        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertTrue(output.toString().contains("internal diagnostic redacted"), output.toString());
+        assertFalse(output.toString().contains("private-user"));
+    }
+
+    @Test
     void autonomousIndexDiagnosticIsSanitizedBeforeTextOutput() throws Exception {
         AutonomousIndexOperations operations = new StubAutonomousOperations() {
             @Override
@@ -49,7 +67,37 @@ class CliBoundaryHardeningTest {
         assertFalse(output.toString().contains("private-user"));
     }
 
+    @Test
+    void indexPlanStructuredProviderDiagnosticsAreRedactedInJson() throws Exception {
+        AutonomousIndexOperations operations = new StubAutonomousOperations() {
+            @Override
+            public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) {
+                return planWithProvider(sensitiveProvider());
+            }
+        };
+        StringBuilder output = new StringBuilder();
+
+        int exit = new IndexCommand(new StubProjectOperations(), operations)
+                .run(new String[]{"demo", "--dry-run", "--format", "json"}, output, new StringBuilder());
+
+        assertEquals(FindSymbolCommand.SUCCESS, exit);
+        assertTrue(output.toString().contains("internal diagnostic redacted"), output.toString());
+        assertFalse(output.toString().contains("private-user"));
+    }
+
+    private static AutonomousIndexOperations.ProviderView sensitiveProvider() {
+        return new AutonomousIndexOperations.ProviderView(
+                "scip-java", "1.0", "BLOCKED", null,
+                List.of("provider failed at /home/private-user/.minos/providers/token"), true);
+    }
+
     private static AutonomousIndexOperations.IndexPlanView plan() {
+        return planWithProvider(null);
+    }
+
+    private static AutonomousIndexOperations.IndexPlanView planWithProvider(
+            AutonomousIndexOperations.ProviderView provider
+    ) {
         return new AutonomousIndexOperations.IndexPlanView(
                 "00000000-0000-0000-0000-000000000001",
                 "demo",
@@ -57,7 +105,7 @@ class CliBoundaryHardeningTest {
                 List.of("JAVA"),
                 List.of("MAVEN"),
                 List.of("scip-java"),
-                List.of(),
+                provider == null ? List.of() : List.of(provider),
                 IndexingMode.FULL,
                 List.of("test"),
                 List.of(),
