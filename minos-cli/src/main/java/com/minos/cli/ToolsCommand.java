@@ -59,7 +59,7 @@ public final class ToolsCommand {
                 value.put("state", provider.state());
                 value.put("requiredByDefault", provider.requiredByDefault());
                 value.put("executable", provider.executable());
-                value.put("diagnostics", provider.diagnostics());
+                value.put("diagnostics", CliCommandSupport.publicDiagnostics(provider.diagnostics()));
                 values.add(value);
             }
             return CliJson.render(Map.of("providers", values));
@@ -71,7 +71,8 @@ public final class ToolsCommand {
             if (provider.executable() != null) {
                 lines.add("  executable: " + provider.executable());
             }
-            provider.diagnostics().forEach(diagnostic -> lines.add("  diagnostic: " + diagnostic));
+            CliCommandSupport.publicDiagnostics(provider.diagnostics())
+                    .forEach(diagnostic -> lines.add("  diagnostic: " + diagnostic));
         }
         return String.join("\n", lines);
     }
