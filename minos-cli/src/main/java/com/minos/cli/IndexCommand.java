@@ -100,8 +100,9 @@ public final class IndexCommand {
         lines.add("reasons: " + String.join(",", plan.reasons()));
         lines.add("changedFiles: " + plan.changedFiles().size());
         for (AutonomousIndexOperations.ProviderView runtime : plan.providerRuntimes()) {
+            List<String> diagnostics = CliCommandSupport.publicDiagnostics(runtime.diagnostics());
             lines.add("runtime[" + runtime.id() + "]: " + runtime.state()
-                    + (runtime.diagnostics().isEmpty() ? "" : " — " + String.join("; ", runtime.diagnostics())));
+                    + (diagnostics.isEmpty() ? "" : " — " + String.join("; ", diagnostics)));
         }
         return String.join("\n", lines);
     }
@@ -148,7 +149,7 @@ public final class IndexCommand {
             value.put("version", runtime.version());
             value.put("state", runtime.state());
             value.put("executable", runtime.executable());
-            value.put("diagnostics", runtime.diagnostics());
+            value.put("diagnostics", CliCommandSupport.publicDiagnostics(runtime.diagnostics()));
             runtimes.add(value);
         }
         map.put("providerRuntimes", runtimes);
