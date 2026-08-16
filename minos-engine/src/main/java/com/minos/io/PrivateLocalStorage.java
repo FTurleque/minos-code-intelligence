@@ -334,11 +334,16 @@ public final class PrivateLocalStorage {
 
     /**
      * What a given path's filesystem actually exposes for privacy enforcement. Production code
-     * always uses {@link #real()}; same-package tests may substitute a fake via
+     * always uses {@link #real()}; tests may substitute a fake via
      * {@link #useForTesting(CapabilityProbe)} to deterministically exercise the POSIX, ACL and
      * unsupported-filesystem branches without depending on the real OS/filesystem under CI.
+     *
+     * <p>Public so that tests in other modules that build on {@code PrivateLocalStorage} (e.g.
+     * {@code MinosApplication.open}) can inject the same deterministic fault without depending on
+     * minos-engine's test sources or duplicating this seam. It is a fault-injection hook, not part
+     * of the storage policy itself -- production code never references it.</p>
      */
-    interface CapabilityProbe {
+    public interface CapabilityProbe {
         boolean supportsPosix(Path target);
 
         AclFileAttributeView aclView(Path target);
@@ -362,12 +367,12 @@ public final class PrivateLocalStorage {
             ThreadLocal.withInitial(CapabilityProbe::real);
 
     /** Test-only: overrides filesystem capability probing for the calling thread. */
-    static void useForTesting(CapabilityProbe probe) {
+    public static void useForTesting(CapabilityProbe probe) {
         CAPABILITY_PROBE.set(Objects.requireNonNull(probe, "probe"));
     }
 
     /** Test-only: restores real filesystem capability probing for the calling thread. */
-    static void resetCapabilityProbeForTesting() {
+    public static void resetCapabilityProbeForTesting() {
         CAPABILITY_PROBE.remove();
     }
 }

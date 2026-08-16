@@ -177,13 +177,21 @@ public final class MinosApplication implements AutoCloseable {
         this.hostedControlPlaneService = Objects.requireNonNull(hostedControlPlaneService, "hostedControlPlaneService");
     }
 
-    /** Opens MINOS using one immutable settings snapshot for this home. */
+    /**
+     * Opens MINOS using one immutable settings snapshot for this home.
+     *
+     * <p>{@code home} is validated private -- rejecting a symlink, and failing closed if ownership
+     * cannot be enforced or verified -- before anything reads {@code config/minos.properties}, a
+     * configured secret file, or opens a storage backend. None of that may happen against a home
+     * MINOS has not yet confirmed it can protect.</p>
+     */
     public static MinosApplication open(Path home) throws IOException {
-        MinosRuntimeSettings settings = MinosRuntimeSettings.load(home);
+        Path validatedHome = PrivateLocalStorage.ensurePrivateDirectory(home);
+        MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
         StorageBackend backend = StorageBackends.open(StorageBackendConfiguration.resolve(settings));
         boolean buildInvoked = false;
         try {
-            Builder builder = builder(home).storageBackend(backend);
+            Builder builder = builder(validatedHome).storageBackend(backend);
             String configured = setting(settings, SEMANTIC_PROVIDER_PROPERTY, SEMANTIC_PROVIDER_ENV);
             String provider = configured == null || configured.isBlank() ? "disabled" : configured.trim().toLowerCase(Locale.ROOT);
             if ("local-hash".equals(provider)) {
@@ -352,6 +360,12 @@ public final class MinosApplication implements AutoCloseable {
             // -- each of them only hardens what it creates *inside* home. An installation that
             // predates this policy, or one created by something other than MINOS, must still end up
             // owner-only at the root, not just in the subdirectories MINOS happens to touch.
+            //
+            // open(Path) already validates home before this point -- before it even reads
+            // config/minos.properties -- so for that path this is a cheap, idempotent re-check, not
+            // the first line of defense. It stays here too because Builder is itself a direct,
+            // independent public entry point (see the M21SemanticScaleProbe script), and it must
+            // give the same guarantee on its own, not only when reached through open(Path).
             PrivateLocalStorage.ensurePrivateDirectory(home);
             StorageBackend selected = storageBackend;
             boolean explicitStore = projectRegistry != null || snapshotStore != null || indexStateStore != null
