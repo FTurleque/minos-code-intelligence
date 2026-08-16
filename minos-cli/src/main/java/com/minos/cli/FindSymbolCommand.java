@@ -13,9 +13,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Commande CLI minimale de recherche de symboles.
- */
+/** Commande CLI minimale de recherche de symboles. */
 public final class FindSymbolCommand {
 
     public static final String NAME = "find-symbol";
@@ -27,12 +25,7 @@ public final class FindSymbolCommand {
     static final int MAX_LIMIT = 1_000;
 
     private static final Set<String> SUPPORTED_OPTIONS = Set.of(
-            "--qualified-name",
-            "--kind",
-            "--module",
-            "--limit",
-            "--format"
-    );
+            "--qualified-name", "--kind", "--module", "--limit", "--format");
     private static final String USAGE = """
             Usage: minos find-symbol <project> <symbol> [options]
 
@@ -56,8 +49,7 @@ public final class FindSymbolCommand {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
 
-        if (arguments.length == 1
-                && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
             output.append(USAGE).append('\n');
             return SUCCESS;
         }
@@ -71,39 +63,23 @@ public final class FindSymbolCommand {
             return USAGE_ERROR;
         }
 
-        List<SymbolResult> results;
         try {
-            results = List.copyOf(symbolQuery.findSymbols(
-                    options.projectId(),
-                    options.criteria()
-            ));
+            List<SymbolResult> results = List.copyOf(symbolQuery.findSymbols(options.projectId(), options.criteria()));
+            output.append(SymbolResultRenderer.render(results, options.format())).append('\n');
+            return SUCCESS;
         } catch (Exception exception) {
             error.append("error: find-symbol failed: ")
-                    .append(failureMessage(exception))
+                    .append(CliCommandSupport.failureMessage(exception))
                     .append('\n');
             return EXECUTION_ERROR;
         }
-
-        output.append(SymbolResultRenderer.render(results, options.format())).append('\n');
-        return SUCCESS;
     }
 
     public static String usage() {
         return USAGE;
     }
 
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    private record Options(
-            String projectId,
-            SymbolSearchCriteria criteria,
-            SymbolOutputFormat format
-    ) {
+    private record Options(String projectId, SymbolSearchCriteria criteria, SymbolOutputFormat format) {
 
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
@@ -122,9 +98,7 @@ public final class FindSymbolCommand {
             for (int index = 2; index < arguments.length; index++) {
                 String option = arguments[index];
                 if (option == null) {
-                    throw new IllegalArgumentException(
-                            "argument at index " + index + " must not be null"
-                    );
+                    throw new IllegalArgumentException("argument at index " + index + " must not be null");
                 }
                 if (!option.startsWith("--")) {
                     throw new IllegalArgumentException("unexpected argument: " + option);
@@ -142,25 +116,17 @@ public final class FindSymbolCommand {
                     case "--kind" -> kind = parseKind(requireValue(value, option));
                     case "--module" -> moduleId = requireValue(value, option);
                     case "--limit" -> limit = CliCommandSupport.parseLimit(requireValue(value, option), MAX_LIMIT);
-                    case "--format" -> format = SymbolOutputFormat.parse(
-                            requireValue(value, option)
-                    );
+                    case "--format" -> format = SymbolOutputFormat.parse(requireValue(value, option));
                     default -> throw new IllegalStateException("unhandled option: " + option);
                 }
             }
 
-            return new Options(
-                    projectId,
-                    new SymbolSearchCriteria(symbol, qualifiedName, kind, moduleId, limit),
-                    format
-            );
+            return new Options(projectId,
+                    new SymbolSearchCriteria(symbol, qualifiedName, kind, moduleId, limit), format);
         }
 
         private static String requireOperand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
+            return CliCommandSupport.operand(value, name);
         }
 
         private static String optionValue(String[] arguments, int index, String option) {
@@ -184,6 +150,5 @@ public final class FindSymbolCommand {
                 throw new IllegalArgumentException("unsupported symbol kind: " + value, exception);
             }
         }
-
     }
 }

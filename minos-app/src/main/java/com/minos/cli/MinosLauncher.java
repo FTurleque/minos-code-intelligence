@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.runtime.MinosVersion;
 
 import java.io.IOException;
@@ -34,8 +35,9 @@ public final class MinosLauncher {
             } else {
                 Path home = resolveHome(System.getenv(), System.getProperties());
                 if (arguments.length == 1 && "mcp".equals(arguments[0])) {
-                    // M29: route before opening MinosApplication. A Docker MCP session must not
-                    // touch or create native registry/snapshot/vector-store state as a side effect.
+                    // Route before opening MinosApplication so Docker MCP does not touch native
+                    // business stores. McpBackendRouter still validates/hardens MINOS_HOME before
+                    // it reads backend.properties or performs any Docker side effect.
                     exitCode = new McpBackendRouter().run(home);
                 } else {
                     MinosApplication application = MinosApplication.open(home);
@@ -74,14 +76,11 @@ public final class MinosLauncher {
         return MinosCliRunner.resolveHome(environment, properties);
     }
 
-    private static boolean isHelp(String[] arguments) {
-        return arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]));
+    static String failureMessage(Exception exception) {
+        return PublicErrorMessages.sanitize(exception.getMessage(), exception.getClass().getSimpleName());
     }
 
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
+    private static boolean isHelp(String[] arguments) {
+        return arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]));
     }
 }

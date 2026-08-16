@@ -9,9 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Read-only CLI transport used by the optional NEXUS integration.
- */
+/** Read-only CLI transport used by the optional NEXUS integration. */
 public final class NexusExportCommand {
 
     public static final String NAME = "nexus-export";
@@ -43,8 +41,7 @@ public final class NexusExportCommand {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
 
-        if (arguments.length == 1
-                && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -63,7 +60,7 @@ public final class NexusExportCommand {
             snapshot = exportOperation.export(root);
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
-                    .append(failureMessage(exception))
+                    .append(CliCommandSupport.failureMessage(exception))
                     .append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -160,13 +157,6 @@ public final class NexusExportCommand {
         json.put("description", evidence.description());
         json.put("weight", evidence.weight());
         return json;
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     @FunctionalInterface

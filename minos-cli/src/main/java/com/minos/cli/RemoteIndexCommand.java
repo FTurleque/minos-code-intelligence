@@ -18,11 +18,9 @@ public final class RemoteIndexCommand {
 
     public static final String NAME = "remote";
     private static final Set<String> COMMON_OPTIONS = Set.of(
-            "--ref", "--commit", "--subdir", "--credential-env", "--format"
-    );
+            "--ref", "--commit", "--subdir", "--credential-env", "--format");
     private static final Set<String> INDEX_OPTIONS = Set.of(
-            "--name", "--provider", "--worker", "--worker-network"
-    );
+            "--name", "--provider", "--worker", "--worker-network");
     private static final String USAGE = """
             Usage:
               minos remote materialize <https-url> --ref <branch|tag> --commit <sha> [options]
@@ -57,23 +55,15 @@ public final class RemoteIndexCommand {
                         + CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception)),
                 options -> {
                     RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
-                            options.repository(),
-                            options.reference(),
-                            options.commit(),
-                            options.subdirectory(),
-                            options.credentialEnvironmentVariable()
-                    );
+                            options.repository(), options.reference(), options.commit(), options.subdirectory(),
+                            options.credentialEnvironmentVariable());
                     if (options.action() == Action.MATERIALIZE) {
                         output.append(renderMaterialization(operations.materialize(request), options.format()))
                                 .append('\n');
                     } else {
                         output.append(renderIndex(operations.index(
-                                request,
-                                options.displayName(),
-                                options.provider(),
-                                options.workerId(),
-                                options.workerNetworkPolicy()
-                        ), options.format())).append('\n');
+                                request, options.displayName(), options.provider(), options.workerId(),
+                                options.workerNetworkPolicy()), options.format())).append('\n');
                     }
                     return FindSymbolCommand.SUCCESS;
                 });
@@ -100,8 +90,7 @@ public final class RemoteIndexCommand {
                 "projectRoot: " + value.projectRoot(),
                 "cacheKey: " + value.cacheKey(),
                 "cacheHit: " + value.cacheHit(),
-                "materializedAt: " + value.materializedAt()
-        );
+                "materializedAt: " + value.materializedAt());
     }
 
     private static String renderIndex(RemoteIndexOperations.RemoteIndexView value, SymbolOutputFormat format) {
@@ -151,7 +140,7 @@ public final class RemoteIndexCommand {
         map.put("status", value.status());
         map.put("activeSnapshotId", value.activeSnapshotId());
         map.put("fingerprintPromoted", value.fingerprintPromoted());
-        map.put("diagnostic", value.diagnostic());
+        map.put("diagnostic", CliCommandSupport.publicDiagnostic(value.diagnostic()));
         map.put("providers", value.plan().providerIds());
         map.put("languages", value.plan().languages());
         map.put("buildSystems", value.plan().buildSystems());
@@ -181,18 +170,10 @@ public final class RemoteIndexCommand {
     }
 
     private enum Action {
-        MATERIALIZE("materialize"),
-        INDEX("index");
-
+        MATERIALIZE("materialize"), INDEX("index");
         private final String command;
-
-        Action(String command) {
-            this.command = command;
-        }
-
-        String command() {
-            return command;
-        }
+        Action(String command) { this.command = command; }
+        String command() { return command; }
     }
 
     private record Options(
@@ -229,9 +210,7 @@ public final class RemoteIndexCommand {
             WorkerNetworkPolicy workerNetwork = null;
             Set<String> seen = new HashSet<>();
             Set<String> supported = new HashSet<>(COMMON_OPTIONS);
-            if (action == Action.INDEX) {
-                supported.addAll(INDEX_OPTIONS);
-            }
+            if (action == Action.INDEX) supported.addAll(INDEX_OPTIONS);
             for (int index = 2; index < arguments.length; index++) {
                 String option = arguments[index];
                 if (!supported.contains(option)) {
@@ -258,12 +237,8 @@ public final class RemoteIndexCommand {
                     default -> throw new IllegalStateException("unhandled option: " + option);
                 }
             }
-            if (reference == null) {
-                throw new IllegalArgumentException("--ref is required");
-            }
-            if (commit == null) {
-                throw new IllegalArgumentException("--commit is required");
-            }
+            if (reference == null) throw new IllegalArgumentException("--ref is required");
+            if (commit == null) throw new IllegalArgumentException("--commit is required");
             if (action == Action.INDEX && (displayName == null || displayName.isBlank())) {
                 throw new IllegalArgumentException("--name is required for remote index");
             }
@@ -281,6 +256,5 @@ public final class RemoteIndexCommand {
                 default -> throw new IllegalArgumentException("worker network policy must be allow or deny");
             };
         }
-
     }
 }

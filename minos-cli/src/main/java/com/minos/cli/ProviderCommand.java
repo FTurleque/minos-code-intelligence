@@ -22,12 +22,7 @@ public final class ProviderCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        try {
-            Options options = Options.parse(arguments);
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             if (options.providerId() == null) {
                 List<ProviderPlatformService.ProviderView> providers = service.listProviders();
                 output.append(renderList(providers, options.format())).append('\n');
@@ -35,13 +30,7 @@ public final class ProviderCommand {
                 output.append(render(service.inspect(options.providerId()), options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        } catch (RuntimeException exception) {
-            error.append("error: providers failed: ").append(message(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() { return USAGE; }
@@ -103,12 +92,6 @@ public final class ProviderCommand {
         value.put("runtimeState", provider.runtimeState());
         value.put("runtimeDiagnostics", provider.runtimeDiagnostics());
         return value;
-    }
-
-    private static boolean isHelp(String argument) { return "--help".equals(argument) || "-h".equals(argument); }
-    private static String message(RuntimeException exception) {
-        String value = exception.getMessage();
-        return value == null || value.isBlank() ? exception.getClass().getSimpleName() : value;
     }
 
     private record Options(String providerId, SymbolOutputFormat format) {

@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.diagnostics.PublicErrorMessages;
+
 import java.io.IOException;
 
 /**
@@ -20,6 +22,8 @@ import java.io.IOException;
  * which is why the two phases are caught separately.</p>
  */
 final class CliCommandSupport {
+
+    private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
 
     private CliCommandSupport() {
     }
@@ -86,10 +90,6 @@ final class CliCommandSupport {
         return "--help".equals(value) || "-h".equals(value);
     }
 
-    /**
-     * Validates a positional operand. A value starting with {@code -} is rejected rather than
-     * consumed, so a forgotten operand cannot silently swallow the following option flag.
-     */
     static String operand(String value, String name) {
         if (value == null || value.isBlank() || value.startsWith("-")) {
             throw new IllegalArgumentException("invalid <" + name + "> operand");
@@ -97,7 +97,6 @@ final class CliCommandSupport {
         return value;
     }
 
-    /** Parses a {@code --limit} value, rejecting anything outside {@code 1..maximum}. */
     static int parseLimit(String value, int maximum) {
         try {
             int limit = Integer.parseInt(value);
@@ -110,21 +109,14 @@ final class CliCommandSupport {
         }
     }
 
-    /**
-     * Single-line operator-facing text for a failure: a blank message degrades to the exception type
-     * and embedded line breaks are flattened so one failure stays one diagnostic line.
-     */
     static String failureMessage(Throwable failure) {
-        String message = failure.getMessage();
-        return message == null || message.isBlank()
-                ? failure.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
+        return PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
     }
 
-    /**
-     * Peels runtime wrappers off a failure so the operator sees the originating diagnostic rather
-     * than the plumbing that re-threw it. Checked causes are preserved as-is.
-     */
+    static String publicDiagnostic(String diagnostic) {
+        return diagnostic == null ? null : PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC);
+    }
+
     static Throwable unwrapRuntime(Throwable failure) {
         Throwable effective = failure;
         while (effective instanceof RuntimeException && effective.getCause() != null) {

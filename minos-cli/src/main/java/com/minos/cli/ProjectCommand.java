@@ -12,9 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Commandes stables d'administration du registre projet.
- */
+/** Commandes stables d'administration du registre projet. */
 public final class ProjectCommand {
 
     public static final String NAME = "project";
@@ -244,19 +242,8 @@ public final class ProjectCommand {
 
     private static int executionError(String command, Exception exception, Appendable error) throws IOException {
         error.append("error: ").append(command).append(" failed: ")
-                .append(failureMessage(exception)).append('\n');
+                .append(CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception))).append('\n');
         return FindSymbolCommand.EXECUTION_ERROR;
-    }
-
-    private static String failureMessage(Exception exception) {
-        Throwable effective = exception;
-        if (exception instanceof RuntimeException && exception.getCause() != null) {
-            effective = exception.getCause();
-        }
-        String message = effective.getMessage();
-        return message == null || message.isBlank()
-                ? effective.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     private static String nullable(String value) {
@@ -323,5 +310,4 @@ public final class ProjectCommand {
             return fileName == null ? "project" : fileName.toString();
         }
     }
-
 }

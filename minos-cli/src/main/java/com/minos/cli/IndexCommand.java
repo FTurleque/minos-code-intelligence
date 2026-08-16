@@ -18,8 +18,7 @@ public final class IndexCommand {
     public static final String NAME = "index";
     private static final Set<String> SUPPORTED_OPTIONS = Set.of(
             "--provider", "--force-full", "--dry-run", "--format",
-            "--scip", "--provider-version", "--module", "--snapshot"
-    );
+            "--scip", "--provider-version", "--module", "--snapshot");
     private static final String USAGE = """
             Usage: minos index <project> [options]
 
@@ -58,10 +57,11 @@ public final class IndexCommand {
                 ProjectOperations.IndexImportResult imported = projectOperations.importScip(
                         options.project(), options.scipFile(), options.providerId(),
                         options.providerVersion(), options.moduleId(), options.snapshotId());
-                output.append(renderImport(imported, options.format())).append('\n');
+                String diagnostic = CliCommandSupport.publicDiagnostic(imported.diagnostic());
+                output.append(renderImport(imported, options.format(), diagnostic)).append('\n');
                 if (imported.commitStatus() == ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING) {
                     error.append("warning: snapshot committed but project metadata recovery is pending")
-                            .append(imported.diagnostic() == null ? "" : ": " + imported.diagnostic())
+                            .append(diagnostic == null ? "" : ": " + diagnostic)
                             .append('\n');
                 }
                 return FindSymbolCommand.SUCCESS;
@@ -110,13 +110,14 @@ public final class IndexCommand {
             AutonomousIndexOperations.IndexExecutionView execution,
             SymbolOutputFormat format
     ) {
+        String diagnostic = CliCommandSupport.publicDiagnostic(execution.diagnostic());
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("plan", planMap(execution.plan()));
         map.put("runId", execution.runId());
         map.put("status", execution.status());
         map.put("activeSnapshotId", execution.activeSnapshotId());
         map.put("fingerprintPromoted", execution.fingerprintPromoted());
-        map.put("diagnostic", execution.diagnostic());
+        map.put("diagnostic", diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -125,7 +126,7 @@ public final class IndexCommand {
                 + "status: " + execution.status() + "\n"
                 + "activeSnapshotId: " + nullable(execution.activeSnapshotId()) + "\n"
                 + "fingerprintPromoted: " + execution.fingerprintPromoted() + "\n"
-                + "diagnostic: " + nullable(execution.diagnostic());
+                + "diagnostic: " + nullable(diagnostic);
     }
 
     private static Map<String, Object> planMap(AutonomousIndexOperations.IndexPlanView plan) {
@@ -154,7 +155,11 @@ public final class IndexCommand {
         return map;
     }
 
-    private static String renderImport(ProjectOperations.IndexImportResult result, SymbolOutputFormat format) {
+    private static String renderImport(
+            ProjectOperations.IndexImportResult result,
+            SymbolOutputFormat format,
+            String diagnostic
+    ) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("projectId", result.projectId());
         map.put("snapshotId", result.snapshotId());
@@ -168,7 +173,7 @@ public final class IndexCommand {
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
         map.put("completedAt", result.completedAt());
         map.put("commitStatus", result.commitStatus().name());
-        map.put("diagnostic", result.diagnostic());
+        map.put("diagnostic", diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -185,7 +190,7 @@ public final class IndexCommand {
                 "unresolvedRelationships: " + result.unresolvedRelationshipCount(),
                 "completedAt: " + result.completedAt(),
                 "commitStatus: " + result.commitStatus().name(),
-                "diagnostic: " + nullable(result.diagnostic()));
+                "diagnostic: " + nullable(diagnostic));
     }
 
     private static String nullable(String value) {
@@ -260,6 +265,5 @@ public final class IndexCommand {
             }
             return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
         }
-
     }
 }

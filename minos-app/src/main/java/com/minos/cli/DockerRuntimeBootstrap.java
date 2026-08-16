@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosHome;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.registry.ProjectPathMapping;
 import com.minos.registry.ProjectPathMappingStore;
 
@@ -26,9 +27,7 @@ public final class DockerRuntimeBootstrap {
         try {
             exitCode = run(MinosHome.resolve(System.getenv(), System.getProperties()), arguments, System.out, System.err);
         } catch (Exception exception) {
-            String message = exception.getMessage();
-            System.err.println("error: Docker runtime bootstrap failed: "
-                    + (message == null || message.isBlank() ? exception.getClass().getSimpleName() : message));
+            System.err.println("error: Docker runtime bootstrap failed: " + failureMessage(exception));
             exitCode = FindSymbolCommand.EXECUTION_ERROR;
         }
         System.exit(exitCode);
@@ -58,9 +57,7 @@ public final class DockerRuntimeBootstrap {
         ProjectPathMappingStore store = new ProjectPathMappingStore(home);
         Optional<ProjectPathMapping> existing = store.loadOptional();
         if (existing.isPresent() && !existing.orElseThrow().equals(desired)) {
-            error.append("error: refusing to replace an existing project path mapping implicitly: ")
-                    .append(store.file().toString())
-                    .append('\n');
+            error.append("error: refusing to replace an existing project path mapping implicitly\n");
             return FindSymbolCommand.EXECUTION_ERROR;
         }
         if (existing.isEmpty()) {
@@ -74,5 +71,9 @@ public final class DockerRuntimeBootstrap {
             output.append("MINOS Docker project path mapping already matches requested roots.\n");
         }
         return FindSymbolCommand.SUCCESS;
+    }
+
+    static String failureMessage(Exception exception) {
+        return PublicErrorMessages.sanitize(exception.getMessage(), exception.getClass().getSimpleName());
     }
 }

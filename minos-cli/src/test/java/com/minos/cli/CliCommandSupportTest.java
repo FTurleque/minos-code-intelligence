@@ -4,16 +4,15 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Pins the contract every option-parsing command inherits from {@link CliCommandSupport}, so a
- * change to the shared skeleton cannot silently alter exit codes or operator diagnostics.
- */
+/** Pins the contract every option-parsing command inherits from {@link CliCommandSupport}. */
 class CliCommandSupportTest {
 
     private static final String USAGE = "Usage: minos widget <project>";
@@ -87,6 +86,39 @@ class CliCommandSupportTest {
             throw new IOException("first\r\nsecond");
         }));
         assertEquals("error: widget failed: first  second\n", error.toString());
+    }
+
+    @Test
+    void sensitiveExecutionMessagesAreRedactedAtTheSharedCliBoundary() throws Exception {
+        List<String> sensitive = List.of(
+                "cannot open /home/private-user/.minos/token",
+                "cannot open C:\\Users\\private-user\\.minos\\token",
+                "cannot open \\\\server\\private-share\\token",
+                "jdbc:postgresql://user:password@db.example/minos",
+                "token=super-secret",
+                "password=super-secret",
+                "{\"access_token\":\"super-secret\"}",
+                "api-key: super-secret",
+                "Authorization: Bearer super-secret");
+        for (String detail : sensitive) {
+            error.setLength(0);
+            assertEquals(FindSymbolCommand.EXECUTION_ERROR, run(new String[]{"alpha"}, options -> {
+                throw new IOException(detail);
+            }));
+            assertEquals("error: widget failed: IOException\n", error.toString(), detail);
+            assertFalse(error.toString().contains("super-secret"), detail);
+            assertFalse(error.toString().contains("private-user"), detail);
+        }
+    }
+
+    @Test
+    void resultDiagnosticsUseTheSameFailClosedPolicy() {
+        assertNull(CliCommandSupport.publicDiagnostic(null));
+        assertEquals("safe operational note", CliCommandSupport.publicDiagnostic("safe operational note"));
+        assertEquals("internal diagnostic redacted",
+                CliCommandSupport.publicDiagnostic("failed at /home/private-user/.minos/state"));
+        assertEquals("internal diagnostic redacted",
+                CliCommandSupport.publicDiagnostic("jdbc:postgresql://user:password@db/minos"));
     }
 
     @Test

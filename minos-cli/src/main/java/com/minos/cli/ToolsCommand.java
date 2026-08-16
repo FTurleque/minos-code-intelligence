@@ -29,16 +29,7 @@ public final class ToolsCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        if (arguments.length == 0) {
-            error.append("error: tools action is required\n").append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
-            Parsed parsed = Parsed.parse(arguments);
+        return CliCommandSupport.run(arguments, output, error, USAGE, Parsed::parse, NAME, parsed -> {
             if ("install".equals(parsed.action())) {
                 AutonomousIndexOperations.ProviderView installed = operations.installProvider(parsed.provider());
                 output.append(render(List.of(installed), parsed.format())).append('\n');
@@ -55,16 +46,7 @@ public final class ToolsCommand {
                 }
             }
             return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        } catch (Exception exception) {
-            String message = exception.getMessage();
-            error.append("error: tools failed: ")
-                    .append(message == null || message.isBlank() ? exception.getClass().getSimpleName() : message)
-                    .append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     static String render(List<AutonomousIndexOperations.ProviderView> providers, SymbolOutputFormat format) {
@@ -96,6 +78,9 @@ public final class ToolsCommand {
 
     private record Parsed(String action, String provider, boolean all, SymbolOutputFormat format) {
         private static Parsed parse(String[] arguments) {
+            if (arguments.length == 0) {
+                throw new IllegalArgumentException("tools action is required");
+            }
             String action = arguments[0];
             if (!List.of("list", "verify", "install").contains(action)) {
                 throw new IllegalArgumentException("unknown tools action: " + action);
