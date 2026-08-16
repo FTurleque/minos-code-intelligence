@@ -8,6 +8,7 @@ import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,9 +79,6 @@ class MinosApiSupportTest {
             throw original;
         });
 
-        // getCause() is part of the observable public surface -- a caller holds the actual
-        // exception object, not just its message. The original exception (and whatever it or its
-        // own cause chain contains) must not be reachable through it.
         assertNull(failure.getCause(), "the public exception must not expose the internal exception as its cause");
     }
 
@@ -111,9 +109,6 @@ class MinosApiSupportTest {
 
     @Test
     void aMinosApiExceptionConstructedDirectlyWithARawCauseIsStrippedByExecute() {
-        // Simulates a call site that built a MinosApiException itself instead of going through
-        // publicFailure(): execute()'s pass-through for an already-classified exception must not
-        // trust that it is actually safe just because it is already the right type.
         IOException rawCause = new IOException("cannot open C:\\Users\\secret-user\\.minos\\data");
         MinosApi.MinosApiException constructedDirectly =
                 new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, "shutdown failed", rawCause);
@@ -123,8 +118,76 @@ class MinosApiSupportTest {
         });
 
         assertEquals(MinosApi.ErrorCode.IO_FAILURE, failure.code());
+        assertNotSame(constructedDirectly, failure);
         assertNull(failure.getCause());
         assertNoSensitiveDetailIsReachable(failure, "C:\\Users\\secret-user\\.minos\\data");
+    }
+
+    @Test
+    void anAlreadyClassifiedApiExceptionWithSensitiveMessageIsRepublished() {
+        String detail = "authentication rejected: token=super-secret-value";
+        MinosApi.MinosApiException original =
+                new MinosApi.MinosApiException(MinosApi.ErrorCode.ACCESS_DENIED, detail);
+
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw original;
+        });
+
+        assertNotSame(original, failure, "an unsafe already-classified exception must not bypass sanitization");
+        assertEquals(MinosApi.ErrorCode.ACCESS_DENIED, failure.code());
+        assertNoSensitiveDetailIsReachable(failure, detail);
+    }
+
+    @Test
+    void anAlreadyClassifiedApiExceptionWithSuppressedFailureIsRepublished() {
+        String detail = "cleanup also failed: password=super-secret-value";
+        MinosApi.MinosApiException original =
+                new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, "shutdown failed");
+        original.addSuppressed(new IOException(detail));
+
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw original;
+        });
+
+        assertNotSame(original, failure, "suppressed exceptions are part of the public observable surface");
+        assertEquals(MinosApi.ErrorCode.IO_FAILURE, failure.code());
+        assertEquals("shutdown failed", failure.getMessage());
+        assertNoSensitiveDetailIsReachable(failure, detail);
+    }
+
+    @Test
+    void anAlreadyClassifiedSafeApiExceptionPassesThroughUnchanged() {
+        MinosApi.MinosApiException original =
+                new MinosApi.MinosApiException(MinosApi.ErrorCode.UNAVAILABLE, "team mode is disabled");
+        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
+            throw original;
+        });
+        assertSame(original, failure);
+    }
+
+    @Test
+    void internalDiagnosticSummaryNeverIncludesRawExceptionDetail() {
+        for (String detail : SENSITIVE_MESSAGES) {
+            IOException internal = new IOException(detail);
+            String summary = MinosApiSupport.diagnosticSummary(MinosApi.ErrorCode.IO_FAILURE, internal);
+
+            assertTrue(summary.contains("IO_FAILURE"), summary);
+            assertTrue(summary.contains(IOException.class.getName()), summary);
+            assertFalse(summary.contains(detail), summary);
+            assertFalse(summary.toLowerCase(java.util.Locale.ROOT).contains("super-secret-value"), summary);
+            assertFalse(summary.contains("jdbc:"), summary);
+        }
+    }
+
+    @Test
+    void explicitPublicFailureMessageIsStillSanitizedDefensively() {
+        String detail = "token=super-secret-value";
+        MinosApi.MinosApiException failure = MinosApiSupport.publicFailure(
+                MinosApi.ErrorCode.EXECUTION_FAILURE,
+                detail,
+                new IOException("internal failure"));
+
+        assertNoSensitiveDetailIsReachable(failure, detail);
     }
 
     @Test
@@ -153,16 +216,6 @@ class MinosApiSupportTest {
     }
 
     @Test
-    void anAlreadyClassifiedApiExceptionWithNoCausePassesThroughUnchanged() {
-        MinosApi.MinosApiException original =
-                new MinosApi.MinosApiException(MinosApi.ErrorCode.UNAVAILABLE, "team mode is disabled");
-        MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
-            throw original;
-        });
-        assertSame(original, failure);
-    }
-
-    @Test
     void blankMessageFallsBackToTheExceptionTypeName() {
         MinosApi.MinosApiException failure = assertThrowsApiException(() -> {
             throw new IOException();
@@ -170,11 +223,6 @@ class MinosApiSupportTest {
         assertEquals("IOException", failure.getMessage());
     }
 
-    /**
-     * Checks every path a public caller could use to recover {@code originalDetail} from the
-     * exception object it holds: the message, the cause chain (should not exist at all), and
-     * suppressed exceptions.
-     */
     private static void assertNoSensitiveDetailIsReachable(MinosApi.MinosApiException failure, String originalDetail) {
         assertNull(failure.getCause(), "public exception must carry no cause at all");
         assertEquals(0, failure.getSuppressed().length, "public exception must carry no suppressed exceptions");
