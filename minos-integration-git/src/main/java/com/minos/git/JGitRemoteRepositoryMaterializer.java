@@ -94,8 +94,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         this.gitClient = Objects.requireNonNull(gitClient, "gitClient");
         this.secretResolver = Objects.requireNonNull(secretResolver, "secretResolver");
         this.clock = Objects.requireNonNull(clock, "clock");
-        // A cache entry is a full clone of a possibly private repository, so the whole remote
-        // cache tree is owner-only and an installation predating this policy is hardened here.
         PrivateLocalStorage.ensurePrivateDirectory(remoteRoot);
         PrivateLocalStorage.ensurePrivateDirectory(cacheRoot);
         PrivateLocalStorage.ensurePrivateDirectory(locksRoot);
@@ -283,10 +281,6 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             ensureProjectRoot(repositoryRoot, request.projectSubdirectory());
             return Optional.of(new CacheEntry(repositoryRoot, metadata, Instant.parse(required(metadata, "materializedAt"))));
         } catch (Exception unusableEntry) {
-            // Any failure to prove a cached entry still matches the request -- unreadable metadata,
-            // a budget checkpoint breach, a checkout that no longer validates -- means this entry
-            // cannot be served. Reporting a miss re-materialises it, which is the fail-closed
-            // outcome; the alternative would be handing the caller an unverified working tree.
             return Optional.empty();
         }
     }
@@ -508,6 +502,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     static final class CloneBudget {
+        private static final String TIMEOUT_MESSAGE = "remote repository clone exceeds the configured time limit";
+
         private final Path destination;
         private final long maxBytes;
         private final long maxFiles;
@@ -571,6 +567,50 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             return new TreeMetrics(bytes[0], files[0], directories[0], entries[0]);
         }
 
+        int transportTimeoutSeconds() {
+            long seconds = TimeUnit.NANOSECONDS.toSeconds(timeoutNanos);
+            if (TimeUnit.SECONDS.toNanos(seconds) < timeoutNanos) seconds++;
+            return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, seconds));
+        }
+
+        int remainingTimeoutMillis() throws IOException {
+            long remainingNanos = remainingNanos();
+            if (remainingNanos <= 0L) throw timeoutFailure();
+            long millis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
+            if (TimeUnit.MILLISECONDS.toNanos(millis) < remainingNanos) millis++;
+            return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, millis));
+        }
+
+        int clampTimeoutMillis(int configuredMillis) {
+            int remaining;
+            try {
+                remaining = remainingTimeoutMillis();
+            } catch (IOException timeout) {
+                throw new CloneDeadlineExceededException(timeout);
+            }
+            return configuredMillis <= 0 ? remaining : Math.min(configuredMillis, remaining);
+        }
+
+        void enforceTimeoutUnchecked() {
+            try {
+                enforceTimeout();
+            } catch (IOException timeout) {
+                throw new CloneDeadlineExceededException(timeout);
+            }
+        }
+
+        void enforceTimeout() throws IOException {
+            if (remainingNanos() <= 0L) throw timeoutFailure();
+        }
+
+        private long remainingNanos() {
+            return timeoutNanos - (System.nanoTime() - startedNanos);
+        }
+
+        private IOException timeoutFailure() {
+            return new IOException(TIMEOUT_MESSAGE);
+        }
+
         private long increment(long value, String counter) throws IOException {
             try {
                 return Math.addExact(value, 1L);
@@ -590,11 +630,11 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
                 throw new IOException("remote repository exceeds the configured clone traversal entry limit");
             }
         }
+    }
 
-        private void enforceTimeout() throws IOException {
-            if (System.nanoTime() - startedNanos > timeoutNanos) {
-                throw new IOException("remote repository clone exceeds the configured time limit");
-            }
+    private static final class CloneDeadlineExceededException extends RuntimeException {
+        private CloneDeadlineExceededException(IOException cause) {
+            super(cause.getMessage(), cause);
         }
     }
 
@@ -611,6 +651,8 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
                     .setCloneAllBranches(false)
                     .setCloneSubmodules(false)
                     .setDepth(1)
+                    .setTimeout(budget.transportTimeoutSeconds())
+                    .setTransportConfigCallback(transport -> JGitCloneDeadline.configure(transport, budget))
                     .setProgressMonitor(monitor);
             UsernamePasswordCredentialsProvider credentials = null;
             if (secret != null) {
@@ -626,6 +668,10 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
             } catch (Exception exception) {
                 IOException budgetFailure = monitor.failure();
                 if (budgetFailure != null) throw budgetFailure;
+                // A deadline exception raised through the HTTP proxy may be wrapped by JGit.
+                // Re-checking the monotonic absolute budget maps every such failure to the stable
+                // timeout contract rather than leaking transport-specific detail.
+                budget.enforceTimeout();
                 throw exception;
             } finally {
                 if (credentials != null) credentials.clear();
