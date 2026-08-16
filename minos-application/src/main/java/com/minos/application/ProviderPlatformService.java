@@ -1,6 +1,7 @@
 package com.minos.application;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -14,6 +15,8 @@ import java.util.stream.Collectors;
 
 /** Shared read-only provider/discovery platform view for CLI, API and MCP. */
 public final class ProviderPlatformService {
+    private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
+
     private final List<IndexerProvider> providers;
     private final ProviderRuntimeManager runtimes;
     private final ProviderConformanceKit conformanceKit = new ProviderConformanceKit();
@@ -69,8 +72,14 @@ public final class ProviderPlatformService {
                 result.stableIdentityBehavior(),
                 result.provenanceBehavior(),
                 status == null ? "UNMANAGED" : status.state().name(),
-                status == null ? List.of("no runtime manager registered") : status.diagnostics()
+                status == null ? List.of("no runtime manager registered") : publicDiagnostics(status.diagnostics())
         );
+    }
+
+    static List<String> publicDiagnostics(List<String> diagnostics) {
+        return List.copyOf(Objects.requireNonNull(diagnostics, "diagnostics")).stream()
+                .map(value -> PublicErrorMessages.sanitize(value, REDACTED_DIAGNOSTIC))
+                .toList();
     }
 
     public record ProviderView(
