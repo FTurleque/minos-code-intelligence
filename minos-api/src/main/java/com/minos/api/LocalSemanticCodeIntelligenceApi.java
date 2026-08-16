@@ -7,7 +7,6 @@ import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 
-import java.io.IOException;
 import java.util.Objects;
 
 /** Local M20 implementation backed by the shared long-lived MinosApplication. */
@@ -110,20 +109,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
         return new RankingSignalDto(value.type(), value.score(), value.nature().name());
     }
 
-    private static <T> T execute(ThrowingSupplier<T> action) throws MinosApi.MinosApiException {
-        try {
-            return action.get();
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.INVALID_REQUEST, exception.getMessage(), exception);
-        } catch (IOException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, exception.getMessage(), exception);
-        } catch (RuntimeException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.EXECUTION_FAILURE, exception.getMessage(), exception);
-        }
-    }
-
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws IOException;
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 }

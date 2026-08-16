@@ -29,40 +29,25 @@ public final class LocalProviderPlatformApi implements ProviderPlatformApi, Auto
 
     @Override
     public List<ProviderDto> listProviders() throws MinosApi.MinosApiException {
-        try {
-            return service.listProviders().stream().map(LocalProviderPlatformApi::dto).toList();
-        } catch (RuntimeException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.EXECUTION_FAILURE, exception.getMessage(), exception);
-        }
+        return MinosApiSupport.execute(() -> service.listProviders().stream().map(LocalProviderPlatformApi::dto).toList());
     }
 
     @Override
     public ProviderDto getProvider(String providerId) throws MinosApi.MinosApiException {
-        try {
-            return dto(service.inspect(providerId));
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.INVALID_REQUEST, exception.getMessage(), exception);
-        }
+        return MinosApiSupport.execute(() -> dto(service.inspect(providerId)));
     }
 
     @Override
     public void close() throws MinosApi.MinosApiException {
         if (!ownsApplication) return;
-        try {
+        MinosApiSupport.execute(() -> {
             application.close();
-        } catch (Exception exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE,
-                    "unable to close MINOS provider platform", exception);
-        }
+            return null;
+        });
     }
 
     private static MinosApplication openApplication(Path home) throws MinosApi.MinosApiException {
-        try {
-            return MinosApplication.open(Objects.requireNonNull(home, "home"));
-        } catch (Exception exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE,
-                    "unable to open MINOS provider platform", exception);
-        }
+        return MinosApiSupport.openApplication(home, "unable to open MINOS provider platform");
     }
 
     private static ProviderDto dto(ProviderPlatformService.ProviderView value) {

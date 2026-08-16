@@ -11,7 +11,6 @@ import com.minos.hosted.HostedRole;
 import com.minos.hosted.HostedTenantState;
 import com.minos.hosted.SharedWorkspace;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -141,18 +140,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
         return new RetentionPlanDto(value.tenantId(), value.evaluatedAt().toString(), value.auditEventsToRemove(),
                 value.archivedWorkspacesToRemove());
     }
-    private static <T> T execute(Call<T> call) throws MinosApi.MinosApiException {
-        try { return call.run(); }
-        catch (SecurityException exception) { throw failure(MinosApi.ErrorCode.ACCESS_DENIED, exception); }
-        catch (IllegalArgumentException exception) { throw failure(MinosApi.ErrorCode.INVALID_REQUEST, exception); }
-        catch (IllegalStateException exception) { throw failure(MinosApi.ErrorCode.UNAVAILABLE, exception); }
-        catch (IOException exception) { throw failure(MinosApi.ErrorCode.IO_FAILURE, exception); }
-        catch (Exception exception) { throw failure(MinosApi.ErrorCode.EXECUTION_FAILURE, exception); }
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(call);
     }
-    private static MinosApi.MinosApiException failure(MinosApi.ErrorCode code, Exception exception) {
-        String message = exception.getMessage();
-        return new MinosApi.MinosApiException(code, message == null || message.isBlank()
-                ? exception.getClass().getSimpleName() : message.replace('\r', ' ').replace('\n', ' '), exception);
-    }
-    @FunctionalInterface private interface Call<T> { T run() throws Exception; }
 }

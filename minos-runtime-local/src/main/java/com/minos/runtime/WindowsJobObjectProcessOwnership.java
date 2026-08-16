@@ -18,6 +18,9 @@ import java.util.Optional;
 /** Ownership-only Windows launcher. It does not impose AppContainer ACL/network restrictions. */
 final class WindowsJobObjectProcessOwnership {
 
+    private static final System.Logger LOGGER =
+            System.getLogger(WindowsJobObjectProcessOwnership.class.getName());
+
     private static final String LAUNCHER_NAME = "windows-job-object-owner-v1.ps1";
     private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_NAME;
 
@@ -40,6 +43,12 @@ final class WindowsJobObjectProcessOwnership {
             return Optional.of(new WindowsJobObjectProcessOwnership(
                     powershell.orElseThrow(), installLauncher(minosHome.toAbsolutePath().normalize())));
         } catch (IOException failure) {
+            // Not just "PowerShell missing": this can also mean the launcher could not be installed
+            // as owner-only (e.g. the private-storage filesystem could not enforce or verify
+            // ownership). The caller reports this as an ordinary "capability unavailable" diagnostic,
+            // so the real cause must still be observable here rather than disappearing silently.
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Windows Job Object process ownership is unavailable", failure);
             return Optional.empty();
         }
     }

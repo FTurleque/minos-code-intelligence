@@ -43,6 +43,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
     private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_SCRIPT_NAME;
 
+    private static final System.Logger LOGGER =
+            System.getLogger(WindowsAppContainerWorkerSandboxBackend.class.getName());
+
     private final Path minosHome;
     private final Path powershell;
     private final Path launcher;
@@ -63,6 +66,14 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         try {
             return Optional.of(new WindowsAppContainerWorkerSandboxBackend(minosHome, shell.orElseThrow()));
         } catch (IOException | IllegalArgumentException exception) {
+            // Not just "PowerShell missing": this can also mean the launcher could not be installed
+            // as owner-only (e.g. the private-storage filesystem could not enforce or verify
+            // ownership) or another environmental failure. WorkerSandboxBackends.strongestAvailable()
+            // silently falls back to the weaker native-ephemeral tier for untrusted provider code
+            // when this returns empty, so the degradation must be observable, not silent.
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Windows AppContainer worker sandbox is unavailable, falling back to a weaker "
+                            + "sandbox tier", exception);
             return Optional.empty();
         }
     }

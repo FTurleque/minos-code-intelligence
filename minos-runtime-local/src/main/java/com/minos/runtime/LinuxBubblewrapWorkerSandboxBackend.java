@@ -295,6 +295,13 @@ public final class LinuxBubblewrapWorkerSandboxBackend implements WorkerSandboxB
         try {
             addRuntimeReadOnlyBinds(command, List.of("/bin/true"), WorkerNetworkPolicy.DENY, minosHome);
         } catch (IOException exception) {
+            // Every other failure branch in this method logs before declining to qualify; this one
+            // must too -- discover() feeds WorkerSandboxBackends.strongestAvailable(), which falls
+            // back to a materially weaker sandbox tier for untrusted provider code when this
+            // returns false, and that degradation must be observable, not silent.
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Linux sandbox capability probe could not resolve a required bind path: "
+                            + exception.getMessage());
             return false;
         }
         command.add("--dev");

@@ -2,7 +2,6 @@ package com.minos.io;
 
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -37,15 +36,22 @@ import java.util.Set;
  * </ul>
  *
  * <h2>Guarantees</h2>
- * <p>Permissions are requested <em>at creation</em> via {@link FileAttribute}, so there is no window
- * between a world-readable create and a later {@code chmod}. Locations that already exist — an
- * installation created before this policy, or by an older MINOS — are hardened in place and then
- * re-read: enforcement is verified, never assumed. A path that is a symbolic link, or whose type is
- * not the expected one, is rejected rather than followed.</p>
+ * <p>Permissions are requested <em>at creation</em> via {@link FileAttribute} where the platform
+ * allows it (POSIX), so there is no window between a world-readable create and a later
+ * {@code chmod}. Every directory a call creates along the way — not just the leaf — is hardened and
+ * re-verified before use, which matters on ACL platforms where attribute-at-creation is not
+ * available. Locations that already exist — an installation created before this policy, or by an
+ * older MINOS — are hardened in place and then re-read: enforcement is verified, never assumed. A
+ * path that is a symbolic link, or whose type is not the expected one, is rejected rather than
+ * followed.</p>
  *
- * <p>Where the filesystem exposes neither a POSIX nor an ACL view there is nothing to enforce and
- * nothing is silently claimed: {@link #privacyOf(Path)} reports {@link Privacy#UNSUPPORTED} so the
- * condition surfaces in diagnostics instead of being mistaken for a protected store.</p>
+ * <p>Where the filesystem exposes neither a POSIX nor an ACL view there is nothing to enforce, so
+ * every enforcement entry point ({@link #ensurePrivateDirectory}, {@link #createPrivateFile},
+ * {@link #createPrivateTempFile}, {@link #hardenExistingFile}, {@link #verifyPrivateDirectory},
+ * {@link #verifyPrivateFile}) fails closed with an {@link IOException} rather than treating the
+ * location as private. Only the read-only {@link #privacyOf(Path)} diagnostic reports
+ * {@link Privacy#UNSUPPORTED} without throwing, so the condition can surface in tooling such as
+ * {@code minos doctor}.</p>
  */
 public final class PrivateLocalStorage {
 
@@ -75,7 +81,11 @@ public final class PrivateLocalStorage {
         ENFORCED,
         /** The location exists but grants access beyond its owner. */
         EXPOSED,
-        /** The filesystem exposes no permission model, so privacy cannot be enforced or denied. */
+        /**
+         * The filesystem exposes no permission model, so privacy cannot be enforced or denied. This
+         * is a read-only diagnostic value from {@link #privacyOf(Path)}: every enforcement entry
+         * point fails closed with an {@link IOException} instead of ever returning this as success.
+         */
         UNSUPPORTED,
         /** The location does not exist. */
         ABSENT
@@ -86,7 +96,8 @@ public final class PrivateLocalStorage {
      * already exists, then verifies the result.
      *
      * @return the normalised absolute directory
-     * @throws IOException if the path is a symlink, is not a directory, or cannot be made private
+     * @throws IOException if the path is a symlink, is not a directory, or cannot be made private —
+     *         including when the filesystem cannot enforce or verify ownership at all
      */
     public static Path ensurePrivateDirectory(Path directory) throws IOException {
         Path target = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
@@ -104,9 +115,8 @@ public final class PrivateLocalStorage {
         Path target = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent != null) ensurePrivateDirectory(parent);
-        Files.createFile(target, privateFileAttributes());
-        hardenFile(target);
-        verifyPrivateFile(target);
+        Files.createFile(target, privateFileAttributes(target));
+        hardenOrDeleteAndThrow(target);
         return target;
     }
 
@@ -116,10 +126,27 @@ public final class PrivateLocalStorage {
      */
     public static Path createPrivateTempFile(Path directory, String prefix, String suffix) throws IOException {
         Path parent = ensurePrivateDirectory(directory);
-        Path temporary = Files.createTempFile(parent, prefix, suffix, privateFileAttributes());
-        hardenFile(temporary);
-        verifyPrivateFile(temporary);
+        Path temporary = Files.createTempFile(parent, prefix, suffix, privateFileAttributes(parent));
+        hardenOrDeleteAndThrow(temporary);
         return temporary;
+    }
+
+    /**
+     * Hardens and verifies a just-created file, deleting it before propagating the failure so a
+     * file this call created never lingers in a state that is not actually private.
+     */
+    private static void hardenOrDeleteAndThrow(Path target) throws IOException {
+        try {
+            hardenFile(target);
+            verifyPrivateFile(target);
+        } catch (IOException failure) {
+            try {
+                Files.deleteIfExists(target);
+            } catch (IOException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     /** Hardens an already-written file in place, e.g. one produced before this policy existed. */
@@ -144,13 +171,15 @@ public final class PrivateLocalStorage {
 
     /**
      * Reports the enforcement actually in place, without changing anything. Intended for
-     * diagnostics; it never throws for an exposed location, it describes it.
+     * diagnostics; it never throws for an exposed or unsupported location, it describes it. Callers
+     * that need a safety guarantee must use one of the enforcement entry points above instead, which
+     * fail closed rather than returning {@link Privacy#UNSUPPORTED} or {@link Privacy#EXPOSED}.
      */
     public static Privacy privacyOf(Path path) throws IOException {
         Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return Privacy.ABSENT;
         if (Files.isSymbolicLink(target)) return Privacy.EXPOSED;
-        if (supportsPosix()) {
+        if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
             return actual.stream().anyMatch(FORBIDDEN_PERMISSIONS::contains) ? Privacy.EXPOSED : Privacy.ENFORCED;
         }
@@ -163,10 +192,33 @@ public final class PrivateLocalStorage {
         if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) return;
         Path parent = target.getParent();
         if (parent != null) createPrivateDirectories(parent);
+        boolean created = true;
         try {
-            Files.createDirectory(target, privateDirectoryAttributes());
+            Files.createDirectory(target, privateDirectoryAttributes(target));
         } catch (FileAlreadyExistsException concurrentlyCreated) {
-            // Another writer won the race; hardening and verification below still apply to it.
+            // Another writer won the race; hardening and verification below still apply to it, but
+            // it is theirs, not ours -- it must not be deleted if hardening fails below.
+            created = false;
+        }
+        try {
+            // POSIX gets owner-only permissions atomically at creation above; ACL platforms cannot
+            // express an owner-only ACL as a creation-time FileAttribute, so every directory this
+            // call creates -- not just the leaf the caller asked for -- must be hardened explicitly
+            // here. Otherwise an intermediate directory would be left with whatever ACL it inherited.
+            hardenDirectory(target);
+            verifyPrivateDirectory(target);
+        } catch (IOException failure) {
+            if (created) deleteEmptyDirectoryBestEffort(target);
+            throw failure;
+        }
+    }
+
+    /** Best-effort cleanup of a directory this call itself just created and knows to be empty. */
+    private static void deleteEmptyDirectoryBestEffort(Path target) {
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException cleanupFailure) {
+            // Best-effort only: the real failure already propagates to the caller.
         }
     }
 
@@ -182,13 +234,13 @@ public final class PrivateLocalStorage {
         if (Files.isSymbolicLink(target)) {
             throw new IOException("private storage path must not be a symbolic link: " + target);
         }
-        if (supportsPosix()) {
+        if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
             if (!actual.equals(permissions)) Files.setPosixFilePermissions(target, permissions);
             return;
         }
         AclFileAttributeView acl = aclView(target);
-        if (acl == null) return;
+        if (acl == null) throw unsupportedFilesystem(target);
         UserPrincipal owner = Files.getOwner(target, LinkOption.NOFOLLOW_LINKS);
         acl.setAcl(List.of(AclEntry.newBuilder()
                 .setType(AclEntryType.ALLOW)
@@ -198,7 +250,7 @@ public final class PrivateLocalStorage {
     }
 
     private static void verifyPrivacy(Path target) throws IOException {
-        if (supportsPosix()) {
+        if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
             Set<PosixFilePermission> leaked = EnumSet.noneOf(PosixFilePermission.class);
             for (PosixFilePermission permission : actual) {
@@ -210,12 +262,23 @@ public final class PrivateLocalStorage {
             return;
         }
         AclFileAttributeView acl = aclView(target);
-        if (acl == null) return;
+        if (acl == null) throw unsupportedFilesystem(target);
         AclEntry foreign = foreignAclEntry(acl);
         if (foreign != null) {
             throw new IOException("private storage grants access to another principal: "
                     + target + " grants " + foreign.principal().getName());
         }
+    }
+
+    /**
+     * Fails closed: the filesystem exposes neither a POSIX nor an ACL view, so ownership and
+     * confidentiality cannot be enforced or verified for {@code target}. Enforcement entry points
+     * must never treat this as success -- only the read-only {@link #privacyOf(Path)} diagnostic is
+     * allowed to report {@link Privacy#UNSUPPORTED} without throwing.
+     */
+    private static IOException unsupportedFilesystem(Path target) {
+        return new IOException("cannot enforce private storage: filesystem supports neither POSIX "
+                + "permissions nor ACLs for " + target);
     }
 
     /** The first entry granting access to a principal other than the owner, or {@code null}. */
@@ -246,24 +309,98 @@ public final class PrivateLocalStorage {
         }
     }
 
-    private static FileAttribute<?>[] privateDirectoryAttributes() {
-        return posixAttributes(DIRECTORY_PERMISSIONS);
+    private static FileAttribute<?>[] privateDirectoryAttributes(Path target) {
+        return posixAttributes(target, DIRECTORY_PERMISSIONS);
     }
 
-    private static FileAttribute<?>[] privateFileAttributes() {
-        return posixAttributes(FILE_PERMISSIONS);
+    private static FileAttribute<?>[] privateFileAttributes(Path target) {
+        return posixAttributes(target, FILE_PERMISSIONS);
     }
 
-    private static FileAttribute<?>[] posixAttributes(Set<PosixFilePermission> permissions) {
-        if (!supportsPosix()) return new FileAttribute<?>[0];
+    private static FileAttribute<?>[] posixAttributes(Path target, Set<PosixFilePermission> permissions) {
+        if (!supportsPosix(target)) return new FileAttribute<?>[0];
         return new FileAttribute<?>[]{PosixFilePermissions.asFileAttribute(permissions)};
     }
 
     private static AclFileAttributeView aclView(Path target) {
-        return Files.getFileAttributeView(target, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        return CAPABILITY_PROBE.get().aclView(target);
     }
 
-    private static boolean supportsPosix() {
-        return FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+    private static boolean supportsPosix(Path target) {
+        return CAPABILITY_PROBE.get().supportsPosix(target);
+    }
+
+    // ---------------------------------------------------------------- fault-injection seam (tests)
+
+    /**
+     * What a given path's filesystem actually exposes for privacy enforcement. Production code
+     * always uses {@link #real()}; tests may substitute a fake via
+     * {@link #useForTesting(CapabilityProbe)} to deterministically exercise the POSIX, ACL and
+     * unsupported-filesystem branches without depending on the real OS/filesystem under CI.
+     *
+     * <p>Public so that tests in other modules that build on {@code PrivateLocalStorage} (e.g.
+     * {@code MinosApplication.open}) can inject the same deterministic fault without depending on
+     * minos-engine's test sources or duplicating this seam. It is a fault-injection hook, not part
+     * of the storage policy itself -- production code never references it, and {@link
+     * #useForTesting} refuses to install one outside a test runtime (see there for why that is, and
+     * is not, a security boundary).</p>
+     */
+    public interface CapabilityProbe {
+        boolean supportsPosix(Path target);
+
+        AclFileAttributeView aclView(Path target);
+
+        static CapabilityProbe real() {
+            return new CapabilityProbe() {
+                @Override
+                public boolean supportsPosix(Path target) {
+                    return target.getFileSystem().supportedFileAttributeViews().contains("posix");
+                }
+
+                @Override
+                public AclFileAttributeView aclView(Path target) {
+                    return Files.getFileAttributeView(target, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+                }
+            };
+        }
+    }
+
+    private static final ThreadLocal<CapabilityProbe> CAPABILITY_PROBE =
+            ThreadLocal.withInitial(CapabilityProbe::real);
+
+    /**
+     * Test-only: overrides filesystem capability probing for the calling thread.
+     *
+     * <p>This is {@code public} so tests in other modules can use it, which means any code sharing
+     * this JVM process could technically call it too -- that alone is not a security boundary
+     * against code already running in-process (nothing expressible with Java visibility modifiers
+     * is: such code could just as easily call the real enforcement methods' own private internals
+     * via reflection). MINOS's actual containment boundary for untrusted code is process isolation
+     * (the AppContainer/Job Object and bubblewrap/cgroup sandboxes), not this method's visibility.
+     * What this check <em>does</em> defend against is the realistic accident: a shipped MINOS
+     * artifact does not bundle a JUnit dependency, so in an actual deployed process this throws
+     * unconditionally, regardless of who calls it.</p>
+     *
+     * @throws IllegalStateException if called outside a test runtime (no JUnit Jupiter on the
+     *         classpath)
+     */
+    public static void useForTesting(CapabilityProbe probe) {
+        requireTestRuntime();
+        CAPABILITY_PROBE.set(Objects.requireNonNull(probe, "probe"));
+    }
+
+    /** Test-only: restores real filesystem capability probing for the calling thread. */
+    public static void resetCapabilityProbeForTesting() {
+        CAPABILITY_PROBE.remove();
+    }
+
+    private static void requireTestRuntime() {
+        try {
+            Class.forName("org.junit.jupiter.api.Test", false, PrivateLocalStorage.class.getClassLoader());
+        } catch (ClassNotFoundException notATestRuntime) {
+            throw new IllegalStateException(
+                    "PrivateLocalStorage.useForTesting is a test-only fault-injection hook; "
+                            + "it refuses to run outside a JUnit test runtime");
+        }
     }
 }

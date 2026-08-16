@@ -165,7 +165,7 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         try {
             application.close();
         } catch (Exception exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS multi-repository API shutdown failed", exception);
+            throw MinosApiSupport.publicFailure(ErrorCode.IO_FAILURE, "MINOS multi-repository API shutdown failed", exception);
         }
     }
 

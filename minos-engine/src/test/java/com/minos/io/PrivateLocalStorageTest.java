@@ -1,5 +1,6 @@
 package com.minos.io;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -15,6 +16,7 @@ import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,6 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PrivateLocalStorageTest {
+
+    @AfterEach
+    void resetCapabilityProbe() {
+        PrivateLocalStorage.resetCapabilityProbeForTesting();
+    }
 
     private static boolean posix() {
         return FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
@@ -37,7 +44,7 @@ class PrivateLocalStorageTest {
 
         assertTrue(Files.isDirectory(created, LinkOption.NOFOLLOW_LINKS));
         assertEquals(nested.toAbsolutePath().normalize(), created);
-        assertPrivacyEnforcedOrUnsupported(created);
+        assertPrivacyEnforced(created);
     }
 
     @Test
@@ -54,7 +61,7 @@ class PrivateLocalStorageTest {
         Path created = PrivateLocalStorage.createPrivateFile(file);
 
         assertTrue(Files.isRegularFile(created, LinkOption.NOFOLLOW_LINKS));
-        assertPrivacyEnforcedOrUnsupported(created);
+        assertPrivacyEnforced(created);
         assertThrows(FileAlreadyExistsException.class, () -> PrivateLocalStorage.createPrivateFile(file));
     }
 
@@ -65,7 +72,7 @@ class PrivateLocalStorageTest {
 
         assertEquals(directory.toAbsolutePath().normalize(), temporary.getParent());
         assertTrue(Files.isRegularFile(temporary, LinkOption.NOFOLLOW_LINKS));
-        assertPrivacyEnforcedOrUnsupported(temporary);
+        assertPrivacyEnforced(temporary);
     }
 
     @Test
@@ -236,10 +243,180 @@ class PrivateLocalStorageTest {
         }
     }
 
-    private static void assertPrivacyEnforcedOrUnsupported(Path target) throws IOException {
-        PrivateLocalStorage.Privacy privacy = PrivateLocalStorage.privacyOf(target);
-        assertFalse(privacy == PrivateLocalStorage.Privacy.EXPOSED, target + " is exposed");
-        assertFalse(privacy == PrivateLocalStorage.Privacy.ABSENT, target + " was not created");
-        if (posix()) assertEquals(PrivateLocalStorage.Privacy.ENFORCED, privacy);
+    /**
+     * Every enforcement entry point now fails closed, so reaching this assertion at all already
+     * proves the location could not have been left {@code UNSUPPORTED} or {@code EXPOSED}: privacy
+     * must be {@code ENFORCED} unconditionally, on every platform.
+     */
+    private static void assertPrivacyEnforced(Path target) throws IOException {
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(target));
+    }
+
+    // ---------------------------------------------------------------- UNSUPPORTED (fault injection)
+    //
+    // A filesystem that exposes neither POSIX permissions nor an ACL view cannot have its privacy
+    // enforced or verified. Every enforcement entry point must fail closed rather than silently
+    // treating the location as private -- this is simulated deterministically via a fake
+    // CapabilityProbe so it does not depend on finding such a filesystem on the CI runner.
+
+    @Test
+    void unsupportedFilesystemFailsClosedCreatingADirectoryAndLeavesNoDirectoryBehind(@TempDir Path root) {
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+        Path directory = root.resolve("scratch");
+
+        IOException failure = assertThrows(IOException.class,
+                () -> PrivateLocalStorage.ensurePrivateDirectory(directory));
+        assertTrue(failure.getMessage().contains("neither POSIX"), failure.getMessage());
+        assertFalse(Files.exists(directory, LinkOption.NOFOLLOW_LINKS),
+                "a directory this call created must not remain when it could not be made private");
+    }
+
+    @Test
+    void unsupportedFilesystemFailureDuringANestedCreateOnlyRemovesWhatItCreated(@TempDir Path root) throws Exception {
+        Path alreadyExisting = Files.createDirectories(root.resolve("already-existing"));
+        Path nested = alreadyExisting.resolve("newly-created");
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.ensurePrivateDirectory(nested));
+
+        assertFalse(Files.exists(nested, LinkOption.NOFOLLOW_LINKS),
+                "the directory this call created must not remain");
+        assertTrue(Files.isDirectory(alreadyExisting),
+                "a directory that pre-existed this call must never be deleted, even on failure");
+    }
+
+    @Test
+    void unsupportedFilesystemFailsClosedCreatingAFileAndLeavesNoFileBehind(@TempDir Path root) {
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+        Path file = root.resolve("store/snapshot.bin");
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.createPrivateFile(file));
+        assertFalse(Files.exists(file, LinkOption.NOFOLLOW_LINKS),
+                "a file this call created must not remain when it could not be made private");
+    }
+
+    @Test
+    void unsupportedFilesystemFailsClosedCreatingATempFileAndLeavesNoFileBehind(@TempDir Path root) throws Exception {
+        Path directory = Files.createDirectories(root.resolve("scratch"));
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertThrows(IOException.class,
+                () -> PrivateLocalStorage.createPrivateTempFile(directory, ".t-", ".tmp"));
+        try (var entries = Files.list(directory)) {
+            assertTrue(entries.findAny().isEmpty(),
+                    "a temp file that could not be made private must not remain in the directory");
+        }
+    }
+
+    @Test
+    void unsupportedFilesystemFailsClosedVerifyingAPreExistingDirectory(@TempDir Path root) throws Exception {
+        Path directory = Files.createDirectories(root.resolve("legacy"));
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.verifyPrivateDirectory(directory));
+    }
+
+    @Test
+    void unsupportedFilesystemFailsClosedVerifyingAPreExistingFile(@TempDir Path root) throws Exception {
+        Path file = Files.writeString(root.resolve("legacy.bin"), "payload");
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.verifyPrivateFile(file));
+    }
+
+    @Test
+    void unsupportedFilesystemFailsClosedHardeningAPreExistingFileButPreservesIt(@TempDir Path root) throws Exception {
+        Path file = Files.writeString(root.resolve("legacy.bin"), "payload");
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.hardenExistingFile(file));
+        // Unlike a file this call created itself, a pre-existing legacy file is the caller's data:
+        // failing to harden it must not destroy it.
+        assertTrue(Files.exists(file, LinkOption.NOFOLLOW_LINKS));
+        assertEquals("payload", Files.readString(file));
+    }
+
+    @Test
+    void privacyOfReportsUnsupportedAsADiagnosticWithoutThrowing(@TempDir Path root) throws Exception {
+        Path directory = Files.createDirectories(root.resolve("legacy"));
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+
+        assertEquals(PrivateLocalStorage.Privacy.UNSUPPORTED, PrivateLocalStorage.privacyOf(directory));
+    }
+
+    // ---------------------------------------------------------------- ACL branch (fault injection)
+    //
+    // These exercise PrivateLocalStorage's ACL code path deterministically on any OS, complementing
+    // the @EnabledOnOs(WINDOWS) tests below that confirm the real platform behaves the same way.
+
+    @Test
+    void aclOwnerOnlyGrantIsEnforced(@TempDir Path root) throws Exception {
+        UserPrincipal owner = Files.getOwner(root, LinkOption.NOFOLLOW_LINKS);
+        PrivateLocalStorage.useForTesting(
+                FakeCapabilityProbe.aclOnly(target -> FakeAclFileAttributeView.ownerOnly(owner)));
+
+        Path directory = PrivateLocalStorage.ensurePrivateDirectory(root.resolve("remote-cache"));
+
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(directory));
+    }
+
+    @Test
+    void aclForeignGrantIsDetectedAndRejectedByVerify(@TempDir Path root) throws Exception {
+        Path directory = Files.createDirectories(root.resolve("legacy-cache"));
+        UserPrincipal owner = Files.getOwner(directory, LinkOption.NOFOLLOW_LINKS);
+        PrivateLocalStorage.useForTesting(
+                FakeCapabilityProbe.aclOnly(target -> FakeAclFileAttributeView.withForeignGrant(owner)));
+
+        IOException failure = assertThrows(IOException.class,
+                () -> PrivateLocalStorage.verifyPrivateDirectory(directory));
+        assertTrue(failure.getMessage().contains("another principal"), failure.getMessage());
+    }
+
+    @Test
+    void aclHardeningNarrowsAnInheritedGrantToOwnerOnly(@TempDir Path root) throws Exception {
+        Path directory = Files.createDirectories(root.resolve("legacy-cache"));
+        UserPrincipal owner = Files.getOwner(directory, LinkOption.NOFOLLOW_LINKS);
+        FakeCapabilityProbe probe = FakeCapabilityProbe.aclOnly(
+                target -> FakeAclFileAttributeView.withForeignGrant(owner));
+        PrivateLocalStorage.useForTesting(probe);
+
+        PrivateLocalStorage.ensurePrivateDirectory(directory);
+
+        AclFileAttributeView view = probe.viewOf(directory.toAbsolutePath().normalize());
+        assertEquals(1, view.getAcl().size(), "hardening must narrow the ACL down to the owner only");
+        assertEquals(owner, view.getAcl().get(0).principal());
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(directory));
+    }
+
+    @Test
+    void aclHardeningAppliesToEveryIntermediateDirectoryNotJustTheLeaf(@TempDir Path root) throws Exception {
+        UserPrincipal owner = Files.getOwner(root, LinkOption.NOFOLLOW_LINKS);
+        FakeCapabilityProbe probe = FakeCapabilityProbe.aclOnly(
+                target -> FakeAclFileAttributeView.withForeignGrant(owner));
+        PrivateLocalStorage.useForTesting(probe);
+
+        Path leaf = PrivateLocalStorage.ensurePrivateDirectory(root.resolve("a/b/c"));
+
+        for (Path level : new Path[]{root.resolve("a"), root.resolve("a/b"), leaf}) {
+            AclFileAttributeView view = probe.viewOf(level.toAbsolutePath().normalize());
+            assertEquals(1, view.getAcl().size(), level + " must be hardened to owner-only, not just the leaf");
+        }
+    }
+
+    @Test
+    void aclHardeningFailureLeavesNoFileBehind(@TempDir Path root) throws Exception {
+        Path directory = root.resolve("store");
+        Path file = directory.resolve("snapshot.bin").toAbsolutePath().normalize();
+        UserPrincipal owner = Files.getOwner(root, LinkOption.NOFOLLOW_LINKS);
+        // The directory hardens correctly; only the file's ACL implementation is broken (setAcl is a
+        // permanent no-op), so verify() -- not harden() -- is what must catch the surviving grant.
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.aclOnly(target ->
+                target.equals(file)
+                        ? FakeAclFileAttributeView.stuckWithForeignGrant(owner)
+                        : FakeAclFileAttributeView.ownerOnly(owner)));
+
+        assertThrows(IOException.class, () -> PrivateLocalStorage.createPrivateFile(file));
+        assertFalse(Files.exists(file, LinkOption.NOFOLLOW_LINKS),
+                "a file whose ACL could not actually be narrowed must not remain");
     }
 }
