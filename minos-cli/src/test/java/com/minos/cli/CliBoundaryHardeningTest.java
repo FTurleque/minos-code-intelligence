@@ -35,7 +35,7 @@ class CliBoundaryHardeningTest {
         AutonomousIndexOperations operations = new StubAutonomousOperations() {
             @Override
             public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) {
-                return new IndexExecutionView(plan(), "run-1", "FAILED", null, false,
+                return new IndexExecutionView(CliBoundaryHardeningTest.plan(), "run-1", "FAILED", null, false,
                         "worker failed at /home/private-user/.minos/runtime/worker.log");
             }
         };
