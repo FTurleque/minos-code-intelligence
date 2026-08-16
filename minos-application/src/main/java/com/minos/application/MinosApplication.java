@@ -17,6 +17,7 @@ import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.impact.LocalProjectImpactQuery;
 import com.minos.impact.ProjectImpactQuery;
 import com.minos.incremental.IncrementalIndexingPlanner;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
 import com.minos.incremental.ProjectInvalidationService;
@@ -347,6 +348,11 @@ public final class MinosApplication implements AutoCloseable {
         }
 
         public MinosApplication build() throws IOException {
+            // MINOS_HOME itself is never created or hardened by any of the individual stores below
+            // -- each of them only hardens what it creates *inside* home. An installation that
+            // predates this policy, or one created by something other than MINOS, must still end up
+            // owner-only at the root, not just in the subdirectories MINOS happens to touch.
+            PrivateLocalStorage.ensurePrivateDirectory(home);
             StorageBackend selected = storageBackend;
             boolean explicitStore = projectRegistry != null || snapshotStore != null || indexStateStore != null
                     || fingerprintStore != null || semanticVectorStore != null || runtimeObservationStore != null;

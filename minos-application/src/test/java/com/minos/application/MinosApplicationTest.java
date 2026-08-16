@@ -9,6 +9,7 @@ import com.minos.domain.Symbol;
 import com.minos.domain.SymbolIdentityQuality;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolLocation;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -22,11 +23,15 @@ import com.minos.runtime.ProviderRuntimeStatus;
 import com.minos.store.FileRuntimeObservationStore;
 import com.minos.store.FileSymbolSnapshotStore;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -75,6 +80,27 @@ class MinosApplicationTest {
         ), providerIds);
         assertTrue(application.programGraphService().providerIds()
                 .contains(JavaSourceProgramGraphProvider.PROVIDER_ID));
+    }
+
+    @Test
+    void opensMakesMinosHomeItselfPrivateNotJustTheStoresCreatedInsideIt(@TempDir Path root) throws Exception {
+        Path home = root.resolve("minos-home");
+
+        MinosApplication.open(home).close();
+
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(home));
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void opensHardensAPreExistingWorldReadableMinosHomeRoot(@TempDir Path root) throws Exception {
+        Path home = Files.createDirectories(root.resolve("legacy-minos-home"));
+        Files.setPosixFilePermissions(home, PosixFilePermissions.fromString("rwxr-xr-x"));
+
+        MinosApplication.open(home).close();
+
+        assertEquals("rwx------", PosixFilePermissions.toString(
+                Files.getPosixFilePermissions(home, LinkOption.NOFOLLOW_LINKS)));
     }
 
     @Test
