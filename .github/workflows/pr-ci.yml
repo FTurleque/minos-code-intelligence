@@ -246,11 +246,20 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - name: Checkout finalization head
+      - name: Checkout exact M15 head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+      - name: Assert exact M15 HEAD
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) {
+            throw "Exact-head mismatch: actual=$actual expected=$env:EXPECTED_SHA"
+          }
       - name: Set up Java 24
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -268,7 +277,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: m15-final-${{ github.sha }}-${{ github.run_attempt }}
+          name: m15-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 30
           path: |
