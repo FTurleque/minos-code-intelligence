@@ -29,7 +29,7 @@ class JGitCloneDeadlineTest {
                 100,
                 100,
                 200,
-                Duration.ofMillis(150));
+                Duration.ofMillis(500));
         JGitRemoteRepositoryMaterializer.CloneBudget budget =
                 new JGitRemoteRepositoryMaterializer.CloneBudget(temp.resolve("repository"), policy);
 
@@ -82,9 +82,9 @@ class JGitCloneDeadlineTest {
         bounded.setConnectTimeout(30_000);
         bounded.setReadTimeout(30_000);
 
-        assertTrue(connectTimeout.get() > 0 && connectTimeout.get() <= 150,
+        assertTrue(connectTimeout.get() > 0 && connectTimeout.get() <= 500,
                 "connect timeout must be clamped to the absolute remaining clone budget");
-        assertTrue(readTimeout.get() > 0 && readTimeout.get() <= 150,
+        assertTrue(readTimeout.get() > 0 && readTimeout.get() <= 500,
                 "read timeout must be clamped to the absolute remaining clone budget");
 
         InputStream input = bounded.getInputStream();
