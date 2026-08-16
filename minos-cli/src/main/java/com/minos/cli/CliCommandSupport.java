@@ -3,6 +3,7 @@ package com.minos.cli;
 import com.minos.diagnostics.PublicErrorMessages;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Shared fail-closed skeleton for the option-parsing MINOS commands.
@@ -115,6 +116,10 @@ final class CliCommandSupport {
 
     static String publicDiagnostic(String diagnostic) {
         return diagnostic == null ? null : PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC);
+    }
+
+    static List<String> publicDiagnostics(List<String> diagnostics) {
+        return List.copyOf(diagnostics).stream().map(CliCommandSupport::publicDiagnostic).toList();
     }
 
     static Throwable unwrapRuntime(Throwable failure) {
