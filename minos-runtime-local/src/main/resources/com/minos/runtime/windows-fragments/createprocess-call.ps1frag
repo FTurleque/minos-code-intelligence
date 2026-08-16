@@ -1,0 +1,13 @@
+            if (!CreateProcessW(
+                    command[0],
+                    commandLine,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    true,
+                    flags,
+                    environmentBlock,
+                    workingDirectory,
+                    ref startup,
+                    out pi)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
