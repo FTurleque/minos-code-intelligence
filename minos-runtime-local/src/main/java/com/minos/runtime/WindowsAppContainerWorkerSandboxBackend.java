@@ -73,7 +73,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             // when this returns empty, so the degradation must be observable, not silent.
             LOGGER.log(System.Logger.Level.WARNING,
                     "MINOS Windows AppContainer worker sandbox is unavailable, falling back to a weaker "
-                            + "sandbox tier: " + exception.getMessage());
+                            + "sandbox tier", exception);
             return Optional.empty();
         }
     }

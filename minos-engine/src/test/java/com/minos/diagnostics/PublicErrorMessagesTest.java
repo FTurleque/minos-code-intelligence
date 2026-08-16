@@ -87,4 +87,35 @@ class PublicErrorMessagesTest {
     void ordinaryMessageMentioningAWordLikeTokenWithoutAssignmentIsNotFlagged() {
         assertFalse(PublicErrorMessages.looksSensitive("query token limit exceeded"));
     }
+
+    @Test
+    void aQuotedAbsolutePathIsRejectedEvenWithoutLeadingWhitespace() {
+        assertTrue(PublicErrorMessages.looksSensitive("Cannot open '/etc/minos/secrets.json'"));
+    }
+
+    @Test
+    void aParenthesizedWindowsPathIsRejectedEvenWithoutLeadingWhitespace() {
+        assertTrue(PublicErrorMessages.looksSensitive("permission denied (C:\\Users\\fabrice\\.minos\\token)"));
+    }
+
+    @Test
+    void aWindowsUncPathIsRejected() {
+        assertTrue(PublicErrorMessages.looksSensitive("cannot reach \\\\fileserver\\shared\\minos\\data"));
+        assertTrue(PublicErrorMessages.looksSensitive("cannot reach '\\\\fileserver\\shared\\minos\\data'"));
+    }
+
+    @Test
+    void aDomainNameIsNotMistakenForAnAbsolutePath() {
+        assertFalse(PublicErrorMessages.looksSensitive("request to example.com/status failed"));
+    }
+
+    @Test
+    void queryStringApiKeyIsRejected() {
+        assertTrue(PublicErrorMessages.looksSensitive("GET https://example.org/v1/data?key=AIzaSyD-abcdef1234 failed"));
+    }
+
+    @Test
+    void odbcStyleCredentialAssignmentsAreRejected() {
+        assertTrue(PublicErrorMessages.looksSensitive("Server=db;Uid=admin;Pwd=hunter2;"));
+    }
 }

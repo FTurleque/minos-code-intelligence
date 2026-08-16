@@ -42,16 +42,24 @@ public final class PublicErrorMessages {
         String lower = detail.toLowerCase(Locale.ROOT);
         if (lower.contains("jdbc:") || lower.contains("password") || lower.contains("secret")
                 || lower.contains("bearer") || lower.contains("authorization") || lower.contains("token=")
-                || lower.contains("apikey") || lower.contains("api_key") || lower.contains("private_key")) {
+                || lower.contains("apikey") || lower.contains("api_key") || lower.contains("private_key")
+                || lower.contains("key=") || lower.contains("pwd=") || lower.contains("uid=")) {
             return true;
         }
         if (URL_CREDENTIALS.matcher(detail).find()) return true;
-        return containsAbsolutePath(detail);
+        return containsAbsolutePath(detail) || containsUncPath(detail);
     }
 
+    /**
+     * A {@code /...} or {@code C:\...} path, wherever it appears in the message -- not only when it
+     * opens the whole string or a whitespace-delimited word. Internal exception messages routinely
+     * quote or parenthesize the offending path (e.g. {@code Cannot open '/etc/minos/secrets.json'}
+     * or {@code (C:\Users\fabrice\.minos\token)}), so the character immediately before the path only
+     * needs to not itself be part of an identifier -- not specifically whitespace.
+     */
     private static boolean containsAbsolutePath(String detail) {
         for (int index = 0; index < detail.length(); index++) {
-            if (index > 0 && !Character.isWhitespace(detail.charAt(index - 1))) continue;
+            if (index > 0 && isPathIdentifierChar(detail.charAt(index - 1))) continue;
             char first = detail.charAt(index);
             if (first == '/') return true;
             if (index + 2 < detail.length()
@@ -62,5 +70,22 @@ public final class PublicErrorMessages {
             }
         }
         return false;
+    }
+
+    /** A Windows UNC path such as {@code \\server\share\file}. */
+    private static boolean containsUncPath(String detail) {
+        for (int index = 0; index < detail.length() - 2; index++) {
+            if (index > 0 && isPathIdentifierChar(detail.charAt(index - 1))) continue;
+            if (detail.charAt(index) == '\\' && detail.charAt(index + 1) == '\\'
+                    && (Character.isLetterOrDigit(detail.charAt(index + 2)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A character that could plausibly be part of the same word/token as what follows it. */
+    private static boolean isPathIdentifierChar(char value) {
+        return Character.isLetterOrDigit(value) || value == '_' || value == '.' || value == '-';
     }
 }

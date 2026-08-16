@@ -48,7 +48,7 @@ final class WindowsJobObjectProcessOwnership {
             // ownership). The caller reports this as an ordinary "capability unavailable" diagnostic,
             // so the real cause must still be observable here rather than disappearing silently.
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS Windows Job Object process ownership is unavailable: " + failure.getMessage());
+                    "MINOS Windows Job Object process ownership is unavailable", failure);
             return Optional.empty();
         }
     }
