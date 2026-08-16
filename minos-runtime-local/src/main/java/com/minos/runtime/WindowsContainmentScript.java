@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Assembles a Windows containment launcher from its template and shared fragments.
@@ -27,8 +29,11 @@ final class WindowsContainmentScript {
     private static final String RESOURCE_ROOT = "/com/minos/runtime/";
     private static final String FRAGMENT_ROOT = RESOURCE_ROOT + "windows-fragments/";
     private static final String INCLUDE_PREFIX = "#minos-include:";
-    private static final String LINE_SEPARATOR = "\r\n";
     private static final int MAX_FRAGMENTS = 64;
+
+    /** Matches the directive line only; the surrounding terminators stay in the template. */
+    private static final Pattern INCLUDE_DIRECTIVE =
+            Pattern.compile("^" + Pattern.quote(INCLUDE_PREFIX) + "([a-z0-9-]+)[ \\t]*$", Pattern.MULTILINE);
 
     private WindowsContainmentScript() {
     }
@@ -44,36 +49,27 @@ final class WindowsContainmentScript {
         String name = Objects.requireNonNull(launcherName, "launcherName");
         String template = readResource(RESOURCE_ROOT + name + ".template");
         Set<String> resolved = new LinkedHashSet<>();
+        // Only the directive itself is replaced; every other byte of the template is carried through
+        // untouched, including its line terminators. Assembly therefore stays byte-exact whichever
+        // end-of-line convention the working tree was checked out with.
+        Matcher directive = INCLUDE_DIRECTIVE.matcher(template);
         StringBuilder assembled = new StringBuilder(template.length());
-        String[] lines = template.split("\r\n", -1);
-        for (int index = 0; index < lines.length; index++) {
-            if (index > 0) assembled.append(LINE_SEPARATOR);
-            String line = lines[index];
-            if (!line.startsWith(INCLUDE_PREFIX)) {
-                assembled.append(line);
-                continue;
-            }
-            String fragment = line.substring(INCLUDE_PREFIX.length()).trim();
-            requireSafeFragmentName(fragment);
+        while (directive.find()) {
+            String fragment = directive.group(1);
             if (!resolved.add(fragment)) {
                 throw new IOException("Windows containment template includes a fragment twice: " + fragment);
             }
             if (resolved.size() > MAX_FRAGMENTS) {
                 throw new IOException("Windows containment template exceeds its fragment budget");
             }
-            assembled.append(readResource(FRAGMENT_ROOT + fragment + ".ps1frag"));
+            directive.appendReplacement(assembled,
+                    Matcher.quoteReplacement(readResource(FRAGMENT_ROOT + fragment + ".ps1frag")));
+        }
+        directive.appendTail(assembled);
+        if (assembled.indexOf(INCLUDE_PREFIX) >= 0) {
+            throw new IOException("Windows containment template carries a malformed include directive: " + name);
         }
         return assembled.toString();
-    }
-
-    /**
-     * Fragment names come from packaged templates, never from user input, but the check is kept so a
-     * future template edit cannot turn an include into a path traversal out of the resource root.
-     */
-    private static void requireSafeFragmentName(String fragment) throws IOException {
-        if (fragment.isEmpty() || !fragment.matches("[a-z0-9-]+")) {
-            throw new IOException("invalid Windows containment fragment name: " + fragment);
-        }
     }
 
     private static String readResource(String resource) throws IOException {
