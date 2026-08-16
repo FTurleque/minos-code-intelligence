@@ -1,6 +1,7 @@
 package com.minos.mcp;
 
 import com.minos.application.MinosApplication;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.output.DeterministicJson;
 import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
@@ -190,35 +191,11 @@ public final class MinosMcpTools implements AutoCloseable {
         if (detail.length() > MAX_CLIENT_ERROR_CHARS) {
             detail = detail.substring(0, MAX_CLIENT_ERROR_CHARS);
         }
-        if (looksSensitive(detail)) {
+        if (PublicErrorMessages.looksSensitive(detail)) {
             logInternalFailure(toolName, exception);
             return GENERIC_TOOL_ERROR;
         }
         return detail.startsWith("error:") ? detail : "error: " + detail;
-    }
-
-    private static boolean looksSensitive(String detail) {
-        String lower = detail.toLowerCase(Locale.ROOT);
-        if (lower.contains("jdbc:") || lower.contains("password") || lower.contains("secret")
-                || lower.contains("bearer") || lower.contains("authorization") || lower.contains("token=")) {
-            return true;
-        }
-        return containsAbsolutePath(detail);
-    }
-
-    private static boolean containsAbsolutePath(String detail) {
-        for (int index = 0; index < detail.length(); index++) {
-            if (index > 0 && !Character.isWhitespace(detail.charAt(index - 1))) continue;
-            char first = detail.charAt(index);
-            if (first == '/') return true;
-            if (index + 2 < detail.length()
-                    && Character.isLetter(first)
-                    && detail.charAt(index + 1) == ':'
-                    && (detail.charAt(index + 2) == '\\' || detail.charAt(index + 2) == '/')) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static void logInternalFailure(String toolName, Exception exception) {

@@ -3,17 +3,25 @@ package com.minos.api;
 import com.minos.application.MinosApplication;
 import com.minos.api.MinosApi.ErrorCode;
 import com.minos.api.MinosApi.MinosApiException;
+import com.minos.diagnostics.PublicErrorMessages;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
 import java.util.Objects;
 
 /**
  * Shared argument checks and failure translation for the local MINOS API facades.
  *
- * <p>The mapping from a thrown failure to a {@link ErrorCode} is part of the published API
- * contract, so it lives here once: a facade that classified {@code IOException} differently from
- * its siblings would make the same underlying fault look like a different error to callers.</p>
+ * <p>The mapping from a thrown failure to an {@link ErrorCode} <em>and</em> to a public message is
+ * part of the published API contract, so it lives here once, in {@link #execute}. Every {@code
+ * Local*Api} facade routes through it rather than building its own {@code catch} chain: a facade
+ * that classified {@code IOException} differently from its siblings would make the same underlying
+ * fault look like a different error to callers, and a facade that surfaced {@code
+ * exception.getMessage()} directly could leak an absolute path, a JDBC URL or a credential that the
+ * underlying implementation (storage, hosted control plane, git, PostgreSQL...) put in its internal
+ * exception message. {@link #failureMessage} is the one place that decides what is safe to expose;
+ * see {@link PublicErrorMessages} for the redaction policy itself.</p>
  */
 final class MinosApiSupport {
 
@@ -35,6 +43,10 @@ final class MinosApiSupport {
             return call.call();
         } catch (MinosApiException exception) {
             throw exception;
+        } catch (SecurityException exception) {
+            throw new MinosApiException(ErrorCode.ACCESS_DENIED, failureMessage(exception), exception);
+        } catch (AccessDeniedException exception) {
+            throw new MinosApiException(ErrorCode.ACCESS_DENIED, failureMessage(exception), exception);
         } catch (IllegalArgumentException exception) {
             throw new MinosApiException(ErrorCode.INVALID_REQUEST, failureMessage(exception), exception);
         } catch (IllegalStateException exception) {
@@ -61,11 +73,14 @@ final class MinosApiSupport {
         return value;
     }
 
-    /** Single-line failure text: a blank message degrades to the type, line breaks are flattened. */
+    /**
+     * The message a caller of the public API is allowed to see: single-line, length-bounded, and
+     * never containing a path, URL credential, token or other internal detail. The full exception
+     * (message included) remains available as the {@link MinosApiException}'s cause for whatever a
+     * process's own internal logging chooses to record -- only the published {@code getMessage()}
+     * is redacted.
+     */
     static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
+        return PublicErrorMessages.sanitize(exception.getMessage(), exception.getClass().getSimpleName());
     }
 }
