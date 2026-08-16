@@ -1,5 +1,6 @@
 package com.minos.io;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -13,6 +14,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DurableAtomicFileTest {
+
+    @AfterEach
+    void resetCapabilityProbe() {
+        PrivateLocalStorage.resetCapabilityProbeForTesting();
+    }
+
+    @Test
+    void ensureDirectoryFailsClosedWhenTheFilesystemCannotEnforcePrivacy(@TempDir Path root) {
+        // DurableAtomicFile delegates directory privacy entirely to PrivateLocalStorage: a
+        // control-plane directory it creates must never be usable when ownership cannot be
+        // guaranteed for it, on the same terms as every other private-storage consumer.
+        PrivateLocalStorage.useForTesting(FakeCapabilityProbe.unsupported());
+        Path directory = root.resolve("hosted-control-plane");
+
+        assertThrows(IOException.class, () -> DurableAtomicFile.ensureDirectory(directory, "control-plane"));
+        assertFalse(Files.isDirectory(directory), "a directory that could not be made private must not remain");
+    }
 
     @Test
     void directorySyncFailureAfterAtomicMoveIsExplicitlyCommitUncertain(@TempDir Path root) throws Exception {
