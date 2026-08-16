@@ -14,6 +14,8 @@ public final class NexusExportCommand {
 
     public static final String NAME = "nexus-export";
 
+    private static final String UNREGISTERED_PROJECT_MESSAGE = "project root is not registered in MINOS";
+
     private static final String USAGE = """
             Usage: minos nexus-export --root <project-root>
 
@@ -60,7 +62,7 @@ public final class NexusExportCommand {
             snapshot = exportOperation.export(root);
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
-                    .append(CliCommandSupport.failureMessage(exception))
+                    .append(exportFailureMessage(exception))
                     .append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -82,6 +84,16 @@ public final class NexusExportCommand {
             throw new IllegalArgumentException("missing value for --root");
         }
         return Path.of(rawRoot);
+    }
+
+    private static String exportFailureMessage(Exception exception) {
+        String message = exception.getMessage();
+        if (exception instanceof IllegalArgumentException
+                && message != null
+                && message.startsWith(UNREGISTERED_PROJECT_MESSAGE)) {
+            return UNREGISTERED_PROJECT_MESSAGE;
+        }
+        return CliCommandSupport.failureMessage(exception);
     }
 
     private static Map<String, Object> snapshotJson(NexusExportContract.ExportSnapshot snapshot) {
@@ -153,7 +165,7 @@ public final class NexusExportCommand {
 
     private static Map<String, Object> evidenceJson(NexusExportContract.ExportEvidence evidence) {
         Map<String, Object> json = new LinkedHashMap<>();
-        json.put("type", evidence.type());
+        json.put("type", evidence.type().name());
         json.put("description", evidence.description());
         json.put("weight", evidence.weight());
         return json;
