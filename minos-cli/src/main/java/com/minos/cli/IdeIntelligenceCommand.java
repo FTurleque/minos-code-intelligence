@@ -396,8 +396,7 @@ final class IdeIntelligenceCommand {
     }
 
     private static String message(RuntimeException exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+        return CliCommandSupport.failureMessage(exception);
     }
 
     private static Map<String, Object> object(Object... pairs) {

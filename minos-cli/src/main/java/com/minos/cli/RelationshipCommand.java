@@ -14,9 +14,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Commande paramétrée pour les vues relationnelles M3/M5.
- */
+/** Commande paramétrée pour les vues relationnelles M3/M5. */
 public final class RelationshipCommand {
 
     public enum Operation {
@@ -72,18 +70,12 @@ public final class RelationshipCommand {
                 ? RelationshipSearchCriteria.incoming(anchor, Set.of(operation.kind), options.limit())
                 : RelationshipSearchCriteria.outgoing(anchor, Set.of(operation.kind), options.limit());
         try {
-            List<RelationshipResult> relationships = List.copyOf(query.findRelationships(
-                    options.projectId(),
-                    criteria
-            ));
-            output.append(CodeIntelligenceResultRenderer.renderRelationships(
-                    relationships,
-                    options.format()
-            )).append('\n');
+            List<RelationshipResult> relationships = List.copyOf(query.findRelationships(options.projectId(), criteria));
+            output.append(CodeIntelligenceResultRenderer.renderRelationships(relationships, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
         } catch (Exception exception) {
             error.append("error: ").append(operation.commandName).append(" failed: ")
-                    .append(failureMessage(exception)).append('\n');
+                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
     }
@@ -103,19 +95,7 @@ public final class RelationshipCommand {
         return "--help".equals(value) || "-h".equals(value);
     }
 
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    private record Options(
-            String projectId,
-            String symbolId,
-            int limit,
-            SymbolOutputFormat format
-    ) {
+    private record Options(String projectId, String symbolId, int limit, SymbolOutputFormat format) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
@@ -148,7 +128,5 @@ public final class RelationshipCommand {
             }
             return new Options(project, symbol, limit, format);
         }
-
-
     }
 }

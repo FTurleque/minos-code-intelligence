@@ -3,6 +3,7 @@ package com.minos.application;
 import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotReport;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
 import com.minos.io.DurableAtomicFile;
 import com.minos.orchestration.IndexArtifactLimits;
@@ -151,8 +152,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
 
     private static String safeMessage(RuntimeException failure) {
         if (failure == null) return "unknown state persistence failure";
-        String message = failure.getMessage();
-        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
+        return PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
     }
 
     private static ProjectView projectView(ProjectInspectionService.ProjectView view) {

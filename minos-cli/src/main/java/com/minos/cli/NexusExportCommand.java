@@ -9,12 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Read-only CLI transport used by the optional NEXUS integration.
- */
+/** Read-only CLI transport used by the optional NEXUS integration. */
 public final class NexusExportCommand {
 
     public static final String NAME = "nexus-export";
+
+    private static final String UNREGISTERED_PROJECT_MESSAGE = "project root is not registered in MINOS";
 
     private static final String USAGE = """
             Usage: minos nexus-export --root <project-root>
@@ -43,8 +43,7 @@ public final class NexusExportCommand {
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(error, "error");
 
-        if (arguments.length == 1
-                && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -63,7 +62,7 @@ public final class NexusExportCommand {
             snapshot = exportOperation.export(root);
         } catch (Exception exception) {
             error.append("error: nexus-export failed: ")
-                    .append(failureMessage(exception))
+                    .append(exportFailureMessage(exception))
                     .append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
@@ -85,6 +84,16 @@ public final class NexusExportCommand {
             throw new IllegalArgumentException("missing value for --root");
         }
         return Path.of(rawRoot);
+    }
+
+    private static String exportFailureMessage(Exception exception) {
+        String message = exception.getMessage();
+        if (exception instanceof IllegalArgumentException
+                && message != null
+                && message.startsWith(UNREGISTERED_PROJECT_MESSAGE)) {
+            return UNREGISTERED_PROJECT_MESSAGE;
+        }
+        return CliCommandSupport.failureMessage(exception);
     }
 
     private static Map<String, Object> snapshotJson(NexusExportContract.ExportSnapshot snapshot) {
@@ -160,13 +169,6 @@ public final class NexusExportCommand {
         json.put("description", evidence.description());
         json.put("weight", evidence.weight());
         return json;
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     @FunctionalInterface

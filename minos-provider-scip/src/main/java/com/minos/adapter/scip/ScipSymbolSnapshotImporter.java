@@ -1,5 +1,6 @@
 package com.minos.adapter.scip;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.Symbol;
@@ -178,11 +179,6 @@ public final class ScipSymbolSnapshotImporter {
         throw new IOException("unable to allocate a unique SCIP import scratch file");
     }
 
-    /**
-     * A frozen SCIP artifact is a verbatim copy of the indexed code, so the scratch root follows the
-     * shared owner-only policy. It is re-validated on every allocation rather than only at
-     * construction: the directory must still be a real directory and must still be private.
-     */
     private void prepareScratchRoot() throws IOException {
         PrivateLocalStorage.ensurePrivateDirectory(scratchRoot);
         if (Files.isSymbolicLink(scratchRoot)
@@ -240,8 +236,7 @@ public final class ScipSymbolSnapshotImporter {
     }
 
     private static String safeMessage(Throwable failure) {
-        String message = failure.getMessage();
-        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
+        return PublicErrorMessages.sanitize(failure.getMessage(), failure.getClass().getSimpleName());
     }
 
     private record FrozenArtifact(Path path, String sha256) implements AutoCloseable {
@@ -256,7 +251,6 @@ public final class ScipSymbolSnapshotImporter {
         }
     }
 
-    /** Write-only capture used only to atomically publish one normalized snapshot. */
     private static final class CapturingStore implements CodeKnowledgeStore {
         private final Map<String, Symbol> symbolsById = new LinkedHashMap<>();
         private final Map<String, SymbolOccurrence> occurrencesById = new LinkedHashMap<>();

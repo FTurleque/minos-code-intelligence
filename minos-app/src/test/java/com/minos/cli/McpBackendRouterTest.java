@@ -1,5 +1,7 @@
 package com.minos.cli;
 
+import com.minos.io.PrivateLocalStorage;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,6 +32,9 @@ class McpBackendRouterTest {
         assertEquals(McpBackend.NATIVE, first.backend());
         assertEquals(first, second);
         assertTrue(Files.isRegularFile(store.file()));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(home));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(store.file().getParent()));
+        assertEquals(PrivateLocalStorage.Privacy.ENFORCED, PrivateLocalStorage.privacyOf(store.file()));
         String persisted = Files.readString(store.file());
         assertTrue(persisted.contains("backend=native"));
         assertTrue(persisted.contains("formatVersion=1"));
@@ -38,7 +43,7 @@ class McpBackendRouterTest {
     @Test
     void invalidOrUnknownConfigurationFailsClosed(@TempDir Path home) throws Exception {
         McpBackendConfigurationStore store = new McpBackendConfigurationStore(home);
-        Files.createDirectories(store.file().getParent());
+        store.save(McpBackendConfiguration.nativeDefault());
         Files.writeString(store.file(), String.join("\n",
                 "formatVersion=1",
                 "backend=cloud",
@@ -59,14 +64,74 @@ class McpBackendRouterTest {
     }
 
     @Test
+    void homeValidationHappensBeforeConfigurationOrDockerSideEffects(@TempDir Path home) {
+        AtomicBoolean nativeCalled = new AtomicBoolean(false);
+        FakeProcessExecutor processes = new FakeProcessExecutor();
+        McpBackendRouter router = new McpBackendRouter(
+                ignored -> nativeCalled.set(true),
+                new DockerMcpTransport(processes),
+                ignored -> { throw new IOException("MINOS home rejected"); });
+
+        IOException failure = assertThrows(IOException.class, () -> router.run(home));
+
+        assertEquals("MINOS home rejected", failure.getMessage());
+        assertFalse(nativeCalled.get());
+        assertTrue(processes.probeCommands.isEmpty());
+        assertTrue(processes.attachCommands.isEmpty());
+        assertFalse(Files.exists(home.resolve(McpBackendConfigurationStore.RUNTIME_DIRECTORY)),
+                "configuration migration must not run before home validation");
+    }
+
+    @Test
+    void symlinkedHomeIsRejectedBeforeNativeOrDockerExecution(@TempDir Path root) throws Exception {
+        Path realHome = root.resolve("real-home");
+        new McpBackendConfigurationStore(realHome).save(dockerConfiguration());
+        Path linkedHome = root.resolve("linked-home");
+        assumeCanCreateSymlink(linkedHome, realHome);
+
+        AtomicBoolean nativeCalled = new AtomicBoolean(false);
+        FakeProcessExecutor processes = new FakeProcessExecutor();
+        McpBackendRouter router = new McpBackendRouter(
+                ignored -> nativeCalled.set(true), new DockerMcpTransport(processes));
+
+        assertThrows(IOException.class, () -> router.run(linkedHome));
+        assertFalse(nativeCalled.get());
+        assertTrue(processes.probeCommands.isEmpty());
+        assertTrue(processes.attachCommands.isEmpty());
+    }
+
+    @Test
+    void symlinkedBackendConfigurationIsRejectedBeforeDockerExecution(@TempDir Path root) throws Exception {
+        Path home = root.resolve("home");
+        McpBackendConfigurationStore store = new McpBackendConfigurationStore(home);
+        store.save(McpBackendConfiguration.nativeDefault());
+        Path outside = root.resolve("outside-backend.properties");
+        Files.writeString(outside, String.join("\n",
+                "formatVersion=1",
+                "backend=docker",
+                "docker.containerName=minos-mcp-prod",
+                "docker.probeTimeoutMillis=10000"));
+        Files.delete(store.file());
+        assumeCanCreateSymlink(store.file(), outside);
+
+        FakeProcessExecutor processes = new FakeProcessExecutor();
+        McpBackendRouter router = new McpBackendRouter(
+                ignored -> { throw new AssertionError("native must not run"); },
+                new DockerMcpTransport(processes));
+
+        assertThrows(IOException.class, () -> router.run(home));
+        assertTrue(processes.probeCommands.isEmpty());
+        assertTrue(processes.attachCommands.isEmpty());
+    }
+
+    @Test
     void dockerUnavailableNeverFallsBackToNative(@TempDir Path home) throws Exception {
         new McpBackendConfigurationStore(home).save(dockerConfiguration());
         AtomicBoolean nativeCalled = new AtomicBoolean(false);
         FakeProcessExecutor processes = new FakeProcessExecutor();
         processes.probes.add(new DockerMcpTransport.ProcessResult(1, "daemon unavailable"));
         McpBackendRouter router = new McpBackendRouter(
-                ignored -> nativeCalled.set(true),
-                new DockerMcpTransport(processes));
+                ignored -> nativeCalled.set(true), new DockerMcpTransport(processes));
 
         IOException failure = assertThrows(IOException.class, () -> router.run(home));
 
@@ -83,17 +148,14 @@ class McpBackendRouterTest {
         processes.probes.add(new DockerMcpTransport.ProcessResult(0, "true"));
         processes.attachExitCode = 0;
         McpBackendRouter router = new McpBackendRouter(
-                ignored -> { throw new AssertionError("native must not run"); },
-                new DockerMcpTransport(processes));
+                ignored -> { throw new AssertionError("native must not run"); }, new DockerMcpTransport(processes));
 
         assertEquals(0, router.run(home));
-        assertEquals(List.of(
-                "docker", "version", "--format", "{{.Server.Version}}"), processes.probeCommands.get(0));
-        assertEquals(List.of(
-                "docker", "inspect", "--format", "{{.State.Running}}", "minos-mcp-prod"),
+        assertEquals(List.of("docker", "version", "--format", "{{.Server.Version}}"),
+                processes.probeCommands.get(0));
+        assertEquals(List.of("docker", "inspect", "--format", "{{.State.Running}}", "minos-mcp-prod"),
                 processes.probeCommands.get(1));
-        assertEquals(List.of(
-                "docker", "exec", "-i", "minos-mcp-prod",
+        assertEquals(List.of("docker", "exec", "-i", "minos-mcp-prod",
                 "java", "-cp", "/opt/minos/minos.jar", "com.minos.mcp.MinosMcpServer"),
                 processes.attachCommands.get(0));
     }
@@ -104,8 +166,7 @@ class McpBackendRouterTest {
         AtomicBoolean nativeCalled = new AtomicBoolean(false);
         FakeProcessExecutor processes = new FakeProcessExecutor();
         McpBackendRouter router = new McpBackendRouter(
-                ignored -> nativeCalled.set(true),
-                new DockerMcpTransport(processes));
+                ignored -> nativeCalled.set(true), new DockerMcpTransport(processes));
 
         assertEquals(0, router.run(home));
         assertTrue(nativeCalled.get());
@@ -118,14 +179,23 @@ class McpBackendRouterTest {
         new McpBackendConfigurationStore(home).save(McpBackendConfiguration.nativeDefault());
         FakeProcessExecutor processes = new FakeProcessExecutor();
         McpBackendRouter router = new McpBackendRouter(
-                ignored -> { throw new Exception("native MCP failed"); },
-                new DockerMcpTransport(processes));
+                ignored -> { throw new Exception("native MCP failed"); }, new DockerMcpTransport(processes));
 
         Exception failure = assertThrows(Exception.class, () -> router.run(home));
 
         assertEquals("native MCP failed", failure.getMessage());
         assertTrue(processes.probeCommands.isEmpty());
         assertTrue(processes.attachCommands.isEmpty());
+    }
+
+    private static void assumeCanCreateSymlink(Path link, Path target) throws IOException {
+        try {
+            Files.createSymbolicLink(link, target.toAbsolutePath());
+        } catch (UnsupportedOperationException | SecurityException exception) {
+            Assumptions.abort("symbolic links are unavailable: " + exception.getClass().getSimpleName());
+        } catch (IOException exception) {
+            Assumptions.abort("symbolic links are unavailable: " + exception.getClass().getSimpleName());
+        }
     }
 
     private static McpBackendConfiguration dockerConfiguration() {
