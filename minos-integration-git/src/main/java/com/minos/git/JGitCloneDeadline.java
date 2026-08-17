@@ -16,7 +16,10 @@ import java.net.Proxy;
 import java.net.URL;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -211,34 +214,35 @@ final class JGitCloneDeadline {
                 throw timeout;
             }
 
-            AtomicReference<Throwable> failure = new AtomicReference<>();
-            CountDownLatch completed = new CountDownLatch(1);
+            FutureTask<Void> closeTask = new FutureTask<>(() -> {
+                in.close();
+                return null;
+            });
             Thread worker = Thread.ofVirtual()
                     .name("minos-jgit-http-input-close")
-                    .start(() -> {
-                        try {
-                            in.close();
-                        } catch (Throwable problem) {
-                            failure.set(problem);
-                        } finally {
-                            completed.countDown();
-                        }
-                    });
+                    .start(closeTask);
 
             try {
-                while (completed.getCount() != 0L) {
+                while (!closeTask.isDone()) {
                     int remainingMillis = budget.remainingTimeoutMillis();
-                    if (completed.await(remainingMillis, TimeUnit.MILLISECONDS)) {
-                        break;
+                    try {
+                        closeTask.get(remainingMillis, TimeUnit.MILLISECONDS);
+                    } catch (TimeoutException timeout) {
+                        // Millisecond rounding may wake just before the monotonic deadline. Re-check
+                        // and loop if there is still budget; once expired this throws the stable error.
+                        budget.enforceTimeout();
                     }
-                    // Millisecond rounding may wake just before the monotonic deadline. Re-check
-                    // and loop if there is still budget; once expired this throws the stable error.
-                    budget.enforceTimeout();
                 }
+                // Surface delegate failures, including Errors captured by FutureTask, without catching
+                // Throwable in MINOS code. A successful task returns null immediately here.
+                closeTask.get();
             } catch (InterruptedException interrupted) {
                 worker.interrupt();
                 Thread.currentThread().interrupt();
                 throw new IOException("interrupted while enforcing remote repository clone deadline", interrupted);
+            } catch (ExecutionException execution) {
+                budget.enforceTimeout();
+                rethrowInputFailure(execution.getCause());
             } catch (IOException timeout) {
                 // Do not issue a second close: the first close is precisely the operation that may
                 // be stuck. Interrupt the worker and let the bounded caller return at the deadline.
@@ -248,7 +252,6 @@ final class JGitCloneDeadline {
 
             // A close that completed just after the deadline still fails as a deadline breach.
             budget.enforceTimeout();
-            rethrowInputFailure(failure.get());
         }
 
         private void closeDelegateAsync() {
@@ -264,7 +267,6 @@ final class JGitCloneDeadline {
         }
 
         private static void rethrowInputFailure(Throwable failure) throws IOException {
-            if (failure == null) return;
             if (failure instanceof IOException io) throw io;
             if (failure instanceof RuntimeException runtime) throw runtime;
             if (failure instanceof Error error) throw error;
