@@ -13,6 +13,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState.Availability;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -31,7 +32,7 @@ final class IndexingRunExecutor {
                                IndexingMode mode, List<String> changedFiles,
                                Map<String, IndexerExecutor> executors, SnapshotStager stager,
                                SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
-        Path root = validateExecutionRoot(projectRoot, targets, mode);
+        ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, createdAt);
         RunContext context = new RunContext(UUID.randomUUID(), projectId, createdAt, previous, targets.size());
@@ -47,13 +48,13 @@ final class IndexingRunExecutor {
         }
     }
 
-    private static Path validateExecutionRoot(
+    private static ValidatedProjectRoot validateExecutionRoot(
             Path projectRoot,
             List<IndexingExecutionTarget> targets,
             IndexingMode mode
     ) {
-        Path root = projectRoot.toAbsolutePath().normalize();
-        if (!Files.isDirectory(root)) {
+        Path lexicalRoot = projectRoot.toAbsolutePath().normalize();
+        if (!Files.isDirectory(lexicalRoot)) {
             throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
         }
         long scopes = targets.stream().map(IndexingExecutionTarget::projectRelativeRoot).distinct().count();
@@ -61,7 +62,12 @@ final class IndexingRunExecutor {
             throw new IllegalArgumentException(
                     "multi-scope incremental indexing is not qualified; planner must require FULL for this topology");
         }
-        return root;
+        try {
+            return new ValidatedProjectRoot(lexicalRoot, lexicalRoot.toRealPath());
+        } catch (IOException failure) {
+            throw new IllegalArgumentException(
+                    "projectRoot could not be resolved to a canonical directory: " + projectRoot, failure);
+        }
     }
 
     private static ProjectIndexState reconcilePreviousState(
@@ -108,7 +114,7 @@ final class IndexingRunExecutor {
 
     private static void executeProviders(
             RunContext context,
-            Path root,
+            ValidatedProjectRoot root,
             List<IndexingExecutionTarget> targets,
             IndexingMode mode,
             List<String> changedFiles,
@@ -122,7 +128,7 @@ final class IndexingRunExecutor {
 
     private static void executeProvider(
             RunContext context,
-            Path root,
+            ValidatedProjectRoot root,
             IndexingExecutionTarget target,
             IndexingMode mode,
             List<String> changedFiles,
@@ -137,7 +143,7 @@ final class IndexingRunExecutor {
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
-                root,
+                root.lexicalRoot(),
                 executionRoot,
                 relative,
                 selection,
@@ -167,13 +173,26 @@ final class IndexingRunExecutor {
         return executor;
     }
 
-    private static Path requireExecutionRoot(Path root, Path relative) {
-        Path executionRoot = root.resolve(relative).normalize();
-        if (!executionRoot.startsWith(root) || !Files.isDirectory(executionRoot)) {
+    private static Path requireExecutionRoot(ValidatedProjectRoot root, Path relative) {
+        Path executionRoot = root.lexicalRoot().resolve(relative).normalize();
+        if (!executionRoot.startsWith(root.lexicalRoot()) || !Files.isDirectory(executionRoot)) {
             throw new IllegalStateException(
                     "provider execution root is missing or outside project: " + portable(relative));
         }
-        return executionRoot;
+        try {
+            Path realExecutionRoot = executionRoot.toRealPath();
+            if (!realExecutionRoot.startsWith(root.realRoot())) {
+                throw new IllegalStateException(
+                        "provider execution root resolves outside project: " + portable(relative));
+            }
+            // Physical authorization is decided only on canonical paths. The request itself keeps
+            // lexical paths so registeredRoot + relativeRoot remains stable even when Windows
+            // expands an 8.3 path (or another filesystem alias) during toRealPath().
+            return executionRoot;
+        } catch (IOException failure) {
+            throw new IllegalStateException(
+                    "provider execution root could not be resolved safely: " + portable(relative), failure);
+        }
     }
 
     private static void stageSnapshot(
@@ -399,6 +418,13 @@ final class IndexingRunExecutor {
     private static String failureMessage(Exception exception) {
         String message = exception.getMessage();
         return exception.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
+    }
+
+    private record ValidatedProjectRoot(Path lexicalRoot, Path realRoot) {
+        private ValidatedProjectRoot {
+            Objects.requireNonNull(lexicalRoot, "lexicalRoot");
+            Objects.requireNonNull(realRoot, "realRoot");
+        }
     }
 
     private static final class RunContext {

@@ -171,24 +171,32 @@ final class LinuxCgroupJob implements AutoCloseable {
     /**
      * Kills and removes cgroups left behind by a MINOS process that was itself killed.
      * The delegated root must never accumulate residue a provider could rely on.
+     *
+     * <p>A stale boundary that still contains processes, or whose membership cannot be read, is a
+     * containment failure and rejects the delegated root. Only deletion of an already empty cgroup
+     * remains best-effort because it cannot hide surviving provider processes.</p>
      */
-    private static void reclaimStaleJobs(Path root) {
+    static void reclaimStaleJobs(Path root) throws IOException {
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
-            children.limit(MAX_STALE_JOB_SWEEP)
-                    .filter(child -> Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS))
-                    .filter(child -> String.valueOf(child.getFileName()).startsWith("minos-"))
-                    .filter(child -> !CONTROLLER_DIRECTORY.equals(String.valueOf(child.getFileName())))
-                    .forEach(child -> {
-                        try {
-                            new LinuxCgroupJob(child).close();
-                        } catch (RuntimeException exception) {
-                            LOGGER.log(System.Logger.Level.WARNING,
-                                    "MINOS could not reclaim stale cgroup " + child, exception);
-                        }
-                    });
-        } catch (IOException | RuntimeException exception) {
+            for (Path child : children.limit(MAX_STALE_JOB_SWEEP).toList()) {
+                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
+                if (!String.valueOf(child.getFileName()).startsWith("minos-")) continue;
+                if (CONTROLLER_DIRECTORY.equals(String.valueOf(child.getFileName()))) continue;
+                reclaimStaleJob(child);
+            }
+        }
+    }
+
+    private static void reclaimStaleJob(Path child) {
+        LinuxCgroupJob stale = new LinuxCgroupJob(child);
+        if (stale.aliveProcesses() > 0L) {
+            stale.kill();
+        }
+        try {
+            Files.deleteIfExists(child);
+        } catch (IOException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not enumerate stale cgroups in " + root, exception);
+                    "MINOS could not remove already-empty stale cgroup " + child, exception);
         }
     }
 
