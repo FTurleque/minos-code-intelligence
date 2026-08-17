@@ -1,6 +1,7 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.ExecutionPathIdentityProvider.IdentityPair;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
 import java.io.IOException;
@@ -94,10 +95,11 @@ public final class IndexingRuntimePorts {
      *
      * <p>The canonical path protects against symlink retargeting while the stable filesystem-object
      * identity detects replacement of a directory by another object at the same pathname. The
-     * identity can come from the Java provider key or a platform-specific strong identity fallback.
-     * A strict authorization is captured only when both roots expose such identities. If either
-     * identity is unavailable, {@link #tryCapture(Path, Path)} returns empty and local process
-     * execution treats that missing authorization as a hard launch failure.</p>
+     * identity can come from the Java provider key, Unix device/inode values or a trusted
+     * platform-specific runtime implementation. A strict authorization is captured only when both
+     * roots expose strong identities. If that proof is unavailable, {@link #tryCapture(Path, Path)}
+     * returns empty and local process execution treats the missing authorization as a hard launch
+     * failure.</p>
      */
     public record ExecutionPathAuthorization(
             Path registeredProjectRoot,
@@ -129,16 +131,17 @@ public final class IndexingRuntimePorts {
                     throw new IllegalArgumentException(
                             "projectRoot resolves outside registeredProjectRoot");
                 }
-                Optional<String> registeredFileKey = fileIdentity(realRegisteredRoot);
-                Optional<String> projectFileKey = fileIdentity(realProjectRoot);
-                if (registeredFileKey.isEmpty() || projectFileKey.isEmpty()) {
+                Optional<IdentityPair> captured = StableFileSystemIdentity.capture(
+                        realRegisteredRoot, realProjectRoot);
+                if (captured.isEmpty()) {
                     return Optional.empty();
                 }
+                IdentityPair identity = captured.orElseThrow();
                 return Optional.of(new ExecutionPathAuthorization(
                         realRegisteredRoot,
                         realProjectRoot,
-                        registeredFileKey,
-                        projectFileKey));
+                        Optional.of(identity.registeredProjectIdentity()),
+                        Optional.of(identity.projectIdentity())));
             } catch (IOException unavailable) {
                 // Some protocol/contract tests intentionally construct requests for paths that are
                 // not materialized. Local process execution rejects an absent authorization before
@@ -154,14 +157,20 @@ public final class IndexingRuntimePorts {
         public void verifyCurrent(Path currentRegisteredProjectRoot, Path currentProjectRoot) {
             final Path realRegisteredRoot;
             final Path realProjectRoot;
-            final Optional<String> currentRegisteredFileKey;
-            final Optional<String> currentProjectFileKey;
+            final Optional<String> currentRegisteredIdentity;
+            final Optional<String> currentProjectIdentity;
             try {
                 realRegisteredRoot = normalizedAbsolute(
                         currentRegisteredProjectRoot, "currentRegisteredProjectRoot").toRealPath();
                 realProjectRoot = normalizedAbsolute(currentProjectRoot, "currentProjectRoot").toRealPath();
-                currentRegisteredFileKey = fileIdentity(realRegisteredRoot);
-                currentProjectFileKey = fileIdentity(realProjectRoot);
+                Optional<IdentityPair> captured = StableFileSystemIdentity.capture(
+                        realRegisteredRoot, realProjectRoot);
+                if (captured.isEmpty()) {
+                    throw new IOException("stable filesystem identity is unavailable");
+                }
+                IdentityPair identity = captured.orElseThrow();
+                currentRegisteredIdentity = Optional.of(identity.registeredProjectIdentity());
+                currentProjectIdentity = Optional.of(identity.projectIdentity());
             } catch (IOException failure) {
                 throw new IllegalStateException(
                         "provider execution path identity cannot be revalidated before launch", failure);
@@ -169,8 +178,8 @@ public final class IndexingRuntimePorts {
 
             if (!realRegisteredRoot.equals(registeredProjectRoot)
                     || !realProjectRoot.equals(projectRoot)
-                    || !fileIdentityMatches(registeredProjectFileKey, currentRegisteredFileKey)
-                    || !fileIdentityMatches(projectFileKey, currentProjectFileKey)) {
+                    || !fileIdentityMatches(registeredProjectFileKey, currentRegisteredIdentity)
+                    || !fileIdentityMatches(projectFileKey, currentProjectIdentity)) {
                 throw new IllegalStateException(
                         "provider execution path identity changed after canonical authorization");
             }
@@ -178,10 +187,6 @@ public final class IndexingRuntimePorts {
                 throw new IllegalStateException(
                         "provider execution path no longer resolves inside the registered project root");
             }
-        }
-
-        private static Optional<String> fileIdentity(Path realPath) throws IOException {
-            return StableFileSystemIdentity.capture(realPath);
         }
 
         private static boolean fileIdentityMatches(Optional<String> authorized, Optional<String> current) {
@@ -203,7 +208,7 @@ public final class IndexingRuntimePorts {
      * the registered project.</p>
      *
      * <p>{@code pathAuthorization} snapshots the canonical filesystem identity at request
-     * construction whenever both roots are materialized and expose stable filesystem-object
+     * construction whenever both roots are materialized and expose strong filesystem-object
      * identities. Local process execution requires this authorization and revalidates it
      * immediately before {@code ProcessBuilder.start()}.</p>
      */
