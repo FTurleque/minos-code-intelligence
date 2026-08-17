@@ -92,7 +92,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
                         }
                         yield Capability.unavailable("linux-cgroup-v2",
                                 root.isEmpty()
-                                        ? "delegated cgroup v2 root is unavailable"
+                                        ? "delegated cgroup v2 root with cgroup.kill is unavailable"
                                         : "POSIX sh is unavailable");
                     }
                     case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome).isPresent()
@@ -126,6 +126,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
         String jobName = "minos-provider-" + request.runId();
         return new ProcessIndexerExecutor.ProcessPlanTransformer() {
             private LinuxCgroupJob job;
+            private RuntimeException deferredContainmentFailure;
 
             @Override
             public IndexerProcessPlan transform(IndexerProcessPlan plan, Path runDirectory) throws Exception {
@@ -140,15 +141,36 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             }
 
             @Override
-            public void killContainedJob() {
-                if (job != null) job.kill();
+            public synchronized void killContainedJob() {
+                if (job == null) return;
+                try {
+                    job.kill();
+                } catch (RuntimeException failure) {
+                    rememberContainmentFailure(failure);
+                }
             }
 
             @Override
-            public void releaseContainment() {
-                if (job != null) {
+            public synchronized void releaseContainment() {
+                if (job == null) return;
+                RuntimeException failure = deferredContainmentFailure;
+                try {
                     job.close();
+                } catch (RuntimeException closeFailure) {
+                    if (failure == null) failure = closeFailure;
+                    else if (failure != closeFailure) failure.addSuppressed(closeFailure);
+                } finally {
                     job = null;
+                    deferredContainmentFailure = null;
+                }
+                if (failure != null) throw failure;
+            }
+
+            private void rememberContainmentFailure(RuntimeException failure) {
+                if (deferredContainmentFailure == null) {
+                    deferredContainmentFailure = failure;
+                } else if (deferredContainmentFailure != failure) {
+                    deferredContainmentFailure.addSuppressed(failure);
                 }
             }
         };

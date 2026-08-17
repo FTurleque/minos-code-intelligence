@@ -24,9 +24,8 @@ import java.util.UUID;
  * used by sandboxed workers; ownership-only callers deliberately leave controller limits unchanged.</p>
  *
  * <p>When resource limits are requested, {@code memory.max}, {@code pids.max} and {@code cpu.max}
- * bound the aggregate process tree. In every mode {@code cgroup.kill} (when exposed by the kernel)
- * terminates all remaining members atomically, with explicit member termination as defence in
- * depth.</p>
+ * bound the aggregate process tree. Strong ownership requires the kernel {@code cgroup.kill}
+ * primitive so MINOS never falls back to signalling raw PIDs that may have been reused.</p>
  */
 final class LinuxCgroupJob implements AutoCloseable {
 
@@ -38,6 +37,7 @@ final class LinuxCgroupJob implements AutoCloseable {
     static final String PROCS_FILE = "cgroup.procs";
     static final long CPU_PERIOD_MICROS = 100_000L;
 
+    private static final String KILL_FILE = "cgroup.kill";
     private static final java.util.regex.Pattern SAFE_JOB_NAME =
             java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,95}");
     private static final List<String> REQUIRED_CONTROLLERS = List.of("memory", "pids", "cpu");
@@ -51,9 +51,10 @@ final class LinuxCgroupJob implements AutoCloseable {
     private static Optional<Path> delegation = Optional.empty();
 
     private final Path directory;
+    private boolean closed;
 
-    private LinuxCgroupJob(Path directory) {
-        this.directory = directory;
+    LinuxCgroupJob(Path directory) {
+        this.directory = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
     }
 
     /**
@@ -177,10 +178,17 @@ final class LinuxCgroupJob implements AutoCloseable {
                     .filter(child -> Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS))
                     .filter(child -> String.valueOf(child.getFileName()).startsWith("minos-"))
                     .filter(child -> !CONTROLLER_DIRECTORY.equals(String.valueOf(child.getFileName())))
-                    .forEach(child -> new LinuxCgroupJob(child).close());
+                    .forEach(child -> {
+                        try {
+                            new LinuxCgroupJob(child).close();
+                        } catch (RuntimeException exception) {
+                            LOGGER.log(System.Logger.Level.WARNING,
+                                    "MINOS could not reclaim stale cgroup " + child, exception);
+                        }
+                    });
         } catch (IOException | RuntimeException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not reclaim stale cgroups in " + root, exception);
+                    "MINOS could not enumerate stale cgroups in " + root, exception);
         }
     }
 
@@ -226,9 +234,10 @@ final class LinuxCgroupJob implements AutoCloseable {
             if (!Files.exists(directory.resolve(PROCS_FILE), LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("cgroup ownership file is missing: " + directory.resolve(PROCS_FILE));
             }
+            job.requireKillSwitch();
             return job;
         } catch (IOException | RuntimeException failure) {
-            job.close();
+            discardUnstartedCgroup(directory, failure);
             throw failure;
         }
     }
@@ -259,10 +268,19 @@ final class LinuxCgroupJob implements AutoCloseable {
             job.requireApplied("memory.max", Long.toString(limits.memoryBytes()));
             job.requireApplied("pids.max", Long.toString(limits.processes()));
             job.requireApplied("cpu.max", limits.cpuMicrosPerPeriod() + " " + CPU_PERIOD_MICROS);
+            job.requireKillSwitch();
             return job;
         } catch (IOException | RuntimeException exception) {
-            job.close();
+            discardUnstartedCgroup(directory, exception);
             throw exception;
+        }
+    }
+
+    private static void discardUnstartedCgroup(Path directory, Throwable failure) {
+        try {
+            Files.deleteIfExists(directory);
+        } catch (IOException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
         }
     }
 
@@ -289,69 +307,103 @@ final class LinuxCgroupJob implements AutoCloseable {
         return List.copyOf(wrapped);
     }
 
-    /** Number of processes still alive inside the boundary. */
-    long aliveProcesses() {
+    /** Number of processes still alive inside the boundary. Read failures are containment failures. */
+    synchronized long aliveProcesses() {
+        if (closed) return 0L;
         try {
-            return Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8).stream()
-                    .filter(line -> !line.isBlank())
-                    .count();
+            return members().size();
         } catch (IOException exception) {
-            return 0L;
+            throw containmentFailure("unable to read cgroup membership", exception);
         }
     }
 
-    /** Atomically terminates every process in the boundary. */
+    /** Atomically terminates every process in the boundary using the kernel ownership primitive. */
     void kill() {
-        Path killSwitch = directory.resolve("cgroup.kill");
+        kill(MAX_KILL_POLLS, KILL_POLL_MILLIS);
+    }
+
+    /** Package-private bounded variant used by deterministic fault-injection tests. */
+    synchronized void kill(int maximumPolls, long pollMillis) {
+        if (closed) return;
+        if (maximumPolls < 1) throw new IllegalArgumentException("maximumPolls must be positive");
+        if (pollMillis < 0L) throw new IllegalArgumentException("pollMillis must not be negative");
+        killInternal(maximumPolls, pollMillis);
+    }
+
+    private void killInternal(int maximumPolls, long pollMillis) {
+        Path killSwitch;
         try {
-            if (Files.exists(killSwitch, LinkOption.NOFOLLOW_LINKS)) {
-                Files.writeString(killSwitch, "1", StandardCharsets.UTF_8);
-            }
-        } catch (IOException ignored) {
-            // Fall through to the explicit signal path below.
+            killSwitch = requireKillSwitch();
+            Files.writeString(killSwitch, "1", StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw containmentFailure("kernel cgroup.kill is unavailable or could not be triggered", exception);
         }
-        for (int poll = 0; poll < MAX_KILL_POLLS; poll++) {
-            List<Long> members = members();
-            if (members.isEmpty()) return;
-            members.forEach(pid -> ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly));
+
+        for (int poll = 0; poll < maximumPolls; poll++) {
+            List<Long> current;
             try {
-                Thread.sleep(KILL_POLL_MILLIS);
+                current = members();
+            } catch (IOException exception) {
+                throw containmentFailure("unable to verify cgroup membership after cgroup.kill", exception);
+            }
+            if (current.isEmpty()) return;
+            if (poll + 1 >= maximumPolls) {
+                throw containmentFailure("cgroup still contains " + current.size()
+                        + " process(es) after kernel cgroup.kill", null);
+            }
+            if (pollMillis == 0L) {
+                Thread.onSpinWait();
+                continue;
+            }
+            try {
+                Thread.sleep(pollMillis);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                return;
+                throw containmentFailure("interrupted while verifying cgroup termination", exception);
             }
         }
     }
 
-    private List<Long> members() {
-        try {
-            List<Long> members = new ArrayList<>();
-            for (String line : Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
-                if (!line.isBlank()) parsePid(line).ifPresent(members::add);
+    private List<Long> members() throws IOException {
+        List<Long> result = new ArrayList<>();
+        for (String line : Files.readAllLines(directory.resolve(PROCS_FILE), StandardCharsets.UTF_8)) {
+            if (line.isBlank()) continue;
+            String value = line.trim();
+            try {
+                long pid = Long.parseLong(value);
+                if (pid <= 0L) throw new NumberFormatException("pid must be positive");
+                result.add(pid);
+            } catch (NumberFormatException exception) {
+                throw new IOException("invalid PID in cgroup.procs: " + value, exception);
             }
-            return members;
-        } catch (IOException exception) {
-            return List.of();
         }
+        return List.copyOf(result);
     }
 
-    private static Optional<Long> parsePid(String line) {
-        try {
-            return Optional.of(Long.parseLong(line.trim()));
-        } catch (NumberFormatException ignored) {
-            // cgroup.procs only ever holds decimal pids; anything else is not addressable.
-            return Optional.empty();
+    private Path requireKillSwitch() throws IOException {
+        Path killSwitch = directory.resolve(KILL_FILE);
+        if (Files.isSymbolicLink(killSwitch)
+                || !Files.isRegularFile(killSwitch, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("kernel cgroup.kill control is missing: " + killSwitch);
         }
+        return killSwitch;
+    }
+
+    private IllegalStateException containmentFailure(String detail, Throwable cause) {
+        String message = "strong cgroup containment cleanup failed for " + directory + ": " + detail;
+        return cause == null ? new IllegalStateException(message) : new IllegalStateException(message, cause);
     }
 
     @Override
-    public void close() {
-        kill();
+    public synchronized void close() {
+        if (closed) return;
+        killInternal(MAX_KILL_POLLS, KILL_POLL_MILLIS);
         try {
             Files.deleteIfExists(directory);
         } catch (IOException exception) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not reclaim cgroup " + directory, exception);
+            throw containmentFailure("unable to reclaim empty cgroup", exception);
         }
+        closed = true;
     }
 
     private void write(String file, String value) throws IOException {
