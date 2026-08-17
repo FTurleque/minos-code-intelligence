@@ -26,11 +26,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>JGit's built-in transport timeout is an inactivity timeout expressed in whole seconds. That
  * alone cannot enforce an absolute clone deadline. This adapter clamps every connect/read timeout
  * to the budget remaining at that operation and wraps response/request streams. Reads refresh the
- * socket timeout before each blocking call; writes, flushes and closes execute in a virtual thread
- * and are awaited only for the absolute budget remaining. On expiry an in-flight write/flush closes
- * the request stream asynchronously to unblock the transport; an in-flight close is only interrupted
- * because issuing a second close could itself block indefinitely. GitHub/GitLab remote materialization
- * only permits HTTPS, so an unexpected non-HTTP transport is rejected fail-closed.</p>
+ * socket timeout before each blocking call; response closes and request writes, flushes and closes
+ * execute in a virtual thread and are awaited only for the absolute budget remaining. On expiry an
+ * in-flight write/flush closes the request stream asynchronously to unblock the transport; an
+ * in-flight close is only interrupted because issuing a second close could itself block indefinitely.
+ * GitHub/GitLab remote materialization only permits HTTPS, so an unexpected non-HTTP transport is
+ * rejected fail-closed.</p>
  */
 final class JGitCloneDeadline {
 
@@ -137,6 +138,7 @@ final class JGitCloneDeadline {
     private static final class DeadlineInputStream extends FilterInputStream {
         private final HttpConnection connection;
         private final JGitRemoteRepositoryMaterializer.CloneBudget budget;
+        private final AtomicBoolean closed = new AtomicBoolean();
 
         private DeadlineInputStream(
                 InputStream delegate,
@@ -187,9 +189,86 @@ final class JGitCloneDeadline {
             }
         }
 
+        @Override
+        public void close() throws IOException {
+            if (!closed.compareAndSet(false, true)) return;
+            runBoundedClose();
+        }
+
         private void prepareRead() throws IOException {
+            if (closed.get()) {
+                throw new IOException("JGit HTTP response stream is closed");
+            }
             connection.setReadTimeout(budget.remainingTimeoutMillis());
             budget.enforceTimeout();
+        }
+
+        private void runBoundedClose() throws IOException {
+            try {
+                budget.enforceTimeout();
+            } catch (IOException timeout) {
+                closeDelegateAsync();
+                throw timeout;
+            }
+
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            CountDownLatch completed = new CountDownLatch(1);
+            Thread worker = Thread.ofVirtual()
+                    .name("minos-jgit-http-input-close")
+                    .start(() -> {
+                        try {
+                            in.close();
+                        } catch (Throwable problem) {
+                            failure.set(problem);
+                        } finally {
+                            completed.countDown();
+                        }
+                    });
+
+            try {
+                while (completed.getCount() != 0L) {
+                    int remainingMillis = budget.remainingTimeoutMillis();
+                    if (completed.await(remainingMillis, TimeUnit.MILLISECONDS)) {
+                        break;
+                    }
+                    // Millisecond rounding may wake just before the monotonic deadline. Re-check
+                    // and loop if there is still budget; once expired this throws the stable error.
+                    budget.enforceTimeout();
+                }
+            } catch (InterruptedException interrupted) {
+                worker.interrupt();
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted while enforcing remote repository clone deadline", interrupted);
+            } catch (IOException timeout) {
+                // Do not issue a second close: the first close is precisely the operation that may
+                // be stuck. Interrupt the worker and let the bounded caller return at the deadline.
+                worker.interrupt();
+                throw timeout;
+            }
+
+            // A close that completed just after the deadline still fails as a deadline breach.
+            budget.enforceTimeout();
+            rethrowInputFailure(failure.get());
+        }
+
+        private void closeDelegateAsync() {
+            Thread.ofVirtual()
+                    .name("minos-jgit-http-input-close")
+                    .start(() -> {
+                        try {
+                            in.close();
+                        } catch (IOException ignored) {
+                            // The deadline failure remains authoritative; close is best-effort cleanup.
+                        }
+                    });
+        }
+
+        private static void rethrowInputFailure(Throwable failure) throws IOException {
+            if (failure == null) return;
+            if (failure instanceof IOException io) throw io;
+            if (failure instanceof RuntimeException runtime) throw runtime;
+            if (failure instanceof Error error) throw error;
+            throw new IOException("unexpected JGit HTTP input failure", failure);
         }
     }
 
