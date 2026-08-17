@@ -108,7 +108,7 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                 Instant startedAt = Instant.now();
                 writeMetadata(metadataSink, plan, request, startedAt);
 
-                Process process = startProvider(plan, transformer);
+                Process process = startProvider(plan, transformer, request);
                 try (ProcessOwnershipTracker ownership = new ProcessOwnershipTracker(process)) {
                     supervisor = startWriteQuotaSupervisor(writeQuota, plan, runDirectory, transformer, process);
                     BoundedProcessOutput.Capture outputCapture =
@@ -159,8 +159,11 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         }
     }
 
-    private static Process startProvider(IndexerProcessPlan plan, ProcessPlanTransformer transformer)
-            throws IOException {
+    private static Process startProvider(
+            IndexerProcessPlan plan,
+            ProcessPlanTransformer transformer,
+            IndexingExecutionRequest request
+    ) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder(plan.command());
         processBuilder.directory(plan.workingDirectory().toFile());
         if (transformer.trustedLauncherRequiresParentEnvironment()) {
@@ -171,6 +174,16 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         } else {
             ProviderProcessEnvironment.apply(processBuilder, plan.environment());
         }
+
+        // The application authorizes a physical filesystem identity when it creates the request.
+        // Re-resolve it at the last host-controlled instruction before ProcessBuilder.start(): this
+        // rejects symlink retargeting as well as same-path directory replacement when fileKey is
+        // available. The sandbox may canonicalize paths too, but comparing only current root/current
+        // scope would still allow both names to be retargeted together between orchestration and launch.
+        request.pathAuthorization()
+                .orElseThrow(() -> new IllegalStateException(
+                        "provider execution path was not canonically authorized before launch"))
+                .verifyCurrent(request.registeredProjectRoot(), request.projectRoot());
         return processBuilder.start();
     }
 
