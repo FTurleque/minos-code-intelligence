@@ -41,9 +41,10 @@ class IndexingExecutionPathContainmentTest {
 
         IndexingRun run = execute(project, executed, new AtomicBoolean());
 
-        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status(), run.message().orElse("<no run message>"));
         assertEquals(project.toRealPath(), executed.get().registeredProjectRoot());
-        assertEquals(realApp.toRealPath(), executed.get().projectRoot());
+        assertEquals(project.toRealPath().resolve("app"), executed.get().projectRoot());
+        assertEquals(realApp.toRealPath(), executed.get().projectRoot().toRealPath());
         assertEquals(Path.of("app"), executed.get().projectRelativeRoot());
     }
 
@@ -57,8 +58,9 @@ class IndexingExecutionPathContainmentTest {
 
         IndexingRun run = execute(project, executed, new AtomicBoolean());
 
-        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
-        assertEquals(realApp.toRealPath(), executed.get().projectRoot());
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status(), run.message().orElse("<no run message>"));
+        assertEquals(project.toRealPath().resolve("app"), executed.get().projectRoot());
+        assertEquals(realApp.toRealPath(), executed.get().projectRoot().toRealPath());
     }
 
     @Test

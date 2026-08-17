@@ -185,7 +185,10 @@ final class IndexingRunExecutor {
                 throw new IllegalStateException(
                         "provider execution root resolves outside project: " + portable(relative));
             }
-            return realExecutionRoot;
+            // Security is decided on canonical paths, but the execution request deliberately keeps
+            // the lexical root so its registeredRoot + relativeRoot contract remains stable. The
+            // sandbox backend canonicalizes the validated mount before applying OS isolation.
+            return executionRoot;
         } catch (IOException failure) {
             throw new IllegalStateException(
                     "provider execution root could not be resolved safely: " + portable(relative), failure);
