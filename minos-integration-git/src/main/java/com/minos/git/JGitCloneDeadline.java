@@ -223,19 +223,7 @@ final class JGitCloneDeadline {
                     .start(closeTask);
 
             try {
-                while (!closeTask.isDone()) {
-                    int remainingMillis = budget.remainingTimeoutMillis();
-                    try {
-                        closeTask.get(remainingMillis, TimeUnit.MILLISECONDS);
-                    } catch (TimeoutException timeout) {
-                        // Millisecond rounding may wake just before the monotonic deadline. Re-check
-                        // and loop if there is still budget; once expired this throws the stable error.
-                        budget.enforceTimeout();
-                    }
-                }
-                // Surface delegate failures, including Errors captured by FutureTask, without catching
-                // Throwable in MINOS code. A successful task returns null immediately here.
-                closeTask.get();
+                awaitCloseTask(closeTask);
             } catch (InterruptedException interrupted) {
                 worker.interrupt();
                 Thread.currentThread().interrupt();
@@ -252,6 +240,23 @@ final class JGitCloneDeadline {
 
             // A close that completed just after the deadline still fails as a deadline breach.
             budget.enforceTimeout();
+        }
+
+        private void awaitCloseTask(FutureTask<Void> closeTask)
+                throws InterruptedException, ExecutionException, IOException {
+            while (!closeTask.isDone()) {
+                int remainingMillis = budget.remainingTimeoutMillis();
+                try {
+                    closeTask.get(remainingMillis, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException timeout) {
+                    // Millisecond rounding may wake just before the monotonic deadline. Re-check
+                    // and loop if there is still budget; once expired this throws the stable error.
+                    budget.enforceTimeout();
+                }
+            }
+            // Surface delegate failures, including Errors captured by FutureTask, without catching
+            // Throwable in MINOS code. A successful task returns null immediately here.
+            closeTask.get();
         }
 
         private void closeDelegateAsync() {
