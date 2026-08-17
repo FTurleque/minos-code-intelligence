@@ -216,8 +216,9 @@ public final class IndexingRuntimePorts {
             }
             changedFiles = immutableSortedPaths(changedFiles);
             pathAuthorization = Objects.requireNonNull(pathAuthorization, "pathAuthorization");
-            pathAuthorization.ifPresent(authorization ->
-                    authorization.verifyCurrent(registeredProjectRoot, projectRoot));
+            if (pathAuthorization.isPresent()) {
+                pathAuthorization.orElseThrow().verifyCurrent(registeredProjectRoot, projectRoot);
+            }
             if (mode == IndexingMode.FULL && !changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("FULL execution must not expose a partial changed-file scope");
             }
