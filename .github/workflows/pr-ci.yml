@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -152,7 +152,7 @@ jobs:
   m28-final-linux:
     name: M28 final Linux exact-head gate
     if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Checkout exact M28 head
@@ -206,7 +206,7 @@ jobs:
   m28-final-windows:
     name: M28 final Windows exact-head gate
     if: github.event_name == 'pull_request' && ((github.head_ref == 'pre-m28-audit-remediation' && github.base_ref == 'develop') || (github.head_ref == 'develop' && github.base_ref == 'main'))
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 90
     steps:
       - name: Checkout exact M28 head
@@ -243,7 +243,7 @@ jobs:
   m15-final-exact-head:
     name: M15 final Windows exact-head gate
     if: github.event_name == 'pull_request' && github.head_ref == 'm15-finalize-s7-s11'
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 90
     steps:
       - name: Checkout exact M15 head

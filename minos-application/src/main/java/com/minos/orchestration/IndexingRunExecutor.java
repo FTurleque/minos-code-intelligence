@@ -13,6 +13,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ProjectIndexState.Availability;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -61,7 +62,12 @@ final class IndexingRunExecutor {
             throw new IllegalArgumentException(
                     "multi-scope incremental indexing is not qualified; planner must require FULL for this topology");
         }
-        return root;
+        try {
+            return root.toRealPath();
+        } catch (IOException failure) {
+            throw new IllegalArgumentException(
+                    "projectRoot could not be resolved to a canonical directory: " + projectRoot, failure);
+        }
     }
 
     private static ProjectIndexState reconcilePreviousState(
@@ -173,7 +179,17 @@ final class IndexingRunExecutor {
             throw new IllegalStateException(
                     "provider execution root is missing or outside project: " + portable(relative));
         }
-        return executionRoot;
+        try {
+            Path realExecutionRoot = executionRoot.toRealPath();
+            if (!realExecutionRoot.startsWith(root)) {
+                throw new IllegalStateException(
+                        "provider execution root resolves outside project: " + portable(relative));
+            }
+            return realExecutionRoot;
+        } catch (IOException failure) {
+            throw new IllegalStateException(
+                    "provider execution root could not be resolved safely: " + portable(relative), failure);
+        }
     }
 
     private static void stageSnapshot(

@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     name: Java 24 / Maven Wrapper verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
