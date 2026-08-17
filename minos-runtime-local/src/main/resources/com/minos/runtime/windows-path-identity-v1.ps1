@@ -1,9 +1,10 @@
-param(
-    [Parameter(Mandatory = $true)][string]$Registered,
-    [Parameter(Mandatory = $true)][string]$Project
-)
-
 $ErrorActionPreference = 'Stop'
+
+$registered = $env:MINOS_REGISTERED_PATH_IDENTITY_TARGET
+$project = $env:MINOS_PROJECT_PATH_IDENTITY_TARGET
+if ([string]::IsNullOrWhiteSpace($registered) -or [string]::IsNullOrWhiteSpace($project)) {
+    throw 'MINOS path identity targets are missing'
+}
 
 $source = @'
 using System;
@@ -88,8 +89,8 @@ public static class MinosPathIdentity
 
 try {
     Add-Type -TypeDefinition $source -Language CSharp
-    [Console]::Out.WriteLine('registered=' + [MinosPathIdentity]::Capture($Registered))
-    [Console]::Out.WriteLine('project=' + [MinosPathIdentity]::Capture($Project))
+    [Console]::Out.WriteLine('registered=' + [MinosPathIdentity]::Capture($registered))
+    [Console]::Out.WriteLine('project=' + [MinosPathIdentity]::Capture($project))
     exit 0
 }
 catch {
