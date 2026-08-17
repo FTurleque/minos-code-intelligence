@@ -59,7 +59,11 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
                 "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
 
         Process process = builder.start();
-        try (ExecutorService outputExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (ExecutorService outputExecutor = Executors.newSingleThreadExecutor(
+                Thread.ofPlatform()
+                        .name("minos-windows-path-identity-output")
+                        .daemon(true)
+                        .factory())) {
             Future<byte[]> output = outputExecutor.submit(() -> drainBounded(process.getInputStream()));
             boolean completed;
             try {
