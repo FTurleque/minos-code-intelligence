@@ -15,15 +15,21 @@ import java.lang.reflect.Method;
 import java.net.Proxy;
 import java.net.URL;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Applies the clone's absolute wall-clock budget to every HTTP connection created by JGit.
  *
  * <p>JGit's built-in transport timeout is an inactivity timeout expressed in whole seconds. That
  * alone cannot enforce an absolute clone deadline. This adapter clamps every connect/read timeout
- * to the budget remaining at that operation and wraps response/request streams so the remaining
- * timeout is refreshed before each blocking I/O call. GitHub/GitLab remote materialization only
- * permits HTTPS, so an unexpected non-HTTP transport is rejected fail-closed.</p>
+ * to the budget remaining at that operation and wraps response/request streams. Reads refresh the
+ * socket timeout before each blocking call; writes and flushes execute in a virtual thread and are
+ * awaited only for the absolute budget remaining. On expiry the request stream is closed
+ * asynchronously to unblock the transport without letting close itself extend the caller's
+ * deadline. GitHub/GitLab remote materialization only permits HTTPS, so an unexpected non-HTTP
+ * transport is rejected fail-closed.</p>
  */
 final class JGitCloneDeadline {
 
@@ -199,23 +205,83 @@ final class JGitCloneDeadline {
 
         @Override
         public void write(int value) throws IOException {
-            budget.enforceTimeout();
-            out.write(value);
-            budget.enforceTimeout();
+            runBounded(() -> out.write(value));
         }
 
         @Override
         public void write(byte[] bytes, int offset, int length) throws IOException {
-            budget.enforceTimeout();
-            out.write(bytes, offset, length);
-            budget.enforceTimeout();
+            runBounded(() -> out.write(bytes, offset, length));
         }
 
         @Override
         public void flush() throws IOException {
+            runBounded(out::flush);
+        }
+
+        private void runBounded(IoOperation operation) throws IOException {
             budget.enforceTimeout();
-            out.flush();
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            CountDownLatch completed = new CountDownLatch(1);
+            Thread worker = Thread.ofVirtual()
+                    .name("minos-jgit-http-output")
+                    .start(() -> {
+                        try {
+                            operation.run();
+                        } catch (Throwable problem) {
+                            failure.set(problem);
+                        } finally {
+                            completed.countDown();
+                        }
+                    });
+
+            try {
+                while (completed.getCount() != 0L) {
+                    int remainingMillis = budget.remainingTimeoutMillis();
+                    if (completed.await(remainingMillis, TimeUnit.MILLISECONDS)) {
+                        break;
+                    }
+                    // Millisecond rounding may wake just before the monotonic deadline. Re-check
+                    // and loop if there is still budget; once expired this throws the stable error.
+                    budget.enforceTimeout();
+                }
+            } catch (InterruptedException interrupted) {
+                abort(worker);
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted while enforcing remote repository clone deadline", interrupted);
+            } catch (IOException timeout) {
+                abort(worker);
+                throw timeout;
+            }
+
+            // An operation that completed just after the deadline still fails as a deadline breach.
             budget.enforceTimeout();
+            rethrow(failure.get());
+        }
+
+        private void abort(Thread worker) {
+            worker.interrupt();
+            Thread.ofVirtual()
+                    .name("minos-jgit-http-output-close")
+                    .start(() -> {
+                        try {
+                            out.close();
+                        } catch (IOException ignored) {
+                            // The deadline failure remains authoritative; close is best-effort cleanup.
+                        }
+                    });
+        }
+
+        private static void rethrow(Throwable failure) throws IOException {
+            if (failure == null) return;
+            if (failure instanceof IOException io) throw io;
+            if (failure instanceof RuntimeException runtime) throw runtime;
+            if (failure instanceof Error error) throw error;
+            throw new IOException("unexpected JGit HTTP output failure", failure);
+        }
+
+        @FunctionalInterface
+        private interface IoOperation {
+            void run() throws IOException;
         }
     }
 }
