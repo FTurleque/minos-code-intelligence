@@ -68,6 +68,52 @@ class ProcessIndexerExecutorTest {
     }
 
     @Test
+    void processMetadataNeverPersistsProviderCommandArguments() throws Exception {
+        Path project = temporary.resolve("metadata-project");
+        Files.createDirectories(project);
+        Path generated = project.resolve("index.scip");
+        Path source = temporary.resolve("MetadataProvider.java");
+        Files.writeString(source, """
+                import java.nio.file.*;
+                public class MetadataProvider {
+                    public static void main(String[] args) throws Exception {
+                        Files.writeString(Path.of(args[0]), "fresh-scip");
+                    }
+                }
+                """);
+        String apiKey = "api-key-value-must-not-leak";
+        String bearer = "bearer-value-must-not-leak";
+        String credential = "credential-value-must-not-leak";
+        String java = javaExecutable();
+        ProcessIndexerExecutor executor = new ProcessIndexerExecutor(
+                "fake-provider",
+                temporary.resolve("metadata-home"),
+                (request, runDirectory) -> new IndexerProcessPlan(
+                        List.of(
+                                java,
+                                source.toString(),
+                                generated.toString(),
+                                "--api-key",
+                                apiKey,
+                                "authorization=Bearer " + bearer,
+                                "credential=" + credential),
+                        project,
+                        Map.of(),
+                        generated,
+                        Duration.ofMinutes(1)));
+
+        var artifact = executor.execute(request(project));
+        String metadata = Files.readString(artifact.finalArtifact().getParent().resolve("process.txt"));
+
+        assertTrue(metadata.contains("command=<redacted provider command; argumentCount=6>"));
+        assertFalse(metadata.contains(apiKey));
+        assertFalse(metadata.contains(bearer));
+        assertFalse(metadata.contains(credential));
+        assertFalse(metadata.contains("--api-key"),
+                "provider option names are not a safe allow-list for persisted diagnostics");
+    }
+
+    @Test
     void replacingDiagnosticPathsWithSymlinksCannotRedirectMinosHostWrites() throws Exception {
         Assumptions.assumeFalse(CommandLocator.isWindows(), "symbolic-link fixture is qualified on Unix CI");
         Path project = temporary.resolve("symlink-project");

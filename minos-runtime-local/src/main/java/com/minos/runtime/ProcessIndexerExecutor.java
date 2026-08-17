@@ -378,29 +378,18 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                 + "\nstderrTruncated=" + output.stderrTruncated() + "\n");
     }
 
+    /**
+     * Provider command arguments are intentionally never persisted.
+     *
+     * <p>A blacklist of token/password/secret spellings is not a confidentiality boundary: provider
+     * CLIs can use arbitrary option names such as api-key, authorization, credential or vendor-
+     * specific flags. Keeping only argument cardinality preserves useful diagnostics while making
+     * the persisted metadata independent of future credential naming conventions.</p>
+     */
     private static String redactedCommand(List<String> command) {
-        List<String> rendered = new ArrayList<>(command.size());
-        boolean redactNext = false;
-        for (String argument : command) {
-            if (redactNext) {
-                rendered.add("<redacted>");
-                redactNext = false;
-                continue;
-            }
-            String lower = argument.toLowerCase(Locale.ROOT);
-            if (lower.contains("token=") || lower.contains("password=") || lower.contains("secret=")) {
-                int separator = argument.indexOf('=');
-                rendered.add(separator >= 0
-                        ? argument.substring(0, separator + 1) + "<redacted>"
-                        : "<redacted>");
-                continue;
-            }
-            rendered.add(argument);
-            if ("--token".equals(lower) || "--password".equals(lower) || "--secret".equals(lower)) {
-                redactNext = true;
-            }
-        }
-        return String.join(" ", rendered);
+        Objects.requireNonNull(command, "command");
+        int argumentCount = Math.max(0, command.size() - 1);
+        return "<redacted provider command; argumentCount=" + argumentCount + ">";
     }
 
     private static void append(OutputStream output, String value) throws IOException {

@@ -23,7 +23,6 @@ public final class LocalSourceReader implements SourceReader {
     private static final long MAX_SOURCE_BYTES = 16L * 1024L * 1024L;
 
     private final Path projectRoot;
-    private CachedSource cachedSource;
 
     public LocalSourceReader(Path projectRoot) throws IOException {
         this.projectRoot = Objects.requireNonNull(projectRoot, "projectRoot").toRealPath();
@@ -50,8 +49,8 @@ public final class LocalSourceReader implements SourceReader {
         if (source.isEmpty()) {
             return Optional.empty();
         }
-        CachedSource cached = readSource(source.orElseThrow());
-        List<String> lines = cached.lines();
+        LoadedSource loaded = readSource(source.orElseThrow());
+        List<String> lines = loaded.lines();
         if (lines.isEmpty() || location.startLine() > lines.size()) {
             return Optional.empty();
         }
@@ -80,7 +79,7 @@ public final class LocalSourceReader implements SourceReader {
         if (contentTruncated) {
             content = TokenEstimator.truncate(content, maxTokens);
         }
-        int totalFileTokens = cached.totalTokens();
+        int totalFileTokens = loaded.totalTokens();
         boolean truncated = start != requestedStart || end != requestedEnd || contentTruncated;
         int actualEnd = content.isEmpty()
                 ? start + 1
@@ -122,8 +121,14 @@ public final class LocalSourceReader implements SourceReader {
         );
     }
 
-    private CachedSource readSource(Path source) throws IOException {
-        if (cachedSource != null && cachedSource.path().equals(source)) return cachedSource;
+    /**
+     * Reads the current file contents for every excerpt request.
+     *
+     * <p>The previous single-path cache could return stale source indefinitely when a file changed
+     * between requests. Timestamp/size based invalidation would still be heuristic on file systems
+     * with coarse timestamp resolution, so correctness takes precedence over this tiny cache.</p>
+     */
+    private LoadedSource readSource(Path source) throws IOException {
         List<String> lines = new ArrayList<>();
         int utf8Bytes = 0;
         try (BoundedInputStream input = new BoundedInputStream(
@@ -141,8 +146,7 @@ public final class LocalSourceReader implements SourceReader {
             throw new IOException("source token byte counter overflow", exception);
         }
         int totalTokens = utf8Bytes == 0 ? 0 : Math.max(1, (utf8Bytes + 3) / 4);
-        cachedSource = new CachedSource(source, List.copyOf(lines), totalTokens);
-        return cachedSource;
+        return new LoadedSource(List.copyOf(lines), totalTokens);
     }
 
     private String readText(Path source) throws IOException {
@@ -193,6 +197,5 @@ public final class LocalSourceReader implements SourceReader {
         return String.join("\n", lines.subList(start, end + 1));
     }
 
-
-    private record CachedSource(Path path, List<String> lines, int totalTokens) { }
+    private record LoadedSource(List<String> lines, int totalTokens) { }
 }

@@ -7,11 +7,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Proxy;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -95,6 +97,116 @@ class JGitCloneDeadlineTest {
         assertEquals("remote repository clone exceeds the configured time limit", failure.getMessage());
         assertTrue(elapsedMillis < 2_000L,
                 "a stalled transport must not outlive the configured wall-clock budget indefinitely");
+    }
+
+    @Test
+    void stalledHttpWriteIsBoundedByAbsoluteCloneDeadline(@TempDir Path temp) throws Exception {
+        assertOutputOperationIsBounded(temp, BlockOn.WRITE, output -> output.write(7));
+    }
+
+    @Test
+    void stalledHttpFlushIsBoundedByAbsoluteCloneDeadline(@TempDir Path temp) throws Exception {
+        assertOutputOperationIsBounded(temp, BlockOn.FLUSH, OutputStream::flush);
+    }
+
+    private static void assertOutputOperationIsBounded(
+            Path temp,
+            BlockOn blockOn,
+            OutputOperation operation
+    ) throws Exception {
+        RemoteRepositoryCachePolicy policy = new RemoteRepositoryCachePolicy(
+                2,
+                1024L * 1024L,
+                100,
+                100,
+                200,
+                Duration.ofMillis(300));
+        JGitRemoteRepositoryMaterializer.CloneBudget budget =
+                new JGitRemoteRepositoryMaterializer.CloneBudget(temp.resolve("repository"), policy);
+        BlockingOutputStream rawOutput = new BlockingOutputStream(blockOn);
+        HttpConnection raw = outputConnection(rawOutput);
+        HttpConnectionFactory delegate = new HttpConnectionFactory() {
+            @Override
+            public HttpConnection create(URL url) {
+                return raw;
+            }
+
+            @Override
+            public HttpConnection create(URL url, java.net.Proxy proxy) {
+                return raw;
+            }
+        };
+
+        HttpConnection bounded = JGitCloneDeadline.wrapFactory(delegate, budget)
+                .create(new URL("https://github.com/acme/demo.git"));
+        OutputStream output = bounded.getOutputStream();
+        long started = System.nanoTime();
+        IOException failure = assertThrows(IOException.class, () -> operation.run(output));
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertEquals("remote repository clone exceeds the configured time limit", failure.getMessage());
+        assertTrue(elapsedMillis < 2_000L,
+                "a blocked request body operation must not outlive the absolute clone deadline");
+        assertTrue(rawOutput.entered.await(1, TimeUnit.SECONDS),
+                "the fixture must prove the delegate operation actually blocked");
+        assertTrue(rawOutput.closed.await(1, TimeUnit.SECONDS),
+                "deadline expiry must close the request stream to unblock the transport");
+    }
+
+    private static HttpConnection outputConnection(OutputStream output) {
+        return (HttpConnection) Proxy.newProxyInstance(
+                HttpConnection.class.getClassLoader(),
+                new Class<?>[]{HttpConnection.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getOutputStream" -> output;
+                    case "getURL" -> new URL("https://github.com/acme/demo.git");
+                    case "usingProxy" -> false;
+                    case "getContentLength", "getResponseCode" -> 0;
+                    default -> defaultValue(method.getReturnType());
+                });
+    }
+
+    private enum BlockOn { WRITE, FLUSH }
+
+    private static final class BlockingOutputStream extends OutputStream {
+        private final BlockOn blockOn;
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch closed = new CountDownLatch(1);
+
+        private BlockingOutputStream(BlockOn blockOn) {
+            this.blockOn = blockOn;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            if (blockOn == BlockOn.WRITE) blockUntilClosed();
+        }
+
+        @Override
+        public void flush() throws IOException {
+            if (blockOn == BlockOn.FLUSH) blockUntilClosed();
+        }
+
+        @Override
+        public void close() {
+            closed.countDown();
+        }
+
+        private void blockUntilClosed() throws IOException {
+            entered.countDown();
+            while (closed.getCount() != 0L) {
+                try {
+                    closed.await();
+                } catch (InterruptedException ignored) {
+                    // Deliberately ignore interruption: only closing the delegate releases this fixture.
+                }
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface OutputOperation {
+        void run(OutputStream output) throws IOException;
     }
 
     private static Object defaultValue(Class<?> type) {
