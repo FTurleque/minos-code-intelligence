@@ -4,7 +4,10 @@ import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -90,6 +93,104 @@ public final class IndexingRuntimePorts {
     }
 
     /**
+     * Canonical identity captured before an execution request crosses into the provider runtime.
+     *
+     * <p>The canonical path protects against symlink retargeting. The optional file key additionally
+     * detects replacement of a directory by a different filesystem object at the same pathname when
+     * the underlying filesystem exposes a stable identity. A missing file key deliberately degrades
+     * to canonical-path identity rather than inventing a weaker synthetic identifier.</p>
+     */
+    public record ExecutionPathAuthorization(
+            Path registeredProjectRoot,
+            Path projectRoot,
+            Optional<String> registeredProjectFileKey,
+            Optional<String> projectFileKey
+    ) {
+        public ExecutionPathAuthorization {
+            registeredProjectRoot = normalizedAbsolute(registeredProjectRoot, "registeredProjectRoot");
+            projectRoot = normalizedAbsolute(projectRoot, "projectRoot");
+            registeredProjectFileKey = Objects.requireNonNull(
+                    registeredProjectFileKey, "registeredProjectFileKey");
+            projectFileKey = Objects.requireNonNull(projectFileKey, "projectFileKey");
+            if (!projectRoot.startsWith(registeredProjectRoot)) {
+                throw new IllegalArgumentException(
+                        "authorized projectRoot must stay inside authorized registeredProjectRoot");
+            }
+        }
+
+        public static Optional<ExecutionPathAuthorization> tryCapture(
+                Path registeredProjectRoot,
+                Path projectRoot
+        ) {
+            try {
+                Path realRegisteredRoot = normalizedAbsolute(
+                        registeredProjectRoot, "registeredProjectRoot").toRealPath();
+                Path realProjectRoot = normalizedAbsolute(projectRoot, "projectRoot").toRealPath();
+                if (!realProjectRoot.startsWith(realRegisteredRoot)) {
+                    throw new IllegalArgumentException(
+                            "projectRoot resolves outside registeredProjectRoot");
+                }
+                return Optional.of(new ExecutionPathAuthorization(
+                        realRegisteredRoot,
+                        realProjectRoot,
+                        fileKey(realRegisteredRoot),
+                        fileKey(realProjectRoot)));
+            } catch (IOException unavailable) {
+                // Some protocol/contract tests intentionally construct requests for paths that are
+                // not materialized. Local process execution rejects an absent authorization before
+                // launch; non-process ports can continue to use the historical request contract.
+                return Optional.empty();
+            }
+        }
+
+        /**
+         * Re-resolves the lexical request roots and fails closed if either identity changed.
+         */
+        public void verifyCurrent(Path currentRegisteredProjectRoot, Path currentProjectRoot) {
+            final Path realRegisteredRoot;
+            final Path realProjectRoot;
+            final Optional<String> currentRegisteredFileKey;
+            final Optional<String> currentProjectFileKey;
+            try {
+                realRegisteredRoot = normalizedAbsolute(
+                        currentRegisteredProjectRoot, "currentRegisteredProjectRoot").toRealPath();
+                realProjectRoot = normalizedAbsolute(currentProjectRoot, "currentProjectRoot").toRealPath();
+                currentRegisteredFileKey = fileKey(realRegisteredRoot);
+                currentProjectFileKey = fileKey(realProjectRoot);
+            } catch (IOException failure) {
+                throw new IllegalStateException(
+                        "provider execution path identity cannot be revalidated before launch", failure);
+            }
+
+            if (!realRegisteredRoot.equals(registeredProjectRoot)
+                    || !realProjectRoot.equals(projectRoot)
+                    || !fileIdentityMatches(registeredProjectFileKey, currentRegisteredFileKey)
+                    || !fileIdentityMatches(projectFileKey, currentProjectFileKey)) {
+                throw new IllegalStateException(
+                        "provider execution path identity changed after canonical authorization");
+            }
+            if (!realProjectRoot.startsWith(realRegisteredRoot)) {
+                throw new IllegalStateException(
+                        "provider execution path no longer resolves inside the registered project root");
+            }
+        }
+
+        private static Optional<String> fileKey(Path realPath) throws IOException {
+            Object key = Files.readAttributes(
+                    realPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).fileKey();
+            return key == null ? Optional.empty() : Optional.of(key.toString());
+        }
+
+        private static boolean fileIdentityMatches(Optional<String> authorized, Optional<String> current) {
+            return authorized.isEmpty() || authorized.equals(current);
+        }
+
+        private static Path normalizedAbsolute(Path value, String label) {
+            return Objects.requireNonNull(value, label).toAbsolutePath().normalize();
+        }
+    }
+
+    /**
      * One provider execution request.
      *
      * <p>{@code registeredProjectRoot} is the root persisted in the MINOS project registry.
@@ -97,6 +198,10 @@ public final class IndexingRuntimePorts {
      * equal for a single-root project. In a polyglot monorepo, {@code projectRoot} can be a
      * nested module while {@code projectRelativeRoot} preserves its portable position inside
      * the registered project.</p>
+     *
+     * <p>{@code pathAuthorization} snapshots the canonical filesystem identity at request
+     * construction whenever both roots are materialized. Local process execution requires this
+     * authorization and revalidates it immediately before {@code ProcessBuilder.start()}.</p>
      */
     public record IndexingExecutionRequest(
             UUID runId,
@@ -106,7 +211,8 @@ public final class IndexingRuntimePorts {
             Path projectRelativeRoot,
             IndexerSelection selection,
             IndexingMode mode,
-            List<String> changedFiles
+            List<String> changedFiles,
+            Optional<ExecutionPathAuthorization> pathAuthorization
     ) {
         public IndexingExecutionRequest {
             Objects.requireNonNull(runId, "runId");
@@ -127,12 +233,32 @@ public final class IndexingRuntimePorts {
                 throw new IllegalArgumentException("NONE is not an executable indexing mode");
             }
             changedFiles = immutableSortedPaths(changedFiles);
+            pathAuthorization = Objects.requireNonNull(pathAuthorization, "pathAuthorization");
+            if (pathAuthorization.isPresent()) {
+                pathAuthorization.orElseThrow().verifyCurrent(registeredProjectRoot, projectRoot);
+            }
             if (mode == IndexingMode.FULL && !changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("FULL execution must not expose a partial changed-file scope");
             }
             if (mode == IndexingMode.INCREMENTAL && changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("INCREMENTAL execution requires changed files");
             }
+        }
+
+        /** Constructor preserving the historical request shape while capturing path identity. */
+        public IndexingExecutionRequest(
+                UUID runId,
+                UUID projectId,
+                Path registeredProjectRoot,
+                Path projectRoot,
+                Path projectRelativeRoot,
+                IndexerSelection selection,
+                IndexingMode mode,
+                List<String> changedFiles
+        ) {
+            this(runId, projectId, registeredProjectRoot, projectRoot, projectRelativeRoot,
+                    selection, mode, changedFiles,
+                    ExecutionPathAuthorization.tryCapture(registeredProjectRoot, projectRoot));
         }
 
         /** Compatibility constructor for historical single-root executions. */
