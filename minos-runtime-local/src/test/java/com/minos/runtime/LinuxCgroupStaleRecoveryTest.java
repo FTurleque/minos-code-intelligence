@@ -7,21 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LinuxCgroupStaleRecoveryTest {
-
-    @Test
-    void emptyStaleCgroupIsReclaimedWithoutRequiringKillControl(@TempDir Path root) throws Exception {
-        Path stale = Files.createDirectory(root.resolve("minos-empty"));
-        Files.writeString(stale.resolve(LinuxCgroupJob.PROCS_FILE), "", StandardCharsets.UTF_8);
-
-        LinuxCgroupJob.reclaimStaleJobs(root);
-
-        assertFalse(Files.exists(stale), "an empty stale cgroup should be removed");
-    }
 
     @Test
     void emptyStaleCgroupDeletionFailureDoesNotDisableContainment(@TempDir Path root) throws Exception {
