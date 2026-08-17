@@ -109,6 +109,55 @@ class JGitCloneDeadlineTest {
         assertOutputOperationIsBounded(temp, BlockOn.FLUSH, OutputStream::flush);
     }
 
+    @Test
+    void stalledHttpCloseIsBoundedByAbsoluteCloneDeadlineAndRemainsIdempotent(@TempDir Path temp) throws Exception {
+        RemoteRepositoryCachePolicy policy = new RemoteRepositoryCachePolicy(
+                2,
+                1024L * 1024L,
+                100,
+                100,
+                200,
+                Duration.ofMillis(300));
+        JGitRemoteRepositoryMaterializer.CloneBudget budget =
+                new JGitRemoteRepositoryMaterializer.CloneBudget(temp.resolve("repository"), policy);
+        BlockingCloseOutputStream rawOutput = new BlockingCloseOutputStream();
+        HttpConnection raw = outputConnection(rawOutput);
+        HttpConnectionFactory delegate = new HttpConnectionFactory() {
+            @Override
+            public HttpConnection create(URL url) {
+                return raw;
+            }
+
+            @Override
+            public HttpConnection create(URL url, java.net.Proxy proxy) {
+                return raw;
+            }
+        };
+
+        HttpConnection bounded = JGitCloneDeadline.wrapFactory(delegate, budget)
+                .create(new URL("https://github.com/acme/demo.git"));
+        OutputStream output = bounded.getOutputStream();
+        long started = System.nanoTime();
+        IOException failure = assertThrows(IOException.class, output::close);
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertEquals("remote repository clone exceeds the configured time limit", failure.getMessage());
+        assertTrue(elapsedMillis < 2_000L,
+                "a blocked request body close must not outlive the absolute clone deadline");
+        assertTrue(rawOutput.entered.await(1, TimeUnit.SECONDS),
+                "the fixture must prove the delegate close actually blocked");
+        assertEquals(1, rawOutput.closeCalls.get(),
+                "deadline expiry must not recursively invoke another potentially blocking close");
+
+        // The wrapper is logically closed as soon as close starts, even if the delegate remains stuck.
+        output.close();
+        assertEquals(1, rawOutput.closeCalls.get(), "repeated close must remain idempotent");
+
+        rawOutput.release.countDown();
+        assertTrue(rawOutput.completed.await(1, TimeUnit.SECONDS),
+                "the fixture close worker must be releasable after the bounded caller returns");
+    }
+
     private static void assertOutputOperationIsBounded(
             Path temp,
             BlockOn blockOn,
@@ -200,6 +249,34 @@ class JGitCloneDeadlineTest {
                 } catch (InterruptedException ignored) {
                     // Deliberately ignore interruption: only closing the delegate releases this fixture.
                 }
+            }
+        }
+    }
+
+    private static final class BlockingCloseOutputStream extends OutputStream {
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+        private final CountDownLatch completed = new CountDownLatch(1);
+        private final AtomicInteger closeCalls = new AtomicInteger();
+
+        @Override
+        public void write(int value) {
+        }
+
+        @Override
+        public void close() {
+            closeCalls.incrementAndGet();
+            entered.countDown();
+            try {
+                while (release.getCount() != 0L) {
+                    try {
+                        release.await();
+                    } catch (InterruptedException ignored) {
+                        // Deliberately ignore interruption: the fixture models an uncooperative close.
+                    }
+                }
+            } finally {
+                completed.countDown();
             }
         }
     }

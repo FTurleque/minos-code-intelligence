@@ -17,6 +17,7 @@ import java.net.URL;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -25,11 +26,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>JGit's built-in transport timeout is an inactivity timeout expressed in whole seconds. That
  * alone cannot enforce an absolute clone deadline. This adapter clamps every connect/read timeout
  * to the budget remaining at that operation and wraps response/request streams. Reads refresh the
- * socket timeout before each blocking call; writes and flushes execute in a virtual thread and are
- * awaited only for the absolute budget remaining. On expiry the request stream is closed
- * asynchronously to unblock the transport without letting close itself extend the caller's
- * deadline. GitHub/GitLab remote materialization only permits HTTPS, so an unexpected non-HTTP
- * transport is rejected fail-closed.</p>
+ * socket timeout before each blocking call; writes, flushes and closes execute in a virtual thread
+ * and are awaited only for the absolute budget remaining. On expiry an in-flight write/flush closes
+ * the request stream asynchronously to unblock the transport; an in-flight close is only interrupted
+ * because issuing a second close could itself block indefinitely. GitHub/GitLab remote materialization
+ * only permits HTTPS, so an unexpected non-HTTP transport is rejected fail-closed.</p>
  */
 final class JGitCloneDeadline {
 
@@ -194,6 +195,7 @@ final class JGitCloneDeadline {
 
     private static final class DeadlineOutputStream extends FilterOutputStream {
         private final JGitRemoteRepositoryMaterializer.CloneBudget budget;
+        private final AtomicBoolean closed = new AtomicBoolean();
 
         private DeadlineOutputStream(
                 OutputStream delegate,
@@ -205,21 +207,43 @@ final class JGitCloneDeadline {
 
         @Override
         public void write(int value) throws IOException {
-            runBounded(() -> out.write(value));
+            requireOpen();
+            runBounded(() -> out.write(value), true);
         }
 
         @Override
         public void write(byte[] bytes, int offset, int length) throws IOException {
-            runBounded(() -> out.write(bytes, offset, length));
+            requireOpen();
+            runBounded(() -> out.write(bytes, offset, length), true);
         }
 
         @Override
         public void flush() throws IOException {
-            runBounded(out::flush);
+            requireOpen();
+            runBounded(out::flush, true);
         }
 
-        private void runBounded(IoOperation operation) throws IOException {
-            budget.enforceTimeout();
+        @Override
+        public void close() throws IOException {
+            if (!closed.compareAndSet(false, true)) return;
+            runBounded(out::close, false);
+        }
+
+        private void requireOpen() throws IOException {
+            if (closed.get()) {
+                throw new IOException("JGit HTTP request stream is closed");
+            }
+        }
+
+        private void runBounded(IoOperation operation, boolean closeDelegateOnAbort) throws IOException {
+            try {
+                budget.enforceTimeout();
+            } catch (IOException timeout) {
+                if (closeDelegateOnAbort) closed.set(true);
+                closeDelegateAsync();
+                throw timeout;
+            }
+
             AtomicReference<Throwable> failure = new AtomicReference<>();
             CountDownLatch completed = new CountDownLatch(1);
             Thread worker = Thread.ofVirtual()
@@ -245,21 +269,35 @@ final class JGitCloneDeadline {
                     budget.enforceTimeout();
                 }
             } catch (InterruptedException interrupted) {
-                abort(worker);
+                abort(worker, closeDelegateOnAbort);
                 Thread.currentThread().interrupt();
                 throw new IOException("interrupted while enforcing remote repository clone deadline", interrupted);
             } catch (IOException timeout) {
-                abort(worker);
+                abort(worker, closeDelegateOnAbort);
                 throw timeout;
             }
 
             // An operation that completed just after the deadline still fails as a deadline breach.
-            budget.enforceTimeout();
+            try {
+                budget.enforceTimeout();
+            } catch (IOException timeout) {
+                if (closeDelegateOnAbort) {
+                    closed.set(true);
+                    closeDelegateAsync();
+                }
+                throw timeout;
+            }
             rethrow(failure.get());
         }
 
-        private void abort(Thread worker) {
+        private void abort(Thread worker, boolean closeDelegateOnAbort) {
             worker.interrupt();
+            if (!closeDelegateOnAbort) return;
+            closed.set(true);
+            closeDelegateAsync();
+        }
+
+        private void closeDelegateAsync() {
             Thread.ofVirtual()
                     .name("minos-jgit-http-output-close")
                     .start(() -> {
