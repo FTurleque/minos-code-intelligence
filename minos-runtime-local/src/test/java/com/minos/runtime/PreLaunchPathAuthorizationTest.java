@@ -5,6 +5,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 import com.minos.orchestration.IndexerQualification;
 import com.minos.orchestration.IndexingMode;
+import com.minos.orchestration.IndexingRuntimePorts.ExecutionPathAuthorization;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
@@ -16,6 +17,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -112,6 +114,47 @@ class PreLaunchPathAuthorizationTest {
                 "a different inode/file identity at the same canonical pathname must be rejected");
     }
 
+    @Test
+    void incompleteFilesystemIdentityFailsClosedEvenWhenCanonicalPathsMatch() throws Exception {
+        Path project = Files.createDirectories(temporary.resolve("project"));
+        Path module = Files.createDirectories(project.resolve("module"));
+        ExecutionPathAuthorization incomplete = new ExecutionPathAuthorization(
+                project.toRealPath(),
+                module.toRealPath(),
+                Optional.empty(),
+                Optional.empty());
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> incomplete.verifyCurrent(project, module));
+
+        assertTrue(failure.getMessage().contains("identity changed after canonical authorization"));
+    }
+
+    @Test
+    void absentStrictAuthorizationFailsClosedBeforeSpawn() throws Exception {
+        Path project = Files.createDirectories(temporary.resolve("project"));
+        Path module = Files.createDirectories(project.resolve("module"));
+        IndexingExecutionRequest request = new IndexingExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                project,
+                module,
+                Path.of("module"),
+                selection(),
+                IndexingMode.FULL,
+                List.of(),
+                Optional.empty());
+        Path marker = temporary.resolve("provider-started-without-authorization");
+        ProcessIndexerExecutor executor = executor(request, marker);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> executor.executeSandboxed(request, (plan, runDirectory) -> plan));
+
+        assertTrue(failure.getMessage().contains("not canonically authorized before launch"));
+        assertFalse(Files.exists(marker),
+                "provider must not start when a stable filesystem identity could not be authorized");
+    }
+
     private ProcessIndexerExecutor executor(IndexingExecutionRequest request) {
         return executor(request, null);
     }
@@ -137,17 +180,21 @@ class PreLaunchPathAuthorizationTest {
     }
 
     private static IndexingExecutionRequest request(Path registeredRoot, Path projectRoot, Path relativeRoot) {
-        IndexerDescriptor descriptor = new IndexerDescriptor(
-                "fake-provider", "1", "fake", Set.of(Language.JAVA), Set.of(), Set.of(),
-                IndexerQualification.QUALIFIED, 1, List.of());
         return new IndexingExecutionRequest(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 registeredRoot,
                 projectRoot,
                 relativeRoot,
-                new IndexerSelection(Language.JAVA, descriptor),
+                selection(),
                 IndexingMode.FULL,
                 List.of());
+    }
+
+    private static IndexerSelection selection() {
+        IndexerDescriptor descriptor = new IndexerDescriptor(
+                "fake-provider", "1", "fake", Set.of(Language.JAVA), Set.of(), Set.of(),
+                IndexerQualification.QUALIFIED, 1, List.of());
+        return new IndexerSelection(Language.JAVA, descriptor);
     }
 }
