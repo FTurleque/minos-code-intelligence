@@ -4,10 +4,7 @@ import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -95,11 +92,12 @@ public final class IndexingRuntimePorts {
     /**
      * Canonical identity captured before an execution request crosses into the provider runtime.
      *
-     * <p>The canonical path protects against symlink retargeting while the file key detects
-     * replacement of a directory by a different filesystem object at the same pathname. A strict
-     * authorization is captured only when the underlying filesystem exposes stable identities for
-     * both roots. If either identity is unavailable, {@link #tryCapture(Path, Path)} returns empty;
-     * local process execution treats that missing authorization as a hard launch failure.</p>
+     * <p>The canonical path protects against symlink retargeting while the stable filesystem-object
+     * identity detects replacement of a directory by another object at the same pathname. The
+     * identity can come from the Java provider key or a platform-specific strong identity fallback.
+     * A strict authorization is captured only when both roots expose such identities. If either
+     * identity is unavailable, {@link #tryCapture(Path, Path)} returns empty and local process
+     * execution treats that missing authorization as a hard launch failure.</p>
      */
     public record ExecutionPathAuthorization(
             Path registeredProjectRoot,
@@ -131,8 +129,8 @@ public final class IndexingRuntimePorts {
                     throw new IllegalArgumentException(
                             "projectRoot resolves outside registeredProjectRoot");
                 }
-                Optional<String> registeredFileKey = fileKey(realRegisteredRoot);
-                Optional<String> projectFileKey = fileKey(realProjectRoot);
+                Optional<String> registeredFileKey = fileIdentity(realRegisteredRoot);
+                Optional<String> projectFileKey = fileIdentity(realProjectRoot);
                 if (registeredFileKey.isEmpty() || projectFileKey.isEmpty()) {
                     return Optional.empty();
                 }
@@ -151,7 +149,7 @@ public final class IndexingRuntimePorts {
 
         /**
          * Re-resolves the lexical request roots and fails closed if either identity changed or
-         * cannot be proven with a stable filesystem key.
+         * cannot be proven with a stable filesystem-object identifier.
          */
         public void verifyCurrent(Path currentRegisteredProjectRoot, Path currentProjectRoot) {
             final Path realRegisteredRoot;
@@ -162,8 +160,8 @@ public final class IndexingRuntimePorts {
                 realRegisteredRoot = normalizedAbsolute(
                         currentRegisteredProjectRoot, "currentRegisteredProjectRoot").toRealPath();
                 realProjectRoot = normalizedAbsolute(currentProjectRoot, "currentProjectRoot").toRealPath();
-                currentRegisteredFileKey = fileKey(realRegisteredRoot);
-                currentProjectFileKey = fileKey(realProjectRoot);
+                currentRegisteredFileKey = fileIdentity(realRegisteredRoot);
+                currentProjectFileKey = fileIdentity(realProjectRoot);
             } catch (IOException failure) {
                 throw new IllegalStateException(
                         "provider execution path identity cannot be revalidated before launch", failure);
@@ -182,10 +180,8 @@ public final class IndexingRuntimePorts {
             }
         }
 
-        private static Optional<String> fileKey(Path realPath) throws IOException {
-            Object key = Files.readAttributes(
-                    realPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).fileKey();
-            return key == null ? Optional.empty() : Optional.of(key.toString());
+        private static Optional<String> fileIdentity(Path realPath) throws IOException {
+            return StableFileSystemIdentity.capture(realPath);
         }
 
         private static boolean fileIdentityMatches(Optional<String> authorized, Optional<String> current) {
@@ -207,9 +203,9 @@ public final class IndexingRuntimePorts {
      * the registered project.</p>
      *
      * <p>{@code pathAuthorization} snapshots the canonical filesystem identity at request
-     * construction whenever both roots are materialized and expose stable filesystem keys. Local
-     * process execution requires this authorization and revalidates it immediately before
-     * {@code ProcessBuilder.start()}.</p>
+     * construction whenever both roots are materialized and expose stable filesystem-object
+     * identities. Local process execution requires this authorization and revalidates it
+     * immediately before {@code ProcessBuilder.start()}.</p>
      */
     public record IndexingExecutionRequest(
             UUID runId,
