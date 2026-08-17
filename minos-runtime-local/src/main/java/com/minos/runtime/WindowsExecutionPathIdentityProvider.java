@@ -2,17 +2,22 @@ package com.minos.runtime;
 
 import com.minos.orchestration.ExecutionPathIdentityProvider;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,6 +26,7 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
 
     private static final String RESOURCE = "/com/minos/runtime/windows-path-identity-v1.ps1";
     private static final Duration QUERY_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration OUTPUT_DRAIN_TIMEOUT = Duration.ofSeconds(2);
     private static final int OUTPUT_LIMIT = 8 * 1024;
     private static final Pattern REGISTERED =
             Pattern.compile("(?m)^registered=([0-9a-fA-F]{8}:[0-9a-fA-F]{16})\\R?$");
@@ -37,25 +43,24 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
             return Optional.empty();
         }
 
-        Path output = Files.createTempFile("minos-windows-path-identity-", ".log");
-        try {
-            ProcessBuilder builder = new ProcessBuilder(List.of(
-                    powershell.orElseThrow().toString(),
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-EncodedCommand",
-                    encodedHelper()));
-            builder.redirectErrorStream(true);
-            builder.redirectOutput(output.toFile());
-            builder.environment().put(
-                    "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
-            builder.environment().put(
-                    "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell.orElseThrow().toString(),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-EncodedCommand",
+                encodedHelper()));
+        builder.redirectErrorStream(true);
+        builder.environment().put(
+                "MINOS_REGISTERED_PATH_IDENTITY_TARGET", registeredProjectRoot.toString());
+        builder.environment().put(
+                "MINOS_PROJECT_PATH_IDENTITY_TARGET", projectRoot.toString());
 
-            Process process = builder.start();
+        Process process = builder.start();
+        try (ExecutorService outputExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<byte[]> output = outputExecutor.submit(() -> drainBounded(process.getInputStream()));
             boolean completed;
             try {
                 completed = process.waitFor(QUERY_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
@@ -70,10 +75,7 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
                 throw new IOException("Windows filesystem identity query timed out");
             }
 
-            byte[] bytes;
-            try (InputStream input = Files.newInputStream(output)) {
-                bytes = input.readNBytes(OUTPUT_LIMIT + 1);
-            }
+            byte[] bytes = awaitOutput(output);
             if (bytes.length > OUTPUT_LIMIT) {
                 throw new IOException("Windows filesystem identity output exceeded its bound");
             }
@@ -89,8 +91,46 @@ public final class WindowsExecutionPathIdentityProvider implements ExecutionPath
             return Optional.of(new IdentityPair(
                     "windows:" + registered.group(1).toLowerCase(Locale.ROOT),
                     "windows:" + project.group(1).toLowerCase(Locale.ROOT)));
-        } finally {
-            Files.deleteIfExists(output);
+        }
+    }
+
+    /**
+     * Drains the trusted helper's pipe to EOF while retaining at most limit + 1 bytes.
+     *
+     * <p>Draining concurrently prevents a full pipe from stalling the helper, while retaining one
+     * byte beyond the limit lets the caller distinguish bounded output from overflow without ever
+     * writing helper diagnostics into the publicly writable system temporary directory.</p>
+     */
+    private static byte[] drainBounded(InputStream input) throws IOException {
+        try (InputStream stream = input;
+             ByteArrayOutputStream captured = new ByteArrayOutputStream(OUTPUT_LIMIT + 1)) {
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                int remaining = OUTPUT_LIMIT + 1 - captured.size();
+                if (remaining > 0) {
+                    captured.write(buffer, 0, Math.min(read, remaining));
+                }
+            }
+            return captured.toByteArray();
+        }
+    }
+
+    private static byte[] awaitOutput(Future<byte[]> output) throws IOException {
+        try {
+            return output.get(OUTPUT_DRAIN_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while draining Windows filesystem identity output", interrupted);
+        } catch (TimeoutException timeout) {
+            output.cancel(true);
+            throw new IOException("Windows filesystem identity output did not drain after helper exit", timeout);
+        } catch (ExecutionException failure) {
+            Throwable cause = failure.getCause();
+            if (cause instanceof IOException ioFailure) {
+                throw ioFailure;
+            }
+            throw new IOException("failed to drain Windows filesystem identity output", cause);
         }
     }
 
