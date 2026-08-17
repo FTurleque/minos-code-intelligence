@@ -75,6 +75,24 @@ public final class IndexingRuntimePorts {
     }
 
     /**
+     * La promotion fournie par ce port doit être atomique au sens de l'ADR-0006.
+     */
+    public interface SnapshotPromoter {
+        void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception;
+
+        /**
+         * Observes the authoritative snapshot state when supported by this promoter.
+         *
+         * <p>The default is explicitly {@link ActiveSnapshotObservation.Status#UNSUPPORTED}; a
+         * supported promoter must return {@code NO_ACTIVE_SNAPSHOT} when its authority is
+         * observable but empty.</p>
+         */
+        default ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws IOException {
+            return ActiveSnapshotObservation.unsupported();
+        }
+    }
+
+    /**
      * Canonical identity captured before an execution request crosses into the provider runtime.
      *
      * <p>The canonical path protects against symlink retargeting. The optional file key additionally
