@@ -30,7 +30,6 @@ final class ProviderResidueReclamation {
             "index.scip",
             "failed-index.scip",
             "preexisting-artifact.scip",
-            "windows-appcontainer-plan.txt",
             "scopes");
 
     private ProviderResidueReclamation() {
