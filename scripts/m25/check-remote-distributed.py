@@ -52,6 +52,7 @@ def main() -> int:
         artifact_limits = read("minos-engine/src/main/java/com/minos/orchestration/IndexArtifactLimits.java")
         artifact_store = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
         local_worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
+        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/ProviderWorkspaceFiles.java")
         sandbox_backend = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
         coordinator = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedIndexerExecutor.java")
@@ -97,9 +98,13 @@ def main() -> int:
                       "unsafe or duplicate entry", "artifact checksum", "maxArtifactBytes", "evict",
                       "decodeV1", "decodeV2", "projectRelativeRoot", "FORMAT_V2")
         require_facts("LocalIsolatedIndexWorker.java", local_worker,
-                      "ProjectIgnoreRules.load", "supportsUntrustedCode", "isSymbolicLink",
-                      "deleteWorkerTree", ".bundle-",
+                      "ProviderWorkspaceFiles.copyWorkspace", "ProviderWorkspaceFiles.deleteTree",
+                      "supportsUntrustedCode", ".bundle-",
                       "FORMAT_V2", "portableScope", "projectRelativeRoot")
+        require_facts("ProviderWorkspaceFiles.java", workspace_files,
+                      "ProjectIgnoreRules.load", "isSymbolicLink", "deleteTree",
+                      "ignoreRules.isHardIgnored", "ignoreRules.isIgnored",
+                      "budget.accountTraversalEntry", "budget.accountBytes")
         require_facts("WorkerSandboxBackend.java", sandbox_backend,
                       "native worker cannot prove OS-level network denial", "supportsUntrustedCode")
         require_facts("ProjectIgnoreRules.java", ignore_rules,
