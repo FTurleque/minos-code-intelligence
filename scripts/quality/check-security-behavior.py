@@ -45,6 +45,11 @@ def current_platform() -> str:
     return "other"
 
 
+def canonical_test_name(value: str) -> str:
+    """Return the Java method name when Surefire appends an injected-parameter signature."""
+    return value.partition("(")[0]
+
+
 def executed_testcases(root: Path) -> dict[tuple[str, str], str]:
     results: dict[tuple[str, str], str] = {}
     reports = sorted(root.glob("**/target/surefire-reports/TEST-*.xml"))
@@ -57,7 +62,7 @@ def executed_testcases(root: Path) -> dict[tuple[str, str], str]:
             raise RuntimeError(f"invalid Surefire XML report {report}: {exception}") from exception
         for testcase in suite.findall("testcase"):
             class_name = testcase.attrib.get("classname", "")
-            test_name = testcase.attrib.get("name", "")
+            test_name = canonical_test_name(testcase.attrib.get("name", ""))
             if not class_name or not test_name:
                 continue
             status = "PASS"
@@ -67,7 +72,12 @@ def executed_testcases(root: Path) -> dict[tuple[str, str], str]:
                 status = "FAIL"
             elif testcase.find("error") is not None:
                 status = "ERROR"
-            results[(class_name, test_name)] = status
+            key = (class_name, test_name)
+            previous = results.get(key)
+            if previous is None or previous == "PASS":
+                results[key] = status
+            elif status != "PASS":
+                results[key] = previous
     return results
 
 
