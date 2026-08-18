@@ -18,7 +18,9 @@ import java.util.Objects;
  * Lit un fichier binaire SCIP à la frontière infrastructure de MINOS.
  *
  * <p>Le type {@link Index} ne doit pas franchir le package d'adaptation SCIP.
- * La taille brute est imposée pendant la lecture protobuf, pas uniquement via un précheck.</p>
+ * La taille brute est imposée pendant la lecture protobuf, pas uniquement via un précheck. Avant
+ * la matérialisation complète du protobuf, un préflight streaming borne aussi l'amplification
+ * mémoire estimée de l'object graph par rapport au heap disponible.</p>
  */
 public final class ScipIndexReader {
 
@@ -52,7 +54,9 @@ public final class ScipIndexReader {
                 indexFile, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS))) {
             BoundedInputStream preflight = new BoundedInputStream(
                     Channels.newInputStream(channel), limits.maxArtifactBytes(), "SCIP artifact preflight");
-            limits.preflight(preflight);
+            ScipIngestionLimits.PreflightMetrics metrics = limits.preflight(preflight);
+            limits.enforceDecodeHeapBudget(metrics, observedSize, Runtime.getRuntime().maxMemory());
+
             channel.position(0L);
             BoundedInputStream input = new BoundedInputStream(
                     Channels.newInputStream(channel), limits.maxArtifactBytes(), "SCIP artifact");

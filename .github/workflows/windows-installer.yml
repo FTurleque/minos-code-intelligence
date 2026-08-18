@@ -39,7 +39,7 @@ concurrency:
 jobs:
   candidate:
     name: Build and smoke Windows 1.0.1 candidate
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 75
 
     steps:

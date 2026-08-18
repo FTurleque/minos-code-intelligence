@@ -19,7 +19,7 @@ concurrency:
 jobs:
   publish:
     name: Build, MCP smoke test and publish Windows x64
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}

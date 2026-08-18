@@ -82,6 +82,7 @@ def main() -> int:
         windows_launcher = read(
             "minos-runtime-local/src/main/resources/com/minos/runtime/windows-appcontainer-sandbox-v4.ps1")
         worker = read("minos-runtime-local/src/main/java/com/minos/runtime/LocalIsolatedIndexWorker.java")
+        workspace_files = read("minos-runtime-local/src/main/java/com/minos/runtime/ProviderWorkspaceFiles.java")
         worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
         clone_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
         clone = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteRepositoryMaterializer.java")
@@ -128,8 +129,11 @@ def main() -> int:
         require("WorkerSandboxBackend.java", worker_contract,
                 "supportsUntrustedCode", "UNTRUSTED_CODE_SUPPORTED", "qualifiedForCurrentPlatform")
         require("LocalIsolatedIndexWorker.java", worker,
-                "!sandboxBackend.supportsUntrustedCode()", "ProjectIgnoreRules.load(source)",
-                "ignoreRules.isHardIgnored(relative)", "ignoreRules.isIgnored(relative, false)")
+                "!sandboxBackend.supportsUntrustedCode()", "ProviderWorkspaceFiles.copyWorkspace")
+        require("ProviderWorkspaceFiles.java", workspace_files,
+                "ProjectIgnoreRules.load(source)", "ignoreRules.isHardIgnored(relative)",
+                "ignoreRules.isIgnored(relative, false)", "budget.accountTraversalEntry()",
+                "budget.accountBytes(read)")
         if worker.index("!sandboxBackend.supportsUntrustedCode()") > worker.index("sandboxBackend.execute"):
             raise RuntimeError("LocalIsolatedIndexWorker.java: trust qualification occurs after execution")
         require("LinuxBubblewrapWorkerSandboxBackend.java", linux,

@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Applies the clone's absolute wall-clock budget to every HTTP connection created by JGit.
+ * Applies the clone's absolute wall-clock budget and endpoint pin to every HTTP connection created by JGit.
  *
  * <p>JGit's built-in transport timeout is an inactivity timeout expressed in whole seconds. That
  * alone cannot enforce an absolute clone deadline. This adapter clamps every connect/read timeout
@@ -33,8 +33,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * execute in a virtual thread and are awaited only for the absolute budget remaining. On expiry an
  * in-flight write/flush closes the request stream asynchronously to unblock the transport; an
  * in-flight close is only interrupted because issuing a second close could itself block indefinitely.
- * GitHub/GitLab remote materialization only permits HTTPS, so an unexpected non-HTTP transport is
- * rejected fail-closed.</p>
+ * Every production connection is also revalidated against the original HTTPS host/port before the
+ * delegate creates it, so redirects can never silently cross the GitHub/GitLab trust boundary.</p>
  */
 final class JGitCloneDeadline {
 
@@ -47,38 +47,95 @@ final class JGitCloneDeadline {
         if (!(transport instanceof TransportHttp http)) {
             throw new IllegalStateException("remote repository clone requires the JGit HTTPS transport");
         }
-        http.setHttpConnectionFactory(wrapFactory(http.getHttpConnectionFactory(), budget));
+        String scheme = http.getURI().getScheme();
+        String host = http.getURI().getHost();
+        int port = http.getURI().getPort();
+        if (!"https".equalsIgnoreCase(scheme)
+                || host == null || host.isBlank()
+                || (port != -1 && port != 443)) {
+            throw new IllegalStateException("remote repository clone requires one pinned HTTPS endpoint on port 443");
+        }
+        http.setHttpConnectionFactory(wrapFactory(
+                http.getHttpConnectionFactory(),
+                budget,
+                new AllowedEndpoint(host)));
     }
 
+    /** Deadline-only wrapper retained for focused stream tests. Production uses the endpoint-pinned overload. */
     static HttpConnectionFactory wrapFactory(
             HttpConnectionFactory delegate,
             JGitRemoteRepositoryMaterializer.CloneBudget budget
     ) {
-        return new DeadlineHttpConnectionFactory(delegate, budget);
+        return new DeadlineHttpConnectionFactory(delegate, budget, null);
+    }
+
+    static HttpConnectionFactory wrapFactory(
+            HttpConnectionFactory delegate,
+            JGitRemoteRepositoryMaterializer.CloneBudget budget,
+            String expectedHost
+    ) {
+        return wrapFactory(delegate, budget, new AllowedEndpoint(expectedHost));
+    }
+
+    private static HttpConnectionFactory wrapFactory(
+            HttpConnectionFactory delegate,
+            JGitRemoteRepositoryMaterializer.CloneBudget budget,
+            AllowedEndpoint endpoint
+    ) {
+        return new DeadlineHttpConnectionFactory(delegate, budget, endpoint);
     }
 
     private static final class DeadlineHttpConnectionFactory implements HttpConnectionFactory {
         private final HttpConnectionFactory delegate;
         private final JGitRemoteRepositoryMaterializer.CloneBudget budget;
+        private final AllowedEndpoint endpoint;
 
         private DeadlineHttpConnectionFactory(
                 HttpConnectionFactory delegate,
-                JGitRemoteRepositoryMaterializer.CloneBudget budget
+                JGitRemoteRepositoryMaterializer.CloneBudget budget,
+                AllowedEndpoint endpoint
         ) {
             this.delegate = Objects.requireNonNull(delegate, "delegate");
             this.budget = Objects.requireNonNull(budget, "budget");
+            this.endpoint = endpoint;
         }
 
         @Override
         public HttpConnection create(URL url) throws IOException {
             budget.enforceTimeout();
+            validateEndpoint(url);
             return wrap(delegate.create(url), budget);
         }
 
         @Override
         public HttpConnection create(URL url, Proxy proxy) throws IOException {
             budget.enforceTimeout();
+            validateEndpoint(url);
             return wrap(delegate.create(url, proxy), budget);
+        }
+
+        private void validateEndpoint(URL url) throws IOException {
+            if (endpoint != null) endpoint.validate(url);
+        }
+    }
+
+    private record AllowedEndpoint(String host) {
+        private AllowedEndpoint {
+            if (host == null || host.isBlank()) {
+                throw new IllegalArgumentException("expected remote repository host must not be blank");
+            }
+            host = host.toLowerCase(java.util.Locale.ROOT);
+        }
+
+        private void validate(URL url) throws IOException {
+            Objects.requireNonNull(url, "url");
+            int port = url.getPort();
+            if (!"https".equalsIgnoreCase(url.getProtocol())
+                    || !host.equalsIgnoreCase(url.getHost())
+                    || (port != -1 && port != 443)
+                    || url.getUserInfo() != null) {
+                throw new IOException("JGit attempted a connection outside the pinned remote repository HTTPS endpoint");
+            }
         }
     }
 

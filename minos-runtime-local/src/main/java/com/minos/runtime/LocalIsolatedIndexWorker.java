@@ -11,20 +11,12 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.DistributedIndexing.WorkerRequest;
 import com.minos.remote.DistributedIndexing.WorkerResponse;
-import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
@@ -41,6 +33,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
 
     private static final long DEFAULT_MAX_WORKSPACE_FILES = SourceBudgetPolicy.DEFAULT_MAX_FILES;
     private static final long DEFAULT_MAX_WORKSPACE_BYTES = SourceBudgetPolicy.DEFAULT_MAX_BYTES;
+    private static final String WORKSPACE_BOUNDARY = "remote worker workspace";
 
     private final String workerId;
     private final Path workersRoot;
@@ -144,14 +137,15 @@ public final class LocalIsolatedIndexWorker implements Worker {
         Path workspace = providerRoot.resolve("workspace");
         Files.createDirectories(providerRoot);
         if (Files.exists(workspace, LinkOption.NOFOLLOW_LINKS)) {
-            deleteWorkerTree(workspace);
+            ProviderWorkspaceFiles.deleteTree(workersRoot, workspace, WORKSPACE_BOUNDARY);
         }
         Files.createDirectory(workspace);
 
         String portableScope = portableScope(request.execution().projectRelativeRoot());
         Instant startedAt = clock.instant();
         try {
-            copyWorkspace(request.execution().projectRoot(), workspace);
+            ProviderWorkspaceFiles.copyWorkspace(
+                    request.execution().projectRoot(), workspace, sourceBudgetPolicy, WORKSPACE_BOUNDARY);
             IndexingExecutionRequest isolated = new IndexingExecutionRequest(
                     request.execution().runId(),
                     request.execution().projectId(),
@@ -208,7 +202,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
             }
         } finally {
             if (Files.exists(providerRoot, LinkOption.NOFOLLOW_LINKS)) {
-                deleteWorkerTree(providerRoot);
+                ProviderWorkspaceFiles.deleteTree(workersRoot, providerRoot, WORKSPACE_BOUNDARY);
             }
             try {
                 Files.deleteIfExists(providerRoot.getParent());
@@ -226,118 +220,8 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 : WorkerSandboxBackend.nativeEphemeralWorkspace();
     }
 
-    private void copyWorkspace(Path sourceRoot, Path targetRoot) throws IOException {
-        Path source = Objects.requireNonNull(sourceRoot, "sourceRoot").toRealPath();
-        if (!Files.isDirectory(source)) {
-            throw new IOException("worker source workspace is not a directory");
-        }
-        SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("remote worker workspace");
-        ProjectIgnoreRules ignoreRules = ProjectIgnoreRules.load(source);
-        Files.walkFileTree(source, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
-                budget.accountTraversalEntry();
-                Path relative = source.relativize(directory);
-                if (ignoreRules.isHardIgnored(relative)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                if (Files.isSymbolicLink(directory)) {
-                    throw new IOException("remote worker rejects symbolic links: " + portable(relative));
-                }
-                Path target = checkedTarget(targetRoot, relative);
-                Files.createDirectories(target);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                budget.accountTraversalEntry();
-                Path relative = source.relativize(file);
-                if (ignoreRules.isIgnored(relative, false)) {
-                    return FileVisitResult.CONTINUE;
-                }
-                if (Files.isSymbolicLink(file)) {
-                    throw new IOException("remote worker rejects symbolic links: " + portable(relative));
-                }
-                if (!attributes.isRegularFile()) {
-                    throw new IOException("remote worker rejects non-regular workspace entries");
-                }
-                budget.accountFile();
-                Path target = checkedTarget(targetRoot, relative);
-                Files.createDirectories(target.getParent());
-                copyBounded(file, target, budget);
-                Files.setLastModifiedTime(target, attributes.lastModifiedTime());
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private static void copyBounded(Path source, Path target, SourceBudgetPolicy.Tracker budget) throws IOException {
-        byte[] buffer = new byte[8192];
-        try (InputStream input = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
-             OutputStream output = Files.newOutputStream(
-                     target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-            int read;
-            while ((read = input.read(buffer)) >= 0) {
-                if (read == 0) continue;
-                budget.accountBytes(read);
-                output.write(buffer, 0, read);
-            }
-        } catch (Exception exception) {
-            Files.deleteIfExists(target);
-            throw exception;
-        }
-    }
-
-    private static Path checkedTarget(Path targetRoot, Path relative) throws IOException {
-        Path target = targetRoot.resolve(relative).normalize();
-        if (!target.startsWith(targetRoot)) {
-            throw new IOException("worker workspace path escapes its target root");
-        }
-        return target;
-    }
-
     private static String portableScope(Path projectRelativeRoot) {
         String portable = projectRelativeRoot.toString().replace('\\', '/');
         return ".".equals(portable) ? "" : portable;
-    }
-
-    private static String portable(Path path) {
-        return path.toString().replace('\\', '/');
-    }
-
-    private void deleteWorkerTree(Path target) throws IOException {
-        Path normalized = target.toAbsolutePath().normalize();
-        if (normalized.equals(workersRoot) || !normalized.startsWith(workersRoot)) {
-            throw new IOException("refusing to delete outside the distributed worker root");
-        }
-        Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) throws IOException {
-                clearReadOnly(path);
-                Files.deleteIfExists(path);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
-                if (failure != null) throw failure;
-                clearReadOnly(directory);
-                Files.deleteIfExists(directory);
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private static void clearReadOnly(Path path) {
-        try {
-            DosFileAttributeView attributes = Files.getFileAttributeView(
-                    path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes != null && attributes.readAttributes().isReadOnly()) {
-                attributes.setReadOnly(false);
-            }
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Non-DOS file systems do not need this Windows-specific cleanup.
-        }
     }
 }

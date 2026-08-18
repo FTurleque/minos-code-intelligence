@@ -12,6 +12,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScipIngestionLimitsTest {
 
@@ -41,5 +42,41 @@ class ScipIngestionLimitsTest {
 
         assertDoesNotThrow(() -> limits.validate(exact));
         assertThrows(IOException.class, () -> limits.validate(overflow));
+    }
+
+    @Test
+    void decodeHeapBudgetRejectsCardinalityAmplificationBeforeFullParse() {
+        ScipIngestionLimits limits = ScipIngestionLimits.DEFAULT;
+        ScipIngestionLimits.PreflightMetrics hostile = new ScipIngestionLimits.PreflightMetrics(
+                50_000L,
+                500_000L,
+                8_000_000L,
+                1_000_000L,
+                128L * 1024L * 1024L);
+
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> limits.enforceDecodeHeapBudget(
+                        hostile,
+                        128L * 1024L * 1024L,
+                        1536L * 1024L * 1024L));
+
+        assertTrue(failure.getMessage().contains("safe decode heap budget"));
+    }
+
+    @Test
+    void decodeHeapBudgetAllowsSmallValidatedIndex() {
+        ScipIngestionLimits limits = ScipIngestionLimits.DEFAULT;
+        ScipIngestionLimits.PreflightMetrics small = new ScipIngestionLimits.PreflightMetrics(
+                10L,
+                100L,
+                1_000L,
+                100L,
+                1024L * 1024L);
+
+        assertDoesNotThrow(() -> limits.enforceDecodeHeapBudget(
+                small,
+                2L * 1024L * 1024L,
+                1024L * 1024L * 1024L));
     }
 }

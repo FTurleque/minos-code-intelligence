@@ -2,6 +2,7 @@ package com.minos.runtime;
 
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -11,23 +12,48 @@ import java.util.Optional;
 /**
  * Fail-closed wrapper for provider executions that require kernel-backed descendant ownership.
  *
- * <p>{@link ProcessOwnershipTracker} remains active inside the delegate as defence in depth, but it
- * is deliberately not the ownership authority. Linux uses an ownership-only cgroup v2 joined
- * before {@code exec}; Windows uses a Job Object assigned while the provider process is still
- * suspended. Unsupported hosts never silently fall back to process-tree polling.</p>
+ * <p>The historical two-argument constructor retains its ownership-only contract for callers that
+ * explicitly qualify that kernel primitive. Managed provider production wiring uses the explicit
+ * network-policy constructor, which additionally executes from a bounded ephemeral project copy
+ * inside the strongest qualified OS sandbox.</p>
  */
 public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
+    private static final String DELEGATE_PARAMETER = "delegate";
+
     private final ProcessIndexerExecutor delegate;
     private final BoundaryProvider boundaryProvider;
+    private final LocalIsolation localIsolation;
 
+    /** Strong descendant ownership only; managed providers must use the explicit network-policy constructor. */
     public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
-        this(delegate, platformBoundary(normalizedHome(minosHome)));
+        Path home = normalizedHome(minosHome);
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
+        this.boundaryProvider = platformBoundary(home);
+        this.localIsolation = null;
+    }
+
+    /**
+     * Production managed-provider boundary: copied workspace plus qualified OS sandbox and an
+     * explicit provider network policy.
+     */
+    public StrongProcessOwnershipIndexerExecutor(
+            ProcessIndexerExecutor delegate,
+            Path minosHome,
+            WorkerNetworkPolicy networkPolicy
+    ) {
+        Path home = normalizedHome(minosHome);
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
+        this.boundaryProvider = platformBoundary(home);
+        this.localIsolation = new LocalIsolation(
+                home,
+                Objects.requireNonNull(networkPolicy, "networkPolicy"));
     }
 
     StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, BoundaryProvider boundaryProvider) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = Objects.requireNonNull(boundaryProvider, "boundaryProvider");
+        this.localIsolation = null;
     }
 
     @Override
@@ -35,7 +61,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
         return delegate.indexerId();
     }
 
-    /** Probes the same strong-ownership capability used by production execution. */
+    /** Probes the same strong-ownership capability used by the ownership-only boundary. */
     public static Capability detectCapability(Path minosHome) {
         return Objects.requireNonNull(
                 platformBoundary(normalizedHome(minosHome)).capability(),
@@ -50,6 +76,39 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     @Override
     public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
         Objects.requireNonNull(request, "request");
+        if (localIsolation != null) {
+            return executeLocallyIsolated(request, localIsolation);
+        }
+        return executeOwnershipOnly(request);
+    }
+
+    private IndexingArtifact executeLocallyIsolated(
+            IndexingExecutionRequest request,
+            LocalIsolation isolation
+    ) throws Exception {
+        WorkerSandboxBackend backend = WorkerSandboxBackends.strongestAvailable(isolation.minosHome());
+        if (!backend.supportsUntrustedCode()) {
+            throw unavailable("qualified local provider sandbox is unavailable: " + backend.id());
+        }
+        if (isolation.networkPolicy() == WorkerNetworkPolicy.DENY && !backend.enforcesNetworkDeny()) {
+            throw unavailable("qualified local provider sandbox cannot prove OS-level network denial: " + backend.id());
+        }
+
+        try (LocalProviderWorkspace workspace = LocalProviderWorkspace.create(isolation.minosHome(), request)) {
+            IndexingExecutionRequest isolatedRequest = workspace.request();
+            IndexingArtifact artifact = Objects.requireNonNull(
+                    backend.execute(delegate, isolatedRequest, isolation.networkPolicy()),
+                    "local provider sandbox artifact");
+            if (artifact.language() != request.selection().language()
+                    || !artifact.indexerId().equals(delegate.indexerId())
+                    || !artifact.projectRelativeRoot().equals(request.projectRelativeRoot())) {
+                throw new IllegalStateException("local provider sandbox returned inconsistent artifact provenance");
+            }
+            return artifact;
+        }
+    }
+
+    private IndexingArtifact executeOwnershipOnly(IndexingExecutionRequest request) throws Exception {
         Capability capability = capability();
         if (!capability.strong()) {
             throw unavailable(String.join("; ", capability.diagnostics()));
@@ -184,6 +243,13 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
         Capability capability();
 
         ProcessIndexerExecutor.ProcessPlanTransformer transformer(IndexingExecutionRequest request);
+    }
+
+    private record LocalIsolation(Path minosHome, WorkerNetworkPolicy networkPolicy) {
+        private LocalIsolation {
+            minosHome = normalizedHome(minosHome);
+            Objects.requireNonNull(networkPolicy, "networkPolicy");
+        }
     }
 
     public record Capability(Status status, String mechanism, List<String> diagnostics) {

@@ -20,6 +20,12 @@ public record ScipIngestionLimits(
         long maxRelationshipFacts
 ) {
     private static final long MAX_NESTED_MESSAGE_BYTES = 768L * 1024L * 1024L;
+    private static final long MAX_DECODE_HEAP_BUDGET_BYTES = 1024L * 1024L * 1024L;
+    private static final long DECODE_BASE_OVERHEAD_BYTES = 16L * 1024L * 1024L;
+    private static final long DOCUMENT_HEAP_BYTES = 256L;
+    private static final long SYMBOL_HEAP_BYTES = 384L;
+    private static final long OCCURRENCE_HEAP_BYTES = 96L;
+    private static final long RELATIONSHIP_HEAP_BYTES = 64L;
 
     public static final ScipIngestionLimits DEFAULT = new ScipIngestionLimits(
             IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES,
@@ -37,12 +43,61 @@ public record ScipIngestionLimits(
         }
     }
 
-    public void preflight(InputStream source) throws IOException {
+    /**
+     * Streams the protobuf wire format without materializing the full index and returns the
+     * cardinalities used by the decode-memory gate.
+     */
+    public PreflightMetrics preflight(InputStream source) throws IOException {
         Objects.requireNonNull(source, "source");
         CodedInputStream input = CodedInputStream.newInstance(source);
         input.setSizeLimit((int) Math.min(Integer.MAX_VALUE, maxArtifactBytes));
         Counters counters = new Counters();
         scanIndex(input, counters);
+        return counters.snapshot();
+    }
+
+    /**
+     * Refuses a full protobuf decode when its conservative object-graph estimate would consume too
+     * much of the JVM heap. The parser remains bounded by the encoded artifact limit as well; this
+     * second gate specifically addresses encoded-to-object amplification.
+     */
+    void enforceDecodeHeapBudget(
+            PreflightMetrics metrics,
+            long artifactBytes,
+            long maxHeapBytes
+    ) throws IOException {
+        Objects.requireNonNull(metrics, "metrics");
+        if (artifactBytes < 1L || maxHeapBytes < 1L) {
+            throw new IllegalArgumentException("SCIP decode budget inputs must be positive");
+        }
+        long budget = decodeHeapBudget(maxHeapBytes);
+        long estimate = estimatedDecodedHeapBytes(metrics, artifactBytes);
+        if (estimate > budget) {
+            throw new IOException("SCIP index exceeds safe decode heap budget: estimated=" + estimate
+                    + "/" + budget + " bytes; artifact=" + artifactBytes
+                    + ", documents=" + metrics.documents()
+                    + ", symbols=" + metrics.symbols()
+                    + ", occurrences=" + metrics.occurrences()
+                    + ", relationships=" + metrics.relationshipFacts());
+        }
+    }
+
+    static long decodeHeapBudget(long maxHeapBytes) {
+        if (maxHeapBytes < 1L) throw new IllegalArgumentException("maxHeapBytes must be positive");
+        return Math.clamp(maxHeapBytes / 3L, 1L, MAX_DECODE_HEAP_BUDGET_BYTES);
+    }
+
+    static long estimatedDecodedHeapBytes(PreflightMetrics metrics, long artifactBytes) {
+        Objects.requireNonNull(metrics, "metrics");
+        if (artifactBytes < 0L) throw new IllegalArgumentException("artifactBytes must not be negative");
+        long estimate = DECODE_BASE_OVERHEAD_BYTES;
+        estimate = saturatingAdd(estimate, saturatingMultiply(artifactBytes, 2L));
+        estimate = saturatingAdd(estimate, saturatingMultiply(metrics.documents(), DOCUMENT_HEAP_BYTES));
+        estimate = saturatingAdd(estimate, saturatingMultiply(metrics.symbols(), SYMBOL_HEAP_BYTES));
+        estimate = saturatingAdd(estimate, saturatingMultiply(metrics.occurrences(), OCCURRENCE_HEAP_BYTES));
+        estimate = saturatingAdd(estimate,
+                saturatingMultiply(metrics.relationshipFacts(), RELATIONSHIP_HEAP_BYTES));
+        return estimate;
     }
 
     private void scanIndex(CodedInputStream input, Counters counters) throws IOException {
@@ -138,6 +193,30 @@ public record ScipIngestionLimits(
         private long occurrences;
         private long relationshipFacts;
         private long nestedMessageBytes;
+
+        private PreflightMetrics snapshot() {
+            return new PreflightMetrics(
+                    documents,
+                    symbols,
+                    occurrences,
+                    relationshipFacts,
+                    nestedMessageBytes);
+        }
+    }
+
+    public record PreflightMetrics(
+            long documents,
+            long symbols,
+            long occurrences,
+            long relationshipFacts,
+            long nestedMessageBytes
+    ) {
+        public PreflightMetrics {
+            if (documents < 0L || symbols < 0L || occurrences < 0L
+                    || relationshipFacts < 0L || nestedMessageBytes < 0L) {
+                throw new IllegalArgumentException("SCIP preflight metrics must not be negative");
+            }
+        }
     }
 
     public void validate(Index index) throws IOException {
@@ -174,6 +253,17 @@ public record ScipIngestionLimits(
         } catch (ArithmeticException exception) {
             throw new IOException("SCIP " + label + " counter overflow", exception);
         }
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        if (left < 0L || right < 0L) throw new IllegalArgumentException("heap estimate values must not be negative");
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
+    }
+
+    private static long saturatingMultiply(long value, long multiplier) {
+        if (value < 0L || multiplier < 0L) throw new IllegalArgumentException("heap estimate values must not be negative");
+        if (value == 0L || multiplier == 0L) return 0L;
+        return value > Long.MAX_VALUE / multiplier ? Long.MAX_VALUE : value * multiplier;
     }
 
     private static void fail(String label, long actual, long maximum) throws IOException {
