@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,6 +74,11 @@ class WindowsContainmentScriptTest {
     private static void assertAssemblesToGolden(String launcher) throws Exception {
         byte[] assembled = WindowsContainmentScript.assemble(launcher).getBytes(StandardCharsets.UTF_8);
         byte[] golden = readGolden(launcher);
+        if (!Arrays.equals(golden, assembled)) {
+            Path reports = Path.of("target", "surefire-reports");
+            Files.createDirectories(reports);
+            Files.write(reports.resolve(launcher + ".candidate"), assembled);
+        }
         assertArrayEquals(golden, assembled,
                 launcher + " no longer assembles to the qualified script (length "
                         + assembled.length + " vs golden " + golden.length + ")");
