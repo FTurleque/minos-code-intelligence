@@ -492,21 +492,28 @@ function Recover-Stale([string] $RecoveryDirectory) {
     }
 }
 
-$values = Read-Plan $Plan
-$command = Read-List $values 'command'
-$environment = Read-Environment $values
-$readPaths = Read-List $values 'read'
-$readFiles = Read-List $values 'readFile'
-$writePaths = Read-List $values 'write'
-$workingDirectory = Decode ([string]$values['working'])
-$recoveryDirectory = Decode ([string]$values['recovery'])
-$memoryBytes = [UInt64]$values['jobMemoryBytes']
-$activeProcesses = [UInt32]$values['activeProcesses']
-$cpuRate = [UInt32]$values['cpuRate']
-$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']
-$networkPolicy = [string]$values['networkPolicy']
-if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
-    throw "Invalid sandbox network policy: $networkPolicy"
+try {
+    $values = Read-Plan $Plan
+    $command = Read-List $values 'command'
+    $environment = Read-Environment $values
+    $readPaths = Read-List $values 'read'
+    $readFiles = Read-List $values 'readFile'
+    $writePaths = Read-List $values 'write'
+    $workingDirectory = Decode ([string]$values['working'])
+    $recoveryDirectory = Decode ([string]$values['recovery'])
+    $memoryBytes = [UInt64]$values['jobMemoryBytes']
+    $activeProcesses = [UInt32]$values['activeProcesses']
+    $cpuRate = [UInt32]$values['cpuRate']
+    $jobCpuSeconds = [UInt64]$values['jobCpuSeconds']
+    $networkPolicy = [string]$values['networkPolicy']
+    if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
+        throw "Invalid sandbox network policy: $networkPolicy"
+    }
+}
+finally {
+    # The plan contains provider argv and the explicit provider environment. It is transport state,
+    # never a diagnostic artifact: erase it as soon as parsing finishes, including parse failures.
+    Remove-Item -LiteralPath $Plan -Force -ErrorAction SilentlyContinue
 }
 
 New-Item -ItemType Directory -Path $recoveryDirectory -Force | Out-Null
