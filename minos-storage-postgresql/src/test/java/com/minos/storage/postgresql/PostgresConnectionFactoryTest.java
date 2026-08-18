@@ -64,6 +64,24 @@ class PostgresConnectionFactoryTest {
     }
 
     @Test
+    void numericLookingDnsNamesCannotBypassExternalTlsPolicy(@TempDir Path home) {
+        for (String host : new String[]{
+                "127.attacker.example",
+                "127.0.0.1.example.com",
+                "127.1.example"
+        }) {
+            assertThrows(IOException.class, () -> factory(
+                    home,
+                    "jdbc:postgresql://" + host + ":5432/minos",
+                    "minos", "secret", "minos"), host);
+            assertDoesNotThrow(() -> factory(
+                    home,
+                    "jdbc:postgresql://" + host + ":5432/minos?sslmode=verify-full",
+                    "minos", "secret", "minos").close(), host);
+        }
+    }
+
+    @Test
     void rejectsCredentialsAndSecretsInsideJdbcUrl(@TempDir Path home) {
         assertThrows(IOException.class, () -> factory(
                 home,
@@ -116,6 +134,10 @@ class PostgresConnectionFactoryTest {
                 home,
                 "jdbc:postgresql://127.0.0.1:5432/minos?sslmode=disable",
                 "minos", "secret", "minos").close());
+        assertDoesNotThrow(() -> factory(
+                home,
+                "jdbc:postgresql://127.255.1.2:5432/minos?sslmode=disable",
+                "minos", "secret", "minos").close());
         assertThrows(IOException.class, () -> factory(
                 home,
                 "jdbc:postgresql://localhost:5432/minos?currentSchema=public",
@@ -123,16 +145,26 @@ class PostgresConnectionFactoryTest {
     }
 
     @Test
-    void managedPostgresAllowsOnlyDockerServiceOrLoopback(@TempDir Path home) {
+    void managedPostgresAllowsOnlyDockerServiceOrLiteralLoopback(@TempDir Path home) {
         StorageBackendConfiguration managed = new StorageBackendConfiguration(
                 "postgresql", home, "jdbc:postgresql://minos-postgres:5432/minos",
                 "minos", "secret", "minos", true);
         assertDoesNotThrow(() -> new PostgresConnectionFactory(managed).close());
 
+        StorageBackendConfiguration loopback = new StorageBackendConfiguration(
+                "postgresql", home, "jdbc:postgresql://127.0.0.1:5432/minos",
+                "minos", "secret", "minos", true);
+        assertDoesNotThrow(() -> new PostgresConnectionFactory(loopback).close());
+
         StorageBackendConfiguration unsafeManaged = new StorageBackendConfiguration(
                 "postgresql", home, "jdbc:postgresql://db.example.com:5432/minos",
                 "minos", "secret", "minos", true);
         assertThrows(IOException.class, () -> new PostgresConnectionFactory(unsafeManaged));
+
+        StorageBackendConfiguration spoofedLoopback = new StorageBackendConfiguration(
+                "postgresql", home, "jdbc:postgresql://127.attacker.example:5432/minos",
+                "minos", "secret", "minos", true);
+        assertThrows(IOException.class, () -> new PostgresConnectionFactory(spoofedLoopback));
     }
 
     @Test
