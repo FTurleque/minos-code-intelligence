@@ -610,10 +610,29 @@ final class PostgresConnectionFactory implements AutoCloseable {
 
     private static boolean loopbackHost(String host) {
         String normalized = host.toLowerCase(Locale.ROOT);
-        return "localhost".equals(normalized)
-                || normalized.startsWith("127.")
+        if ("localhost".equals(normalized)
                 || "::1".equals(normalized)
-                || "0:0:0:0:0:0:0:1".equals(normalized);
+                || "0:0:0:0:0:0:0:1".equals(normalized)) {
+            return true;
+        }
+        return ipv4LoopbackLiteral(normalized);
+    }
+
+    private static boolean ipv4LoopbackLiteral(String host) {
+        String[] octets = host.split("\\.", -1);
+        if (octets.length != 4) return false;
+        for (int index = 0; index < octets.length; index++) {
+            String octet = octets[index];
+            if (octet.isEmpty() || octet.length() > 3) return false;
+            int value = 0;
+            for (int character = 0; character < octet.length(); character++) {
+                char digit = octet.charAt(character);
+                if (digit < '0' || digit > '9') return false;
+                value = value * 10 + (digit - '0');
+            }
+            if (value > 255 || (index == 0 && value != 127)) return false;
+        }
+        return true;
     }
 
     private static void rollbackPreserving(Connection connection, Exception original) {

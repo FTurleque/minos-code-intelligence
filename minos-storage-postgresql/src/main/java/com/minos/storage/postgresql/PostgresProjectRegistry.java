@@ -11,6 +11,7 @@ import com.minos.registry.RegisteredWorkspace;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,6 +33,9 @@ final class PostgresProjectRegistry implements ProjectRegistry {
             FROM workspaces w
             LEFT JOIN projects p ON p.workspace_id=w.id
             """;
+    private static final String PROJECT_SELECT =
+            "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at "
+                    + "FROM projects WHERE id=?";
 
     private final PostgresConnectionFactory connections;
     private final Optional<ProjectPathMapping> mapping;
@@ -129,59 +133,53 @@ final class PostgresProjectRegistry implements ProjectRegistry {
     public RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException {
         Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         Objects.requireNonNull(workspaceId, "workspaceId");
-        RegisteredProject project = findProject(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
-        findWorkspace(workspaceId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown workspace: " + workspaceId));
-        if (project.workspaceId().filter(workspaceId::equals).isPresent()) {
-            return project;
+        try {
+            return connections.inTransaction(connection -> {
+                PostgresProjectMutationLock.acquire(connection, projectId);
+                RegisteredProject project = findProject(connection, projectId)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
+                requireWorkspaceForUpdate(connection, workspaceId);
+                if (project.workspaceId().filter(workspaceId::equals).isPresent()) return project;
+                return updateWorkspaceAssignment(connection, project, Optional.of(workspaceId));
+            });
+        } catch (SQLException exception) {
+            throw io("assign project to workspace", exception);
         }
-        RegisteredProject updated = new RegisteredProject(
-                project.id(),
-                project.rootPath(),
-                project.displayName(),
-                Optional.of(workspaceId),
-                project.createdAt(),
-                Instant.now());
-        writeProject(updated);
-        return updated;
     }
 
     @Override
     public RegisteredProject removeProjectFromWorkspace(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
-        RegisteredProject project = findProject(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
-        if (project.workspaceId().isEmpty()) {
-            return project;
+        try {
+            return connections.inTransaction(connection -> {
+                PostgresProjectMutationLock.acquire(connection, projectId);
+                RegisteredProject project = findProject(connection, projectId)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown project: " + projectId));
+                if (project.workspaceId().isEmpty()) return project;
+                return updateWorkspaceAssignment(connection, project, Optional.empty());
+            });
+        } catch (SQLException exception) {
+            throw io("remove project from workspace", exception);
         }
-        RegisteredProject updated = new RegisteredProject(
-                project.id(),
-                project.rootPath(),
-                project.displayName(),
-                Optional.empty(),
-                project.createdAt(),
-                Instant.now());
-        writeProject(updated);
-        return updated;
     }
 
     @Override
     public Optional<RegisteredProject> findProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         try {
-            return connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT id,root_value,root_portable,display_name,workspace_id,created_at,updated_at "
-                                + "FROM projects WHERE id=?")) {
-                    statement.setObject(1, projectId);
-                    try (ResultSet result = statement.executeQuery()) {
-                        return result.next() ? Optional.of(readProject(result)) : Optional.empty();
-                    }
-                }
-            });
+            return connections.withConnection(connection -> findProject(connection, projectId));
         } catch (SQLException exception) {
             throw io("find project", exception);
+        }
+    }
+
+    private Optional<RegisteredProject> findProject(Connection connection, UUID projectId)
+            throws SQLException, IOException {
+        try (PreparedStatement statement = connection.prepareStatement(PROJECT_SELECT)) {
+            statement.setObject(1, projectId);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? Optional.of(readProject(result)) : Optional.empty();
+            }
         }
     }
 
@@ -288,7 +286,8 @@ final class PostgresProjectRegistry implements ProjectRegistry {
     public boolean deleteProject(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, PROJECT_ID_LABEL);
         try {
-            return connections.withConnection(connection -> {
+            return connections.inTransaction(connection -> {
+                PostgresProjectMutationLock.acquire(connection, projectId);
                 try (PreparedStatement statement = connection.prepareStatement(
                         "DELETE FROM projects WHERE id=?")) {
                     statement.setObject(1, projectId);
@@ -300,6 +299,40 @@ final class PostgresProjectRegistry implements ProjectRegistry {
         }
     }
 
+    private static void requireWorkspaceForUpdate(Connection connection, UUID workspaceId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM workspaces WHERE id=? FOR KEY SHARE")) {
+            statement.setObject(1, workspaceId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new IllegalArgumentException("Unknown workspace: " + workspaceId);
+            }
+        }
+    }
+
+    private RegisteredProject updateWorkspaceAssignment(
+            Connection connection,
+            RegisteredProject project,
+            Optional<UUID> workspaceId
+    ) throws SQLException {
+        Instant updatedAt = Instant.now();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE projects SET workspace_id=?,updated_at=? WHERE id=?")) {
+            statement.setObject(1, workspaceId.orElse(null));
+            statement.setObject(2, sqlTimestamp(updatedAt));
+            statement.setObject(3, project.id());
+            if (statement.executeUpdate() != 1) {
+                throw new SQLException("project disappeared while holding its mutation lock: " + project.id());
+            }
+        }
+        return new RegisteredProject(
+                project.id(),
+                project.rootPath(),
+                project.displayName(),
+                workspaceId,
+                project.createdAt(),
+                updatedAt);
+    }
+
     private RootIdentity rootIdentity(Path physicalRoot) throws IOException {
         boolean portable = mapping.isPresent();
         try {
@@ -309,33 +342,6 @@ final class PostgresProjectRegistry implements ProjectRegistry {
             return new RootIdentity(rootValue, portable);
         } catch (IllegalArgumentException exception) {
             throw new IOException("project path cannot be represented by configured runtime mapping", exception);
-        }
-    }
-
-    private void writeProject(RegisteredProject project) throws IOException {
-        RootIdentity root = rootIdentity(project.rootPath());
-        try {
-            connections.withConnection(connection -> {
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "INSERT INTO projects(id,root_value,root_portable,display_name,workspace_id,created_at,updated_at) "
-                                + "VALUES (?,?,?,?,?,?,?) "
-                                + "ON CONFLICT(id) DO UPDATE SET "
-                                + "root_value=EXCLUDED.root_value,root_portable=EXCLUDED.root_portable,"
-                                + "display_name=EXCLUDED.display_name,workspace_id=EXCLUDED.workspace_id,"
-                                + "updated_at=EXCLUDED.updated_at")) {
-                    statement.setObject(1, project.id());
-                    statement.setString(2, root.value());
-                    statement.setBoolean(3, root.portable());
-                    statement.setString(4, project.displayName());
-                    statement.setObject(5, project.workspaceId().orElse(null));
-                    statement.setObject(6, sqlTimestamp(project.createdAt()));
-                    statement.setObject(7, sqlTimestamp(project.updatedAt()));
-                    statement.executeUpdate();
-                    return null;
-                }
-            });
-        } catch (SQLException exception) {
-            throw io("write project", exception);
         }
     }
 

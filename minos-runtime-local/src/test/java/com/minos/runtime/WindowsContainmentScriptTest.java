@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,20 +13,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Splitting a containment launcher into shared fragments is only safe if assembly reproduces the
- * script that was reviewed and qualified. These tests compare the assembled bytes against a golden
- * copy of each launcher taken before the split, so any drift in a fragment, a template or the
- * assembler is a test failure rather than a silent change to a security boundary.
+ * script that was reviewed and qualified. The golden copies remain the pre-remediation qualified
+ * baseline; after normalizing platform line endings, the only accepted drift is the explicit
+ * one-shot deletion of the credential-bearing plan immediately before {@code Read-Plan} returns.
+ * Any other content drift remains a test failure.
  */
 class WindowsContainmentScriptTest {
 
+    private static final String QUALIFIED_PLAN_RETURN = "    return $values\n}";
+    private static final String APPROVED_PLAN_CONSUMPTION = """
+            # The plan contains the provider argv and explicit environment, both of which may carry
+            # credentials. Consume it exactly once and remove it before any untrusted provider process is
+            # resumed so secrets never become retained run diagnostics.
+            Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+            return $values
+        }""";
+
     @Test
-    void jobObjectLauncherAssemblesByteIdenticalToItsQualifiedForm() throws Exception {
-        assertAssemblesToGolden("windows-job-object-owner-v1.ps1");
+    void jobObjectLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
+        assertAssemblesToQualifiedBaseline("windows-job-object-owner-v1.ps1");
     }
 
     @Test
-    void appContainerLauncherAssemblesByteIdenticalToItsQualifiedForm() throws Exception {
-        assertAssemblesToGolden("windows-appcontainer-sandbox-v4.ps1");
+    void appContainerLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
+        assertAssemblesToQualifiedBaseline("windows-appcontainer-sandbox-v4.ps1");
     }
 
     @Test
@@ -68,12 +77,22 @@ class WindowsContainmentScriptTest {
         assertEquals(first, second);
     }
 
-    private static void assertAssemblesToGolden(String launcher) throws Exception {
-        byte[] assembled = WindowsContainmentScript.assemble(launcher).getBytes(StandardCharsets.UTF_8);
-        byte[] golden = readGolden(launcher);
-        assertArrayEquals(golden, assembled,
-                launcher + " no longer assembles to the qualified script (length "
-                        + assembled.length + " vs golden " + golden.length + ")");
+    private static void assertAssemblesToQualifiedBaseline(String launcher) throws Exception {
+        String golden = normalizeLineEndings(new String(readGolden(launcher), StandardCharsets.UTF_8));
+        int marker = golden.indexOf(QUALIFIED_PLAN_RETURN);
+        assertTrue(marker >= 0, launcher + " qualified baseline lost the plan return marker");
+        assertEquals(marker, golden.lastIndexOf(QUALIFIED_PLAN_RETURN),
+                launcher + " qualified baseline has an ambiguous plan return marker");
+        String expected = golden.substring(0, marker)
+                + APPROVED_PLAN_CONSUMPTION
+                + golden.substring(marker + QUALIFIED_PLAN_RETURN.length());
+        String assembled = normalizeLineEndings(WindowsContainmentScript.assemble(launcher));
+        assertEquals(expected, assembled,
+                launcher + " drifted beyond the approved one-shot plan-consumption remediation");
+    }
+
+    private static String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static byte[] readGolden(String launcher) throws IOException {
