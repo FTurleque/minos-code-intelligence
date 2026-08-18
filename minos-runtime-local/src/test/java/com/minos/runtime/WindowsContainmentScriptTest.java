@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,11 +17,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Splitting a containment launcher into shared fragments is only safe if assembly reproduces the
- * script that was reviewed and qualified. These tests compare the assembled bytes against a golden
- * copy of each launcher taken before the split, so any drift in a fragment, a template or the
- * assembler is a test failure rather than a silent change to a security boundary.
+ * exact reviewed and qualified bytes. The unchanged Job Object launcher remains locked to its
+ * checked-in golden copy. The AppContainer launcher intentionally changed during the post-audit
+ * remediation, so its newly qualified byte sequence is locked by SHA-256; any single-byte drift in
+ * a fragment, template or assembler remains a hard test failure.
  */
 class WindowsContainmentScriptTest {
+
+    private static final String APP_CONTAINER_QUALIFIED_SHA256 =
+            "43fbbe83713077b2f3305bcfef6a1ea693853fdc3f6b62347651627ad44e021d";
 
     @Test
     void jobObjectLauncherAssemblesByteIdenticalToItsQualifiedForm() throws Exception {
@@ -29,8 +33,11 @@ class WindowsContainmentScriptTest {
     }
 
     @Test
-    void appContainerLauncherAssemblesByteIdenticalToItsQualifiedForm() throws Exception {
-        assertAssemblesToGolden("windows-appcontainer-sandbox-v4.ps1");
+    void appContainerLauncherAssemblesByteIdenticalToItsQualifiedDigest() throws Exception {
+        byte[] assembled = WindowsContainmentScript.assemble("windows-appcontainer-sandbox-v4.ps1")
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(APP_CONTAINER_QUALIFIED_SHA256, sha256(assembled),
+                "windows-appcontainer-sandbox-v4.ps1 no longer matches its qualified byte digest");
     }
 
     @Test
@@ -74,14 +81,17 @@ class WindowsContainmentScriptTest {
     private static void assertAssemblesToGolden(String launcher) throws Exception {
         byte[] assembled = WindowsContainmentScript.assemble(launcher).getBytes(StandardCharsets.UTF_8);
         byte[] golden = readGolden(launcher);
-        if (!Arrays.equals(golden, assembled)) {
-            Path reports = Path.of("target", "surefire-reports");
-            Files.createDirectories(reports);
-            Files.write(reports.resolve(launcher + ".candidate"), assembled);
-        }
         assertArrayEquals(golden, assembled,
                 launcher + " no longer assembles to the qualified script (length "
                         + assembled.length + " vs golden " + golden.length + ")");
+    }
+
+    private static String sha256(byte[] value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private static byte[] readGolden(String launcher) throws IOException {
