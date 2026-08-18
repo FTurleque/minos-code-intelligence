@@ -84,7 +84,16 @@ SCOPES = {
             "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/ProviderWorkspaceFiles",
             "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/runtime/ProviderProcessEnvironment", "com/minos/runtime/ProcessTreeTermination",
+            "com/minos/runtime/ProviderResidueReclamation",
         ), "line": 0.68, "branch": 0.48,
+    },
+    "provider-execution-linux-sandbox": {
+        "prefixes": ("com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend",),
+        "line": 0.80, "branch": 0.65,
+    },
+    "provider-execution-windows-sandbox": {
+        "prefixes": ("com/minos/runtime/WindowsAppContainerWorkerSandboxBackend",),
+        "line": 0.80, "branch": 0.50,
     },
     "m26-runtime-dynamic-intelligence": {
         "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
