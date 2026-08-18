@@ -2,7 +2,9 @@ package com.minos.intellij.protocol;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -68,9 +70,12 @@ final class MinosStrongProcessLauncher {
     }
 
     private static Launch startWindows(ProcessBuilder original, String configuredMinosHome) throws IOException {
-        Path ownership = ownershipHome(configuredMinosHome)
-                .resolve("intellij").resolve("process-ownership").toAbsolutePath().normalize();
-        Files.createDirectories(ownership);
+        Path home = ownershipHome(configuredMinosHome).toAbsolutePath().normalize();
+        ensureWindowsPrivateDirectory(home, "MINOS ownership home");
+        Path intellijHome = home.resolve("intellij");
+        ensureWindowsPrivateDirectory(intellijHome, "IntelliJ ownership directory");
+        Path ownership = intellijHome.resolve("process-ownership");
+        ensureWindowsPrivateDirectory(ownership, "IntelliJ process ownership directory");
         cleanupStaleWindowsPlans(ownership, Instant.now().minus(STALE_PLAN_AGE));
         Path launcher = installWindowsLauncher(ownership);
         Path plan = Files.createTempFile(ownership, "cli-", ".plan");
@@ -104,11 +109,33 @@ final class MinosStrongProcessLauncher {
     }
 
     static void restrictWindowsPlan(Path plan) throws IOException {
-        Path file = Objects.requireNonNull(plan, "plan").toAbsolutePath().normalize();
+        restrictWindowsOwnerOnly(Objects.requireNonNull(plan, "plan"), "Windows ownership plan");
+    }
+
+    private static void ensureWindowsPrivateDirectory(Path directory, String label) throws IOException {
+        Path resolved = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
+        if (Files.exists(resolved, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(resolved)) {
+            throw new IOException(label + " must not be a symbolic link: " + resolved);
+        }
+        Files.createDirectories(resolved);
+        if (!Files.isDirectory(resolved, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(resolved)) {
+            throw new IOException(label + " is not a private directory: " + resolved);
+        }
+        restrictWindowsOwnerOnly(resolved, label);
+        if (!Files.isDirectory(resolved, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(resolved)) {
+            throw new IOException(label + " changed while securing it: " + resolved);
+        }
+    }
+
+    private static void restrictWindowsOwnerOnly(Path entry, String label) throws IOException {
+        Path file = Objects.requireNonNull(entry, "entry").toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(file)) {
+            throw new IOException(label + " must not be a symbolic link: " + file);
+        }
         AclFileAttributeView view = Files.getFileAttributeView(
                 file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         if (view == null) {
-            throw new IOException("Windows ownership plan filesystem does not expose ACLs: " + file);
+            throw new IOException(label + " filesystem does not expose ACLs: " + file);
         }
         UserPrincipal owner = Files.getOwner(file, LinkOption.NOFOLLOW_LINKS);
         AclEntry ownerOnly = AclEntry.newBuilder()
@@ -119,9 +146,10 @@ final class MinosStrongProcessLauncher {
         view.setAcl(List.of(ownerOnly));
         List<AclEntry> applied = view.getAcl();
         boolean ownerOnlyApplied = !applied.isEmpty() && applied.stream()
-                .allMatch(entry -> entry.type() == AclEntryType.ALLOW && entry.principal().equals(owner));
-        if (!ownerOnlyApplied) {
-            throw new IOException("Windows ownership plan ACL is not restricted to its owner: " + file);
+                .allMatch(entryValue -> entryValue.type() == AclEntryType.ALLOW
+                        && entryValue.principal().equals(owner));
+        if (!ownerOnlyApplied || Files.isSymbolicLink(file)) {
+            throw new IOException(label + " ACL is not restricted to its owner: " + file);
         }
     }
 
@@ -190,19 +218,44 @@ final class MinosStrongProcessLauncher {
         synchronized (WINDOWS_INSTALL_LOCK) {
             Path target = ownership.resolve("windows-cli-job-owner-v1.ps1");
             Path temporary = Files.createTempFile(ownership, ".windows-cli-owner-", ".tmp");
-            try (InputStream input = MinosStrongProcessLauncher.class.getResourceAsStream(
-                    "/com/minos/intellij/protocol/windows-cli-job-owner-v1.ps1")) {
-                if (input == null) throw new IOException("packaged Windows Job Object launcher is missing");
-                Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);
+            boolean published = false;
+            try {
+                restrictWindowsOwnerOnly(temporary, "Windows Job Object launcher temporary file");
+                try (InputStream input = MinosStrongProcessLauncher.class.getResourceAsStream(
+                        "/com/minos/intellij/protocol/windows-cli-job-owner-v1.ps1")) {
+                    if (input == null) throw new IOException("packaged Windows Job Object launcher is missing");
+                    try (OutputStream output = Files.newOutputStream(
+                            temporary,
+                            StandardOpenOption.WRITE,
+                            StandardOpenOption.TRUNCATE_EXISTING,
+                            LinkOption.NOFOLLOW_LINKS)) {
+                        input.transferTo(output);
+                    }
+                }
+                restrictWindowsOwnerOnly(temporary, "Windows Job Object launcher temporary file");
                 try {
                     Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
-                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException unsupported) {
+                    throw new IOException("Windows Job Object launcher requires atomic publication", unsupported);
                 }
+                published = true;
+                if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target)) {
+                    throw new IOException("Windows Job Object launcher is not a regular file: " + target);
+                }
+                restrictWindowsOwnerOnly(target, "Windows Job Object launcher");
+                return target;
+            } catch (IOException failure) {
+                if (published) {
+                    try {
+                        Files.deleteIfExists(target);
+                    } catch (IOException cleanup) {
+                        failure.addSuppressed(cleanup);
+                    }
+                }
+                throw failure;
             } finally {
                 Files.deleteIfExists(temporary);
             }
-            return target;
         }
     }
 
@@ -233,7 +286,7 @@ final class MinosStrongProcessLauncher {
         }
         value.append("working=").append(encoded(working.toString())).append('\n');
         Files.writeString(plan, value, StandardCharsets.UTF_8,
-                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static boolean validWindowsEnvironmentKey(String key) {
