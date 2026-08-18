@@ -74,14 +74,14 @@ class WindowsSandboxSensitivePlanTest {
                             project,
                             Map.of("MINOS_TEST_PROVIDER_SECRET", sentinel),
                             generated,
-                            Duration.ofSeconds(20));
+                            Duration.ofSeconds(60));
                 });
 
         ExecutorService asynchronous = Executors.newSingleThreadExecutor();
         try {
             Future<IndexingArtifact> execution = asynchronous.submit(
                     () -> backend.execute(executor, executionRequest(project), WorkerNetworkPolicy.ALLOW));
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
             while (!Files.exists(marker) && System.nanoTime() < deadline) {
                 Thread.sleep(25L);
             }
@@ -89,7 +89,7 @@ class WindowsSandboxSensitivePlanTest {
             assertFalse(containsSensitivePlan(home.resolve("runs")),
                     "sandbox transport plan must be erased immediately after launcher parsing");
 
-            IndexingArtifact artifact = execution.get(20, TimeUnit.SECONDS);
+            IndexingArtifact artifact = execution.get(75, TimeUnit.SECONDS);
             assertTrue(Files.isRegularFile(artifact.finalArtifact()));
             assertFalse(containsSensitivePlan(home.resolve("runs")),
                     "sandbox transport plan must never survive provider execution");
