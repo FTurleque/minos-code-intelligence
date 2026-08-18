@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
@@ -15,7 +18,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * Owner-thread, cross-process file lease with one bounded deadline shared by the JVM and OS locks.
  *
  * <p>The helper deliberately owns the full acquisition and cleanup lifecycle so callers do not
- * duplicate subtle timeout, interruption and partial-acquisition handling.</p>
+ * duplicate subtle timeout, interruption and partial-acquisition handling. Lock files are also part
+ * of the local trust boundary: a pre-existing symlink must never redirect two logical leases onto
+ * different physical files, so every lock file is owner-only and opened with {@link
+ * LinkOption#NOFOLLOW_LINKS}.</p>
  */
 public final class BoundedFileLease implements AutoCloseable {
 
@@ -47,7 +53,11 @@ public final class BoundedFileLease implements AutoCloseable {
         try {
             acquireJvmLock(localLock, deadline, label);
             localAcquired = true;
-            channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            preparePrivateLockFile(file, label);
+            channel = FileChannel.open(
+                    file,
+                    StandardOpenOption.WRITE,
+                    LinkOption.NOFOLLOW_LINKS);
             FileLock fileLock = acquireFileLock(channel, deadline, label);
             return new BoundedFileLease(localLock, channel, fileLock);
         } catch (IOException | RuntimeException failure) {
@@ -82,6 +92,26 @@ public final class BoundedFileLease implements AutoCloseable {
             return null;
         } catch (IOException failure) {
             return failure;
+        }
+    }
+
+    private static void preparePrivateLockFile(Path file, String description) throws IOException {
+        if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+            PrivateLocalStorage.hardenExistingFile(file);
+            return;
+        }
+        try {
+            PrivateLocalStorage.createPrivateFile(file);
+        } catch (FileAlreadyExistsException concurrentCreate) {
+            try {
+                PrivateLocalStorage.hardenExistingFile(file);
+            } catch (IOException unsafeWinner) {
+                unsafeWinner.addSuppressed(concurrentCreate);
+                throw unsafeWinner;
+            }
+        }
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException(description + " lock file is not a regular non-symlink file: " + file);
         }
     }
 

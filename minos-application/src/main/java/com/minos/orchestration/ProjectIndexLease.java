@@ -1,9 +1,9 @@
 package com.minos.orchestration;
 
 import com.minos.io.BoundedFileLease;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -39,8 +39,11 @@ public final class ProjectIndexLease implements AutoCloseable {
     static ProjectIndexLease acquire(Path minosHome, UUID projectId, Duration timeout) throws IOException {
         Path home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
         UUID id = Objects.requireNonNull(projectId, "projectId");
-        Path directory = home.resolve("locks").resolve("indexing").toAbsolutePath().normalize();
-        Files.createDirectories(directory);
+        DurableAtomicFile.ensureDirectory(home, "project indexing storage root");
+        Path locks = home.resolve("locks").toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(locks, "project indexing lock root");
+        Path directory = locks.resolve("indexing").toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(directory, "project indexing lock directory");
         Path lockPath = directory.resolve(id + ".lock").toAbsolutePath().normalize();
         if (!lockPath.startsWith(directory)) {
             throw new IOException("project indexing lock escapes MINOS lock directory");

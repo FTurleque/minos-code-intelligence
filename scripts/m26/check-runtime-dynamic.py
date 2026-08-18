@@ -46,6 +46,7 @@ def main() -> int:
         codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
         store = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
+        bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
@@ -84,15 +85,20 @@ def main() -> int:
 
         require_facts("FileRuntimeObservationStore.java", store,
                       "DEFAULT_MAX_SESSIONS_PER_PROJECT = 128", "DEFAULT_MAX_PROJECT_BYTES",
-                      "DEFAULT_MAX_SESSION_BYTES", "FileLock", "ATOMIC_MOVE", "checksum mismatch",
-                      "session is immutable", "must not be a symbolic link", "capacity reached")
+                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "ATOMIC_MOVE",
+                      "LinkOption.NOFOLLOW_LINKS", "checksum mismatch", "session is immutable",
+                      "must not be a symbolic link", "capacity reached")
+        require_facts("BoundedFileLease.java", bounded_lease,
+                      "FileLock", "LeaseDeadline", "PrivateLocalStorage", "LinkOption.NOFOLLOW_LINKS",
+                      "tryLock", "preparePrivateLockFile")
         require_facts("RuntimeCommand.java", command,
                       "runtime import", "runtime sessions", "runtime report", "runtime symbol",
                       "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS", "--limit")
         require_facts("MinosApplication.java", app,
                       "RuntimeObservationStore", "RuntimeIntelligenceService", "selected.runtimeObservationStore()")
         require_facts("LocalStorageBackend.java", local_storage,
-                      'root.resolve("runtime-observations")', "FileRuntimeObservationStore")
+                      'namespace(root, "runtime-observations")', "FileRuntimeObservationStore",
+                      "DurableAtomicFile.ensureDirectory")
         tool_count_match = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)
         if not tool_count_match or int(tool_count_match.group(1)) < 26:
             raise RuntimeError("MinosMcpTools.java: M26 requires its 26-tool catalogue or an additive superset")
@@ -107,6 +113,7 @@ def main() -> int:
         tests = {
             "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
@@ -116,6 +123,9 @@ def main() -> int:
         require_facts("FileRuntimeObservationStoreTest.java", tests["FileRuntimeObservationStoreTest.java"],
                       "TreatsTheSameSourceAsIdempotent", "refusesSessionIdentityMutationAndCapacityOverflow",
                       "detectsPersistedByteTampering", "rejectsAProjectDirectorySymlink")
+        require_facts("FileRuntimeObservationStoreSymlinkTest.java", tests["FileRuntimeObservationStoreSymlinkTest.java"],
+                      "rejectsSymlinkedStoreRoot", "rejectsSymlinkedProjectLockLeaf",
+                      "rejectsSymlinkedSessionLeaf")
         require_facts("RuntimeIntelligenceServiceTest.java", tests["RuntimeIntelligenceServiceTest.java"],
                       "ReportsResolutionHotPathsAndSymbolFacts", "rejectsProjectAndSnapshotMisalignment",
                       "codecFailsClosedOnBomTraversalUnknownKindsAndNonPartialCompleteness")

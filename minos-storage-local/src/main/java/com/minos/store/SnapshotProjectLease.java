@@ -1,9 +1,9 @@
 package com.minos.store;
 
 import com.minos.io.BoundedFileLease;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
@@ -40,7 +40,7 @@ final class SnapshotProjectLease implements AutoCloseable {
 
     static SnapshotProjectLease acquire(Path storageRoot, String projectId, Duration timeout) throws IOException {
         Path file = lockFile(storageRoot, projectId);
-        Files.createDirectories(file.getParent());
+        DurableAtomicFile.ensureDirectory(file.getParent(), "project mutation lease directory");
         ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(file.hashCode(), JVM_LOCKS.length)];
         return new SnapshotProjectLease(BoundedFileLease.acquire(
                 file,

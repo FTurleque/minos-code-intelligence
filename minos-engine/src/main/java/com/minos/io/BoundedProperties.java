@@ -7,7 +7,9 @@ import java.io.Reader;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -25,13 +27,14 @@ public final class BoundedProperties {
             int maximumValueChars,
             String boundary
     ) throws IOException {
-        Objects.requireNonNull(file, "file");
+        Path source = requireRegularFile(file, boundary);
         if (maximumEntries < 1 || maximumKeyChars < 1 || maximumValueChars < 1) {
             throw new IllegalArgumentException("properties limits must be positive");
         }
         Properties properties = new Properties();
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file), maximumBytes, boundary);
+                     Files.newInputStream(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS),
+                     maximumBytes, boundary);
              Reader reader = strictUtf8Reader(input)) {
             loadInto(properties, reader, boundary);
         }
@@ -101,11 +104,20 @@ public final class BoundedProperties {
     }
 
     public static String readUtf8(Path file, long maximumBytes, String boundary) throws IOException {
-        Objects.requireNonNull(file, "file");
+        Path source = requireRegularFile(file, boundary);
         try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(file), maximumBytes, boundary)) {
+                Files.newInputStream(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS),
+                maximumBytes, boundary)) {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    private static Path requireRegularFile(Path file, String boundary) throws IOException {
+        Path source = Objects.requireNonNull(file, "file").toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(source) || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException(label(boundary) + " must be a regular non-symlink file: " + source);
+        }
+        return source;
     }
 
     private static String label(String boundary) {
