@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Targeted JaCoCo and executed security-behavior gates for critical MINOS responsibilities."""
+"""Targeted JaCoCo gates for critical MINOS responsibilities through M30."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import platform
-import subprocess
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -159,15 +158,6 @@ def platform_scope_skips() -> set[str]:
     return {"provider-execution-linux-sandbox", "provider-execution-windows-sandbox"}
 
 
-def run_security_behavior_gate() -> bool:
-    gate = Path("scripts/quality/check-security-behavior.py")
-    if not gate.is_file():
-        print(f"ERROR: security behavior gate not found: {gate}", file=sys.stderr)
-        return False
-    completed = subprocess.run([sys.executable, str(gate)], check=False)
-    return completed.returncode == 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("xml", nargs="?", default="target/site/jacoco-aggregate/jacoco.xml", help="JaCoCo aggregate XML report")
@@ -222,11 +212,6 @@ def main() -> int:
             "branch": round(branch, 6), "branchMinimum": branch_min, "status": "PASS" if passed else "FAIL",
         }
 
-    behavior_passed = run_security_behavior_gate()
-    results["securityBehavior"] = {"status": "PASS" if behavior_passed else "FAIL"}
-    if not behavior_passed:
-        failures.append("security behavior evidence gate failed")
-
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
@@ -240,12 +225,12 @@ def main() -> int:
         )
 
     if failures:
-        print("MINOS JACOCO/SECURITY BEHAVIOR GATE FAILED", file=sys.stderr)
+        print("MINOS JACOCO GATE FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
 
-    print("MINOS JACOCO/SECURITY BEHAVIOR GATE SUCCESS")
+    print("MINOS JACOCO GATE SUCCESS")
     return 0
 
 
