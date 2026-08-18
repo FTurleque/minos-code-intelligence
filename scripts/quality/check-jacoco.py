@@ -81,9 +81,9 @@ SCOPES = {
     "provider-execution-trust-boundary": {
         "prefixes": (
             "com/minos/runtime/ProcessIndexerExecutor", "com/minos/runtime/StrongProcessOwnershipIndexerExecutor",
-            "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/WorkerSandboxBackend",
-            "com/minos/runtime/WorkerSandboxQualification", "com/minos/runtime/ProviderProcessEnvironment",
-            "com/minos/runtime/ProcessTreeTermination",
+            "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/ProviderWorkspaceFiles",
+            "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
+            "com/minos/runtime/ProviderProcessEnvironment", "com/minos/runtime/ProcessTreeTermination",
         ), "line": 0.68, "branch": 0.48,
     },
     "m26-runtime-dynamic-intelligence": {
