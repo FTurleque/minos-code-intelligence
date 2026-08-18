@@ -84,7 +84,26 @@ SCOPES = {
             "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/ProviderWorkspaceFiles",
             "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/runtime/ProviderProcessEnvironment", "com/minos/runtime/ProcessTreeTermination",
+            "com/minos/runtime/ProviderResidueReclamation",
         ), "line": 0.68, "branch": 0.48,
+    },
+    "provider-sandbox-linux": {
+        "prefixes": (
+            "com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend",
+            "com/minos/runtime/LinuxCgroupV2",
+        ),
+        "platform": "linux",
+        "line": 0.55,
+        "branch": 0.35,
+    },
+    "provider-sandbox-windows": {
+        "prefixes": (
+            "com/minos/runtime/WindowsAppContainerWorkerSandboxBackend",
+            "com/minos/runtime/WindowsContainmentScript",
+        ),
+        "platform": "windows",
+        "line": 0.55,
+        "branch": 0.35,
     },
     "m26-runtime-dynamic-intelligence": {
         "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
@@ -139,6 +158,14 @@ def load_classes(report: Path, cache: dict[Path, list[ET.Element]]) -> list[ET.E
     return cache[report]
 
 
+def current_platform() -> str:
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "other"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("xml", nargs="?", default="target/site/jacoco-aggregate/jacoco.xml", help="JaCoCo aggregate XML report")
@@ -155,14 +182,17 @@ def main() -> int:
         return 2
 
     skipped = set(args.skip_scope)
+    platform = current_platform()
     cache: dict[Path, list[ET.Element]] = {}
-    results: dict[str, object] = {"report": str(default_report), "scopes": {}}
+    results: dict[str, object] = {"report": str(default_report), "platform": platform, "scopes": {}}
     failures: list[str] = []
 
     for name, config in SCOPES.items():
-        if name in skipped:
-            results["scopes"][name] = {"classes": 0, "status": "SKIPPED", "reason": "explicit environment-specific exclusion"}
-            print(f"JaCoCo {name}: SKIPPED (explicit environment-specific exclusion)")
+        required_platform = config.get("platform")
+        if name in skipped or (required_platform is not None and required_platform != platform):
+            reason = "explicit environment-specific exclusion" if name in skipped else f"platform={platform}"
+            results["scopes"][name] = {"classes": 0, "status": "SKIPPED", "reason": reason}
+            print(f"JaCoCo {name}: SKIPPED ({reason})")
             continue
 
         report = Path(str(config.get("report", default_report)))
