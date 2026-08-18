@@ -77,7 +77,11 @@ jobs:
       - name: Provider trust-boundary behavioral regression (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\mvnw.cmd -B -ntp -pl minos-runtime-local -am -Dtest=ProviderSandboxSecurityRegressionTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: |
+          & '.\mvnw.cmd' '-B' '-ntp' '-pl' 'minos-runtime-local' '-am' `
+              '-Dtest=ProviderSandboxSecurityRegressionTest' `
+              '-Dsurefire.failIfNoSpecifiedTests=false' 'test'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
