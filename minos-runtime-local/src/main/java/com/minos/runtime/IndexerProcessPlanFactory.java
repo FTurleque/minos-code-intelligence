@@ -1,6 +1,7 @@
 package com.minos.runtime;
 
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.nio.file.Path;
 
@@ -12,4 +13,14 @@ import java.nio.file.Path;
 public interface IndexerProcessPlanFactory {
 
     IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws Exception;
+
+    /**
+     * Network access granted to the untrusted provider inside the qualified local sandbox.
+     *
+     * <p>DENY is the safe default. Providers that must resolve project dependencies during
+     * indexing have to opt into ALLOW explicitly in their process-plan factory.</p>
+     */
+    default WorkerNetworkPolicy networkPolicy() {
+        return WorkerNetworkPolicy.DENY;
+    }
 }
