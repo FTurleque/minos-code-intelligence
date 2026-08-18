@@ -1,11 +1,11 @@
 package com.minos.store;
 
+import com.minos.io.BoundedFileLease;
 import com.minos.io.DurableAtomicFile;
 import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticDocumentKind;
 import com.minos.semantic.SemanticVector;
 import com.minos.semantic.SemanticVectorStore;
-
 import com.minos.semantic.StaleSemanticSyncException;
 
 import java.io.BufferedInputStream;
@@ -14,12 +14,13 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,6 +36,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private static final Object JVM_SYNC_LOCK_MONITOR = new Object();
     private static final Map<Path, SyncLockState> JVM_SYNC_LOCKS = new HashMap<>();
+    private static final Duration SYNC_LOCK_TIMEOUT = Duration.ofSeconds(10);
 
     private static final int MAGIC = 0x4D53454D; // MSEM
     private static final int LEGACY_FORMAT_VERSION = 1;
@@ -66,7 +68,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
         if (maxCacheWeightBytes < 1L) throw new IllegalArgumentException("maxCacheWeightBytes must be positive");
         this.maxCacheWeightBytes = maxCacheWeightBytes;
-        Files.createDirectories(this.root);
+        DurableAtomicFile.ensureDirectory(this.root, "semantic index root");
     }
 
     @Override
@@ -94,7 +96,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
         synchronized (cacheLock) { cacheMisses++; }
         DecodeBudget budget = new DecodeBudget();
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
@@ -143,7 +146,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         if (file == null) return Optional.empty();
         requireIndexFileSize(file);
         DecodeBudget budget = new DecodeBudget();
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             int version = input.readInt();
             if (version != LEGACY_FORMAT_VERSION && version != FORMAT_VERSION) {
@@ -171,8 +175,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         Objects.requireNonNull(snapshot, "snapshot");
         if (snapshot.documents().size() > MAX_DOCUMENTS) throw new IOException("semantic index exceeds document limit");
         if (snapshot.dimensions() > MAX_DIMENSIONS) throw new IOException("semantic index exceeds dimension limit");
-        Path directory = projectDirectory(snapshot.projectId());
-        Files.createDirectories(directory);
+        Path directory = ensureProjectDirectory(snapshot.projectId());
         Path target = directory.resolve(CURRENT_FILE);
         Path temporary = Files.createTempFile(directory, "index-v2-", ".tmp");
         List<IndexedDocument> ordered = snapshot.documents().stream()
@@ -227,15 +230,15 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         requireText(expectedActiveSnapshotId, "expectedActiveSnapshotId");
         Objects.requireNonNull(activeSnapshotReader, "activeSnapshotReader");
         Path lockDirectory = root.resolve(".sync-locks").toAbsolutePath().normalize();
-        Files.createDirectories(lockDirectory);
+        DurableAtomicFile.ensureDirectory(lockDirectory, "semantic sync lock directory");
         Path lockFile = lockDirectory.resolve(safeProjectDirectory(next.projectId()) + ".lock")
                 .toAbsolutePath().normalize();
         if (!lockFile.startsWith(lockDirectory)) {
             throw new IOException("semantic sync lock file escapes store directory");
         }
-        try (SyncLockLease ignored = acquireJvmSyncLock(lockFile);
-             FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             FileLock fileLock = channel.lock()) {
+        SyncLockState state = retainJvmSyncLock(lockFile);
+        try (BoundedFileLease ignored = BoundedFileLease.acquire(
+                lockFile, state.lock, SYNC_LOCK_TIMEOUT, "semantic sync lease: " + next.projectId())) {
             Optional<String> currentActive = activeSnapshotReader.read();
             String currentId = currentActive.orElse(null);
             if (!expectedActiveSnapshotId.equals(currentId)) {
@@ -244,6 +247,8 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
                         currentId != null ? currentId : "absent");
             }
             replace(next);
+        } finally {
+            releaseJvmSyncLock(lockFile, state);
         }
     }
 
@@ -251,21 +256,24 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     public void delete(String projectId) throws IOException {
         requireText(projectId, "projectId");
         removeCached(projectId, false);
-        Path directory = projectDirectory(projectId);
+        Path directory = existingProjectDirectory(projectId);
+        if (directory == null) return;
         Files.deleteIfExists(directory.resolve(CURRENT_FILE));
         Files.deleteIfExists(directory.resolve(LEGACY_FILE));
     }
 
     public long sizeBytes(String projectId) throws IOException {
         Path file = readableIndexFile(projectId);
-        return file == null ? 0L : Files.size(file);
+        if (file == null) return 0L;
+        return requireIndexFileAttributes(file).size();
     }
 
     /** Returns 0 when absent, otherwise the on-disk semantic index format version. */
     public int formatVersion(String projectId) throws IOException {
         Path file = readableIndexFile(projectId);
         if (file == null) return 0;
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid semantic index magic: " + file);
             return input.readInt();
         }
@@ -307,16 +315,50 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         }
     }
 
-    private Path readableIndexFile(String projectId) {
-        Path directory = projectDirectory(projectId);
+    private Path readableIndexFile(String projectId) throws IOException {
+        Path directory = existingProjectDirectory(projectId);
+        if (directory == null) return null;
         Path current = directory.resolve(CURRENT_FILE);
-        if (Files.isRegularFile(current)) return current;
+        if (regularIndexFileExists(current)) return current;
         Path legacy = directory.resolve(LEGACY_FILE);
-        return Files.isRegularFile(legacy) ? legacy : null;
+        return regularIndexFileExists(legacy) ? legacy : null;
+    }
+
+    private Path ensureProjectDirectory(String projectId) throws IOException {
+        Path directory = projectDirectory(projectId);
+        DurableAtomicFile.ensureDirectory(directory, "semantic project directory");
+        return directory;
+    }
+
+    private Path existingProjectDirectory(String projectId) throws IOException {
+        Path directory = projectDirectory(projectId);
+        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return null;
+        if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("semantic project entry must be a non-symlink directory: " + directory);
+        }
+        return directory;
     }
 
     private Path projectDirectory(String projectId) {
         return root.resolve(safeProjectDirectory(projectId));
+    }
+
+    private static boolean regularIndexFileExists(Path file) throws IOException {
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return false;
+        requireIndexFileAttributes(file);
+        return true;
+    }
+
+    private static BasicFileAttributes requireIndexFileAttributes(Path file) throws IOException {
+        if (Files.isSymbolicLink(file)) {
+            throw new IOException("semantic index entry must not be a symbolic link: " + file);
+        }
+        BasicFileAttributes attributes = Files.readAttributes(
+                file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attributes.isRegularFile()) {
+            throw new IOException("semantic index entry must be a regular file: " + file);
+        }
+        return attributes;
     }
 
     private static String safeProjectDirectory(String projectId) {
@@ -327,14 +369,12 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
         return projectId;
     }
 
-    private static SyncLockLease acquireJvmSyncLock(Path lockFile) {
-        SyncLockState state;
+    private static SyncLockState retainJvmSyncLock(Path lockFile) {
         synchronized (JVM_SYNC_LOCK_MONITOR) {
-            state = JVM_SYNC_LOCKS.computeIfAbsent(lockFile, ignored -> new SyncLockState());
+            SyncLockState state = JVM_SYNC_LOCKS.computeIfAbsent(lockFile, ignored -> new SyncLockState());
             state.references++;
+            return state;
         }
-        state.lock.lock();
-        return new SyncLockLease(lockFile, state);
     }
 
     private static void releaseJvmSyncLock(Path lockFile, SyncLockState state) {
@@ -348,25 +388,6 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     private static final class SyncLockState {
         private final ReentrantLock lock = new ReentrantLock();
         private int references;
-    }
-
-    private static final class SyncLockLease implements AutoCloseable {
-        private final Path lockFile;
-        private final SyncLockState state;
-        private boolean closed;
-
-        private SyncLockLease(Path lockFile, SyncLockState state) {
-            this.lockFile = lockFile;
-            this.state = state;
-        }
-
-        @Override
-        public void close() {
-            if (closed) return;
-            closed = true;
-            state.lock.unlock();
-            releaseJvmSyncLock(lockFile, state);
-        }
     }
 
     private static void writeString(DataOutputStream output, String value) throws IOException {
@@ -386,7 +407,7 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
     }
 
     private static void requireIndexFileSize(Path file) throws IOException {
-        long size = Files.size(file);
+        long size = requireIndexFileAttributes(file).size();
         if (size < 1L || size > MAX_INDEX_FILE_BYTES) {
             throw new IOException("semantic index exceeds persisted byte limit: " + size + "/" + MAX_INDEX_FILE_BYTES);
         }
@@ -454,13 +475,16 @@ public final class FileSemanticVectorStore implements SemanticVectorStore {
 
     private record CacheEntry(IndexSnapshot snapshot, Path file, long sizeBytes, long lastModifiedMillis, long weightBytes) {
         static CacheEntry capture(Path file, IndexSnapshot snapshot) throws IOException {
-            return new CacheEntry(snapshot, file, Files.size(file), Files.getLastModifiedTime(file).toMillis(), estimateWeight(snapshot));
+            BasicFileAttributes attributes = requireIndexFileAttributes(file);
+            return new CacheEntry(snapshot, file, attributes.size(), attributes.lastModifiedTime().toMillis(),
+                    estimateWeight(snapshot));
         }
 
         boolean matches(Path candidate) throws IOException {
-            return file.equals(candidate)
-                    && sizeBytes == Files.size(candidate)
-                    && lastModifiedMillis == Files.getLastModifiedTime(candidate).toMillis();
+            if (!file.equals(candidate)) return false;
+            BasicFileAttributes attributes = requireIndexFileAttributes(candidate);
+            return sizeBytes == attributes.size()
+                    && lastModifiedMillis == attributes.lastModifiedTime().toMillis();
         }
     }
 

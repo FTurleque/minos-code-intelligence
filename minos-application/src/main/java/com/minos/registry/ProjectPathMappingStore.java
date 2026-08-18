@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
@@ -24,17 +25,22 @@ public final class ProjectPathMappingStore {
     private static final long MAX_MAPPING_BYTES = 64L * 1024L;
     private static final Set<String> ALLOWED_KEYS = Set.of("formatVersion", "hostRoot", "containerRoot");
 
+    private final Path home;
+    private final Path runtimeDirectory;
     private final Path file;
 
     public ProjectPathMappingStore(Path minosHome) {
-        Objects.requireNonNull(minosHome, "minosHome");
-        file = minosHome.toAbsolutePath().normalize().resolve(RUNTIME_DIRECTORY).resolve(FILE_NAME);
+        this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
+        this.runtimeDirectory = home.resolve(RUNTIME_DIRECTORY);
+        this.file = runtimeDirectory.resolve(FILE_NAME);
     }
 
     public Optional<ProjectPathMapping> loadOptional() throws IOException {
-        if (!Files.exists(file)) return Optional.empty();
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("project path mapping is not a regular file: " + file);
+        validateExistingContainer(home, "MINOS home");
+        validateExistingContainer(runtimeDirectory, "project path mapping directory");
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("project path mapping is not a regular non-symlink file: " + file);
         }
         Properties properties = BoundedProperties.load(
                 file,
@@ -65,12 +71,14 @@ public final class ProjectPathMappingStore {
 
     public void save(ProjectPathMapping mapping) throws IOException {
         Objects.requireNonNull(mapping, "mapping");
-        DurableAtomicFile.ensureDirectory(file.getParent(), "project path mapping directory");
+        validateExistingContainer(home, "MINOS home");
+        validateExistingContainer(runtimeDirectory, "project path mapping directory");
+        DurableAtomicFile.ensureDirectory(runtimeDirectory, "project path mapping directory");
         Properties properties = new Properties();
         properties.setProperty("formatVersion", Integer.toString(CURRENT_FORMAT_VERSION));
         properties.setProperty("hostRoot", mapping.hostRoot());
         properties.setProperty("containerRoot", mapping.containerRoot());
-        Path temporary = Files.createTempFile(file.getParent(), FILE_NAME + ".", ".tmp");
+        Path temporary = Files.createTempFile(runtimeDirectory, FILE_NAME + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
                     temporary, StandardCharsets.UTF_8,
@@ -85,6 +93,13 @@ public final class ProjectPathMappingStore {
 
     public Path file() {
         return file;
+    }
+
+    private static void validateExistingContainer(Path directory, String label) throws IOException {
+        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return;
+        if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException(label + " must be a non-symlink directory: " + directory);
+        }
     }
 
     private static String required(Properties properties, String key) {
