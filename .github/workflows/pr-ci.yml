@@ -195,7 +195,7 @@ jobs:
         run: bash scripts/remediation/run-final.sh "" 1000
       - name: Upload M28 Linux diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: m28-linux-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -232,7 +232,7 @@ jobs:
         run: .\scripts\remediation\run-final.ps1 -ProgramGraphFiles 1000
       - name: Upload M28 Windows diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: m28-windows-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -278,7 +278,7 @@ jobs:
         run: .\scripts\m15\run-final.ps1
       - name: Upload final M15 diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: m15-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
