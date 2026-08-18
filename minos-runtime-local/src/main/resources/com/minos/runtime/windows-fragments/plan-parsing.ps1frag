@@ -1,5 +1,9 @@
         $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1)
     }
+    # The plan contains the provider argv and explicit environment, both of which may carry
+    # credentials. Consume it exactly once and remove it before any untrusted provider process is
+    # resumed so secrets never become retained run diagnostics.
+    Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
     return $values
 }
 
