@@ -7,6 +7,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,8 +34,12 @@ public final class ActiveSnapshotRepository {
     public Optional<SnapshotDescriptor> read(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         Path pointerFile = repository.projectDirectory(projectId).resolve(ACTIVE_FILE);
-        if (!Files.isRegularFile(pointerFile)) {
+        if (!Files.exists(pointerFile, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
+        }
+        if (Files.isSymbolicLink(pointerFile)
+                || !Files.isRegularFile(pointerFile, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("active snapshot pointer must be a regular file");
         }
         return Optional.of(readPointer(pointerFile));
     }
@@ -74,7 +79,7 @@ public final class ActiveSnapshotRepository {
 
     private static SnapshotDescriptor readPointer(Path file) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file)
+                Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)
         ))) {
             int version = SnapshotBinaryCodecSupport.readHeaderVersion(input, POINTER_MAGIC, "active snapshot pointer");
             if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2) {

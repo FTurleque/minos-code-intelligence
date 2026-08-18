@@ -7,13 +7,19 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinosStrongProcessLauncherTest {
@@ -41,6 +47,42 @@ class MinosStrongProcessLauncherTest {
             assertTrue(launch.process().isAlive(), "fixture child must still be alive after plan deletion");
             supervisor.stop(null);
         }
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void windowsOwnershipInfrastructureAndLauncherAreOwnerOnly() throws Exception {
+        Path home = temp.resolve("secure-home");
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-Command", "Start-Sleep -Seconds 30"));
+        builder.directory(temp.toFile());
+
+        MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, home.toString());
+        try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+            Path intellijHome = home.resolve("intellij");
+            Path ownership = intellijHome.resolve("process-ownership");
+            Path launcher = ownership.resolve("windows-cli-job-owner-v1.ps1");
+
+            assertOwnerOnlyAcl(home);
+            assertOwnerOnlyAcl(intellijHome);
+            assertOwnerOnlyAcl(ownership);
+            assertTrue(Files.isRegularFile(launcher, LinkOption.NOFOLLOW_LINKS));
+            assertFalse(Files.isSymbolicLink(launcher));
+            assertOwnerOnlyAcl(launcher);
+
+            supervisor.stop(null);
+        }
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void ownershipPlanAclIsExplicitlyRestrictedToItsOwner() throws Exception {
+        Path plan = Files.writeString(temp.resolve("cli-test.plan"), "secret");
+
+        MinosStrongProcessLauncher.restrictWindowsPlan(plan);
+
+        assertOwnerOnlyAcl(plan);
     }
 
     @Test
@@ -118,6 +160,19 @@ class MinosStrongProcessLauncherTest {
         awaitDead(pid);
         assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
                 "setsid child must remain owned by the systemd cgroup scope");
+    }
+
+    private static void assertOwnerOnlyAcl(Path path) throws Exception {
+        assertFalse(Files.isSymbolicLink(path), "secured ownership entry must not be a symbolic link");
+        AclFileAttributeView view = Files.getFileAttributeView(
+                path, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        assertNotNull(view, "Windows ownership entry must expose an ACL view");
+        UserPrincipal owner = Files.getOwner(path, LinkOption.NOFOLLOW_LINKS);
+        List<AclEntry> acl = view.getAcl();
+        assertFalse(acl.isEmpty(), "Windows ownership entry ACL must not be empty");
+        assertTrue(acl.stream().allMatch(entry -> entry.type() == AclEntryType.ALLOW
+                        && entry.principal().equals(owner)),
+                "Windows ownership entry ACL must contain only owner ALLOW entries");
     }
 
     private static boolean hasPlans(Path ownership) throws Exception {

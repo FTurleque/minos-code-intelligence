@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -19,8 +20,12 @@ public final class SnapshotIntegrityService {
 
     public String checksum(Path file) throws IOException {
         Objects.requireNonNull(file, "file");
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("snapshot checksum source must be a regular file");
+        }
         MessageDigest digest = sha256Digest();
-        try (InputStream input = new DigestInputStream(Files.newInputStream(file), digest)) {
+        try (InputStream input = new DigestInputStream(
+                Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), digest)) {
             input.transferTo(OutputStream.nullOutputStream());
         }
         return HEX.formatHex(digest.digest());
