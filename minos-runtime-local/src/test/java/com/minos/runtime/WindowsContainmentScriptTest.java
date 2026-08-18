@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -15,8 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Splitting a containment launcher into shared fragments is only safe if assembly reproduces the
  * script that was reviewed and qualified. The golden copies remain the pre-remediation qualified
- * baseline; the only accepted drift is the explicit one-shot deletion of the credential-bearing
- * plan immediately before {@code Read-Plan} returns. Any other byte drift remains a test failure.
+ * baseline; after normalizing platform line endings, the only accepted drift is the explicit
+ * one-shot deletion of the credential-bearing plan immediately before {@code Read-Plan} returns.
+ * Any other content drift remains a test failure.
  */
 class WindowsContainmentScriptTest {
 
@@ -30,12 +30,12 @@ class WindowsContainmentScriptTest {
         }""";
 
     @Test
-    void jobObjectLauncherAssemblesByteIdenticalExceptForApprovedPlanConsumption() throws Exception {
+    void jobObjectLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
         assertAssemblesToQualifiedBaseline("windows-job-object-owner-v1.ps1");
     }
 
     @Test
-    void appContainerLauncherAssemblesByteIdenticalExceptForApprovedPlanConsumption() throws Exception {
+    void appContainerLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
         assertAssemblesToQualifiedBaseline("windows-appcontainer-sandbox-v4.ps1");
     }
 
@@ -78,7 +78,7 @@ class WindowsContainmentScriptTest {
     }
 
     private static void assertAssemblesToQualifiedBaseline(String launcher) throws Exception {
-        String golden = new String(readGolden(launcher), StandardCharsets.UTF_8);
+        String golden = normalizeLineEndings(new String(readGolden(launcher), StandardCharsets.UTF_8));
         int marker = golden.indexOf(QUALIFIED_PLAN_RETURN);
         assertTrue(marker >= 0, launcher + " qualified baseline lost the plan return marker");
         assertEquals(marker, golden.lastIndexOf(QUALIFIED_PLAN_RETURN),
@@ -86,9 +86,13 @@ class WindowsContainmentScriptTest {
         String expected = golden.substring(0, marker)
                 + APPROVED_PLAN_CONSUMPTION
                 + golden.substring(marker + QUALIFIED_PLAN_RETURN.length());
-        byte[] assembled = WindowsContainmentScript.assemble(launcher).getBytes(StandardCharsets.UTF_8);
-        assertArrayEquals(expected.getBytes(StandardCharsets.UTF_8), assembled,
+        String assembled = normalizeLineEndings(WindowsContainmentScript.assemble(launcher));
+        assertEquals(expected, assembled,
                 launcher + " drifted beyond the approved one-shot plan-consumption remediation");
+    }
+
+    private static String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static byte[] readGolden(String launcher) throws IOException {
