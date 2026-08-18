@@ -46,6 +46,13 @@ jobs:
         run: |
           if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED_SHA) { throw 'Exact-head mismatch' }
 
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -54,8 +61,23 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
-      - name: Post-MNE remediation invariants
+      - name: Post-MNE structural remediation invariants
         run: python scripts/remediation/check-post-mne.py
+
+      - name: Prepare Maven Wrapper (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x mvnw
+
+      - name: Provider trust-boundary behavioral regression (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./mvnw -B -ntp -pl minos-runtime-local -am -Dtest=ProviderSandboxSecurityRegressionTest -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Provider trust-boundary behavioral regression (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\mvnw.cmd -B -ntp -pl minos-runtime-local -am -Dtest=ProviderSandboxSecurityRegressionTest -Dsurefire.failIfNoSpecifiedTests=false test
 
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
