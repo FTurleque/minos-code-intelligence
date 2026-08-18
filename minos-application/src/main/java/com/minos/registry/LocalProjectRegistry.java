@@ -63,6 +63,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             ProjectPathMapping.RuntimeLocation runtimeLocation
     ) throws IOException {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "local project registry root");
         this.projectsDirectory = this.storageRoot.resolve(PROJECTS_DIRECTORY);
         this.workspacesDirectory = this.storageRoot.resolve(WORKSPACES_DIRECTORY);
         this.pathMapping = Objects.requireNonNull(pathMapping, "pathMapping");
