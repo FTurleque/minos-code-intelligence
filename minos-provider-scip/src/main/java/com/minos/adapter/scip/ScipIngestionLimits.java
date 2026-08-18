@@ -84,7 +84,7 @@ public record ScipIngestionLimits(
 
     static long decodeHeapBudget(long maxHeapBytes) {
         if (maxHeapBytes < 1L) throw new IllegalArgumentException("maxHeapBytes must be positive");
-        return Math.min(MAX_DECODE_HEAP_BUDGET_BYTES, Math.max(1L, maxHeapBytes / 3L));
+        return Math.clamp(maxHeapBytes / 3L, 1L, MAX_DECODE_HEAP_BUDGET_BYTES);
     }
 
     static long estimatedDecodedHeapBytes(PreflightMetrics metrics, long artifactBytes) {
