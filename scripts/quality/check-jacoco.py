@@ -20,8 +20,8 @@ SCOPES = {
         ), "line": 0.50, "branch": 0.35,
     },
     "project-resolution": {"prefixes": ("com/minos/application/ProjectResolver",), "line": 0.70, "branch": 0.50},
-    "public-api": {"prefixes": ("com/minos/api/",), "line": 0.31, "branch": 0.21},
-    "mcp-mapping": {"prefixes": ("com/minos/mcp/",), "line": 0.30, "branch": 0.20},
+    "public-api": {"prefixes": ("com/minos/api/",), "line": 0.60, "branch": 0.35},
+    "mcp-mapping": {"prefixes": ("com/minos/mcp/",), "line": 0.55, "branch": 0.40},
     "program-graph-analysis": {
         "prefixes": (
             "com/minos/program/analysis/ProgramGraphService", "com/minos/program/analysis/ProgramGraphComposer",
@@ -66,16 +66,25 @@ SCOPES = {
             "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
             "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
             "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
-        ), "line": 0.30, "branch": 0.15,
+        ), "line": 0.50, "branch": 0.28,
     },
     "m25-remote-distributed-indexing": {
         "prefixes": (
-            "com/minos/remote/", "com/minos/git/JGitRemoteRepositoryMaterializer", "com/minos/git/RemoteRepositoryCachePolicy",
-            "com/minos/runtime/DistributedArtifactBundleStore", "com/minos/runtime/DistributedArtifactCachePolicy",
-            "com/minos/runtime/DistributedIndexerExecutor", "com/minos/runtime/LocalIsolatedIndexWorker",
-            "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
-            "com/minos/cli/LocalRemoteIndexOperations", "com/minos/cli/RemoteIndexCommand",
-        ), "line": 0.47, "branch": 0.27,
+            "com/minos/remote/", "com/minos/git/JGitRemoteRepositoryMaterializer", "com/minos/git/JGitCloneDeadline",
+            "com/minos/git/RemoteRepositoryCachePolicy", "com/minos/runtime/DistributedArtifactBundleStore",
+            "com/minos/runtime/DistributedArtifactCachePolicy", "com/minos/runtime/DistributedIndexerExecutor",
+            "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
+            "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
+            "com/minos/cli/RemoteIndexCommand",
+        ), "line": 0.70, "branch": 0.50,
+    },
+    "provider-execution-trust-boundary": {
+        "prefixes": (
+            "com/minos/runtime/ProcessIndexerExecutor", "com/minos/runtime/StrongProcessOwnershipIndexerExecutor",
+            "com/minos/runtime/LocalProviderWorkspace", "com/minos/runtime/WorkerSandboxBackend",
+            "com/minos/runtime/WorkerSandboxQualification", "com/minos/runtime/ProviderProcessEnvironment",
+            "com/minos/runtime/ProcessTreeTermination",
+        ), "line": 0.68, "branch": 0.48,
     },
     "m26-runtime-dynamic-intelligence": {
         "prefixes": ("com/minos/dynamic/", "com/minos/store/FileRuntimeObservationStore", "com/minos/cli/RuntimeCommand", "com/minos/output/RuntimeIntelligenceRenderer"),
@@ -101,7 +110,7 @@ SCOPES = {
             "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
         ), "line": 0.52, "branch": 0.32,
     },
-    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.47, "branch": 0.27},
+    "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
 }
 
 
