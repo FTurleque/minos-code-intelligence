@@ -43,6 +43,8 @@ final class MinosStrongProcessLauncher {
     private static final String SYSTEMCTL = "systemctl";
     private static final String USER_SCOPE = "--user";
     private static final String QUIET = "--quiet";
+    private static final String WINDOWS_LAUNCHER_LABEL = "Windows Job Object launcher";
+    private static final String WINDOWS_TEMP_LAUNCHER_LABEL = "Windows Job Object launcher temporary file";
     private static final Object WINDOWS_INSTALL_LOCK = new Object();
     private static final Object LINUX_PROBE_LOCK = new Object();
     private static volatile Boolean linuxCapability;
@@ -218,44 +220,60 @@ final class MinosStrongProcessLauncher {
         synchronized (WINDOWS_INSTALL_LOCK) {
             Path target = ownership.resolve("windows-cli-job-owner-v1.ps1");
             Path temporary = Files.createTempFile(ownership, ".windows-cli-owner-", ".tmp");
-            boolean published = false;
             try {
-                restrictWindowsOwnerOnly(temporary, "Windows Job Object launcher temporary file");
-                try (InputStream input = MinosStrongProcessLauncher.class.getResourceAsStream(
-                        "/com/minos/intellij/protocol/windows-cli-job-owner-v1.ps1")) {
-                    if (input == null) throw new IOException("packaged Windows Job Object launcher is missing");
-                    try (OutputStream output = Files.newOutputStream(
-                            temporary,
-                            StandardOpenOption.WRITE,
-                            StandardOpenOption.TRUNCATE_EXISTING,
-                            LinkOption.NOFOLLOW_LINKS)) {
-                        input.transferTo(output);
-                    }
-                }
-                restrictWindowsOwnerOnly(temporary, "Windows Job Object launcher temporary file");
-                try {
-                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (AtomicMoveNotSupportedException unsupported) {
-                    throw new IOException("Windows Job Object launcher requires atomic publication", unsupported);
-                }
-                published = true;
-                if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target)) {
-                    throw new IOException("Windows Job Object launcher is not a regular file: " + target);
-                }
-                restrictWindowsOwnerOnly(target, "Windows Job Object launcher");
+                writeWindowsLauncherResource(temporary);
+                publishWindowsLauncher(temporary, target);
                 return target;
-            } catch (IOException failure) {
-                if (published) {
-                    try {
-                        Files.deleteIfExists(target);
-                    } catch (IOException cleanup) {
-                        failure.addSuppressed(cleanup);
-                    }
-                }
-                throw failure;
             } finally {
                 Files.deleteIfExists(temporary);
             }
+        }
+    }
+
+    private static void writeWindowsLauncherResource(Path temporary) throws IOException {
+        restrictWindowsOwnerOnly(temporary, WINDOWS_TEMP_LAUNCHER_LABEL);
+        try (InputStream input = MinosStrongProcessLauncher.class.getResourceAsStream(
+                "/com/minos/intellij/protocol/windows-cli-job-owner-v1.ps1")) {
+            if (input == null) throw new IOException("packaged Windows Job Object launcher is missing");
+            try (OutputStream output = Files.newOutputStream(
+                    temporary,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    LinkOption.NOFOLLOW_LINKS)) {
+                input.transferTo(output);
+            }
+        }
+        restrictWindowsOwnerOnly(temporary, WINDOWS_TEMP_LAUNCHER_LABEL);
+    }
+
+    private static void publishWindowsLauncher(Path temporary, Path target) throws IOException {
+        boolean published = false;
+        try {
+            moveWindowsLauncherAtomically(temporary, target);
+            published = true;
+            if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target)) {
+                throw new IOException(WINDOWS_LAUNCHER_LABEL + " is not a regular file: " + target);
+            }
+            restrictWindowsOwnerOnly(target, WINDOWS_LAUNCHER_LABEL);
+        } catch (IOException failure) {
+            if (published) deleteFailedWindowsLauncher(target, failure);
+            throw failure;
+        }
+    }
+
+    private static void moveWindowsLauncherAtomically(Path temporary, Path target) throws IOException {
+        try {
+            Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException unsupported) {
+            throw new IOException(WINDOWS_LAUNCHER_LABEL + " requires atomic publication", unsupported);
+        }
+    }
+
+    private static void deleteFailedWindowsLauncher(Path target, IOException failure) {
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException cleanup) {
+            failure.addSuppressed(cleanup);
         }
     }
 
