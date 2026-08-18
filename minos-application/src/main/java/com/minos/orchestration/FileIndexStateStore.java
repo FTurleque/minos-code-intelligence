@@ -49,6 +49,7 @@ public final class FileIndexStateStore implements IndexStateStore {
 
     public FileIndexStateStore(Path storageRoot) throws IOException {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "index state storage root");
         this.projectRoot = this.storageRoot.resolve("projects");
         this.runRoot = this.storageRoot.resolve("runs");
         this.runLocatorRoot = this.runRoot.resolve(RUN_LOCATOR_DIRECTORY);
