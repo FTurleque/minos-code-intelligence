@@ -12,9 +12,10 @@ import java.util.Optional;
 /**
  * Fail-closed wrapper for provider executions that require kernel-backed descendant ownership.
  *
- * <p>Production local executions additionally run from a bounded ephemeral project copy inside the
- * strongest qualified OS sandbox. The historical ownership-only path remains injectable for
- * focused boundary tests, but it is not used by managed provider production wiring.</p>
+ * <p>The historical two-argument constructor retains its ownership-only contract for callers that
+ * explicitly qualify that kernel primitive. Managed provider production wiring uses the explicit
+ * network-policy constructor, which additionally executes from a bounded ephemeral project copy
+ * inside the strongest qualified OS sandbox.</p>
  */
 public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
@@ -22,10 +23,18 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     private final BoundaryProvider boundaryProvider;
     private final LocalIsolation localIsolation;
 
+    /** Strong descendant ownership only; managed providers must use the explicit network-policy constructor. */
     public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
-        this(delegate, minosHome, WorkerNetworkPolicy.DENY);
+        Path home = normalizedHome(minosHome);
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.boundaryProvider = platformBoundary(home);
+        this.localIsolation = null;
     }
 
+    /**
+     * Production managed-provider boundary: copied workspace plus qualified OS sandbox and an
+     * explicit provider network policy.
+     */
     public StrongProcessOwnershipIndexerExecutor(
             ProcessIndexerExecutor delegate,
             Path minosHome,
