@@ -19,6 +19,8 @@ import java.util.Optional;
  */
 public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
+    private static final String DELEGATE_PARAMETER = "delegate";
+
     private final ProcessIndexerExecutor delegate;
     private final BoundaryProvider boundaryProvider;
     private final LocalIsolation localIsolation;
@@ -26,7 +28,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     /** Strong descendant ownership only; managed providers must use the explicit network-policy constructor. */
     public StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, Path minosHome) {
         Path home = normalizedHome(minosHome);
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = platformBoundary(home);
         this.localIsolation = null;
     }
@@ -41,7 +43,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             WorkerNetworkPolicy networkPolicy
     ) {
         Path home = normalizedHome(minosHome);
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = platformBoundary(home);
         this.localIsolation = new LocalIsolation(
                 home,
@@ -49,7 +51,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
     }
 
     StrongProcessOwnershipIndexerExecutor(ProcessIndexerExecutor delegate, BoundaryProvider boundaryProvider) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = Objects.requireNonNull(delegate, DELEGATE_PARAMETER);
         this.boundaryProvider = Objects.requireNonNull(boundaryProvider, "boundaryProvider");
         this.localIsolation = null;
     }
