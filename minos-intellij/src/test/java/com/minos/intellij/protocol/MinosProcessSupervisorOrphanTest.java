@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinosProcessSupervisorOrphanTest {
 
+    private static final long WINDOWS_LAUNCH_TIMEOUT_SECONDS = 45L;
+
     @TempDir
     Path tmp;
 
@@ -73,7 +75,7 @@ class MinosProcessSupervisorOrphanTest {
                 builder, tmp.resolve("home").toString());
         long childPid;
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
-            awaitFile(pidFile);
+            awaitWindowsFixtureStart(pidFile, launch, supervisor);
             childPid = Long.parseLong(Files.readString(pidFile).trim());
             assertTrue(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false),
                     "fixture child must be alive while the CLI root is still running");
@@ -94,6 +96,32 @@ class MinosProcessSupervisorOrphanTest {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (!Files.exists(file) && System.nanoTime() < deadline) Thread.sleep(25L);
         assertTrue(Files.exists(file), "timed out waiting for child pid file");
+    }
+
+    private static void awaitWindowsFixtureStart(
+            Path file,
+            MinosStrongProcessLauncher.Launch launch,
+            MinosProcessSupervisor supervisor
+    ) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WINDOWS_LAUNCH_TIMEOUT_SECONDS);
+        while (!Files.exists(file) && launch.process().isAlive() && System.nanoTime() < deadline) {
+            Thread.sleep(25L);
+        }
+        if (Files.exists(file)) return;
+        if (!launch.process().isAlive()) {
+            supervisor.drainOutput();
+            throw new AssertionError("Windows Job Object launcher exited before the fixture child published its PID"
+                    + " (exit=" + supervisor.exitValue()
+                    + ", stdout=" + diagnostic(supervisor.stdout())
+                    + ", stderr=" + diagnostic(supervisor.stderr()) + ")");
+        }
+        throw new AssertionError("timed out after " + WINDOWS_LAUNCH_TIMEOUT_SECONDS
+                + "s waiting for the fixture child PID while the Windows Job Object launcher remained alive");
+    }
+
+    private static String diagnostic(String value) {
+        String flattened = value == null ? "" : value.replace('\r', ' ').replace('\n', ' ').trim();
+        return flattened.length() <= 1_000 ? flattened : flattened.substring(0, 1_000) + "...";
     }
 
     private static void awaitDead(ProcessHandle process) throws Exception {
