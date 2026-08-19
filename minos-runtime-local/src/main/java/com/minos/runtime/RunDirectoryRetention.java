@@ -197,6 +197,17 @@ final class RunDirectoryRetention {
         if (!Files.exists(normalized, LinkOption.NOFOLLOW_LINKS)) return;
         Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
             @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
+                    throws IOException {
+                if (FileTreeOperations.isRecursableDirectory(attributes)) return FileVisitResult.CONTINUE;
+                // A previous run's Windows junction/reparse point: never descend into it. Deleting
+                // the entry itself only removes the reparse point, never the content it points at.
+                if (!budget.consume()) return FileVisitResult.TERMINATE;
+                Files.deleteIfExists(directory);
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+
+            @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 if (!budget.consume()) return FileVisitResult.TERMINATE;
                 Files.deleteIfExists(file);
@@ -245,7 +256,12 @@ final class RunDirectoryRetention {
 
                 @Override
                 public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                    return account(0L);
+                    FileVisitResult result = account(0L);
+                    if (result != FileVisitResult.CONTINUE) return result;
+                    // A Windows junction/reparse point: account it as one entry but never descend
+                    // into whatever it targets, which may be entirely outside this run's tree.
+                    return FileTreeOperations.isRecursableDirectory(attributes)
+                            ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
                 }
 
                 @Override

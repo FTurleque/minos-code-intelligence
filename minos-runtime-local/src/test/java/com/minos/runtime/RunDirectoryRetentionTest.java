@@ -1,10 +1,12 @@
 package com.minos.runtime;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
@@ -123,6 +125,32 @@ class RunDirectoryRetentionTest {
         assertThrows(IOException.class, () -> RunDirectoryRetention.deleteTree(runs, outside));
         assertThrows(IOException.class, () -> RunDirectoryRetention.deleteTree(runs, runs));
         assertTrue(Files.exists(outside));
+    }
+
+    @Test
+    void deleteTreeQuarantinesAWindowsJunctionInsteadOfWalkingThroughToItsTarget(@TempDir Path home) throws Exception {
+        Assumptions.assumeTrue(CommandLocator.isWindows(), "NTFS junctions are a Windows-only reparse point");
+        Path runs = Files.createDirectories(home.resolve("runs"));
+        Path outside = Files.createDirectories(home.resolve("outside"));
+        Path evidence = Files.writeString(outside.resolve("evidence.txt"), "preserved");
+        Path hostileRun = run(runs, "hostile", 4);
+        Path junction = hostileRun.resolve("outside-junction");
+        createJunction(junction, outside);
+
+        RunDirectoryRetention.deleteTree(runs, hostileRun);
+
+        assertFalse(Files.exists(hostileRun));
+        assertFalse(Files.exists(junction, LinkOption.NOFOLLOW_LINKS), "the junction entry itself must be removed");
+        assertTrue(Files.isRegularFile(evidence), "reclaiming a hostile run must never delete anything at a junction's target");
+    }
+
+    private static void createJunction(Path link, Path target) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes());
+        int exit = process.waitFor();
+        if (exit != 0) throw new IOException("mklink /J failed (exit=" + exit + "): " + output);
     }
 
     private static Path run(Path runs, String name, int bytes) throws Exception {

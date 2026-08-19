@@ -1,5 +1,6 @@
 package com.minos.runtime;
 
+import com.minos.io.FileTreeOperations;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
@@ -91,6 +92,17 @@ final class ProviderWorkspaceFiles {
             throw new IOException(label + " refuses to delete outside its workspace root");
         }
         Files.walkFileTree(normalized, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
+                    throws IOException {
+                if (FileTreeOperations.isRecursableDirectory(attributes)) return FileVisitResult.CONTINUE;
+                // A provider-planted Windows junction/reparse point: never descend into it. Deleting
+                // the entry itself only removes the reparse point, never the content it points at.
+                clearReadOnly(directory);
+                Files.deleteIfExists(directory);
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 clearReadOnly(file);
