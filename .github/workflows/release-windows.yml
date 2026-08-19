@@ -109,15 +109,18 @@ jobs:
           if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
             throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
           }
-          # Inno Setup's ISCC.exe does not reliably stamp FileVersion (observed as 0.0.0.0 on the
-          # 6.7.1 chocolatey package); ProductVersion is what actually carries the release number,
-          # so check both and accept either.
-          $versionInfo = (Get-Item -LiteralPath $isccPath).VersionInfo
-          $reportedVersions = @($versionInfo.ProductVersion, $versionInfo.FileVersion) | Where-Object { $_ }
-          if (-not ($reportedVersions | Where-Object { $_ -like "$($env:INNO_SETUP_VERSION)*" })) {
-            throw "ISCC.exe at $isccPath reports ProductVersion='$($versionInfo.ProductVersion)' FileVersion='$($versionInfo.FileVersion)', expected $env:INNO_SETUP_VERSION. Refusing to build the release setup with an unverified Inno Setup compiler."
+          # ISCC.exe does not reliably stamp its FileVersion/ProductVersion PE resources (both
+          # observed as 0.0.0.0 on the 6.7.1 chocolatey package) -- ask the compiler itself
+          # instead. Running it with no script argument prints a banner naming its own version
+          # before exiting non-zero; that banner is the only authoritative source for what is
+          # actually about to compile the release setup.exe.
+          $bannerOutput = (& $isccPath 2>&1 | Out-String)
+          $global:LASTEXITCODE = 0
+          if ($bannerOutput -notmatch [regex]::Escape($env:INNO_SETUP_VERSION)) {
+            throw "ISCC.exe at $isccPath did not report the expected version $env:INNO_SETUP_VERSION in its own banner. Captured output:`n$bannerOutput"
           }
-          Write-Host "Qualified ISCC: $isccPath (ProductVersion=$($versionInfo.ProductVersion) FileVersion=$($versionInfo.FileVersion))"
+          Write-Host "Qualified ISCC: $isccPath"
+          Write-Host $bannerOutput
           "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Afficher la toolchain

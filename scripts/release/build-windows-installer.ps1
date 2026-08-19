@@ -80,13 +80,17 @@ if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
         throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
     }
     if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
-        # ISCC.exe does not reliably stamp FileVersion (observed as 0.0.0.0 on the 6.7.1
-        # chocolatey package); ProductVersion is what actually carries the release number, so
-        # check both and accept either.
-        $ActualVersionInfo = (Get-Item -LiteralPath $IsccPath).VersionInfo
-        $ActualIsccVersions = @($ActualVersionInfo.ProductVersion, $ActualVersionInfo.FileVersion) | Where-Object { $_ }
-        if (-not ($ActualIsccVersions | Where-Object { $_ -like "$RequiredIsccVersion*" })) {
-            throw "ISCC.exe at $IsccPath reports ProductVersion='$($ActualVersionInfo.ProductVersion)' FileVersion='$($ActualVersionInfo.FileVersion)', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
+        # ISCC.exe does not reliably stamp its FileVersion/ProductVersion PE resources (both
+        # observed as 0.0.0.0 on the 6.7.1 chocolatey package) -- ask the compiler itself
+        # instead. Running it with no script argument prints a banner naming its own version
+        # before exiting non-zero; that banner is the only authoritative source for what is
+        # actually about to compile the setup.exe. Verified here too, independently of any
+        # verification the caller may already have done, so this script never trusts an
+        # -IsccPath it cannot itself confirm.
+        $BannerOutput = (& $IsccPath 2>&1 | Out-String)
+        $global:LASTEXITCODE = 0
+        if ($BannerOutput -notmatch [regex]::Escape($RequiredIsccVersion)) {
+            throw "ISCC.exe at $IsccPath did not report the required version $RequiredIsccVersion in its own banner. Captured output:`n$BannerOutput"
         }
     }
     $Iscc = $IsccPath
