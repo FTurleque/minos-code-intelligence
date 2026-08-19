@@ -48,15 +48,15 @@ jobs:
         with:
           python-version: '3.13'
 
-      # Bounded so an apt/network incident on GitHub-hosted runners fails fast and legibly instead
-      # of consuming the 90-minute job timeout.
+      # Per-transfer apt timeouts plus retries, with timeout-minutes as the backstop, so an
+      # apt/network incident on GitHub-hosted runners cannot consume the job timeout.
       - name: Install and authorize Linux worker sandbox runtime
         timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
             bubblewrap util-linux apparmor apparmor-profiles
           command -v bwrap
           command -v prlimit
