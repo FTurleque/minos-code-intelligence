@@ -116,9 +116,17 @@ jobs:
         shell: bash
         run: chmod +x mvnw
 
+      # --attach-pid places THIS step's shell inside the delegated subtree while the helper is still
+      # privileged, so Maven (and the sandbox tests it runs) inherit the boundary without the MINOS
+      # account ever holding write access to the root cgroup.procs. Each `run:` block is a separate
+      # shell, so the attach must happen in the same step as the workload.
       - name: Maven clean verify (Unix, PostgreSQL required)
         if: runner.os != 'Windows'
-        run: ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
+          ./mvnw -B -ntp -Dminos.postgresql.tests.required=true clean verify
 
       - name: Maven clean verify (Windows)
         if: runner.os == 'Windows'
@@ -188,8 +196,14 @@ jobs:
         run: bash scripts/ci/delegate-linux-cgroup.sh
       - name: Prepare Maven Wrapper
         run: chmod +x mvnw
+      # See the Verify job: --attach-pid keeps the privileged migration in the provisioning helper
+      # instead of granting the MINOS account root cgroup.procs access.
       - name: Run complete M28 Linux exact-head qualification
-        run: bash scripts/remediation/run-final.sh "" 1000
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
+          bash scripts/remediation/run-final.sh "" 1000
       - name: Upload M28 Linux diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

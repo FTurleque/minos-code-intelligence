@@ -72,8 +72,15 @@ jobs:
       - name: Product facts
         run: python scripts/docs/product-facts.py --check
 
+      # --attach-pid keeps the privileged cgroup migration in the provisioning helper instead of
+      # granting the MINOS account root cgroup.procs access; each `run:` block is its own shell, so
+      # the attach must happen in the same step as the workload.
       - name: Maven verification
-        run: ./mvnw -B -ntp clean verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
+          ./mvnw -B -ntp clean verify
 
       - name: JaCoCo gates
         run: python scripts/quality/check-jacoco.py

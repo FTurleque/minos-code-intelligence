@@ -90,7 +90,7 @@ SCOPES = {
     "provider-sandbox-linux": {
         "prefixes": (
             "com/minos/runtime/LinuxBubblewrapWorkerSandboxBackend",
-            "com/minos/runtime/LinuxCgroupV2",
+            "com/minos/runtime/LinuxCgroupJob",
         ),
         "platform": "linux",
         "line": 0.55,
@@ -166,6 +166,117 @@ def current_platform() -> str:
     return "other"
 
 
+def self_test() -> int:
+    """Exercises the gate's own decision logic on synthetic reports.
+
+    The gate is the only thing standing between a renamed class and a silently shrinking coverage
+    surface, so its behaviour is verified here rather than assumed. Runs without pytest so it can be
+    invoked from any CI step.
+    """
+    import tempfile
+
+    report_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<report name="self-test">
+  <class name="com/minos/selftest/Alpha">
+    <counter type="LINE" covered="90" missed="10"/>
+    <counter type="BRANCH" covered="80" missed="20"/>
+  </class>
+  <class name="com/minos/selftest/pkg/Beta">
+    <counter type="LINE" covered="90" missed="10"/>
+    <counter type="BRANCH" covered="80" missed="20"/>
+  </class>
+</report>
+"""
+    failures: list[str] = []
+
+    def run(scopes: dict, *, skip: list[str] | None = None) -> tuple[int, list[str]]:
+        original = dict(SCOPES)
+        SCOPES.clear()
+        SCOPES.update(scopes)
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                report = Path(directory) / "jacoco.xml"
+                report.write_text(report_xml, encoding="utf-8")
+                output = Path(directory) / "gate.json"
+                argv = [sys.argv[0], str(report), "--output", str(output)]
+                for name in skip or []:
+                    argv += ["--skip-scope", name]
+                saved_argv = sys.argv
+                sys.argv = argv
+                try:
+                    code = main()
+                finally:
+                    sys.argv = saved_argv
+                payload = json.loads(output.read_text(encoding="utf-8"))
+                return code, [n for n, r in payload["scopes"].items() if r.get("status") == "FAIL"]
+        finally:
+            SCOPES.clear()
+            SCOPES.update(original)
+
+    def expect(label: str, actual, wanted) -> None:
+        if actual != wanted:
+            failures.append(f"{label}: expected {wanted!r}, got {actual!r}")
+
+    live_class = {"prefixes": ("com/minos/selftest/Alpha",), "line": 0.5, "branch": 0.5}
+    live_package = {"prefixes": ("com/minos/selftest/pkg/",), "line": 0.5, "branch": 0.5}
+
+    # 1. every declared prefix valid (class prefix and package prefix) -> PASS
+    code, failed = run({"class-prefix": live_class, "package-prefix": live_package})
+    expect("all prefixes valid: exit", code, 0)
+    expect("all prefixes valid: failures", failed, [])
+
+    # 2. one dead prefix beside a live one -> FAIL (the regression this gate previously missed)
+    code, failed = run({"mixed": {
+        "prefixes": ("com/minos/selftest/Alpha", "com/minos/selftest/Removed"),
+        "line": 0.5, "branch": 0.5,
+    }})
+    expect("dead prefix beside live: exit", code, 1)
+    expect("dead prefix beside live: failures", failed, ["mixed"])
+
+    # 3. a dead package prefix is caught the same way
+    code, failed = run({"dead-package": {
+        "prefixes": ("com/minos/selftest/Alpha", "com/minos/selftest/gone/"),
+        "line": 0.5, "branch": 0.5,
+    }})
+    expect("dead package prefix: exit", code, 1)
+    expect("dead package prefix: failures", failed, ["dead-package"])
+
+    # 4. no prefix matches anything -> FAIL
+    code, failed = run({"empty": {"prefixes": ("com/minos/absent/",), "line": 0.5, "branch": 0.5}})
+    expect("no prefix matches: exit", code, 1)
+    expect("no prefix matches: failures", failed, ["empty"])
+
+    # 5. an unmet threshold still fails, independently of prefix validity
+    code, failed = run({"threshold": {"prefixes": ("com/minos/selftest/Alpha",), "line": 0.99, "branch": 0.5}})
+    expect("threshold breach: exit", code, 1)
+    expect("threshold breach: failures", failed, ["threshold"])
+
+    # 6. platform exclusion keeps SKIPPED semantics: a dead prefix in an inapplicable scope is not
+    #    evaluated at all, exactly as before.
+    other_platform = "windows" if current_platform() != "windows" else "linux"
+    code, failed = run({"platform-excluded": {
+        "prefixes": ("com/minos/selftest/Removed",), "platform": other_platform, "line": 0.5, "branch": 0.5,
+    }})
+    expect("platform exclusion: exit", code, 0)
+    expect("platform exclusion: failures", failed, [])
+
+    # 7. explicit --skip-scope keeps SKIPPED semantics for the same case
+    code, failed = run(
+        {"skippable": {"prefixes": ("com/minos/selftest/Removed",), "line": 0.5, "branch": 0.5}},
+        skip=["skippable"],
+    )
+    expect("explicit skip: exit", code, 0)
+    expect("explicit skip: failures", failed, [])
+
+    if failures:
+        print("MINOS JACOCO GATE SELF-TEST FAILED", file=sys.stderr)
+        for failure in failures:
+            print(f" - {failure}", file=sys.stderr)
+        return 1
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (7 scenarios)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("xml", nargs="?", default="target/site/jacoco-aggregate/jacoco.xml", help="JaCoCo aggregate XML report")
@@ -174,7 +285,14 @@ def main() -> int:
         "--skip-scope", action="append", default=[], choices=sorted(SCOPES),
         help="Skip one environment-inapplicable scope. May be repeated.",
     )
+    parser.add_argument(
+        "--self-test", action="store_true",
+        help="Verify the gate's own decision logic on synthetic reports and exit.",
+    )
     args = parser.parse_args()
+
+    if args.self_test:
+        return self_test()
 
     default_report = Path(args.xml)
     if not default_report.is_file():
@@ -208,6 +326,21 @@ def main() -> int:
         if not classes:
             failures.append(f"{name}: no classes matched {prefixes} in {report}")
             results["scopes"][name] = {"classes": 0, "report": str(report), "status": "FAIL"}
+            continue
+
+        # Every declared prefix must still designate real code. Without this, a renamed or deleted
+        # class silently stops being measured as soon as any sibling prefix in the same scope keeps
+        # matching, and the scope keeps reporting PASS over a shrinking surface.
+        dead = [prefix for prefix in prefixes
+                if not any(clazz.attrib.get("name", "").startswith(prefix) for clazz in all_classes)]
+        if dead:
+            failures.append(
+                f"{name}: declared prefix(es) match no class in {report} "
+                f"(renamed or deleted?): {', '.join(sorted(dead))}"
+            )
+            results["scopes"][name] = {
+                "classes": len(classes), "report": str(report), "status": "FAIL", "deadPrefixes": sorted(dead),
+            }
             continue
 
         counters = counters_for(classes)

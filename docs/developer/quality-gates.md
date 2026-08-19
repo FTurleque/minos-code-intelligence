@@ -45,6 +45,12 @@ Le gate reproductible est :
 python scripts/quality/check-jacoco.py
 ```
 
+Chaque préfixe déclaré dans un scope doit désigner au moins une classe réellement présente dans le rapport. Sans cette règle, une classe renommée ou supprimée cesse silencieusement d'être mesurée dès qu'un préfixe voisin du même scope continue de matcher, et le scope reste `PASS` sur une surface qui rétrécit. Un préfixe mort provoque désormais un `FAIL` explicite qui le nomme. La logique de décision du gate est elle-même vérifiée par :
+
+```text
+python scripts/quality/check-jacoco.py --self-test
+```
+
 Le résultat machine-readable est écrit par défaut dans :
 
 ```text
@@ -111,6 +117,8 @@ python scripts/remediation/check-minos-01.py
 ```
 
 Il interdit de revenir à un simple contrôle par processus, de supprimer la sonde de capacité, de retirer le quota d’écriture supervisé ou de supprimer les tests adversariaux de confinement. Le job Ubuntu de `pr-ci.yml` provisionne en plus une racine cgroup v2 déléguée (`MINOS_SANDBOX_CGROUP_ROOT`) afin que ces tests s’exécutent réellement.
+
+Cette délégation est **contenue** : le script de provisioning effectue lui-même, pendant sa phase privilégiée, l'unique migration nécessaire (`--attach-pid` place le shell du workload dans `$ROOT/minos-controller`). Le compte MINOS ne reçoit jamais de droit sur `/sys/fs/cgroup/cgroup.procs` — un tel droit lui permettrait de sortir de sa propre frontière de délégation. Parce que chaque bloc `run:` de GitHub Actions est un shell distinct, l'étape qui exécute réellement le workload doit passer `--attach-pid $$` elle-même ; `scripts/remediation/check-p0-p2.py` vérifie ces deux invariants.
 
 La campagne #135 ajoute une preuve exact-head Linux/Windows qui interdit explicitement les skips et exécute également le chemin réel `ProcessIndexerExecutor → sandbox → provider → artefact`.
 

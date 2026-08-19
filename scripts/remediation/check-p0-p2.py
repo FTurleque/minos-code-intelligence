@@ -66,8 +66,66 @@ def forbid_postgres_connection_escape() -> None:
         raise RuntimeError("PostgresConnectionFactory.java: Connection must not escape the factory lifecycle")
 
 
+def forbid_root_cgroup_procs_delegation() -> None:
+    """A MINOS delegatee must never durably own the ROOT cgroup.procs.
+
+    cgroup v2 lets an unprivileged delegatee migrate a process only when it can write both the
+    destination ``cgroup.procs`` and the ``cgroup.procs`` of the common ancestor of the source and
+    destination cgroups. Granting the MINOS account write access to /sys/fs/cgroup/cgroup.procs
+    therefore lets it migrate processes anywhere in the hierarchy -- including *out* of its own
+    delegated subtree, defeating delegation containment. The one migration MINOS needs is performed
+    while the provisioning helper is still privileged (``--attach-pid``), so no such grant is ever
+    required.
+    """
+    ownership = re.compile(
+        r"\b(chown|chgrp|chmod|setfacl)\b[^\n]*?/sys/fs/cgroup/cgroup\.procs"
+    )
+    scanned = 0
+    for relative_root in ("scripts", ".github/workflows"):
+        base = ROOT / relative_root
+        if not base.is_dir():
+            continue
+        for candidate in base.rglob("*"):
+            if not candidate.is_file() or candidate.suffix not in {".sh", ".yml", ".yaml", ".ps1", ".py"}:
+                continue
+            if candidate.name == "check-p0-p2.py":
+                continue
+            scanned += 1
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+            match = ownership.search(text)
+            if match:
+                raise RuntimeError(
+                    f"{candidate.relative_to(ROOT)}: granting the MINOS delegatee permissions on the "
+                    f"root cgroup.procs is forbidden (delegation escape): {match.group(0).strip()}"
+                )
+    if scanned == 0:
+        raise RuntimeError("root cgroup.procs delegation barrier scanned no provisioning files")
+
+
+def require_contained_cgroup_delegation() -> None:
+    """The provisioning helpers must implement the contained delegation model."""
+    for relative in (
+        "scripts/ci/delegate-linux-cgroup.sh",
+        "scripts/deploy/provision-linux-sandbox-cgroup.sh",
+    ):
+        text = read(relative)
+        require(relative, text, "--attach-pid")
+        require(relative, text, "minos-controller")
+        require(relative, text, "DELEGATION CONTAINMENT")
+    # The workloads that actually exercise the qualified Linux sandbox must place their own shell
+    # inside the delegated subtree, otherwise the cgroup path silently degrades to SKIPPED tests.
+    for relative in (
+        ".github/workflows/pr-ci.yml",
+        ".github/workflows/m19-advanced-code-intelligence.yml",
+        ".github/workflows/m20-semantic-hybrid-intelligence.yml",
+    ):
+        require(relative, read(relative), "delegate-linux-cgroup.sh --attach-pid $$")
+
+
 def main() -> int:
     try:
+        forbid_root_cgroup_procs_delegation()
+        require_contained_cgroup_delegation()
         application = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprint_provider = read(
