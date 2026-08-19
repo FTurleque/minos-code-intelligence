@@ -36,6 +36,12 @@ concurrency:
   group: windows-installer-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  # Cross the GitHub Actions -> PowerShell boundary only through env vars, never through direct
+  # ${{ }} interpolation inside a run: block -- see release-windows.yml for the full rationale.
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  INNO_SETUP_VERSION: '6.7.1'
+
 jobs:
   candidate:
     name: Build and smoke Windows 1.0.1 candidate
@@ -64,27 +70,31 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --version=6.7.1 --yes --no-progress
-          $iscc = @(
-            (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
-            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
-            'C:\Program Files\Inno Setup 7\ISCC.exe',
-            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-            'C:\Program Files\Inno Setup 6\ISCC.exe',
-            'C:\ProgramData\chocolatey\bin\ISCC.exe'
-          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-          if (-not $iscc) { throw 'Inno Setup installation did not expose ISCC.exe.' }
-          Write-Host "ISCC: $iscc"
+          choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress
+          # Resolve the exact binary the choco package above just installed -- do NOT search PATH or
+          # any other Inno Setup install location. A stray pre-existing Inno Setup 7 (or any other
+          # ISCC.exe reachable via PATH/chocolatey shim) must never be able to silently take over
+          # compilation of the candidate setup.exe just because it happened to be found first.
+          $isccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
+            throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
+          }
+          $fileVersion = (Get-Item -LiteralPath $isccPath).VersionInfo.FileVersion
+          if (-not $fileVersion -or $fileVersion -notlike "$($env:INNO_SETUP_VERSION)*") {
+            throw "ISCC.exe at $isccPath reports FileVersion '$fileVersion', expected $env:INNO_SETUP_VERSION. Refusing to build the candidate setup with an unverified Inno Setup compiler."
+          }
+          Write-Host "Qualified ISCC: $isccPath (FileVersion=$fileVersion)"
+          "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Build exact-head non-published candidate
         shell: powershell
-        run: .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify
+        run: .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION
 
       - name: Install, handshake and uninstall isolated candidate
         shell: powershell
         run: |
           $head = (git rev-parse HEAD).Trim()
-          if ($head -ne '${{ github.event.pull_request.head.sha || github.sha }}') { throw "Exact-head mismatch before smoke validation: checkout=$head expected=${{ github.event.pull_request.head.sha || github.sha }}" }
+          if ($head -ne $env:EXPECTED_HEAD) { throw "Exact-head mismatch before smoke validation: checkout=$head expected=$env:EXPECTED_HEAD" }
           .\scripts\release\publish-windows-release.ps1 -Version 1.0.1 -TargetCommit $head -SkipBuild -ValidateOnly
 
       - name: Verify candidate artifacts

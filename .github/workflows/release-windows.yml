@@ -21,6 +21,17 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ github.token }}
+  # Untrusted/external values (workflow_dispatch input, commit SHA) cross the GitHub Actions ->
+  # PowerShell boundary ONLY through env vars, never through direct ${{ }} interpolation inside a
+  # run: block. GitHub Actions substitutes ${{ }} into the script text before PowerShell parses it,
+  # so a value containing a quote could otherwise close the surrounding string and inject arbitrary
+  # PowerShell -- the [ValidatePattern] checks inside the release scripts are a second line of
+  # defense, not a substitute for this boundary. See scripts/quality/check-workflow-pins.py, which
+  # fails the build if a future change reintroduces ${{ inputs.* }}/${{ github.* }} inside a run:
+  # block.
+  RELEASE_VERSION: ${{ inputs.version }}
+  TARGET_COMMIT: ${{ github.sha }}
+  INNO_SETUP_VERSION: '6.7.1'
 
 jobs:
   build:
@@ -39,10 +50,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          $version = '${{ inputs.version }}'
+          $version = $env:RELEASE_VERSION
           $tag = "v$version"
           $head = (git rev-parse HEAD).Trim()
-          if ($head -ne '${{ github.sha }}') { throw "Exact-head mismatch before release: checkout=$head expected=${{ github.sha }}" }
+          if ($head -ne $env:TARGET_COMMIT) { throw "Exact-head mismatch before release: checkout=$head expected=$env:TARGET_COMMIT" }
           git fetch origin --tags --force
           $existingTag = @(git ls-remote --tags origin "refs/tags/$tag")
           if ($LASTEXITCODE -ne 0) { throw "Unable to inspect remote tag $tag." }
@@ -89,17 +100,21 @@ jobs:
       - name: Installer Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --version=6.7.1 --yes --no-progress
-          $iscc = @(
-            (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
-            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
-            'C:\Program Files\Inno Setup 7\ISCC.exe',
-            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-            'C:\Program Files\Inno Setup 6\ISCC.exe',
-            'C:\ProgramData\chocolatey\bin\ISCC.exe'
-          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-          if (-not $iscc) { throw 'Inno Setup installation did not expose ISCC.exe.' }
-          Write-Host "ISCC: $iscc"
+          choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress
+          # Resolve the exact binary the choco package above just installed -- do NOT search PATH or
+          # any other Inno Setup install location. A stray pre-existing Inno Setup 7 (or any other
+          # ISCC.exe reachable via PATH/chocolatey shim) must never be able to silently take over
+          # compilation of the release setup.exe just because it happened to be found first.
+          $isccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
+            throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
+          }
+          $fileVersion = (Get-Item -LiteralPath $isccPath).VersionInfo.FileVersion
+          if (-not $fileVersion -or $fileVersion -notlike "$($env:INNO_SETUP_VERSION)*") {
+            throw "ISCC.exe at $isccPath reports FileVersion '$fileVersion', expected $env:INNO_SETUP_VERSION. Refusing to build the release setup with an unverified Inno Setup compiler."
+          }
+          Write-Host "Qualified ISCC: $isccPath (FileVersion=$fileVersion)"
+          "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Afficher la toolchain
         shell: pwsh
@@ -113,7 +128,7 @@ jobs:
 
       - name: Construire et qualifier la distribution Windows
         shell: pwsh
-        run: .\scripts\release\publish-windows-release.ps1 -Version '${{ inputs.version }}' -TargetCommit '${{ github.sha }}' -ValidateOnly
+        run: .\scripts\release\publish-windows-release.ps1 -Version $env:RELEASE_VERSION -TargetCommit $env:TARGET_COMMIT -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION -ValidateOnly
 
       - name: Publier les artefacts vérifiés pour le job de publication
         if: github.ref == 'refs/heads/main'
@@ -177,4 +192,4 @@ jobs:
 
       - name: Publier la GitHub Release
         shell: pwsh
-        run: .\scripts\release\publish-windows-release.ps1 -Version '${{ inputs.version }}' -TargetCommit '${{ github.sha }}' -PublishOnly
+        run: .\scripts\release\publish-windows-release.ps1 -Version $env:RELEASE_VERSION -TargetCommit $env:TARGET_COMMIT -PublishOnly
