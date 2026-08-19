@@ -28,6 +28,11 @@ python scripts/quality/check-workflow-pins.py
 
 Toute action externe durable doit être référencée par un SHA de commit immuable. Le commentaire de version (`# vN`) reste présent pour la lisibilité humaine. Les installations Chocolatey utilisées dans le packaging doivent également fixer leur version.
 
+Le même gate refuse aussi :
+
+- toute interpolation `${{ ... }}` directement à l'intérieur d'un bloc `run:` (hors valeurs GitHub à énumération fermée comme `steps.*.outcome`) : une valeur externe (input `workflow_dispatch`, SHA, métadonnées PR/tag) doit toujours traverser la frontière `env:` avant d'atteindre le shell ;
+- un workflow qui installe Inno Setup via Chocolatey sans résoudre et exporter un `ISCC_PATH` déterministe, ou sans transmettre `-IsccPath` au script de build correspondant ; `scripts/release/build-windows-installer.ps1` doit utiliser exactement ce binaire sur le chemin release/CI, sans recherche ambiguë via PATH.
+
 La supply-chain produit applique le même principe : images de base par digest OCI, launcher Coursier par commit immuable + SHA-256 attendu, et binaires providers téléchargés avec checksum attendu avant exécution.
 
 ## JaCoCo

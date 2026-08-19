@@ -106,7 +106,9 @@ jobs:
 
       - name: Run complete M20 exact-head qualification
         shell: powershell
-        run: .\scripts\m20\run-final.ps1 -ExpectedHead '${{ github.event.pull_request.head.sha }}'
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .\scripts\m20\run-final.ps1 -ExpectedHead $env:EXPECTED_HEAD
 
       - name: Upload M20 diagnostics
         if: always()

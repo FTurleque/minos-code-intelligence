@@ -9,7 +9,18 @@ param(
 
     # Build a non-shippable setup with a distinct AppId and cleanup hooks disabled.
     # This is the only setup variant release smoke tests are allowed to install.
-    [switch] $Smoke
+    [switch] $Smoke,
+
+    # RELEASE/CI path: the caller (the workflow, right after installing a pinned Inno Setup
+    # version) resolves ISCC.exe itself and passes its exact path here. When set, this script MUST
+    # use exactly that binary -- it never falls back to searching PATH or other Inno Setup install
+    # locations, because that search is exactly how a stray Inno Setup 7 (or any other ISCC.exe)
+    # could silently take over compilation of the release setup.exe.
+    [string] $IsccPath = '',
+
+    # Optional defense-in-depth: when set together with -IsccPath, the resolved binary's
+    # ProductVersion or FileVersion must start with this value or the build refuses to proceed.
+    [string] $RequiredIsccVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,28 +73,59 @@ foreach ($Required in @(
     }
 }
 
-$IsccCandidates = @()
-$IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-if ($IsccCommand) { $IsccCandidates += $IsccCommand.Source }
-if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
-}
-if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
-    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
-}
-if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
-}
-$IsccCandidates += 'C:\ProgramData\chocolatey\bin\ISCC.exe'
+if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
+    # Release/CI path: the compiler identity was already resolved and pinned by the caller. Do not
+    # second-guess it by searching anywhere else.
+    if (-not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
+        throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+        # ISCC.exe itself exposes no trustworthy version signal: its FileVersion/ProductVersion PE
+        # resources are both unset (observed as 0.0.0.0), and its bare-invocation usage banner
+        # omits the minor/patch version. Verify against Chocolatey's own installed-package record
+        # instead -- the nuspec it writes for every package. Verified here too, independently of
+        # any verification the caller may already have done, so this script never trusts an
+        # -IsccPath it cannot itself confirm. Only meaningful when Inno Setup was installed via the
+        # `innosetup` Chocolatey package (the only supported release/CI provisioning path); a
+        # missing nuspec fails closed rather than silently skipping the check.
+        $NuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+        if (-not (Test-Path -LiteralPath $NuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $NuspecPath; cannot verify the Inno Setup compiler at -IsccPath against -RequiredIsccVersion $RequiredIsccVersion."
+        }
+        [xml]$Nuspec = Get-Content -LiteralPath $NuspecPath -Raw
+        $InstalledIsccVersion = $Nuspec.package.metadata.version
+        if ($InstalledIsccVersion -ne $RequiredIsccVersion) {
+            throw "Chocolatey innosetup package metadata at $NuspecPath reports version '$InstalledIsccVersion', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
+        }
+    }
+    $Iscc = $IsccPath
+} else {
+    # Developer/local fallback only: resolve automatically so `pwsh build-windows-installer.ps1`
+    # keeps working on a workstation without a pre-resolved path. Never used on the release/CI path
+    # (the workflow always passes -IsccPath), so this ambiguity cannot silently affect a release.
+    $IsccCandidates = @()
+    $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($IsccCommand) { $IsccCandidates += $IsccCommand.Source }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
+        $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+    }
+    $IsccCandidates += 'C:\ProgramData\chocolatey\bin\ISCC.exe'
 
-$Iscc = $IsccCandidates |
-    Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
-    Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($Iscc)) {
-    throw 'Inno Setup is required to build MINOS setup.exe. Install Inno Setup 6/7 or expose ISCC.exe in PATH.'
+    $Iscc = $IsccCandidates |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($Iscc)) {
+        throw 'Inno Setup is required to build MINOS setup.exe. Install Inno Setup 6/7 or expose ISCC.exe in PATH.'
+    }
 }
 
 $Template = Join-Path $RepoRoot 'packaging\windows\minos-installer.iss.template'

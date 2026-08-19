@@ -19,20 +19,37 @@ final class PostgresSchemaMigrator {
         try {
             connections.inTransaction(connection -> {
                 try (Statement statement = connection.createStatement()) {
-                    String quotedSchema = statement.enquoteIdentifier(connections.schema(), true);
+                    String schema = connections.schema();
+                    String quotedSchema = statement.enquoteIdentifier(schema, true);
                     if (quotedSchema.isBlank()) {
                         throw new SQLException("PostgreSQL schema quoting produced an empty identifier");
                     }
+                    // Serialize the entire bootstrap -- including CREATE EXTENSION and CREATE SCHEMA,
+                    // not just the schema_version migrations -- behind one global advisory lock, acquired
+                    // as the FIRST statement of this transaction. Two MINOS instances racing to bootstrap
+                    // the same brand-new database must never both run DDL unserialized: pg_advisory_xact_lock
+                    // is fair-FIFO and auto-released at commit/rollback, so the second caller simply waits
+                    // and then observes the fully-migrated schema instead of colliding on it.
+                    //
+                    // The lock key is hashtext(schema) bound as a query parameter -- NOT current_schema() --
+                    // because before the target schema exists, current_schema() falls back to the first
+                    // schema in search_path that already exists (typically "public"), which would let two
+                    // concurrent bootstraps of two *different*, both-not-yet-created schemas collide on the
+                    // same lock key instead of the intended per-schema serialization.
+                    try (PreparedStatement bootstrapLock = connection.prepareStatement(
+                            "SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(?))")) {
+                        bootstrapLock.setString(1, schema);
+                        bootstrapLock.execute();
+                    }
                     try (PreparedStatement schemaSetting = connection.prepareStatement(
                             "SELECT set_config('minos.migration_schema', ?, true)")) {
-                        schemaSetting.setString(1, connections.schema());
+                        schemaSetting.setString(1, schema);
                         schemaSetting.execute();
                     }
                     statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
                     statement.execute("DO $minos$ DECLARE target_schema text := "
                             + "current_setting('minos.migration_schema', true); "
                             + "BEGIN EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', target_schema); END $minos$");
-                    statement.execute("SELECT pg_advisory_xact_lock(hashtext('minos-schema-migration'), hashtext(current_schema()))");
                     statement.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
                     int version = currentVersion(statement);
                     if (version > CURRENT_VERSION) {

@@ -103,7 +103,9 @@ jobs:
 
       - name: Run complete M19 exact-head qualification
         shell: powershell
-        run: .\scripts\m19\run-final.ps1 -ExpectedHead '${{ github.event.pull_request.head.sha }}'
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .\scripts\m19\run-final.ps1 -ExpectedHead $env:EXPECTED_HEAD
 
       - name: Upload M19 diagnostics
         if: always()

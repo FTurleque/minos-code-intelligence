@@ -68,14 +68,17 @@ jobs:
 
       - name: Confirm exact-head
         shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ steps.resolve.outputs.commit }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           head="$(git rev-parse HEAD)"
-          if [ "$head" != "${{ steps.resolve.outputs.commit }}" ]; then
-            echo "Exact-head mismatch: checked out $head, expected ${{ steps.resolve.outputs.commit }}" >&2
+          if [ "$head" != "$EXPECTED_COMMIT" ]; then
+            echo "Exact-head mismatch: checked out $head, expected $EXPECTED_COMMIT" >&2
             exit 1
           fi
-          echo "Building IntelliJ plugin from verified commit $head (tag ${{ github.event.release.tag_name }})"
+          echo "Building IntelliJ plugin from verified commit $head (tag $TAG)"
 
       - name: Set up Java 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -104,9 +107,11 @@ jobs:
 
       - name: Build and verify plugin
         working-directory: minos-intellij
+        env:
+          MINOS_VERSION: ${{ steps.version.outputs.value }}
         run: >-
           gradle --no-daemon
-          -PminosVersion='${{ steps.version.outputs.value }}'
+          "-PminosVersion=$MINOS_VERSION"
           test buildPlugin verifyPluginProjectConfiguration verifyPluginStructure verifyPlugin
 
       - name: Create SHA-256 checksum
@@ -152,11 +157,12 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
           ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           # No --clobber on this nominal path: a release is expected to receive each asset exactly
           # once, and silently replacing an existing asset would undermine release immutability. A
           # genuine recovery from a partially failed run is a deliberate, separate, manual action
           # (re-run with `gh release upload "$TAG" "$ZIP_NAME" "$ZIP_NAME.sha256" --clobber --repo
-          # ${{ github.repository }}`), never an automatic part of this workflow.
-          gh release upload "$TAG" "$ZIP_NAME" "$ZIP_NAME.sha256" --repo "${{ github.repository }}"
+          # "$REPOSITORY"`), never an automatic part of this workflow.
+          gh release upload "$TAG" "$ZIP_NAME" "$ZIP_NAME.sha256" --repo "$REPOSITORY"

@@ -8,7 +8,13 @@ param(
 
     [switch] $SkipBuild,
     [switch] $ValidateOnly,
-    [switch] $PublishOnly
+    [switch] $PublishOnly,
+
+    # Forwarded verbatim to build-windows-installer.ps1. See that script for the rationale: on the
+    # release/CI path these must be the compiler explicitly qualified by the caller, never one
+    # discovered ambiguously via PATH.
+    [string] $IsccPath = '',
+    [string] $RequiredIsccVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -165,12 +171,17 @@ if (-not $ValidateOnly) {
 if (-not $PublishOnly) {
     $BuildDistribution = Join-Path $RepoRoot 'scripts\release\build-windows-distribution.ps1'
     $BuildInstaller = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
+    $InstallerParameters = @{ Version=$Version }
+    if (-not [string]::IsNullOrWhiteSpace($IsccPath)) { $InstallerParameters['IsccPath'] = $IsccPath }
+    if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) { $InstallerParameters['RequiredIsccVersion'] = $RequiredIsccVersion }
     if (-not $SkipBuild) {
         Invoke-PowerShellScriptChecked -Script $BuildDistribution -Parameters @{ Version=$Version } -Failure 'Windows release distribution build failed'
-        Invoke-PowerShellScriptChecked -Script $BuildInstaller -Parameters @{ Version=$Version } -Failure 'Windows release setup build failed'
+        Invoke-PowerShellScriptChecked -Script $BuildInstaller -Parameters $InstallerParameters -Failure 'Windows release setup build failed'
     }
     # Always compile a non-shippable setup with a distinct AppId for automated install/uninstall smoke.
-    Invoke-PowerShellScriptChecked -Script $BuildInstaller -Parameters @{ Version=$Version; Smoke=$true } -Failure 'Isolated Windows smoke setup build failed'
+    $SmokeInstallerParameters = $InstallerParameters.Clone()
+    $SmokeInstallerParameters['Smoke'] = $true
+    Invoke-PowerShellScriptChecked -Script $BuildInstaller -Parameters $SmokeInstallerParameters -Failure 'Isolated Windows smoke setup build failed'
 }
 
 $DistributionName = "minos-$Version-windows-x64"

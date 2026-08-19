@@ -8,7 +8,13 @@ param(
     # Build the provider-complete image once on the maintainer workstation. The
     # setup then reuses the exact version/commit-labelled image instead of
     # downloading four toolchains and rebuilding it during installation.
-    [switch] $PrepareDockerImage
+    [switch] $PrepareDockerImage,
+
+    # Forwarded verbatim to build-windows-installer.ps1. CI passes the exact ISCC.exe it just
+    # installed and qualified; left empty, build-windows-installer.ps1 falls back to its
+    # developer-workstation auto-resolution.
+    [string] $IsccPath = '',
+    [string] $RequiredIsccVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -224,7 +230,10 @@ if ($PrepareDockerImage) {
     }
 }
 
-& $BuildInstaller -Version $Version
+$InstallerParameters = @{ Version=$Version }
+if (-not [string]::IsNullOrWhiteSpace($IsccPath)) { $InstallerParameters['IsccPath'] = $IsccPath }
+if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) { $InstallerParameters['RequiredIsccVersion'] = $RequiredIsccVersion }
+& $BuildInstaller @InstallerParameters
 
 $Setup = Join-Path $RepoRoot "target\dist\MINOS-$Version-windows-x64-setup.exe"
 $SetupChecksum = "$Setup.sha256"
