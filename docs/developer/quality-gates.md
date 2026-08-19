@@ -31,7 +31,12 @@ Toute action externe durable doit être référencée par un SHA de commit immua
 Le même gate refuse aussi :
 
 - toute interpolation `${{ ... }}` directement à l'intérieur d'un bloc `run:` (hors valeurs GitHub à énumération fermée comme `steps.*.outcome`) : une valeur externe (input `workflow_dispatch`, SHA, métadonnées PR/tag) doit toujours traverser la frontière `env:` avant d'atteindre le shell ;
-- un workflow qui installe Inno Setup via Chocolatey sans résoudre et exporter un `ISCC_PATH` déterministe, ou sans transmettre `-IsccPath` au script de build correspondant ; `scripts/release/build-windows-installer.ps1` doit utiliser exactement ce binaire sur le chemin release/CI, sans recherche ambiguë via PATH.
+- un workflow qui installe Inno Setup via Chocolatey sans résoudre et exporter un `ISCC_PATH` déterministe, ou sans transmettre `-IsccPath` au script de build correspondant ; `scripts/release/build-windows-installer.ps1` doit utiliser exactement ce binaire sur le chemin release/CI, sans recherche ambiguë via PATH ;
+- toute invocation susceptible de compiler un setup (`publish-windows-release.ps1`, `build-local-windows-candidate.ps1`) qui ne propage pas `-IsccPath` **et** `-RequiredIsccVersion` — y compris l'appel `-SkipBuild -ValidateOnly`, qui compile encore le setup smoke ; seul `-PublishOnly`, qui ne compile rien, est exempté ;
+- un `build-windows-installer.ps1` qui n'assérerait plus la version moteur remontée par le compilateur réellement exécuté, ou qui accepterait `-IsccPath` et `-RequiredIsccVersion` séparément ;
+- des filtres `paths` de `windows-installer.yml` qui ne couvriraient plus `release-windows.yml` et le gate lui-même, ou qui divergeraient entre `pull_request` et `push`.
+
+La provenance du compilateur Inno Setup repose sur deux couches distinctes : les métadonnées Chocolatey prouvent ce qui a été **installé**, tandis que la ligne `Compiler engine version: Inno Setup X.Y.Z` émise pendant la compilation prouve ce qui a réellement **compilé** le setup. Seule la seconde est autoritative ; ses règles d'analyse et de rejet sont couvertes par `scripts/release/test-iscc-provenance.ps1`.
 
 La supply-chain produit applique le même principe : images de base par digest OCI, launcher Coursier par commit immuable + SHA-256 attendu, et binaires providers téléchargés avec checksum attendu avant exécution.
 
