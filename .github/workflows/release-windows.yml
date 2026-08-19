@@ -9,20 +9,24 @@ on:
         default: '1.0.1'
         type: string
 
+# The default token is read-only for every job. Only the publish job, which does nothing but
+# download already-built and already-verified artifacts and create the GitHub Release, escalates
+# to contents: write. Build, test and qualification never run with a privileged token.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: windows-release-${{ github.ref }}-${{ inputs.version }}
   cancel-in-progress: false
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
-  publish:
-    name: Build, MCP smoke test and publish Windows x64
+  build:
+    name: Build, MCP smoke test and qualify Windows x64 (read-only)
     runs-on: windows-2022
     timeout-minutes: 120
-    env:
-      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout exact candidate
@@ -108,14 +112,25 @@ jobs:
           Write-Host "Ref: $env:GITHUB_REF"
 
       - name: Construire et qualifier la distribution Windows
-        if: github.ref != 'refs/heads/main'
         shell: pwsh
         run: .\scripts\release\publish-windows-release.ps1 -Version '${{ inputs.version }}' -TargetCommit '${{ github.sha }}' -ValidateOnly
 
-      - name: Construire, qualifier et publier la GitHub Release
+      - name: Publier les artefacts vérifiés pour le job de publication
         if: github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: .\scripts\release\publish-windows-release.ps1 -Version '${{ inputs.version }}' -TargetCommit '${{ github.sha }}'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minos-${{ inputs.version }}-windows-release-assets
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            target/dist/MINOS-${{ inputs.version }}-windows-x64-setup.exe
+            target/dist/MINOS-${{ inputs.version }}-windows-x64-setup.exe.sha256
+            target/dist/minos-${{ inputs.version }}-windows-x64.zip
+            target/dist/minos-${{ inputs.version }}-windows-x64.zip.sha256
+            target/dist/minos-${{ inputs.version }}.cdx.json
+            target/dist/minos-${{ inputs.version }}.cdx.json.sha256
+            target/dist/MINOS-${{ inputs.version }}-THIRD-PARTY-NOTICES.txt
+            target/dist/MINOS-${{ inputs.version }}-THIRD-PARTY-NOTICES.txt.sha256
 
       - name: Conserver une copie des assets dans le run
         if: always()
@@ -137,3 +152,29 @@ jobs:
             minos-intellij/build/distributions/*.zip
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**
+
+  publish:
+    name: Publish verified Windows x64 release
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Télécharger les artefacts déjà construits et vérifiés
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: minos-${{ inputs.version }}-windows-release-assets
+          path: target/dist
+
+      - name: Publier la GitHub Release
+        shell: pwsh
+        run: .\scripts\release\publish-windows-release.ps1 -Version '${{ inputs.version }}' -TargetCommit '${{ github.sha }}' -PublishOnly
