@@ -89,19 +89,20 @@ jobs:
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
-      # Provisioning the sandbox toolchain is a ~15s apt install. It has been observed stalling with
-      # zero output for tens of minutes on GitHub-hosted runners (apt/network incident, reproduced on
-      # the same commit that passed in a parallel run). apt has no overall timeout on a stalled
-      # mirror, so bound each transfer and retry transient stalls; timeout-minutes is the backstop
-      # that keeps such an incident from consuming the 90-minute job timeout.
+      # Provisioning the sandbox toolchain is a ~15s apt install, observed stalling for tens of
+      # minutes on GitHub-hosted runners when the Azure Ubuntu mirror is degraded. apt has no overall
+      # timeout on a stalled mirror, so bound each transfer -- but keep Retries LOW on purpose: the
+      # runner uses a mirrorlist, and retrying a dead mirror only burns the budget the working
+      # fallback (archive.ubuntu.com) needs. Fail over fast, then let the fallback finish.
+      # timeout-minutes is the backstop for a genuine outage of every mirror.
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
         timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install --yes --no-install-recommends \
             bubblewrap util-linux apparmor apparmor-profiles
           command -v bwrap
           command -v prlimit
@@ -184,15 +185,15 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
-      # See the Verify job: per-transfer apt timeouts plus retries, with timeout-minutes as the
-      # backstop so an apt/network incident cannot consume the 90-minute job timeout.
+      # See the Verify job: bounded per-transfer apt timeouts with deliberately low retries so a
+      # degraded mirror is abandoned quickly in favour of the mirrorlist fallback.
       - name: Install and authorize Linux worker sandbox runtime
         timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install --yes --no-install-recommends \
             bubblewrap util-linux apparmor apparmor-profiles
           command -v bwrap
           command -v prlimit
