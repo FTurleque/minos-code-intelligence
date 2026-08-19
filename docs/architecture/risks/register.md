@@ -2,7 +2,7 @@
 
 > Référence : [Section 11 — Risques et dette](../arc42/11-risques-dette.md)
 
-Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@7f7d8a279318a67e55cb2aa33899c629cadd4313` après PR #215 et PR #216.
+Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@b14006e7dd30550af5569ae881244e3fa1611143` après PR #215, #216 et #217.
 
 ---
 
@@ -59,7 +59,8 @@ Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@7f7d
 - lifecycle de containment rendu sûr sur les échecs pré-start ;
 - réconciliation autonome alignée sur l'autorité snapshot commune ;
 - identités des stores file-backed rendues fail-closed ;
-- **DT-07** — prérequis opérateur Linux (`bubblewrap`, `util-linux`, profil AppArmor `bwrap-userns-restrict` quand applicable, délégation cgroup v2 via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) documentés dans `docs/user/remote-indexing.md` avec un script de provisioning dédié (`scripts/deploy/provision-linux-sandbox-cgroup.sh`) pour l'alternative manuelle à une unité systemd déléguée ;
+- **DT-07** — prérequis opérateur Linux (`bubblewrap`, `util-linux`, profil AppArmor `bwrap-userns-restrict` quand applicable, délégation cgroup v2 via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) documentés dans `docs/user/remote-indexing.md` avec un script de provisioning dédié (`scripts/deploy/provision-linux-sandbox-cgroup.sh`) pour l'alternative manuelle à une unité systemd déléguée. **Correction du 19 août 2026** : la première version de cette procédure accordait au compte MINOS la propriété de `/sys/fs/cgroup/cgroup.procs` (racine), ce qui constituait une évasion de délégation — sa clôture initiale était donc prématurée. La procédure applique désormais le modèle contenu décrit ci-dessous (`--attach-pid`) et ne demande plus aucun droit hors du sous-arbre délégué ;
+- **délégation cgroup v2 contenue** — la migration privilégiée est effectuée par le script de provisioning lui-même (`--attach-pid`), qui place le shell lanceur dans `$ROOT/minos-controller` ; MINOS démarre donc déjà dans le cgroup contrôleur, ne migre aucun processus et n'écrit que dans le sous-arbre qu'il possède. `scripts/remediation/check-p0-p2.py` interdit désormais toute réintroduction d'un `chown`/`chmod`/`chgrp`/`setfacl` visant le `cgroup.procs` racine, et exige que les workflows exerçant la sandbox Linux attachent réellement leur shell ;
 - restauration fail-closed d'un artefact provider préexistant et rejet des jonctions Windows dans les walkers de suppression récursive/mesure (PR #216) ;
 - moindre privilège des workflows de release Windows/IntelliJ et immutabilité de la release IntelliJ liée au commit résolu (PR #216) ;
 - arguments de chaîne des outils MCP bornés par des `maxLength` sémantiques centralisés, appliqués au schéma et revérifiés côté serveur (PR #216) ;

@@ -13,12 +13,63 @@
 # inputs: when GitHub/Ubuntu changes them, CI fails until the new toolchain is reviewed and this file
 # is updated deliberately.
 #
-# Usage: sudo-capable host, then `source scripts/ci/delegate-linux-cgroup.sh` or run it directly.
+# DELEGATION CONTAINMENT
+# ----------------------
+# cgroup v2 lets an unprivileged delegatee migrate a process only when it can write BOTH the
+# destination `cgroup.procs` AND the `cgroup.procs` of the common ancestor of the source and
+# destination cgroups. A MINOS process started outside the delegated subtree therefore has the root
+# cgroup as that common ancestor -- and granting the MINOS account durable write access to
+# /sys/fs/cgroup/cgroup.procs would let it migrate processes anywhere in the hierarchy, including
+# *out* of its own delegated boundary. That is a delegation escape, so this script never grants it.
+#
+# Instead the one migration MINOS needs is performed here, while this script is still privileged:
+# `--attach-pid` places the shell that will run the MINOS test/build workload directly inside
+# `$ROOT/minos-controller`. MINOS then finds itself already in the controller cgroup, skips the
+# migration entirely (see LinuxCgroupJob.relocateSelf), and only ever writes inside the subtree it
+# actually owns. This mirrors the shape systemd `Delegate=yes` produces natively.
+#
+# Usage: sudo-capable host.
+#   bash scripts/ci/delegate-linux-cgroup.sh                  # provision only
+#   bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$   # provision + place THIS shell inside
 # It exports MINOS_SANDBOX_CGROUP_ROOT and, inside GitHub Actions, appends it to $GITHUB_ENV.
+# Because each GitHub Actions `run:` block is a separate shell, the step that actually executes the
+# MINOS workload must itself pass --attach-pid $$; provisioning alone does not place a later step's
+# shell inside the boundary.
 set -euo pipefail
 
 ROOT="${MINOS_SANDBOX_CGROUP_ROOT:-/sys/fs/cgroup/minos.slice}"
 CONTROLLERS='+memory +pids +cpu'
+ATTACH_PID=''
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --attach-pid)
+      ATTACH_PID="${2:-}"
+      if [ -z "$ATTACH_PID" ]; then
+        echo '--attach-pid requires a PID argument.' >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# Strip trailing slashes so the attach verification below can compare the resolved cgroup path
+# reported by /proc/PID/cgroup against this one literally.
+while [ "${ROOT%/}" != "$ROOT" ]; do ROOT="${ROOT%/}"; done
+CONTROLLER="$ROOT/minos-controller"
+
+case "$ROOT" in
+  /sys/fs/cgroup/?*) ;;
+  *)
+    echo "MINOS_SANDBOX_CGROUP_ROOT must be a proper subdirectory of /sys/fs/cgroup, got: $ROOT" >&2
+    exit 2
+    ;;
+esac
 
 verify_github_actions_sandbox_toolchain() {
   if [ "${GITHUB_ACTIONS:-false}" != "true" ]; then
@@ -60,16 +111,39 @@ sudo mkdir -p "$ROOT"
 # The root cgroup is exempt from the "no internal processes" rule, so granting controllers to its
 # children is allowed even while processes live in it. It may already be granted.
 sudo sh -c "echo '$CONTROLLERS' > /sys/fs/cgroup/cgroup.subtree_control" || true
+# $ROOT must still be process-free here: cgroup v2 refuses subtree_control on a non-root cgroup that
+# holds processes. Everything MINOS-related lives in the $CONTROLLER child created below, so $ROOT
+# stays empty for the lifetime of the delegation.
 sudo sh -c "echo '$CONTROLLERS' > '$ROOT/cgroup.subtree_control'"
+sudo mkdir -p "$CONTROLLER"
+# Delegate the subtree -- and only the subtree. /sys/fs/cgroup/cgroup.procs is deliberately NOT
+# chowned: see DELEGATION CONTAINMENT above.
 sudo chown -R "$(id -u):$(id -g)" "$ROOT"
-# cgroup v2 delegation containment: migrating a process also requires write access to the
-# cgroup.procs of the common ancestor of its source and destination cgroups.
-sudo chown "$(id -u):$(id -g)" /sys/fs/cgroup/cgroup.procs
 
 for controller in memory pids cpu; do
   grep -qw "$controller" "$ROOT/cgroup.controllers"
   grep -qw "$controller" "$ROOT/cgroup.subtree_control"
 done
+
+if [ -n "$ATTACH_PID" ]; then
+  case "$ATTACH_PID" in
+    ''|*[!0-9]*)
+      echo "--attach-pid must be a numeric PID, got: $ATTACH_PID" >&2
+      exit 2
+      ;;
+  esac
+  test -d "/proc/$ATTACH_PID"
+  # Performed while still privileged, so the MINOS account never needs write access to the root
+  # cgroup.procs to place itself inside the delegated boundary.
+  sudo sh -c "echo '$ATTACH_PID' > '$CONTROLLER/cgroup.procs'"
+  attached="$(tr -d '\0' < "/proc/$ATTACH_PID/cgroup" | sed -n 's/^0:://p' | tr -d '[:space:]')"
+  expected="${CONTROLLER#/sys/fs/cgroup}"
+  if [ "$attached" != "$expected" ]; then
+    echo "Failed to attach PID $ATTACH_PID to $CONTROLLER (now in '$attached')." >&2
+    exit 1
+  fi
+  echo "Attached PID $ATTACH_PID to $CONTROLLER"
+fi
 
 export MINOS_SANDBOX_CGROUP_ROOT="$ROOT"
 if [ -n "${GITHUB_ENV:-}" ]; then

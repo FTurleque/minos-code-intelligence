@@ -81,15 +81,29 @@ La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-dis
    Sur une distribution sans AppArmor (ou où `kernel.unprivileged_userns_clone` est déjà activé sans restriction LSM additionnelle), cette étape peut ne pas être nécessaire ; la découverte MINOS sonde la capacité réelle et n'exige pas de mécanisme LSM spécifique — seulement que l'opération réussisse. Si elle échoue, MINOS refuse le backend Linux plutôt que de deviner une politique de contournement.
 
 3. **Une racine cgroup v2 déléguée** — deux options, décrites dans [`quality-gates.md`](../developer/quality-gates.md) :
-   - lancer MINOS sous une unité systemd avec `Delegate=yes` (approche recommandée en production : le processus MINOS délègue alors son propre cgroup, sans configuration additionnelle) ; ou
-   - provisionner explicitement un sous-arbre et exporter `MINOS_SANDBOX_CGROUP_ROOT` avant de lancer MINOS. Le script [`scripts/deploy/provision-linux-sandbox-cgroup.sh`](../../scripts/deploy/provision-linux-sandbox-cgroup.sh) exécute cette délégation (création du sous-arbre, activation des contrôleurs `memory`/`pids`/`cpu`, `chown` vers l'utilisateur courant) et affiche la valeur à exporter :
+
+   - **Recommandé en production : une unité systemd avec `Delegate=yes`.** systemd place lui-même le processus MINOS dans le cgroup délégué ; aucune étape supplémentaire n'est requise et aucune permission n'est accordée hors de ce sous-arbre.
+
+   - **Sinon : provisionner explicitement un sous-arbre.** Le script [`scripts/deploy/provision-linux-sandbox-cgroup.sh`](../../scripts/deploy/provision-linux-sandbox-cgroup.sh) crée le sous-arbre, active les contrôleurs `memory`/`pids`/`cpu`, délègue le sous-arbre au compte MINOS, et — avec `--attach-pid` — place le shell qui lancera MINOS **à l'intérieur** de ce sous-arbre :
 
      ```bash
-     sudo -E scripts/deploy/provision-linux-sandbox-cgroup.sh
+     # une seule fois : provisionner le sous-arbre délégué
+     scripts/deploy/provision-linux-sandbox-cgroup.sh
+
+     # par shell/session : provisionner (idempotent) et y placer CE shell
+     scripts/deploy/provision-linux-sandbox-cgroup.sh --attach-pid $$
      export MINOS_SANDBOX_CGROUP_ROOT=/sys/fs/cgroup/minos.slice
      ```
 
-Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et `remote index` échoue avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée.
+     MINOS lancé depuis ce shell hérite du cgroup et n'a donc jamais besoin de migrer un processus au-delà de sa propre frontière.
+
+#### Pourquoi `--attach-pid` plutôt qu'une permission plus large
+
+cgroup v2 n'autorise un délégataire non privilégié à migrer un processus que s'il peut écrire **à la fois** le `cgroup.procs` de destination **et** celui de l'ancêtre commun des cgroups source et destination. Un MINOS démarré *hors* du sous-arbre délégué a donc le cgroup racine comme ancêtre commun — et accorder au compte MINOS un droit d'écriture durable sur `/sys/fs/cgroup/cgroup.procs` lui permettrait de déplacer des processus n'importe où dans la hiérarchie, y compris **hors** de sa propre frontière de délégation. C'est une évasion de délégation ; MINOS ne demande donc jamais ce droit.
+
+L'unique migration nécessaire est effectuée par le script pendant sa phase privilégiée (`--attach-pid`). MINOS se retrouve déjà dans le cgroup contrôleur, n'a aucune migration à faire, et n'écrit que dans le sous-arbre qu'il possède réellement. C'est exactement la forme que produit nativement `Delegate=yes`.
+
+Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et `remote index` échoue avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
 
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
