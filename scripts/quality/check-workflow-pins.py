@@ -157,6 +157,117 @@ def find_inno_setup_provenance_violations(workflow: Path, text: str) -> list[str
     return failures
 
 
+SETUP_BUILDING_INVOCATION = re.compile(
+    r"scripts[\\/]release[\\/](?P<script>publish-windows-release\.ps1|build-local-windows-candidate\.ps1)")
+
+
+def find_iscc_propagation_violations(workflow: Path, text: str) -> list[str]:
+    """Every setup-building invocation in an Inno-installing workflow must carry the qualified compiler.
+
+    build-windows-installer.ps1 only honours a pinned compiler when it is actually told about one;
+    with neither -IsccPath nor -RequiredIsccVersion it falls back to searching PATH and the Inno
+    Setup install locations. A release/qualification workflow that installs a pinned Inno Setup and
+    then omits those arguments on any build-capable call therefore silently reintroduces the
+    ambiguity for that build -- which is exactly how the smoke setup once ended up compiled by the
+    Chocolatey shim while the production setup used the qualified binary.
+
+    Invocations passing -PublishOnly are exempt: that mode uploads already-built, already-verified
+    artifacts and compiles nothing.
+    """
+    failures: list[str] = []
+    if not any("choco install innosetup" in line.lower() for line in text.splitlines()):
+        return failures
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        match = SETUP_BUILDING_INVOCATION.search(line)
+        if not match:
+            continue
+        if "-PublishOnly" in line:
+            continue
+        missing = [flag for flag in ("-IsccPath", "-RequiredIsccVersion") if flag not in line]
+        if missing:
+            failures.append(
+                f"{workflow.relative_to(ROOT)}:{line_number}: {match.group('script')} can compile a "
+                f"setup here but the invocation does not pass {', '.join(missing)}; the build would "
+                f"fall back to ambiguous ISCC.exe resolution."
+            )
+    return failures
+
+
+def find_windows_qualification_coverage_violations() -> list[str]:
+    """windows-installer.yml must re-qualify Windows when the files defining release compilation change.
+
+    The Windows qualification workflow is what actually proves the candidate builds, installs,
+    handshakes over MCP and uninstalls. If the real publication workflow (or the supply-chain gate
+    that constrains it) can be edited without triggering it, that proof silently stops covering the
+    thing being changed.
+    """
+    failures: list[str] = []
+    workflow = WORKFLOWS / "windows-installer.yml"
+    if not workflow.is_file():
+        return [f"{workflow.relative_to(ROOT)}: Windows qualification workflow not found"]
+
+    trigger_paths = _trigger_path_filters(workflow.read_text(encoding="utf-8"))
+    required_coverage = (
+        ".github/workflows/release-windows.yml",
+        "scripts/quality/check-workflow-pins.py",
+    )
+    for trigger in ("pull_request", "push"):
+        if trigger not in trigger_paths:
+            failures.append(
+                f"{workflow.relative_to(ROOT)}: no '{trigger}' paths filter found; cannot verify that "
+                f"Windows qualification covers the release workflow."
+            )
+            continue
+        for required in required_coverage:
+            if required not in trigger_paths[trigger]:
+                failures.append(
+                    f"{workflow.relative_to(ROOT)}: '{trigger}' paths filter does not include "
+                    f"'{required}'; changing it would skip Windows qualification."
+                )
+
+    if "pull_request" in trigger_paths and "push" in trigger_paths:
+        if trigger_paths["pull_request"] != trigger_paths["push"]:
+            failures.append(
+                f"{workflow.relative_to(ROOT)}: pull_request and push paths filters differ; a change "
+                f"qualified on a PR must be re-qualified on the branch it lands on."
+            )
+    return failures
+
+
+def _trigger_path_filters(text: str) -> dict[str, list[str]]:
+    """Extract {trigger: [path globs]} from a workflow's `on:` block without a YAML dependency."""
+    filters: dict[str, list[str]] = {}
+    lines = text.splitlines()
+    in_on_block = False
+    trigger: str | None = None
+    paths_indent: int | None = None
+    for raw in lines:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        if indent == 0:
+            in_on_block = stripped in ("on:", '"on":', "'on':")
+            trigger = None
+            paths_indent = None
+            continue
+        if not in_on_block:
+            continue
+        if paths_indent is not None:
+            if indent > paths_indent and stripped.startswith("- "):
+                filters[trigger].append(stripped[2:].strip().strip("'\""))
+                continue
+            paths_indent = None
+        if indent == 2 and stripped.endswith(":"):
+            trigger = stripped[:-1]
+            continue
+        if trigger is not None and stripped == "paths:":
+            paths_indent = indent
+            filters.setdefault(trigger, [])
+    return filters
+
+
 def check_build_windows_installer_script() -> list[str]:
     """The installer build script must not let an explicit -IsccPath be second-guessed."""
     failures: list[str] = []
@@ -186,6 +297,27 @@ def check_build_windows_installer_script() -> list[str]:
             f"{script.relative_to(ROOT)}: ambiguous ISCC candidate search appears before the "
             f"-IsccPath guard; an explicit release-qualified path could be shadowed."
         )
+
+    # Package metadata proves what was installed, not what executed. The build must assert the
+    # engine version reported by the compiler it actually ran.
+    if "Assert-IsccEngineVersion" not in text:
+        failures.append(
+            f"{script.relative_to(ROOT)}: does not assert the engine version reported by the "
+            f"compiler it executes; installed-package metadata alone cannot prove which binary "
+            f"produced the setup."
+        )
+    if not re.search(r"IsNullOrWhiteSpace\(\$IsccPath\)\s*-ne\s*\[string\]::IsNullOrWhiteSpace\(\$RequiredIsccVersion\)", text):
+        failures.append(
+            f"{script.relative_to(ROOT)}: does not reject a half-qualified invocation; -IsccPath and "
+            f"-RequiredIsccVersion must be required together so neither the binary nor its version "
+            f"can go unproven."
+        )
+
+    helper = ROOT / "scripts" / "release" / "iscc-provenance.ps1"
+    tests = ROOT / "scripts" / "release" / "test-iscc-provenance.ps1"
+    for required in (helper, tests):
+        if not required.is_file():
+            failures.append(f"{required.relative_to(ROOT)}: required Inno Setup provenance file not found")
     return failures
 
 
@@ -214,6 +346,8 @@ def main() -> int:
                     )
         failures.extend(find_run_block_violations(workflow, text))
         failures.extend(find_inno_setup_provenance_violations(workflow, text))
+        failures.extend(find_iscc_propagation_violations(workflow, text))
+    failures.extend(find_windows_qualification_coverage_violations())
     failures.extend(check_build_windows_installer_script())
     if failures:
         print("WORKFLOW SUPPLY-CHAIN PIN GATE FAILED", file=sys.stderr)

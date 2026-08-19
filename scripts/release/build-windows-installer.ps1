@@ -18,13 +18,23 @@ param(
     # could silently take over compilation of the release setup.exe.
     [string] $IsccPath = '',
 
-    # Optional defense-in-depth: when set together with -IsccPath, the resolved binary's
-    # ProductVersion or FileVersion must start with this value or the build refuses to proceed.
+    # The exact engine version the compiler must report while compiling. Supplied together with
+    # -IsccPath on the qualified release/CI path; the build is discarded if the compiler that
+    # actually ran reports anything else.
     [string] $RequiredIsccVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Both or neither: a caller that pins the binary must also pin the version it has to report, and a
+# caller that demands a version must say which binary it trusts. Accepting one alone would leave a
+# half-qualified path where either the compiler or its version goes unproven.
+if ([string]::IsNullOrWhiteSpace($IsccPath) -ne [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+    throw 'Provide -IsccPath and -RequiredIsccVersion together, or neither: a qualified release build pins both the compiler binary and the engine version it must report.'
+}
+
+. (Join-Path $PSScriptRoot 'iscc-provenance.ps1')
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
@@ -80,14 +90,12 @@ if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
         throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
     }
     if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
-        # ISCC.exe itself exposes no trustworthy version signal: its FileVersion/ProductVersion PE
-        # resources are both unset (observed as 0.0.0.0), and its bare-invocation usage banner
-        # omits the minor/patch version. Verify against Chocolatey's own installed-package record
-        # instead -- the nuspec it writes for every package. Verified here too, independently of
-        # any verification the caller may already have done, so this script never trusts an
-        # -IsccPath it cannot itself confirm. Only meaningful when Inno Setup was installed via the
-        # `innosetup` Chocolatey package (the only supported release/CI provisioning path); a
-        # missing nuspec fails closed rather than silently skipping the check.
+        # First provenance layer: what Chocolatey recorded as installed. This proves the provisioned
+        # package but NOT which binary will execute, so it is a cross-check, not the assertion --
+        # the authoritative check is the engine version the compiler itself reports below. Verified
+        # here independently of any check the caller already did, so this script never trusts an
+        # -IsccPath it cannot itself corroborate. A missing nuspec fails closed rather than
+        # silently skipping the check.
         $NuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
         if (-not (Test-Path -LiteralPath $NuspecPath -PathType Leaf)) {
             throw "Chocolatey package metadata not found at $NuspecPath; cannot verify the Inno Setup compiler at -IsccPath against -RequiredIsccVersion $RequiredIsccVersion."
@@ -189,8 +197,34 @@ Assert-InnoTaskNames -ScriptContent $Iss
 [System.IO.File]::WriteAllText($GeneratedIss, $Iss, $Utf8)
 
 try {
-    & $Iscc $GeneratedIss
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+    # Stream the compiler's output to the log AND capture it: the "Compiler engine version:" line it
+    # prints is the only evidence of which binary actually produced this setup.exe. ErrorActionPreference
+    # is relaxed only around the native call so that 2>&1 stderr lines stay diagnostics instead of
+    # terminating the pipeline before the exit code can be inspected.
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $Iscc $GeneratedIss 2>&1 | Tee-Object -Variable CompilerOutput
+        $CompilerExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $Previous }
+    if ($CompilerExitCode -ne 0) { throw "Inno Setup compilation failed with exit code $CompilerExitCode" }
+
+    $EngineVersion = '(not asserted: no -RequiredIsccVersion supplied)'
+    if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+        # Authoritative provenance check on the qualified release/CI path. A setup produced by an
+        # unqualified compiler is deleted rather than left on disk where a later step could pick it up.
+        try {
+            $EngineVersion = Assert-IsccEngineVersion `
+                -CompilerOutput @($CompilerOutput | ForEach-Object { [string] $_ }) `
+                -RequiredVersion $RequiredIsccVersion `
+                -IsccPath $Iscc
+        }
+        catch {
+            Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
+            throw
+        }
+    }
     if (-not (Test-Path -LiteralPath $Setup -PathType Leaf)) { throw "MINOS setup executable was not produced: $Setup" }
 
     $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -205,6 +239,7 @@ try {
     Write-Host "Distribution : $DistributionRoot"
     Write-Host "AppId mode   : $ModeLabel"
     Write-Host "Inno Setup   : $Iscc"
+    Write-Host "Engine ver.  : $EngineVersion"
 }
 finally {
     Remove-Item -LiteralPath $GeneratedIss -Force -ErrorAction SilentlyContinue
