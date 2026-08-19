@@ -37,13 +37,26 @@ final class ProviderResidueReclamation {
 
     /** Removes every provider-authored entry of {@code runDirectory}; never throws. */
     static void reclaim(Path runsRoot, Path runDirectory) {
+        reclaim(runsRoot, runDirectory, Set.of());
+    }
+
+    /**
+     * Removes every provider-authored entry of {@code runDirectory}; never throws.
+     *
+     * <p>{@code extraRetainedTopLevelEntries} additionally exempts specific direct children of
+     * {@code runDirectory} beyond {@link #RETAINED_ENTRIES}. A caller that just restored a
+     * preexisting provider artifact into a top-level entry not covered by that fixed name list
+     * uses this to stop reclamation from deleting the entry moments after it was restored.</p>
+     */
+    static void reclaim(Path runsRoot, Path runDirectory, Set<Path> extraRetainedTopLevelEntries) {
         Path root = Objects.requireNonNull(runsRoot, "runsRoot").toAbsolutePath().normalize();
         Path directory = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
+        Objects.requireNonNull(extraRetainedTopLevelEntries, "extraRetainedTopLevelEntries");
         if (!directory.startsWith(root) || directory.equals(root)) return;
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) return;
         try (DirectoryStream<Path> children = Files.newDirectoryStream(directory)) {
             for (Path child : children) {
-                deleteResidue(directory, child);
+                deleteResidue(directory, child, extraRetainedTopLevelEntries);
             }
         } catch (IOException exception) {
             LOGGER.log(System.Logger.Level.WARNING,
@@ -51,10 +64,11 @@ final class ProviderResidueReclamation {
         }
     }
 
-    private static void deleteResidue(Path directory, Path child) {
+    private static void deleteResidue(Path directory, Path child, Set<Path> extraRetainedTopLevelEntries) {
         Path name = child.getFileName();
         if (name != null && RETAINED_ENTRIES.contains(name.toString())) return;
         Path normalized = child.toAbsolutePath().normalize();
+        if (extraRetainedTopLevelEntries.contains(normalized)) return;
         if (!normalized.startsWith(directory) || normalized.equals(directory)) return;
         try {
             if (Files.isSymbolicLink(normalized) || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {

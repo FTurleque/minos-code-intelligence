@@ -13,9 +13,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -92,11 +95,17 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         boolean preserveExisting = artifactOutsideRun && regularFileNoFollow(generatedArtifact);
         Optional<ProviderWriteQuota> writeQuota = transformer.providerWriteQuota();
         ProviderWriteQuotaSupervisor supervisor = null;
+        // Cleanup below may only touch generatedArtifact once a preexisting artifact there has been
+        // safely relocated (or confirmed absent). If that relocation itself fails, the original
+        // content is left exactly where it was and must never be blindly deleted by cleanup.
+        boolean providerLocationPrepared = false;
+        IndexingArtifact result;
 
         try {
             if (preserveExisting) {
                 move(generatedArtifact, preservedArtifact);
             }
+            providerLocationPrepared = true;
 
             // Open every MINOS-owned diagnostic sink before untrusted provider code starts. The
             // provider may later replace these pathnames in a shared writable directory, but host
@@ -140,23 +149,127 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
                         throw new IllegalStateException("provider exited with code " + exitCode + "; see " + stderr);
                     }
                     promoteArtifact(generatedArtifact, finalArtifact, runDirectory);
-
-                    return new IndexingArtifact(
+                    result = new IndexingArtifact(
                             request.selection().language(), indexerId, finalArtifact, request.projectRelativeRoot());
                 }
             }
-        } finally {
-            if (supervisor != null) supervisor.close();
-            if (artifactOutsideRun) {
-                Files.deleteIfExists(generatedArtifact);
-                if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
-                    move(preservedArtifact, generatedArtifact);
-                }
-            }
-            if (writeQuota.isPresent()) {
-                ProviderResidueReclamation.reclaim(runsRoot, runDirectory);
+        } catch (Exception primary) {
+            runPostExecutionCleanup(supervisor, providerLocationPrepared, artifactOutsideRun,
+                    generatedArtifact, preservedArtifact, preserveExisting, writeQuota, runDirectory)
+                    .forEach(primary::addSuppressed);
+            throw primary;
+        }
+
+        List<Throwable> cleanupFailures = runPostExecutionCleanup(supervisor, providerLocationPrepared,
+                artifactOutsideRun, generatedArtifact, preservedArtifact, preserveExisting, writeQuota, runDirectory);
+        if (!cleanupFailures.isEmpty()) {
+            IOException failure = new IOException("MINOS post-execution cleanup failed for run directory "
+                    + runDirectory + "; a preserved provider artifact backup may remain at " + preservedArtifact);
+            cleanupFailures.forEach(failure::addSuppressed);
+            throw failure;
+        }
+        return result;
+    }
+
+    /**
+     * Runs every post-execution cleanup step independently so that one step's failure never
+     * prevents the others from running, and never silently masks a primary execution failure.
+     * Every failure encountered is returned rather than thrown so the caller decides whether to
+     * attach it to an in-flight exception or surface it as a new one.
+     */
+    private List<Throwable> runPostExecutionCleanup(
+            ProviderWriteQuotaSupervisor supervisor,
+            boolean providerLocationPrepared,
+            boolean artifactOutsideRun,
+            Path generatedArtifact,
+            Path preservedArtifact,
+            boolean preserveExisting,
+            Optional<ProviderWriteQuota> writeQuota,
+            Path runDirectory
+    ) {
+        List<Throwable> failures = new ArrayList<>();
+        if (artifactOutsideRun && providerLocationPrepared) {
+            try {
+                restoreGeneratedArtifactLocation(generatedArtifact, preservedArtifact, preserveExisting);
+            } catch (Exception failure) {
+                failures.add(failure);
             }
         }
+        if (supervisor != null) {
+            try {
+                supervisor.close();
+            } catch (RuntimeException failure) {
+                failures.add(failure);
+            }
+        }
+        if (writeQuota.isPresent()) {
+            try {
+                Set<Path> exemptions = (preserveExisting && providerLocationPrepared)
+                        ? residueReclamationExemptions(runDirectory, generatedArtifact)
+                        : Set.of();
+                ProviderResidueReclamation.reclaim(runsRoot, runDirectory, exemptions);
+            } catch (RuntimeException failure) {
+                failures.add(failure);
+            }
+        }
+        return failures;
+    }
+
+    /**
+     * Frees {@code generatedArtifact} for restoration and, if a preexisting artifact was relocated
+     * there, moves it back. A hostile provider may have replaced the path with a populated
+     * directory; that is quarantined by a single rename rather than walked and deleted, so cleanup
+     * never becomes a recursive delete of adversary-controlled content.
+     */
+    private static void restoreGeneratedArtifactLocation(
+            Path generatedArtifact,
+            Path preservedArtifact,
+            boolean preserveExisting
+    ) throws IOException {
+        clearGeneratedArtifactLocation(generatedArtifact);
+        if (preserveExisting && regularFileNoFollow(preservedArtifact)) {
+            move(preservedArtifact, generatedArtifact);
+        }
+    }
+
+    private static void clearGeneratedArtifactLocation(Path generatedArtifact) throws IOException {
+        try {
+            Files.delete(generatedArtifact);
+        } catch (NoSuchFileException absent) {
+            // Nothing left to clear.
+        } catch (DirectoryNotEmptyException nonEmpty) {
+            quarantineHostileDirectory(generatedArtifact);
+        }
+    }
+
+    /**
+     * Renames a provider-populated directory aside with a single filesystem operation. This never
+     * follows symlinks (rename operates on the directory entry itself) and never walks the tree, so
+     * a hostile provider cannot turn cleanup into a TOCTOU-prone or unbounded recursive delete.
+     */
+    private static void quarantineHostileDirectory(Path directory) throws IOException {
+        Path parent = directory.getParent();
+        if (parent == null) {
+            throw new IOException("cannot quarantine provider-controlled directory without a parent: " + directory);
+        }
+        Path quarantined = parent.resolve(directory.getFileName() + ".quarantined-" + System.nanoTime());
+        Files.move(directory, quarantined, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    /**
+     * The direct child of {@code runDirectory} that contains {@code generatedArtifact}, if any.
+     * Reclamation only inspects top-level entries of the run directory, so a restored preexisting
+     * artifact living several levels below one of those entries must have that whole entry exempted
+     * or reclamation would delete it again immediately after cleanup restores it.
+     */
+    private static Set<Path> residueReclamationExemptions(Path runDirectory, Path generatedArtifact) {
+        Path normalizedRunDirectory = runDirectory.toAbsolutePath().normalize();
+        if (!generatedArtifact.startsWith(normalizedRunDirectory) || generatedArtifact.equals(normalizedRunDirectory)) {
+            return Set.of();
+        }
+        Path relative = normalizedRunDirectory.relativize(generatedArtifact);
+        if (relative.getNameCount() == 0) return Set.of();
+        return Set.of(normalizedRunDirectory.resolve(relative.getName(0)));
     }
 
     private static Process startProvider(
