@@ -48,21 +48,13 @@ jobs:
         with:
           python-version: '3.13'
 
+      # The helper bounds each apt attempt and falls back to a pinned mirror if the runner's
+      # mirrorlist stalls; timeout-minutes is the outer backstop.
       - name: Install and authorize Linux worker sandbox runtime
+        timeout-minutes: 10
         shell: bash
         run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            bubblewrap util-linux apparmor apparmor-profiles
-          command -v bwrap
-          command -v prlimit
-          command -v unshare
-          command -v setpriv
-          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
-          test -f "$profile"
-          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
-          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+          bash scripts/ci/install-linux-sandbox-toolchain.sh
 
       - name: Delegate a cgroup v2 job boundary to the worker sandbox
         shell: bash
