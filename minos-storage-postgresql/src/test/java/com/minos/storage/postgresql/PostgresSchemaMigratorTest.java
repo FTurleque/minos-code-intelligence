@@ -20,20 +20,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PostgresSchemaMigratorTest extends PostgresTestSupport {
 
+    private static final List<String> BOOTSTRAP_TABLES = List.of(
+            "workspaces", "projects",
+            "knowledge_snapshots", "knowledge_active",
+            "project_index_state", "indexing_runs",
+            "fingerprint_snapshots", "fingerprint_active",
+            "runtime_sessions",
+            "semantic_index_meta", "semantic_documents",
+            "schema_version");
+
     @Test
     void createsAllV1Tables() throws Exception {
-        String[] tables = {
-                "workspaces", "projects",
-                "knowledge_snapshots", "knowledge_active",
-                "project_index_state", "indexing_runs",
-                "fingerprint_snapshots", "fingerprint_active",
-                "runtime_sessions",
-                "semantic_index_meta", "semantic_documents",
-                "schema_version"
-        };
         connections.withConnection(c -> {
             try (Statement s = c.createStatement()) {
-                for (String table : tables) {
+                for (String table : BOOTSTRAP_TABLES) {
                     try (ResultSet r = s.executeQuery("SELECT count(*) FROM " + table)) {
                         assertTrue(r.next(), "table missing: " + table);
                     }
@@ -120,28 +120,73 @@ class PostgresSchemaMigratorTest extends PostgresTestSupport {
             second.close();
         }
 
-        connections.withConnection(c -> {
+        assertFullyBootstrapped(connections, schema);
+    }
+
+    /**
+     * Two independent MINOS instances bootstrapping two DIFFERENT schemas concurrently must also
+     * serialize, because the bootstrap mutates database-wide state: {@code CREATE EXTENSION IF NOT
+     * EXISTS vector} writes {@code pg_extension}, which is per-database. With a per-schema lock key
+     * both callers would observe the extension missing and both would issue CREATE EXTENSION, so one
+     * would fail on the {@code pg_extension} unique index.
+     *
+     * <p>The race is run against a freshly created database precisely so that the extension really
+     * does not exist yet -- against the already-migrated default test database {@code IF NOT EXISTS}
+     * would short-circuit and the step under test would never actually race.</p>
+     */
+    @Test
+    void concurrentFreshBootstrapsOfDistinctSchemasSerializeDatabaseWideState() throws Exception {
+        String database = "minos_bootstrap_race";
+        String schemaA = "minos_concurrent_a";
+        String schemaB = "minos_concurrent_b";
+        createFreshDatabase(database);
+        PostgresConnectionFactory first = createFactoryForDatabase(database, schemaA);
+        PostgresConnectionFactory second = createFactoryForDatabase(database, schemaB);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CyclicBarrier barrier = new CyclicBarrier(2);
+            List<Callable<Exception>> tasks = List.of(
+                    migrationTask(barrier, first),
+                    migrationTask(barrier, second));
+            List<Future<Exception>> futures = executor.invokeAll(tasks, 120, TimeUnit.SECONDS);
+            for (Future<Exception> future : futures) {
+                Exception failure = future.get();
+                if (failure != null) {
+                    throw new AssertionError("concurrent cross-schema migrate() must not fail", failure);
+                }
+            }
+
+            first.withConnection(c -> {
+                try (Statement s = c.createStatement();
+                     ResultSet r = s.executeQuery("SELECT '[1,2,3]'::vector")) {
+                    assertTrue(r.next(), "pgvector extension must be usable after a concurrent bootstrap");
+                }
+                return null;
+            });
+            assertFullyBootstrapped(first, schemaA);
+            assertFullyBootstrapped(second, schemaB);
+        } finally {
+            executor.shutdownNow();
+            first.close();
+            second.close();
+        }
+    }
+
+    private static void assertFullyBootstrapped(PostgresConnectionFactory factory, String schema) throws Exception {
+        factory.withConnection(c -> {
             try (Statement s = c.createStatement();
                  ResultSet r = s.executeQuery(
                          "SELECT version FROM " + schema + ".schema_version ORDER BY version")) {
                 List<Integer> versions = new ArrayList<>();
                 while (r.next()) versions.add(r.getInt(1));
                 assertEquals(List.of(1, 2, 3, 4), versions,
-                        "schema_version must contain exactly versions 1..4 once each, with no partial or duplicate migration");
+                        "schema_version of " + schema + " must contain exactly versions 1..4 once each,"
+                                + " with no partial or duplicate migration");
             }
-            String[] tables = {
-                    "workspaces", "projects",
-                    "knowledge_snapshots", "knowledge_active",
-                    "project_index_state", "indexing_runs",
-                    "fingerprint_snapshots", "fingerprint_active",
-                    "runtime_sessions",
-                    "semantic_index_meta", "semantic_documents",
-                    "schema_version"
-            };
             try (Statement s = c.createStatement()) {
-                for (String table : tables) {
+                for (String table : BOOTSTRAP_TABLES) {
                     try (ResultSet r = s.executeQuery("SELECT count(*) FROM " + schema + "." + table)) {
-                        assertTrue(r.next(), "table missing after concurrent bootstrap: " + table);
+                        assertTrue(r.next(), "table missing after concurrent bootstrap in " + schema + ": " + table);
                     }
                 }
             }
