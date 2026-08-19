@@ -80,17 +80,22 @@ if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
         throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
     }
     if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
-        # ISCC.exe does not reliably stamp its FileVersion/ProductVersion PE resources (both
-        # observed as 0.0.0.0 on the 6.7.1 chocolatey package) -- ask the compiler itself
-        # instead. Running it with no script argument prints a banner naming its own version
-        # before exiting non-zero; that banner is the only authoritative source for what is
-        # actually about to compile the setup.exe. Verified here too, independently of any
-        # verification the caller may already have done, so this script never trusts an
-        # -IsccPath it cannot itself confirm.
-        $BannerOutput = (& $IsccPath 2>&1 | Out-String)
-        $global:LASTEXITCODE = 0
-        if ($BannerOutput -notmatch [regex]::Escape($RequiredIsccVersion)) {
-            throw "ISCC.exe at $IsccPath did not report the required version $RequiredIsccVersion in its own banner. Captured output:`n$BannerOutput"
+        # ISCC.exe itself exposes no trustworthy version signal: its FileVersion/ProductVersion PE
+        # resources are both unset (observed as 0.0.0.0), and its bare-invocation usage banner
+        # omits the minor/patch version. Verify against Chocolatey's own installed-package record
+        # instead -- the nuspec it writes for every package. Verified here too, independently of
+        # any verification the caller may already have done, so this script never trusts an
+        # -IsccPath it cannot itself confirm. Only meaningful when Inno Setup was installed via the
+        # `innosetup` Chocolatey package (the only supported release/CI provisioning path); a
+        # missing nuspec fails closed rather than silently skipping the check.
+        $NuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+        if (-not (Test-Path -LiteralPath $NuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $NuspecPath; cannot verify the Inno Setup compiler at -IsccPath against -RequiredIsccVersion $RequiredIsccVersion."
+        }
+        [xml]$Nuspec = Get-Content -LiteralPath $NuspecPath -Raw
+        $InstalledIsccVersion = $Nuspec.package.metadata.version
+        if ($InstalledIsccVersion -ne $RequiredIsccVersion) {
+            throw "Chocolatey innosetup package metadata at $NuspecPath reports version '$InstalledIsccVersion', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
         }
     }
     $Iscc = $IsccPath

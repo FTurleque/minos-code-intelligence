@@ -70,7 +70,10 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress
+          $installOutput = (choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress 2>&1 | Out-String)
+          Write-Host $installOutput
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup --version=$env:INNO_SETUP_VERSION failed (exit=$LASTEXITCODE):`n$installOutput" }
+
           # Resolve the exact binary the choco package above just installed -- do NOT search PATH or
           # any other Inno Setup install location. A stray pre-existing Inno Setup 7 (or any other
           # ISCC.exe reachable via PATH/chocolatey shim) must never be able to silently take over
@@ -79,18 +82,26 @@ jobs:
           if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
             throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
           }
-          # ISCC.exe does not reliably stamp its FileVersion/ProductVersion PE resources (both
-          # observed as 0.0.0.0 on the 6.7.1 chocolatey package) -- ask the compiler itself
-          # instead. Running it with no script argument prints a banner naming its own version
-          # before exiting non-zero; that banner is the only authoritative source for what is
-          # actually about to compile the candidate setup.exe.
-          $bannerOutput = (& $isccPath 2>&1 | Out-String)
-          $global:LASTEXITCODE = 0
-          if ($bannerOutput -notmatch [regex]::Escape($env:INNO_SETUP_VERSION)) {
-            throw "ISCC.exe at $isccPath did not report the expected version $env:INNO_SETUP_VERSION in its own banner. Captured output:`n$bannerOutput"
+
+          # ISCC.exe itself exposes no trustworthy version signal: its FileVersion/ProductVersion PE
+          # resources are both unset (observed as 0.0.0.0), and its bare-invocation usage banner
+          # omits the minor/patch version (only an actual compile run prints the full versioned
+          # banner). Verify against Chocolatey's own installed-package record instead -- the nuspec
+          # it writes for every package -- cross-checked against Chocolatey's own install-time
+          # confirmation message captured above.
+          $nuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+          if (-not (Test-Path -LiteralPath $nuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $nuspecPath; cannot verify the installed Inno Setup version."
           }
-          Write-Host "Qualified ISCC: $isccPath"
-          Write-Host $bannerOutput
+          [xml]$nuspec = Get-Content -LiteralPath $nuspecPath -Raw
+          $installedVersion = $nuspec.package.metadata.version
+          if ($installedVersion -ne $env:INNO_SETUP_VERSION) {
+            throw "Chocolatey innosetup package metadata at $nuspecPath reports version '$installedVersion', expected $env:INNO_SETUP_VERSION."
+          }
+          if ($installOutput -notmatch [regex]::Escape($env:INNO_SETUP_VERSION)) {
+            throw "Chocolatey's own install output did not confirm version $env:INNO_SETUP_VERSION:`n$installOutput"
+          }
+          Write-Host "Qualified ISCC: $isccPath (chocolatey innosetup package version=$installedVersion)"
           "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Build exact-head non-published candidate
