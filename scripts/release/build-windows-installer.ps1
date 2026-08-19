@@ -19,7 +19,7 @@ param(
     [string] $IsccPath = '',
 
     # Optional defense-in-depth: when set together with -IsccPath, the resolved binary's
-    # FileVersion must start with this value or the build refuses to proceed.
+    # ProductVersion or FileVersion must start with this value or the build refuses to proceed.
     [string] $RequiredIsccVersion = ''
 )
 
@@ -80,9 +80,13 @@ if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
         throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
     }
     if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
-        $ActualIsccVersion = (Get-Item -LiteralPath $IsccPath).VersionInfo.FileVersion
-        if (-not $ActualIsccVersion -or $ActualIsccVersion -notlike "$RequiredIsccVersion*") {
-            throw "ISCC.exe at $IsccPath reports FileVersion '$ActualIsccVersion', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
+        # ISCC.exe does not reliably stamp FileVersion (observed as 0.0.0.0 on the 6.7.1
+        # chocolatey package); ProductVersion is what actually carries the release number, so
+        # check both and accept either.
+        $ActualVersionInfo = (Get-Item -LiteralPath $IsccPath).VersionInfo
+        $ActualIsccVersions = @($ActualVersionInfo.ProductVersion, $ActualVersionInfo.FileVersion) | Where-Object { $_ }
+        if (-not ($ActualIsccVersions | Where-Object { $_ -like "$RequiredIsccVersion*" })) {
+            throw "ISCC.exe at $IsccPath reports ProductVersion='$($ActualVersionInfo.ProductVersion)' FileVersion='$($ActualVersionInfo.FileVersion)', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
         }
     }
     $Iscc = $IsccPath

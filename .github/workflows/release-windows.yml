@@ -109,11 +109,15 @@ jobs:
           if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
             throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
           }
-          $fileVersion = (Get-Item -LiteralPath $isccPath).VersionInfo.FileVersion
-          if (-not $fileVersion -or $fileVersion -notlike "$($env:INNO_SETUP_VERSION)*") {
-            throw "ISCC.exe at $isccPath reports FileVersion '$fileVersion', expected $env:INNO_SETUP_VERSION. Refusing to build the release setup with an unverified Inno Setup compiler."
+          # Inno Setup's ISCC.exe does not reliably stamp FileVersion (observed as 0.0.0.0 on the
+          # 6.7.1 chocolatey package); ProductVersion is what actually carries the release number,
+          # so check both and accept either.
+          $versionInfo = (Get-Item -LiteralPath $isccPath).VersionInfo
+          $reportedVersions = @($versionInfo.ProductVersion, $versionInfo.FileVersion) | Where-Object { $_ }
+          if (-not ($reportedVersions | Where-Object { $_ -like "$($env:INNO_SETUP_VERSION)*" })) {
+            throw "ISCC.exe at $isccPath reports ProductVersion='$($versionInfo.ProductVersion)' FileVersion='$($versionInfo.FileVersion)', expected $env:INNO_SETUP_VERSION. Refusing to build the release setup with an unverified Inno Setup compiler."
           }
-          Write-Host "Qualified ISCC: $isccPath (FileVersion=$fileVersion)"
+          Write-Host "Qualified ISCC: $isccPath (ProductVersion=$($versionInfo.ProductVersion) FileVersion=$($versionInfo.FileVersion))"
           "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Afficher la toolchain
