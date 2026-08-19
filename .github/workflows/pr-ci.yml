@@ -80,6 +80,12 @@ jobs:
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
 
+      # Pure parsing/assertion rules, so they run on every PR on both runners rather than only when
+      # the Windows packaging paths change.
+      - name: Inno Setup provenance rules
+        shell: pwsh
+        run: ./scripts/release/test-iscc-provenance.ps1
+
       - name: P0-P2 audit remediation consistency
         run: python scripts/remediation/check-p0-p2.py
 
