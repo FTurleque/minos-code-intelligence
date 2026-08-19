@@ -1,8 +1,33 @@
 # État courant — MINOS
 
-Dernière mise à jour : **14 août 2026**.
+Dernière mise à jour : **19 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
+
+## Réconciliation post-PR #215 / #216 — 19 août 2026
+
+`develop@7f7d8a279318a67e55cb2aa33899c629cadd4313` a été réaudité intégralement (50 commits depuis la réconciliation précédente, répartis sur deux PR mergées).
+
+**PR #215** (`fix/post-audit-hardening-20260818-v2`) a durci les frontières de confiance du stockage local et de l'exécution provider :
+
+- stores file-backed (registre projet, index-state, run) rejettent une racine ou une propriété symlinkée au lieu de la suivre ;
+- partitions run d'index-state confinées à leur racine attendue ;
+- providers locaux exigent désormais une sandbox qualifiée et une politique réseau explicite avant exécution, avec workspace provider isolée ;
+- décodage SCIP borné par un budget heap explicite, empêchant l'amplification mémoire d'un payload adversarial avant le décodage complet ;
+- chaque connexion HTTP JGit épinglée à l'endpoint du dépôt demandé, empêchant une redirection vers un hôte arbitraire ;
+- classification des hôtes loopback PostgreSQL restreinte aux formes littérales, et mutations du registre projet PostgreSQL sérialisées pour éliminer une course d'enregistrement concurrent ;
+- plans de sandbox Windows consommés de façon éphémère au lieu d'être retenus ;
+- fichiers de workspace provider (local et remote worker) partagés entre les deux implémentations au lieu d'être dupliqués ;
+- seuils JaCoCo critiques relevés.
+
+**PR #216** (`fix/final-minos-hardening-20260819`) a fermé quatre findings d'un audit ciblé plus un finding découvert pendant sa remédiation :
+
+- `ProcessIndexerExecutor` : un provider hostile remplaçant l'emplacement de l'artefact préexistant par un répertoire non vide ne peut plus faire échouer silencieusement la restauration de la sauvegarde ni faire perdre l'exception primaire ; le répertoire hostile est mis en quarantaine par un renommage non récursif plutôt que supprimé ;
+- découvert pendant cette remédiation : les walkers de suppression récursive/mesure (`FileTreeOperations`, `ProviderWorkspaceFiles`, `RunDirectoryRetention`, `ProviderWriteQuotaSupervisor`) suivaient une jonction NTFS Windows plantée par un provider comme un répertoire ordinaire ; ils vérifient désormais `isDirectory() && !isSymbolicLink() && !isOther()` avant de descendre ;
+- `release-windows.yml` et `intellij-plugin-release.yml` séparés en un job de build/qualification `contents: read` et un job de publication minimal `contents: write` déclenché uniquement sur `main`/à la publication d'une release ; la release IntelliJ résout désormais le tag en SHA vérifié contre `target_commitish` avant build, et n'utilise plus `--clobber` sur le chemin nominal ;
+- arguments de chaîne des outils MCP bornés par des `maxLength` sémantiques centralisés (`McpArgumentBounds`), appliqués au schéma JSON **et** revérifiés côté serveur en octets UTF-8 réels.
+
+Des tests adversariaux couvrent chaque scénario (répertoire hostile vide/non vide, échec provider, timeout, jonction Windows réelle créée via `mklink /J`, dépassement de borne MCP avec caractères multi-octets et paires de substituts).
 
 ## Réconciliation post-PR #183 — 14 août 2026
 
@@ -48,6 +73,8 @@ v1.0.1                          PUBLIÉE / IMMUTABLE
 post-audit #132 / PR #135       REMÉDIATION IMPLÉMENTÉE / QUALIFICATION FINALE
 #98 sandbox OS réelle           IMPLÉMENTÉE + QUALIFIÉE LINUX/WINDOWS dans #135
 PR #182 / #183                  HARDENING SNAPSHOT / OWNERSHIP / M25 / SUPPLY-CHAIN INTÉGRÉ
+PR #215                          HARDENING STOCKAGE LOCAL / SCIP / JGit / PostgreSQL INTÉGRÉ
+PR #216                          ARTEFACT PROVIDER / JONCTIONS WINDOWS / RELEASE CI / BORNES MCP INTÉGRÉ
 ```
 
 ## Campagne post-audit — #132 / PR #135
