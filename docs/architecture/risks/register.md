@@ -2,7 +2,9 @@
 
 > Référence : [Section 11 — Risques et dette](../arc42/11-risques-dette.md)
 
-Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@b14006e7dd30550af5569ae881244e3fa1611143` après PR #215, #216 et #217.
+Dernière réconciliation : **19 août 2026**, réaudit complet de `develop` après PR #215, #216, #217 et #218.
+
+> **Convention de référencement.** L'état courant est ancré sur des **numéros de PR**, jamais sur un SHA de `develop`. Un SHA cité dans un document est périmé dès le merge qui l'introduit — le commit de merge est nécessairement postérieur au contenu qu'il publie —, ce qui recréait une dérive à chaque réconciliation. Les SHA immuables (tags de release, par exemple `v1.0.1`) restent cités explicitement : eux ne bougent jamais.
 
 ---
 
@@ -43,6 +45,7 @@ Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@b140
 | DT-06 | Décider ANN uniquement si les profils sémantiques montrent un besoin mesuré | semantic/storage | Faible | Watchlist |
 | DT-08 | Continuer la hausse progressive des seuils JaCoCo à mesure que des tests comportementaux utiles sont ajoutés | tous | Faible | Continu |
 | DT-09 | Étudier un lock transitif repository-owned pour le bootstrap Coursier `scip-java` si une exigence de reproductibilité bit-à-bit Docker devient contractuelle | packaging/supply-chain | Faible | Watchlist — aucune claim bit-reproducible actuelle |
+| DT-11 | L'étape CI `Install and authorize Linux worker sandbox runtime` (`apt-get install bubblewrap util-linux apparmor apparmor-profiles` + `apparmor_parser`) se bloque par intermittence sur les runners GitHub-hosted : ~15 s en temps normal, observée à 19 min puis encore bloquée après relance le 19 août 2026, alors que le **même commit** (`develop` post-#218) franchissait cette étape en 4 min sur un run parallèle. Incident apt/réseau externe, sans rapport avec le code MINOS. Mitigé par un `timeout-minutes: 10` sur les 4 occurrences de l'étape (pr-ci ×2, m19, m20) : l'incident échoue vite et lisiblement au lieu de consommer le timeout de job de 90 min. | ci/infrastructure | Faible | Mitigé / surveillé — externe, non corrigeable côté MINOS |
 | DT-10 | `WindowsStrongProcessOwnershipContainmentTest` est racy sous charge CI (timing de la création/lecture du PID d'un enfant détaché et de l'autorisation de chemin avant lancement) : confirmé le 19 août 2026 en observant le même commit `7f7d8a27` produire deux résultats différents sur deux runs CI parallèles déclenchés simultanément (`push` : 134/134 ; `pull_request` : 2 erreurs sur les mêmes tests). Pas de régression fonctionnelle constatée. | minos-runtime-local (tests) | Faible | Ouvert — robustifier l'attente déterministe au lieu du timing fixe |
 
 ## Dette clôturée par les campagnes post-audit

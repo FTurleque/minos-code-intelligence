@@ -89,8 +89,13 @@ jobs:
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
+      # Provisioning the sandbox toolchain is a ~15s apt install. It has been observed hanging for
+      # tens of minutes on GitHub-hosted runners (apt/network incident, reproduced on the same commit
+      # that passed in a parallel run). Bound it so such an incident fails fast and legibly instead
+      # of consuming the 90-minute job timeout.
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
@@ -178,7 +183,10 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+      # See the Verify job: bounded so an apt/network incident fails fast instead of consuming the
+      # 90-minute job timeout.
       - name: Install and authorize Linux worker sandbox runtime
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail

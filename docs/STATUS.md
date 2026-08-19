@@ -4,9 +4,22 @@ Dernière mise à jour : **19 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
 
+> **Convention de référencement.** L'état courant est ancré sur des **numéros de PR**, jamais sur un SHA de `develop`. Un SHA cité ici est périmé dès le merge qui l'introduit — le commit de merge est nécessairement postérieur au contenu qu'il publie —, ce qui recréait une dérive à chaque réconciliation. Les SHA immuables (tags de release, par exemple `v1.0.1`) restent cités explicitement : eux ne bougent jamais. Les sections historiques ci-dessous conservent les SHA déjà figés à titre d'archive.
+
+## Réconciliation post-PR #218 — 19 août 2026
+
+**PR #218** (`fix/audit-linux-cgroup-and-quality-gate-20260819`) a fermé les deux constats du dernier audit ciblé :
+
+- **P1 — délégation cgroup v2 trop large.** Les deux helpers de provisioning accordaient au compte MINOS la propriété durable de `/sys/fs/cgroup/cgroup.procs` (racine). cgroup v2 n'autorisant une migration que si le délégataire peut écrire le `cgroup.procs` de l'**ancêtre commun** des cgroups source et destination, ce droit — nécessaire uniquement parce que MINOS démarrait *hors* de son sous-arbre — lui permettait de déplacer des processus n'importe où, donc de **sortir de sa propre frontière de délégation**. La migration unique requise est désormais effectuée par le script pendant sa phase privilégiée (`--attach-pid`), qui place le shell lanceur dans `$ROOT/minos-controller` ; MINOS y démarre déjà, ne migre plus rien et n'écrit que dans le sous-arbre qu'il possède. C'est la forme que produit nativement `systemd Delegate=yes`, resté inchangé. Aucun fichier Java modifié : `LinuxCgroupJob` n'écrivait jamais le `cgroup.procs` racine.
+- **P2 — trou dans le quality gate JaCoCo.** Le scope `provider-sandbox-linux` référençait `LinuxCgroupV2`, classe disparue ; comme le filtrage testait le tuple de préfixes entier, un préfixe voisin vivant suffisait à maintenir le scope `PASS` alors que la frontière de job cgroup n'était plus mesurée. Le scope pointe désormais `LinuxCgroupJob`, et **chaque préfixe déclaré doit matcher au moins une classe**, sinon le scope échoue en nommant le préfixe mort.
+
+Barrières ajoutées : `check-p0-p2.py` refuse toute réintroduction d'un `chown`/`chmod`/`chgrp`/`setfacl` sur le `cgroup.procs` racine et exige que les workflows sandbox attachent réellement leur shell ; `check-jacoco.py --self-test` vérifie la logique de décision du gate sur 7 scénarios.
+
+Qualification CI Linux : `Attached PID … to /sys/fs/cgroup/minos.slice/minos-controller`, 17 tests cgroup exécutés sans skip, `provider-sandbox-linux: PASS line=0.814 branch=0.665` avec des seuils **inchangés**.
+
 ## Réconciliation post-PR #215 / #216 — 19 août 2026
 
-`develop@7f7d8a279318a67e55cb2aa33899c629cadd4313` a été réaudité intégralement (50 commits depuis la réconciliation précédente, répartis sur deux PR mergées).
+`develop` a été réaudité intégralement (50 commits depuis la réconciliation précédente, répartis sur deux PR mergées).
 
 **PR #215** (`fix/post-audit-hardening-20260818-v2`) a durci les frontières de confiance du stockage local et de l'exécution provider :
 
@@ -75,6 +88,8 @@ post-audit #132 / PR #135       REMÉDIATION IMPLÉMENTÉE / QUALIFICATION FINAL
 PR #182 / #183                  HARDENING SNAPSHOT / OWNERSHIP / M25 / SUPPLY-CHAIN INTÉGRÉ
 PR #215                          HARDENING STOCKAGE LOCAL / SCIP / JGit / PostgreSQL INTÉGRÉ
 PR #216                          ARTEFACT PROVIDER / JONCTIONS WINDOWS / RELEASE CI / BORNES MCP INTÉGRÉ
+PR #217                          RÉCONCILIATION DOCUMENTAIRE / PRÉREQUIS SANDBOX LINUX INTÉGRÉ
+PR #218                          DÉLÉGATION CGROUP CONTENUE / GATE JACOCO DURCI INTÉGRÉ
 ```
 
 ## Campagne post-audit — #132 / PR #135

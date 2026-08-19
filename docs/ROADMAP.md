@@ -1,6 +1,8 @@
 # Feuille de route — MINOS
 
-Statut au **19 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135 ; campagnes de hardening supplémentaires PR #215 et PR #216 intégrées.**
+Statut au **19 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135 ; campagnes de hardening supplémentaires PR #215, #216, #217 et #218 intégrées.**
+
+> **Convention de référencement.** L'état est ancré sur des **numéros de PR**, jamais sur un SHA de `develop` (périmé dès le merge qui l'introduit). Les SHA immuables — tags de release comme `v1.0.1` — restent cités explicitement.
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -44,6 +46,8 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | #98 Real OS worker sandbox | Linux bubblewrap/namespaces/prlimit + Windows AppContainer/Job Object, exact-head | ✅ implémenté et qualifié dans #135 |
 | Hardening stockage local / SCIP / JGit / PostgreSQL | rejet symlink des stores file-backed, budget heap décodage SCIP, endpoint JGit épinglé, concurrence registre PostgreSQL sérialisée, sandbox obligatoire pour providers locaux | ✅ PR #215 |
 | Hardening artefact provider / release / MCP | restauration fail-closed d'un artefact préexistant, rejet des jonctions Windows dans les walkers de suppression, moindre privilège des workflows de release, immutabilité de la release IntelliJ, bornes sémantiques MCP | ✅ PR #216 |
+| Réconciliation documentaire / prérequis sandbox Linux | STATUS/ROADMAP/registre réalignés, procédure opérateur Linux documentée et outillée (DT-07) | ✅ PR #217 |
+| Délégation cgroup contenue / gate JaCoCo durci | suppression du droit sur le `cgroup.procs` racine (évasion de délégation), migration privilégiée via `--attach-pid`, préfixes JaCoCo morts désormais bloquants | ✅ PR #218 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 

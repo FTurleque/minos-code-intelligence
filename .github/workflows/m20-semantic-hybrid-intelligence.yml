@@ -48,7 +48,10 @@ jobs:
         with:
           python-version: '3.13'
 
+      # Bounded so an apt/network incident on GitHub-hosted runners fails fast and legibly instead
+      # of consuming the 90-minute job timeout.
       - name: Install and authorize Linux worker sandbox runtime
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
