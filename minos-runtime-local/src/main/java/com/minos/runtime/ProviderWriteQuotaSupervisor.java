@@ -1,5 +1,7 @@
 package com.minos.runtime;
 
+import com.minos.io.FileTreeOperations;
+
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
@@ -147,7 +149,12 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
             Files.walkFileTree(root, Set.<FileVisitOption>of(), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                    return account(0L);
+                    FileVisitResult result = account(0L);
+                    if (result != FileVisitResult.CONTINUE) return result;
+                    // A Windows junction/reparse point: account it as one entry but never descend
+                    // into whatever it targets, which may be entirely outside this writable root.
+                    return FileTreeOperations.isRecursableDirectory(attributes)
+                            ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
                 }
 
                 @Override

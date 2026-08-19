@@ -61,9 +61,9 @@ public final class MinosMcpTools implements AutoCloseable {
     public List<SyncToolSpecification> specifications() {
         return List.of(
                 tool("minos_project_structure", "Inspect a registered MINOS project, its detected languages/builds and current index snapshot.", projectSchema(), args ->
-                        backend.projectStructure(required(args, "project"))),
+                        backend.projectStructure(requiredProject(args))),
                 tool("minos_index_status", "Read the active index status and factual last-success metadata known by MINOS.", projectSchema(), args ->
-                        backend.indexStatus(required(args, "project"))),
+                        backend.indexStatus(requiredProject(args))),
                 tool("minos_search_code", "Build bounded compact code context from normalized MINOS knowledge.", searchSchema(), args ->
                         backend.searchCode(searchRequest(args))),
                 tool("minos_find_symbols", "Find normalized symbols in the active project snapshot.", symbolSearchSchema(), args ->
@@ -85,9 +85,10 @@ public final class MinosMcpTools implements AutoCloseable {
                 tool("minos_symbol_context", "Build one-root compact context for a symbol query, including bounded usages, relationships and relevant source.", symbolContextSchema(), args ->
                         backend.symbolContext(symbolContextRequest(args))),
                 tool("minos_module_context", "Read the compact M6 architecture context for one module.", moduleSchema(), args ->
-                        backend.moduleContext(required(args, "project"), required(args, ARG_MODULE))),
+                        backend.moduleContext(requiredProject(args),
+                                required(args, ARG_MODULE, McpArgumentBounds.MODULE_NAME_MAX_UTF8_BYTES))),
                 tool("minos_architecture", "Read the composed M6 architecture intelligence view for a project, including explicit module dependency edges.", projectSchema(), args ->
-                        backend.architecture(required(args, "project"))),
+                        backend.architecture(requiredProject(args))),
                 tool("minos_architecture_graph", "Render the observed inter-module dependency graph as JSON, Mermaid or Graphviz DOT; optionally focus on one module and its direct neighbours.", architectureGraphSchema(), args ->
                         backend.architectureGraph(architectureGraphRequest(args))),
                 tool("minos_impact", "Estimate direct and indirect potential impact with deterministic explanatory paths and explicit limitations.", impactSchema(), args ->
@@ -99,7 +100,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 tool("minos_security_paths", "Find bounded observed source-to-sink paths and sanitizers; never claims exhaustive vulnerability presence or absence.", securitySchema(), args ->
                         backend.securityPaths(securityRequest(args))),
                 tool("minos_semantic_index_status", "Read optional M20 semantic index state, active snapshot alignment, model identity, size and limitations.", projectSchema(), args ->
-                        backend.semanticIndexStatus(required(args, "project"))),
+                        backend.semanticIndexStatus(requiredProject(args))),
                 tool("minos_semantic_search", "Search the ready semantic index by intent. Vector scores are heuristic ranking signals, never structural code facts.", semanticSearchSchema(), args ->
                         backend.semanticSearch(semanticSearchRequest(args))),
                 tool("minos_hybrid_search", "Fuse structured lexical/graph signals with optional semantic ranking while exposing every signal and its nature.", hybridSearchSchema(), args ->
@@ -117,7 +118,7 @@ public final class MinosMcpTools implements AutoCloseable {
                 tool("minos_team_workspaces", "List tenant-isolated shared workspaces without exposing credentials.", emptySchema(), args ->
                         backend.teamWorkspaces()),
                 tool("minos_team_workspace", "Read one workspace and its exact project/snapshot bindings in the authenticated tenant.", teamWorkspaceSchema(), args ->
-                        backend.teamWorkspace(required(args, "workspaceId"))),
+                        backend.teamWorkspace(required(args, "workspaceId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES))),
                 tool("minos_team_members", "List tenant members, roles and permissions for the authenticated tenant.", emptySchema(), args ->
                         backend.teamMembers()),
                 tool("minos_team_audit", "Read a bounded newest-first view of the authenticated tenant audit chain.", teamAuditSchema(), args ->
@@ -205,8 +206,8 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static MinosMcpBackend.SearchRequest searchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.searchDefaults(
-                required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, ARG_LIMIT, 1, 20),
+                requiredProject(args), requiredQuery(args), optionalQualifiedName(args),
+                optionalKind(args), optionalModule(args), optionalInteger(args, ARG_LIMIT, 1, 20),
                 optionalInteger(args, "depth", 0, 3), optionalInteger(args, "usages", 0, 50),
                 optionalInteger(args, "relationships", 0, 50), optionalInteger(args, "contextLines", 0, 50),
                 optionalInteger(args, "maxTokens", 256, 32768), optionalBoolean(args, "includeSource", true));
@@ -214,98 +215,137 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static MinosMcpBackend.SymbolSearchRequest symbolSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.symbolDefaults(
-                required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, ARG_LIMIT, 1, 1000));
+                requiredProject(args), requiredQuery(args), optionalQualifiedName(args),
+                optionalKind(args), optionalModule(args), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.RelationRequest relationRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.relationDefaults(
-                required(args, "project"), required(args, "symbolId"), optionalInteger(args, ARG_LIMIT, 1, 1000));
+                requiredProject(args), requiredSymbolId(args), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.SymbolContextRequest symbolContextRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.symbolContextDefaults(
-                required(args, "project"), required(args, "query"), optionalString(args, "qualifiedName"),
-                optionalString(args, "kind"), optionalString(args, ARG_MODULE), optionalInteger(args, "depth", 0, 3),
+                requiredProject(args), requiredQuery(args), optionalQualifiedName(args),
+                optionalKind(args), optionalModule(args), optionalInteger(args, "depth", 0, 3),
                 optionalInteger(args, "contextLines", 0, 50), optionalInteger(args, "maxTokens", 256, 32768),
                 optionalBoolean(args, "includeSource", true));
     }
 
     private static MinosMcpBackend.ArchitectureGraphRequest architectureGraphRequest(Map<String, Object> args) {
-        String format = stringValue(args.get("format"), "json").toLowerCase(Locale.ROOT);
+        String format = stringValue(args.get("format"), "json", "format", McpArgumentBounds.SMALL_TOKEN_MAX_UTF8_BYTES)
+                .toLowerCase(Locale.ROOT);
         if (!ARCHITECTURE_GRAPH_FORMATS.contains(format)) {
             throw new IllegalArgumentException("unsupported architecture graph format: " + format);
         }
-        return new MinosMcpBackend.ArchitectureGraphRequest(required(args, "project"), optionalString(args, ARG_MODULE), format);
+        return new MinosMcpBackend.ArchitectureGraphRequest(requiredProject(args), optionalModule(args), format);
     }
 
     private static MinosMcpBackend.ImpactRequest impactRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.impactDefaults(
-                required(args, "project"), required(args, "symbolId"),
+                requiredProject(args), requiredSymbolId(args),
                 optionalInteger(args, "depth", 1, 32), optionalInteger(args, ARG_LIMIT, 1, 10000));
     }
 
     private static MinosMcpBackend.ProgramGraphRequest programGraphRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.programGraphDefaults(
-                required(args, "project"), optionalInteger(args, "maxNodes", 1, 10000),
+                requiredProject(args), optionalInteger(args, "maxNodes", 1, 10000),
                 optionalInteger(args, "maxEdges", 1, 50000));
     }
 
     private static MinosMcpBackend.SecurityRequest securityRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.securityDefaults(
-                required(args, "project"), optionalString(args, "sourceNodeId"),
+                requiredProject(args), optionalString(args, "sourceNodeId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES),
                 optionalInteger(args, "depth", 1, 32), optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.SemanticSearchRequest semanticSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.semanticDefaults(
-                required(args, "project"), required(args, "query"), optionalInteger(args, ARG_LIMIT, 1, 1000),
+                requiredProject(args), requiredQuery(args), optionalInteger(args, ARG_LIMIT, 1, 1000),
                 optionalDouble(args, "minimumScore", -1.0, 1.0));
     }
 
     private static MinosMcpBackend.HybridSearchRequest hybridSearchRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.hybridDefaults(
-                required(args, "project"), required(args, "query"), optionalInteger(args, ARG_LIMIT, 1, 500),
+                requiredProject(args), requiredQuery(args), optionalInteger(args, ARG_LIMIT, 1, 500),
                 optionalDouble(args, "minimumScore", 0.0, 1.0));
     }
 
     private static MinosMcpBackend.HybridContextRequest hybridContextRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.hybridContextDefaults(
-                required(args, "project"), required(args, "query"),
+                requiredProject(args), requiredQuery(args),
                 optionalInteger(args, "maxDocuments", 1, 100), optionalInteger(args, "maxTokens", 128, 65536),
                 optionalInteger(args, "maxTokensPerDocument", 32, 65536));
     }
 
     private static MinosMcpBackend.RuntimeSessionsRequest runtimeSessionsRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeSessionsDefaults(
-                required(args, "project"), optionalInteger(args, ARG_LIMIT, 1, 128));
+                requiredProject(args), optionalInteger(args, ARG_LIMIT, 1, 128));
     }
 
     private static MinosMcpBackend.RuntimeReportRequest runtimeReportRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeReportDefaults(
-                required(args, "project"), optionalString(args, "sessionId"),
+                requiredProject(args), optionalString(args, "sessionId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES),
                 optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
     private static MinosMcpBackend.RuntimeSymbolRequest runtimeSymbolRequest(Map<String, Object> args) {
         return MinosApplicationMcpBackend.runtimeSymbolDefaults(
-                required(args, "project"), required(args, "symbolId"), optionalString(args, "sessionId"),
+                requiredProject(args), requiredSymbolId(args),
+                optionalString(args, "sessionId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES),
                 optionalInteger(args, ARG_LIMIT, 1, 1000));
     }
 
-    private static String required(Map<String, Object> args, String key) {
+    private static String requiredProject(Map<String, Object> args) {
+        return required(args, "project", McpArgumentBounds.PROJECT_REFERENCE_MAX_UTF8_BYTES);
+    }
+
+    private static String requiredQuery(Map<String, Object> args) {
+        return required(args, "query", McpArgumentBounds.QUERY_MAX_UTF8_BYTES);
+    }
+
+    private static String requiredSymbolId(Map<String, Object> args) {
+        return required(args, "symbolId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES);
+    }
+
+    private static String optionalQualifiedName(Map<String, Object> args) {
+        return optionalString(args, "qualifiedName", McpArgumentBounds.QUALIFIED_NAME_MAX_UTF8_BYTES);
+    }
+
+    private static String optionalKind(Map<String, Object> args) {
+        return optionalString(args, "kind", McpArgumentBounds.KIND_MAX_UTF8_BYTES);
+    }
+
+    private static String optionalModule(Map<String, Object> args) {
+        return optionalString(args, ARG_MODULE, McpArgumentBounds.MODULE_NAME_MAX_UTF8_BYTES);
+    }
+
+    private static String required(Map<String, Object> args, String key, int maxUtf8Bytes) {
         Object value = args.get(key);
         if (!(value instanceof String text) || text.isBlank()) {
             throw new IllegalArgumentException("missing required MCP argument: " + key);
         }
-        return text;
+        return bounded(key, text, maxUtf8Bytes);
     }
 
-    private static String optionalString(Map<String, Object> args, String key) {
+    private static String optionalString(Map<String, Object> args, String key, int maxUtf8Bytes) {
         Object value = args.get(key);
         if (value == null) return null;
         if (!(value instanceof String text) || text.isBlank()) {
             throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
+        }
+        return bounded(key, text, maxUtf8Bytes);
+    }
+
+    /**
+     * Never trusts the JSON Schema {@code maxLength} advertised to clients: a non-compliant or
+     * hostile client can send a payload that ignores it entirely, so every semantically bounded
+     * string argument is re-checked here in actual UTF-8 bytes before it reaches application code.
+     */
+    private static String bounded(String key, String text, int maxUtf8Bytes) {
+        if (exceedsUtf8Budget(text, maxUtf8Bytes)) {
+            throw new IllegalArgumentException(
+                    "MCP argument " + key + " exceeds UTF-8 byte limit: " + maxUtf8Bytes);
         }
         return text;
     }
@@ -341,12 +381,12 @@ public final class MinosMcpTools implements AutoCloseable {
         return flag;
     }
 
-    private static String stringValue(Object value, String defaultValue) {
+    private static String stringValue(Object value, String defaultValue, String key, int maxUtf8Bytes) {
         if (value == null) return defaultValue;
         if (!(value instanceof String text) || text.isBlank()) {
-            throw new IllegalArgumentException("MCP argument must be a non-blank string");
+            throw new IllegalArgumentException("MCP argument " + key + " must be a non-blank string");
         }
-        return text;
+        return bounded(key, text, maxUtf8Bytes);
     }
 
     private static Map<String, Object> arguments(Map<String, Object> arguments) {
@@ -354,43 +394,37 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private static String projectSchema() {
-        return objectSchema("\"project\":{\"type\":\"string\",\"minLength\":1}", "\"project\"");
+        return objectSchema(projectProperty(), "\"project\"");
     }
 
     private static String moduleSchema() {
-        return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1},\"module\":{\"type\":\"string\",\"minLength\":1}",
-                "\"project\",\"module\"");
+        return objectSchema(projectProperty() + "," + moduleProperty(), "\"project\",\"module\"");
     }
 
     private static String architectureGraphSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"module\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + moduleProperty() + "," +
                         "\"format\":{\"type\":\"string\",\"enum\":[\"json\",\"mermaid\",\"dot\"]}",
                 "\"project\"");
     }
 
     private static String relationSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"symbolId\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + symbolIdProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
                 "\"project\",\"symbolId\"");
     }
 
     private static String symbolSearchSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," + commonSymbolProperties() +
+                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() +
                         ",\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
                 "\"project\",\"query\"");
     }
 
     private static String searchSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," + commonSymbolProperties() + "," +
+                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":20}," +
                         "\"depth\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":3}," +
                         "\"usages\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
@@ -403,8 +437,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String symbolContextSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," + commonSymbolProperties() + "," +
+                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() + "," +
                         "\"depth\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":3}," +
                         "\"contextLines\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
                         "\"maxTokens\":{\"type\":\"integer\",\"minimum\":256,\"maximum\":32768}," +
@@ -414,8 +447,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String impactSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"symbolId\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + symbolIdProperty() + "," +
                         "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}",
                 "\"project\",\"symbolId\"");
@@ -423,7 +455,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String programGraphSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," +
                         "\"maxNodes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}," +
                         "\"maxEdges\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50000}",
                 "\"project\"");
@@ -431,8 +463,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String securitySchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"sourceNodeId\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + sourceNodeIdProperty() + "," +
                         "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
                 "\"project\"");
@@ -440,8 +471,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String semanticSearchSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + queryProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}," +
                         "\"minimumScore\":{\"type\":\"number\",\"minimum\":-1,\"maximum\":1}",
                 "\"project\",\"query\"");
@@ -449,8 +479,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String hybridSearchSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + queryProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500}," +
                         "\"minimumScore\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1}",
                 "\"project\",\"query\"");
@@ -458,8 +487,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String hybridContextSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"query\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + queryProperty() + "," +
                         "\"maxDocuments\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}," +
                         "\"maxTokens\":{\"type\":\"integer\",\"minimum\":128,\"maximum\":65536}," +
                         "\"maxTokensPerDocument\":{\"type\":\"integer\",\"minimum\":32,\"maximum\":65536}",
@@ -468,24 +496,21 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String runtimeSessionsSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":128}",
                 "\"project\"");
     }
 
     private static String runtimeReportSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"sessionId\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + sessionIdProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
                 "\"project\"");
     }
 
     private static String runtimeSymbolSchema() {
         return objectSchema(
-                "\"project\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"symbolId\":{\"type\":\"string\",\"minLength\":1}," +
-                        "\"sessionId\":{\"type\":\"string\",\"minLength\":1}," +
+                projectProperty() + "," + symbolIdProperty() + "," + sessionIdProperty() + "," +
                         "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
                 "\"project\",\"symbolId\"");
     }
@@ -500,7 +525,10 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private static String teamWorkspaceSchema() {
-        return objectSchema("\"workspaceId\":{\"type\":\"string\",\"format\":\"uuid\"}", "\"workspaceId\"");
+        return objectSchema(
+                "\"workspaceId\":{\"type\":\"string\",\"format\":\"uuid\",\"maxLength\":"
+                        + McpArgumentBounds.HANDLE_MAX_UTF8_BYTES + "}",
+                "\"workspaceId\"");
     }
 
     private static String teamAuditSchema() {
@@ -508,9 +536,37 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private static String commonSymbolProperties() {
-        return "\"qualifiedName\":{\"type\":\"string\",\"minLength\":1}," +
-                "\"kind\":{\"type\":\"string\",\"minLength\":1}," +
-                "\"module\":{\"type\":\"string\",\"minLength\":1}";
+        return stringProperty("qualifiedName", McpArgumentBounds.QUALIFIED_NAME_MAX_UTF8_BYTES) + "," +
+                stringProperty("kind", McpArgumentBounds.KIND_MAX_UTF8_BYTES) + "," +
+                moduleProperty();
+    }
+
+    private static String projectProperty() {
+        return stringProperty("project", McpArgumentBounds.PROJECT_REFERENCE_MAX_UTF8_BYTES);
+    }
+
+    private static String queryProperty() {
+        return stringProperty("query", McpArgumentBounds.QUERY_MAX_UTF8_BYTES);
+    }
+
+    private static String symbolIdProperty() {
+        return stringProperty("symbolId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES);
+    }
+
+    private static String sourceNodeIdProperty() {
+        return stringProperty("sourceNodeId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES);
+    }
+
+    private static String sessionIdProperty() {
+        return stringProperty("sessionId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES);
+    }
+
+    private static String moduleProperty() {
+        return stringProperty(ARG_MODULE, McpArgumentBounds.MODULE_NAME_MAX_UTF8_BYTES);
+    }
+
+    private static String stringProperty(String name, int maxUtf8Bytes) {
+        return "\"" + name + "\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":" + maxUtf8Bytes + "}";
     }
 
     private static String objectSchema(String properties, String required) {
