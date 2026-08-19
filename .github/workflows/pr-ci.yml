@@ -89,29 +89,15 @@ jobs:
       - name: Maven module-boundary fitness gate
         run: python scripts/architecture/check-module-boundaries.py
 
-      # Provisioning the sandbox toolchain is a ~15s apt install, observed stalling for tens of
-      # minutes on GitHub-hosted runners when the Azure Ubuntu mirror is degraded. apt has no overall
-      # timeout on a stalled mirror, so bound each transfer -- but keep Retries LOW on purpose: the
-      # runner uses a mirrorlist, and retrying a dead mirror only burns the budget the working
-      # fallback (archive.ubuntu.com) needs. Fail over fast, then let the fallback finish.
-      # timeout-minutes is the backstop for a genuine outage of every mirror.
+      # The helper bounds each apt attempt with `timeout` and, if the runner's mirrorlist does not
+      # complete, pins archive.ubuntu.com and retries once -- a stalled Azure mirror never returns,
+      # so a plain shell fallback could not fire. timeout-minutes is the outer backstop.
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
         timeout-minutes: 10
         shell: bash
         run: |
-          set -euo pipefail
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install --yes --no-install-recommends \
-            bubblewrap util-linux apparmor apparmor-profiles
-          command -v bwrap
-          command -v prlimit
-          command -v unshare
-          command -v setpriv
-          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
-          test -f "$profile"
-          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
-          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+          bash scripts/ci/install-linux-sandbox-toolchain.sh
 
       - name: Delegate a cgroup v2 job boundary to the worker sandbox
         if: runner.os != 'Windows'
@@ -185,22 +171,12 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
-      # See the Verify job: bounded per-transfer apt timeouts with deliberately low retries so a
-      # degraded mirror is abandoned quickly in favour of the mirrorlist fallback.
+      # See the Verify job: the helper bounds each apt attempt and falls back to a pinned mirror.
       - name: Install and authorize Linux worker sandbox runtime
         timeout-minutes: 10
         shell: bash
         run: |
-          set -euo pipefail
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install --yes --no-install-recommends \
-            bubblewrap util-linux apparmor apparmor-profiles
-          command -v bwrap
-          command -v prlimit
-          profile='/usr/share/apparmor/extra-profiles/bwrap-userns-restrict'
-          test -f "$profile"
-          sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
-          sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+          bash scripts/ci/install-linux-sandbox-toolchain.sh
       - name: Delegate a cgroup v2 job boundary to the worker sandbox
         shell: bash
         run: bash scripts/ci/delegate-linux-cgroup.sh
