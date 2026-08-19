@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **9 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135.**
+Statut au **19 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135 ; campagnes de hardening supplémentaires PR #215 et PR #216 intégrées.**
 
 L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves détaillées restent sous [`roadmap/`](roadmap/), les décisions durables sous [`adr/`](adr/README.md), l'architecture sous [`architecture/`](architecture/README.md) et les preuves historiques sous [`history/milestones/`](history/milestones/README.md).
 
@@ -42,6 +42,8 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | Release 1.0.1 | setup Windows + supply-chain + plugin IntelliJ | ✅ publiée le 9 août 2026 |
 | Remédiation audit complet | supply-chain immuable, frontières process/path/config, concurrence PostgreSQL, architecture, qualité | ✅ PR #135 |
 | #98 Real OS worker sandbox | Linux bubblewrap/namespaces/prlimit + Windows AppContainer/Job Object, exact-head | ✅ implémenté et qualifié dans #135 |
+| Hardening stockage local / SCIP / JGit / PostgreSQL | rejet symlink des stores file-backed, budget heap décodage SCIP, endpoint JGit épinglé, concurrence registre PostgreSQL sérialisée, sandbox obligatoire pour providers locaux | ✅ PR #215 |
+| Hardening artefact provider / release / MCP | restauration fail-closed d'un artefact préexistant, rejet des jonctions Windows dans les walkers de suppression, moindre privilège des workflows de release, immutabilité de la release IntelliJ, bornes sémantiques MCP | ✅ PR #216 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 

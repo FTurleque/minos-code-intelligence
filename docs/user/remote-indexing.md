@@ -56,6 +56,41 @@ minos.cmd remote index https://github.com/acme/project `
 
 Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`. Cette condition ne remplace pas l’exigence distincte de quota stockage OS-enforced.
 
+### Prérequis opérateur — sandbox Linux
+
+La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, MINOS reste fail-closed sur `remote index` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
+
+1. **`bwrap` et `prlimit`** — installez `bubblewrap` et `util-linux` avec le gestionnaire de paquets de la distribution, par exemple :
+
+   ```bash
+   # Debian / Ubuntu
+   sudo apt-get install --yes bubblewrap util-linux
+   # Fedora / RHEL
+   sudo dnf install -y bubblewrap util-linux
+   ```
+
+2. **User namespaces non privilégiés autorisés par le noyau/LSM** — bubblewrap a besoin de créer un user namespace sans privilège root. Sur certaines distributions (Ubuntu récent notamment), le LSM AppArmor restreint cette création par défaut pour les binaires non confinés ; il faut alors charger un profil qui l'autorise explicitement, par exemple le profil `bwrap-userns-restrict` fourni par le paquet `apparmor-profiles` :
+
+   ```bash
+   sudo apt-get install --yes apparmor apparmor-profiles
+   profile=/usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+   sudo cp "$profile" /etc/apparmor.d/minos-bwrap-userns-restrict
+   sudo apparmor_parser -r /etc/apparmor.d/minos-bwrap-userns-restrict
+   ```
+
+   Sur une distribution sans AppArmor (ou où `kernel.unprivileged_userns_clone` est déjà activé sans restriction LSM additionnelle), cette étape peut ne pas être nécessaire ; la découverte MINOS sonde la capacité réelle et n'exige pas de mécanisme LSM spécifique — seulement que l'opération réussisse. Si elle échoue, MINOS refuse le backend Linux plutôt que de deviner une politique de contournement.
+
+3. **Une racine cgroup v2 déléguée** — deux options, décrites dans [`quality-gates.md`](../developer/quality-gates.md) :
+   - lancer MINOS sous une unité systemd avec `Delegate=yes` (approche recommandée en production : le processus MINOS délègue alors son propre cgroup, sans configuration additionnelle) ; ou
+   - provisionner explicitement un sous-arbre et exporter `MINOS_SANDBOX_CGROUP_ROOT` avant de lancer MINOS. Le script [`scripts/deploy/provision-linux-sandbox-cgroup.sh`](../../scripts/deploy/provision-linux-sandbox-cgroup.sh) exécute cette délégation (création du sous-arbre, activation des contrôleurs `memory`/`pids`/`cpu`, `chown` vers l'utilisateur courant) et affiche la valeur à exporter :
+
+     ```bash
+     sudo -E scripts/deploy/provision-linux-sandbox-cgroup.sh
+     export MINOS_SANDBOX_CGROUP_ROOT=/sys/fs/cgroup/minos.slice
+     ```
+
+Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et `remote index` échoue avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée.
+
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
 Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny` : ces primitives ne prouvent pas un blocage réseau au niveau OS. Il reste également interdit comme repli pour `remote index` avec `allow`, car elles ne prouvent pas le confinement complet de code non fiable.

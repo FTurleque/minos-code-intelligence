@@ -2,7 +2,7 @@
 
 > Référence : [Section 11 — Risques et dette](../arc42/11-risques-dette.md)
 
-Dernière réconciliation : **14 août 2026**, réaudit complet de `develop@20ce803ea43fbfa579b463f79e04e9272b2b81ce` après PR #183 et campagne de remédiation associée.
+Dernière réconciliation : **19 août 2026**, réaudit complet de `develop@7f7d8a279318a67e55cb2aa33899c629cadd4313` après PR #215 et PR #216.
 
 ---
 
@@ -41,9 +41,9 @@ Dernière réconciliation : **14 août 2026**, réaudit complet de `develop@20ce
 | Réf | Description | Module | Priorité | État |
 |-----|-------------|--------|----------|------|
 | DT-06 | Décider ANN uniquement si les profils sémantiques montrent un besoin mesuré | semantic/storage | Faible | Watchlist |
-| DT-07 | Documenter/provisionner les prérequis Linux de sandbox (`bubblewrap`, util-linux, politique userns/LSM, racine cgroup v2 déléguée via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) dans chaque environnement opérateur | runtime/deployment | Moyenne | Ouvert — l'absence reste fail-closed |
 | DT-08 | Continuer la hausse progressive des seuils JaCoCo à mesure que des tests comportementaux utiles sont ajoutés | tous | Faible | Continu |
 | DT-09 | Étudier un lock transitif repository-owned pour le bootstrap Coursier `scip-java` si une exigence de reproductibilité bit-à-bit Docker devient contractuelle | packaging/supply-chain | Faible | Watchlist — aucune claim bit-reproducible actuelle |
+| DT-10 | `WindowsStrongProcessOwnershipContainmentTest` est racy sous charge CI (timing de la création/lecture du PID d'un enfant détaché et de l'autorisation de chemin avant lancement) : confirmé le 19 août 2026 en observant le même commit `7f7d8a27` produire deux résultats différents sur deux runs CI parallèles déclenchés simultanément (`push` : 134/134 ; `pull_request` : 2 erreurs sur les mêmes tests). Pas de régression fonctionnelle constatée. | minos-runtime-local (tests) | Faible | Ouvert — robustifier l'attente déterministe au lieu du timing fixe |
 
 ## Dette clôturée par les campagnes post-audit
 
@@ -58,4 +58,9 @@ Dernière réconciliation : **14 août 2026**, réaudit complet de `develop@20ce
 - diagnostics provider rendus résistants au remplacement de pathname/symlink ;
 - lifecycle de containment rendu sûr sur les échecs pré-start ;
 - réconciliation autonome alignée sur l'autorité snapshot commune ;
-- identités des stores file-backed rendues fail-closed.
+- identités des stores file-backed rendues fail-closed ;
+- **DT-07** — prérequis opérateur Linux (`bubblewrap`, `util-linux`, profil AppArmor `bwrap-userns-restrict` quand applicable, délégation cgroup v2 via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) documentés dans `docs/user/remote-indexing.md` avec un script de provisioning dédié (`scripts/deploy/provision-linux-sandbox-cgroup.sh`) pour l'alternative manuelle à une unité systemd déléguée ;
+- restauration fail-closed d'un artefact provider préexistant et rejet des jonctions Windows dans les walkers de suppression récursive/mesure (PR #216) ;
+- moindre privilège des workflows de release Windows/IntelliJ et immutabilité de la release IntelliJ liée au commit résolu (PR #216) ;
+- arguments de chaîne des outils MCP bornés par des `maxLength` sémantiques centralisés, appliqués au schéma et revérifiés côté serveur (PR #216) ;
+- stores file-backed, décodage SCIP, endpoints JGit, providers locaux et registre PostgreSQL durcis contre les frontières de confiance provider/filesystem (PR #215).
