@@ -2,13 +2,17 @@ package com.minos.context;
 
 import com.minos.domain.SymbolLocation;
 import com.minos.io.BoundedInputStream;
+import com.minos.io.ConfinedFileOpener;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -131,8 +135,9 @@ public final class LocalSourceReader implements SourceReader {
     private LoadedSource readSource(Path source) throws IOException {
         List<String> lines = new ArrayList<>();
         int utf8Bytes = 0;
-        try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(source), MAX_SOURCE_BYTES, "source file");
+        try (SeekableByteChannel channel = openConfined(source);
+             BoundedInputStream input = new BoundedInputStream(
+                     Channels.newInputStream(channel), MAX_SOURCE_BYTES, "source file");
              BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
             String line;
             boolean first = true;
@@ -150,12 +155,41 @@ public final class LocalSourceReader implements SourceReader {
     }
 
     private String readText(Path source) throws IOException {
-        try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(source), MAX_SOURCE_BYTES, "source file")) {
+        try (SeekableByteChannel channel = openConfined(source);
+             BoundedInputStream input = new BoundedInputStream(
+                     Channels.newInputStream(channel), MAX_SOURCE_BYTES, "source file")) {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
+    /**
+     * Opens a validated project-relative source under the confinement guarantee.
+     *
+     * <p>The byte ceiling stays on the stream rather than on a pre-read {@code Files.size()} for the
+     * same reason the open itself is confined: a size observed before the read says nothing about
+     * the bytes that follow it.</p>
+     */
+    private SeekableByteChannel openConfined(Path relativeSource) throws IOException {
+        try {
+            return ConfinedFileOpener.openConfinedRegularFile(projectRoot, relativeSource);
+        } catch (ConfinedFileOpener.ConfinementException exception) {
+            // Kept as an invalid-argument failure, exactly as the previous escaping-symlink check
+            // was: the request named something the project is not allowed to serve. The message is
+            // deliberately path-free.
+            throw new IllegalArgumentException("source file is not a confined project file", exception);
+        }
+    }
+
+    /**
+     * Validates the requested identifier and answers the project-relative path to open.
+     *
+     * <p>It deliberately stops at the relative path and no longer hands back a resolved real path.
+     * A real path is a <em>pathname</em>, and re-walking a pathname at open time is precisely the
+     * gap this reader had: whatever was proven about the object it named could stop being true
+     * before the bytes were read. Containment is therefore established once here on the request
+     * shape, and then again -- against the actual object -- by {@link ConfinedFileOpener} at the
+     * moment of the open.</p>
+     */
     private Optional<Path> resolveReadableSource(String fileId) throws IOException {
         String required = requireFileId(fileId);
         if (required.startsWith("file:")) {
@@ -176,14 +210,10 @@ public final class LocalSourceReader implements SourceReader {
         if (!candidate.startsWith(projectRoot)) {
             throw new IllegalArgumentException("fileId escapes the project root");
         }
-        if (!Files.isRegularFile(candidate)) {
+        if (!Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
         }
-        Path real = candidate.toRealPath();
-        if (!real.startsWith(projectRoot)) {
-            throw new IllegalArgumentException("source symlink escapes the project root");
-        }
-        return Optional.of(real);
+        return Optional.of(relative);
     }
 
     private static String requireFileId(String fileId) {
