@@ -51,10 +51,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *       discovering afterwards that the two had raced.</li>
  * </ul>
  *
- * <p>The detached child is {@code ping}, not a second PowerShell: starting it costs milliseconds
- * instead of seconds, so the launch is comfortably inside the provider budget even on a saturated
- * runner. It is an ordinary descendant process, which is exactly what the containment claim is
- * about.</p>
+ * <p>When a wait does expire, the failure quotes the provider's own stdout, stderr and process
+ * metadata: a provider that never started has to say why in the report, instead of leaving the next
+ * reader to guess between "the script failed" and "the runner was slow".</p>
  *
  * <p>Neither wait sleeps at all. The publication is awaited on the filesystem's own creation event
  * ({@link WatchService}) and the descendant's death on {@link ProcessHandle#onExit()}, the JDK's
@@ -66,26 +65,38 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class WindowsStrongProcessOwnershipContainmentTest {
 
     /**
-     * Ten to twenty times what launching PowerShell plus {@code ping} costs, so the ordering the
-     * timeout scenario depends on -- child launched, then budget expires -- holds even on a badly
-     * saturated runner, while the test still finishes in seconds rather than minutes.
+     * How long the provider is allowed to run before the ownership boundary is torn down.
+     *
+     * <p>Deliberately far above the cost of what the provider script does. A hosted Windows runner
+     * needed more than twenty seconds merely to start PowerShell and spawn one child, which is why
+     * an earlier attempt to shorten this budget to keep the test quick failed in CI while passing
+     * locally in under a second. Wall-clock is not the property under test; the ordering "child
+     * launched, then budget expires" is, and it is worth a slow test to hold it on any runner.</p>
      */
-    private static final Duration PROVIDER_TIMEOUT = Duration.ofSeconds(20);
+    private static final Duration PROVIDER_TIMEOUT = Duration.ofSeconds(90);
 
-    /** Shorter than the provider budget, so a missing launch is reported instead of masked. */
-    private static final Duration OBSERVATION_DEADLINE = Duration.ofSeconds(15);
+    /** Shorter than the provider budget, so a launch that never happens is reported, not masked. */
+    private static final Duration OBSERVATION_DEADLINE = Duration.ofSeconds(75);
     private static final Duration TERMINATION_DEADLINE = Duration.ofSeconds(30);
+
+    private static final Set<String> DIAGNOSTIC_FILES =
+            Set.of("provider.stdout.log", "provider.stderr.log", "process.txt");
+    private static final int MAX_DIAGNOSTIC_CHARS = 2000;
 
     /**
      * Starts a long-lived detached descendant and publishes its PID atomically.
      *
      * <p>{@code $PidFile.tmp} then {@code File.Move} is the whole point: the observing test sees the
      * final name only once the complete PID is already in it.</p>
+     *
+     * <p>The child is a second PowerShell, the shape every previously green run of this test used.
+     * Substituting a cheaper process looked like a free improvement and was not measurable as one on
+     * the runner, so the known-good shape stays and only the synchronization changed.</p>
      */
     private static final String SPAWN_AND_PUBLISH = """
             $info = [System.Diagnostics.ProcessStartInfo]::new()
-            $info.FileName = (Join-Path $env:SystemRoot 'System32\\PING.EXE')
-            $info.Arguments = '-n 300 127.0.0.1'
+            $info.FileName = $PowerShell
+            $info.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "[System.Threading.Thread]::Sleep(300000)"'
             $info.UseShellExecute = $false
             $info.CreateNoWindow = $true
             $child = [System.Diagnostics.Process]::Start($info)
@@ -102,7 +113,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
         Path provider = project.resolve("immediate-provider.ps1");
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
         Files.writeString(provider, """
-                param([string] $Artifact, [string] $PidFile)
+                param([string] $Artifact, [string] $PidFile, [string] $PowerShell)
                 """ + SPAWN_AND_PUBLISH + """
                 [System.IO.File]::WriteAllText($Artifact, 'strong-owned-artifact')
                 exit 0
@@ -114,7 +125,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
                 (request, runDirectory) -> {
                     Path generated = runDirectory.resolve("generated.scip");
                     return new IndexerProcessPlan(
-                            providerCommand(powershell, provider, generated.toString(), pidFile.toString()),
+                            providerCommand(powershell, provider, generated.toString(), pidFile.toString(), powershell.toString()),
                             project,
                             Map.of(),
                             generated,
@@ -124,7 +135,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
         assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
 
         var artifact = executor.execute(request(project));
-        long detachedPid = awaitPublishedPid(pidFile);
+        long detachedPid = awaitPublishedPid(pidFile, home);
 
         assertEquals("windows-job-object", executor.capability().mechanism());
         assertEquals("strong-owned-artifact", Files.readString(artifact.finalArtifact()));
@@ -140,7 +151,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
         Path provider = project.resolve("timeout-provider.ps1");
         Path powershell = CommandLocator.windowsPowerShell().orElseThrow();
         Files.writeString(provider, """
-                param([string] $PidFile)
+                param([string] $PidFile, [string] $PowerShell)
                 """ + SPAWN_AND_PUBLISH + """
                 [System.Threading.Thread]::Sleep(600000)
                 """, StandardCharsets.UTF_8);
@@ -149,7 +160,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
                 "fake-provider",
                 home,
                 (request, runDirectory) -> new IndexerProcessPlan(
-                        providerCommand(powershell, provider, pidFile.toString()),
+                        providerCommand(powershell, provider, pidFile.toString(), powershell.toString()),
                         project,
                         Map.of(),
                         runDirectory.resolve("never.scip"),
@@ -169,7 +180,7 @@ class WindowsStrongProcessOwnershipContainmentTest {
             // Reading the PID while the provider is still running is what makes the assertion
             // meaningful: it establishes that the child existed *before* the timeout, rather than
             // hoping the two happened in that order.
-            long childPid = awaitPublishedPid(pidFile);
+            long childPid = awaitPublishedPid(pidFile, home);
             assertTrue(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false),
                     "the detached child must still be running when the provider budget expires");
 
@@ -215,9 +226,10 @@ class WindowsStrongProcessOwnershipContainmentTest {
      * decides how long a stalled runner is tolerated before the test reports a precise failure
      * instead of a {@code NoSuchFileException}.</p>
      */
-    private static long awaitPublishedPid(Path pidFile) throws IOException, InterruptedException {
+    private static long awaitPublishedPid(Path pidFile, Path home) throws IOException, InterruptedException {
         assertTrue(awaitCreation(pidFile),
-                () -> "provider never published a detached child PID at " + pidFile);
+                () -> "provider never published a detached child PID at " + pidFile
+                        + providerDiagnostics(home));
         try {
             return Long.parseLong(Files.readString(pidFile).trim());
         } catch (Exception failure) {
@@ -242,6 +254,44 @@ class WindowsStrongProcessOwnershipContainmentTest {
                 key.reset();
             }
             return true;
+        }
+    }
+
+    /**
+     * Everything the provider itself reported, so an expired wait explains its own cause.
+     *
+     * <p>The executor writes {@code provider.stdout.log}, {@code provider.stderr.log} and {@code
+     * process.txt} into the run directory it owns under MINOS_HOME. The test does not need to know
+     * where that is: it walks the home it created and quotes what it finds, bounded so a runaway
+     * provider cannot turn a failure message into a log dump.</p>
+     */
+    private static String providerDiagnostics(Path home) {
+        StringBuilder report = new StringBuilder();
+        try (var paths = Files.walk(home)) {
+            paths.filter(Files::isRegularFile)
+                    .filter(path -> DIAGNOSTIC_FILES.contains(path.getFileName().toString()))
+                    .sorted()
+                    .forEach(path -> report.append(System.lineSeparator())
+                            .append("--- ").append(path.getFileName()).append(" ---")
+                            .append(System.lineSeparator())
+                            .append(readBounded(path)));
+        } catch (IOException unreadable) {
+            report.append(System.lineSeparator())
+                    .append("provider diagnostics unreadable: ").append(unreadable);
+        }
+        return report.isEmpty()
+                ? System.lineSeparator() + "provider produced no diagnostics at all"
+                : report.toString();
+    }
+
+    private static String readBounded(Path file) {
+        try {
+            String content = Files.readString(file, StandardCharsets.UTF_8);
+            return content.length() <= MAX_DIAGNOSTIC_CHARS
+                    ? content
+                    : content.substring(0, MAX_DIAGNOSTIC_CHARS) + "...[truncated]";
+        } catch (IOException unreadable) {
+            return "<unreadable: " + unreadable + ">";
         }
     }
 
