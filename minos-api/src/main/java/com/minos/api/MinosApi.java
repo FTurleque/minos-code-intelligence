@@ -39,6 +39,32 @@ public interface MinosApi extends AutoCloseable {
             IndexImportRequest request
     ) throws MinosApiException;
 
+    /**
+     * Imports a SCIP index and reports the complete commit outcome, not only the imported counters.
+     *
+     * <p>{@link #importScip} answers "what was imported"; it cannot answer "is the snapshot already
+     * durable, and is the project metadata already repaired". Those two facts are distinct from
+     * success: an import can be committed and authoritative while its durability acknowledgement or
+     * its project-metadata recovery is still pending, and a caller that automates around the import
+     * (scheduling a re-check, delaying a downstream promotion, surfacing a warning) needs to see the
+     * difference. This operation therefore returns {@link IndexImportOutcomeDto}, which carries the
+     * same {@link IndexImportDto} plus the {@link ImportCommitStatus} and a redacted diagnostic.</p>
+     *
+     * <p>The default keeps contract-v1 third-party implementations source- and binary-compatible.
+     * It answers {@link ErrorCode#UNAVAILABLE} rather than fabricating {@link
+     * ImportCommitStatus#COMMITTED}: an implementation that cannot observe the commit outcome must
+     * say so instead of asserting the most favourable one.</p>
+     */
+    default IndexImportOutcomeDto importScipOutcome(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws MinosApiException {
+        throw new MinosApiException(
+                ErrorCode.UNAVAILABLE,
+                "detailed index import outcome is not available in this implementation");
+    }
+
     List<SymbolDto> findSymbols(
             String projectIdentifier,
             SymbolQuery query
@@ -79,6 +105,25 @@ public interface MinosApi extends AutoCloseable {
     /** Opt-in M27 team surface; default preserves third-party contract-v1 implementations. */
     default MinosTeamApi team() throws MinosApiException {
         throw new MinosApiException(ErrorCode.UNAVAILABLE, "team mode is not available in this implementation");
+    }
+
+    /**
+     * Commit outcome of an index import, as reported by {@link #importScipOutcome}.
+     *
+     * <p>Every constant means the snapshot <em>is</em> committed and authoritative. What differs is
+     * what the storage layer had not finished acknowledging when the import returned, so a caller
+     * can distinguish "fully settled" from "authoritative with an acknowledgement still pending"
+     * without parsing a diagnostic string.</p>
+     */
+    enum ImportCommitStatus {
+        /** Committed, durable and with project metadata already up to date. */
+        COMMITTED,
+        /** Committed and authoritative; the durability acknowledgement is still pending. */
+        COMMITTED_DURABILITY_PENDING,
+        /** Committed and authoritative; project metadata recovery is still pending. */
+        COMMITTED_METADATA_PENDING,
+        /** Committed and authoritative; durability acknowledgement and metadata recovery are pending. */
+        COMMITTED_DURABILITY_AND_METADATA_PENDING
     }
 
     enum ErrorCode {
@@ -219,6 +264,42 @@ public interface MinosApi extends AutoCloseable {
             int unresolvedRelationshipCount,
             String completedAt
     ) {
+    }
+
+    /**
+     * Complete result of {@link #importScipOutcome}: what was imported, plus how far the commit had
+     * settled and why.
+     *
+     * <p>{@code diagnostic} is sanitized by the same public-message policy every other MINOS public
+     * surface uses, so it never carries a filesystem path, a connection string or a credential. It
+     * is {@code null} when the underlying import reported no diagnostic.</p>
+     */
+    record IndexImportOutcomeDto(
+            IndexImportDto index,
+            ImportCommitStatus commitStatus,
+            String diagnostic
+    ) {
+        public IndexImportOutcomeDto {
+            if (index == null) {
+                throw new IllegalArgumentException("index must not be null");
+            }
+            if (commitStatus == null) {
+                throw new IllegalArgumentException("commitStatus must not be null");
+            }
+            diagnostic = blankToNull(diagnostic);
+        }
+
+        /** Whether the snapshot is authoritative but its durability acknowledgement is still pending. */
+        public boolean durabilityAcknowledgementPending() {
+            return commitStatus == ImportCommitStatus.COMMITTED_DURABILITY_PENDING
+                    || commitStatus == ImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING;
+        }
+
+        /** Whether the snapshot is authoritative but project metadata recovery is still pending. */
+        public boolean metadataRecoveryPending() {
+            return commitStatus == ImportCommitStatus.COMMITTED_METADATA_PENDING
+                    || commitStatus == ImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING;
+        }
     }
 
     record LocationDto(

@@ -36,6 +36,9 @@ final class MinosApiSupport {
 
     private static final System.Logger LOGGER = System.getLogger(MinosApiSupport.class.getName());
 
+    /** Fixed, path-free replacement for an internal diagnostic that fails the public policy. */
+    private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
+
     private MinosApiSupport() {
     }
 
@@ -85,6 +88,22 @@ final class MinosApiSupport {
             throw new IllegalArgumentException(field + " must not be null");
         }
         return value;
+    }
+
+    /**
+     * The version of an internal diagnostic a public caller is allowed to see.
+     *
+     * <p>A diagnostic is not an exception message, but it comes from the same internal layers and
+     * can carry exactly the same private detail (a staging path, a JDBC URL). It therefore crosses
+     * the public boundary through {@link PublicErrorMessages}, the single redaction policy, rather
+     * than being copied verbatim into a DTO. {@code null} stays {@code null}: "no diagnostic" is a
+     * distinct fact from "a diagnostic that had to be redacted".</p>
+     */
+    static String publicDiagnostic(String diagnostic) {
+        if (diagnostic == null || diagnostic.isBlank()) {
+            return null;
+        }
+        return PublicErrorMessages.sanitize(diagnostic, REDACTED_DIAGNOSTIC);
     }
 
     /**
