@@ -43,4 +43,36 @@ final class McpArgumentBounds {
 
     /** Opaque session/workspace handles, typically UUIDs. */
     static final int HANDLE_MAX_UTF8_BYTES = 256;
+
+    /**
+     * Translates a UTF-8 byte budget into the JSON Schema {@code maxLength} that advertises it.
+     *
+     * <p>The two units are not the same thing, and conflating them made the published schema say
+     * something MINOS does not mean. JSON Schema defines {@code maxLength} as a count of
+     * <em>characters</em>; every bound above is a count of <em>UTF-8 bytes</em>. For ASCII they
+     * coincide, which is why the difference stayed invisible; for {@code "é"} (2 bytes) or an emoji
+     * (4 bytes) they do not.</p>
+     *
+     * <p>No {@code maxLength} can express a byte budget exactly, so the one published is the
+     * tightest character bound the budget <em>implies</em>: a character is at least one UTF-8 byte,
+     * therefore a value the server accepts can never exceed {@code maxUtf8Bytes} characters, and an
+     * all-ASCII value of exactly that length is legal. That direction is the one that matters for a
+     * client -- the schema never rejects a value MINOS would have accepted, so a compliant client
+     * loses no capability. The converse does not hold: a schema-valid string of multi-byte
+     * characters can still exceed the byte budget, which is precisely why {@code MinosMcpTools}
+     * re-checks every argument in real UTF-8 bytes and why each property's {@code description}
+     * states the byte budget explicitly instead of letting {@code maxLength} imply it.</p>
+     *
+     * <p>The alternative -- publishing {@code maxUtf8Bytes / 4}, the largest bound that could never
+     * be exceeded by any input -- would make the schema sufficient as well as necessary, at the cost
+     * of silently cutting the advertised capability to a quarter for the ASCII identifiers that
+     * dominate real traffic. Under-advertising a limit is as dishonest as over-advertising it, and
+     * it would deny valid requests, so it was rejected.</p>
+     */
+    static int schemaMaxCharacters(int maxUtf8Bytes) {
+        if (maxUtf8Bytes < 1) {
+            throw new IllegalArgumentException("maxUtf8Bytes must be greater than zero");
+        }
+        return maxUtf8Bytes;
+    }
 }
