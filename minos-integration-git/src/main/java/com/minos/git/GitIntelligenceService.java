@@ -97,7 +97,7 @@ public final class GitIntelligenceService {
                     history = List.of();
                 }
 
-                int retainedPaths = 0;
+                int retainedPathCount = 0;
                 for (RevCommit commit : history) {
                     Instant committedAt = commit.getCommitterIdent().getWhenAsInstant();
                     if (committedAt.isBefore(query.since())) {
@@ -110,31 +110,10 @@ public final class GitIntelligenceService {
                     }
 
                     List<String> changedPaths = changedPaths(commit, formatter, revWalk, repository, limitations);
-                    String author = authorKey(commit);
-                    for (String path : changedPaths) {
-                        MutableFileActivity file = files.get(path);
-                        if (file == null && files.size() >= budget.maxTrackedFiles()) {
-                            limitations.add("FILE_TRACKING_TRUNCATED");
-                        } else {
-                            files.computeIfAbsent(path, MutableFileActivity::new)
-                                    .record(commit.getName(), committedAt, author);
-                        }
-                        String zone = zone(path, query.zoneDepth());
-                        MutableZoneActivity zoneActivityEntry = zones.get(zone);
-                        if (zoneActivityEntry == null && zones.size() >= budget.maxTrackedZones()) {
-                            limitations.add("ZONE_TRACKING_TRUNCATED");
-                        } else {
-                            zones.computeIfAbsent(zone, MutableZoneActivity::new)
-                                    .record(path, committedAt);
-                        }
-                    }
-                    List<String> retained = changedPaths;
-                    int remaining = budget.maxRetainedChangedPaths() - retainedPaths;
-                    if (retained.size() > remaining) {
-                        retained = retained.subList(0, Math.max(0, remaining));
-                        limitations.add("PATHS_TRUNCATED");
-                    }
-                    retainedPaths += retained.size();
+                    recordActivity(commit, committedAt, changedPaths, query, files, zones, limitations);
+                    List<String> retained = retainedPaths(
+                            changedPaths, budget.maxRetainedChangedPaths() - retainedPathCount, limitations);
+                    retainedPathCount += retained.size();
                     commits.add(new CommitActivity(
                             commit.getName(),
                             committedAt,
@@ -238,6 +217,48 @@ public final class GitIntelligenceService {
                 clean,
                 limitations
         );
+    }
+
+    /**
+     * Folds one commit's changed paths into the tracked file and zone activity, within budget.
+     *
+     * <p>An entry that already exists keeps being updated once a map is full: the budget bounds how
+     * many distinct files and zones are <em>tracked</em>, not how accurately the tracked ones are
+     * counted. Refusing an update would understate a file MINOS is already reporting on.</p>
+     */
+    private void recordActivity(
+            RevCommit commit,
+            Instant committedAt,
+            List<String> changedPaths,
+            ActivityQuery query,
+            Map<String, MutableFileActivity> files,
+            Map<String, MutableZoneActivity> zones,
+            Set<String> limitations
+    ) {
+        String author = authorKey(commit);
+        for (String path : changedPaths) {
+            if (!files.containsKey(path) && files.size() >= budget.maxTrackedFiles()) {
+                limitations.add("FILE_TRACKING_TRUNCATED");
+            } else {
+                files.computeIfAbsent(path, MutableFileActivity::new)
+                        .record(commit.getName(), committedAt, author);
+            }
+            String zone = zone(path, query.zoneDepth());
+            if (!zones.containsKey(zone) && zones.size() >= budget.maxTrackedZones()) {
+                limitations.add("ZONE_TRACKING_TRUNCATED");
+            } else {
+                zones.computeIfAbsent(zone, MutableZoneActivity::new).record(path, committedAt);
+            }
+        }
+    }
+
+    /** The prefix of {@code changedPaths} this report is still allowed to retain, whole or none. */
+    private static List<String> retainedPaths(List<String> changedPaths, int remaining, Set<String> limitations) {
+        if (changedPaths.size() <= remaining) {
+            return changedPaths;
+        }
+        limitations.add("PATHS_TRUNCATED");
+        return changedPaths.subList(0, Math.max(0, remaining));
     }
 
     /**

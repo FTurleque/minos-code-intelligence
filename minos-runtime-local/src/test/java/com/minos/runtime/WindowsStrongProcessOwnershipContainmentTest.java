@@ -10,19 +10,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -48,8 +54,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>The detached child is {@code ping}, not a second PowerShell: starting it costs milliseconds
  * instead of seconds, so the launch is comfortably inside the provider budget even on a saturated
  * runner. It is an ordinary descendant process, which is exactly what the containment claim is
- * about. Nothing here waits for a fixed delay, and no assertion was weakened: the test still proves
- * the kernel boundary kills a process Java never tracked.</p>
+ * about.</p>
+ *
+ * <p>Neither wait sleeps at all. The publication is awaited on the filesystem's own creation event
+ * ({@link WatchService}) and the descendant's death on {@link ProcessHandle#onExit()}, the JDK's
+ * completion signal for a process this JVM did not start. Both carry a deadline purely so a stalled
+ * runner produces a precise failure instead of hanging. No assertion was weakened: the test still
+ * proves the kernel boundary kills a process Java never tracked.</p>
  */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsStrongProcessOwnershipContainmentTest {
@@ -197,12 +208,15 @@ class WindowsStrongProcessOwnershipContainmentTest {
     /**
      * Waits for the atomic publication of the child PID and returns it.
      *
-     * <p>The wait is on the publication itself, so it ends as soon as the signal is there whatever
-     * the runner's speed; the deadline only decides how long a stalled runner is tolerated before
-     * the test reports a precise failure instead of a {@code NoSuchFileException}.
+     * <p>The wait blocks on the filesystem's own creation event rather than on a timer, so it ends
+     * the moment the publication happens whatever the runner's speed. The watch is registered
+     * <em>before</em> the existence check, so a file created in between is still observed: the check
+     * covers what happened before registration, the events cover everything after. The deadline only
+     * decides how long a stalled runner is tolerated before the test reports a precise failure
+     * instead of a {@code NoSuchFileException}.</p>
      */
-    private static long awaitPublishedPid(Path pidFile) throws InterruptedException {
-        assertTrue(await(() -> Files.isRegularFile(pidFile), OBSERVATION_DEADLINE),
+    private static long awaitPublishedPid(Path pidFile) throws IOException, InterruptedException {
+        assertTrue(awaitCreation(pidFile),
                 () -> "provider never published a detached child PID at " + pidFile);
         try {
             return Long.parseLong(Files.readString(pidFile).trim());
@@ -211,20 +225,42 @@ class WindowsStrongProcessOwnershipContainmentTest {
         }
     }
 
-    private static boolean awaitDead(long pid) throws InterruptedException {
-        return await(() -> !ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
-                TERMINATION_DEADLINE);
+    private static boolean awaitCreation(Path file) throws IOException, InterruptedException {
+        try (WatchService watcher = file.getFileSystem().newWatchService()) {
+            file.getParent().register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
+            long expiresAt = System.nanoTime() + OBSERVATION_DEADLINE.toNanos();
+            while (!Files.isRegularFile(file)) {
+                long remaining = expiresAt - System.nanoTime();
+                if (remaining <= 0L) {
+                    return Files.isRegularFile(file);
+                }
+                WatchKey key = watcher.poll(remaining, TimeUnit.NANOSECONDS);
+                if (key == null) {
+                    return Files.isRegularFile(file);
+                }
+                key.pollEvents();
+                key.reset();
+            }
+            return true;
+        }
     }
 
-    /** Polls a real condition until it holds or the deadline expires; never sleeps for its own sake. */
-    private static boolean await(BooleanSupplier condition, Duration deadline) throws InterruptedException {
-        long expiresAt = System.nanoTime() + deadline.toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() >= expiresAt) {
-                return condition.getAsBoolean();
-            }
-            Thread.sleep(25L);
+    /**
+     * Waits for the descendant to die on {@link ProcessHandle#onExit()} -- the JDK's own completion
+     * signal for a process this JVM did not start -- rather than on a poll loop.
+     */
+    private static boolean awaitDead(long pid) throws InterruptedException {
+        Optional<ProcessHandle> handle = ProcessHandle.of(pid);
+        if (handle.isEmpty()) {
+            return true;
         }
-        return true;
+        try {
+            handle.orElseThrow().onExit().get(TERMINATION_DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
+            return true;
+        } catch (TimeoutException expired) {
+            return !handle.orElseThrow().isAlive();
+        } catch (ExecutionException failure) {
+            throw new AssertionError("waiting for the descendant to exit failed", failure);
+        }
     }
 }
