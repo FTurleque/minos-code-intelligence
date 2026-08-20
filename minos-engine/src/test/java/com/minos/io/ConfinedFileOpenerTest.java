@@ -160,11 +160,29 @@ class ConfinedFileOpenerTest {
             assumeTrue(canCreateSymbolicLinks(root), "this platform/account cannot create symbolic links");
             Files.createSymbolicLink(root.resolve("src"), outsideDirectory);
 
-            assertThrows(IOException.class, () -> read(root, Path.of("src", "Main.java")));
+            assertThrows(ConfinedFileOpener.ConfinementException.class,
+                    () -> read(root, Path.of("src", "Main.java")),
+                    "a linked directory component is refused identically on both traversal strategies");
         } finally {
             Files.deleteIfExists(outsideDirectory.resolve("Main.java"));
             Files.deleteIfExists(outsideDirectory);
         }
+    }
+
+    /**
+     * The boundary a caller hands in is not always canonical -- a Windows temp directory reached
+     * through its short 8.3 alias is the case that caught this in CI. Comparing canonicalized
+     * ancestors against a non-canonical boundary refused every legitimate read, so the boundary is
+     * resolved inside the opener rather than trusted as given.
+     */
+    @Test
+    void acceptsABoundaryThatIsNotAlreadyCanonical(@TempDir Path root) throws Exception {
+        Path file = root.resolve("src/Main.java");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "class Main {}", StandardCharsets.UTF_8);
+        Path detour = root.resolve("src").resolve("..");
+
+        assertEquals("class Main {}", read(detour, Path.of("src", "Main.java")));
     }
 
     @Test

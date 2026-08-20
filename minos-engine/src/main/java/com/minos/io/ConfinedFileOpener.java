@@ -79,14 +79,19 @@ public final class ConfinedFileOpener {
     /**
      * Opens {@code root/relative} for reading under the guarantees described above.
      *
-     * @param root     an already resolved real directory (see {@link Path#toRealPath}); it is the
-     *                 confinement boundary and is never re-derived from the returned channel
+     * @param root     the directory that is the confinement boundary; it is canonicalized here, once,
+     *                 and is never re-derived from the returned channel
      * @param relative a normalized relative path inside {@code root}
      * @throws ConfinementException           if the guarantee cannot be established
      * @throws java.nio.file.NoSuchFileException if the file (or one of its directories) is absent
      */
     public static SeekableByteChannel openConfinedRegularFile(Path root, Path relative) throws IOException {
-        Path boundary = Objects.requireNonNull(root, "root");
+        // The boundary is resolved here rather than trusted from the caller. Establishing where the
+        // project *is* happens once, before anything is opened, and is not the race this class
+        // exists to close -- but comparing a canonicalized ancestor against a boundary that is not
+        // canonical is a real trap: on Windows a short 8.3 temp path (RUNNER~1) resolves to its long
+        // form, and every read would be refused as an escape. Fail-closed, but wrongly so.
+        Path boundary = Objects.requireNonNull(root, "root").toRealPath();
         Path target = requireConfinedRelativePath(Objects.requireNonNull(relative, "relative"));
         try (DirectoryStream<Path> rootStream = Files.newDirectoryStream(boundary)) {
             if (rootStream instanceof SecureDirectoryStream<Path> secureRoot) {
@@ -125,8 +130,24 @@ public final class ConfinedFileOpener {
         try {
             SecureDirectoryStream<Path> parent = root;
             for (int index = 0; index < relative.getNameCount() - 1; index++) {
-                SecureDirectoryStream<Path> next =
-                        parent.newDirectoryStream(relative.getName(index), LinkOption.NOFOLLOW_LINKS);
+                Path segment = relative.getName(index);
+                final SecureDirectoryStream<Path> from = parent;
+                SecureDirectoryStream<Path> next;
+                try {
+                    next = from.newDirectoryStream(segment, LinkOption.NOFOLLOW_LINKS);
+                } catch (NoSuchFileException | AccessDeniedException propagated) {
+                    throw propagated;
+                } catch (IOException failure) {
+                    // Refusing to descend a linked directory surfaces as ELOOP here and as an
+                    // explicit chain check in the fallback. Classifying both the same way keeps one
+                    // hostile situation looking like one failure to a caller, whatever the platform.
+                    throw classifyDescentFailure(
+                            () -> from
+                                    .getFileAttributeView(segment, BasicFileAttributeView.class,
+                                            LinkOption.NOFOLLOW_LINKS)
+                                    .readAttributes(),
+                            failure);
+                }
                 descended.push(next);
                 parent = next;
             }
@@ -215,16 +236,27 @@ public final class ConfinedFileOpener {
      *
      * <p>Refusing to follow a link surfaces as a platform-specific failure -- {@code ELOOP} on
      * POSIX, {@code "File is symbolic link"} on Windows -- and callers must not have to pattern
-     * match on either. When the object under the requested name is genuinely not a regular file,
-     * the refusal is republished as a {@link ConfinementException}; anything else keeps its original
-     * failure, because turning an unrelated I/O error into a confinement verdict would be a lie in
-     * the other direction.</p>
+     * match on either. When the object under the requested name is genuinely not what the traversal
+     * required, the refusal is republished as a {@link ConfinementException}; anything else keeps
+     * its original failure, because turning an unrelated I/O error into a confinement verdict would
+     * be a lie in the other direction.</p>
      */
     private static IOException classifyOpenFailure(AttributeReader reader, IOException failure) {
+        return classify(reader, failure, false);
+    }
+
+    private static IOException classifyDescentFailure(AttributeReader reader, IOException failure) {
+        return classify(reader, failure, true);
+    }
+
+    private static IOException classify(AttributeReader reader, IOException failure, boolean directory) {
         try {
             BasicFileAttributes attributes = reader.read();
-            if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
-                return new ConfinementException("source is not a regular non-symlink file", failure);
+            boolean wrongKind = directory ? !attributes.isDirectory() : !attributes.isRegularFile();
+            if (attributes.isSymbolicLink() || wrongKind) {
+                return new ConfinementException(directory
+                        ? "source path crosses a non-directory or a link"
+                        : "source is not a regular non-symlink file", failure);
             }
         } catch (IOException unreadable) {
             failure.addSuppressed(unreadable);

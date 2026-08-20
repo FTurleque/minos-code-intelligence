@@ -70,7 +70,10 @@ class LocalSourceReaderConfinementTest {
         Files.createSymbolicLink(root.resolve("src"), outside);
         LocalSourceReader reader = new LocalSourceReader(root);
 
-        assertThrows(RuntimeException.class, () -> reader.readFull("src/Main.java"));
+        // Same verdict on both platforms: the POSIX descent refuses to follow the linked directory
+        // (ELOOP) and the fallback refuses it by chain check, and both are published as a refusal to
+        // confine, not as an unrelated I/O error.
+        assertThrows(IllegalArgumentException.class, () -> reader.readFull("src/Main.java"));
     }
 
     @Test
