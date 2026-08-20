@@ -1,10 +1,24 @@
 # État courant — MINOS
 
-Dernière mise à jour : **19 août 2026**.
+Dernière mise à jour : **20 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
 
 > **Convention de référencement.** L'état courant est ancré sur des **numéros de PR**, jamais sur un SHA de `develop`. Un SHA cité ici est périmé dès le merge qui l'introduit — le commit de merge est nécessairement postérieur au contenu qu'il publie —, ce qui recréait une dérive à chaque réconciliation. Les SHA immuables (tags de release, par exemple `v1.0.1`) restent cités explicitement : eux ne bougent jamais. Les sections historiques ci-dessous conservent les SHA déjà figés à titre d'archive.
+
+## Réconciliation post-audit — 20 août 2026
+
+Réaudit ciblé de `develop` après PR #219/#220/#221. Aucun P0/P1. Les quatre P2 et les deux P3 identifiés ont été confirmés sur le code courant puis corrigés, et la dette de test DT-10 est close.
+
+- **P2 — perte du `commitStatus` dans l'API Java.** `LocalMinosApi` jetait le statut de commit et le diagnostic en construisant `IndexImportDto` : les quatre états d'import (committé, durabilité et/ou métadonnées en attente) étaient indistinguables pour un consommateur Java, alors que la CLI les restituait déjà. Correction **additive** : `importScipOutcome()` retourne `IndexImportOutcomeDto` (mêmes données + `ImportCommitStatus` + diagnostic assaini), `importScip()` est inchangé, aucun record public existant n'est modifié et `CONTRACT_VERSION` reste `1`. Le `default` répond `UNAVAILABLE` plutôt que d'annoncer `COMMITTED`.
+- **P2 — perte de capacités dans `LocalMinosMultiRepositoryApi`.** La façade M12 héritait des `default` `UNAVAILABLE` de `MinosApi` pour `getArchitectureGraph(...)` et `team()`, capacités que l'application sous-jacente possède. Les deux sont redéléguées, ainsi que `contractVersion()` : sans exemption, l'invariant « toute opération `MinosApi` est redéléguée » devient vérifiable par réflexion au lieu d'une liste maintenue à la main.
+- **P2 — budget incomplet dans `GitIntelligenceService`.** `maxFiles` ne bornait que le résultat ; tout le travail était accumulé avant troncature. `ActivityBudget` borne le diff d'un commit, les maps fichiers/zones suivies et les chemins retenus, et la taille du diff est mesurée par un `TreeWalk` borné **avant** matérialisation. `maxFiles` conserve sa sémantique publique et les limites atteintes sont restituées explicitement.
+- **P2 — TOCTOU sur les lectures de sources.** `LocalSourceReader` validait un pathname puis le rouvrait. `ConfinedFileOpener` supprime la fenêtre : descente par handles `SecureDirectoryStream` + `NOFOLLOW_LINKS` là où la plateforme le permet, sinon ouverture atomique `NOFOLLOW_LINKS` de la feuille puis vérification de la chaîne d'ancêtres handle déjà ouvert. Même motif corrigé dans le sidecar program-graph et le fingerprint projet.
+- **P3 — `maxLength` MCP ≠ octets UTF-8.** Le `maxLength` publié est désormais une borne de **caractères** dérivée explicitement du budget, chaque propriété documentant le budget en octets ; le contrôle serveur en octets réels reste l'autorité et est inchangé.
+- **P3 — taxonomie des requêtes `null`.** Un `null` fourni par un appelant était présenté comme `EXECUTION_FAILURE`. Les frontières publiques valident désormais leurs paramètres via la politique commune ; `execute()` **n'attrape toujours pas** `NullPointerException`, afin qu'un défaut interne reste un défaut interne.
+- **DT-10 — test Windows racy.** Observation du PID enfant rendue déterministe : publication atomique, lecture uniquement après observation de l'événement de création (`WatchService`), mort du descendant attendue sur `ProcessHandle.onExit()`, scénario de timeout exécuté sur son propre thread pour **prouver** que l'enfant était lancé et vivant avant l'expiration du budget. Budget provider porté à 90 s après qu'un runner hébergé a demandé plus de 20 s pour le seul démarrage de PowerShell. Aucun sleep d'attente, aucun retry, aucun skip, aucune assertion de sécurité modifiée.
+
+Qualification : `clean verify` complet, gate JaCoCo (seuils **inchangés**), pins de workflow, cohérence P0-P2, MINOS-01, frontières de modules, Product Facts et provenance Inno Setup.
 
 ## Réconciliation post-PR #218 — 19 août 2026
 

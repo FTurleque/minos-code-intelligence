@@ -8,8 +8,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -183,7 +185,10 @@ public final class ProjectFingerprintService {
         MessageDigest digest = sha256();
         byte[] buffer = new byte[8192];
         long bytes = 0L;
-        try (InputStream input = Files.newInputStream(file)) {
+        // The walk classified this entry as a regular file from its own NOFOLLOW attributes; opening
+        // the pathname again without NOFOLLOW would hash whatever replaced it in between, including
+        // a symlink pointing outside the project.
+        try (InputStream input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read > 0) {

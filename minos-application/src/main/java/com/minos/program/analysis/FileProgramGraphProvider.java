@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -158,7 +159,7 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         List<ProgramGraphNode> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file), MAX_FILE_BYTES, "advanced program nodes");
+                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program nodes");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
             String header = reader.readLine();
@@ -196,7 +197,7 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         List<ProgramGraphEdge> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file), MAX_FILE_BYTES, "advanced program edges");
+                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program edges");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
             String header = reader.readLine();
@@ -335,7 +336,7 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
             for (Path file : files) {
                 digest.update(file.getFileName().toString().getBytes(StandardCharsets.UTF_8));
                 try (BoundedInputStream input = new BoundedInputStream(
-                        Files.newInputStream(file), MAX_FILE_BYTES, "advanced program sidecar hash")) {
+                        Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program sidecar hash")) {
                     int read;
                     while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
                 }

@@ -526,8 +526,7 @@ public final class MinosMcpTools implements AutoCloseable {
 
     private static String teamWorkspaceSchema() {
         return objectSchema(
-                "\"workspaceId\":{\"type\":\"string\",\"format\":\"uuid\",\"maxLength\":"
-                        + McpArgumentBounds.HANDLE_MAX_UTF8_BYTES + "}",
+                stringProperty("workspaceId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES, "\"format\":\"uuid\""),
                 "\"workspaceId\"");
     }
 
@@ -566,7 +565,26 @@ public final class MinosMcpTools implements AutoCloseable {
     }
 
     private static String stringProperty(String name, int maxUtf8Bytes) {
-        return "\"" + name + "\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":" + maxUtf8Bytes + "}";
+        return stringProperty(name, maxUtf8Bytes, null);
+    }
+
+    /**
+     * Publishes one bounded string argument.
+     *
+     * <p>{@code maxLength} is a character count and is derived through {@link
+     * McpArgumentBounds#schemaMaxCharacters} rather than being the byte budget under a misleading
+     * name; the budget MINOS actually enforces is stated in the description, because JSON Schema has
+     * no keyword for a byte length. A client that honours the schema is never rejected for a length
+     * it was told was valid, and a client that ignores it still meets {@link #bounded} on the
+     * server.</p>
+     */
+    private static String stringProperty(String name, int maxUtf8Bytes, String extraKeywords) {
+        return "\"" + name + "\":{\"type\":\"string\","
+                + (extraKeywords == null || extraKeywords.isBlank() ? "" : extraKeywords + ",")
+                + "\"minLength\":1,"
+                + "\"maxLength\":" + McpArgumentBounds.schemaMaxCharacters(maxUtf8Bytes) + ","
+                + "\"description\":\"UTF-8 text; the server accepts at most " + maxUtf8Bytes
+                + " UTF-8 bytes, which is fewer characters than maxLength when the value is not ASCII.\"}";
     }
 
     private static String objectSchema(String properties, String required) {

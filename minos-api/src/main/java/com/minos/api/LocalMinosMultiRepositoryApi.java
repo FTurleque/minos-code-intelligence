@@ -37,6 +37,19 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
         this.workspaceIntelligence = app.workspaceIntelligence();
     }
 
+    /**
+     * Delegated rather than inherited from {@link MinosApi}.
+     *
+     * <p>Every M11 operation below forwards to {@link LocalMinosApi}. Inheriting even a trivially
+     * correct default would make this facade's parity with the facade it extends a matter of
+     * case-by-case judgement; forwarding everything makes it a rule a test can check mechanically
+     * (see {@code LocalMinosMultiRepositoryApiParityTest}).</p>
+     */
+    @Override
+    public String contractVersion() {
+        return delegate.contractVersion();
+    }
+
     @Override
     public ProjectDto addProject(Path rootPath, String displayName) throws MinosApiException {
         return delegate.addProject(rootPath, displayName);
@@ -59,6 +72,15 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
             IndexImportRequest request
     ) throws MinosApiException {
         return delegate.importScip(projectIdentifier, indexFile, request);
+    }
+
+    @Override
+    public IndexImportOutcomeDto importScipOutcome(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws MinosApiException {
+        return delegate.importScipOutcome(projectIdentifier, indexFile, request);
     }
 
     @Override
@@ -85,6 +107,11 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     }
 
     @Override
+    public ArchitectureGraphDto getArchitectureGraph(String projectIdentifier) throws MinosApiException {
+        return delegate.getArchitectureGraph(projectIdentifier);
+    }
+
+    @Override
     public ModuleContextDto getModuleContext(
             String projectIdentifier,
             String moduleIdentifier
@@ -95,6 +122,16 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     @Override
     public ImpactReportDto analyzeImpact(String projectIdentifier, ImpactQuery query) throws MinosApiException {
         return delegate.analyzeImpact(projectIdentifier, query);
+    }
+
+    /**
+     * Forwards to the same team surface {@link LocalMinosApi} exposes, so the fail-closed decision
+     * stays where it is already qualified -- in {@link LocalMinosTeamApi} against the application's
+     * hosted control plane -- instead of being re-decided here.
+     */
+    @Override
+    public MinosTeamApi team() throws MinosApiException {
+        return delegate.team();
     }
 
     @Override

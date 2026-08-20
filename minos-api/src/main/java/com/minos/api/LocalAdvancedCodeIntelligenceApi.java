@@ -94,7 +94,7 @@ public final class LocalAdvancedCodeIntelligenceApi implements AdvancedCodeIntel
     }
 
     private static <T> T required(T value, String name) {
-        return Objects.requireNonNull(value, name);
+        return MinosApiSupport.required(value, name);
     }
 
     private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {

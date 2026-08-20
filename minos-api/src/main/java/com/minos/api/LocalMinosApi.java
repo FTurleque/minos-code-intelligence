@@ -32,6 +32,7 @@ import com.minos.query.RelationshipResult;
 import com.minos.query.SymbolResult;
 import com.minos.query.UsageResult;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,11 +66,27 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
         this(application, false);
     }
 
+    /**
+     * Test seam: substitutes the application-level import port so every commit outcome the port can
+     * report is reachable from a test without staging the storage failure that produces it.
+     */
+    LocalMinosApi(MinosApplication application, ProjectOperations projectOperations) {
+        this(application, false, Objects.requireNonNull(projectOperations, "projectOperations"));
+    }
+
     private LocalMinosApi(MinosApplication application, boolean ownsApplication) {
+        this(application, ownsApplication, null);
+    }
+
+    private LocalMinosApi(
+            MinosApplication application,
+            boolean ownsApplication,
+            ProjectOperations projectOperations
+    ) {
         MinosApplication app = Objects.requireNonNull(application, "application");
         this.application = app;
         this.ownsApplication = ownsApplication;
-        this.projectOperations = new LocalProjectOperations(app);
+        this.projectOperations = projectOperations != null ? projectOperations : new LocalProjectOperations(app);
         this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
         this.architectureQuery = app.architectureQuery();
         this.impactQuery = app.impactQuery();
@@ -78,7 +95,7 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
 
     @Override
     public ProjectDto addProject(Path rootPath, String displayName) throws MinosApiException {
-        return execute(() -> project(projectOperations.addProject(rootPath, displayName)));
+        return execute(() -> project(projectOperations.addProject(required(rootPath, "rootPath"), displayName)));
     }
 
     @Override
@@ -97,17 +114,34 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
             Path indexFile,
             IndexImportRequest request
     ) throws MinosApiException {
-        return execute(() -> {
-            IndexImportRequest value = required(request, "request");
-            return indexImport(projectOperations.importScip(
-                    projectIdentifier,
-                    indexFile,
-                    value.providerId(),
-                    value.providerVersion(),
-                    value.moduleId(),
-                    value.snapshotId()
-            ));
-        });
+        return execute(() -> indexImport(runImport(projectIdentifier, indexFile, request)));
+    }
+
+    @Override
+    public IndexImportOutcomeDto importScipOutcome(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws MinosApiException {
+        return execute(() -> importOutcome(runImport(projectIdentifier, indexFile, request)));
+    }
+
+    /** One import path for both operations so they can never diverge on validation or arguments. */
+    private ProjectOperations.IndexImportResult runImport(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws IOException {
+        IndexImportRequest value = required(request, "request");
+        required(indexFile, "indexFile");
+        return projectOperations.importScip(
+                projectIdentifier,
+                indexFile,
+                value.providerId(),
+                value.providerVersion(),
+                value.moduleId(),
+                value.snapshotId()
+        );
     }
 
     @Override
@@ -224,6 +258,32 @@ public final class LocalMinosApi implements MinosApi, AutoCloseable {
                 result.relatedTestRelationshipCount(), result.unresolvedOccurrenceCount(),
                 result.unresolvedRelationshipCount(), result.completedAt()
         );
+    }
+
+    /** Package-private so the mapping itself, not only a full import run, is directly testable. */
+    static IndexImportOutcomeDto importOutcome(ProjectOperations.IndexImportResult result) {
+        return new IndexImportOutcomeDto(
+                indexImport(result),
+                commitStatus(result.commitStatus()),
+                MinosApiSupport.publicDiagnostic(result.diagnostic())
+        );
+    }
+
+    /**
+     * Maps the application commit status onto the published one.
+     *
+     * <p>The switch is deliberately exhaustive without a {@code default}: adding a state to {@link
+     * ProjectOperations.IndexImportCommitStatus} must break this compilation rather than silently
+     * collapse a new state onto an existing published one.</p>
+     */
+    private static ImportCommitStatus commitStatus(ProjectOperations.IndexImportCommitStatus status) {
+        return switch (status) {
+            case COMMITTED -> ImportCommitStatus.COMMITTED;
+            case COMMITTED_DURABILITY_PENDING -> ImportCommitStatus.COMMITTED_DURABILITY_PENDING;
+            case COMMITTED_METADATA_PENDING -> ImportCommitStatus.COMMITTED_METADATA_PENDING;
+            case COMMITTED_DURABILITY_AND_METADATA_PENDING ->
+                    ImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING;
+        };
     }
 
     private static SymbolDto symbol(SymbolResult value) {

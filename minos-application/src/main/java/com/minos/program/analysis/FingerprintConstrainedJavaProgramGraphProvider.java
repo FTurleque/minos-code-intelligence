@@ -11,6 +11,8 @@ import com.minos.store.CodeKnowledgeSnapshot;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -166,22 +168,27 @@ public final class FingerprintConstrainedJavaProgramGraphProvider implements Pro
         Path root = projectRoot.toRealPath();
         Path candidate = root.resolve(JavaSourceProgramGraphProvider.SECURITY_CONFIG).normalize();
         if (!candidate.startsWith(root) || !Files.exists(candidate)) return "absent";
-        if (!Files.isRegularFile(candidate)) throw new IOException("Java advanced provider security config is not a regular file");
+        // The loader (BoundedProperties) already refuses a linked security config; a fingerprint that
+        // followed one would cover a different file than the analysis reads.
+        if (Files.isSymbolicLink(candidate) || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Java advanced provider security config is not a regular file");
+        }
         Path real = candidate.toRealPath();
         if (!real.startsWith(root)) throw new IOException("Java advanced provider security config escapes project root");
         long size = Files.size(real);
         if (size > MAX_SECURITY_CONFIG_BYTES) {
             throw new IOException("Java advanced provider security config exceeds byte limit: " + size);
         }
-        return sha256Exact(real, size, "Java advanced provider security config");
+        return sha256Exact(real, size, "Java advanced provider security config", LinkOption.NOFOLLOW_LINKS);
     }
 
-    private static String sha256Exact(Path file, long expectedBytes, String label) throws IOException {
+    private static String sha256Exact(Path file, long expectedBytes, String label, OpenOption... options)
+            throws IOException {
         if (expectedBytes < 0L) throw new IOException(label + " has a negative expected size");
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long total = 0L;
-            try (InputStream input = Files.newInputStream(file)) {
+            try (InputStream input = Files.newInputStream(file, options)) {
                 byte[] buffer = new byte[64 * 1024];
                 int read;
                 while ((read = input.read(buffer)) >= 0) {

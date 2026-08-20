@@ -16,7 +16,7 @@ MinosApi.CONTRACT_VERSION = 1
 MinosMultiRepositoryApi.MULTI_REPOSITORY_CONTRACT_VERSION = 1
 ```
 
-L'ajout de la vue de graphe est additif : `getArchitectureGraph(...)` est un `default method` dans le contrat v1 afin de ne pas casser les implémentations tierces existantes. `LocalMinosApi` fournit l'implémentation complète.
+Les ajouts au contrat v1 sont **additifs** : `getArchitectureGraph(...)`, `team()` et `importScipOutcome(...)` sont des `default methods`, afin de ne pas casser les implémentations tierces existantes. `LocalMinosApi` fournit l'implémentation complète, et `LocalMinosMultiRepositoryApi` redélègue **toutes** les opérations `MinosApi` : une façade plus riche ne perd jamais une capacité de la façade qu'elle étend (invariant vérifié par réflexion en test).
 
 ## Implémentations locales
 
@@ -59,6 +59,33 @@ MinosApi.IndexImportDto imported = minos.importScip(
         request
 );
 ```
+
+### Connaître l'état de commit du snapshot
+
+`importScip(...)` répond « ce qui a été importé ». Un import peut être **committé et autoritatif** alors que l'acquittement de durabilité ou la réparation des métadonnées projet est encore en attente : c'est un fait distinct du succès, et un consommateur qui automatise autour de l'import (re-vérification planifiée, promotion différée, avertissement à l'utilisateur) doit pouvoir le voir.
+
+```java
+MinosApi.IndexImportOutcomeDto outcome = minos.importScipOutcome(
+        project.id(),
+        Path.of("N:/workspace-dev/my-project/index.scip"),
+        request
+);
+
+switch (outcome.commitStatus()) {
+    case COMMITTED -> { /* durable et métadonnées à jour */ }
+    case COMMITTED_DURABILITY_PENDING -> { /* autoritatif, acquittement en attente */ }
+    case COMMITTED_METADATA_PENDING -> { /* autoritatif, réparation métadonnées en attente */ }
+    case COMMITTED_DURABILITY_AND_METADATA_PENDING -> { /* les deux */ }
+}
+
+if (outcome.durabilityAcknowledgementPending() || outcome.metadataRecoveryPending()) {
+    System.err.println(outcome.diagnostic());
+}
+```
+
+`outcome.index()` est **exactement** le `IndexImportDto` que `importScip(...)` aurait retourné. Le `diagnostic` est optionnel (`null` s'il n'y en a pas) et traverse la même politique de redaction publique que les messages d'erreur : ni chemin absolu, ni URL de connexion, ni secret.
+
+**Compatibilité.** L'ajout est additif : `importScipOutcome(...)` est un `default method` du contrat v1, `importScip(...)` est inchangé, aucun record public existant n'a été modifié et `MinosApi.CONTRACT_VERSION` reste `1`. Une implémentation tierce écrite pour le contrat v1 compile et s'exécute sans modification ; par défaut elle répond `UNAVAILABLE` sur la nouvelle opération plutôt que d'annoncer `COMMITTED`, une capacité qu'elle n'a pas.
 
 ## Rechercher des symboles
 
@@ -195,6 +222,7 @@ classDiagram
       +contractVersion()
       +addProject(...)
       +importScip(...)
+      +importScipOutcome(...)
       +findSymbols(...)
       +findUsages(...)
       +findRelationships(...)
