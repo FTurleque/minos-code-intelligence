@@ -6,6 +6,7 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -118,8 +119,7 @@ class MinosStrongProcessLauncherTest {
                 builder, temp.resolve("home").toString());
         long pid;
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
-            awaitFile(pidFile);
-            pid = Long.parseLong(Files.readString(pidFile).trim());
+            pid = awaitPid(pidFile);
             assertTrue(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
                     "fixture child must be alive before strong-boundary termination");
             supervisor.stop(null);
@@ -150,8 +150,7 @@ class MinosStrongProcessLauncherTest {
                 builder, temp.resolve("home").toString());
         long pid;
         try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
-            awaitFile(pidFile);
-            pid = Long.parseLong(Files.readString(pidFile).trim());
+            pid = awaitPid(pidFile);
             assertTrue(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
                     "fixture setsid child must be alive before strong-boundary termination");
             supervisor.stop(null);
@@ -186,10 +185,29 @@ class MinosStrongProcessLauncherTest {
         return Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     }
 
-    private static void awaitFile(Path file) throws Exception {
+    /**
+     * Waits until the fixture child has published a complete, readable PID.
+     *
+     * <p>Waiting for the file to merely exist is not enough. The writer creates it before it has
+     * finished writing, and on Windows it still holds the handle open while doing so, so a read
+     * that races that window fails with a {@link java.nio.file.FileSystemException} ("used by
+     * another process") or observes an empty/partial value. Poll until the content can actually be
+     * read and parsed, which covers both the not-yet-created and the not-yet-complete states.</p>
+     */
+    private static long awaitPid(Path file) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-        while (!Files.exists(file) && System.nanoTime() < deadline) Thread.sleep(20L);
-        assertTrue(Files.exists(file), "timed out waiting for detached child PID");
+        Exception lastFailure = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                String published = Files.readString(file).trim();
+                if (!published.isEmpty()) return Long.parseLong(published);
+                lastFailure = null;
+            } catch (IOException | NumberFormatException notReadyYet) {
+                lastFailure = notReadyYet;
+            }
+            Thread.sleep(20L);
+        }
+        throw new AssertionError("timed out waiting for detached child PID from " + file, lastFailure);
     }
 
     private static void awaitDead(long pid) throws Exception {
