@@ -28,7 +28,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
 
     @Override public BootstrapDto bootstrap(BootstrapRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            BootstrapRequest value = Objects.requireNonNull(request, "request");
+            BootstrapRequest value = MinosApiSupport.required(request, "request");
             var result = hosted().bootstrap(value.tenantId(), value.tenantName(), value.keyId(), value.ownerPrincipalId(),
                     value.ownerDisplayName(), value.tokenLifetime(), value.requestId());
             return new BootstrapDto(tenantDto(result.state()), result.bearerToken(), TOKEN_HANDLING);
@@ -54,7 +54,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public MemberDto grantMember(String token, String requestId, MemberGrantRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            MemberGrantRequest value = Objects.requireNonNull(request, "request");
+            MemberGrantRequest value = MinosApiSupport.required(request, "request");
             return memberDto(hosted().grantMember(token, requestId, value.principalId(), value.displayName(), role(value.role())));
         });
     }
@@ -63,7 +63,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public BindingDto bindProject(String token, String requestId, BindingRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            BindingRequest value = Objects.requireNonNull(request, "request");
+            BindingRequest value = MinosApiSupport.required(request, "request");
             return bindingDto(hosted().bindProject(token, requestId, value.workspaceId(), value.projectId(), value.snapshotId()));
         });
     }
@@ -79,7 +79,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public RetentionDto setRetention(String token, String requestId, RetentionPolicyDto policy) throws MinosApi.MinosApiException {
         return execute(() -> {
-            RetentionPolicyDto value = Objects.requireNonNull(policy, "policy");
+            RetentionPolicyDto value = MinosApiSupport.required(policy, "policy");
             var saved = hosted().setRetention(token, requestId, new HostedRetentionPolicy(value.maxAuditEvents(),
                     value.auditRetentionDays(), value.archivedWorkspaceRetentionDays()));
             return new RetentionDto(policyDto(saved), planDto(hosted().retentionPlan(token)), false);

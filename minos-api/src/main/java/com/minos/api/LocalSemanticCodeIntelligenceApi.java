@@ -31,7 +31,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public SemanticSearchDto semanticSearch(String projectIdentifier, SemanticQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            SemanticQuery value = Objects.requireNonNull(query, "query");
+            SemanticQuery value = MinosApiSupport.required(query, "query");
             return semantic(application.semanticSearchService().search(projectIdentifier,
                     new SemanticSearchService.SearchRequest(value.query(), value.limit(), value.minimumScore())));
         });
@@ -40,7 +40,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public HybridSearchDto hybridSearch(String projectIdentifier, HybridQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            HybridQuery value = Objects.requireNonNull(query, "query");
+            HybridQuery value = MinosApiSupport.required(query, "query");
             return hybrid(application.hybridSearchService().search(projectIdentifier,
                     new HybridSearchService.HybridRequest(value.query(), value.limit(), value.minimumScore())));
         });
@@ -49,7 +49,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public HybridContextDto buildHybridContext(String projectIdentifier, ContextQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            ContextQuery value = Objects.requireNonNull(query, "query");
+            ContextQuery value = MinosApiSupport.required(query, "query");
             return context(application.hybridContextBuilder().build(projectIdentifier,
                     new HybridContextBuilder.ContextRequest(
                             value.query(), value.maxDocuments(), value.maxTokens(), value.maxTokensPerDocument())));
