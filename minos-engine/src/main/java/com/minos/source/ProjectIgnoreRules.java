@@ -2,11 +2,14 @@ package com.minos.source;
 
 import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedLineReader;
+import com.minos.io.ConfinedFileOpener;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,8 +46,8 @@ public final class ProjectIgnoreRules {
     public static ProjectIgnoreRules load(Path projectRoot) throws IOException {
         Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
         return new ProjectIgnoreRules(
-                readRules(root.resolve(".gitignore")),
-                readRules(root.resolve(".minosignore"))
+                readRules(root, Path.of(".gitignore")),
+                readRules(root, Path.of(".minosignore"))
         );
     }
 
@@ -75,12 +78,17 @@ public final class ProjectIgnoreRules {
         return ignored;
     }
 
-    private static List<IgnoreRule> readRules(Path file) throws IOException {
-        if (!Files.isRegularFile(file)) return List.of();
+    private static List<IgnoreRule> readRules(Path root, Path relative) throws IOException {
+        Path file = root.resolve(relative).normalize();
+        if (!file.startsWith(root) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            return List.of();
+        }
         List<IgnoreRule> rules = new ArrayList<>();
         int lines = 0;
         try (BoundedInputStream input = new BoundedInputStream(
-                     Files.newInputStream(file), MAX_IGNORE_BYTES, "project ignore file");
+                     Channels.newInputStream(ConfinedFileOpener.openConfinedRegularFile(root, relative)),
+                     MAX_IGNORE_BYTES,
+                     "project ignore file");
              BoundedLineReader reader = new BoundedLineReader(
                      new InputStreamReader(input, StandardCharsets.UTF_8), MAX_IGNORE_LINE_CHARS)) {
             String rawLine;
@@ -228,7 +236,7 @@ public final class ProjectIgnoreRules {
     ) {
         private boolean matches(String portablePath, boolean directory) {
             if (directoryOnly && !directory && directPattern.matcher(portablePath).matches()) return false;
-            return effectivePattern.matcher(portablePath).matches();
+            return effectivePattern.matcher(portablePath, directory).matches();
         }
     }
 }
