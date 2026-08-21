@@ -64,6 +64,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/orchestration/ProviderConformanceKit", "com/minos/orchestration/ProviderOperationalProfile",
             "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
+            "com/minos/adapter/scip/runtime/BoundedProviderSourceProbe", "com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory",
             "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
             "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
         ),
@@ -71,6 +72,8 @@ SCOPES = {
         "branch": 0.28,
         "prefixMinimums": {
             "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
+            "com/minos/adapter/scip/runtime/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35},
+            "com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15},
         },
     },
     "m25-remote-distributed-indexing": {
