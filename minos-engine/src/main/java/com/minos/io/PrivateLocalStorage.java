@@ -42,8 +42,9 @@ import java.util.Set;
  * re-verified before use, which matters on ACL platforms where attribute-at-creation is not
  * available. Locations that already exist — an installation created before this policy, or by an
  * older MINOS — are hardened in place and then re-read: enforcement is verified, never assumed. A
- * path that is a symbolic link, or whose type is not the expected one, is rejected rather than
- * followed.</p>
+ * path that is a symbolic link, a filesystem-specific/special object ({@link BasicFileAttributes#isOther()}),
+ * or whose type is not the expected one is rejected rather than followed. On Windows this explicitly
+ * includes junction/reparse points before any ACL mutation.</p>
  *
  * <p>Where the filesystem exposes neither a POSIX nor an ACL view there is nothing to enforce, so
  * every enforcement entry point ({@link #ensurePrivateDirectory}, {@link #createPrivateFile},
@@ -178,7 +179,8 @@ public final class PrivateLocalStorage {
     public static Privacy privacyOf(Path path) throws IOException {
         Path target = Objects.requireNonNull(path, "path").toAbsolutePath().normalize();
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return Privacy.ABSENT;
-        if (Files.isSymbolicLink(target)) return Privacy.EXPOSED;
+        BasicFileAttributes attributes = readAttributesNoFollow(target);
+        if (attributes.isSymbolicLink() || attributes.isOther()) return Privacy.EXPOSED;
         if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
             return actual.stream().anyMatch(FORBIDDEN_PERMISSIONS::contains) ? Privacy.EXPOSED : Privacy.ENFORCED;
@@ -231,8 +233,9 @@ public final class PrivateLocalStorage {
     }
 
     private static void harden(Path target, Set<PosixFilePermission> permissions) throws IOException {
-        if (Files.isSymbolicLink(target)) {
-            throw new IOException("private storage path must not be a symbolic link: " + target);
+        BasicFileAttributes attributes = readAttributesNoFollow(target);
+        if (attributes.isSymbolicLink() || attributes.isOther()) {
+            throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
         }
         if (supportsPosix(target)) {
             Set<PosixFilePermission> actual = Files.getPosixFilePermissions(target, LinkOption.NOFOLLOW_LINKS);
@@ -292,20 +295,23 @@ public final class PrivateLocalStorage {
     }
 
     private static void requireType(Path target, boolean directory) throws IOException {
-        if (Files.isSymbolicLink(target)) {
-            throw new IOException("private storage path must not be a symbolic link: " + target);
-        }
-        BasicFileAttributes attributes;
-        try {
-            attributes = Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        } catch (IOException unreadable) {
-            throw new IOException("private storage path is not readable: " + target, unreadable);
+        BasicFileAttributes attributes = readAttributesNoFollow(target);
+        if (attributes.isSymbolicLink() || attributes.isOther()) {
+            throw new IOException("private storage path must not be a symbolic link or reparse/special object: " + target);
         }
         if (directory && !attributes.isDirectory()) {
             throw new IOException("private storage path is not a directory: " + target);
         }
         if (!directory && !attributes.isRegularFile()) {
             throw new IOException("private storage path is not a regular file: " + target);
+        }
+    }
+
+    private static BasicFileAttributes readAttributesNoFollow(Path target) throws IOException {
+        try {
+            return Files.readAttributes(target, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        } catch (IOException unreadable) {
+            throw new IOException("private storage path is not readable: " + target, unreadable);
         }
     }
 
