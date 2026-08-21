@@ -64,6 +64,55 @@ class ProjectTreeConfinementTest {
         assertTrue(discovery.modules().getFirst().sourceRoots().isEmpty());
     }
 
+    @Test
+    void discoveryDoesNotAcceptASymbolicLinkAsABuildMarker(@TempDir Path temporaryDirectory)
+            throws Exception {
+        Path project = Files.createDirectories(temporaryDirectory.resolve("project"));
+        Path outside = Files.createDirectories(temporaryDirectory.resolve("outside"));
+        Path outsidePom = Files.writeString(outside.resolve("pom.xml"), "<project/>\n");
+        createSymbolicLinkOrSkip(project.resolve("pom.xml"), outsidePom);
+
+        ProjectDiscovery discovery = new ProjectDiscoveryService().discover(project);
+
+        assertTrue(discovery.buildSystems().isEmpty(),
+                "a build marker must be a physical regular file inside the project boundary");
+    }
+
+    @Test
+    void discoveryDoesNotAcceptASymbolicLinkAsAnExtensionBuildMarker(@TempDir Path temporaryDirectory)
+            throws Exception {
+        Path project = Files.createDirectories(temporaryDirectory.resolve("project"));
+        Path outside = Files.createDirectories(temporaryDirectory.resolve("outside"));
+        Path outsideProject = Files.writeString(outside.resolve("outside.csproj"), "<Project/>\n");
+        createSymbolicLinkOrSkip(project.resolve("linked.csproj"), outsideProject);
+
+        ProjectDiscovery discovery = new ProjectDiscoveryService().discover(project);
+
+        assertTrue(discovery.buildSystems().isEmpty(),
+                "extension-based build markers must not follow symbolic links outside the project");
+    }
+
+    @Test
+    void discoveryDoesNotAcceptAWindowsJunctionAsAConventionalSourceRoot(@TempDir Path temporaryDirectory)
+            throws Exception {
+        Assumptions.assumeTrue(isWindows(), "NTFS junctions are a Windows-only reparse point");
+        Path project = Files.createDirectories(temporaryDirectory.resolve("project"));
+        Files.writeString(project.resolve("package.json"), "{}");
+        Path outsideSource = Files.createDirectories(temporaryDirectory.resolve("outside-source"));
+        Files.writeString(outsideSource.resolve("app.ts"), "export const value = 1;\n");
+        Path sourceJunction = project.resolve("src");
+        createJunction(sourceJunction, outsideSource);
+        assertTrue(Files.isDirectory(sourceJunction));
+        assertFalse(Files.isSymbolicLink(sourceJunction));
+
+        ProjectDiscovery discovery = new ProjectDiscoveryService().discover(project);
+
+        assertTrue(discovery.languages().isEmpty(),
+                "files behind a source-root junction must not influence language discovery");
+        assertTrue(discovery.modules().stream().flatMap(module -> module.sourceRoots().stream()).findAny().isEmpty(),
+                "a conventional source root must be a physical directory inside the project");
+    }
+
     private static void createJunction(Path junction, Path target) throws IOException, InterruptedException {
         Process process = new ProcessBuilder("cmd", "/c", "mklink", "/J", junction.toString(), target.toString())
                 .redirectErrorStream(true)
@@ -72,6 +121,14 @@ class ProjectTreeConfinementTest {
         int exit = process.waitFor();
         if (exit != 0) {
             throw new IOException("mklink /J failed (exit=" + exit + "): " + output);
+        }
+    }
+
+    private static void createSymbolicLinkOrSkip(Path link, Path target) {
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            Assumptions.assumeTrue(false, "symbolic-link creation is unavailable: " + unavailable.getMessage());
         }
     }
 
