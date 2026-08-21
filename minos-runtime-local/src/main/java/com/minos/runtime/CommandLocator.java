@@ -1,6 +1,9 @@
 package com.minos.runtime;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -8,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /** Résolution déterministe des exécutables externes sans passer par un shell implicite. */
 public final class CommandLocator {
@@ -16,21 +20,56 @@ public final class CommandLocator {
     }
 
     public static Optional<Path> find(String command) {
+        return findInPath(command, System.getenv("PATH"), isWindows());
+    }
+
+    /**
+     * Searches only absolute PATH directories and returns the real path of the selected executable.
+     *
+     * <p>Empty PATH entries and relative entries such as {@code .} have current-directory semantics
+     * on common process launchers. Accepting them would let a repository containing a planted
+     * {@code docker.exe}, {@code npm.cmd}, {@code mvn.cmd}, etc. become process-launch authority merely
+     * because MINOS was started from that directory. They are therefore ignored rather than
+     * normalized against the current working directory.</p>
+     */
+    static Optional<Path> findInPath(String command, String pathValue, boolean windows) {
         if (command == null || command.isBlank()) {
             throw new IllegalArgumentException("command must not be blank");
         }
-        String path = System.getenv("PATH");
-        if (path == null || path.isBlank()) {
+        if (pathValue == null || pathValue.isBlank()) {
             return Optional.empty();
         }
-        for (String directory : path.split(java.io.File.pathSeparator)) {
-            if (directory == null || directory.isBlank()) {
+        String separator = java.io.File.pathSeparator;
+        for (String configured : pathValue.split(Pattern.quote(separator), -1)) {
+            if (configured == null || configured.isBlank()) {
                 continue;
             }
-            for (String candidate : candidates(command)) {
-                Path executable = Path.of(directory).resolve(candidate).toAbsolutePath().normalize();
-                if (Files.isRegularFile(executable)) {
-                    return Optional.of(executable);
+            Path directory;
+            try {
+                directory = Path.of(configured);
+            } catch (InvalidPathException invalid) {
+                continue;
+            }
+            if (!directory.isAbsolute()) {
+                continue;
+            }
+            try {
+                directory = directory.toRealPath();
+            } catch (IOException | SecurityException unavailable) {
+                continue;
+            }
+            if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+                continue;
+            }
+            for (String candidate : candidates(command, windows)) {
+                Path executable = directory.resolve(candidate).normalize();
+                try {
+                    Path real = executable.toRealPath();
+                    if (Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)) {
+                        return Optional.of(real);
+                    }
+                } catch (IOException | SecurityException unavailable) {
+                    // Keep searching the remaining trusted absolute PATH entries.
                 }
             }
         }
@@ -43,10 +82,14 @@ public final class CommandLocator {
         if (fromPath.isPresent() || !isWindows()) return fromPath;
         String systemRoot = System.getenv("SystemRoot");
         if (systemRoot == null || systemRoot.isBlank()) return Optional.empty();
-        Path systemHost = Path.of(
-                systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-                .toAbsolutePath().normalize();
-        return Files.isRegularFile(systemHost) ? Optional.of(systemHost) : Optional.empty();
+        try {
+            Path root = Path.of(systemRoot);
+            if (!root.isAbsolute()) return Optional.empty();
+            return realRegularFile(root.resolve("System32").resolve("WindowsPowerShell")
+                    .resolve("v1.0").resolve("powershell.exe"));
+        } catch (InvalidPathException invalid) {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -82,8 +125,7 @@ public final class CommandLocator {
             rendered.append(' ');
             appendBatchToken(rendered, argument, "argument");
         }
-        String comSpec = System.getenv("ComSpec");
-        String commandProcessor = comSpec == null || comSpec.isBlank() ? "cmd.exe" : comSpec;
+        String commandProcessor = windowsCommandProcessor();
         // With cmd /S /C, the conventional and required shape is:
         //   ""C:\path with spaces\script.cmd" "arg" ..."
         // The outer pair belongs to cmd; the inner quotes protect every individual token.
@@ -110,14 +152,62 @@ public final class CommandLocator {
         target.append('"').append(value).append('"');
     }
 
+    private static String windowsCommandProcessor() {
+        if (!isWindows()) {
+            // Direct unit tests exercise the quoting renderer cross-platform; production reaches
+            // this branch only on Windows through invocation().
+            return "cmd.exe";
+        }
+        Optional<Path> configured = realRegularFile(System.getenv("ComSpec"));
+        if (configured.isPresent()
+                && configured.orElseThrow().getFileName().toString().equalsIgnoreCase("cmd.exe")) {
+            return configured.orElseThrow().toString();
+        }
+        String systemRoot = System.getenv("SystemRoot");
+        if (systemRoot != null && !systemRoot.isBlank()) {
+            try {
+                Path root = Path.of(systemRoot);
+                if (root.isAbsolute()) {
+                    Optional<Path> systemCmd = realRegularFile(root.resolve("System32").resolve("cmd.exe"));
+                    if (systemCmd.isPresent()) return systemCmd.orElseThrow().toString();
+                }
+            } catch (InvalidPathException invalid) {
+                // Fail below instead of falling back to a bare current-directory-searchable cmd.exe.
+            }
+        }
+        throw new IllegalStateException("Windows command processor must resolve to an existing absolute cmd.exe");
+    }
+
+    private static Optional<Path> realRegularFile(String configured) {
+        if (configured == null || configured.isBlank()) return Optional.empty();
+        try {
+            Path path = Path.of(configured);
+            if (!path.isAbsolute()) return Optional.empty();
+            return realRegularFile(path);
+        } catch (InvalidPathException invalid) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Path> realRegularFile(Path path) {
+        try {
+            Path real = path.toRealPath();
+            return Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)
+                    ? Optional.of(real)
+                    : Optional.empty();
+        } catch (IOException | SecurityException unavailable) {
+            return Optional.empty();
+        }
+    }
+
     private static boolean isBatch(Path executable) {
         String file = executable.getFileName().toString().toLowerCase(Locale.ROOT);
         return file.endsWith(".cmd") || file.endsWith(".bat");
     }
 
-    private static List<String> candidates(String command) {
+    private static List<String> candidates(String command, boolean windows) {
         String lower = command.toLowerCase(Locale.ROOT);
-        if (!isWindows() || lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
+        if (!windows || lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat")) {
             return List.of(command);
         }
         return List.of(command + ".exe", command + ".cmd", command + ".bat", command);
