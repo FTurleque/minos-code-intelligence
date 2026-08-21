@@ -2,6 +2,7 @@ package com.minos.adapter.scip.runtime;
 
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -59,5 +61,55 @@ class ScipJavaProcessPlanFactoryStagingTest {
         assertThrows(IOException.class,
                 () -> ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run, tinyBudget));
         assertFalse(Files.exists(run.resolve("workspace")));
+    }
+
+    @Test
+    void stagingSkipsASymbolicLinkInsteadOfCopyingItsExternalTarget(@TempDir Path temporary) throws Exception {
+        Path project = temporary.resolve("project");
+        Path run = temporary.resolve("run");
+        Path outside = temporary.resolve("outside-secret.java");
+        Files.createDirectories(project);
+        Files.writeString(project.resolve("pom.xml"), "<project/>", StandardCharsets.UTF_8);
+        Files.writeString(outside, "class Secret {}", StandardCharsets.UTF_8);
+        Path link = project.resolve("Secret.java");
+        try {
+            Files.createSymbolicLink(link, outside);
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            Assumptions.assumeTrue(false, "symbolic links unavailable: " + unavailable.getMessage());
+            return;
+        }
+
+        Path staged = ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run);
+
+        assertFalse(Files.exists(staged.resolve("Secret.java")));
+        assertTrue(Files.isRegularFile(outside));
+    }
+
+    @Test
+    void stagingRejectsAWindowsJunctionInsteadOfCopyingItsExternalTarget(@TempDir Path temporary)
+            throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win"));
+        Path project = temporary.resolve("project");
+        Path run = temporary.resolve("run");
+        Path outside = temporary.resolve("outside");
+        Files.createDirectories(project);
+        Files.createDirectories(outside);
+        Files.writeString(project.resolve("pom.xml"), "<project/>", StandardCharsets.UTF_8);
+        Files.writeString(outside.resolve("Secret.java"), "class Secret {}", StandardCharsets.UTF_8);
+        Path junction = project.resolve("linked");
+
+        Process mklink = new ProcessBuilder(
+                "cmd.exe", "/d", "/s", "/c",
+                "mklink /J \"" + junction + "\" \"" + outside + "\"")
+                .redirectErrorStream(true)
+                .start();
+        int exit = mklink.waitFor();
+        String mklinkOutput = new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        Assumptions.assumeTrue(exit == 0, "mklink /J unavailable: " + mklinkOutput);
+
+        assertThrows(IOException.class,
+                () -> ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run));
+        assertFalse(Files.exists(run.resolve("workspace")));
+        assertTrue(Files.isRegularFile(outside.resolve("Secret.java")));
     }
 }

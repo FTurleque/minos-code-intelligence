@@ -1,5 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.CommandLocator;
@@ -11,6 +13,7 @@ import com.minos.source.SourceBudgetPolicy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -48,7 +51,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     @Override
     public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
         Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (!Files.isRegularFile(root.resolve("pom.xml"))) {
+        if (!Files.isRegularFile(root.resolve("pom.xml"), LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException(
                     "qualified MINOS scip-java runtime currently requires Maven pom.xml: " + root);
         }
@@ -149,11 +152,16 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
         Path run = Objects.requireNonNull(runDirectory, "runDirectory").toAbsolutePath().normalize();
         SourceBudgetPolicy policy = Objects.requireNonNull(budgetPolicy, "budgetPolicy");
+        BasicFileAttributes rootAttributes = Files.readAttributes(
+                root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!FileTreeOperations.isRecursableDirectory(rootAttributes)) {
+            throw new IOException("scip-java staging root is not a physical directory: " + root);
+        }
         Path workspace = run.resolve("workspace").normalize();
         if (workspace.startsWith(root)) {
             throw new IllegalArgumentException("scip-java staging workspace must be outside the source project: " + workspace);
         }
-        deleteRecursively(workspace);
+        FileTreeOperations.deleteRecursively(workspace);
         Files.createDirectories(workspace);
 
         ProjectIgnoreRules ignoreRules = ProjectIgnoreRules.load(root);
@@ -171,6 +179,9 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                             return FileVisitResult.SKIP_SUBTREE;
                         }
                     }
+                    if (!FileTreeOperations.isRecursableDirectory(attributes)) {
+                        throw new IOException("scip-java staging rejects non-recursable directory: " + directory);
+                    }
                     Path target = stagedTarget(root, workspace, directory);
                     Files.createDirectories(target);
                     return FileVisitResult.CONTINUE;
@@ -179,7 +190,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                     budget.accountTraversalEntry();
-                    if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
+                    if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
                         return FileVisitResult.CONTINUE;
                     }
                     Path relative = root.relativize(file);
@@ -192,7 +203,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                     }
                     Path target = stagedTarget(root, workspace, file);
                     Files.createDirectories(target.getParent());
-                    copyRegularFileBounded(file, target, budget);
+                    copyRegularFileBounded(root, file, target, budget);
                     return FileVisitResult.CONTINUE;
                 }
 
@@ -204,27 +215,30 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             });
         } catch (IOException | RuntimeException exception) {
             try {
-                deleteRecursively(workspace);
+                FileTreeOperations.deleteRecursively(workspace);
             } catch (IOException cleanupFailure) {
                 exception.addSuppressed(cleanupFailure);
             }
             throw exception;
         }
 
-        if (!Files.isRegularFile(workspace.resolve("pom.xml"))) {
-            deleteRecursively(workspace);
+        if (!Files.isRegularFile(workspace.resolve("pom.xml"), LinkOption.NOFOLLOW_LINKS)) {
+            FileTreeOperations.deleteRecursively(workspace);
             throw new IllegalStateException("scip-java staging did not preserve the root pom.xml: " + workspace);
         }
         return workspace;
     }
 
     private static void copyRegularFileBounded(
+            Path sourceRoot,
             Path source,
             Path target,
             SourceBudgetPolicy.Tracker budget
     ) throws IOException {
         budget.accountFile();
-        try (InputStream input = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+        Path relative = sourceRoot.relativize(source);
+        try (InputStream input = Channels.newInputStream(
+                    ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative));
              OutputStream output = Files.newOutputStream(
                      target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             byte[] buffer = new byte[8192];
@@ -245,24 +259,6 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             throw new IllegalArgumentException("project staging path escapes workspace: " + source);
         }
         return target;
-    }
-
-    private static void deleteRecursively(Path root) throws IOException {
-        if (!Files.exists(root)) return;
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                Files.deleteIfExists(file);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path directory, IOException exception) throws IOException {
-                if (exception != null) throw exception;
-                Files.deleteIfExists(directory);
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 
     private static void requireProjectJdk() {

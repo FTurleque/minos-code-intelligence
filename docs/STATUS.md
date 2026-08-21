@@ -6,6 +6,15 @@ Ce fichier est la synthèse autoritative de l'état produit. Les preuves détail
 
 > **Convention de référencement.** L'état courant est ancré sur des **numéros de PR**, jamais sur un SHA de `develop`. Un SHA cité ici est périmé dès le merge qui l'introduit — le commit de merge est nécessairement postérieur au contenu qu'il publie —, ce qui recréait une dérive à chaque réconciliation. Les SHA immuables (tags de release, par exemple `v1.0.1`) restent cités explicitement : eux ne bougent jamais. Les sections historiques ci-dessous conservent les SHA déjà figés à titre d'archive.
 
+## Réconciliation post-PR #225 — 21 août 2026
+
+`develop` intègre désormais les campagnes #224 et #225. Un nouvel audit complet du tree publié par #225 a confirmé **aucun P0 et aucun nouveau P2 dans le cœur MINOS**, mais a découvert un **P1 dans la provenance du launcher IntelliJ** ainsi que trois écarts P3 de durcissement/qualité/documentation. La remédiation est portée par la **PR #226** et reste non intégrée tant que son HEAD final n'a pas passé la qualification exact-head puis été mergé.
+
+- **P1 — binary planting / configuration de launcher IntelliJ.** Sous Windows, le défaut `minos.cmd` était relatif alors que `MinosCliClient` plaçait le `ProcessBuilder` dans la racine du projet avant exécution ; un `minos.cmd` planté dans un workspace pouvait donc masquer l'installation MINOS. En parallèle, `executable` et `MINOS_HOME` étaient stockés dans un service `PROJECT`, donc potentiellement dans du metadata projet versionnable. #226 déplace ces réglages sensibles au niveau application/IDE, résout le launcher en chemin réel absolu **avant** d'appliquer le working directory projet, n'autorise un nom relatif que comme commande recherchée dans des entrées `PATH` absolues, ignore les éléments PATH vides/relatifs et refuse les chemins relatifs explicites. La frontière Windows d'ownership rejette également les junctions/reparse points avant toute mutation d'ACL.
+- **P3 — walkers provider encore dépendants d'un confinement amont.** `BoundedProviderSourceProbe` et le staging `ScipJavaProcessPlanFactory` deviennent autonomes : rejet `isOther()`/junction des répertoires non récursables, suppression via `FileTreeOperations`, lectures de staging par `ConfinedFileOpener` afin d'éviter une réouverture de pathname, tests de symlink et vraies junctions `mklink /J` sous Windows.
+- **P3 — couverture ciblée `scip-java`.** Le scope `m24-polyglot-provider-platform` inclut désormais `BoundedProviderSourceProbe` et `ScipJavaProcessPlanFactory`, avec floors par préfixe dédiés. Le gate P0-P2 exige aussi explicitement les invariants de provenance du launcher et de confinement provider.
+- **P3 — documentation.** STATUS, ROADMAP, registre des risques et guide IntelliJ sont réalignés sur #224/#225 et sur la remédiation #226 sans présenter cette dernière comme intégrée avant sa qualification.
+
 ## Réconciliation post-audit — 20 août 2026
 
 Réadit ciblé de `develop` après PR #219/#220/#221. Aucun P0/P1. Les quatre P2 et les deux P3 identifiés ont été confirmés sur le code courant puis corrigés dans **PR #222** ; la stabilisation déterministe du test Windows d'ownership a été intégrée dans **PR #223**. L'état courant est donc ancré au minimum jusqu'à PR #223, et la dette de test DT-10 est close.
@@ -105,6 +114,9 @@ PR #216                          ARTEFACT PROVIDER / JONCTIONS WINDOWS / RELEASE
 PR #217                          RÉCONCILIATION DOCUMENTAIRE / PRÉREQUIS SANDBOX LINUX INTÉGRÉ
 PR #218                          DÉLÉGATION CGROUP CONTENUE / GATE JACOCO DURCI INTÉGRÉ
 PR #219–#223                     RÉCONCILIATIONS POST-AUDIT / CONTRATS / CONFINEMENT / STABILISATION WINDOWS INTÉGRÉES
+PR #224                          TRAVERSÉES PROJET / NEXUS / COUVERTURE CIBLÉE INTÉGRÉES
+PR #225                          WORKSPACE PROVIDER / DISCOVERY / IGNORE RULES PHYSIQUEMENT CONFINÉS INTÉGRÉS
+PR #226                          PROVENANCE LAUNCHER INTELLIJ / WALKERS PROVIDER / JACOCO — EN QUALIFICATION, NON INTÉGRÉE
 ```
 
 ## Campagne post-audit — #132 / PR #135

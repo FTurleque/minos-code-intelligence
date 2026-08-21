@@ -14,6 +14,7 @@ import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.UserPrincipal;
 import java.time.Duration;
 import java.time.Instant;
@@ -116,23 +117,31 @@ final class MinosStrongProcessLauncher {
 
     private static void ensureWindowsPrivateDirectory(Path directory, String label) throws IOException {
         Path resolved = Objects.requireNonNull(directory, "directory").toAbsolutePath().normalize();
-        if (Files.exists(resolved, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(resolved)) {
-            throw new IOException(label + " must not be a symbolic link: " + resolved);
+        if (Files.exists(resolved, LinkOption.NOFOLLOW_LINKS) && !isPhysicalDirectory(resolved)) {
+            throw new IOException(label + " must be a physical directory, not a symlink or reparse point: " + resolved);
         }
         Files.createDirectories(resolved);
-        if (!Files.isDirectory(resolved, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(resolved)) {
-            throw new IOException(label + " is not a private directory: " + resolved);
+        if (!isPhysicalDirectory(resolved)) {
+            throw new IOException(label + " is not a private physical directory: " + resolved);
         }
         restrictWindowsOwnerOnly(resolved, label);
-        if (!Files.isDirectory(resolved, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(resolved)) {
+        if (!isPhysicalDirectory(resolved)) {
             throw new IOException(label + " changed while securing it: " + resolved);
         }
     }
 
+    private static boolean isPhysicalDirectory(Path directory) throws IOException {
+        BasicFileAttributes attributes = Files.readAttributes(
+                directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        return attributes.isDirectory() && !attributes.isSymbolicLink() && !attributes.isOther();
+    }
+
     private static void restrictWindowsOwnerOnly(Path entry, String label) throws IOException {
         Path file = Objects.requireNonNull(entry, "entry").toAbsolutePath().normalize();
-        if (Files.isSymbolicLink(file)) {
-            throw new IOException(label + " must not be a symbolic link: " + file);
+        BasicFileAttributes attributes = Files.readAttributes(
+                file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (attributes.isSymbolicLink() || attributes.isOther()) {
+            throw new IOException(label + " must not be a symbolic link or reparse point: " + file);
         }
         AclFileAttributeView view = Files.getFileAttributeView(
                 file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
@@ -150,7 +159,9 @@ final class MinosStrongProcessLauncher {
         boolean ownerOnlyApplied = !applied.isEmpty() && applied.stream()
                 .allMatch(entryValue -> entryValue.type() == AclEntryType.ALLOW
                         && entryValue.principal().equals(owner));
-        if (!ownerOnlyApplied || Files.isSymbolicLink(file)) {
+        BasicFileAttributes securedAttributes = Files.readAttributes(
+                file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!ownerOnlyApplied || securedAttributes.isSymbolicLink() || securedAttributes.isOther()) {
             throw new IOException(label + " ACL is not restricted to its owner: " + file);
         }
     }

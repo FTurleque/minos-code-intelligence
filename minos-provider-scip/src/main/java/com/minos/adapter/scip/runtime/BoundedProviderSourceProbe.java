@@ -1,11 +1,13 @@
 package com.minos.adapter.scip.runtime;
 
+import com.minos.io.FileTreeOperations;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -36,7 +38,10 @@ final class BoundedProviderSourceProbe {
             SourceBudgetPolicy budgetPolicy
     ) throws IOException {
         Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
-        if (!Files.isDirectory(normalizedRoot)) return false;
+        if (!Files.exists(normalizedRoot, LinkOption.NOFOLLOW_LINKS)) return false;
+        BasicFileAttributes rootAttributes = Files.readAttributes(
+                normalizedRoot, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!FileTreeOperations.isRecursableDirectory(rootAttributes)) return false;
         if (maxDepth < 1) throw new IllegalArgumentException("maxDepth must be positive");
         Predicate<String> predicate = Objects.requireNonNull(fileNamePredicate, "fileNamePredicate");
         ProjectIgnoreRules ignoreRules = ProjectIgnoreRules.load(normalizedRoot);
@@ -54,13 +59,16 @@ final class BoundedProviderSourceProbe {
                                 && ignoreRules.isHardIgnored(normalizedRoot.relativize(directory))) {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
+                        if (!FileTreeOperations.isRecursableDirectory(attributes)) {
+                            throw new IOException("provider source probe rejects non-recursable directory: " + directory);
+                        }
                         return FileVisitResult.CONTINUE;
                     }
 
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                         budget.accountTraversalEntry();
-                        if (!attributes.isRegularFile() || attributes.isSymbolicLink()) {
+                        if (!attributes.isRegularFile() || attributes.isSymbolicLink() || attributes.isOther()) {
                             return FileVisitResult.CONTINUE;
                         }
                         Path relative = normalizedRoot.relativize(file);
