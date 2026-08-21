@@ -3,15 +3,18 @@ package com.minos.runtime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ProviderWriteQuotaSupervisorTest {
 
@@ -78,6 +81,34 @@ class ProviderWriteQuotaSupervisorTest {
             assertTrue(supervisor.observedBytes() < 16L * 1024L,
                     "a nested writable root must not be measured twice: " + supervisor.observedBytes());
         }
+    }
+
+    @Test
+    void lossOfVisibilityIsAContainmentBreach(@TempDir Path workspace) throws Exception {
+        assumeTrue(Files.getFileStore(workspace).supportsFileAttributeView("posix"),
+                "POSIX permissions are required for the unreadable-subtree adversarial fixture");
+        AtomicInteger kills = new AtomicInteger();
+        Path hidden = Files.createDirectory(workspace.resolve("hidden"));
+        Path payload = hidden.resolve("payload.bin");
+
+        try (OutputStream alreadyOpen = Files.newOutputStream(payload);
+             ProviderWriteQuotaSupervisor supervisor = ProviderWriteQuotaSupervisor.start(
+                     Set.of(workspace),
+                     new ProviderWriteQuota(1L << 30, 10_000L, FAST_SAMPLE),
+                     kills::incrementAndGet)) {
+            // Simulate a hostile descendant that keeps an already-open descriptor but removes the
+            // host supervisor's ability to enumerate the directory containing it.
+            Files.setPosixFilePermissions(hidden, Set.of());
+            alreadyOpen.write(new byte[64 * 1024]);
+            alreadyOpen.flush();
+
+            assertTrue(awaitBreach(supervisor),
+                    "losing visibility of a writable subtree must fail closed instead of counting zero bytes");
+            assertTrue(supervisor.breach().orElseThrow().contains("visibility lost"));
+        } finally {
+            Files.setPosixFilePermissions(hidden, PosixFilePermissions.fromString("rwx------"));
+        }
+        assertEquals(1, kills.get(), "visibility loss must destroy the contained job exactly once");
     }
 
     private static boolean awaitBreach(ProviderWriteQuotaSupervisor supervisor) throws InterruptedException {
