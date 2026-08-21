@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **19 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135 ; campagnes de hardening supplémentaires PR #215, #216, #217 et #218 intégrées.**
+Statut au **21 août 2026** : **C0 → M30 terminés et intégrés ; hardening/readiness terminés ; MINOS 1.0.0 et 1.0.1 publiés ; remédiation post-audit #132 / #98 implémentée et qualifiée dans PR #135 ; campagnes de hardening supplémentaires PR #215 à #223 intégrées.**
 
 > **Convention de référencement.** L'état est ancré sur des **numéros de PR**, jamais sur un SHA de `develop` (périmé dès le merge qui l'introduit). Les SHA immuables — tags de release comme `v1.0.1` — restent cités explicitement.
 
@@ -48,6 +48,7 @@ L'état opérationnel courant est dans [`STATUS.md`](STATUS.md). Les preuves dé
 | Hardening artefact provider / release / MCP | restauration fail-closed d'un artefact préexistant, rejet des jonctions Windows dans les walkers de suppression, moindre privilège des workflows de release, immutabilité de la release IntelliJ, bornes sémantiques MCP | ✅ PR #216 |
 | Réconciliation documentaire / prérequis sandbox Linux | STATUS/ROADMAP/registre réalignés, procédure opérateur Linux documentée et outillée (DT-07) | ✅ PR #217 |
 | Délégation cgroup contenue / gate JaCoCo durci | suppression du droit sur le `cgroup.procs` racine (évasion de délégation), migration privilégiée via `--attach-pid`, préfixes JaCoCo morts désormais bloquants | ✅ PR #218 |
+| Réconciliations post-audit finales | durcissements CI/PostgreSQL/release, contrats API/Git/MCP et confinement source, stabilisation du test d'ownership Windows | ✅ PR #219 à #223 |
 
 ## M29 — Autonomous Docker Runtime & Native Parity
 

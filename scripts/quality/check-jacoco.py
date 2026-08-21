@@ -66,7 +66,12 @@ SCOPES = {
             "com/minos/adapter/scip/ScipIndexerCatalog", "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager",
             "com/minos/adapter/scip/runtime/ScipClangProcessPlanFactory", "com/minos/adapter/scip/runtime/ScipDotnetProcessPlanFactory",
             "com/minos/adapter/scip/runtime/ScipGoProcessPlanFactory", "com/minos/adapter/scip/runtime/RustAnalyzerScipProcessPlanFactory",
-        ), "line": 0.50, "branch": 0.28,
+        ),
+        "line": 0.50,
+        "branch": 0.28,
+        "prefixMinimums": {
+            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
+        },
     },
     "m25-remote-distributed-indexing": {
         "prefixes": (
@@ -76,7 +81,12 @@ SCOPES = {
             "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
             "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
             "com/minos/cli/RemoteIndexCommand",
-        ), "line": 0.70, "branch": 0.50,
+        ),
+        "line": 0.70,
+        "branch": 0.50,
+        "prefixMinimums": {
+            "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
+        },
     },
     "provider-execution-trust-boundary": {
         "prefixes": (
@@ -85,7 +95,13 @@ SCOPES = {
             "com/minos/runtime/WorkerSandboxBackend", "com/minos/runtime/WorkerSandboxQualification",
             "com/minos/runtime/ProviderProcessEnvironment", "com/minos/runtime/ProcessTreeTermination",
             "com/minos/runtime/ProviderResidueReclamation",
-        ), "line": 0.68, "branch": 0.48,
+        ),
+        "line": 0.68,
+        "branch": 0.48,
+        "prefixMinimums": {
+            "com/minos/runtime/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
+            "com/minos/runtime/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
+        },
     },
     "provider-sandbox-linux": {
         "prefixes": (
@@ -130,6 +146,7 @@ SCOPES = {
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
+    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.18, "branch": 0.07},
 }
 
 
@@ -180,6 +197,10 @@ def self_test() -> int:
   <class name="com/minos/selftest/Alpha">
     <counter type="LINE" covered="90" missed="10"/>
     <counter type="BRANCH" covered="80" missed="20"/>
+  </class>
+  <class name="com/minos/selftest/Weak">
+    <counter type="LINE" covered="10" missed="90"/>
+    <counter type="BRANCH" covered="10" missed="90"/>
   </class>
   <class name="com/minos/selftest/pkg/Beta">
     <counter type="LINE" covered="90" missed="10"/>
@@ -268,12 +289,24 @@ def self_test() -> int:
     expect("explicit skip: exit", code, 0)
     expect("explicit skip: failures", failed, [])
 
+    # 8. a weak live prefix cannot hide behind a strongly-covered sibling when the aggregate passes.
+    code, failed = run({"prefix-floor": {
+        "prefixes": ("com/minos/selftest/Alpha", "com/minos/selftest/Weak"),
+        "line": 0.50,
+        "branch": 0.45,
+        "prefixMinimums": {
+            "com/minos/selftest/Weak": {"line": 0.50, "branch": 0.50},
+        },
+    }})
+    expect("weak live prefix: exit", code, 1)
+    expect("weak live prefix: failures", failed, ["prefix-floor"])
+
     if failures:
         print("MINOS JACOCO GATE SELF-TEST FAILED", file=sys.stderr)
         for failure in failures:
             print(f" - {failure}", file=sys.stderr)
         return 1
-    print("MINOS JACOCO GATE SELF-TEST SUCCESS (7 scenarios)")
+    print("MINOS JACOCO GATE SELF-TEST SUCCESS (8 scenarios)")
     return 0
 
 
@@ -331,8 +364,11 @@ def main() -> int:
         # Every declared prefix must still designate real code. Without this, a renamed or deleted
         # class silently stops being measured as soon as any sibling prefix in the same scope keeps
         # matching, and the scope keeps reporting PASS over a shrinking surface.
-        dead = [prefix for prefix in prefixes
-                if not any(clazz.attrib.get("name", "").startswith(prefix) for clazz in all_classes)]
+        prefix_matches = {
+            prefix: [clazz for clazz in all_classes if clazz.attrib.get("name", "").startswith(prefix)]
+            for prefix in prefixes
+        }
+        dead = [prefix for prefix, matches in prefix_matches.items() if not matches]
         if dead:
             failures.append(
                 f"{name}: declared prefix(es) match no class in {report} "
@@ -351,10 +387,42 @@ def main() -> int:
         passed = line >= line_min and branch >= branch_min
         if not passed:
             failures.append(f"{name}: line={line:.3f} (min {line_min:.3f}), branch={branch:.3f} (min {branch_min:.3f})")
-        results["scopes"][name] = {
+
+        prefix_results: dict[str, object] = {}
+        for prefix, minimums in config.get("prefixMinimums", {}).items():
+            if prefix not in prefix_matches:
+                failures.append(f"{name}: prefix minimum references undeclared prefix: {prefix}")
+                passed = False
+                prefix_results[prefix] = {"status": "FAIL", "reason": "undeclared prefix"}
+                continue
+            prefix_counters = counters_for(prefix_matches[prefix])
+            prefix_line = ratio(*prefix_counters["LINE"])
+            prefix_branch = ratio(*prefix_counters["BRANCH"])
+            prefix_line_min = float(minimums["line"])
+            prefix_branch_min = float(minimums["branch"])
+            prefix_passed = prefix_line >= prefix_line_min and prefix_branch >= prefix_branch_min
+            if not prefix_passed:
+                failures.append(
+                    f"{name}: prefix {prefix} line={prefix_line:.3f} (min {prefix_line_min:.3f}), "
+                    f"branch={prefix_branch:.3f} (min {prefix_branch_min:.3f})"
+                )
+                passed = False
+            prefix_results[prefix] = {
+                "classes": len(prefix_matches[prefix]),
+                "line": round(prefix_line, 6),
+                "lineMinimum": prefix_line_min,
+                "branch": round(prefix_branch, 6),
+                "branchMinimum": prefix_branch_min,
+                "status": "PASS" if prefix_passed else "FAIL",
+            }
+
+        result = {
             "classes": len(classes), "report": str(report), "line": round(line, 6), "lineMinimum": line_min,
             "branch": round(branch, 6), "branchMinimum": branch_min, "status": "PASS" if passed else "FAIL",
         }
+        if prefix_results:
+            result["prefixes"] = prefix_results
+        results["scopes"][name] = result
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

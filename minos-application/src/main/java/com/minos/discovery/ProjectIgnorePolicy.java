@@ -1,5 +1,6 @@
 package com.minos.discovery;
 
+import com.minos.io.FileTreeOperations;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
 
@@ -7,6 +8,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -91,6 +93,9 @@ public final class ProjectIgnorePolicy {
         Files.walkFileTree(sourceRoot, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs) {
+                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attrs)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 if (!directory.equals(sourceRoot) && isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -99,6 +104,9 @@ public final class ProjectIgnorePolicy {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (!attrs.isRegularFile()) {
+                    return FileVisitResult.CONTINUE;
+                }
                 Path relative = root.relativize(file);
                 if (!isIgnored(relative, false)) {
                     names.add(file.getFileName().toString().toLowerCase(java.util.Locale.ROOT));
@@ -122,8 +130,11 @@ public final class ProjectIgnorePolicy {
         if (budget == null || !accountedRegularFiles.add(relative)) return;
         try {
             Path file = root.resolve(relative).normalize();
-            if (file.startsWith(root) && Files.isRegularFile(file)) {
-                budget.accountRegularFile(Files.size(file));
+            if (!file.startsWith(root)) return;
+            BasicFileAttributes attributes =
+                    Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (attributes.isRegularFile()) {
+                budget.accountRegularFile(attributes.size());
             }
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);

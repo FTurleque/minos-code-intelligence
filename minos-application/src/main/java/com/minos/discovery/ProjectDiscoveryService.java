@@ -8,6 +8,7 @@ import com.minos.discovery.spi.BuildSystemDetector;
 import com.minos.discovery.spi.LanguageDetector;
 import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.io.FileTreeOperations;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
@@ -126,6 +127,9 @@ public final class ProjectDiscoveryService {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
                 budget.accountTraversalEntry();
+                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attributes)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 Path relative = root.relativize(directory);
                 if (!directory.equals(root) && ignorePolicy.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
