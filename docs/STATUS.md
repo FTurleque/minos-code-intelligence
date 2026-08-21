@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **20 août 2026**.
+Dernière mise à jour : **21 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
 
@@ -8,7 +8,7 @@ Ce fichier est la synthèse autoritative de l'état produit. Les preuves détail
 
 ## Réconciliation post-audit — 20 août 2026
 
-Réaudit ciblé de `develop` après PR #219/#220/#221. Aucun P0/P1. Les quatre P2 et les deux P3 identifiés ont été confirmés sur le code courant puis corrigés, et la dette de test DT-10 est close.
+Réadit ciblé de `develop` après PR #219/#220/#221. Aucun P0/P1. Les quatre P2 et les deux P3 identifiés ont été confirmés sur le code courant puis corrigés dans **PR #222** ; la stabilisation déterministe du test Windows d'ownership a été intégrée dans **PR #223**. L'état courant est donc ancré au minimum jusqu'à PR #223, et la dette de test DT-10 est close.
 
 - **P2 — perte du `commitStatus` dans l'API Java.** `LocalMinosApi` jetait le statut de commit et le diagnostic en construisant `IndexImportDto` : les quatre états d'import (committé, durabilité et/ou métadonnées en attente) étaient indistinguables pour un consommateur Java, alors que la CLI les restituait déjà. Correction **additive** : `importScipOutcome()` retourne `IndexImportOutcomeDto` (mêmes données + `ImportCommitStatus` + diagnostic assaini), `importScip()` est inchangé, aucun record public existant n'est modifié et `CONTRACT_VERSION` reste `1`. Le `default` répond `UNAVAILABLE` plutôt que d'annoncer `COMMITTED`.
 - **P2 — perte de capacités dans `LocalMinosMultiRepositoryApi`.** La façade M12 héritait des `default` `UNAVAILABLE` de `MinosApi` pour `getArchitectureGraph(...)` et `team()`, capacités que l'application sous-jacente possède. Les deux sont redéléguées, ainsi que `contractVersion()` : sans exemption, l'invariant « toute opération `MinosApi` est redéléguée » devient vérifiable par réflexion au lieu d'une liste maintenue à la main.
@@ -104,6 +104,7 @@ PR #215                          HARDENING STOCKAGE LOCAL / SCIP / JGit / Postgr
 PR #216                          ARTEFACT PROVIDER / JONCTIONS WINDOWS / RELEASE CI / BORNES MCP INTÉGRÉ
 PR #217                          RÉCONCILIATION DOCUMENTAIRE / PRÉREQUIS SANDBOX LINUX INTÉGRÉ
 PR #218                          DÉLÉGATION CGROUP CONTENUE / GATE JACOCO DURCI INTÉGRÉ
+PR #219–#223                     RÉCONCILIATIONS POST-AUDIT / CONTRATS / CONFINEMENT / STABILISATION WINDOWS INTÉGRÉES
 ```
 
 ## Campagne post-audit — #132 / PR #135
