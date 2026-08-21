@@ -34,7 +34,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         Path home = Files.createTempDirectory("minos-appcontainer-home-");
         var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
         if (WorkerSandboxQualification.currentPlatform() == WorkerSandboxQualification.Platform.WINDOWS) {
-            assumeTrue(discovered.isPresent(), "Windows PowerShell 5.1 is required for AppContainer qualification");
+            assumeTrue(discovered.isPresent(), "real Windows AppContainer/Job Object qualification is required");
             WorkerSandboxQualification qualification = discovered.orElseThrow().qualification();
             assertTrue(discovered.orElseThrow().enforcesNetworkDeny());
             assertTrue(qualification.containment().aggregateJobBoundaryEnforced());
@@ -44,13 +44,25 @@ class WindowsAppContainerWorkerSandboxBackendTest {
             assertEquals(
                     WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
                     qualification.trustDisposition());
+            assertTrue(qualification.limitations().contains("WINDOWS_RUNTIME_CAPABILITY_PROBE_REQUIRED"));
+            assertTrue(qualification.limitations().contains(
+                    "WINDOWS_APPCONTAINER_PRIVATE_FILE_AND_REGISTRY_STORAGE_SUPERVISED"));
+            assertEquals(
+                    ProviderWriteQuota.DEFAULT_MAX_BYTES,
+                    WindowsAppContainerWorkerSandboxBackend.EXPLICIT_ROOT_WRITE_QUOTA.maxBytes()
+                            + WindowsAppContainerWorkerSandboxBackend.PRIVATE_STORAGE_MAX_BYTES);
+            assertEquals(
+                    ProviderWriteQuota.DEFAULT_MAX_ENTRIES,
+                    WindowsAppContainerWorkerSandboxBackend.EXPLICIT_ROOT_WRITE_QUOTA.maxEntries()
+                            + WindowsAppContainerWorkerSandboxBackend.PRIVATE_STORAGE_MAX_ENTRIES);
         } else {
             assertTrue(discovered.isEmpty());
         }
     }
 
     @Test
-    void realWindowsSandboxUsesAppContainerJobLimitsAndBlocksNetworkAndHostWrite() throws Exception {
+    void realWindowsSandboxUsesAppContainerJobLimitsAndBlocksNetworkHostWriteAndPrivateRegistryWrite()
+            throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
 
         Path home = Files.createTempDirectory("minos-appcontainer-home-");
@@ -86,6 +98,11 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                   [System.IO.File]::WriteAllText($HostEscape, 'escape')
                   exit 42
                 } catch { }
+                try {
+                  New-Item -Path 'HKCU:\\Software\\MinosAppContainerWriteProbe' -Force | Out-Null
+                  New-ItemProperty -Path 'HKCU:\\Software\\MinosAppContainerWriteProbe' -Name value -Value escape -Force | Out-Null
+                  exit 43
+                } catch { }
                 [System.IO.File]::WriteAllText($Artifact, 'qualified-appcontainer-artifact')
                 exit 0
                 """, StandardCharsets.US_ASCII);
@@ -110,6 +127,10 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run);
         String planText = Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8);
         assertTrue(planText.contains("networkPolicy=DENY"));
+        assertTrue(planText.contains("privateStorageMaxBytes="
+                + WindowsAppContainerWorkerSandboxBackend.PRIVATE_STORAGE_MAX_BYTES));
+        assertTrue(planText.contains("privateStorageMaxEntries="
+                + WindowsAppContainerWorkerSandboxBackend.PRIVATE_STORAGE_MAX_ENTRIES));
         Process process = new ProcessBuilder(sandboxed.command())
                 .directory(working.toFile())
                 .redirectErrorStream(true)
@@ -150,8 +171,12 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertTrue(sandboxed.command().contains("-File"));
         assertTrue(Files.readString(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)
                 .contains("networkPolicy=ALLOW"));
-        assertTrue(Files.readString(home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8)
-                .contains("S-1-15-3-1"));
+        String launcher = Files.readString(
+                home.resolve("sandbox/windows-appcontainer-sandbox-v4.ps1"), StandardCharsets.UTF_8);
+        assertTrue(launcher.contains("S-1-15-3-1"));
+        assertTrue(launcher.contains("GetAppContainerFolderPath"));
+        assertTrue(launcher.contains("DenyPrivateRegistryWrites"));
+        assertTrue(launcher.contains("MINOS_APPCONTAINER_PRIVATE_STORAGE_QUOTA_BREACH"));
     }
 
     @Test
