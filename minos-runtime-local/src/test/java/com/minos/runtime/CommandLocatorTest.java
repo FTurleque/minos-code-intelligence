@@ -67,15 +67,17 @@ class CommandLocatorTest {
     }
 
     @Test
-    void realWindowsBatchInvocationUsesAnAbsoluteExistingCmd() {
+    void realWindowsBatchInvocationUsesCanonicalSystem32Cmd() throws Exception {
         if (!CommandLocator.isWindows()) {
             return;
         }
         List<String> command = CommandLocator.windowsBatchInvocation(Path.of("C:\\fixture.cmd"));
         Path processor = Path.of(command.getFirst());
+        Path expected = Path.of(System.getenv("SystemRoot"), "System32", "cmd.exe").toRealPath();
         assertTrue(processor.isAbsolute(), "cmd.exe must not be resolved from the current directory or PATH");
         assertTrue(Files.isRegularFile(processor), "resolved Windows command processor must exist");
-        assertEquals("cmd.exe", processor.getFileName().toString().toLowerCase());
+        assertEquals(expected, processor.toRealPath(),
+                "batch execution must be anchored to canonical SystemRoot\\System32\\cmd.exe, not ComSpec or PATH");
     }
 
     @Test
