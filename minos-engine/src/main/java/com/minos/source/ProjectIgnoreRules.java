@@ -46,8 +46,8 @@ public final class ProjectIgnoreRules {
     public static ProjectIgnoreRules load(Path projectRoot) throws IOException {
         Path root = Objects.requireNonNull(projectRoot, "projectRoot").toAbsolutePath().normalize();
         return new ProjectIgnoreRules(
-                readRules(root, Path.of(".gitignore")),
-                readRules(root, Path.of(".minosignore"))
+                readRules(root, root.resolve(".gitignore")),
+                readRules(root, root.resolve(".minosignore"))
         );
     }
 
@@ -78,11 +78,12 @@ public final class ProjectIgnoreRules {
         return ignored;
     }
 
-    private static List<IgnoreRule> readRules(Path root, Path relative) throws IOException {
-        Path file = root.resolve(relative).normalize();
-        if (!file.startsWith(root) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+    private static List<IgnoreRule> readRules(Path root, Path file) throws IOException {
+        Path candidate = file.toAbsolutePath().normalize();
+        if (!candidate.startsWith(root) || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
         }
+        Path relative = root.relativize(candidate);
         List<IgnoreRule> rules = new ArrayList<>();
         int lines = 0;
         try (BoundedInputStream input = new BoundedInputStream(
