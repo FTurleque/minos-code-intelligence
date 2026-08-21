@@ -8,10 +8,14 @@ import com.minos.discovery.spi.BuildSystemDetector;
 import com.minos.discovery.spi.LanguageDetector;
 import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.FileTreeOperations;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -156,7 +160,7 @@ public final class DefaultDiscoveryPlugins {
         return (projectRoot, moduleRoot, ignorePolicy) -> {
             Path candidate = moduleRoot.resolve(relative).normalize();
             Path projectRelative = projectRoot.relativize(candidate);
-            if (!Files.isDirectory(candidate)
+            if (!isPhysicalDirectory(projectRoot, candidate)
                     || ignorePolicy.isIgnored(projectRelative, true)
                     || !containsVisibleExtension(projectRoot, candidate, values, ignorePolicy)) {
                 return List.of();
@@ -173,10 +177,9 @@ public final class DefaultDiscoveryPlugins {
 
     private static boolean containsVisibleMarkerExtension(
             Path projectRoot, Path directory, Set<String> suffixes, ProjectIgnorePolicy ignorePolicy) {
-        if (!Files.isDirectory(directory)) return false;
+        if (!isPhysicalDirectory(projectRoot, directory)) return false;
         try (var entries = Files.list(directory)) {
-            return entries.filter(Files::isRegularFile)
-                    .filter(file -> !ignorePolicy.isIgnored(projectRoot.relativize(file), false))
+            return entries.filter(file -> visibleFile(projectRoot, file, ignorePolicy))
                     .map(file -> file.getFileName().toString().toLowerCase(Locale.ROOT))
                     .anyMatch(name -> suffixes.stream().anyMatch(name::endsWith));
         } catch (IOException exception) {
@@ -194,7 +197,36 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static boolean visibleFile(Path projectRoot, Path file, ProjectIgnorePolicy ignorePolicy) {
-        return Files.isRegularFile(file)
-                && !ignorePolicy.isIgnored(projectRoot.relativize(file), false);
+        Path root = projectRoot.toAbsolutePath().normalize();
+        Path candidate = file.toAbsolutePath().normalize();
+        if (candidate.equals(root) || !candidate.startsWith(root)) return false;
+        Path relative = root.relativize(candidate);
+        try (var ignored = ConfinedFileOpener.openConfinedRegularFile(root, relative)) {
+            return !ignorePolicy.isIgnored(relative, false);
+        } catch (IOException | SecurityException exception) {
+            return false;
+        }
+    }
+
+    private static boolean isPhysicalDirectory(Path projectRoot, Path directory) {
+        Path root = projectRoot.toAbsolutePath().normalize();
+        Path candidate = directory.toAbsolutePath().normalize();
+        if (!candidate.startsWith(root)) return false;
+        try {
+            BasicFileAttributes rootAttributes =
+                    Files.readAttributes(root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!FileTreeOperations.isRecursableDirectory(rootAttributes)) return false;
+            Path current = root;
+            Path relative = root.relativize(candidate);
+            for (int index = 0; index < relative.getNameCount(); index++) {
+                current = current.resolve(relative.getName(index));
+                BasicFileAttributes attributes =
+                        Files.readAttributes(current, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                if (!FileTreeOperations.isRecursableDirectory(attributes)) return false;
+            }
+            return true;
+        } catch (IOException | SecurityException exception) {
+            return false;
+        }
     }
 }
