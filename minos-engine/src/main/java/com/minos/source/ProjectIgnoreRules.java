@@ -236,7 +236,7 @@ public final class ProjectIgnoreRules {
     ) {
         private boolean matches(String portablePath, boolean directory) {
             if (directoryOnly && !directory && directPattern.matcher(portablePath).matches()) return false;
-            return effectivePattern.matcher(portablePath, directory).matches();
+            return effectivePattern.matcher(portablePath).matches();
         }
     }
 }
