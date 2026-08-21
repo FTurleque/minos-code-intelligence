@@ -1,78 +1,55 @@
 # Registre des risques
 
-> Référence : [Section 11 — Risques et dette](../arc42/11-risques-dette.md)
+Dernière réconciliation : **21 août 2026**. État courant de `develop` ancré jusqu'à **PR #226 intégrée** ; remédiation du nouvel audit complet portée par **PR #227**, en qualification et non intégrée.
 
-Dernière réconciliation : **21 août 2026**, état courant de `develop` ancré jusqu'aux PR **#224 et #225**. Le réaudit complet lancé après #225 a identifié un P1 sur la provenance du launcher IntelliJ et trois écarts P3 de durcissement/qualité/documentation ; leur remédiation est portée par la **PR #226** et ne sera considérée close qu'après qualification exact-head puis merge.
-
-> **Convention de référencement.** L'état courant est ancré sur des **numéros de PR**, jamais sur un SHA de `develop`. Un SHA cité dans un document est périmé dès le merge qui l'introduit — le commit de merge est nécessairement postérieur au contenu qu'il publie —, ce qui recréait une dérive à chaque réconciliation. Les SHA immuables (tags de release, par exemple `v1.0.1`) restent cités explicitement : eux ne bougent jamais.
-
----
+La version historique détaillée du registre avant cette campagne est conservée intégralement dans [`../../history/reconciliations/risk-register-pre-post226-audit-20260821.md`](../../history/reconciliations/risk-register-pre-post226-audit-20260821.md).
 
 ## Risques actifs / résiduels
 
-| Réf | Titre | P | I | Exposition | Propriétaire | Statut | Mitigation durable |
-|-----|-------|---|---|-----------|-------------|--------|--------------------|
-| R-04 | ANN non encore décidé | Faible | Moyen | Faible | Équipe MINOS | Watchlist | Aucun claim ANN ; évolution uniquement après mesure d'un besoin réel. |
-| R-09 | Disponibilité des primitives sandbox et de la délégation cgroup selon l'OS / LSM | Moyenne | Élevé | Moyenne | Équipe MINOS / opérateur | Mitigé / capability-honest | Linux sonde réellement `bubblewrap`, les user namespaces **et** la délégation cgroup v2 avant de déclarer `OS_ENFORCED`; Windows utilise AppContainer + Job Object vérifié. `WorkerResourceContainment` distingue garantie OS, supervision MINOS et simple mesure. En absence d'une primitive qualifiée, toute exécution distante (`ALLOW` ou `DENY`) échoue de façon fail-closed. Les diagnostics MINOS sont ouverts avant l'exécution non fiable et restent liés à des descripteurs hôte afin qu'un remplacement de pathname/symlink depuis le sandbox ne puisse pas rediriger une écriture hôte. |
-| R-11 | Absence de quota disque par job non privilégié sur Linux et Windows | Moyenne | Moyen | Moyenne | Équipe MINOS | Mitigé / assumé | Le budget d'écriture (octets et entrées) est appliqué pendant l'exécution par `ProviderWriteQuotaSupervisor`, qui détruit la frontière de job au dépassement, et est déclaré `SUPERVISED_HARD_KILL` — jamais `OS_ENFORCED`. |
-| R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Équipe MINOS | Mitigé / surveillé | GitHub Actions épinglées par SHA, images OCI par digest, archive Ubuntu datée pour les paquets système, Maven Wrapper et Maven Docker vérifiés par SHA-256 possédé par le dépôt, providers binaires directs par checksum attendu, npm via lockfiles v3 + `npm ci --ignore-scripts`, `scip-dotnet` via nupkg SHA-256 + source NuGet locale, Go via version exacte + `proxy.golang.org`/`sum.golang.org`. Gate packaging anti-régression. |
-| R-12 | Disponibilité de la frontière forte du CLI IntelliJ selon la plateforme | Faible | Moyen | Faible | Équipe MINOS / opérateur | Mitigé / capability-honest | Windows utilise un Job Object établi avant reprise du CLI ; Linux exige un user manager systemd capable de créer un scope transitoire. Une plateforme non qualifiée ou sans primitive disponible échoue fermée au lieu de revenir au polling `ProcessHandle`. |
-| R-13 | Graphe transitif Coursier de `scip-java` non matérialisé par un lockfile possédé par le dépôt | Faible | Moyen | Faible | Équipe MINOS | Assumé / observable | La version/coordonnée `org.scip-code:scip-java:0.13.1` et le launcher Coursier sont épinglés ; le binaire standalone produit est hashé dans les preuves de build. MINOS **ne revendique pas** une reproductibilité bit-à-bit du bootstrap Coursier tant qu'un verrou transitif repository-owned n'existe pas. La query plane reste offline et aucun provider n'est téléchargé à l'exécution MCP. |
-| R-17 | Provenance du launcher CLI IntelliJ depuis un projet non fiable | Faible après #226, Élevée sur `develop` pré-#226 | Élevé | Moyenne | Équipe MINOS | Remédiation PR #226 | Sur `develop` issu de #225, le défaut Windows `minos.cmd` pouvait être résolu depuis le working directory projet et les réglages `executable`/`MINOS_HOME` vivaient au niveau PROJECT. #226 déplace ces réglages au niveau IDE-global, résout tout launcher relatif uniquement depuis des entrées `PATH` **absolues** avant d'appliquer le working directory projet, refuse les chemins relatifs/éléments PATH relatifs ou vides et rejette les junctions/reparse points dans l'infrastructure d'ownership avant mutation d'ACL. Les tests incluent le binary planting et un vrai `mklink /J`; le gate P0-P2 exige ces invariants. |
+| Réf | Titre | P | I | Exposition | Statut | Mitigation durable |
+|---|---|---:|---:|---:|---|---|
+| R-04 | ANN non encore décidé | Faible | Moyen | Faible | Watchlist | Aucun claim ANN ; décision uniquement après mesure. |
+| R-09 | Disponibilité des primitives sandbox / délégation cgroup | Moyenne | Élevé | Moyenne | Mitigé / capability-honest | Linux sonde bubblewrap/userns/cgroup ; Windows AppContainer + Job Object vérifié ; absence de primitive qualifiée => fail-closed. |
+| R-10 | Dérive future de provenance supply-chain | Faible | Élevé | Moyenne | Mitigé / surveillé | Actions par SHA, images/dépendances épinglées ou checksummées quand la garantie est revendiquée, gates packaging/release. |
+| R-11 | Pas de quota disque kernel par job | Moyenne | Moyen | Moyenne | Mitigé / assumé | Quota d'écriture supervisé + kill du job au dépassement ; jamais présenté comme `OS_ENFORCED`. |
+| R-12 | Disponibilité de la frontière forte CLI IntelliJ | Faible | Moyen | Faible | Mitigé / capability-honest | Job Object Windows / systemd scope Linux ; absence => fail-closed. |
+| R-13 | Graphe transitif Coursier scip-java non locké repository-owned | Faible | Moyen | Faible | Assumé / observable | Coordonnée/version et launcher épinglés ; aucune claim bit-reproducible sans lock transitif. |
+| R-18 | Egress réseau d'un descendant repository-controlled dans un provider | Élevée avant #227 | Élevé | Moyenne | Remédiation PR #227 | Aucun `ALLOW` implicite. `IndexerProcessPlanFactory.networkPolicy()` est `DENY` par défaut ; ALLOW exige un opt-in explicite et une phase dont la confiance est démontrée. |
+| R-19 | Résolution d'exécutable influencée par le CWD via PATH relatif/vide | Moyenne avant #227 | Élevé | Moyenne | Remédiation PR #227 | `CommandLocator` ignore les éléments PATH vides/relatifs, canonise les répertoires/exécutables et refuse un `cmd.exe` Windows non résolu en absolu. |
+| R-20 | Fallback Windows de lecture confinée moins fort que `openat` | Faible | Moyen | Faible | Résiduel / capability-honest | `NOFOLLOW_LINKS`, revalidation et rejet `isOther()` conservés ; seule la stratégie `SecureDirectoryStream` revendique la preuve handle-relative. Les callers exigeant cette propriété testent `supportsDirectoryHandleTraversal`. |
 
----
-
-## Risques résolus par les jalons et le post-audit
+## Risques résolus / reclassés récemment
 
 | Réf | Ancien risque | Résolution |
-|-----|---------------|------------|
-| R-01 | Parité Docker incomplète | Résolu par M29 : runtime provider-complete, routage `native|docker`, qualification et packaging dédiés. |
-| R-02 | CI automatique de PR manquante | Résolu : PR Validation Linux/Windows, PostgreSQL/pgvector réel sur Linux, OSV, JaCoCo ciblé et workflows spécialisés. |
-| R-03 | Absence de provider sémantique réel | Résolu : provider Ollama qualifié, parsing JSON robuste et mode `local-hash` conservé comme fallback explicite. |
-| R-05 | Plugin IntelliJ non qualifié en CI | Résolu : tests/build/structure + IntelliJ Plugin Verifier et packaging release. |
-| R-06 | ADR-0036 non finalisé | Résolu : ADR accepté après convergence M28 et qualification post-audit des frontières sandbox. |
-| R-07 | Tests cross-boundary insuffisants | Réduit à un niveau acceptable : gates API/CLI/MCP, remote/distributed, packaging, PostgreSQL, IntelliJ et tests sandbox négatifs Linux/Windows, complétés par fault paths de containment, divergence snapshot et attaques de pathname/symlink. |
-| R-08 | PostgreSQL backend non promu | Résolu par M30 et durci post-audit : le bootstrap complet (extension pgvector, création de schéma, migrations) est sérialisé par un unique advisory lock transactionnel database-global — clé sans composante de schéma, car `CREATE EXTENSION` mute `pg_extension`, qui est propre à la base et non au schéma — acquis dès la première instruction de la transaction ; schéma v2, unicité racine et upsert atomique. Deux bootstraps de schémas distincts sur la même base sérialisent donc au lieu de s'exécuter en parallèle. |
-| R-14 | Divergence silencieuse entre état autonome et snapshot autoritatif | Résolu : `LocalAutonomousIndexOperations` utilise le `ProjectIndexStateReconciler` commun ; un metadata state qui référence un snapshot absent échoue fermé et l'évidence n'est plus réécrite en `NEVER_INDEXED`. |
-| R-15 | Confusion d'identité dans les stores file-backed | Résolu : projet, workspace, project index state et run vérifient systématiquement l'UUID embarqué contre la clé/nom de fichier attendu, lookup comme listing. |
-| R-16 | Ressource de containment créée avant l'armement du cleanup | Résolu : le scope de release englobe désormais transformation, validation, préparation diagnostics et exécution ; un échec pré-start libère la frontière OS. |
-
----
+|---|---|---|
+| R-01 | Parité Docker incomplète | Résolu par M29 / PR #108. |
+| R-02 | CI automatique de PR manquante | Résolu : PR Validation Linux/Windows, OSV, JaCoCo et workflows spécialisés. |
+| R-03 | Provider sémantique réel manquant | Résolu par Ollama qualifié, avec fallback local-hash explicite. |
+| R-05 | Plugin IntelliJ non qualifié | Résolu : build/tests/structure + Plugin Verifier. |
+| R-06 | ADR-0036 non finalisé | Résolu après M28 et qualification sandbox. |
+| R-07 | Tests cross-boundary insuffisants | Réduit : API/CLI/MCP/remote/packaging/PostgreSQL/IntelliJ/sandbox + tests adversariaux Windows/Linux. |
+| R-08 | PostgreSQL backend non promu | Résolu par M30 et hardening transactionnel/TLS. |
+| R-14 | Divergence autonome/snapshot autoritatif | Résolu par réconciliation fail-closed commune. |
+| R-15 | Confusion d'identité stores file-backed | Résolu par validation UUID lookup/listing. |
+| R-16 | Containment créé avant armement cleanup | Résolu : lifecycle englobe transform/validation/pré-start/exécution. |
+| R-17 | Provenance launcher IntelliJ depuis un projet non fiable | Résolu par **PR #226** pour la surface IntelliJ : settings IDE-global, launcher résolu avant CWD, PATH relatif/vide refusé, ownership reparse refusé. Le finding plus général `CommandLocator` est suivi séparément par R-19 / PR #227. |
 
 ## Dette technique active
 
-| Réf | Description | Module | Priorité | État |
-|-----|-------------|--------|----------|------|
-| DT-06 | Décider ANN uniquement si les profils sémantiques montrent un besoin mesuré | semantic/storage | Faible | Watchlist |
-| DT-08 | Continuer la hausse progressive des seuils JaCoCo à mesure que des tests comportementaux utiles sont ajoutés | tous | Faible | Continu ; #226 ajoute des floors propres à `BoundedProviderSourceProbe` et `ScipJavaProcessPlanFactory`. |
-| DT-09 | Étudier un lock transitif repository-owned pour le bootstrap Coursier `scip-java` si une exigence de reproductibilité bit-à-bit Docker devient contractuelle | packaging/supply-chain | Faible | Watchlist — aucune claim bit-reproducible actuelle |
-| DT-11 | L'étape CI `Install and authorize Linux worker sandbox runtime` (`apt-get install bubblewrap util-linux apparmor apparmor-profiles` + `apparmor_parser`) se bloque par intermittence sur les runners GitHub-hosted : ~15 s en temps normal, observée à 19 min puis encore bloquée après relance le 19 août 2026, alors que le **même commit** (`develop` post-#218) franchissait cette étape en 4 min sur un run parallèle. L'étape ne produit **aucune sortie** avant expiration : `apt-get update` cale d'emblée, sans réponse de miroir. Incident apt/réseau externe, sans rapport avec le code MINOS. Cause précise identifiée dans les logs : le miroir `azure.archive.ubuntu.com` du runner ne répond que par `Ign`, apt bascule alors sur `archive.ubuntu.com` (qui répond correctement) mais n'a plus le temps de terminer. Le simple réglage des options apt a échoué trois fois de suite (un sous-ensemble aléatoire de jobs Linux expirait à chaque exécution), la cause étant que **apt ne rend jamais la main** sur un miroir qui accepte puis cale : aucun repli shell ne pouvait se déclencher. Les 4 occurrences de l'étape (pr-ci ×2, m19, m20) délèguent désormais à `scripts/ci/install-linux-sandbox-toolchain.sh`, qui : (1) borne chaque commande apt par `timeout` afin qu'un blocage devienne un vrai code de retour ; (2) garde `Acquire::Retries=1` et `Timeout=15` — un nombre de retries élevé est **contre-productif** avec une mirrorlist, il épuise le budget sur le miroir mort ; (3) en cas d'échec, épingle `archive.ubuntu.com` (prouvé répondant dans les mêmes logs) et réessaie une fois ; (4) échoue en sortie non nulle si les deux tentatives échouent — aucun masquage. `timeout-minutes: 10` reste le garde-fou externe. Comparaison A/B observée le 19 août 2026 : sur l'ancien workflow (sans borne) l'étape est restée bloquée > 26 min ; sur le nouveau elle échoue proprement à 10 min. | ci/infrastructure | Faible | Mitigé / surveillé — cause externe, non corrigeable côté MINOS |
+| Réf | Description | Priorité | État |
+|---|---|---:|---|
+| DT-06 | Décider ANN uniquement après mesure d'un besoin réel | Faible | Watchlist |
+| DT-08 | Augmenter progressivement les seuils JaCoCo avec des tests comportementaux utiles | Faible | Continu |
+| DT-09 | Étudier un lock transitif repository-owned pour Coursier si la reproductibilité bit-à-bit devient contractuelle | Faible | Watchlist |
+| DT-11 | Instabilité ponctuelle apt/mirror GitHub-hosted pour le toolchain sandbox Linux | Faible | Mitigé / surveillé par timeout + fallback miroir |
+| DT-12 | Évaluer une primitive Windows native handle-relative/file-identity si une équivalence stricte `openat` devient nécessaire pour les lectures de projet concurrentes | Faible | Nouveau / watchlist ; aucun faux claim dans le produit |
 
-## Dette clôturée par les campagnes post-audit
+## Barrières anti-régression PR #227
 
-- **DT-10** — `WindowsStrongProcessOwnershipContainmentTest` était racy sous charge CI : les deux scénarios observaient un PID publié par le provider *après* le lancement de l'enfant détaché, avec un budget provider de 2 s ; sur un runner saturé PowerShell n'avait pas fini de démarrer, la lecture tombait sur un fichier absent ou partiel et le test partait en erreur avant d'avoir pu asserter quoi que ce soit (confirmé le 19 août 2026 : même commit `7f7d8a27`, deux runs parallèles, `push` 134/134 vs `pull_request` 2 erreurs). Corrigé sans toucher aux assertions de sécurité : le PID est publié **atomiquement** (fichier de staging puis `File.Move`), n'est lu qu'après observation de cette publication (événement de création `WatchService`, sans aucun sleep ; la mort du descendant est attendue sur `ProcessHandle.onExit()`), et l'exécution du scénario de timeout tourne sur son propre thread — le test **prouve** que l'enfant était lancé et vivant avant l'expiration du budget au lieu de le découvrir après coup. Le budget provider passe à 90 s : un runner Windows hébergé a demandé **plus de 20 s** rien que pour démarrer PowerShell et lancer un enfant, ce qu'une première tentative de raccourcir ce budget (20 s) a révélé en CI alors qu'elle passait localement en moins d'une seconde. Le wall-clock n'est pas la propriété testée : l'ordre « enfant lancé, puis budget expiré » l'est, et il vaut un test lent pour qu'il tienne sur n'importe quel runner. Toute attente expirée cite désormais les diagnostics du provider (`provider.stdout.log`, `provider.stderr.log`, `process.txt`), pour que l'échec distingue lui-même « le script a échoué » de « le runner était lent ». Aucun sleep d'attente arbitraire, aucun retry, aucun skip Windows, aucun assouplissement du containment. Clos par la campagne post-audit du 20 août 2026 : la propriété prouvée est inchangée, le Job Object tue toujours un descendant que Java n'a jamais suivi ;
-- dépendance architecturale `minos-api → minos-cli` supprimée ;
-- configuration par `MINOS_HOME` rendue sans contamination JVM globale ;
-- courses PostgreSQL migration/enregistrement supprimées ;
-- `ProviderId`, confinement de chemins et artefacts `NOFOLLOW_LINKS` durcis ;
-- faux contournement SAST `safeCommand` supprimé ;
-- sorties des processus IntelliJ bornées ;
-- Maven Wrapper et principales entrées Docker/provider supply-chain épinglés et vérifiés ;
-- worker sandbox OS réel implémenté et qualifié sur Linux et Windows ;
-- diagnostics provider rendus résistants au remplacement de pathname/symlink ;
-- lifecycle de containment rendu sûr sur les échecs pré-start ;
-- réconciliation autonome alignée sur l'autorité snapshot commune ;
-- identités des stores file-backed rendues fail-closed ;
-- **DT-07** — prérequis opérateur Linux (`bubblewrap`, `util-linux`, profil AppArmor `bwrap-userns-restrict` quand applicable, délégation cgroup v2 via `Delegate=yes` ou `MINOS_SANDBOX_CGROUP_ROOT`) documentés dans `docs/user/remote-indexing.md` avec un script de provisioning dédié (`scripts/deploy/provision-linux-sandbox-cgroup.sh`) pour l'alternative manuelle à une unité systemd déléguée. **Correction du 19 août 2026** : la première version de cette procédure accordait au compte MINOS la propriété de `/sys/fs/cgroup/cgroup.procs` (racine), ce qui constituait une évasion de délégation — sa clôture initiale était donc prématurée. La procédure applique désormais le modèle contenu décrit ci-dessous (`--attach-pid`) et ne demande plus aucun droit hors du sous-arbre délégué ;
-- **délégation cgroup v2 contenue** — la migration privilégiée est effectuée par le script de provisioning lui-même (`--attach-pid`), qui place le shell lanceur dans `$ROOT/minos-controller` ; MINOS démarre donc déjà dans le cgroup contrôleur, ne migre aucun processus et n'écrit que dans le sous-arbre qu'il possède. `scripts/remediation/check-p0-p2.py` interdit désormais toute réintroduction d'un `chown`/`chmod`/`chgrp`/`setfacl` visant le `cgroup.procs` racine, et exige que les workflows exerçant la sandbox Linux attachent réellement leur shell ;
-- restauration fail-closed d'un artefact provider préexistant et rejet des jonctions Windows dans les walkers de suppression récursive/mesure (PR #216) ;
-- moindre privilège des workflows de release Windows/IntelliJ et immutabilité de la release IntelliJ liée au commit résolu (PR #216) ;
-- arguments de chaîne des outils MCP bornés par des budgets UTF-8 sémantiques centralisés (`McpArgumentBounds`), revérifiés côté serveur en octets réels ; le `maxLength` publié est désormais une **borne de caractères** dérivée explicitement du budget (`schemaMaxCharacters`) et non le nombre d'octets sous un mot-clé qui compte des caractères, et chaque propriété documente le budget en octets qui décide réellement de la requête (PR #216, corrigé le 20 août 2026) ;
-- stores file-backed, décodage SCIP, endpoints JGit, providers locaux et registre PostgreSQL durcis contre les frontières de confiance provider/filesystem (PR #215).
+- test de politique provider : `DENY` est le défaut, `ALLOW` uniquement si la factory l'exprime explicitement ;
+- test `CommandLocator` avec entrée PATH relative réellement résolvable depuis le CWD : elle doit être ignorée ;
+- test Windows vérifiant que `cmd.exe` est absolu et existant ;
+- vraies junctions `mklink /J` pour `PrivateLocalStorage` et `ConfinedFileOpener` ;
+- `check-p0-p2.py` exige les invariants de réseau, provenance des commandes, rejet `isOther()` et wording capability-honest.
 
-### Campagne post-audit du 20 août 2026
-
-- **Perte du `commitStatus` dans l'API Java** — `LocalMinosApi` convertissait `IndexImportResult` en `IndexImportDto` en jetant le statut de commit et le diagnostic ; les quatre états (`COMMITTED`, durabilité et/ou métadonnées en attente) étaient indistinguables pour un consommateur Java alors que la CLI les restituait déjà. Résolu de façon **additive** : `importScip()` conserve son contrat exact, `importScipOutcome()` retourne `IndexImportOutcomeDto` (mêmes données + `ImportCommitStatus` + diagnostic assaini par `PublicErrorMessages`). Le `default` répond `UNAVAILABLE` au lieu de fabriquer `COMMITTED` ; `MinosApi.CONTRACT_VERSION` reste `1` car rien d'existant n'a bougé.
-- **Perte de capacités dans `LocalMinosMultiRepositoryApi`** — la façade M12 n'implémentait ni `getArchitectureGraph(...)` ni `team()` et héritait donc des `default` `UNAVAILABLE` de `MinosApi`, alors que le `MinosApplication` sous-jacent possédait ces capacités. Les deux sont désormais délégués au `LocalMinosApi` composé, ainsi que `contractVersion()` : sans exception, la règle « toute opération `MinosApi` est redéléguée » devient vérifiable par réflexion (`LocalMinosMultiRepositoryApiParityTest`) au lieu d'une liste maintenue à la main.
-- **Frontière de ressources incomplète dans `GitIntelligenceService`** — `maxFiles` ne bornait que le résultat final ; tout le travail (`DiffFormatter.scan` complet, chemins, maps fichiers/zones, `changedPaths` retenus) était accumulé avant troncature. `ActivityBudget` borne désormais explicitement le diff d'un commit, les maps suivies et les chemins retenus, et la taille du diff est **mesurée avant matérialisation** par un `TreeWalk` qui s'arrête une entrée au-delà du budget. `maxFiles` conserve sa sémantique publique. Toute limite atteinte est restituée (`DIFF_SCAN_TRUNCATED`, `PATHS_TRUNCATED`, `FILE_TRACKING_TRUNCATED`, `ZONE_TRACKING_TRUNCATED`) et la troncature reste déterministe.
-- **TOCTOU sur les lectures de sources** — `LocalSourceReader` validait un *pathname* puis le rouvrait avec `Files.newInputStream`, laissant une fenêtre de substitution par symlink. `ConfinedFileOpener` supprime la fenêtre au lieu de la réduire : descente par handles `SecureDirectoryStream` + `NOFOLLOW_LINKS` (modèle `openat`) là où la plateforme le permet, sinon ouverture `NOFOLLOW_LINKS` atomique de la feuille suivie d'une vérification de la chaîne d'ancêtres **handle déjà ouvert**, fail-closed dans tous les autres cas. Même motif corrigé dans le sidecar program-graph et le fingerprint de projet. Les tests utilisent un seam TEST-ONLY déclenché exactement entre validation et ouverture, sans aucun sleep.
+Aucun risque de cette section n'est considéré clos par la seule présence du code dans #227 : la clôture exige qualification exact-head puis merge explicite.
