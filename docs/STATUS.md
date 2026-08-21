@@ -37,7 +37,8 @@ Sous Windows, le PowerShell utilisé par AppContainer/Job Object est résolu uni
 
 Les tests distinguent maintenant explicitement `sandboxClaimPermitted()` de `managedLocalProviderClaimPermitted()`, couvrent la composition `StrongOwnedProcessExecutors`, vérifient que le sélecteur distant ne se transforme pas en contrat local, et qualifient la provenance réelle de `cmd.exe`, PowerShell, `sh`, `systemctl` et `systemd-run` sur les OS concernés.
 
-Le gate `scripts/docs/product-facts.py --check`, déjà exécuté par PR Validation, exige désormais que STATUS, ROADMAP et registre des risques présentent #227 comme intégrée et rejette toute ligne courante qui la marque encore non intégrée/en qualification.
+Le gate `scripts/docs/product-facts.py --check`, déjà exécuté par PR Validation, exige désormais que STATUS, ROADMAP et registre des risques présentent #227 comme intégrée.
+Il rejette les marqueurs de statut contradictoires associés à cette PR dans les documents courants.
 
 ## État produit
 

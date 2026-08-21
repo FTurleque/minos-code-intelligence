@@ -1,6 +1,8 @@
 # Feuille de route — MINOS
 
-Statut au **21 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#227 intégré ; remédiation du nouvel audit en qualification.**
+Statut au **21 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#227 intégré.**
+
+La remédiation du nouvel audit est actuellement en qualification.
 
 La version historique détaillée antérieure à la réconciliation post-#226 est conservée intégralement dans [`history/reconciliations/ROADMAP-pre-post226-audit-20260821.md`](history/reconciliations/ROADMAP-pre-post226-audit-20260821.md). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -44,7 +46,7 @@ La version historique détaillée antérieure à la réconciliation post-#226 es
 | #225 | confinement workspace provider/discovery/ignore rules | ✅ intégrée |
 | #226 | provenance launcher IntelliJ + walkers provider | ✅ intégrée |
 | #227 | provider egress, `CommandLocator`, reparse private storage, fallback confinement capability-honest | ✅ intégrée |
-| Audit post-#227 | composition sandbox/provider + autorité des launchers + gates/docs | 🟡 remédiation en qualification |
+| Audit post-#227 | composition sandbox/provider + autorité des launchers + gates/docs | 🟡 remédiation courante |
 
 ## Ligne de sécurité post-#227
 
@@ -68,7 +70,9 @@ Les frontières sensibles conservent la politique physique de #227 : symbolic li
 
 ### Gates
 
-Le `mvn verify` couvre désormais la distinction hostile/local, le sélecteur strict distant et la composition provider réelle. Les tests OS qualifient la provenance des launchers système. `scripts/docs/product-facts.py --check`, déjà exécuté sur Linux et Windows dans PR Validation, bloque désormais toute régression remettant #227 en état non intégré dans STATUS, ROADMAP ou le registre des risques.
+Le `mvn verify` couvre désormais la distinction hostile/local, le sélecteur strict distant et la composition provider réelle. Les tests OS qualifient la provenance des launchers système.
+
+`scripts/docs/product-facts.py --check` vérifie explicitement que #227 est intégrée dans STATUS, ROADMAP et le registre des risques. Il bloque les marqueurs de statut contradictoires.
 
 ## Release 1.0.1 — publiée
 

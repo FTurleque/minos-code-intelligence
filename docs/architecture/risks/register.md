@@ -55,6 +55,7 @@ Le nouvel audit complet de ce HEAD a ouvert une remédiation distincte, actuelle
 - `CommandLocator` résout les commandes Linux d'autorité sans PATH depuis des racines UID 0 non group/world-writable ;
 - tests Windows vérifiant `cmd.exe` et PowerShell canoniques System32 ;
 - tests IntelliJ vérifiant `/v:off`, `cmd.exe` System32 et `systemctl`/`systemd-run` root-owned ;
-- `product-facts.py --check` refuse de réintroduire un état documentaire où #227 serait encore non intégrée.
+- `product-facts.py --check` exige que #227 soit exposée comme intégrée dans les trois documents courants ;
+- le même gate refuse les marqueurs de statut contradictoires associés à cette PR.
 
 Aucun risque de la remédiation courante n'est considéré clos par la seule présence du code sur sa branche : la clôture exige qualification exact-head puis merge explicite.
