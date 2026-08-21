@@ -1,6 +1,8 @@
 package com.minos.runtime;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,6 +16,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandLocatorTest {
+
+    @Test
+    void pathResolutionIgnoresEmptyAndRelativeEntries(@TempDir Path temp) throws Exception {
+        Path bin = Files.createDirectories(temp.resolve("trusted-bin")).toAbsolutePath().normalize();
+        Path tool = Files.writeString(bin.resolve("minos-path-probe"), "fixture");
+        Path cwd = Path.of("").toAbsolutePath().normalize();
+        Assumptions.assumeTrue(cwd.getRoot().equals(bin.getRoot()),
+                "relative-path fixture requires temp and working directory on the same volume");
+        Path relativeBin = cwd.relativize(bin);
+        String separator = java.io.File.pathSeparator;
+
+        assertTrue(CommandLocator.findInPath(
+                tool.getFileName().toString(), separator + relativeBin + separator, false).isEmpty(),
+                "empty/current-directory and relative PATH entries must never become launch authority");
+
+        assertEquals(tool.toRealPath(), CommandLocator.findInPath(
+                tool.getFileName().toString(), relativeBin + separator + bin, false).orElseThrow(),
+                "the same executable must resolve once its directory is supplied as an absolute PATH entry");
+    }
 
     @Test
     void batchInvocationUsesCmdOuterQuotePairWithoutCallOrExpansion() {
@@ -43,6 +64,20 @@ class CommandLocatorTest {
                 () -> CommandLocator.windowsBatchInvocation(executable, "quote\"value"));
         assertThrows(IllegalArgumentException.class,
                 () -> CommandLocator.windowsBatchInvocation(executable, "line\nvalue"));
+    }
+
+    @Test
+    void realWindowsBatchInvocationUsesCanonicalSystem32Cmd() throws Exception {
+        if (!CommandLocator.isWindows()) {
+            return;
+        }
+        List<String> command = CommandLocator.windowsBatchInvocation(Path.of("C:\\fixture.cmd"));
+        Path processor = Path.of(command.getFirst());
+        Path expected = Path.of(System.getenv("SystemRoot"), "System32", "cmd.exe").toRealPath();
+        assertTrue(processor.isAbsolute(), "cmd.exe must not be resolved from the current directory or PATH");
+        assertTrue(Files.isRegularFile(processor), "resolved Windows command processor must exist");
+        assertEquals(expected, processor.toRealPath(),
+                "batch execution must be anchored to canonical SystemRoot\\System32\\cmd.exe, not ComSpec or PATH");
     }
 
     @Test

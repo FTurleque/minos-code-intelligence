@@ -1,6 +1,5 @@
 package com.minos.adapter.scip.runtime;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.runtime.IndexerProcessPlanFactory;
@@ -29,7 +28,7 @@ final class StrongOwnedProcessExecutors {
         return new StrongProcessOwnershipIndexerExecutor(
                 processExecutor,
                 minosHome,
-                localNetworkPolicy(providerId, planFactory));
+                localNetworkPolicy(planFactory));
     }
 
     /**
@@ -52,17 +51,16 @@ final class StrongOwnedProcessExecutors {
         return status;
     }
 
-    private static WorkerNetworkPolicy localNetworkPolicy(
-            String providerId,
-            IndexerProcessPlanFactory planFactory
-    ) {
-        return switch (providerId) {
-            // These providers can legitimately resolve project dependencies while indexing.
-            case "scip-java", ScipIndexerCatalog.SCIP_DOTNET_ID, ScipIndexerCatalog.SCIP_GO_ID,
-                    ScipIndexerCatalog.RUST_ANALYZER_SCIP_ID -> WorkerNetworkPolicy.ALLOW;
-            // scip-typescript, scip-python and scip-clang remain network-denied by default.
-            default -> planFactory.networkPolicy();
-        };
+    /**
+     * A provider never receives network access merely because its ecosystem normally resolves
+     * dependencies online. Maven wrappers, Maven plugins, MSBuild targets, Cargo build scripts and
+     * equivalent repository-controlled hooks execute inside the same descendant tree as the
+     * provider, so an implicit ALLOW would let untrusted project code exfiltrate the isolated source
+     * copy. A process-plan factory that can prove it does not execute repository-controlled code may
+     * opt into ALLOW explicitly; DENY remains the production default for every current SCIP factory.
+     */
+    static WorkerNetworkPolicy localNetworkPolicy(IndexerProcessPlanFactory planFactory) {
+        return planFactory.networkPolicy();
     }
 
     private static ProviderRuntimeStatus blocked(ProviderRuntimeStatus status, String diagnostic) {

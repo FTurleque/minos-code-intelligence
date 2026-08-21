@@ -122,10 +122,31 @@ def require_contained_cgroup_delegation() -> None:
         require(relative, read(relative), "delegate-linux-cgroup.sh --attach-pid $$")
 
 
+def require_post226_trust_boundaries() -> None:
+    """Regression barriers for the complete audit performed after PR #226."""
+    strong_owned = read(
+        "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/StrongOwnedProcessExecutors.java"
+    )
+    command_locator = read("minos-runtime-local/src/main/java/com/minos/runtime/CommandLocator.java")
+    private_storage = read("minos-engine/src/main/java/com/minos/io/PrivateLocalStorage.java")
+    confined_opener = read("minos-engine/src/main/java/com/minos/io/ConfinedFileOpener.java")
+
+    require("StrongOwnedProcessExecutors.java", strong_owned, "return planFactory.networkPolicy()")
+    forbid("StrongOwnedProcessExecutors.java", strong_owned, "WorkerNetworkPolicy.ALLOW")
+    require("CommandLocator.java", command_locator, "if (!directory.isAbsolute())")
+    require("CommandLocator.java", command_locator, "directory = directory.toRealPath()")
+    require("CommandLocator.java", command_locator,
+            "Windows command processor must resolve to an existing absolute cmd.exe")
+    require("PrivateLocalStorage.java", private_storage, "attributes.isOther()")
+    require("ConfinedFileOpener.java", confined_opener, "attributes.isOther()")
+    require("ConfinedFileOpener.java", confined_opener, "does <em>not</em> claim the same ancestor-identity proof")
+
+
 def main() -> int:
     try:
         forbid_root_cgroup_procs_delegation()
         require_contained_cgroup_delegation()
+        require_post226_trust_boundaries()
         application = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
         fingerprint_provider = read(
