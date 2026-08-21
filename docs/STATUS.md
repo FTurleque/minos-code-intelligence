@@ -2,43 +2,40 @@
 
 Dernière mise à jour : **21 août 2026**.
 
-Ce fichier est la synthèse autoritative de l'état produit courant. L'historique détaillé antérieur à la campagne post-#226 est conservé sans modification dans [`history/reconciliations/STATUS-pre-post226-audit-20260821.md`](history/reconciliations/STATUS-pre-post226-audit-20260821.md). Les preuves de jalons restent sous [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
+Ce fichier est la synthèse autoritative de l'état produit courant. L'historique détaillé antérieur à la campagne post-#226 est conservé sans modification dans [`history/reconciliations/STATUS-pre-post226-audit-20260821.md`](history/reconciliations/STATUS-pre-post226-audit-20260821.md).
 
-> **Convention.** Une capacité n'est considérée intégrée qu'après merge. Une remédiation en PR reste explicitement marquée « en qualification » jusqu'à son merge, même si son code et ses tests sont déjà présents sur la branche de travail.
+> **Convention.** Une capacité n'est considérée intégrée qu'après merge. Une correction présente sur une branche ou une PR reste « en qualification » jusqu'à son merge.
 
-## Réconciliation post-PR #227 — audit complet du 21 août 2026
+## Réconciliation post-PR #228
 
-**PR #227 est intégrée** dans `develop` par le merge signé `32c376ed36595ff60daa7cda9367cba787547069`. Le nouvel audit complet de ce HEAD n'a confirmé aucun P0 ; il a identifié un blocage P1 de composition sandbox/provider, un P2 de provenance des exécutables qui constituent l'autorité de sandbox, et deux écarts P3 de tests/gates et de documentation.
+**PR #228 est intégrée** dans `develop`.
 
-Une remédiation distincte est actuellement en qualification sur une branche dédiée. Elle ne relâche ni l'egress `DENY`, ni le contrat hostile/untrusted des workers distants, ni l'exigence de quota filesystem `OS_ENFORCED` lorsqu'une exécution est présentée comme sûre pour du code hostile.
+- HEAD exact qualifié de #228 : `1a551ff72f95db4e14e8a9597d897491b9c1589a` ;
+- merge signé dans `develop` : `a042e97ac5e3e2ab7207fa603d85563ea1f71712` ;
+- composition sandbox/provider local rétablie sans transformer un quota supervisé en claim hostile ;
+- `bwrap`, `prlimit`, `sh`, `systemctl`, `systemd-run`, PowerShell et `cmd.exe` utilisés comme autorités de sécurité sont ancrés aux emplacements système qualifiés plutôt qu'à un PATH utilisateur/`ComSpec`.
 
-### P1 — composition sandbox/provider local
+Le réaudit complet du merge #228 n'a confirmé aucun P0. Il a toutefois identifié deux défauts distincts dans le niveau **managed-local-provider** : la perte de visibilité d'un writable root pouvait être comptée comme zéro par le superviseur de quota, et le stockage privé implicite d'un AppContainer Windows n'entrait pas dans le budget Java. Il a aussi identifié une sémantique `READY` Windows trop optimiste et des gates/docs incomplets.
 
-Le modèle `WorkerResourceContainment` est volontairement strict : un quota filesystem seulement supervisé ne peut pas qualifier l'exécution de code hostile, car un writer peut dépasser le seuil entre deux échantillons. Les backends Linux bubblewrap/cgroup v2 et Windows AppContainer/Job Object déclarent donc correctement `SUPERVISED_HARD_KILL` sur les dimensions filesystem et restent `UNTRUSTED_CODE_UNSUPPORTED` tant qu'aucun quota disque kernel/hard n'existe.
+La remédiation quota/readiness courante est **en qualification, non intégrée**. Elle conserve le contrat hostile strict : les workers distants restent fail-closed sans quota filesystem `OS_ENFORCED`.
 
-Le défaut était la réutilisation de ce contrat hostile dans le chemin provider local géré : `WorkerSandboxBackends.strongestAvailable()` éliminait les deux backends, `StrongOwnedProcessExecutors.qualifyOwnership()` transformait ensuite les runtimes installés en `BLOCKED`, et l'indexation autonome refusait de construire les executors.
+### Quota managed-local-provider
 
-La remédiation sépare deux qualifications machine-readable :
+La remédiation courante applique les règles suivantes :
 
-- **hostile/untrusted** : contrat historique inchangé, filesystem bytes+entries obligatoirement `OS_ENFORCED`, utilisé par les workers distants ;
-- **managed local provider** : réseau OS-enforced, job boundary agrégé OS, descendants OS-owned, timeout actif, quotas filesystem bytes+entries appliqués pendant l'exécution et reclamation scratch active. Les quotas filesystem peuvent être `SUPERVISED_HARD_KILL`, sans jamais devenir une claim hostile.
+- toute perte réelle de visibilité d'un writable root supervisé devient un breach et détruit le job ;
+- une disparition concurrente normale d'une entrée ne provoque pas de faux breach ;
+- sous Windows, le budget global historique de **8 GiB / 400 000 entrées** reste borné : **7 GiB / 350 000** pour les roots explicites MINOS et **1 GiB / 50 000** réservé au stockage fichier privé AppContainer ;
+- les mutations du stockage registre privé AppContainer sont refusées avant reprise du child suspendu ;
+- le superviseur du stockage privé est armé avant `ResumeThread` et tue le Job Object au dépassement ou à la perte de visibilité.
 
-`StrongOwnedProcessExecutors` et `StrongProcessOwnershipIndexerExecutor` utilisent uniquement ce second sélecteur pour l'indexation locale. `LocalIsolatedIndexWorker` conserve le sélecteur hostile strict et reste fail-closed tant qu'un hard filesystem quota n'est pas disponible.
+### Qualification Windows `READY`
 
-### P2 — provenance des exécutables d'autorité
+La présence de PowerShell ou d'un launcher ne suffit plus à qualifier le backend AppContainer. La découverte exécute un probe réel et borné du launcher packagé : création du profil, token AppContainer, Job Object, limites relues depuis le noyau, assignment, membership et reprise d'un child inoffensif doivent tous réussir. La disponibilité d'un provider local dépend du sandbox réellement utilisé à l'exécution, et non d'un second launcher ownership-only inutilisé par ce chemin.
 
-Le hardening #227 des PATH relatifs reste en place, mais un répertoire PATH absolu ne suffit pas à établir la provenance d'un binaire qui crée la frontière de sécurité.
+### Anti-régression
 
-Sous Linux, `bwrap`, `prlimit` et le `sh` utilisé pour entrer dans le cgroup sont désormais résolus sans PATH depuis les répertoires système fixes `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`. Le répertoire réel et l'exécutable réel doivent être UID 0 et non modifiables par group/others ; un symlink qui sort du répertoire système réel est refusé.
-
-Sous Windows, le PowerShell utilisé par AppContainer/Job Object est résolu uniquement sous `SystemRoot\System32\WindowsPowerShell\v1.0`. Le plugin IntelliJ applique la même règle : `cmd.exe` est ancré à `SystemRoot\System32`, `ComSpec` n'est plus une source de confiance, `/v:off` désactive delayed expansion, et `systemctl`/`systemd-run` utilisent sur Linux des chemins système canoniques root-owned pour le probe, l'exécution et l'arrêt du scope.
-
-### P3 — tests, gates et documentation
-
-Les tests distinguent maintenant explicitement `sandboxClaimPermitted()` de `managedLocalProviderClaimPermitted()`, couvrent la composition `StrongOwnedProcessExecutors`, vérifient que le sélecteur distant ne se transforme pas en contrat local, et qualifient la provenance réelle de `cmd.exe`, PowerShell, `sh`, `systemctl` et `systemd-run` sur les OS concernés.
-
-Le gate `scripts/docs/product-facts.py --check`, déjà exécuté par PR Validation, exige désormais que STATUS, ROADMAP et registre des risques présentent #227 comme intégrée.
-Il rejette les marqueurs de statut contradictoires associés à cette PR dans les documents courants.
+Un gate dédié post-#228 vérifie statiquement les invariants de quota/readiness et impose une couverture JaCoCo ciblée de `ProviderWriteQuotaSupervisor`. Un workflow exact-head Linux/Windows exécute le gate documentaire courant, `mvn verify`, les tests réels AppContainer/Job Object et le gate de couverture.
 
 ## État produit
 
@@ -50,8 +47,9 @@ Il rejette les marqueurs de statut contradictoires associés à cette PR dans le
 - **PR #224** : traversées projet/NEXUS et couverture ciblée intégrées.
 - **PR #225** : confinement workspace provider/discovery/ignore rules intégré.
 - **PR #226** : provenance launcher IntelliJ et derniers walkers provider intégrés.
-- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement — **intégrée**.
-- **remédiation post-audit courant** : composition provider locale, provenance des autorités de sandbox, tests/gates et réconciliation documentaire — **en qualification, non intégrée**.
+- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement intégrés.
+- **PR #228** : composition managed-local-provider et provenance des autorités de sandbox **intégrées** au HEAD qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`.
+- **remédiation quota/readiness post-#228** : en qualification, non intégrée.
 
 ## Release 1.0.1
 
@@ -73,19 +71,18 @@ La release **v1.0.1 est PUBLIÉE et immuable**.
 ## Garanties structurantes courantes
 
 - snapshots structurés autoritatifs et promotions fail-closed ;
-- API/CLI/MCP/NEXUS/IntelliJ au-dessus du métier sans réintroduire une autorité concurrente ;
+- API/CLI/MCP/NEXUS/IntelliJ au-dessus du métier sans autorité concurrente ;
 - providers locaux exécutés depuis une copie éphémère bornée avec réseau OS-enforced et job boundary agrégé ;
-- la qualification provider locale supervisée est distincte de toute claim d'exécution hostile ;
-- workers distants/hostiles toujours fail-closed sans hard filesystem quota `OS_ENFORCED` ;
-- egress provider `DENY` par défaut et jamais inféré du seul besoin de résolution de dépendances ;
-- exécutables qui créent la sandbox résolus depuis des autorités système canoniques, pas depuis un PATH utilisateur ;
+- qualification provider locale supervisée strictement distincte de toute claim hostile ;
+- workers distants/hostiles fail-closed sans hard filesystem quota `OS_ENFORCED` ;
+- egress provider `DENY` par défaut ;
+- exécutables qui créent la sandbox résolus depuis des autorités système canoniques ;
 - environnement provider allowlisté ;
-- Git distant borné et épinglé à l'endpoint attendu ;
-- PostgreSQL hors loopback avec TLS `verify-full`, configuration JDBC allowlistée et transactions encadrées ;
-- hosted control plane avec authentification, membership/RBAC et chaîne d'audit HMAC ;
+- stockage privé AppContainer inclus dans la frontière de write containment de la remédiation courante ;
 - local storage owner-only, symlink/junction/reparse refusés avant mutation ;
-- supply-chain CI et release épinglée à des références immuables lorsqu'une telle garantie est revendiquée.
+- Git distant, PostgreSQL, hosted control plane, MCP et Ollama conservent leurs frontières fail-closed déjà qualifiées ;
+- supply-chain CI et release épinglées à des références immuables lorsqu'une telle garantie est revendiquée.
 
 ## Qualification de la remédiation courante
 
-La remédiation ne doit être déclarée intégrée qu'après succès exact-head des workflows applicables sur son HEAD final, notamment PR Validation Linux/Windows, IntelliJ Plugin Validation et les validations spécialisées déclenchées par les chemins modifiés. Aucun merge n'est autorisé par ce document ; la décision d'intégration reste explicite après qualification.
+La correction ne sera déclarée intégrée qu'après succès exact-head des workflows applicables sur son HEAD final. Aucun merge n'est autorisé par ce document : l'intégration exige toujours une décision explicite après qualification.
