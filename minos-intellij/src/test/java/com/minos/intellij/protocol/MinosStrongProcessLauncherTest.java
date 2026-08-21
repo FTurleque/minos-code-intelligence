@@ -89,8 +89,8 @@ class MinosStrongProcessLauncherTest {
                 .redirectErrorStream(true)
                 .start();
         int exit = mklink.waitFor();
-        Assumptions.assumeTrue(exit == 0,
-                () -> "mklink /J unavailable: " + new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        String mklinkOutput = new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        Assumptions.assumeTrue(exit == 0, "mklink /J unavailable: " + mklinkOutput);
 
         ProcessBuilder builder = new ProcessBuilder(List.of(
                 powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
