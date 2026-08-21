@@ -158,11 +158,9 @@ public final class CommandLocator {
             // this branch only on Windows through invocation().
             return "cmd.exe";
         }
-        Optional<Path> configured = realRegularFile(System.getenv("ComSpec"));
-        if (configured.isPresent()
-                && configured.orElseThrow().getFileName().toString().equalsIgnoreCase("cmd.exe")) {
-            return configured.orElseThrow().toString();
-        }
+        // ComSpec is intentionally not a trust source. It is inherited process environment and may
+        // point at an arbitrary absolute executable. Batch execution is anchored instead to the
+        // canonical Windows system directory; if that cannot be proven, fail closed.
         String systemRoot = System.getenv("SystemRoot");
         if (systemRoot != null && !systemRoot.isBlank()) {
             try {
@@ -172,21 +170,10 @@ public final class CommandLocator {
                     if (systemCmd.isPresent()) return systemCmd.orElseThrow().toString();
                 }
             } catch (InvalidPathException invalid) {
-                // Fail below instead of falling back to a bare current-directory-searchable cmd.exe.
+                // Fail below instead of falling back to ComSpec, PATH or a bare cmd.exe.
             }
         }
-        throw new IllegalStateException("Windows command processor must resolve to an existing absolute cmd.exe");
-    }
-
-    private static Optional<Path> realRegularFile(String configured) {
-        if (configured == null || configured.isBlank()) return Optional.empty();
-        try {
-            Path path = Path.of(configured);
-            if (!path.isAbsolute()) return Optional.empty();
-            return realRegularFile(path);
-        } catch (InvalidPathException invalid) {
-            return Optional.empty();
-        }
+        throw new IllegalStateException("Windows command processor must resolve to SystemRoot\\System32\\cmd.exe");
     }
 
     private static Optional<Path> realRegularFile(Path path) {
