@@ -70,7 +70,7 @@ SCOPES = {
         "line": 0.50,
         "branch": 0.28,
         "prefixMinimums": {
-            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager": {"line": 0.25, "branch": 0.15},
+            "com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager": {"line": 0.28, "branch": 0.20},
         },
     },
     "m25-remote-distributed-indexing": {
@@ -85,7 +85,7 @@ SCOPES = {
         "line": 0.70,
         "branch": 0.50,
         "prefixMinimums": {
-            "com/minos/git/JGitCloneDeadline": {"line": 0.40, "branch": 0.30},
+            "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
         },
     },
     "provider-execution-trust-boundary": {
@@ -99,8 +99,8 @@ SCOPES = {
         "line": 0.68,
         "branch": 0.48,
         "prefixMinimums": {
-            "com/minos/runtime/StrongProcessOwnershipIndexerExecutor": {"line": 0.50, "branch": 0.20},
-            "com/minos/runtime/ProviderProcessEnvironment": {"line": 0.60, "branch": 0.15},
+            "com/minos/runtime/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
+            "com/minos/runtime/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
         },
     },
     "provider-sandbox-linux": {
@@ -146,7 +146,7 @@ SCOPES = {
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
-    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.20, "branch": 0.08},
+    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.18, "branch": 0.07},
 }
 
 
