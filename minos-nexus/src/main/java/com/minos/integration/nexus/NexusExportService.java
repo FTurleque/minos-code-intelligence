@@ -216,7 +216,13 @@ public final class NexusExportService {
 
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                return account();
+                FileVisitResult decision = account();
+                if (decision == FileVisitResult.TERMINATE) return decision;
+                if (!directory.equals(root)
+                        && (!attributes.isDirectory() || attributes.isSymbolicLink() || attributes.isOther())) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
             }
 
             @Override
