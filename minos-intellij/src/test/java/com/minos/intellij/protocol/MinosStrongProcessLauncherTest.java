@@ -7,6 +7,7 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinosStrongProcessLauncherTest {
@@ -74,6 +76,31 @@ class MinosStrongProcessLauncherTest {
 
             supervisor.stop(null);
         }
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void configuredOwnershipHomeRejectsAWindowsJunctionBeforeAclMutation() throws Exception {
+        Path outside = Files.createDirectories(temp.resolve("outside-home"));
+        Path junction = temp.resolve("junction-home");
+        Process mklink = new ProcessBuilder(
+                "cmd.exe", "/d", "/s", "/c",
+                "mklink /J \"" + junction + "\" \"" + outside + "\"")
+                .redirectErrorStream(true)
+                .start();
+        int exit = mklink.waitFor();
+        Assumptions.assumeTrue(exit == 0,
+                () -> "mklink /J unavailable: " + new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+
+        ProcessBuilder builder = new ProcessBuilder(List.of(
+                powershell().toString(), "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-Command", "Start-Sleep -Seconds 30"));
+        builder.directory(temp.toFile());
+
+        assertThrows(IOException.class,
+                () -> MinosStrongProcessLauncher.start(builder, junction.toString()));
+        assertFalse(Files.exists(outside.resolve("intellij")),
+                "rejected reparse homes must not receive ownership infrastructure");
     }
 
     @Test
