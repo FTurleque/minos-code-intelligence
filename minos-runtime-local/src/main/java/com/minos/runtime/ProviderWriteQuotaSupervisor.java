@@ -7,6 +7,7 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -29,9 +30,10 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>Loss of measurement visibility is itself a containment breach. A provider controls the
  * writable roots and may try to make a directory unreadable while retaining an already-open file
- * descriptor below it. Treating that subtree as zero bytes would make the quota bypassable, so a
- * missing/non-directory root, {@code visitFileFailed}, or any failed walk kills the whole contained
- * job instead of being retried optimistically.</p>
+ * descriptor below it. Treating that subtree as zero bytes would make the quota bypassable, so an
+ * access/inspection failure kills the whole contained job. A child entry that simply disappears
+ * during the concurrent walk is different: those bytes no longer occupy the filesystem, so a
+ * {@link NoSuchFileException} for a non-root entry is tolerated.</p>
  */
 final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
@@ -128,9 +130,6 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                 return;
             }
             try {
-                // Supervision must never cost more than a bounded share of a core. The walk itself is
-                // bounded by the entry budget, so backing off proportionally keeps the breach latency
-                // bounded too: at most max(samplePeriod, IDLE_RATIO x boundedWalk).
                 Thread.sleep(Math.max(quota.samplePeriod().toMillis(), IDLE_RATIO * elapsedMillis));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
@@ -172,8 +171,6 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                 public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
                     FileVisitResult result = account(0L);
                     if (result != FileVisitResult.CONTINUE) return result;
-                    // A Windows junction/reparse point: account it as one entry but never descend
-                    // into whatever it targets, which may be entirely outside this writable root.
                     return FileTreeOperations.isRecursableDirectory(attributes)
                             ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
                 }
@@ -185,6 +182,9 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
                 @Override
                 public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                    if (failure instanceof NoSuchFileException && !file.equals(root)) {
+                        return FileVisitResult.CONTINUE;
+                    }
                     totals[1] = saturatingAdd(totals[1], 1L);
                     visibilityFailure[0] = "cannot inspect an entry below a supervised writable root ("
                             + failure.getClass().getSimpleName() + ")";
@@ -199,6 +199,10 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                             : FileVisitResult.CONTINUE;
                 }
             });
+        } catch (NoSuchFileException disappeared) {
+            return Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)
+                    ? null
+                    : "writable root disappeared while it was being supervised";
         } catch (IOException | RuntimeException failure) {
             return "cannot enumerate a supervised writable root (" + failure.getClass().getSimpleName() + ")";
         }
