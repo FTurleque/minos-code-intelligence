@@ -1,8 +1,10 @@
 # Feuille de route — MINOS
 
-Statut au **21 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening post-audit #113–#226 intégré ; remédiation post-#226 en qualification dans PR #227.**
+Statut au **21 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#227 intégré.**
 
-La version historique détaillée antérieure à cette réconciliation est conservée intégralement dans [`history/reconciliations/ROADMAP-pre-post226-audit-20260821.md`](history/reconciliations/ROADMAP-pre-post226-audit-20260821.md). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
+La remédiation du nouvel audit est actuellement en qualification.
+
+La version historique détaillée antérieure à la réconciliation post-#226 est conservée intégralement dans [`history/reconciliations/ROADMAP-pre-post226-audit-20260821.md`](history/reconciliations/ROADMAP-pre-post226-audit-20260821.md). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
 ## Principes durables
 
@@ -12,7 +14,9 @@ La version historique détaillée antérieure à cette réconciliation est conse
 - les providers absents ou non qualifiés ne sont jamais extrapolés ;
 - CLI, API, MCP, NEXUS et IntelliJ restent des surfaces au-dessus du métier ;
 - remote/hosted/sandbox restent fail-closed lorsqu'une garantie n'est pas prouvée ;
+- le contrat managed-local-provider reste distinct d'une claim hostile/untrusted ;
 - l'accès réseau d'un provider est `DENY` par défaut et ne devient jamais `ALLOW` uniquement parce qu'un écosystème résout habituellement ses dépendances en ligne ;
+- les exécutables qui constituent l'autorité de sandbox ne sont pas choisis dans un PATH utilisateur ;
 - une release publiée est immuable ;
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - une publication est bloquée par les vulnérabilités connues ou l'absence de qualification exacte du candidat.
@@ -41,21 +45,34 @@ La version historique détaillée antérieure à cette réconciliation est conse
 | #224 | traversées projet/NEXUS + couverture ciblée | ✅ intégrée |
 | #225 | confinement workspace provider/discovery/ignore rules | ✅ intégrée |
 | #226 | provenance launcher IntelliJ + walkers provider | ✅ intégrée |
-| #227 | provider egress, `CommandLocator`, reparse private storage, fallback confinement capability-honest | 🟡 en qualification — non intégrée |
+| #227 | provider egress, `CommandLocator`, reparse private storage, fallback confinement capability-honest | ✅ intégrée |
+| Audit post-#227 | composition sandbox/provider + autorité des launchers + gates/docs | 🟡 remédiation courante |
 
-## Ligne de sécurité post-#226
+## Ligne de sécurité post-#227
 
 ### Provider egress
 
-La règle de production est désormais simple : tout descendant d'un provider est considéré non fiable, y compris les scripts et hooks provenant du repository. `IndexerProcessPlanFactory.networkPolicy()` reste `DENY` par défaut. Une factory ne peut demander `ALLOW` qu'après démonstration qu'elle n'exécute pas de code repository-controlled dans cette phase, ou après séparation de ce code dans une frontière explicitement approuvée.
+Tout descendant d'un provider reste considéré non fiable pour la confidentialité réseau : `IndexerProcessPlanFactory.networkPolicy()` est `DENY` par défaut. Une factory ne peut demander `ALLOW` qu'après démonstration qu'elle n'exécute pas de code repository-controlled dans cette phase, ou après séparation de ce code dans une frontière explicitement approuvée.
 
-### Provenance des commandes
+### Deux niveaux de qualification sandbox
 
-`CommandLocator` ne considère que des entrées `PATH` absolues, les canonise et retourne un fichier réel absolu. Les éléments vides ou relatifs ne peuvent plus transformer le CWD en autorité de lancement. Les batch Windows utilisent un `cmd.exe` résolu vers un fichier absolu existant.
+Le worker distant/hostile conserve le niveau fort : process/memory/CPU/descendants et filesystem bytes+entries doivent satisfaire le contrat hostile, notamment un quota filesystem `OS_ENFORCED`. Tant que le hard quota disque n'existe pas, ce chemin reste fail-closed.
+
+Le chemin provider local géré possède désormais un contrat distinct et machine-readable. Il exige réseau OS-enforced, job boundary agrégé OS, timeout, quotas filesystem bytes+entries appliqués pendant l'exécution et reclamation scratch. Les quotas filesystem `SUPERVISED_HARD_KILL` sont acceptés uniquement dans ce niveau local ; ils ne modifient jamais `supportsUntrustedCode()`.
+
+### Provenance des commandes de sécurité
+
+Les commandes ordinaires peuvent continuer à provenir d'un PATH absolu canonisé. Les exécutables qui créent ou contrôlent la sandbox utilisent une règle plus forte : `bwrap`, `prlimit`, le `sh` du launcher cgroup, `systemctl` et `systemd-run` sont résolus dans des racines système Linux canoniques root-owned et non group/world-writable. PowerShell et `cmd.exe` sont ancrés à `SystemRoot\System32` ; `ComSpec` n'est pas une autorité de confiance.
 
 ### Confinement filesystem
 
-Les frontières sensibles convergent sur la même politique physique : symbolic links et objets `isOther()` (notamment junction/reparse Windows) sont refusés avant récursion, ACL ou lecture sensible. `SecureDirectoryStream` reste la seule stratégie annoncée comme handle-relative ; le fallback Windows est explicitement décrit comme pathname-revalidated plutôt que sur-vendu comme équivalent `openat`.
+Les frontières sensibles conservent la politique physique de #227 : symbolic links et objets `isOther()` (notamment junction/reparse Windows) sont refusés avant récursion, ACL ou lecture sensible. `SecureDirectoryStream` reste la seule stratégie annoncée comme handle-relative ; le fallback Windows est pathname-revalidated et capability-honest.
+
+### Gates
+
+Le `mvn verify` couvre désormais la distinction hostile/local, le sélecteur strict distant et la composition provider réelle. Les tests OS qualifient la provenance des launchers système.
+
+`scripts/docs/product-facts.py --check` vérifie explicitement que #227 est intégrée dans STATUS, ROADMAP et le registre des risques. Il bloque les marqueurs de statut contradictoires.
 
 ## Release 1.0.1 — publiée
 
@@ -69,4 +86,4 @@ La **Release 1.0.1 est publiée** et reste immuable :
 
 ## Suite
 
-Aucun nouveau jalon fonctionnel n'est ouvert par #227. La priorité est de terminer sa qualification exact-head sans diminuer les seuils ni les assertions de sécurité. Toute évolution future de provider nécessitant réellement le réseau devra introduire une phase de confiance explicite plutôt qu'un retour à un `ALLOW` implicite.
+Aucun nouveau jalon fonctionnel n'est ouvert. La priorité est de qualifier exact-head la remédiation du nouvel audit sans diminuer les seuils ni les assertions de sécurité. La dette durable reste le hard filesystem quota : si une exécution distante réellement hostile doit être activée, elle devra obtenir une primitive qui refuse l'écriture avant dépassement au lieu de reclassifier une supervision périodique.

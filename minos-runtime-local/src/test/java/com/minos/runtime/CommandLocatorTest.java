@@ -37,6 +37,22 @@ class CommandLocatorTest {
     }
 
     @Test
+    void linuxSecurityAuthorityCommandsUseRootOwnedSystemPathsInsteadOfPath() throws Exception {
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (!os.contains("linux")) return;
+
+        Path shell = CommandLocator.findSystemExecutable("sh").orElseThrow();
+
+        assertEquals(shell, CommandLocator.find("sh").orElseThrow(),
+                "security-authority commands must use the dedicated system resolver");
+        assertTrue(shell.isAbsolute());
+        assertTrue(Files.isRegularFile(shell));
+        assertTrue(Files.isExecutable(shell));
+        assertEquals(0L, ((Number) Files.getAttribute(shell, "unix:uid")).longValue(),
+                "the selected security authority executable must be root-owned");
+    }
+
+    @Test
     void batchInvocationUsesCmdOuterQuotePairWithoutCallOrExpansion() {
         List<String> command = CommandLocator.windowsBatchInvocation(
                 Path.of("C:\\Program Files\\MINOS & Tools\\provider.cmd"),
@@ -78,6 +94,16 @@ class CommandLocatorTest {
         assertTrue(Files.isRegularFile(processor), "resolved Windows command processor must exist");
         assertEquals(expected, processor.toRealPath(),
                 "batch execution must be anchored to canonical SystemRoot\\System32\\cmd.exe, not ComSpec or PATH");
+    }
+
+    @Test
+    void realWindowsPowerShellUsesCanonicalSystem32Host() throws Exception {
+        if (!CommandLocator.isWindows()) return;
+        Path actual = CommandLocator.windowsPowerShell().orElseThrow();
+        Path expected = Path.of(System.getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+                .toRealPath();
+        assertEquals(expected, actual.toRealPath(),
+                "the sandbox authority PowerShell host must not be selected from PATH");
     }
 
     @Test

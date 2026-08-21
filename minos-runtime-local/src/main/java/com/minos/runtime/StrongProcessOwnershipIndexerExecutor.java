@@ -15,7 +15,7 @@ import java.util.Optional;
  * <p>The historical two-argument constructor retains its ownership-only contract for callers that
  * explicitly qualify that kernel primitive. Managed provider production wiring uses the explicit
  * network-policy constructor, which additionally executes from a bounded ephemeral project copy
- * inside the strongest qualified OS sandbox.</p>
+ * inside the strongest qualified managed-local-provider OS sandbox.</p>
  */
 public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
@@ -86,9 +86,10 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
             IndexingExecutionRequest request,
             LocalIsolation isolation
     ) throws Exception {
-        WorkerSandboxBackend backend = WorkerSandboxBackends.strongestAvailable(isolation.minosHome());
-        if (!backend.supportsUntrustedCode()) {
-            throw unavailable("qualified local provider sandbox is unavailable: " + backend.id());
+        WorkerSandboxBackend backend = WorkerSandboxBackends
+                .strongestAvailableForManagedLocalProvider(isolation.minosHome());
+        if (!backend.supportsManagedLocalProvider()) {
+            throw unavailable("qualified managed local provider sandbox is unavailable: " + backend.id());
         }
         if (isolation.networkPolicy() == WorkerNetworkPolicy.DENY && !backend.enforcesNetworkDeny()) {
             throw unavailable("qualified local provider sandbox cannot prove OS-level network denial: " + backend.id());
@@ -152,13 +153,13 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
                         yield Capability.unavailable("linux-cgroup-v2",
                                 root.isEmpty()
                                         ? "delegated cgroup v2 root with cgroup.kill is unavailable"
-                                        : "POSIX sh is unavailable");
+                                        : "trusted POSIX sh is unavailable");
                     }
                     case WINDOWS -> WindowsJobObjectProcessOwnership.discover(minosHome).isPresent()
                             ? Capability.available("windows-job-object")
                             : Capability.unavailable(
                                     "windows-job-object",
-                                    "PowerShell/native Job Object launcher is unavailable");
+                                    "trusted PowerShell/native Job Object launcher is unavailable");
                     case OTHER -> Capability.unavailable(
                             "none", "strong process ownership is unsupported on this platform");
                 };
@@ -181,7 +182,7 @@ public final class StrongProcessOwnershipIndexerExecutor implements ProcessSandb
         Path root = LinuxCgroupJob.delegatedRoot()
                 .orElseThrow(() -> unavailable("delegated cgroup v2 ownership is unavailable"));
         Path shell = CommandLocator.find("sh")
-                .orElseThrow(() -> unavailable("POSIX sh required by cgroup ownership launcher is unavailable"));
+                .orElseThrow(() -> unavailable("trusted POSIX sh required by cgroup ownership launcher is unavailable"));
         String jobName = "minos-provider-" + request.runId();
         return new ProcessIndexerExecutor.ProcessPlanTransformer() {
             private LinuxCgroupJob job;

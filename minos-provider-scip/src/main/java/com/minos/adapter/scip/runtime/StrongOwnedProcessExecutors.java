@@ -12,6 +12,7 @@ import com.minos.runtime.WorkerSandboxBackends;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /** Applies the fail-closed local isolation policy to every managed SCIP provider. */
 final class StrongOwnedProcessExecutors {
@@ -33,20 +34,38 @@ final class StrongOwnedProcessExecutors {
 
     /**
      * Downgrades an otherwise-ready runtime when the host cannot provide both strong descendant
-     * ownership and the qualified OS sandbox used by production local indexing.
+     * ownership and the qualified managed-local-provider sandbox used by production local indexing.
+     *
+     * <p>This deliberately does not require {@code supportsUntrustedCode()}: the current Linux and
+     * Windows backends enforce filesystem quotas through a supervised hard kill rather than a kernel
+     * quota. That narrower contract is acceptable for managed local indexing, while remote/hostile
+     * execution remains fail-closed on the stricter worker selector.</p>
      */
     static ProviderRuntimeStatus qualifyOwnership(ProviderRuntimeStatus status, Path minosHome) {
         if (!status.ready()) return status;
         StrongProcessOwnershipIndexerExecutor.Capability ownership =
                 StrongProcessOwnershipIndexerExecutor.detectCapability(minosHome);
+        WorkerSandboxBackend sandbox = WorkerSandboxBackends
+                .strongestAvailableForManagedLocalProvider(minosHome);
+        return qualifyOwnership(status, ownership, sandbox);
+    }
+
+    /** Package-visible seam used to lock the production composition contract without OS assumptions. */
+    static ProviderRuntimeStatus qualifyOwnership(
+            ProviderRuntimeStatus status,
+            StrongProcessOwnershipIndexerExecutor.Capability ownership,
+            WorkerSandboxBackend sandbox
+    ) {
+        Objects.requireNonNull(status, "status");
+        Objects.requireNonNull(ownership, "ownership");
+        Objects.requireNonNull(sandbox, "sandbox");
+        if (!status.ready()) return status;
         if (!ownership.strong()) {
             return blocked(status, "strong process ownership is unavailable (" + ownership.mechanism() + "): "
                     + String.join("; ", ownership.diagnostics()));
         }
-
-        WorkerSandboxBackend sandbox = WorkerSandboxBackends.strongestAvailable(minosHome);
-        if (!sandbox.supportsUntrustedCode()) {
-            return blocked(status, "qualified local provider sandbox is unavailable: " + sandbox.id());
+        if (!sandbox.supportsManagedLocalProvider()) {
+            return blocked(status, "qualified managed local provider sandbox is unavailable: " + sandbox.id());
         }
         return status;
     }

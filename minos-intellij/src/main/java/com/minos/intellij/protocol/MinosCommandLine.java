@@ -15,8 +15,11 @@ final class MinosCommandLine {
         boolean windows = osName != null && osName.toLowerCase(Locale.ROOT).contains("win");
         if (windows && isBatch(effectiveExecutable)) {
             List<String> command = new ArrayList<>();
+            // The strong process launcher resolves this token to canonical SystemRoot\\System32\\cmd.exe
+            // before the ownership plan is published. Never resolve it from ComSpec or PATH there.
             command.add("cmd.exe");
             command.add("/d");
+            command.add("/v:off");
             command.add("/s");
             command.add("/c");
             command.add(renderWindowsBatchCommand(effectiveExecutable, safeArguments));

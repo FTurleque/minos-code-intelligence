@@ -15,6 +15,7 @@ import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.UserPrincipal;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,7 +43,8 @@ final class MinosStrongProcessLauncher {
     private static final long CONTROL_TIMEOUT_SECONDS = 5L;
     private static final int MAX_CONTROL_OUTPUT_BYTES = 64 * 1024;
     private static final Duration STALE_PLAN_AGE = Duration.ofHours(24);
-    private static final String SYSTEMCTL = "systemctl";
+    private static final List<Path> LINUX_SYSTEM_DIRECTORIES = List.of(
+            Path.of("/usr/bin"), Path.of("/bin"), Path.of("/usr/sbin"), Path.of("/sbin"));
     private static final String USER_SCOPE = "--user";
     private static final String QUIET = "--quiet";
     private static final String WINDOWS_LAUNCHER_LABEL = "Windows Job Object launcher";
@@ -49,6 +52,7 @@ final class MinosStrongProcessLauncher {
     private static final Object WINDOWS_INSTALL_LOCK = new Object();
     private static final Object LINUX_PROBE_LOCK = new Object();
     private static volatile Boolean linuxCapability;
+    private static volatile LinuxSystemdTools linuxSystemdTools;
 
     private MinosStrongProcessLauncher() {
     }
@@ -63,7 +67,7 @@ final class MinosStrongProcessLauncher {
     }
 
     static boolean linuxOwnershipAvailableForTests() {
-        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux")) return false;
+        if (!isLinux()) return false;
         try {
             requireLinuxCapability();
             return true;
@@ -167,10 +171,10 @@ final class MinosStrongProcessLauncher {
     }
 
     private static Launch startLinux(ProcessBuilder original) throws IOException {
-        requireLinuxCapability();
+        LinuxSystemdTools tools = requireLinuxCapability();
         String unit = "minos-intellij-" + UUID.randomUUID().toString().replace("-", "");
         List<String> command = new ArrayList<>();
-        command.add("systemd-run");
+        command.add(tools.systemdRun().toString());
         command.add(USER_SCOPE);
         command.add("--scope");
         command.add(QUIET);
@@ -178,32 +182,95 @@ final class MinosStrongProcessLauncher {
         command.add("--");
         command.addAll(original.command());
         Process process = wrapper(original, command).start();
-        return new Launch(process, new LinuxScopeBoundary(process, unit + ".scope"));
+        return new Launch(process, new LinuxScopeBoundary(process, unit + ".scope", tools.systemctl()));
     }
 
-    private static void requireLinuxCapability() throws IOException {
+    private static LinuxSystemdTools requireLinuxCapability() throws IOException {
         Boolean cached = linuxCapability;
-        if (cached != null) {
-            if (!cached) throw new IOException("systemd user scope ownership is unavailable");
-            return;
-        }
+        LinuxSystemdTools cachedTools = linuxSystemdTools;
+        if (Boolean.TRUE.equals(cached) && cachedTools != null) return cachedTools;
+        if (Boolean.FALSE.equals(cached)) throw new IOException("systemd user scope ownership is unavailable");
         synchronized (LINUX_PROBE_LOCK) {
-            if (linuxCapability == null) linuxCapability = probeLinuxCapability();
-            if (!linuxCapability) throw new IOException(
-                    "strong MINOS CLI ownership requires a working systemd user manager and transient scopes");
+            if (linuxCapability == null) {
+                try {
+                    LinuxSystemdTools candidate = new LinuxSystemdTools(
+                            linuxSystemExecutable("systemctl"),
+                            linuxSystemExecutable("systemd-run"));
+                    if (probeLinuxCapability(candidate)) {
+                        linuxSystemdTools = candidate;
+                        linuxCapability = true;
+                    } else {
+                        linuxCapability = false;
+                    }
+                } catch (IOException unavailable) {
+                    linuxCapability = false;
+                }
+            }
+            if (!Boolean.TRUE.equals(linuxCapability) || linuxSystemdTools == null) {
+                throw new IOException(
+                        "strong MINOS CLI ownership requires root-owned systemd tools, a working user manager and transient scopes");
+            }
+            return linuxSystemdTools;
         }
     }
 
-    private static boolean probeLinuxCapability() {
+    private static boolean probeLinuxCapability(LinuxSystemdTools tools) {
         String unit = "minos-intellij-probe-" + UUID.randomUUID().toString().replace("-", "");
         try {
-            if (runControl(List.of(SYSTEMCTL, USER_SCOPE, "show-environment"), false) != 0) return false;
+            if (runControl(List.of(tools.systemctl().toString(), USER_SCOPE, "show-environment"), false) != 0) {
+                return false;
+            }
             return runControl(List.of(
-                    "systemd-run", USER_SCOPE, "--scope", QUIET, "--unit=" + unit,
+                    tools.systemdRun().toString(), USER_SCOPE, "--scope", QUIET, "--unit=" + unit,
                     "--", "/bin/true"), false) == 0;
         } catch (IOException failure) {
             return false;
         }
+    }
+
+    /** Resolves a systemd security-authority executable without consulting PATH. */
+    static Path linuxSystemExecutable(String executable) throws IOException {
+        if (!isLinux()) throw new IOException("Linux system executable requested on a non-Linux host");
+        if (executable == null || executable.isBlank()
+                || executable.indexOf('/') >= 0 || executable.indexOf('\\') >= 0) {
+            throw new IOException("Linux system executable must be a simple name");
+        }
+        for (Path configuredDirectory : LINUX_SYSTEM_DIRECTORIES) {
+            try {
+                Path directory = configuredDirectory.toRealPath();
+                if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+                        || !isRootOwnedAndNotGroupWorldWritable(directory)) {
+                    continue;
+                }
+                Path candidate = directory.resolve(executable).normalize().toRealPath();
+                if (!candidate.startsWith(directory)
+                        || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)
+                        || !Files.isExecutable(candidate)
+                        || !isRootOwnedAndNotGroupWorldWritable(candidate)) {
+                    continue;
+                }
+                return candidate;
+            } catch (IOException | SecurityException | UnsupportedOperationException unavailable) {
+                // Continue through fixed system roots; never fall back to PATH.
+            }
+        }
+        throw new IOException("trusted Linux system executable is unavailable: " + executable);
+    }
+
+    private static boolean isRootOwnedAndNotGroupWorldWritable(Path path) {
+        try {
+            Object uid = Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS);
+            if (!(uid instanceof Number number) || number.longValue() != 0L) return false;
+            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS);
+            return !permissions.contains(PosixFilePermission.GROUP_WRITE)
+                    && !permissions.contains(PosixFilePermission.OTHERS_WRITE);
+        } catch (IOException | SecurityException | UnsupportedOperationException unavailable) {
+            return false;
+        }
+    }
+
+    private static boolean isLinux() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
     }
 
     private static ProcessBuilder wrapper(ProcessBuilder original, List<String> command) {
@@ -327,16 +394,13 @@ final class MinosStrongProcessLauncher {
         return key.indexOf('=') < 0;
     }
 
-    private static Path resolveWindowsExecutable(String executable) throws IOException {
+    static Path resolveWindowsExecutable(String executable) throws IOException {
         String value = Objects.requireNonNull(executable, "executable");
-        Path candidate = Path.of(value);
-        if (candidate.isAbsolute() && Files.isRegularFile(candidate)) return candidate.toAbsolutePath().normalize();
         if (value.equalsIgnoreCase("cmd") || value.equalsIgnoreCase("cmd.exe")) {
-            String comSpec = System.getenv("ComSpec");
-            if (comSpec != null && !comSpec.isBlank() && Files.isRegularFile(Path.of(comSpec))) {
-                return Path.of(comSpec).toAbsolutePath().normalize();
-            }
+            return windowsSystemExecutable("cmd.exe");
         }
+        Path candidate = Path.of(value);
+        if (candidate.isAbsolute() && Files.isRegularFile(candidate)) return candidate.toRealPath();
         Process process = new ProcessBuilder(windowsSystemExecutable("where.exe").toString(), value)
                 .redirectErrorStream(true).start();
         byte[] output;
@@ -354,29 +418,45 @@ final class MinosStrongProcessLauncher {
             throw new IOException("cannot resolve Windows executable for strong ownership: " + value);
         }
         String first = new String(output, StandardCharsets.UTF_8).lines().findFirst().orElse("").trim();
-        if (first.isEmpty() || !Files.isRegularFile(Path.of(first))) {
+        if (first.isEmpty()) {
             throw new IOException("resolved Windows executable is not a regular file: " + value);
         }
-        return Path.of(first).toAbsolutePath().normalize();
+        Path resolved = Path.of(first).toRealPath();
+        if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("resolved Windows executable is not a regular file: " + value);
+        }
+        return resolved;
     }
 
     private static Path windowsSystemExecutable(String executable) throws IOException {
-        String root = System.getenv("SystemRoot");
-        if (root == null || root.isBlank()) throw new IOException("SystemRoot is unavailable");
-        Path resolved = Path.of(root, "System32", executable).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(resolved)) {
+        Path system32 = windowsSystem32();
+        Path resolved = system32.resolve(executable).toRealPath();
+        if (!resolved.startsWith(system32) || !Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Windows system executable is unavailable: " + resolved);
         }
         return resolved;
     }
 
     private static Path windowsPowerShell() throws IOException {
+        Path system32 = windowsSystem32();
+        Path powershell = system32.resolve("WindowsPowerShell").resolve("v1.0").resolve("powershell.exe").toRealPath();
+        if (!powershell.startsWith(system32) || !Files.isRegularFile(powershell, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Windows PowerShell is unavailable: " + powershell);
+        }
+        return powershell;
+    }
+
+    private static Path windowsSystem32() throws IOException {
         String root = System.getenv("SystemRoot");
         if (root == null || root.isBlank()) throw new IOException("SystemRoot is unavailable");
-        Path powershell = Path.of(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-                .toAbsolutePath().normalize();
-        if (!Files.isRegularFile(powershell)) throw new IOException("Windows PowerShell is unavailable: " + powershell);
-        return powershell;
+        Path windowsRoot = Path.of(root);
+        if (!windowsRoot.isAbsolute()) throw new IOException("SystemRoot must be absolute");
+        Path realRoot = windowsRoot.toRealPath();
+        Path system32 = realRoot.resolve("System32").toRealPath();
+        if (!system32.startsWith(realRoot) || !Files.isDirectory(system32, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Windows System32 directory is unavailable: " + system32);
+        }
+        return system32;
     }
 
     private static String encoded(String value) {
@@ -422,6 +502,13 @@ final class MinosStrongProcessLauncher {
         }
     }
 
+    private record LinuxSystemdTools(Path systemctl, Path systemdRun) {
+        private LinuxSystemdTools {
+            Objects.requireNonNull(systemctl, "systemctl");
+            Objects.requireNonNull(systemdRun, "systemdRun");
+        }
+    }
+
     private static final class WindowsJobBoundary implements ProcessBoundary {
         private final Process wrapper;
         private final Path plan;
@@ -460,11 +547,13 @@ final class MinosStrongProcessLauncher {
     private static final class LinuxScopeBoundary implements ProcessBoundary {
         private final Process wrapper;
         private final String scope;
+        private final Path systemctl;
         private final AtomicBoolean terminated = new AtomicBoolean();
 
-        private LinuxScopeBoundary(Process wrapper, String scope) {
+        private LinuxScopeBoundary(Process wrapper, String scope, Path systemctl) {
             this.wrapper = wrapper;
             this.scope = scope;
+            this.systemctl = systemctl;
         }
 
         @Override
@@ -472,9 +561,9 @@ final class MinosStrongProcessLauncher {
             if (!terminated.compareAndSet(false, true)) return;
             IOException failure = null;
             try {
-                int stop = runControl(List.of(SYSTEMCTL, USER_SCOPE, "stop", scope), true);
+                int stop = runControl(List.of(systemctl.toString(), USER_SCOPE, "stop", scope), true);
                 if (stop != 0) {
-                    int active = runControl(List.of(SYSTEMCTL, USER_SCOPE, "is-active", QUIET, scope), true);
+                    int active = runControl(List.of(systemctl.toString(), USER_SCOPE, "is-active", QUIET, scope), true);
                     if (active == 0) failure = new IOException(
                             "systemd scope remained active after stop failure: " + scope);
                 }

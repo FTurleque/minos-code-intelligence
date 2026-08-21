@@ -21,15 +21,15 @@ class MinosCommandLineTest {
     }
 
     @Test
-    void routesWindowsCmdLaunchersThroughCmdExeWithQuoting() {
+    void routesWindowsCmdLaunchersThroughCmdExeWithDelayedExpansionDisabled() {
         List<String> command = MinosCommandLine.build(
                 "C:\\Program Files\\MINOS\\minos.cmd",
                 List.of("project", "add", "C:\\Work Space\\demo", "--format", "json"),
                 "Windows 11");
 
-        assertEquals(List.of("cmd.exe", "/d", "/s", "/c"), command.subList(0, 4));
-        assertTrue(command.get(4).contains("\"C:\\Program Files\\MINOS\\minos.cmd\""));
-        assertTrue(command.get(4).contains("\"C:\\Work Space\\demo\""));
+        assertEquals(List.of("cmd.exe", "/d", "/v:off", "/s", "/c"), command.subList(0, 5));
+        assertTrue(command.get(5).contains("\"C:\\Program Files\\MINOS\\minos.cmd\""));
+        assertTrue(command.get(5).contains("\"C:\\Work Space\\demo\""));
     }
 
     @Test
