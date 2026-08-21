@@ -19,35 +19,38 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Opens a project-relative file so that the bytes actually read come from an object that is proven
- * to be a regular, non-symlink file inside a validated root.
+ * Opens a project-relative file using the strongest confinement primitive exposed by the platform,
+ * while refusing links, filesystem-specific/special objects and non-regular leaves.
  *
  * <p>The usual "validate then open" shape -- {@code Files.isRegularFile} / {@code toRealPath}
  * followed by {@code Files.newInputStream(path)} -- validates a <em>pathname</em> and then re-walks
  * that pathname a second time when opening. Anything able to write into the workspace concurrently
  * can replace the validated object with a symlink in between, and the second walk follows it. The
- * fix is not to shorten that window: re-running {@code toRealPath()} immediately before the open
- * narrows it without removing it. The window has to stop existing.</p>
+ * fix for platforms exposing directory handles is not to shorten that window: the traversal itself
+ * must stay relative to already-open directories.</p>
  *
- * <p>Two strategies deliver that, chosen from what the platform actually provides:</p>
+ * <p>Two strategies are used, and their guarantees are deliberately not described as identical:</p>
  * <ul>
  *   <li><b>{@link SecureDirectoryStream} (POSIX).</b> The root is opened once, then each directory
  *       segment is descended through the <em>open directory handle</em> with {@link
  *       LinkOption#NOFOLLOW_LINKS} -- the {@code openat} model. No pathname is ever re-resolved, so
- *       there is nothing for a concurrent rename to redirect: whatever is opened is by construction
- *       an entry of a directory chain that was descended from the real root without traversing a
- *       single link.</li>
- *   <li><b>Fail-closed fallback (Windows and any provider without secure streams).</b> The final
- *       component is opened with {@code NOFOLLOW_LINKS}, which is atomic: the open either yields a
- *       non-symlink object or fails, so the classic "swap the file for a symlink" race cannot be
- *       won on the leaf at all. The ancestor chain is then verified <em>while the handle is
- *       already open</em>, and the channel is closed and the read refused unless every ancestor is
- *       a real directory and the file still resolves inside the root.</li>
+ *       there is nothing for a concurrent ancestor rename to redirect: whatever is opened is by
+ *       construction an entry of a directory chain descended from the real root without traversing
+ *       a link or special filesystem object.</li>
+ *   <li><b>Path-revalidated fallback (Windows and providers without secure streams).</b> The final
+ *       component is opened with {@code NOFOLLOW_LINKS}, so a leaf swapped to a symbolic link is
+ *       refused atomically. The ancestor chain and leaf type are then revalidated while the channel
+ *       remains open, including rejection of {@link BasicFileAttributes#isOther()} reparse/special
+ *       objects. Standard Java NIO does not expose a Windows directory-handle-relative traversal or
+ *       a portable way to query the opened channel's file identity, so this fallback intentionally
+ *       does <em>not</em> claim the same ancestor-identity proof as {@code SecureDirectoryStream}.
+ *       Callers that require that stronger proof can test {@link #supportsDirectoryHandleTraversal(Path)}
+ *       and fail closed.</li>
  * </ul>
  *
- * <p>Both strategies refuse a symlink outright rather than accepting one that happens to land back
- * inside the root: a link is not needed to read project sources, and accepting it would mean
- * re-deciding containment from a resolved pathname, which is the very thing being removed.</p>
+ * <p>Both strategies refuse a link outright rather than accepting one that happens to land back
+ * inside the root. Windows junction/reparse points and other objects reported through
+ * {@link BasicFileAttributes#isOther()} are refused for the same reason.</p>
  */
 public final class ConfinedFileOpener {
 
@@ -156,12 +159,12 @@ public final class ConfinedFileOpener {
             BasicFileAttributes attributes = current
                     .getFileAttributeView(fileName, BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
                     .readAttributes();
-            if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
-                throw new ConfinementException("source is not a regular non-symlink file");
+            if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
+                throw new ConfinementException("source is not a regular physical file");
             }
             beforeOpenForTests.run();
-            // NOFOLLOW_LINKS here is what makes the replacement race unwinnable rather than merely
-            // unlikely: if the name was swapped for a link after the attribute read, this fails.
+            // NOFOLLOW_LINKS here is what makes a leaf replacement by a symbolic link fail instead
+            // of following the attacker's new target.
             try {
                 return current.newByteChannel(
                         fileName, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
@@ -197,14 +200,14 @@ public final class ConfinedFileOpener {
                     failure);
         }
         try {
-            // The handle is open at this point, so the object it refers to can no longer be turned
-            // into something else behind our back; re-checking the chain now therefore proves what
-            // was opened, instead of predicting what a later open would find.
+            // The channel stays open while the pathname is revalidated. This closes the classic
+            // leaf-symlink race, but these pathname checks are intentionally not described as a
+            // handle-relative ancestor identity proof on platforms without SecureDirectoryStream.
             verifyAncestorChain(root, relative);
             BasicFileAttributes attributes =
                     Files.readAttributes(candidate, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
-                throw new ConfinementException("source is not a regular non-symlink file");
+            if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isRegularFile()) {
+                throw new ConfinementException("source is not a regular physical file");
             }
             if (!candidate.toRealPath().startsWith(root)) {
                 throw new ConfinementException("source resolves outside the project root");
@@ -222,8 +225,8 @@ public final class ConfinedFileOpener {
             current = current.resolve(relative.getName(index));
             BasicFileAttributes attributes =
                     Files.readAttributes(current, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes.isSymbolicLink() || !attributes.isDirectory()) {
-                throw new ConfinementException("source path crosses a non-directory or a link");
+            if (attributes.isSymbolicLink() || attributes.isOther() || !attributes.isDirectory()) {
+                throw new ConfinementException("source path crosses a non-directory, link or special object");
             }
             if (!current.toRealPath(LinkOption.NOFOLLOW_LINKS).startsWith(root)) {
                 throw new ConfinementException("source path escapes the project root");
@@ -253,10 +256,10 @@ public final class ConfinedFileOpener {
         try {
             BasicFileAttributes attributes = reader.read();
             boolean wrongKind = directory ? !attributes.isDirectory() : !attributes.isRegularFile();
-            if (attributes.isSymbolicLink() || wrongKind) {
+            if (attributes.isSymbolicLink() || attributes.isOther() || wrongKind) {
                 return new ConfinementException(directory
-                        ? "source path crosses a non-directory or a link"
-                        : "source is not a regular non-symlink file", failure);
+                        ? "source path crosses a non-directory, link or special object"
+                        : "source is not a regular physical file", failure);
             }
         } catch (IOException unreadable) {
             failure.addSuppressed(unreadable);
