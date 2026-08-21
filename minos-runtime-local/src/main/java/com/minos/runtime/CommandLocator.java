@@ -5,22 +5,67 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Résolution déterministe des exécutables externes sans passer par un shell implicite. */
 public final class CommandLocator {
 
+    private static final Set<String> LINUX_SECURITY_AUTHORITY_COMMANDS = Set.of("bwrap", "prlimit", "sh");
+    private static final List<Path> LINUX_SYSTEM_DIRECTORIES = List.of(
+            Path.of("/usr/bin"), Path.of("/bin"), Path.of("/usr/sbin"), Path.of("/sbin"));
+
     private CommandLocator() {
     }
 
     public static Optional<Path> find(String command) {
+        String normalized = requireCommand(command).toLowerCase(Locale.ROOT);
+        if (isLinux() && LINUX_SECURITY_AUTHORITY_COMMANDS.contains(normalized)) {
+            return findSystemExecutable(command);
+        }
         return findInPath(command, System.getenv("PATH"), isWindows());
+    }
+
+    /**
+     * Resolves a Linux security-authority executable only from root-owned, non-group/world-writable
+     * system directories. The real executable must stay inside the real system directory and must
+     * itself be root-owned and non-group/world-writable.
+     *
+     * <p>This intentionally does not consult PATH. It is for commands that <em>create or enter the
+     * security boundary itself</em> (currently bubblewrap, prlimit and the cgroup launcher shell),
+     * not for operator-selected provider runtimes such as npm, dotnet or docker.</p>
+     */
+    static Optional<Path> findSystemExecutable(String command) {
+        requireCommand(command);
+        if (!isLinux()) return Optional.empty();
+        for (Path configuredDirectory : LINUX_SYSTEM_DIRECTORIES) {
+            try {
+                Path directory = configuredDirectory.toRealPath();
+                if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+                        || !isRootOwnedAndNotGroupWorldWritable(directory)) {
+                    continue;
+                }
+                Path candidate = directory.resolve(command).normalize();
+                Path real = candidate.toRealPath();
+                if (!real.startsWith(directory)
+                        || !Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)
+                        || !Files.isExecutable(real)
+                        || !isRootOwnedAndNotGroupWorldWritable(real)) {
+                    continue;
+                }
+                return Optional.of(real);
+            } catch (IOException | SecurityException | UnsupportedOperationException unavailable) {
+                // Continue through the remaining fixed system roots; never fall back to PATH.
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -33,9 +78,7 @@ public final class CommandLocator {
      * normalized against the current working directory.</p>
      */
     static Optional<Path> findInPath(String command, String pathValue, boolean windows) {
-        if (command == null || command.isBlank()) {
-            throw new IllegalArgumentException("command must not be blank");
-        }
+        requireCommand(command);
         if (pathValue == null || pathValue.isBlank()) {
             return Optional.empty();
         }
@@ -69,25 +112,31 @@ public final class CommandLocator {
                         return Optional.of(real);
                     }
                 } catch (IOException | SecurityException unavailable) {
-                    // Keep searching the remaining trusted absolute PATH entries.
+                    // Keep searching the remaining absolute PATH entries.
                 }
             }
         }
         return Optional.empty();
     }
 
-    /** Resolves the Windows PowerShell 5.1 host even when its system directory is absent from PATH. */
+    /**
+     * Resolves the Windows PowerShell 5.1 host from the canonical system directory only.
+     * PATH is intentionally not a trust source because this executable creates Job Object and
+     * AppContainer security boundaries.
+     */
     static Optional<Path> windowsPowerShell() {
-        Optional<Path> fromPath = find("powershell");
-        if (fromPath.isPresent() || !isWindows()) return fromPath;
+        if (!isWindows()) return find("powershell");
         String systemRoot = System.getenv("SystemRoot");
         if (systemRoot == null || systemRoot.isBlank()) return Optional.empty();
         try {
             Path root = Path.of(systemRoot);
             if (!root.isAbsolute()) return Optional.empty();
-            return realRegularFile(root.resolve("System32").resolve("WindowsPowerShell")
+            Path realRoot = root.toRealPath();
+            Optional<Path> powershell = realRegularFile(root.resolve("System32").resolve("WindowsPowerShell")
                     .resolve("v1.0").resolve("powershell.exe"));
-        } catch (InvalidPathException invalid) {
+            if (powershell.isEmpty() || !powershell.orElseThrow().startsWith(realRoot)) return Optional.empty();
+            return powershell;
+        } catch (InvalidPathException | IOException | SecurityException invalid) {
             return Optional.empty();
         }
     }
@@ -127,7 +176,7 @@ public final class CommandLocator {
         }
         String commandProcessor = windowsCommandProcessor();
         // With cmd /S /C, the conventional and required shape is:
-        //   ""C:\path with spaces\script.cmd" "arg" ..."
+        //   ""C:\\path with spaces\\script.cmd" "arg" ..."
         // The outer pair belongs to cmd; the inner quotes protect every individual token.
         String commandLine = '"' + rendered.toString() + '"';
         return List.of(commandProcessor, "/d", "/v:off", "/s", "/c", commandLine);
@@ -137,6 +186,34 @@ public final class CommandLocator {
         return System.getProperty("os.name", "")
                 .toLowerCase(Locale.ROOT)
                 .contains("win");
+    }
+
+    private static boolean isLinux() {
+        return System.getProperty("os.name", "")
+                .toLowerCase(Locale.ROOT)
+                .contains("linux");
+    }
+
+    private static String requireCommand(String command) {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("command must not be blank");
+        }
+        if (command.indexOf('/') >= 0 || command.indexOf('\\') >= 0) {
+            throw new IllegalArgumentException("command must be a simple executable name");
+        }
+        return command;
+    }
+
+    private static boolean isRootOwnedAndNotGroupWorldWritable(Path path) {
+        try {
+            Object uid = Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS);
+            if (!(uid instanceof Number number) || number.longValue() != 0L) return false;
+            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS);
+            return !permissions.contains(PosixFilePermission.GROUP_WRITE)
+                    && !permissions.contains(PosixFilePermission.OTHERS_WRITE);
+        } catch (IOException | SecurityException | UnsupportedOperationException unavailable) {
+            return false;
+        }
     }
 
     private static void appendBatchToken(StringBuilder target, String value, String label) {
@@ -166,10 +243,13 @@ public final class CommandLocator {
             try {
                 Path root = Path.of(systemRoot);
                 if (root.isAbsolute()) {
+                    Path realRoot = root.toRealPath();
                     Optional<Path> systemCmd = realRegularFile(root.resolve("System32").resolve("cmd.exe"));
-                    if (systemCmd.isPresent()) return systemCmd.orElseThrow().toString();
+                    if (systemCmd.isPresent() && systemCmd.orElseThrow().startsWith(realRoot)) {
+                        return systemCmd.orElseThrow().toString();
+                    }
                 }
-            } catch (InvalidPathException invalid) {
+            } catch (InvalidPathException | IOException | SecurityException invalid) {
                 // Fail below instead of falling back to ComSpec, PATH or a bare cmd.exe.
             }
         }

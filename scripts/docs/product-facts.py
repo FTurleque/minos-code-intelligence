@@ -106,8 +106,10 @@ def provider_facts(source: str) -> list[tuple[str, str, str, list[str], list[str
 
 
 def check_authoritative_documentation() -> None:
-    """Reject stale mutable prose that contradicts the authoritative STATUS release/sandbox facts."""
+    """Reject stale mutable prose that contradicts authoritative release/security facts."""
     status = read("docs/STATUS.md")
+    roadmap = read("docs/ROADMAP.md")
+    risk_register = read("docs/architecture/risks/register.md")
     readme = read("README.md")
     production = read("docs/user/production-installation.md")
 
@@ -123,6 +125,23 @@ def check_authoritative_documentation() -> None:
     )
     if "#98 sandbox OS réelle" not in status or "IMPLÉMENTÉE + QUALIFIÉE" not in status:
         raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
+
+    current_docs = {
+        "docs/STATUS.md": status,
+        "docs/ROADMAP.md": roadmap,
+        "docs/architecture/risks/register.md": risk_register,
+    }
+    for path, text in current_docs.items():
+        integrated_lines = [
+            line for line in text.splitlines()
+            if "#227" in line and ("intégr" in line.casefold() or "merged" in line.casefold())
+        ]
+        if not integrated_lines:
+            raise RuntimeError(f"{path} must expose PR #227 as integrated")
+        for line in text.splitlines():
+            lowered = line.casefold()
+            if "#227" in line and ("non intégr" in lowered or "en qualification" in lowered):
+                raise RuntimeError(f"stale PR #227 integration state in {path}: {line.strip()}")
 
     stale_markers = {
         "README.md": [

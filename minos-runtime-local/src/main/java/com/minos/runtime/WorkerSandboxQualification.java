@@ -41,7 +41,8 @@ public record WorkerSandboxQualification(
         if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && !containment.qualifiedForUntrustedCode()) {
             // Never let a backend overstate its trust boundary. A supervised filesystem quota can
-            // still be useful defence in depth, but it cannot qualify execution of hostile code.
+            // qualify the narrower managed-local-provider contract, but it cannot qualify hostile
+            // code because a writer may burst between supervisor samples.
             trustDisposition = TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED;
             List<String> downgraded = new ArrayList<>(limitations);
             downgraded.add("WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT");
@@ -54,10 +55,25 @@ public record WorkerSandboxQualification(
         }
     }
 
+    /** Full hostile/untrusted-code claim. Filesystem quotas must be kernel-enforced. */
     public boolean sandboxClaimPermitted() {
         return trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && networkDeny == NetworkDenyDisposition.QUALIFIED
                 && containment.qualifiedForUntrustedCode()
+                && qualifiedForCurrentPlatform();
+    }
+
+    /**
+     * Narrower claim used only by managed local provider execution.
+     *
+     * <p>It retains an OS-enforced network boundary and aggregate job ownership, while accepting
+     * filesystem byte/entry limits enforced by the in-process supervisor. This claim must never be
+     * reused by remote workers or surfaced as arbitrary untrusted-code support.</p>
+     */
+    public boolean managedLocalProviderClaimPermitted() {
+        return networkGuarantee == WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED
+                && networkDeny == NetworkDenyDisposition.QUALIFIED
+                && containment.qualifiedForManagedLocalProvider()
                 && qualifiedForCurrentPlatform();
     }
 

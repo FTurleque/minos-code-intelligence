@@ -22,8 +22,8 @@ import java.util.Objects;
  *
  * <p>A per-process limit that a provider can multiply by forking is not an aggregate guarantee and
  * must never be declared {@link Disposition#OS_ENFORCED} on an aggregate dimension. Likewise, a
- * sampled filesystem quota cannot qualify untrusted execution: a provider can burst above the
- * limit and delete the evidence between samples, after the host filesystem has already been
+ * sampled filesystem quota cannot qualify hostile/untrusted execution: a provider can burst above
+ * the limit and delete the evidence between samples, after the host filesystem has already been
  * exhausted.</p>
  */
 public record WorkerResourceContainment(
@@ -71,9 +71,24 @@ public record WorkerResourceContainment(
                 && filesystemWriteEntries == Disposition.OS_ENFORCED;
     }
 
-    /** Returns true only when every P1 containment dimension is actually enforced. */
+    /** Returns true only when every hostile/untrusted-code containment dimension is enforced. */
     public boolean qualifiedForUntrustedCode() {
         return unmetRequirements().isEmpty();
+    }
+
+    /**
+     * Returns true for the narrower managed-local-provider contract.
+     *
+     * <p>This contract deliberately does <strong>not</strong> mean arbitrary hostile code is safe.
+     * It keeps the aggregate process/memory/CPU/descendant boundary kernel-enforced and requires
+     * wall-clock, filesystem byte/entry limits and scratch reclamation to be enforced while the
+     * provider is running. Filesystem limits may be {@link Disposition#SUPERVISED_HARD_KILL}; that
+     * is sufficient to keep the historical managed local provider path usable, but it remains
+     * insufficient for {@link #qualifiedForUntrustedCode()} because a malicious writer can burst
+     * between samples.</p>
+     */
+    public boolean qualifiedForManagedLocalProvider() {
+        return managedLocalProviderUnmetRequirements().isEmpty();
     }
 
     /** Machine-readable reasons why untrusted code cannot be contained here. */
@@ -86,6 +101,20 @@ public record WorkerResourceContainment(
         requireEnforced(unmet, "WALL_CLOCK", wallClock);
         requireOsEnforced(unmet, "FILESYSTEM_WRITE_BYTES", filesystemWriteBytes);
         requireOsEnforced(unmet, "FILESYSTEM_WRITE_ENTRIES", filesystemWriteEntries);
+        requireEnforced(unmet, "SCRATCH_RECLAMATION", scratchReclamation);
+        return List.copyOf(unmet);
+    }
+
+    /** Machine-readable reasons why the managed local provider contract cannot be used. */
+    public List<String> managedLocalProviderUnmetRequirements() {
+        List<String> unmet = new ArrayList<>();
+        requireOsEnforced(unmet, "AGGREGATE_PROCESS_COUNT", aggregateProcessCount);
+        requireOsEnforced(unmet, "AGGREGATE_MEMORY", aggregateMemory);
+        requireOsEnforced(unmet, "AGGREGATE_CPU", aggregateCpu);
+        requireOsEnforced(unmet, "DESCENDANT_TERMINATION", descendantTermination);
+        requireEnforced(unmet, "WALL_CLOCK", wallClock);
+        requireEnforced(unmet, "FILESYSTEM_WRITE_BYTES", filesystemWriteBytes);
+        requireEnforced(unmet, "FILESYSTEM_WRITE_ENTRIES", filesystemWriteEntries);
         requireEnforced(unmet, "SCRATCH_RECLAMATION", scratchReclamation);
         return List.copyOf(unmet);
     }

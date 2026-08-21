@@ -6,31 +6,38 @@ Ce fichier est la synthèse autoritative de l'état produit courant. L'historiqu
 
 > **Convention.** Une capacité n'est considérée intégrée qu'après merge. Une remédiation en PR reste explicitement marquée « en qualification » jusqu'à son merge, même si son code et ses tests sont déjà présents sur la branche de travail.
 
-## Réconciliation post-PR #226 — audit complet du 21 août 2026
+## Réconciliation post-PR #227 — audit complet du 21 août 2026
 
-`develop` intègre **PR #226** (`fix: harden IntelliJ launcher trust and provider traversal`). Le nouvel audit complet a été exécuté sur `develop@9ee7043fbf00cbf05692df72813b233fb5848d5f`. Il n'a confirmé **aucun P0**, mais a identifié un P1, un P2 et trois écarts P3. Leur remédiation est portée par **PR #227**, actuellement **en qualification et non intégrée**.
+**PR #227 est intégrée** dans `develop` par le merge signé `32c376ed36595ff60daa7cda9367cba787547069`. Le nouvel audit complet de ce HEAD n'a confirmé aucun P0 ; il a identifié un blocage P1 de composition sandbox/provider, un P2 de provenance des exécutables qui constituent l'autorité de sandbox, et deux écarts P3 de tests/gates et de documentation.
 
-### P1 — frontière réseau des providers
+Une remédiation distincte est actuellement en qualification sur une branche dédiée. Elle ne relâche ni l'egress `DENY`, ni le contrat hostile/untrusted des workers distants, ni l'exigence de quota filesystem `OS_ENFORCED` lorsqu'une exécution est présentée comme sûre pour du code hostile.
 
-La copie éphémère `LocalProviderWorkspace` protège bien le working tree enregistré, mais l'ancienne politique accordait implicitement `WorkerNetworkPolicy.ALLOW` à `scip-java`, `scip-dotnet`, `scip-go` et `rust-analyzer-scip`. Or leurs descendants peuvent exécuter des éléments contrôlés par le dépôt (Maven wrapper/plugins, MSBuild targets, Cargo build scripts ou mécanismes équivalents). Un dépôt non fiable pouvait donc lire sa copie complète et disposer simultanément d'un egress réseau.
+### P1 — composition sandbox/provider local
 
-**PR #227** supprime tout passe-droit implicite. `StrongOwnedProcessExecutors` délègue uniquement à `IndexerProcessPlanFactory.networkPolicy()`, dont le défaut est `DENY`. `ALLOW` devient un opt-in explicite réservé à un chemin dont la confiance est prouvée ou séparée dans une phase dédiée. Les factories SCIP gérées courantes restent `DENY`.
+Le modèle `WorkerResourceContainment` est volontairement strict : un quota filesystem seulement supervisé ne peut pas qualifier l'exécution de code hostile, car un writer peut dépasser le seuil entre deux échantillons. Les backends Linux bubblewrap/cgroup v2 et Windows AppContainer/Job Object déclarent donc correctement `SUPERVISED_HARD_KILL` sur les dimensions filesystem et restent `UNTRUSTED_CODE_UNSUPPORTED` tant qu'aucun quota disque kernel/hard n'existe.
 
-### P2 — provenance générale des exécutables
+Le défaut était la réutilisation de ce contrat hostile dans le chemin provider local géré : `WorkerSandboxBackends.strongestAvailable()` éliminait les deux backends, `StrongOwnedProcessExecutors.qualifyOwnership()` transformait ensuite les runtimes installés en `BLOCKED`, et l'indexation autonome refusait de construire les executors.
 
-`CommandLocator` n'accepte plus les entrées `PATH` vides ou relatives et ne les transforme plus en chemins dépendants du CWD. Chaque répertoire admissible doit être absolu puis canonisé par `toRealPath()`, et le résultat retourné est lui-même un fichier réel absolu. Sous Windows, l'invocation batch refuse également le fallback vers un `cmd.exe` nu : le command processor doit être résolu vers un fichier `cmd.exe` absolu existant.
+La remédiation sépare deux qualifications machine-readable :
 
-### P3 — stockage privé et reparse points Windows
+- **hostile/untrusted** : contrat historique inchangé, filesystem bytes+entries obligatoirement `OS_ENFORCED`, utilisé par les workers distants ;
+- **managed local provider** : réseau OS-enforced, job boundary agrégé OS, descendants OS-owned, timeout actif, quotas filesystem bytes+entries appliqués pendant l'exécution et reclamation scratch active. Les quotas filesystem peuvent être `SUPERVISED_HARD_KILL`, sans jamais devenir une claim hostile.
 
-`PrivateLocalStorage` rejette maintenant explicitement `BasicFileAttributes.isOther()` avant vérification ou mutation d'ACL. Les junctions/reparse points Windows sont rapportés `EXPOSED` par le diagnostic et refusés par les points d'entrée d'enforcement. Une régression Windows réelle crée une junction via `mklink /J`.
+`StrongOwnedProcessExecutors` et `StrongProcessOwnershipIndexerExecutor` utilisent uniquement ce second sélecteur pour l'indexation locale. `LocalIsolatedIndexWorker` conserve le sélecteur hostile strict et reste fail-closed tant qu'un hard filesystem quota n'est pas disponible.
 
-### P3 — confinement de lecture capability-honest
+### P2 — provenance des exécutables d'autorité
 
-`ConfinedFileOpener` conserve la garantie handle-relative forte quand `SecureDirectoryStream` est disponible. Le fallback Windows/non-secure conserve `NOFOLLOW_LINKS`, la revalidation de la chaîne et rejette désormais aussi `isOther()`, mais ne revendique plus la même preuve d'identité d'ancêtres qu'une descente `openat` par handles. Les callers peuvent tester `supportsDirectoryHandleTraversal(...)` lorsqu'ils exigent cette garantie plus forte. Une régression Windows `mklink /J` vérifie le refus d'une junction d'ancêtre.
+Le hardening #227 des PATH relatifs reste en place, mais un répertoire PATH absolu ne suffit pas à établir la provenance d'un binaire qui crée la frontière de sécurité.
 
-### P3 — gates et documentation
+Sous Linux, `bwrap`, `prlimit` et le `sh` utilisé pour entrer dans le cgroup sont désormais résolus sans PATH depuis les répertoires système fixes `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`. Le répertoire réel et l'exécutable réel doivent être UID 0 et non modifiables par group/others ; un symlink qui sort du répertoire système réel est refusé.
 
-Le gate `scripts/remediation/check-p0-p2.py` exige désormais les invariants post-#226 : absence d'`ALLOW` implicite dans le wrapper provider, PATH absolu/canonisé, command processor Windows absolu, rejet `isOther()` dans stockage/lecture et wording capability-honest. STATUS, ROADMAP et registre des risques sont réconciliés dans #227 ; leurs versions précédentes sont archivées intégralement sous `docs/history/reconciliations/`.
+Sous Windows, le PowerShell utilisé par AppContainer/Job Object est résolu uniquement sous `SystemRoot\System32\WindowsPowerShell\v1.0`. Le plugin IntelliJ applique la même règle : `cmd.exe` est ancré à `SystemRoot\System32`, `ComSpec` n'est plus une source de confiance, `/v:off` désactive delayed expansion, et `systemctl`/`systemd-run` utilisent sur Linux des chemins système canoniques root-owned pour le probe, l'exécution et l'arrêt du scope.
+
+### P3 — tests, gates et documentation
+
+Les tests distinguent maintenant explicitement `sandboxClaimPermitted()` de `managedLocalProviderClaimPermitted()`, couvrent la composition `StrongOwnedProcessExecutors`, vérifient que le sélecteur distant ne se transforme pas en contrat local, et qualifient la provenance réelle de `cmd.exe`, PowerShell, `sh`, `systemctl` et `systemd-run` sur les OS concernés.
+
+Le gate `scripts/docs/product-facts.py --check`, déjà exécuté par PR Validation, exige désormais que STATUS, ROADMAP et registre des risques présentent #227 comme intégrée et rejette toute ligne courante qui la marque encore non intégrée/en qualification.
 
 ## État produit
 
@@ -42,7 +49,8 @@ Le gate `scripts/remediation/check-p0-p2.py` exige désormais les invariants pos
 - **PR #224** : traversées projet/NEXUS et couverture ciblée intégrées.
 - **PR #225** : confinement workspace provider/discovery/ignore rules intégré.
 - **PR #226** : provenance launcher IntelliJ et derniers walkers provider intégrés.
-- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement — **en qualification, non intégrée**.
+- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement — **intégrée**.
+- **remédiation post-audit courant** : composition provider locale, provenance des autorités de sandbox, tests/gates et réconciliation documentaire — **en qualification, non intégrée**.
 
 ## Release 1.0.1
 
@@ -65,8 +73,11 @@ La release **v1.0.1 est PUBLIÉE et immuable**.
 
 - snapshots structurés autoritatifs et promotions fail-closed ;
 - API/CLI/MCP/NEXUS/IntelliJ au-dessus du métier sans réintroduire une autorité concurrente ;
-- providers locaux exécutés depuis une copie éphémère bornée dans une sandbox OS qualifiée ;
+- providers locaux exécutés depuis une copie éphémère bornée avec réseau OS-enforced et job boundary agrégé ;
+- la qualification provider locale supervisée est distincte de toute claim d'exécution hostile ;
+- workers distants/hostiles toujours fail-closed sans hard filesystem quota `OS_ENFORCED` ;
 - egress provider `DENY` par défaut et jamais inféré du seul besoin de résolution de dépendances ;
+- exécutables qui créent la sandbox résolus depuis des autorités système canoniques, pas depuis un PATH utilisateur ;
 - environnement provider allowlisté ;
 - Git distant borné et épinglé à l'endpoint attendu ;
 - PostgreSQL hors loopback avec TLS `verify-full`, configuration JDBC allowlistée et transactions encadrées ;
@@ -74,6 +85,6 @@ La release **v1.0.1 est PUBLIÉE et immuable**.
 - local storage owner-only, symlink/junction/reparse refusés avant mutation ;
 - supply-chain CI et release épinglée à des références immuables lorsqu'une telle garantie est revendiquée.
 
-## Qualification de PR #227
+## Qualification de la remédiation courante
 
-La remédiation ne doit être déclarée intégrée qu'après succès exact-head des workflows applicables sur son HEAD final, notamment PR Validation Linux/Windows et les validations spécialisées déclenchées par les chemins modifiés. Aucun merge n'est autorisé par ce document ; la décision d'intégration reste explicite après qualification.
+La remédiation ne doit être déclarée intégrée qu'après succès exact-head des workflows applicables sur son HEAD final, notamment PR Validation Linux/Windows, IntelliJ Plugin Validation et les validations spécialisées déclenchées par les chemins modifiés. Aucun merge n'est autorisé par ce document ; la décision d'intégration reste explicite après qualification.

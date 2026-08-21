@@ -39,13 +39,25 @@ public interface WorkerSandboxBackend {
                 && evidence.qualifiedForCurrentPlatform();
     }
 
-    /** Returns true only when this backend is qualified to execute untrusted code on this OS. */
+    /** Returns true only when this backend is qualified to execute hostile/untrusted code on this OS. */
     default boolean supportsUntrustedCode() {
         WorkerSandboxQualification evidence = qualification();
         return evidence.trustDisposition()
                 == WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && evidence.containment().qualifiedForUntrustedCode()
                 && evidence.qualifiedForCurrentPlatform();
+    }
+
+    /**
+     * Returns true only for the narrower managed-local-provider contract.
+     *
+     * <p>This is intentionally separate from {@link #supportsUntrustedCode()}: supervised filesystem
+     * quotas are accepted here so installed local SCIP providers remain usable, but remote workers
+     * and callers claiming arbitrary hostile-code execution must continue to use the stricter
+     * method.</p>
+     */
+    default boolean supportsManagedLocalProvider() {
+        return qualification().managedLocalProviderClaimPermitted();
     }
 
     /**
