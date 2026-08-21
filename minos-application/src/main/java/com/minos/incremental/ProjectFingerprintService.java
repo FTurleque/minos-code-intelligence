@@ -1,17 +1,18 @@
 package com.minos.incremental;
 
 import com.minos.discovery.ProjectIgnorePolicy;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.FileTreeOperations;
 import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -67,6 +68,9 @@ public final class ProjectFingerprintService {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
                 budget.accountTraversalEntry();
+                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attributes)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 if (!directory.equals(root)
                         && ignorePolicy.isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -87,7 +91,7 @@ public final class ProjectFingerprintService {
                 }
 
                 budget.accountFile();
-                HashedFile hashed = hashFile(file, budget);
+                HashedFile hashed = hashFile(root, relative, budget);
                 files.add(new FileFingerprint(
                         portable(relative),
                         hashed.sizeBytes(),
@@ -181,14 +185,18 @@ public final class ProjectFingerprintService {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static HashedFile hashFile(Path file, SourceBudgetPolicy.Tracker budget) throws IOException {
+    private static HashedFile hashFile(
+            Path root,
+            Path relative,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
         MessageDigest digest = sha256();
         byte[] buffer = new byte[8192];
         long bytes = 0L;
-        // The walk classified this entry as a regular file from its own NOFOLLOW attributes; opening
-        // the pathname again without NOFOLLOW would hash whatever replaced it in between, including
-        // a symlink pointing outside the project.
-        try (InputStream input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+        // The tree walk is only discovery. Re-open the relative path through the confinement
+        // primitive so neither a junction nor an ancestor replacement can redirect the bytes read.
+        try (InputStream input = Channels.newInputStream(
+                ConfinedFileOpener.openConfinedRegularFile(root, relative))) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read > 0) {
