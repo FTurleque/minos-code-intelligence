@@ -38,7 +38,7 @@ Le gate `scripts/remediation/check-p0-p2.py` exige désormais les invariants pos
 - **M29 issue #107** : **CLOSED** ; **M29 PR #108** intégrée.
 - **M30 PR #110** intégrée ; **M30 promotion PR #111** intégrée.
 - **hardening PR #113** intégré ; **M28 Windows CI PR #117** intégré.
-- **#98** : sandbox OS réel Linux/Windows implémenté et qualifié dans la campagne de convergence.
+- **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
 - **PR #224** : traversées projet/NEXUS et couverture ciblée intégrées.
 - **PR #225** : confinement workspace provider/discovery/ignore rules intégré.
 - **PR #226** : provenance launcher IntelliJ et derniers walkers provider intégrés.
@@ -46,9 +46,16 @@ Le gate `scripts/remediation/check-p0-p2.py` exige désormais les invariants pos
 
 ## Release 1.0.1
 
+La release **MINOS v1.0.1** a été publiée le **9 août 2026** après validation utilisateur réelle du setup Windows.
+
+Tag autoritatif :
+
+```text
+v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
+```
+
 La release **v1.0.1 est PUBLIÉE et immuable**.
 
-- commit publié : `f762025d66e33c40324c811079f1527d122f90f9` ;
 - URL : https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1 ;
 - publication : **10 assets**, soit **5 paires** artefact/checksum ;
 - workflow de publication : `31288322126` ;
