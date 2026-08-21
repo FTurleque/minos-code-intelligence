@@ -1,5 +1,6 @@
 package com.minos.intellij.settings;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
@@ -8,7 +9,16 @@ import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-@Service(Service.Level.PROJECT)
+import java.util.Objects;
+
+/**
+ * IDE-global MINOS client settings.
+ *
+ * <p>The state deliberately lives at application scope even though the settings UI is opened from
+ * a project. Executable paths and MINOS_HOME are process-launch trust inputs and must therefore
+ * never be loaded from versionable project metadata such as {@code .idea/minos.xml}.</p>
+ */
+@Service(Service.Level.APP)
 @State(name = "MinosSettings", storages = @Storage("minos.xml"))
 public final class MinosSettingsState implements PersistentStateComponent<MinosSettingsState.Settings> {
 
@@ -25,7 +35,8 @@ public final class MinosSettingsState implements PersistentStateComponent<MinosS
     private Settings settings = new Settings();
 
     public static MinosSettingsState getInstance(Project project) {
-        return project.getService(MinosSettingsState.class);
+        Objects.requireNonNull(project, "project");
+        return ApplicationManager.getApplication().getService(MinosSettingsState.class);
     }
 
     @Override
