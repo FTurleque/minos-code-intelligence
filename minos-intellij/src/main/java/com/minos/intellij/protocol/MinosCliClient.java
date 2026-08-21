@@ -138,19 +138,21 @@ public final class MinosCliClient {
 
     private ProcessResult run(List<String> arguments) throws MinosProtocolException {
         MinosSettingsState.Settings settings = MinosSettingsState.getInstance(project).value();
-        List<String> command = MinosCommandLine.build(settings.executable, arguments, System.getProperty("os.name", ""));
-        ProcessBuilder builder = new ProcessBuilder(command);
-        String basePath = project.getBasePath();
-        if (basePath != null) {
-            try {
-                Path directory = Path.of(basePath);
-                if (Files.isDirectory(directory)) builder.directory(directory.toFile());
-            } catch (RuntimeException ignored) {
-                // ProcessBuilder will use the IDE working directory if the project path cannot be represented locally.
-            }
-        }
-        if (!settings.minosHome.isBlank()) builder.environment().put("MINOS_HOME", settings.minosHome);
+        String osName = System.getProperty("os.name", "");
         try {
+            Path resolvedExecutable = MinosExecutableResolver.resolve(settings.executable, osName);
+            List<String> command = MinosCommandLine.build(resolvedExecutable.toString(), arguments, osName);
+            ProcessBuilder builder = new ProcessBuilder(command);
+            String basePath = project.getBasePath();
+            if (basePath != null) {
+                try {
+                    Path directory = Path.of(basePath);
+                    if (Files.isDirectory(directory)) builder.directory(directory.toFile());
+                } catch (RuntimeException ignored) {
+                    // ProcessBuilder will use the IDE working directory if the project path cannot be represented locally.
+                }
+            }
+            if (!settings.minosHome.isBlank()) builder.environment().put("MINOS_HOME", settings.minosHome);
             MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, settings.minosHome);
             try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
                 boolean completed = false;
