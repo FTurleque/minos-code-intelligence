@@ -1,5 +1,6 @@
 package com.minos.runtime;
 
+import com.minos.io.ConfinedFileOpener;
 import com.minos.io.FileTreeOperations;
 import com.minos.source.ProjectIgnoreRules;
 import com.minos.source.SourceBudgetPolicy;
@@ -7,6 +8,7 @@ import com.minos.source.SourceBudgetPolicy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -48,8 +50,8 @@ final class ProviderWorkspaceFiles {
                 if (!relative.toString().isEmpty() && ignoreRules.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
-                if (Files.isSymbolicLink(directory) || attributes.isSymbolicLink()) {
-                    throw new IOException(label + " rejects symbolic links: " + portable(relative));
+                if (!FileTreeOperations.isRecursableDirectory(attributes)) {
+                    throw new IOException(label + " rejects non-recursable directory: " + portable(relative));
                 }
                 Files.createDirectories(checkedTarget(target, relative, label));
                 return FileVisitResult.CONTINUE;
@@ -71,7 +73,7 @@ final class ProviderWorkspaceFiles {
                 budget.accountFile();
                 Path destination = checkedTarget(target, relative, label);
                 Files.createDirectories(destination.getParent());
-                copyBounded(file, destination, budget);
+                copyBounded(source, relative, destination, budget);
                 Files.setLastModifiedTime(destination, attributes.lastModifiedTime());
                 return FileVisitResult.CONTINUE;
             }
@@ -120,9 +122,15 @@ final class ProviderWorkspaceFiles {
         });
     }
 
-    private static void copyBounded(Path source, Path target, SourceBudgetPolicy.Tracker budget) throws IOException {
+    private static void copyBounded(
+            Path sourceRoot,
+            Path relative,
+            Path target,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
         byte[] buffer = new byte[8192];
-        try (InputStream input = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+        try (InputStream input = Channels.newInputStream(
+                    ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative));
              OutputStream output = Files.newOutputStream(
                      target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             int read;
