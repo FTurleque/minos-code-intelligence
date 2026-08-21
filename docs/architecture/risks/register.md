@@ -1,6 +1,6 @@
 # Registre des risques
 
-Dernière réconciliation : **21 août 2026**. **PR #228 intégrée** dans `develop` après qualification du head `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge signé `a042e97ac5e3e2ab7207fa603d85563ea1f71712`.
+Dernière réconciliation : **21 août 2026**. **PR #227 intégrée**, puis **PR #228 intégrée** dans `develop` après qualification du head `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge signé `a042e97ac5e3e2ab7207fa603d85563ea1f71712`.
 
 Le réaudit complet de ce merge a ouvert une remédiation quota/readiness distincte, actuellement en qualification. La version historique détaillée du registre avant la campagne post-#226 est conservée intégralement dans [`../../history/reconciliations/risk-register-pre-post226-audit-20260821.md`](../../history/reconciliations/risk-register-pre-post226-audit-20260821.md).
 
