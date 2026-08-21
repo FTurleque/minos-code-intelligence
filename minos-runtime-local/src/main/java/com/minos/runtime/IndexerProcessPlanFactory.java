@@ -15,10 +15,15 @@ public interface IndexerProcessPlanFactory {
     IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws Exception;
 
     /**
-     * Network access granted to the untrusted provider inside the qualified local sandbox.
+     * Network access granted to the complete untrusted provider descendant tree inside the
+     * qualified local sandbox.
      *
-     * <p>DENY is the safe default. Providers that must resolve project dependencies during
-     * indexing have to opt into ALLOW explicitly in their process-plan factory.</p>
+     * <p>{@link WorkerNetworkPolicy#DENY} is the safe default. ALLOW is not a dependency-resolution
+     * convenience: it also grants egress to repository-controlled Maven wrappers/plugins, MSBuild
+     * targets, Cargo build scripts and any equivalent child process that the provider starts. A
+     * factory may therefore opt into ALLOW only when its execution path is proven not to execute
+     * repository-controlled code, or when that code has been separated into a distinct explicitly
+     * trusted phase. Current managed SCIP factories intentionally keep DENY.</p>
      */
     default WorkerNetworkPolicy networkPolicy() {
         return WorkerNetworkPolicy.DENY;
