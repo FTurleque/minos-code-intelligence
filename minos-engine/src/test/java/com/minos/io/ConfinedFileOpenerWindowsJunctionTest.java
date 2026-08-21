@@ -16,8 +16,9 @@ class ConfinedFileOpenerWindowsJunctionTest {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void refusesAWindowsJunctionInTheAncestorChain(@TempDir Path root) throws Exception {
-        Path outside = Files.createDirectories(root.resolveSibling(root.getFileName() + "-outside"));
+    void refusesAWindowsJunctionInTheAncestorChain(@TempDir Path temp) throws Exception {
+        Path root = Files.createDirectories(temp.resolve("project"));
+        Path outside = Files.createDirectories(temp.resolve("outside"));
         Files.writeString(outside.resolve("Secret.java"), "class Secret {}", StandardCharsets.UTF_8);
         Path junction = root.resolve("src");
         Process mklink = new ProcessBuilder(
