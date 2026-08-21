@@ -174,6 +174,25 @@ def main() -> int:
         )
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
+        intellij_settings = read(
+            "minos-intellij/src/main/java/com/minos/intellij/settings/MinosSettingsState.java"
+        )
+        intellij_client = read(
+            "minos-intellij/src/main/java/com/minos/intellij/protocol/MinosCliClient.java"
+        )
+        intellij_resolver = read(
+            "minos-intellij/src/main/java/com/minos/intellij/protocol/MinosExecutableResolver.java"
+        )
+        intellij_launcher = read(
+            "minos-intellij/src/main/java/com/minos/intellij/protocol/MinosStrongProcessLauncher.java"
+        )
+        provider_probe = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java"
+        )
+        scip_java = read(
+            "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"
+        )
+        jacoco_gate = read("scripts/quality/check-jacoco.py")
 
         require("MinosApplication.java", application,
                 "ProgramGraphService.productionProviders(effectiveFingerprints)")
@@ -269,6 +288,31 @@ def main() -> int:
         forbid("MinosMcpTools.java", mcp_tools, "effective.getMessage()")
         forbid("MinosMcpServer.java", mcp_server,
                '"error: MINOS MCP bootstrap failed: "')
+
+        # Post-#225 IntelliJ launcher and provider traversal trust-boundary barriers.
+        require("MinosSettingsState.java", intellij_settings, "@Service(Service.Level.APP)")
+        forbid("MinosSettingsState.java", intellij_settings, "@Service(Service.Level.PROJECT)")
+        require("MinosCliClient.java", intellij_client,
+                "MinosExecutableResolver.resolve(settings.executable, osName)")
+        forbid("MinosCliClient.java", intellij_client,
+               "MinosCommandLine.build(settings.executable")
+        require("MinosExecutableResolver.java", intellij_resolver,
+                "relative MINOS executable paths are forbidden")
+        require("MinosExecutableResolver.java", intellij_resolver,
+                "if (!directory.isAbsolute())")
+        require("MinosExecutableResolver.java", intellij_resolver,
+                "Empty PATH elements mean the current working directory")
+        require("MinosStrongProcessLauncher.java", intellij_launcher, "attributes.isOther()")
+        require("BoundedProviderSourceProbe.java", provider_probe,
+                "FileTreeOperations.isRecursableDirectory(attributes)")
+        require("ScipJavaProcessPlanFactory.java", scip_java,
+                "ConfinedFileOpener.openConfinedRegularFile(sourceRoot, relative)")
+        require("ScipJavaProcessPlanFactory.java", scip_java,
+                "FileTreeOperations.deleteRecursively(workspace)")
+        require("check-jacoco.py", jacoco_gate,
+                '"com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory": {"line": 0.35, "branch": 0.15}')
+        require("check-jacoco.py", jacoco_gate,
+                '"com/minos/adapter/scip/runtime/BoundedProviderSourceProbe": {"line": 0.55, "branch": 0.35}')
 
         print("P0-P2 AUDIT REMEDIATION CONSISTENCY SUCCESS")
         return 0
