@@ -173,7 +173,7 @@ public final class CommandLocator {
                 // Fail below instead of falling back to ComSpec, PATH or a bare cmd.exe.
             }
         }
-        throw new IllegalStateException("Windows command processor must resolve to SystemRoot\\System32\\cmd.exe");
+        throw new IllegalStateException("Windows command processor must resolve to an existing absolute cmd.exe");
     }
 
     private static Optional<Path> realRegularFile(Path path) {
