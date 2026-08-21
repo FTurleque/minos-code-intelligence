@@ -75,7 +75,8 @@ class ScipJavaProcessPlanFactoryStagingTest {
         try {
             Files.createSymbolicLink(link, outside);
         } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
-            Assumptions.abort("symbolic links unavailable: " + unavailable.getMessage());
+            Assumptions.assumeTrue(false, "symbolic links unavailable: " + unavailable.getMessage());
+            return;
         }
 
         Path staged = ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run);
@@ -103,8 +104,8 @@ class ScipJavaProcessPlanFactoryStagingTest {
                 .redirectErrorStream(true)
                 .start();
         int exit = mklink.waitFor();
-        Assumptions.assumeTrue(exit == 0,
-                () -> "mklink /J unavailable: " + new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        String mklinkOutput = new String(mklink.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        Assumptions.assumeTrue(exit == 0, "mklink /J unavailable: " + mklinkOutput);
 
         assertThrows(IOException.class,
                 () -> ScipJavaProcessPlanFactory.prepareWritableWorkspace(project, run));
