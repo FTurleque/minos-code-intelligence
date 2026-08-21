@@ -26,6 +26,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * stops as soon as the budget is exceeded, so a pathological tree can never make the supervisor
  * unbounded work. Symbolic links are never followed, so a provider cannot make the supervisor
  * traverse outside its own roots.</p>
+ *
+ * <p>Loss of measurement visibility is itself a containment breach. A provider controls the
+ * writable roots and may try to make a directory unreadable while retaining an already-open file
+ * descriptor below it. Treating that subtree as zero bytes would make the quota bypassable, so a
+ * missing/non-directory root, {@code visitFileFailed}, or any failed walk kills the whole contained
+ * job instead of being retried optimistically.</p>
  */
 final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
@@ -111,14 +117,14 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
             long elapsedMillis = Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
             observedBytes.set(sample.bytes());
             observedEntries.set(sample.entries());
+            if (sample.visibilityFailure() != null) {
+                breachAndKill("provider write quota visibility lost: " + sample.visibilityFailure()
+                        + "; bytes=" + sample.bytes() + ", entries=" + sample.entries());
+                return;
+            }
             if (sample.bytes() > quota.maxBytes() || sample.entries() > quota.maxEntries()) {
-                breach.compareAndSet(null, "provider exceeded its write quota: bytes=" + sample.bytes()
+                breachAndKill("provider exceeded its write quota: bytes=" + sample.bytes()
                         + "/" + quota.maxBytes() + ", entries=" + sample.entries() + "/" + quota.maxEntries());
-                try {
-                    jobKill.run();
-                } catch (RuntimeException ignored) {
-                    // The caller terminates the process tree as well; a failed kill must not hide the breach.
-                }
                 return;
             }
             try {
@@ -133,18 +139,33 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
         }
     }
 
+    private void breachAndKill(String description) {
+        if (!breach.compareAndSet(null, description)) return;
+        try {
+            jobKill.run();
+        } catch (RuntimeException ignored) {
+            // The caller terminates the process tree as well; a failed kill must not hide the breach.
+        }
+    }
+
     private Sample sample() {
         long[] totals = {0L, 0L};
         for (Path root : roots) {
-            sampleRoot(root, totals);
+            String visibilityFailure = sampleRoot(root, totals);
+            if (visibilityFailure != null) {
+                return new Sample(totals[0], totals[1], visibilityFailure);
+            }
             if (totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()) break;
         }
-        return new Sample(totals[0], totals[1]);
+        return new Sample(totals[0], totals[1], null);
     }
 
-    /** Accumulates one writable root's bytes/entries into {@code totals}; never throws. */
-    private void sampleRoot(Path root, long[] totals) {
-        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
+    /** Accumulates one writable root's bytes/entries and reports any loss of measurement visibility. */
+    private String sampleRoot(Path root, long[] totals) {
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+            return "writable root is missing or no longer a physical directory";
+        }
+        String[] visibilityFailure = {null};
         try {
             Files.walkFileTree(root, Set.<FileVisitOption>of(), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
                 @Override
@@ -164,8 +185,10 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
 
                 @Override
                 public FileVisitResult visitFileFailed(Path file, IOException failure) {
-                    // Provider files disappear concurrently; an unreadable entry still costs one entry.
-                    return account(0L);
+                    totals[1] = saturatingAdd(totals[1], 1L);
+                    visibilityFailure[0] = "cannot inspect an entry below a supervised writable root ("
+                            + failure.getClass().getSimpleName() + ")";
+                    return FileVisitResult.TERMINATE;
                 }
 
                 private FileVisitResult account(long bytes) {
@@ -176,9 +199,10 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                             : FileVisitResult.CONTINUE;
                 }
             });
-        } catch (IOException | RuntimeException ignored) {
-            // A root that vanished or became unreadable is accounted on the next sample.
+        } catch (IOException | RuntimeException failure) {
+            return "cannot enumerate a supervised writable root (" + failure.getClass().getSimpleName() + ")";
         }
+        return visibilityFailure[0];
     }
 
     private static long saturatingAdd(long left, long right) {
@@ -186,6 +210,6 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
         return left + right;
     }
 
-    private record Sample(long bytes, long entries) {
+    private record Sample(long bytes, long entries, String visibilityFailure) {
     }
 }
