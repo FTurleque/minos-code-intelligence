@@ -197,6 +197,13 @@ public final class MinosApplication implements AutoCloseable {
         return value;
     }
 
+    /** Stable production composition seam retained as a regression-checkable invariant. */
+    static List<ProgramGraphProvider> productionProgramGraphProviders(
+            ProjectFingerprintSnapshotStore effectiveFingerprints
+    ) {
+        return ProgramGraphService.productionProviders(effectiveFingerprints);
+    }
+
     public static Builder builder(Path home) { return new Builder(home); }
     public Path home() { return home; }
     public String storageBackendId() { return storageBackendId; }
