@@ -203,39 +203,11 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
         long[] totals = {0L, 0L};
         String[] visibilityFailure = {null};
         try {
-            Files.walkFileTree(root, Set.<FileVisitOption>of(), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                    FileVisitResult result = account(0L);
-                    if (result != FileVisitResult.CONTINUE) return result;
-                    return FileTreeOperations.isRecursableDirectory(attributes)
-                            ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
-                    return account(attributes.isRegularFile() ? attributes.size() : 0L);
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException failure) {
-                    if (failure instanceof NoSuchFileException && !file.equals(root)) {
-                        return FileVisitResult.CONTINUE;
-                    }
-                    totals[1] = saturatingAdd(totals[1], 1L);
-                    visibilityFailure[0] = "cannot inspect an entry below a supervised writable root ("
-                            + failure.getClass().getSimpleName() + ")";
-                    return FileVisitResult.TERMINATE;
-                }
-
-                private FileVisitResult account(long bytes) {
-                    totals[0] = saturatingAdd(totals[0], bytes);
-                    totals[1] = saturatingAdd(totals[1], 1L);
-                    return totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()
-                            ? FileVisitResult.TERMINATE
-                            : FileVisitResult.CONTINUE;
-                }
-            });
+            Files.walkFileTree(
+                    root,
+                    Set.<FileVisitOption>of(),
+                    Integer.MAX_VALUE,
+                    quotaVisitor(root, quota, totals, visibilityFailure));
         } catch (NoSuchFileException disappeared) {
             String failure = Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)
                     ? null
@@ -246,6 +218,47 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                     "cannot enumerate a supervised writable root (" + failure.getClass().getSimpleName() + ")");
         }
         return new RootSample(totals[0], totals[1], visibilityFailure[0]);
+    }
+
+    private static SimpleFileVisitor<Path> quotaVisitor(
+            Path root,
+            ProviderWriteQuota quota,
+            long[] totals,
+            String[] visibilityFailure
+    ) {
+        return new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                FileVisitResult result = account(0L);
+                if (result != FileVisitResult.CONTINUE) return result;
+                return FileTreeOperations.isRecursableDirectory(attributes)
+                        ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                return account(attributes.isRegularFile() ? attributes.size() : 0L);
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                if (failure instanceof NoSuchFileException && !file.equals(root)) {
+                    return FileVisitResult.CONTINUE;
+                }
+                totals[1] = saturatingAdd(totals[1], 1L);
+                visibilityFailure[0] = "cannot inspect an entry below a supervised writable root ("
+                        + failure.getClass().getSimpleName() + ")";
+                return FileVisitResult.TERMINATE;
+            }
+
+            private FileVisitResult account(long bytes) {
+                totals[0] = saturatingAdd(totals[0], bytes);
+                totals[1] = saturatingAdd(totals[1], 1L);
+                return totals[0] > quota.maxBytes() || totals[1] > quota.maxEntries()
+                        ? FileVisitResult.TERMINATE
+                        : FileVisitResult.CONTINUE;
+            }
+        };
     }
 
     private static long saturatingAdd(long left, long right) {
