@@ -25,7 +25,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Windows worker sandbox backed by an AppContainer token and a Job Object.
@@ -332,21 +334,12 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                     .directory(working.toFile())
                     .redirectErrorStream(true)
                     .start();
-            boolean completed = process.waitFor(15, TimeUnit.SECONDS);
-            if (!completed) {
-                process.descendants().forEach(ProcessHandle::destroyForcibly);
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
+            if (!awaitProbeCompletion(process, Duration.ofSeconds(15))) {
+                ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
                 LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
                 return false;
             }
-            String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
-            if (process.exitValue() != 0) {
-                LOGGER.log(System.Logger.Level.WARNING,
-                        "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
-                return false;
-            }
-            return true;
+            return probeExitedCleanly(process);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return false;
@@ -361,6 +354,25 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 // Disposable probe residue is beneath MINOS_HOME/sandbox and can be reclaimed later.
             }
         }
+    }
+
+    private static boolean awaitProbeCompletion(Process process, Duration timeout) throws InterruptedException {
+        try {
+            process.onExit().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return true;
+        } catch (TimeoutException timeoutException) {
+            return false;
+        } catch (ExecutionException failure) {
+            throw new IllegalStateException("AppContainer capability probe completion failed", failure.getCause());
+        }
+    }
+
+    private static boolean probeExitedCleanly(Process process) throws IOException {
+        String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
+        if (process.exitValue() == 0) return true;
+        LOGGER.log(System.Logger.Level.WARNING,
+                "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
+        return false;
     }
 
     private static Path installLauncher(Path minosHome) throws IOException {
