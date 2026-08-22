@@ -153,6 +153,11 @@ class WindowsContainmentScriptTest {
                 "private-storage supervisor state");
         value = replaceExactlyOnce(
                 value,
+                "            DenyPrivateRegistryWrites(profileName, profileSid);\n",
+                "",
+                "private registry deny invocation");
+        value = replaceExactlyOnce(
+                value,
                 """
                             privateStorageThread = StartPrivateFileStorageSupervisor(
                                     profileSid,
