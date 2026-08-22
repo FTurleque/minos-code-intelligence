@@ -48,6 +48,8 @@ def main() -> int:
         worker_contract = read("minos-engine/src/main/java/com/minos/remote/DistributedIndexing.java")
         cache_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
         materializer = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteRepositoryMaterializer.java")
+        clone_budget = read("minos-integration-git/src/main/java/com/minos/git/RemoteCloneBudget.java")
+        git_client = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteGitClient.java")
         artifact_policy = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactCachePolicy.java")
         artifact_limits = read("minos-engine/src/main/java/com/minos/orchestration/IndexArtifactLimits.java")
         artifact_store = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedArtifactBundleStore.java")
@@ -73,9 +75,17 @@ def main() -> int:
 
         require_facts("RemoteRepositoryCachePolicy.java", cache_policy, "8", "10L * 1024L * 1024L * 1024L")
         require_facts("JGitRemoteRepositoryMaterializer.java", materializer,
-                      "remote-cache", "FileLock", "setCloneSubmodules(false)", "setDepth(1)",
-                      "expectedCommit", "isClean", "ATOMIC_MOVE", "deleteCacheTree", "credentials.clear")
+                      "remote-cache", "FileLock", "expectedCommit", "isClean", "ATOMIC_MOVE", "deleteCacheTree",
+                      "new JGitRemoteGitClient", "new CloneBudget")
+        require_facts("JGitRemoteGitClient.java", git_client,
+                      "setCloneSubmodules(false)", "setDepth(1)", "credentials.clear",
+                      "JGitCloneDeadline.configure", "CloneProgressMonitor")
+        require_facts("RemoteCloneBudget.java", clone_budget,
+                      "maxBytes", "maxFiles", "maxDirectories", "maxTraversalEntries", "cloneTimeout",
+                      "Files.walkFileTree", "enforceTimeout")
         forbid("JGitRemoteRepositoryMaterializer.java", materializer,
+               'setProperty("credential', "System.out", "System.err", "LOGGER", "logger")
+        forbid("JGitRemoteGitClient.java", git_client,
                'setProperty("credential', "System.out", "System.err", "LOGGER", "logger")
 
         require_facts("DistributedIndexing.java", worker_contract,
