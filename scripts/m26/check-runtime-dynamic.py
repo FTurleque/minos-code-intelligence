@@ -49,8 +49,10 @@ def main() -> int:
         bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+        app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
         local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
+        mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         e2e = read("scripts/m26/run-runtime-e2e.py")
         windows = read("scripts/m26/run-final.ps1")
@@ -95,7 +97,9 @@ def main() -> int:
                       "runtime import", "runtime sessions", "runtime report", "runtime symbol",
                       "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS", "--limit")
         require_facts("MinosApplication.java", app,
-                      "RuntimeObservationStore", "RuntimeIntelligenceService", "selected.runtimeObservationStore()")
+                      "RuntimeObservationStore", "RuntimeIntelligenceService", "runtimeObservationStore()")
+        require_facts("MinosApplicationAssembler.java", app_assembler,
+                      "selected.runtimeObservationStore()", "effectiveRuntimeObservations")
         require_facts("LocalStorageBackend.java", local_storage,
                       'namespace(root, "runtime-observations")', "FileRuntimeObservationStore",
                       "DurableAtomicFile.ensureDirectory")
@@ -104,7 +108,10 @@ def main() -> int:
             raise RuntimeError("MinosMcpTools.java: M26 requires its 26-tool catalogue or an additive superset")
         require_facts("MinosMcpTools.java", mcp,
                       "minos_runtime_sessions", "minos_runtime_report", "minos_runtime_symbol",
-                      "sessionId", "additionalProperties")
+                      "sessionId")
+        require_facts("McpToolSchemas.java", mcp_schemas,
+                      "runtimeSessionsSchema", "runtimeReportSchema", "runtimeSymbolSchema",
+                      "additionalProperties")
         forbid("MinosMcpTools.java", mcp, "minos_runtime_import")
         require_facts("MinosApplicationMcpBackend.java", backend,
                       "runtimeIntelligenceService().listSessions", "runtimeIntelligenceService().report",
