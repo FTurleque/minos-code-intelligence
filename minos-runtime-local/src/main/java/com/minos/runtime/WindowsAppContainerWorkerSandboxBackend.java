@@ -59,6 +59,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             ProviderWriteQuota.DEFAULT_MAX_ENTRIES - PRIVATE_STORAGE_MAX_ENTRIES,
             ProviderWriteQuota.DEFAULT_SAMPLE_PERIOD);
 
+    private static final String SANDBOX_DIRECTORY = "sandbox";
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
     private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_SCRIPT_NAME;
     private static final Map<Path, Boolean> CAPABILITY_PROBE_CACHE = new ConcurrentHashMap<>();
@@ -267,7 +268,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 new ProcessBuilder().environment(),
                 plan.environment());
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
-        Path recovery = minosHome.resolve("sandbox").resolve("appcontainer-recovery").toAbsolutePath().normalize();
+        Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
+                .resolve("appcontainer-recovery").toAbsolutePath().normalize();
         Files.createDirectories(recovery);
         writePlan(
                 planFile,
@@ -307,7 +309,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * all succeed once per MINOS home/JVM.
      */
     private boolean probeOsIsolation() {
-        Path probeRoot = minosHome.resolve("sandbox")
+        Path probeRoot = minosHome.resolve(SANDBOX_DIRECTORY)
                 .resolve("appcontainer-probe-" + Long.toHexString(System.nanoTime()))
                 .toAbsolutePath().normalize();
         try {
@@ -362,7 +364,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     private static Path installLauncher(Path minosHome) throws IOException {
-        Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
+        Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
         Files.createDirectories(directory);
         Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
         // Assembled from its template and the shared Win32 fragments, then published as one
