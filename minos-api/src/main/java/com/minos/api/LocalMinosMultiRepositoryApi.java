@@ -4,7 +4,6 @@ import com.minos.application.MinosApplication;
 import com.minos.git.GitIntelligenceService;
 import com.minos.workspace.WorkspaceIntelligenceService;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -14,20 +13,41 @@ import java.util.Objects;
  */
 public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryApi {
 
+    private final MinosApplication application;
+    private final boolean ownsApplication;
     private final LocalMinosApi delegate;
     private final GitIntelligenceService gitIntelligence;
     private final WorkspaceIntelligenceService workspaceIntelligence;
 
     public LocalMinosMultiRepositoryApi(Path home) throws MinosApiException {
-        this(openApplication(home));
+        this(openApplication(home), true);
     }
 
     /** Uses the same application composition as CLI/MCP instead of rebuilding local stores. */
     public LocalMinosMultiRepositoryApi(MinosApplication application) {
+        this(application, false);
+    }
+
+    private LocalMinosMultiRepositoryApi(MinosApplication application, boolean ownsApplication) {
         MinosApplication app = Objects.requireNonNull(application, "application");
+        this.application = app;
+        this.ownsApplication = ownsApplication;
         this.delegate = new LocalMinosApi(app);
         this.gitIntelligence = app.gitIntelligence();
         this.workspaceIntelligence = app.workspaceIntelligence();
+    }
+
+    /**
+     * Delegated rather than inherited from {@link MinosApi}.
+     *
+     * <p>Every M11 operation below forwards to {@link LocalMinosApi}. Inheriting even a trivially
+     * correct default would make this facade's parity with the facade it extends a matter of
+     * case-by-case judgement; forwarding everything makes it a rule a test can check mechanically
+     * (see {@code LocalMinosMultiRepositoryApiParityTest}).</p>
+     */
+    @Override
+    public String contractVersion() {
+        return delegate.contractVersion();
     }
 
     @Override
@@ -55,6 +75,15 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     }
 
     @Override
+    public IndexImportOutcomeDto importScipOutcome(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws MinosApiException {
+        return delegate.importScipOutcome(projectIdentifier, indexFile, request);
+    }
+
+    @Override
     public List<SymbolDto> findSymbols(String projectIdentifier, SymbolQuery query) throws MinosApiException {
         return delegate.findSymbols(projectIdentifier, query);
     }
@@ -78,6 +107,11 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     }
 
     @Override
+    public ArchitectureGraphDto getArchitectureGraph(String projectIdentifier) throws MinosApiException {
+        return delegate.getArchitectureGraph(projectIdentifier);
+    }
+
+    @Override
     public ModuleContextDto getModuleContext(
             String projectIdentifier,
             String moduleIdentifier
@@ -88,6 +122,16 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     @Override
     public ImpactReportDto analyzeImpact(String projectIdentifier, ImpactQuery query) throws MinosApiException {
         return delegate.analyzeImpact(projectIdentifier, query);
+    }
+
+    /**
+     * Forwards to the same team surface {@link LocalMinosApi} exposes, so the fail-closed decision
+     * stays where it is already qualified -- in {@link LocalMinosTeamApi} against the application's
+     * hosted control plane -- instead of being re-decided here.
+     */
+    @Override
+    public MinosTeamApi team() throws MinosApiException {
+        return delegate.team();
     }
 
     @Override
@@ -150,6 +194,16 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
                     value.maxRelationships()
             ));
         });
+    }
+
+    @Override
+    public void close() throws MinosApiException {
+        if (!ownsApplication) return;
+        try {
+            application.close();
+        } catch (Exception exception) {
+            throw MinosApiSupport.publicFailure(ErrorCode.IO_FAILURE, "MINOS multi-repository API shutdown failed", exception);
+        }
     }
 
     private static WorkspaceDto workspace(WorkspaceIntelligenceService.WorkspaceView value) {
@@ -235,45 +289,14 @@ public final class LocalMinosMultiRepositoryApi implements MinosMultiRepositoryA
     }
 
     private static <T> T required(T value, String field) {
-        if (value == null) {
-            throw new IllegalArgumentException(field + " must not be null");
-        }
-        return value;
+        return MinosApiSupport.required(value, field);
     }
 
-    private static <T> T execute(ApiCall<T> call) throws MinosApiException {
-        try {
-            return call.call();
-        } catch (MinosApiException exception) {
-            throw exception;
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApiException(ErrorCode.INVALID_REQUEST, failureMessage(exception), exception);
-        } catch (IllegalStateException exception) {
-            throw new MinosApiException(ErrorCode.UNAVAILABLE, failureMessage(exception), exception);
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, failureMessage(exception), exception);
-        } catch (Exception exception) {
-            throw new MinosApiException(ErrorCode.EXECUTION_FAILURE, failureMessage(exception), exception);
-        }
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 
     private static MinosApplication openApplication(Path home) throws MinosApiException {
-        try {
-            return MinosApplication.open(Objects.requireNonNull(home, "home"));
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS M12 API bootstrap failed", exception);
-        }
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    @FunctionalInterface
-    private interface ApiCall<T> {
-        T call() throws Exception;
+        return MinosApiSupport.openApplication(home, "MINOS M12 API bootstrap failed");
     }
 }

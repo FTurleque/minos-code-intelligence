@@ -1,130 +1,91 @@
 # Diagramme — Dépendances Maven entre modules MINOS
 
-Type : UML classDiagram (dépendances Maven)
-Portée : Reactor complet (`minos-parent`)
+> **Fichier généré.** Ne pas modifier ce diagramme manuellement.
+> La vérité exécutable provient des POMs du reactor et de
+> `scripts/architecture/check-module-boundaries.py`.
+> Régénération : `python scripts/architecture/check-module-boundaries.py --write-doc`.
 
 ```mermaid
-classDiagram
-    class `minos-domain` {
-        «Container»
-        Modèle de domaine pur
-        Symbol, Relationship, Evidence
-        ProgramGraph, SemanticDocument
-        RuntimeObservation, HostedTenantState
-    }
-    class `minos-engine` {
-        «Container»
-        Ports moteur et services de requête
-        CodeKnowledgeStore «interface»
-        IndexerRegistry «interface»
-        SymbolQueryService
-    }
-    class `minos-runtime-local` {
-        «Container»
-        Infrastructure locale d'exécution
-        CommandLocator
-        ProcessIndexerExecutor
-    }
-    class `minos-storage-local` {
-        «Container»
-        Persistance locale
-        SnapshotRepository
-        FileSemanticVectorStore
-    }
-    class `minos-provider-scip` {
-        «adapter»
-        Ingestion SCIP
-        ScipIngestionAdapter
-        ScipIndexerCatalog
-    }
-    class `minos-integration-git` {
-        «adapter»
-        Git via JGit
-        GitIntelligenceService
-    }
-    class `minos-application` {
-        «Container»
-        Services applicatifs partagés
-        ArchitectureIntelligenceService
-        ImpactAnalysisService
-        CodeSearchService
-    }
-    class `minos-nexus` {
-        «adapter»
-        Export NEXUS JSON
-        NexusExportService
-    }
-    class `minos-cli` {
-        «Container»
-        Surface CLI stable
-        MinosCli
-    }
-    class `minos-api` {
-        «Container»
-        API Java publique versionnée
-    }
-    class `minos-mcp` {
-        «Container»
-        Serveur MCP STDIO
-        MinosMcpServer
-    }
-    class `minos-storage-postgresql` {
-        «adapter»
-        Backend PostgreSQL/pgvector
-    }
-    class `minos-app` {
-        «Container»
-        Composition root
-        MinosLauncher
-        BackendRouter
-    }
-
-    `minos-engine` --> `minos-domain` : dépend de
-    `minos-runtime-local` --> `minos-engine` : dépend de
-    `minos-storage-local` --> `minos-engine` : dépend de
-    `minos-provider-scip` --> `minos-domain` : dépend de
-    `minos-provider-scip` --> `minos-engine` : dépend de
-    `minos-provider-scip` --> `minos-storage-local` : dépend de
-    `minos-provider-scip` --> `minos-runtime-local` : dépend de
-    `minos-integration-git` --> `minos-engine` : dépend de
-    `minos-application` --> `minos-domain` : dépend de
-    `minos-application` --> `minos-engine` : dépend de
-    `minos-application` --> `minos-runtime-local` : dépend de
-    `minos-application` --> `minos-storage-local` : dépend de
-    `minos-application` --> `minos-provider-scip` : dépend de
-    `minos-application` --> `minos-integration-git` : dépend de
-    `minos-nexus` --> `minos-domain` : dépend de
-    `minos-nexus` --> `minos-application` : dépend de
-    `minos-nexus` --> `minos-storage-local` : dépend de
-    `minos-cli` --> `minos-domain` : dépend de
-    `minos-cli` --> `minos-engine` : dépend de
-    `minos-cli` --> `minos-application` : dépend de
-    `minos-cli` --> `minos-integration-git` : dépend de
-    `minos-cli` --> `minos-storage-local` : dépend de
-    `minos-cli` --> `minos-provider-scip` : dépend de
-    `minos-cli` --> `minos-runtime-local` : dépend de
-    `minos-cli` --> `minos-nexus` : dépend de
-    `minos-api` --> `minos-domain` : dépend de
-    `minos-api` --> `minos-engine` : dépend de
-    `minos-api` --> `minos-application` : dépend de
-    `minos-api` --> `minos-storage-local` : dépend de
-    `minos-api` --> `minos-cli` : dépend de
-    `minos-api` --> `minos-integration-git` : dépend de
-    `minos-mcp` --> `minos-application` : dépend de
-    `minos-storage-postgresql` --> `minos-domain` : dépend de
-    `minos-storage-postgresql` --> `minos-engine` : dépend de
-    `minos-storage-postgresql` --> `minos-storage-local` : dépend de
-    `minos-storage-postgresql` --> `minos-application` : dépend de
-    `minos-app` --> `minos-domain` : dépend de
-    `minos-app` --> `minos-engine` : dépend de
-    `minos-app` --> `minos-runtime-local` : dépend de
-    `minos-app` --> `minos-storage-local` : dépend de
-    `minos-app` --> `minos-provider-scip` : dépend de
-    `minos-app` --> `minos-integration-git` : dépend de
-    `minos-app` --> `minos-application` : dépend de
-    `minos-app` --> `minos-storage-postgresql` : dépend de
-    `minos-app` --> `minos-nexus` : dépend de
-    `minos-app` --> `minos-cli` : dépend de
-    `minos-app` --> `minos-api` : dépend de
-    `minos-app` --> `minos-mcp` : dépend de
+flowchart LR
+    minos_domain["minos-domain"]
+    minos_engine["minos-engine"]
+    minos_runtime_local["minos-runtime-local"]
+    minos_storage_local["minos-storage-local"]
+    minos_storage_postgresql["minos-storage-postgresql"]
+    minos_provider_scip["minos-provider-scip"]
+    minos_integration_git["minos-integration-git"]
+    minos_application["minos-application"]
+    minos_nexus["minos-nexus"]
+    minos_cli["minos-cli"]
+    minos_api["minos-api"]
+    minos_mcp["minos-mcp"]
+    minos_app["minos-app"]
+    minos_engine --> minos_domain
+    minos_runtime_local --> minos_engine
+    minos_storage_local --> minos_engine
+    minos_storage_postgresql --> minos_application
+    minos_storage_postgresql --> minos_domain
+    minos_storage_postgresql --> minos_engine
+    minos_storage_postgresql --> minos_storage_local
+    minos_provider_scip --> minos_domain
+    minos_provider_scip --> minos_engine
+    minos_provider_scip --> minos_runtime_local
+    minos_provider_scip --> minos_storage_local
+    minos_integration_git --> minos_engine
+    minos_application --> minos_domain
+    minos_application --> minos_engine
+    minos_application --> minos_integration_git
+    minos_application --> minos_provider_scip
+    minos_application --> minos_runtime_local
+    minos_application --> minos_storage_local
+    minos_nexus --> minos_application
+    minos_nexus --> minos_domain
+    minos_nexus --> minos_storage_local
+    minos_cli --> minos_application
+    minos_cli --> minos_domain
+    minos_cli --> minos_engine
+    minos_cli --> minos_integration_git
+    minos_cli --> minos_nexus
+    minos_cli --> minos_provider_scip
+    minos_cli --> minos_runtime_local
+    minos_cli --> minos_storage_local
+    minos_api --> minos_application
+    minos_api --> minos_domain
+    minos_api --> minos_engine
+    minos_api --> minos_integration_git
+    minos_api --> minos_storage_local
+    minos_mcp --> minos_application
+    minos_app --> minos_api
+    minos_app --> minos_application
+    minos_app --> minos_cli
+    minos_app --> minos_domain
+    minos_app --> minos_engine
+    minos_app --> minos_integration_git
+    minos_app --> minos_mcp
+    minos_app --> minos_nexus
+    minos_app --> minos_provider_scip
+    minos_app --> minos_runtime_local
+    minos_app --> minos_storage_local
+    minos_app --> minos_storage_postgresql
 ```
+
+## Dépendances MINOS directes
+
+| Module | Dépendances directes |
+|---|---|
+| `minos-domain` | — |
+| `minos-engine` | `minos-domain` |
+| `minos-runtime-local` | `minos-engine` |
+| `minos-storage-local` | `minos-engine` |
+| `minos-storage-postgresql` | `minos-application`, `minos-domain`, `minos-engine`, `minos-storage-local` |
+| `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local` |
+| `minos-integration-git` | `minos-engine` |
+| `minos-application` | `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local` |
+| `minos-nexus` | `minos-application`, `minos-domain`, `minos-storage-local` |
+| `minos-cli` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local` |
+| `minos-api` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-storage-local` |
+| `minos-mcp` | `minos-application` |
+| `minos-app` | `minos-api`, `minos-application`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
+
+Le sens d'une flèche est **module → dépendance directe**. Les dépendances transitives ne sont pas répétées.
+Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs courants.

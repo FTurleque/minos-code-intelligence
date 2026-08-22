@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectIndexStateReconciler;
 import com.minos.application.ProjectResolver;
 import com.minos.discovery.ProjectDiscovery;
 import com.minos.incremental.IncrementalIndexingPlan;
@@ -41,11 +42,13 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Autonomous indexing adapter over the selected MINOS storage backend. */
-public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations {
+public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations, AutoCloseable {
     private final MinosApplication application;
+    private final MinosApplication ownedApplication;
     private final ProjectResolver projectResolver;
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
+    private final ProjectIndexStateReconciler projectIndexStateReconciler;
     private final ProjectFingerprintSnapshotStore fingerprintStore;
     private final ProviderRuntimeManager runtimeManager;
     private final SnapshotStager snapshotStager;
@@ -55,20 +58,32 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final IncrementalIndexingPlanner planner;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
 
-    public LocalAutonomousIndexOperations(Path minosHome) throws IOException { this(MinosApplication.open(minosHome)); }
+    public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
+        this(MinosApplication.open(minosHome), UnaryOperator.identity(), true);
+    }
 
     public LocalAutonomousIndexOperations(MinosApplication application) {
-        this(application, UnaryOperator.identity());
+        this(application, UnaryOperator.identity(), false);
     }
 
     public LocalAutonomousIndexOperations(
             MinosApplication application,
             UnaryOperator<IndexerExecutor> executorDecorator
     ) {
+        this(application, executorDecorator, false);
+    }
+
+    private LocalAutonomousIndexOperations(
+            MinosApplication application,
+            UnaryOperator<IndexerExecutor> executorDecorator,
+            boolean ownsApplication
+    ) {
         this.application = Objects.requireNonNull(application, "application");
+        this.ownedApplication = ownsApplication ? this.application : null;
         this.projectResolver = new ProjectResolver(application.projectRegistry());
         this.snapshotStore = application.snapshotStore();
         this.stateStore = application.indexStateStore();
+        this.projectIndexStateReconciler = new ProjectIndexStateReconciler(snapshotStore, stateStore);
         this.fingerprintStore = application.fingerprintStore();
         this.runtimeManager = application.providerRuntimeManager();
         this.snapshotStager = application.snapshotStager();
@@ -79,11 +94,27 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
     }
 
-    @Override public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
-        return prepare(projectIdentifier, providerOverride, forceFull).view();
+    @Override
+    public IndexPlanView plan(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
+            return prepare(projectIdentifier, providerOverride, forceFull).view();
+        }
     }
 
-    @Override public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+    @Override
+    public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        RegisteredProject project = projectResolver.resolve(projectIdentifier);
+        try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
+            return executeLocked(projectIdentifier, providerOverride, forceFull);
+        }
+    }
+
+    private IndexExecutionView executeLocked(
+            String projectIdentifier,
+            String providerOverride,
+            boolean forceFull
+    ) throws Exception {
         Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull);
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
             if (!"READY".equals(runtime.state())) {
@@ -93,6 +124,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         }
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
             String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
+            application.retentionService().compact(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
                     prepared.indexState().activeSnapshotId().orElse(null), true, semanticDiagnostic);
         }
@@ -117,9 +149,17 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                                 prepared.plan()
                         )
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
+        run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
-            throw new IllegalStateException("indexing run " + run.id() + " failed: "
-                    + run.message().orElse("provider/staging/promotion failure"));
+            IllegalStateException failure = new IllegalStateException(
+                    "indexing run " + run.id() + " failed: "
+                            + run.message().orElse("provider/staging/promotion failure"));
+            try {
+                application.retentionService().compact(prepared.project().id());
+            } catch (IOException retentionFailure) {
+                failure.addSuppressed(retentionFailure);
+            }
+            throw failure;
         }
         ProjectFingerprint after = fingerprintService.capture(prepared.project().rootPath());
         boolean stable = prepared.fingerprintBefore().equals(after);
@@ -127,15 +167,60 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         String diagnostic = null;
         if (stable) {
             String activeSnapshotId = run.activeSnapshotAfter().orElseThrow();
-            fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
-            fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
+            try {
+                fingerprintStore.publish(prepared.project().id(), activeSnapshotId, after);
+                fingerprintStore.promote(prepared.project().id(), activeSnapshotId);
+            } catch (IOException fingerprintFailure) {
+                try {
+                    application.retentionService().compact(prepared.project().id());
+                } catch (IOException retentionFailure) {
+                    fingerprintFailure.addSuppressed(retentionFailure);
+                }
+                throw fingerprintFailure;
+            }
             fingerprintPromoted = true;
         } else {
             diagnostic = "workspace changed during indexing; fingerprint baseline was not promoted";
         }
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
+        application.retentionService().compact(prepared.project().id());
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
                 run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
+    }
+
+    private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {
+        if (run.status() == IndexingRun.Status.SUCCEEDED || run.stagedSnapshotId().isEmpty()) {
+            return run;
+        }
+        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(run.projectId());
+        if (active.isEmpty()
+                || !run.stagedSnapshotId().orElseThrow().equals(active.orElseThrow().snapshotId())) {
+            return run;
+        }
+
+        String activeSnapshotId = active.orElseThrow().snapshotId();
+        Instant completedAt = run.completedAt().orElseGet(Instant::now);
+        IndexingRun recovered = new IndexingRun(
+                run.id(),
+                run.projectId(),
+                IndexingRun.Status.SUCCEEDED,
+                IndexingRun.Phase.COMPLETED,
+                run.createdAt(),
+                Optional.of(completedAt),
+                run.executions(),
+                run.stagedSnapshotId(),
+                run.activeSnapshotBefore(),
+                Optional.of(activeSnapshotId),
+                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"));
+        stateStore.saveRun(recovered);
+        stateStore.saveProjectState(new ProjectIndexState(
+                run.projectId(),
+                ProjectIndexState.Availability.READY,
+                Optional.of(activeSnapshotId),
+                Optional.of(run.id()),
+                completedAt,
+                Optional.of("state reconciled after successful snapshot promotion")));
+        return recovered;
     }
 
     @Override public List<ProviderView> providers() {
@@ -164,7 +249,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         return first + "; " + second;
     }
 
-    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+    private Prepared prepare(String projectIdentifier, String providerOverride, boolean forceFull) throws IOException {
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         ProjectDiscovery discovery = application.discoveryService().discover(project.rootPath());
         ProjectFingerprint current = fingerprintService.capture(project.rootPath());
@@ -206,16 +291,13 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     }
 
     private ProjectIndexState alignedIndexState(UUID projectId) throws IOException {
-        Optional<ProjectIndexState> stored = stateStore.findProjectState(projectId);
-        if (stored.isPresent()) return stored.orElseThrow();
-        Optional<CodeKnowledgeSnapshot> active = snapshotStore.loadActiveKnowledge(projectId);
-        ProjectIndexState aligned = active
-                .map(snapshot -> new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
-                        Optional.of(snapshot.snapshotId()), Optional.empty(), Instant.now(),
-                        Optional.of("state aligned from active symbol snapshot")))
-                .orElseGet(() -> ProjectIndexState.neverIndexed(projectId, Instant.now()));
-        stateStore.saveProjectState(aligned);
-        return aligned;
+        ProjectIndexStateReconciler.Reconciliation reconciliation = projectIndexStateReconciler.reconcile(projectId);
+        if (reconciliation.projectState().isPresent()) {
+            return reconciliation.projectState().orElseThrow();
+        }
+        ProjectIndexState neverIndexed = ProjectIndexState.neverIndexed(projectId, Instant.now());
+        stateStore.saveProjectState(neverIndexed);
+        return neverIndexed;
     }
 
     private static ProviderView view(ProviderRuntimeStatus status) {
@@ -232,4 +314,9 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
             ProjectFingerprint fingerprintBefore,
             IndexPlanView view
     ) { }
+
+    @Override
+    public void close() throws IOException {
+        if (ownedApplication != null) ownedApplication.close();
+    }
 }

@@ -36,11 +36,6 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-cli</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
             <artifactId>minos-integration-git</artifactId>
             <version>${project.version}</version>
         </dependency>

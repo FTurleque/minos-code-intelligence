@@ -43,7 +43,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** Shared binary primitives used by the explicit v1/v2 snapshot codecs. */
+/**
+ * Shared binary primitives used by the explicit v1/v2 snapshot codecs.
+ *
+ * <p>The framing helpers ({@code readHeaderVersion}, {@code writeString}, {@code readString},
+ * {@code readRequiredString}, {@code readCount}) are package-private rather than private because
+ * {@link ActiveSnapshotRepository} writes the pointer file with the same framing. They must stay a
+ * single implementation: a divergence between the two would silently produce pointer files this
+ * package can no longer read back.</p>
+ */
 final class SnapshotBinaryCodecSupport {
 
     static final int FORMAT_VERSION_V1 = 1;
@@ -57,10 +65,17 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_ROLES = 1_000;
     private static final int MAX_EVIDENCE = 1_000_000;
     private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
+    static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
 
     private SnapshotBinaryCodecSupport() {
     }
+
+    private static int initialCapacity(int declaredCount) {
+        // Counts describe protocol limits, not a trusted heap-allocation request. Grow incrementally.
+        return Math.min(Math.max(0, declaredCount), 16_384);
+    }
+
 
     static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
         MessageDigest digest = SnapshotIntegrityService.sha256Digest();
@@ -77,10 +92,12 @@ final class SnapshotBinaryCodecSupport {
                 writeSymbol(output, symbol);
             }
         }
+        requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
     }
 
     static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
+        requireSnapshotFileSize(file);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
@@ -88,7 +105,7 @@ final class SnapshotBinaryCodecSupport {
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String snapshotId = readRequiredString(input, "snapshotId");
             int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
-            List<Symbol> symbols = new ArrayList<>(symbolCount);
+            List<Symbol> symbols = new ArrayList<>(initialCapacity(symbolCount));
             for (int index = 0; index < symbolCount; index++) {
                 symbols.add(readSymbol(input));
             }
@@ -122,6 +139,7 @@ final class SnapshotBinaryCodecSupport {
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
+        requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
     }
 
@@ -130,7 +148,11 @@ final class SnapshotBinaryCodecSupport {
         try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
-        return baos.toByteArray();
+        byte[] payload = baos.toByteArray();
+        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
+        }
+        return payload;
     }
 
     private static void writeKnowledgeSnapshotV2Body(DataOutputStream output, CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -154,6 +176,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
+        requireSnapshotFileSize(file);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 Files.newInputStream(file)
         ))) {
@@ -164,6 +187,9 @@ final class SnapshotBinaryCodecSupport {
     }
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2FromBytes(byte[] payload) throws IOException {
+        if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
+        }
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 new ByteArrayInputStream(payload)
         ))) {
@@ -178,17 +204,17 @@ final class SnapshotBinaryCodecSupport {
         UUID projectId = new UUID(input.readLong(), input.readLong());
         String snapshotId = readRequiredString(input, "snapshotId");
         int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
-        List<Symbol> symbols = new ArrayList<>(symbolCount);
+        List<Symbol> symbols = new ArrayList<>(initialCapacity(symbolCount));
         for (int index = 0; index < symbolCount; index++) {
             symbols.add(readSymbol(input));
         }
         int occurrenceCount = readCount(input, MAX_OCCURRENCES, "occurrence count");
-        List<SymbolOccurrence> occurrences = new ArrayList<>(occurrenceCount);
+        List<SymbolOccurrence> occurrences = new ArrayList<>(initialCapacity(occurrenceCount));
         for (int index = 0; index < occurrenceCount; index++) {
             occurrences.add(readOccurrence(input));
         }
         int relationshipCount = readCount(input, MAX_RELATIONSHIPS, "relationship count");
-        List<Relationship> relationships = new ArrayList<>(relationshipCount);
+        List<Relationship> relationships = new ArrayList<>(initialCapacity(relationshipCount));
         for (int index = 0; index < relationshipCount; index++) {
             relationships.add(readRelationship(input));
         }
@@ -205,6 +231,14 @@ final class SnapshotBinaryCodecSupport {
             );
         } catch (IllegalArgumentException exception) {
             throw new IOException("invalid knowledge snapshot: " + exception.getMessage(), exception);
+        }
+    }
+
+    private static void requireSnapshotFileSize(Path file) throws IOException {
+        long size = Files.size(file);
+        if (size < 1L || size > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("snapshot payload exceeds persisted byte limit: " + size
+                    + "/" + MAX_PERSISTED_SNAPSHOT_BYTES);
         }
     }
 
@@ -636,7 +670,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static int readHeaderVersion(
+    static int readHeaderVersion(
             DataInputStream input,
             int expectedMagic,
             String name
@@ -647,7 +681,7 @@ final class SnapshotBinaryCodecSupport {
         return input.readInt();
     }
 
-    private static void writeString(DataOutputStream output, String value) throws IOException {
+    static void writeString(DataOutputStream output, String value) throws IOException {
         if (value == null) {
             output.writeInt(-1);
             return;
@@ -661,7 +695,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static String readString(DataInputStream input) throws IOException {
+    static String readString(DataInputStream input) throws IOException {
         int length = input.readInt();
         if (length == -1) {
             return null;
@@ -676,7 +710,7 @@ final class SnapshotBinaryCodecSupport {
         return value.toString();
     }
 
-    private static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
+    static String readRequiredString(DataInputStream input, String fieldName) throws IOException {
         String value = readString(input);
         if (value == null || value.isBlank()) {
             throw new IOException(fieldName + " must not be blank");
@@ -684,7 +718,7 @@ final class SnapshotBinaryCodecSupport {
         return value;
     }
 
-    private static int readCount(DataInputStream input, int maximum, String name) throws IOException {
+    static int readCount(DataInputStream input, int maximum, String name) throws IOException {
         int count = input.readInt();
         if (count < 0 || count > maximum) {
             throw new IOException("invalid " + name + ": " + count);

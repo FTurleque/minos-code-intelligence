@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce MINOS source ownership and explicit Maven dependency directions."""
+"""Enforce MINOS source ownership, Maven dependency directions, and generated architecture facts."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
+GENERATED_DEPENDENCY_DOC = ROOT / "docs" / "architecture" / "diagrams" / "module-dependencies.md"
 MODULES = (
     "minos-domain",
     "minos-engine",
@@ -48,11 +49,9 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-application", "minos-integration-git",
         "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus"
     }),
-    # Historical LocalMinosApi wiring still consumes reusable CLI operations. The edge is explicit
-    # and cannot grow into additional surface-to-surface dependencies without a policy change.
     "minos-api": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-storage-local",
-        "minos-cli", "minos-integration-git"
+        "minos-integration-git"
     }),
     "minos-mcp": frozenset({"minos-application"}),
     "minos-app": frozenset({
@@ -139,7 +138,6 @@ def check_dependency_policy(graph: dict[str, frozenset[str]]) -> None:
         if forbidden:
             fail(f"{module}: forbidden MINOS dependencies: {', '.join(sorted(forbidden))}")
 
-    # Guard the core regardless of future whitelist edits.
     if graph["minos-domain"]:
         fail("minos-domain must remain dependency-free inside MINOS")
     if graph["minos-engine"] - {"minos-domain"}:
@@ -182,13 +180,14 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
 
                 text = source.read_text(encoding="utf-8")
                 match = PACKAGE.search(text)
-                if match:
-                    expected_parent = Path(*match.group(1).split("."))
-                    if source.relative_to(source_root).parent != expected_parent:
-                        fail(
-                            f"{module}: package/path mismatch for {relative}: "
-                            f"package={match.group(1)}"
-                        )
+                if match is None:
+                    fail(f"{module}: production Java source must declare a package: {relative}")
+                expected_parent = Path(*match.group(1).split("."))
+                if source.relative_to(source_root).parent != expected_parent:
+                    fail(
+                        f"{module}: package/path mismatch for {relative}: "
+                        f"package={match.group(1)}"
+                    )
                 module_count += 1
                 total += 1
         counts[module] = module_count
@@ -196,14 +195,83 @@ def check_java_layout() -> tuple[int, dict[str, int]]:
     return total, counts
 
 
+def mermaid_id(module: str) -> str:
+    return module.replace("-", "_")
+
+
+def render_dependency_document(graph: dict[str, frozenset[str]]) -> str:
+    lines = [
+        "# Diagramme — Dépendances Maven entre modules MINOS",
+        "",
+        "> **Fichier généré.** Ne pas modifier ce diagramme manuellement.",
+        "> La vérité exécutable provient des POMs du reactor et de",
+        "> `scripts/architecture/check-module-boundaries.py`.",
+        "> Régénération : `python scripts/architecture/check-module-boundaries.py --write-doc`.",
+        "",
+        "```mermaid",
+        "flowchart LR",
+    ]
+    for module in MODULES:
+        lines.append(f'    {mermaid_id(module)}["{module}"]')
+    for module in MODULES:
+        for dependency in sorted(graph[module]):
+            lines.append(f"    {mermaid_id(module)} --> {mermaid_id(dependency)}")
+    lines.extend([
+        "```",
+        "",
+        "## Dépendances MINOS directes",
+        "",
+        "| Module | Dépendances directes |",
+        "|---|---|",
+    ])
+    for module in MODULES:
+        dependencies = ", ".join(f"`{dependency}`" for dependency in sorted(graph[module])) or "—"
+        lines.append(f"| `{module}` | {dependencies} |")
+    lines.extend([
+        "",
+        "Le sens d'une flèche est **module → dépendance directe**. Les dépendances transitives ne sont pas répétées.",
+        "Le mode normal du checker échoue si ce fichier n'est plus exactement aligné avec les POMs courants.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def check_or_write_dependency_document(graph: dict[str, frozenset[str]], write_doc: bool) -> None:
+    expected = render_dependency_document(graph)
+    if write_doc:
+        GENERATED_DEPENDENCY_DOC.parent.mkdir(parents=True, exist_ok=True)
+        GENERATED_DEPENDENCY_DOC.write_text(expected, encoding="utf-8", newline="\n")
+        print(f"M21 generated dependency documentation: {GENERATED_DEPENDENCY_DOC.relative_to(ROOT)}")
+        return
+
+    if not GENERATED_DEPENDENCY_DOC.is_file():
+        fail(
+            "generated module dependency documentation is missing; run: "
+            "python scripts/architecture/check-module-boundaries.py --write-doc"
+        )
+    actual = GENERATED_DEPENDENCY_DOC.read_text(encoding="utf-8")
+    if actual != expected:
+        fail(
+            "generated module dependency documentation is stale; run: "
+            "python scripts/architecture/check-module-boundaries.py --write-doc"
+        )
+
+
 def main() -> int:
     try:
+        arguments = sys.argv[1:]
+        unknown = [argument for argument in arguments if argument != "--write-doc"]
+        if unknown:
+            fail(f"unknown arguments: {', '.join(unknown)}")
+        write_doc = "--write-doc" in arguments
+
         roots = {module: parse_pom(module) for module in MODULES}
         for module, root in roots.items():
             check_pom_layout(module, root)
         graph = {module: minos_dependencies(module, root) for module, root in roots.items()}
         check_dependency_policy(graph)
         total, counts = check_java_layout()
+        check_or_write_dependency_document(graph, write_doc)
         for module in MODULES:
             dependencies = ",".join(sorted(graph[module])) or "-"
             print(f"M21 module-boundary {module}: sources={counts[module]} dependencies={dependencies}")

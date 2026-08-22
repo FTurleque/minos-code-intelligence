@@ -49,31 +49,19 @@ public final class RuntimeCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
-            String rendered = switch (options.action()) {
-                case IMPORT -> renderImport(options);
-                case SESSIONS -> renderSessions(options);
-                case REPORT -> renderReport(options);
-                case SYMBOL -> renderSymbol(options);
-            };
-            output.append(rendered).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: runtime ").append(options.action().token).append(" failed: ")
-                    .append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse,
+                (options, exception) -> "runtime " + options.action().token + " failed: "
+                        + CliCommandSupport.failureMessage(CliCommandSupport.unwrapRuntime(exception)),
+                options -> {
+                    String rendered = switch (options.action()) {
+                        case IMPORT -> renderImport(options);
+                        case SESSIONS -> renderSessions(options);
+                        case REPORT -> renderReport(options);
+                        case SYMBOL -> renderSymbol(options);
+                    };
+                    output.append(rendered).append('\n');
+                    return FindSymbolCommand.SUCCESS;
+                });
     }
 
     public static String usage() { return USAGE; }
@@ -151,16 +139,6 @@ public final class RuntimeCommand {
                 "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS");
     }
 
-    private static String failureMessage(Exception exception) {
-        Throwable effective = exception;
-        while (effective instanceof RuntimeException && effective.getCause() != null) effective = effective.getCause();
-        String message = effective.getMessage();
-        return message == null || message.isBlank() ? effective.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    private static boolean isHelp(String value) { return "--help".equals(value) || "-h".equals(value); }
-
     private enum Action {
         IMPORT("import"), SESSIONS("sessions"), REPORT("report"), SYMBOL("symbol");
         private final String token;
@@ -185,11 +163,12 @@ public final class RuntimeCommand {
                 case "symbol" -> Action.SYMBOL;
                 default -> throw new IllegalArgumentException("unknown runtime action: " + arguments[0]);
             };
-            String project = operand(arguments[1], "project");
+            String project = CliCommandSupport.operand(arguments[1], "project");
             Path file = null;
             String session = null;
             String symbol = null;
-            int limit = action == Action.SESSIONS ? 20 : 20;
+            // Every action defaults to 20; only the accepted ceiling is action-specific (see --limit).
+            int limit = 20;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
             Set<String> allowed = switch (action) {
@@ -221,12 +200,6 @@ public final class RuntimeCommand {
             return new Options(action, project, file, session, symbol, limit, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
 
         private static int boundedInt(String value, int maximum) {
             try {

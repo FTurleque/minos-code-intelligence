@@ -1,29 +1,57 @@
 # État courant — MINOS
 
-Dernière mise à jour : **9 août 2026**.
+Dernière mise à jour : **21 août 2026**.
 
-Ce fichier est la synthèse autoritative de l'état produit. Les preuves détaillées et les journaux de qualification restent dans [`roadmap/`](roadmap/), [`history/milestones/`](history/milestones/), [`adr/`](adr/README.md) et [`architecture/`](architecture/README.md).
+Ce fichier est la synthèse autoritative de l'état produit courant. L'historique détaillé antérieur à la campagne post-#226 est conservé sans modification dans [`history/reconciliations/STATUS-pre-post226-audit-20260821.md`](history/reconciliations/STATUS-pre-post226-audit-20260821.md).
 
-## Synthèse
+> **Convention.** Une capacité n'est considérée intégrée qu'après merge. Une correction présente sur une branche ou une PR reste « en qualification » jusqu'à son merge.
 
-```text
-C0 → M30                         TERMINÉS / LIVRÉS
-M29 issue #107                  CLOSED / completed
-M29 PR #108                     MERGED
-M30 PR #110                     MERGED vers develop
-M30 promotion PR #111           MERGED vers main
-hardening PR #113               MERGED
-M28 Windows CI PR #117          MERGED
-promotion develop → main #112   MERGED
-readiness PR #118               MERGED
-readiness promotion PR #119     MERGED / QUALIFIÉE
-correctifs installateur #122–127 MERGED / QUALIFIÉS
-v1.0.0                          PUBLIÉE / IMMUTABLE
-v1.0.1                          PUBLIÉE / IMMUTABLE
-#98 sandbox OS réelle           OPEN — limitation explicite
-```
+## Réconciliation post-PR #228
 
-## Release 1.0.1 — publiée
+**PR #228 est intégrée** dans `develop`.
+
+- HEAD exact qualifié de #228 : `1a551ff72f95db4e14e8a9597d897491b9c1589a` ;
+- merge signé dans `develop` : `a042e97ac5e3e2ab7207fa603d85563ea1f71712` ;
+- composition sandbox/provider local rétablie sans transformer un quota supervisé en claim hostile ;
+- `bwrap`, `prlimit`, `sh`, `systemctl`, `systemd-run`, PowerShell et `cmd.exe` utilisés comme autorités de sécurité sont ancrés aux emplacements système qualifiés plutôt qu'à un PATH utilisateur/`ComSpec`.
+
+Le réaudit complet du merge #228 n'a confirmé aucun P0. Il a toutefois identifié deux défauts distincts dans le niveau **managed-local-provider** : la perte de visibilité d'un writable root pouvait être comptée comme zéro par le superviseur de quota, et le stockage privé implicite d'un AppContainer Windows n'entrait pas dans le budget Java. Il a aussi identifié une sémantique `READY` Windows trop optimiste et des gates/docs incomplets.
+
+La remédiation quota/readiness courante est **en qualification, non intégrée**. Elle conserve le contrat hostile strict : les workers distants restent fail-closed sans quota filesystem `OS_ENFORCED`.
+
+### Quota managed-local-provider
+
+La remédiation courante applique les règles suivantes :
+
+- toute perte réelle de visibilité d'un writable root supervisé devient un breach et détruit le job ;
+- une disparition concurrente normale d'une entrée ne provoque pas de faux breach ;
+- sous Windows, le budget global historique de **8 GiB / 400 000 entrées** reste borné : **7 GiB / 350 000** pour les roots explicites MINOS et **1 GiB / 50 000** réservé au stockage fichier privé AppContainer ;
+- les mutations du stockage registre privé AppContainer sont refusées avant reprise du child suspendu ;
+- le superviseur du stockage privé est armé avant `ResumeThread` et tue le Job Object au dépassement ou à la perte de visibilité.
+
+### Qualification Windows `READY`
+
+La présence de PowerShell ou d'un launcher ne suffit plus à qualifier le backend AppContainer. La découverte exécute un probe réel et borné du launcher packagé : création du profil, token AppContainer, Job Object, limites relues depuis le noyau, assignment, membership et reprise d'un child inoffensif doivent tous réussir. La disponibilité d'un provider local dépend du sandbox réellement utilisé à l'exécution, et non d'un second launcher ownership-only inutilisé par ce chemin.
+
+### Anti-régression
+
+Un gate dédié post-#228 vérifie statiquement les invariants de quota/readiness et impose une couverture JaCoCo ciblée de `ProviderWriteQuotaSupervisor`. Un workflow exact-head Linux/Windows exécute le gate documentaire courant, `mvn verify`, les tests réels AppContainer/Job Object et le gate de couverture.
+
+## État produit
+
+- **C0 → M30** : terminés et intégrés.
+- **M29 issue #107** : **CLOSED** ; **M29 PR #108** intégrée.
+- **M30 PR #110** intégrée ; **M30 promotion PR #111** intégrée.
+- **hardening PR #113** intégré ; **M28 Windows CI PR #117** intégré.
+- **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
+- **PR #224** : traversées projet/NEXUS et couverture ciblée intégrées.
+- **PR #225** : confinement workspace provider/discovery/ignore rules intégré.
+- **PR #226** : provenance launcher IntelliJ et derniers walkers provider intégrés.
+- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement intégrés.
+- **PR #228** : composition managed-local-provider et provenance des autorités de sandbox **intégrées** au HEAD qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`.
+- **remédiation quota/readiness post-#228** : en qualification, non intégrée.
+
+## Release 1.0.1
 
 La release **MINOS v1.0.1** a été publiée le **9 août 2026** après validation utilisateur réelle du setup Windows.
 
@@ -33,109 +61,28 @@ Tag autoritatif :
 v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 ```
 
-Release : <https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1>
+La release **v1.0.1 est PUBLIÉE et immuable**.
 
-La publication transactionnelle finale a :
+- URL : https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1 ;
+- publication : **10 assets**, soit **5 paires** artefact/checksum ;
+- workflow de publication : `31288322126` ;
+- setup Windows, distribution et plugin IntelliJ restent soumis aux gates de provenance, OSV et Plugin Verifier applicables.
 
-- reconnu et sauvegardé l'ancienne Release/tag 1.0.1 ;
-- checkout le commit exact testé par le mainteneur ;
-- construit le plugin IntelliJ en version finale `1.0.1` ;
-- rejoué tests/build/structure et IntelliJ Plugin Verifier ;
-- reconstruit et requalifié la distribution Windows ;
-- validé ZIP, setup, MCP handshakes, installation et désinstallation ;
-- remplacé l'ancien tag/release seulement après ces gates ;
-- publié **10 assets** : 8 artefacts Windows/supply-chain + plugin IntelliJ ZIP/checksum ;
-- re-téléchargé les 10 assets ;
-- vérifié **5 paires payload/SHA-256** ;
-- confirmé le tag final sur `f762025d66e33c40324c811079f1527d122f90f9`.
+## Garanties structurantes courantes
 
-Workflow de publication final : run `31288322126`, conclusion **success**.
+- snapshots structurés autoritatifs et promotions fail-closed ;
+- API/CLI/MCP/NEXUS/IntelliJ au-dessus du métier sans autorité concurrente ;
+- providers locaux exécutés depuis une copie éphémère bornée avec réseau OS-enforced et job boundary agrégé ;
+- qualification provider locale supervisée strictement distincte de toute claim hostile ;
+- workers distants/hostiles fail-closed sans hard filesystem quota `OS_ENFORCED` ;
+- egress provider `DENY` par défaut ;
+- exécutables qui créent la sandbox résolus depuis des autorités système canoniques ;
+- environnement provider allowlisté ;
+- stockage privé AppContainer inclus dans la frontière de write containment de la remédiation courante ;
+- local storage owner-only, symlink/junction/reparse refusés avant mutation ;
+- Git distant, PostgreSQL, hosted control plane, MCP et Ollama conservent leurs frontières fail-closed déjà qualifiées ;
+- supply-chain CI et release épinglées à des références immuables lorsqu'une telle garantie est revendiquée.
 
-Le commit de release est immuable. Les commits postérieurs de documentation/maintenance ne doivent jamais déplacer `v1.0.1`.
+## Qualification de la remédiation courante
 
-## Qualification acquise
-
-La qualification ayant mené à 1.0.1 comprend :
-
-- Maven Linux avec PostgreSQL/pgvector Testcontainers réel et fail-closed ;
-- Maven Windows ;
-- JaCoCo ciblé M0–M30 ;
-- OSV Scanner bloquant ;
-- M19 / M20 ;
-- M28 exact-head Linux et Windows ;
-- SonarCloud Quality Gate ;
-- IntelliJ unit tests / build / structure ;
-- IntelliJ Plugin Verifier ;
-- build jpackage Windows ;
-- ZIP, SBOM CycloneDX, third-party notices et SHA-256 ;
-- handshake MCP SDK sur runtime packagé ;
-- compilation Inno Setup ;
-- installation ZIP + handshake ;
-- installation setup + handshake ;
-- désinstallation setup ;
-- contrôle des artefacts durables ;
-- validation utilisateur réelle du wizard et de l'exécutable final.
-
-## M29 — Autonomous Docker Runtime & Native Parity
-
-M29 est terminé et intégré. Le contrat durable reste :
-
-```text
-clients IA
-   ↓
-minos.exe mcp
-   ↓
-backend router
-  ↙      ↘
-native   docker
-```
-
-Les clients ne contiennent aucune logique Docker. Le choix `native|docker` est résolu derrière le point d'entrée stable et aucun fallback silencieux Docker→native n'est autorisé.
-
-## M30 — Advanced Installer, Ollama Docker & PostgreSQL/pgvector
-
-M30 est livré. Capacités intégrées :
-
-- wizard Windows **Standard / Avancé** ;
-- runtime MCP : `native | docker | none` ;
-- stockage : `local | postgresql` ;
-- sémantique : `disabled | local-hash | ollama` ;
-- PostgreSQL/pgvector réel avec migrations ;
-- PostgreSQL/Ollama Docker gérés ;
-- intégrations MCP Copilot JetBrains, Copilot CLI, Claude CLI/Code, Claude Desktop et Codex CLI/Desktop ;
-- résumé des choix avant installation ;
-- upgrade/switch/uninstall transactionnels et ownership-aware.
-
-## Hardening et release engineering
-
-Les PR #113/#117/#118/#119 et les correctifs #122–#127 ont notamment livré :
-
-- Jackson 2/3 corrigés et centralisés ;
-- OSV bloquant ;
-- PostgreSQL/pgvector obligatoire sur Linux ;
-- Testcontainers cohérent Windows/Linux ;
-- JaCoCo M29/M30 ;
-- handshake MCP SDK du runtime packagé ;
-- Plugin Verifier IntelliJ ;
-- build/smoke Windows end-to-end ;
-- détection/réparation ownership-aware des clients MCP ;
-- réutilisation d'une image Docker locale exactement labellisée ;
-- génération locale Windows répétable malgré les locks jpackage transitoires ;
-- publication fail-closed et vérification post-upload des checksums.
-
-## Release 1.0.0
-
-`v1.0.0` reste immuable. Le défaut Windows historique `NoClassDefFoundError: org/w3c/dom/Node` appartient à cette release et est corrigé par 1.0.1. Le tag 1.0.0 ne doit jamais être déplacé ou recréé.
-
-## Limitation explicitement ouverte — #98
-
-L'issue **#98** reste ouverte. La sandbox OS réelle des workers distants n'est pas implicitement résolue par M29/M30 ou 1.0.1. Les modes qui exigent une isolation non disponible doivent continuer à échouer de façon capability-honest / fail-closed.
-
-## Sources de vérité
-
-- état courant : `docs/STATUS.md` ;
-- feuille de route : `docs/ROADMAP.md` ;
-- architecture : `docs/architecture/README.md` ;
-- guide production Windows : `docs/user/production-installation.md` ;
-- release 1.0.1 : `docs/releases/1.0.1.md` ;
-- historique de livraison 1.0.1 : issue #106.
+La correction ne sera déclarée intégrée qu'après succès exact-head des workflows applicables sur son HEAD final. Aucun merge n'est autorisé par ce document : l'intégration exige toujours une décision explicite après qualification.

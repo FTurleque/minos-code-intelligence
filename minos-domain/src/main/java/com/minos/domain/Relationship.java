@@ -45,9 +45,7 @@ public record Relationship(
         if (target != null && resolutionStatus == ResolutionStatus.UNRESOLVED) {
             throw new IllegalArgumentException("resolved target cannot have UNRESOLVED status");
         }
-        if (confidence != null && (confidence < 0.0 || confidence > 1.0)) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
-        }
+        ProbabilityInvariant.requireOptional(confidence, "confidence");
         evidence = evidence == null ? List.of() : List.copyOf(evidence);
         if (nature != InformationNature.FACTUAL && confidence == null) {
             throw new IllegalArgumentException("derived or heuristic relationship requires confidence");

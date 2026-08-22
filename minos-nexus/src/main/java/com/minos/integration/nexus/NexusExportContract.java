@@ -71,6 +71,7 @@ public final class NexusExportContract {
         public ExportEvidence {
             requireText(type, "type");
             requireText(description, "description");
+            requireOptionalProbability(weight, "weight");
         }
     }
 
@@ -133,15 +134,19 @@ public final class NexusExportContract {
             requireText(nature, "nature");
             Objects.requireNonNull(origin, "origin");
             evidence = immutable(evidence);
-            if (confidence != null && (!Double.isFinite(confidence) || confidence < 0.0 || confidence > 1.0)) {
-                throw new IllegalArgumentException("confidence must be between 0 and 1");
-            }
+            requireOptionalProbability(confidence, "confidence");
         }
     }
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void requireOptionalProbability(Double value, String name) {
+        if (value != null && (!Double.isFinite(value) || value < 0.0 || value > 1.0)) {
+            throw new IllegalArgumentException(name + " must be finite and between 0 and 1");
         }
     }
 

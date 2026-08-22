@@ -164,6 +164,12 @@ Invariants UX :
 
 Contrat historique fournisseur-indépendant M11/M12. Il n’expose ni SCIP, ni les stores, ni MCP.
 
+Les extensions restent additives (`default methods`) : `getArchitectureGraph(...)`, `team()` et `importScipOutcome(...)`. Cette dernière restitue le `commitStatus` de l'import (`COMMITTED`, durabilité et/ou métadonnées en attente) et un diagnostic assaini, faits que `IndexImportDto` ne portait pas ; `importScip(...)` conserve son contrat exact et `CONTRACT_VERSION` reste `1`.
+
+Une façade qui étend `MinosApi` doit **redéléguer** chaque opération plutôt qu'hériter d'un `default` : un `default` conçu pour une implémentation tierce répondrait `UNAVAILABLE` pour une capacité que l'application possède. L'invariant est vérifié par réflexion sur `LocalMinosMultiRepositoryApi`, sans liste de méthodes maintenue à la main.
+
+Un argument `null` fourni par un appelant est classé `INVALID_REQUEST` par validation à la frontière publique (`MinosApiSupport.required`) — jamais par capture de `NullPointerException` dans `execute()`, qui présenterait un défaut interne de MINOS comme une erreur du client.
+
 ### `ProviderPlatformApi` v1
 
 Contrat additif M17 : providers, versions, écosystèmes, profiles de capabilities, conformance et diagnostics runtime.

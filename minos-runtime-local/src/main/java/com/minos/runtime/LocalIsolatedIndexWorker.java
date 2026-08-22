@@ -1,45 +1,46 @@
 package com.minos.runtime;
 
+import com.minos.orchestration.IndexArtifactLimits;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
+import com.minos.orchestration.ProviderId;
 import com.minos.remote.DistributedArtifactManifest;
 import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.DistributedIndexing.WorkerRequest;
 import com.minos.remote.DistributedIndexing.WorkerResponse;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.DosFileAttributeView;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.Objects;
 
 /**
  * Provider worker with copied ephemeral workspace and explicit sandbox backend.
  *
- * <p>The default native backend does not claim OS-level network denial. A DENY request therefore
- * fails closed unless an independently qualified backend actually executes the provider and exposes
- * an OS-enforced guarantee.</p>
+ * <p>The public constructor selects the strongest qualified OS sandbox only when the executor
+ * explicitly implements {@link ProcessSandboxCapableIndexerExecutor}. This keeps ownership
+ * capability-based instead of concrete-class-based, including wrappers such as
+ * {@link StrongProcessOwnershipIndexerExecutor}. Other executors remain fail-closed.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
-    private static final long DEFAULT_MAX_WORKSPACE_FILES = 100_000L;
-    private static final long DEFAULT_MAX_WORKSPACE_BYTES = 2L * 1024L * 1024L * 1024L;
+    private static final long DEFAULT_MAX_WORKSPACE_FILES = SourceBudgetPolicy.DEFAULT_MAX_FILES;
+    private static final long DEFAULT_MAX_WORKSPACE_BYTES = SourceBudgetPolicy.DEFAULT_MAX_BYTES;
+    private static final String WORKSPACE_BOUNDARY = "remote worker workspace";
 
     private final String workerId;
     private final Path workersRoot;
     private final IndexerExecutor delegate;
     private final DistributedArtifactBundleStore bundleStore;
     private final WorkerSandboxBackend sandboxBackend;
-    private final long maxWorkspaceFiles;
-    private final long maxWorkspaceBytes;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
     private final Clock clock;
 
     public LocalIsolatedIndexWorker(
@@ -53,7 +54,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 minosHome,
                 delegate,
                 bundleStore,
-                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                defaultSandboxBackend(minosHome, delegate),
                 DEFAULT_MAX_WORKSPACE_FILES,
                 DEFAULT_MAX_WORKSPACE_BYTES,
                 Clock.systemUTC());
@@ -76,6 +77,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         this.workersRoot = Objects.requireNonNull(minosHome, "minosHome")
                 .toAbsolutePath().normalize().resolve("distributed-workers");
         this.delegate = Objects.requireNonNull(delegate, "delegate");
+        ProviderId.require(this.delegate.indexerId());
         this.bundleStore = Objects.requireNonNull(bundleStore, "bundleStore");
         this.sandboxBackend = Objects.requireNonNull(sandboxBackend, "sandboxBackend");
         if (sandboxBackend.id() == null || sandboxBackend.id().isBlank()) {
@@ -83,11 +85,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
         Objects.requireNonNull(sandboxBackend.isolation(), "sandbox backend isolation");
         Objects.requireNonNull(sandboxBackend.networkGuarantee(), "sandbox backend network guarantee");
-        if (maxWorkspaceFiles < 1 || maxWorkspaceBytes < 1) {
-            throw new IllegalArgumentException("workspace limits must be positive");
-        }
-        this.maxWorkspaceFiles = maxWorkspaceFiles;
-        this.maxWorkspaceBytes = maxWorkspaceBytes;
+        this.sourceBudgetPolicy = new SourceBudgetPolicy(maxWorkspaceFiles, maxWorkspaceBytes);
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -116,6 +114,11 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (!delegate.indexerId().equals(request.execution().selection().indexer().id())) {
             throw new IllegalArgumentException("worker delegate does not match selected provider");
         }
+        if (!sandboxBackend.supportsUntrustedCode()) {
+            throw new IllegalStateException(
+                    "sandbox backend " + sandboxBackend.id()
+                            + " is not qualified for untrusted remote code on the current platform; execution is fail-closed");
+        }
         if (request.networkPolicy() == WorkerNetworkPolicy.DENY
                 && !sandboxBackend.enforcesNetworkDeny()) {
             throw new IllegalStateException(
@@ -126,17 +129,23 @@ public final class LocalIsolatedIndexWorker implements Worker {
         Files.createDirectories(workersRoot);
         Path providerRoot = workersRoot
                 .resolve(request.execution().runId().toString())
-                .resolve(delegate.indexerId());
+                .resolve(ProviderId.require(delegate.indexerId()))
+                .toAbsolutePath().normalize();
+        if (!providerRoot.startsWith(workersRoot)) {
+            throw new IOException("worker provider path escapes distributed worker root");
+        }
         Path workspace = providerRoot.resolve("workspace");
         Files.createDirectories(providerRoot);
-        if (Files.exists(workspace)) {
-            deleteWorkerTree(workspace);
+        if (Files.exists(workspace, LinkOption.NOFOLLOW_LINKS)) {
+            ProviderWorkspaceFiles.deleteTree(workersRoot, workspace, WORKSPACE_BOUNDARY);
         }
         Files.createDirectory(workspace);
 
+        String portableScope = portableScope(request.execution().projectRelativeRoot());
         Instant startedAt = clock.instant();
         try {
-            copyWorkspace(request.execution().projectRoot(), workspace);
+            ProviderWorkspaceFiles.copyWorkspace(
+                    request.execution().projectRoot(), workspace, sourceBudgetPolicy, WORKSPACE_BOUNDARY);
             IndexingExecutionRequest isolated = new IndexingExecutionRequest(
                     request.execution().runId(),
                     request.execution().projectId(),
@@ -153,14 +162,21 @@ public final class LocalIsolatedIndexWorker implements Worker {
                         "worker sandbox returned artifact provenance for another provider/language");
             }
             Path artifactPath = artifact.finalArtifact().toAbsolutePath().normalize();
-            if (!Files.isRegularFile(artifactPath) || Files.size(artifactPath) < 1L) {
-                throw new IOException("worker sandbox did not produce a non-empty artifact");
+            if (Files.isSymbolicLink(artifactPath)
+                    || !Files.isRegularFile(artifactPath, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("worker sandbox did not produce a non-empty regular artifact");
+            }
+            long artifactBytes = Files.size(artifactPath);
+            if (artifactBytes < 1L) throw new IOException("worker sandbox did not produce a non-empty regular artifact");
+            if (artifactBytes > IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES) {
+                throw new IOException("worker SCIP artifact exceeds configured byte limit before hashing");
             }
             Instant completedAt = clock.instant();
             DistributedArtifactManifest manifest = new DistributedArtifactManifest(
-                    DistributedArtifactManifest.FORMAT_V1,
+                    DistributedArtifactManifest.FORMAT_V2,
                     isolated.runId(),
                     isolated.projectId(),
+                    portableScope,
                     request.sourceRepository(),
                     request.sourceCommit(),
                     artifact.language(),
@@ -169,11 +185,12 @@ public final class LocalIsolatedIndexWorker implements Worker {
                     workerId,
                     isolation(),
                     request.networkPolicy(),
-                    sandboxBackend.enforcesNetworkDeny(),
+                    request.networkPolicy() == WorkerNetworkPolicy.DENY
+                            && sandboxBackend.enforcesNetworkDeny(),
                     startedAt,
                     completedAt,
                     DistributedArtifactManifest.ARTIFACT_PATH,
-                    Files.size(artifactPath),
+                    artifactBytes,
                     DistributedArtifactBundleStore.sha256(artifactPath));
             Path bundle = Files.createTempFile(workersRoot, ".bundle-", ".zip");
             try {
@@ -184,8 +201,8 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 throw exception;
             }
         } finally {
-            if (Files.exists(providerRoot)) {
-                deleteWorkerTree(providerRoot);
+            if (Files.exists(providerRoot, LinkOption.NOFOLLOW_LINKS)) {
+                ProviderWorkspaceFiles.deleteTree(workersRoot, providerRoot, WORKSPACE_BOUNDARY);
             }
             try {
                 Files.deleteIfExists(providerRoot.getParent());
@@ -195,69 +212,16 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
     }
 
-    private void copyWorkspace(Path sourceRoot, Path targetRoot) throws IOException {
-        Path source = Objects.requireNonNull(sourceRoot, "sourceRoot").toRealPath();
-        if (!Files.isDirectory(source)) {
-            throw new IOException("worker source workspace is not a directory");
-        }
-        long files = 0L;
-        long bytes = 0L;
-        try (var paths = Files.walk(source)) {
-            for (Path current : paths.sorted().toList()) {
-                Path relative = source.relativize(current);
-                if (relative.getNameCount() > 0
-                        && ".git".equals(relative.getName(0).toString())) {
-                    continue;
-                }
-                if (Files.isSymbolicLink(current)) {
-                    throw new IOException(
-                            "remote worker rejects symbolic links: "
-                                    + relative.toString().replace('\\', '/'));
-                }
-                Path target = targetRoot.resolve(relative).normalize();
-                if (!target.startsWith(targetRoot)) {
-                    throw new IOException("worker workspace path escapes its target root");
-                }
-                if (Files.isDirectory(current, LinkOption.NOFOLLOW_LINKS)) {
-                    Files.createDirectories(target);
-                } else if (Files.isRegularFile(current, LinkOption.NOFOLLOW_LINKS)) {
-                    files = Math.addExact(files, 1L);
-                    bytes = Math.addExact(bytes, Files.size(current));
-                    if (files > maxWorkspaceFiles || bytes > maxWorkspaceBytes) {
-                        throw new IOException("remote worker workspace exceeds configured limits");
-                    }
-                    Files.createDirectories(target.getParent());
-                    Files.copy(current, target, StandardCopyOption.COPY_ATTRIBUTES);
-                } else {
-                    throw new IOException("remote worker rejects non-regular workspace entries");
-                }
-            }
-        }
+    private static WorkerSandboxBackend defaultSandboxBackend(Path minosHome, IndexerExecutor delegate) {
+        Objects.requireNonNull(minosHome, "minosHome");
+        Objects.requireNonNull(delegate, "delegate");
+        return delegate instanceof ProcessSandboxCapableIndexerExecutor
+                ? WorkerSandboxBackends.strongestAvailable(minosHome)
+                : WorkerSandboxBackend.nativeEphemeralWorkspace();
     }
 
-    private void deleteWorkerTree(Path target) throws IOException {
-        Path normalized = target.toAbsolutePath().normalize();
-        if (normalized.equals(workersRoot) || !normalized.startsWith(workersRoot)) {
-            throw new IOException("refusing to delete outside the distributed worker root");
-        }
-        try (var paths = Files.walk(normalized)) {
-            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                clearReadOnly(path);
-                Files.deleteIfExists(path);
-            }
-        }
-    }
-
-    private static void clearReadOnly(Path path) {
-        try {
-            DosFileAttributeView attributes = Files.getFileAttributeView(
-                    path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            if (attributes != null && attributes.readAttributes().isReadOnly()) {
-                attributes.setReadOnly(false);
-            }
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Non-DOS file systems do not need this Windows-specific cleanup.
-        }
-        path.toFile().setWritable(true);
+    private static String portableScope(Path projectRelativeRoot) {
+        String portable = projectRelativeRoot.toString().replace('\\', '/');
+        return ".".equals(portable) ? "" : portable;
     }
 }

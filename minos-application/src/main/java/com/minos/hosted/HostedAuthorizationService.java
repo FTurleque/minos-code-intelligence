@@ -68,8 +68,8 @@ final class HostedAuthorizationService {
                     safeRequestId,
                     state.keyId(),
                     state.version() + 1);
-            store.save(denied, state.version());
-            auditSink.publish(denied.auditEvents().getLast());
+            HostedCommitRecovery.save(store, denied, state.version());
+            HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
             throw new SecurityException("hosted permission denied: " + permission);
         }
         return new MutationContext(claims, state, membership.orElseThrow(), safeRequestId);

@@ -1,5 +1,8 @@
 package com.minos.incremental;
 
+import com.minos.io.CommitUncertainException;
+import com.minos.io.DurableAtomicFile;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -9,10 +12,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -24,6 +29,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,7 +58,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot")
                 .toAbsolutePath()
                 .normalize();
-        Files.createDirectories(this.storageRoot);
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "fingerprint storage root");
     }
 
     @Override
@@ -72,7 +78,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                 fingerprint
         );
         Path projectDirectory = projectDirectory(projectId);
-        Files.createDirectories(projectDirectory);
+        DurableAtomicFile.ensureDirectory(projectDirectory, "fingerprint project directory");
         String idHash = sha256(indexSnapshotId);
         Path temporary = Files.createTempFile(projectDirectory, ".fingerprint-", ".tmp");
         try {
@@ -92,7 +98,15 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                 throw new IOException("fingerprint snapshot already exists with different content for index snapshot: "
                         + indexSnapshotId);
             }
-            publishAtomically(temporary, target);
+            try {
+                DurableAtomicFile.publish(temporary, target, "fingerprint snapshot publication");
+            } catch (CommitUncertainException uncertain) {
+                if (regularFileExists(target, "published fingerprint snapshot")) {
+                    ProjectFingerprintSnapshot visible = readVerifiedSnapshot(projectId, target);
+                    if (visible.equals(snapshot)) return visible;
+                }
+                throw uncertain;
+            }
             return snapshot;
         } finally {
             Files.deleteIfExists(temporary);
@@ -128,7 +142,18 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
                     snapshot.fingerprint().buildSha256(),
                     snapshot.fingerprint().fileCount()
             ));
-            replaceAtomically(temporaryPointer, projectDirectory.resolve(ACTIVE_FILE));
+            try {
+                DurableAtomicFile.replace(
+                        temporaryPointer,
+                        projectDirectory.resolve(ACTIVE_FILE),
+                        "active fingerprint pointer replacement");
+            } catch (CommitUncertainException uncertain) {
+                Optional<ProjectFingerprintSnapshot> visible = loadActive(projectId);
+                if (visible.map(ProjectFingerprintSnapshot::indexSnapshotId).filter(indexSnapshotId::equals).isPresent()) {
+                    return;
+                }
+                throw uncertain;
+            }
         } finally {
             Files.deleteIfExists(temporaryPointer);
         }
@@ -156,15 +181,14 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     @Override
     public Optional<ProjectFingerprintSnapshot> loadActive(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        Path projectDirectory = projectDirectory(projectId);
+        Path projectDirectory = existingProjectDirectory(projectId);
+        if (projectDirectory == null) return Optional.empty();
         Path pointerFile = projectDirectory.resolve(ACTIVE_FILE);
-        if (!Files.isRegularFile(pointerFile)) {
-            return Optional.empty();
-        }
+        if (!regularFileExists(pointerFile, "active fingerprint pointer")) return Optional.empty();
 
         ActivePointer pointer = readPointer(pointerFile);
         Path snapshotFile = resolveFile(projectDirectory, pointer.fileName());
-        if (!Files.isRegularFile(snapshotFile)) {
+        if (!regularFileExists(snapshotFile, "active fingerprint snapshot")) {
             throw new IOException("active fingerprint snapshot file is missing: " + snapshotFile);
         }
         String actualChecksum = checksum(snapshotFile);
@@ -187,26 +211,18 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     @Override
     public List<String> listIndexSnapshotIds(UUID projectId) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
-        Path projectDirectory = projectDirectory(projectId);
-        if (!Files.isDirectory(projectDirectory)) {
-            return List.of();
-        }
+        Path projectDirectory = existingProjectDirectory(projectId);
+        if (projectDirectory == null) return List.of();
 
         List<String> ids = new ArrayList<>();
         Set<String> unique = new HashSet<>();
-        try (var stream = Files.list(projectDirectory)) {
-            for (Path file : stream
-                    .filter(Files::isRegularFile)
-                    .filter(path -> isSnapshotFile(path.getFileName().toString()))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                    .toList()) {
-                ProjectFingerprintSnapshot snapshot = readVerifiedSnapshot(projectId, file);
-                if (!unique.add(snapshot.indexSnapshotId())) {
-                    throw new IOException("duplicate fingerprint snapshot id in history: "
-                            + snapshot.indexSnapshotId());
-                }
-                ids.add(snapshot.indexSnapshotId());
+        for (Path file : snapshotFiles(projectDirectory)) {
+            ProjectFingerprintSnapshot snapshot = readVerifiedSnapshot(projectId, file);
+            if (!unique.add(snapshot.indexSnapshotId())) {
+                throw new IOException("duplicate fingerprint snapshot id in history: "
+                        + snapshot.indexSnapshotId());
             }
+            ids.add(snapshot.indexSnapshotId());
         }
         ids.sort(String::compareTo);
         return List.copyOf(ids);
@@ -216,8 +232,83 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return storageRoot;
     }
 
+    /** Applies bounded historical retention while protecting active and caller-referenced ids. */
+    public synchronized FingerprintRetentionResult compact(
+            UUID projectId,
+            Set<String> additionallyProtectedSnapshotIds,
+            int maxHistoricalSnapshots
+    ) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        Objects.requireNonNull(additionallyProtectedSnapshotIds, "additionallyProtectedSnapshotIds");
+        if (maxHistoricalSnapshots < 0) {
+            throw new IllegalArgumentException("maxHistoricalSnapshots must not be negative");
+        }
+        Path projectDirectory = existingProjectDirectory(projectId);
+        if (projectDirectory == null) return new FingerprintRetentionResult(0, 0);
+
+        String activeFileName = null;
+        Path activePointer = projectDirectory.resolve(ACTIVE_FILE);
+        if (regularFileExists(activePointer, "active fingerprint pointer")) {
+            ActivePointer pointer = readPointer(activePointer);
+            Path activeFile = resolveFile(projectDirectory, pointer.fileName());
+            if (!regularFileExists(activeFile, "active fingerprint snapshot")) {
+                throw new IOException("active fingerprint snapshot file is missing: " + activeFile);
+            }
+            activeFileName = pointer.fileName();
+        }
+
+        Set<String> protectedPrefixes = new HashSet<>();
+        for (String snapshotId : additionallyProtectedSnapshotIds) {
+            protectedPrefixes.add("fingerprint-" + sha256(requireText(snapshotId, "protectedSnapshotId")) + "-");
+        }
+        Comparator<FingerprintFile> oldestFirst = Comparator
+                .comparing(FingerprintFile::lastModified)
+                .thenComparing(FingerprintFile::fileName);
+        PriorityQueue<FingerprintFile> historical = new PriorityQueue<>(oldestFirst);
+        int protectedCount = 0;
+        int deleted = 0;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectDirectory)) {
+            for (Path file : stream) {
+                String fileName = file.getFileName().toString();
+                if (!isSnapshotFile(fileName)) continue;
+                requireRegularFile(file, "fingerprint snapshot");
+                boolean protectedFile = fileName.equals(activeFileName)
+                        || protectedPrefixes.stream().anyMatch(fileName::startsWith);
+                if (protectedFile) {
+                    protectedCount++;
+                    continue;
+                }
+                FingerprintFile candidate = new FingerprintFile(
+                        file, fileName,
+                        Files.getLastModifiedTime(file, LinkOption.NOFOLLOW_LINKS));
+                if (historical.size() < maxHistoricalSnapshots) {
+                    historical.add(candidate);
+                } else if (maxHistoricalSnapshots > 0
+                        && oldestFirst.compare(candidate, historical.element()) > 0) {
+                    DurableAtomicFile.deleteIfExists(
+                            historical.remove().path(), "fingerprint retention deletion");
+                    deleted++;
+                    historical.add(candidate);
+                } else {
+                    DurableAtomicFile.deleteIfExists(candidate.path(), "fingerprint retention deletion");
+                    deleted++;
+                }
+            }
+        }
+        return new FingerprintRetentionResult(protectedCount + historical.size(), deleted);
+    }
+
     private Path projectDirectory(UUID projectId) {
         return storageRoot.resolve(projectId.toString());
+    }
+
+    private Path existingProjectDirectory(UUID projectId) throws IOException {
+        Path directory = projectDirectory(projectId);
+        if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) return null;
+        if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory);
+        }
+        return directory;
     }
 
     private static String writeSnapshot(Path file, ProjectFingerprintSnapshot snapshot) throws IOException {
@@ -244,8 +335,10 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static ProjectFingerprintSnapshot readVerifiedSnapshot(UUID expectedProjectId, Path file)
             throws IOException {
+        requireRegularFile(file, "fingerprint snapshot");
         verifyFileNameChecksum(file);
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             requireHeader(input, SNAPSHOT_MAGIC, "fingerprint snapshot");
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String indexSnapshotId = readString(input, "indexSnapshotId");
@@ -294,9 +387,6 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         if (currentBuild.equals(fingerprint.buildSha256())) {
             return;
         }
-        // FORMAT_VERSION=1 snapshots created before M24 used the M17 descriptor set.
-        // Accept that exact legacy hash so additive build markers do not invalidate
-        // an otherwise immutable historical snapshot.
         String legacyBuild = buildHash(fingerprint.files(), LEGACY_BUILD_DESCRIPTOR_POLICY);
         if (!legacyBuild.equals(fingerprint.buildSha256())) {
             throw new IOException("build fingerprint aggregate mismatch");
@@ -336,7 +426,9 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static ActivePointer readPointer(Path file) throws IOException {
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        requireRegularFile(file, "fingerprint active pointer");
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             requireHeader(input, POINTER_MAGIC, "fingerprint active pointer");
             ActivePointer pointer;
             try {
@@ -361,17 +453,51 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static List<Path> filesForIdHash(Path projectDirectory, String idHash) throws IOException {
-        if (!Files.isDirectory(projectDirectory)) {
-            return List.of();
-        }
+        if (!Files.exists(projectDirectory, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        requireProjectDirectory(projectDirectory);
         String prefix = "fingerprint-" + idHash + "-";
-        try (var stream = Files.list(projectDirectory)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().startsWith(prefix))
-                    .filter(path -> path.getFileName().toString().endsWith(".bin"))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                    .toList();
+        List<Path> matches = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectDirectory)) {
+            for (Path path : stream) {
+                String name = path.getFileName().toString();
+                if (!name.startsWith(prefix) || !name.endsWith(".bin")) continue;
+                requireRegularFile(path, "fingerprint snapshot");
+                matches.add(path);
+            }
+        }
+        matches.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        return List.copyOf(matches);
+    }
+
+    private static List<Path> snapshotFiles(Path projectDirectory) throws IOException {
+        requireProjectDirectory(projectDirectory);
+        List<Path> files = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(projectDirectory)) {
+            for (Path path : stream) {
+                if (!isSnapshotFile(path.getFileName().toString())) continue;
+                requireRegularFile(path, "fingerprint snapshot");
+                files.add(path);
+            }
+        }
+        files.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        return List.copyOf(files);
+    }
+
+    private static void requireProjectDirectory(Path directory) throws IOException {
+        if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("fingerprint project entry must be a non-symlink directory: " + directory);
+        }
+    }
+
+    private static boolean regularFileExists(Path file, String label) throws IOException {
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return false;
+        requireRegularFile(file, label);
+        return true;
+    }
+
+    private static void requireRegularFile(Path file, String label) throws IOException {
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException(label + " must be a regular non-symlink file: " + file);
         }
     }
 
@@ -475,8 +601,10 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static String checksum(Path file) throws IOException {
+        requireRegularFile(file, "fingerprint snapshot");
         MessageDigest digest = sha256Digest();
-        try (InputStream input = new DigestInputStream(Files.newInputStream(file), digest)) {
+        try (InputStream input = new DigestInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), digest)) {
             input.transferTo(OutputStream.nullOutputStream());
         }
         return HEX.formatHex(digest.digest());
@@ -507,27 +635,6 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         return value;
     }
 
-    private static void publishAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target);
-        }
-    }
-
-    private static void replaceAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(
-                    source,
-                    target,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
     private record ActivePointer(
             String indexSnapshotId,
             String fileName,
@@ -544,6 +651,16 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             buildSha256 = FileFingerprint.requireSha256(buildSha256);
             if (fileCount < 0) {
                 throw new IllegalArgumentException("fileCount must be >= 0");
+            }
+        }
+    }
+
+    private record FingerprintFile(Path path, String fileName, FileTime lastModified) { }
+
+    public record FingerprintRetentionResult(int retainedSnapshots, int deletedSnapshots) {
+        public FingerprintRetentionResult {
+            if (retainedSnapshots < 0 || deletedSnapshots < 0) {
+                throw new IllegalArgumentException("fingerprint retention counts must not be negative");
             }
         }
     }

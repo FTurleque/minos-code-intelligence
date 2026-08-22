@@ -2,7 +2,9 @@ package com.minos.runtime;
 
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -13,6 +15,7 @@ public record WorkerSandboxQualification(
         WorkerSandboxBackend.NetworkGuarantee networkGuarantee,
         NetworkDenyDisposition networkDeny,
         TrustDisposition trustDisposition,
+        WorkerResourceContainment containment,
         Map<Platform, PlatformDisposition> platforms,
         List<String> limitations
 ) {
@@ -24,6 +27,7 @@ public record WorkerSandboxQualification(
         Objects.requireNonNull(networkGuarantee, "networkGuarantee");
         Objects.requireNonNull(networkDeny, "networkDeny");
         Objects.requireNonNull(trustDisposition, "trustDisposition");
+        Objects.requireNonNull(containment, "containment");
         platforms = platforms == null ? Map.of() : Map.copyOf(platforms);
         limitations = limitations == null ? List.of() : List.copyOf(limitations);
         if (networkDeny == NetworkDenyDisposition.QUALIFIED
@@ -34,12 +38,55 @@ public record WorkerSandboxQualification(
                 && networkDeny != NetworkDenyDisposition.QUALIFIED) {
             throw new IllegalArgumentException("untrusted-code support requires qualified network denial");
         }
+        if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && !containment.qualifiedForUntrustedCode()) {
+            // Never let a backend overstate its trust boundary. A supervised filesystem quota can
+            // qualify the narrower managed-local-provider contract, but it cannot qualify hostile
+            // code because a writer may burst between supervisor samples.
+            trustDisposition = TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED;
+            List<String> downgraded = new ArrayList<>(limitations);
+            downgraded.add("WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT");
+            downgraded.addAll(containment.unmetRequirements());
+            limitations = List.copyOf(downgraded);
+        }
+        if (trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && platforms.values().stream().noneMatch(value -> value == PlatformDisposition.QUALIFIED)) {
+            throw new IllegalArgumentException("untrusted-code support requires at least one qualified platform");
+        }
     }
 
+    /** Full hostile/untrusted-code claim. Filesystem quotas must be kernel-enforced. */
     public boolean sandboxClaimPermitted() {
         return trustDisposition == TrustDisposition.UNTRUSTED_CODE_SUPPORTED
                 && networkDeny == NetworkDenyDisposition.QUALIFIED
-                && platforms.values().stream().anyMatch(value -> value == PlatformDisposition.QUALIFIED);
+                && containment.qualifiedForUntrustedCode()
+                && qualifiedForCurrentPlatform();
+    }
+
+    /**
+     * Narrower claim used only by managed local provider execution.
+     *
+     * <p>It retains an OS-enforced network boundary and aggregate job ownership, while accepting
+     * filesystem byte/entry limits enforced by the in-process supervisor. This claim must never be
+     * reused by remote workers or surfaced as arbitrary untrusted-code support.</p>
+     */
+    public boolean managedLocalProviderClaimPermitted() {
+        return networkGuarantee == WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED
+                && networkDeny == NetworkDenyDisposition.QUALIFIED
+                && containment.qualifiedForManagedLocalProvider()
+                && qualifiedForCurrentPlatform();
+    }
+
+    public boolean qualifiedForCurrentPlatform() {
+        return platforms.getOrDefault(currentPlatform(), PlatformDisposition.NOT_APPLICABLE)
+                == PlatformDisposition.QUALIFIED;
+    }
+
+    public static Platform currentPlatform() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) return Platform.WINDOWS;
+        if (os.contains("linux")) return Platform.LINUX;
+        return Platform.OTHER;
     }
 
     public static WorkerSandboxQualification nativeProcessOnly(String backendId, WorkerIsolation isolation) {
@@ -49,6 +96,7 @@ public record WorkerSandboxQualification(
                 WorkerSandboxBackend.NetworkGuarantee.NONE,
                 NetworkDenyDisposition.FAIL_CLOSED_NOT_ENFORCED,
                 TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                WorkerResourceContainment.none(backendId),
                 Map.of(
                         Platform.WINDOWS, PlatformDisposition.BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND,
                         Platform.LINUX, PlatformDisposition.BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND,
@@ -57,6 +105,7 @@ public record WorkerSandboxQualification(
                         "WORKER_PROCESS_SEPARATION_ONLY",
                         "WORKER_FILESYSTEM_CONFINEMENT_APPLICATION_LEVEL_ONLY",
                         "WORKER_NETWORK_DENY_NOT_OS_ENFORCED",
+                        "WORKER_AGGREGATE_RESOURCE_CONTAINMENT_UNAVAILABLE",
                         "WORKER_UNTRUSTED_CODE_NOT_SUPPORTED",
                         "WORKER_SANDBOX_CLAIM_PROHIBITED"));
     }
@@ -81,6 +130,7 @@ public record WorkerSandboxQualification(
         QUALIFIED,
         BLOCKED_NO_RESTRICTED_TOKEN_JOB_OBJECT_BACKEND,
         BLOCKED_NO_NAMESPACE_SECCOMP_BACKEND,
+        BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY,
         NOT_APPLICABLE
     }
 }

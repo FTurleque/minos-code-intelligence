@@ -3,7 +3,6 @@ package com.minos.hosted;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -76,11 +75,14 @@ final class HostedTenantService {
                 safeRequestId,
                 safeKeyId,
                 0);
-        store.create(audited);
-        auditSink.publish(audited.auditEvents().getLast());
+
+        Duration safeLifetime = Objects.requireNonNull(tokenLifetime, "tokenLifetime");
         String token = identities.issue(
                 tenantId, ownerId, safeKeyId, now,
-                Objects.requireNonNull(tokenLifetime, "tokenLifetime"), UUID.randomUUID().toString());
+                safeLifetime, UUID.randomUUID().toString());
+
+        HostedCommitRecovery.create(store, audited);
+        HostedAuditDelivery.publishAfterCommit(auditSink, audited.auditEvents().getLast());
         return new Bootstrap(audited, token);
     }
 
@@ -95,10 +97,7 @@ final class HostedTenantService {
         HostedTenantState state = authorization.authorizeRead(
                 bearerToken, HostedPermission.AUDIT_READ).state();
         int start = Math.max(0, state.auditEvents().size() - limit);
-        List<HostedAuditEvent> values = new ArrayList<>(
-                state.auditEvents().subList(start, state.auditEvents().size()));
-        java.util.Collections.reverse(values);
-        return List.copyOf(values);
+        return List.copyOf(state.auditEvents().subList(start, state.auditEvents().size()).reversed());
     }
 
     record Bootstrap(HostedTenantState state, String bearerToken) {

@@ -1,18 +1,21 @@
 # ADR-0036 — Fail-closed production boundaries and measured ProgramGraph convergence
 
-- Status: **Proposed**
+- Status: **Accepted**
 - Date: 2026-07-31
+- Accepted: 2026-08-09
 - Origin: M28
 
 ## Context
 
-M22→M27 delivered advanced program analysis, polyglot providers, remote workers, runtime observations and an embedded tenant control plane. The pre-M28 audit found three convergence risks:
+M22→M27 delivered advanced program analysis, polyglot providers, remote workers, runtime observations and an embedded tenant control plane. The pre-M28 audit identified three convergence risks:
 
-1. the Java advanced provider concentrated discovery, parsing, CFG, def-use, interprocedural flow, taint and graph assembly in one implementation;
-2. process/workspace isolation could be misread as an OS sandbox even though the native worker cannot enforce network denial;
+1. the Java advanced provider concentrated discovery, parsing, CFG, def-use, interprocedural flow, taint and graph assembly in one implementation ;
+2. process/workspace isolation could be misread as an OS sandbox even though the original native worker could not enforce network denial ;
 3. the embedded hosted control plane could be misread as a complete operated SaaS although transport, availability and operator integrations are not supplied.
 
 ProgramGraph also needed an explicit performance decision rather than an assumed storage/cache migration.
+
+The post-1.0.1 audit reopened the sandbox part of this decision as issue #98 and required real platform mechanisms plus negative escape tests before any hostile-code claim could be accepted.
 
 ## Decision
 
@@ -20,19 +23,19 @@ ProgramGraph also needed an explicit performance decision rather than an assumed
 
 The production composition uses `FingerprintConstrainedJavaProgramGraphProvider`. A persisted exact project fingerprint is part of the cache key. On a cache miss, every Java source represented by the active structured snapshot is checked against its persisted size and SHA-256 before AST analysis.
 
-A working tree that differs from the active snapshot fails closed with:
+A working tree that differs from the active snapshot fails closed with :
 
 ```text
 JAVA_ADVANCED_PROVIDER_SOURCE_DIFFERS_FROM_SNAPSHOT_FINGERPRINT
 ```
 
-The in-memory ProgramGraph cache remains the candidate backend until the M28 cold/warm/modified-source profiles prove a bottleneck requiring another design.
+The in-memory ProgramGraph cache remains the candidate backend until performance profiles prove a bottleneck requiring another design.
 
 ### 2. Decompose analysis responsibilities without changing capability claims
 
-`JavaSourceProgramGraphProvider` is a stable facade. Discovery/fingerprint, AST parsing, CFG, def-use, interprocedural resolution, taint, deterministic graph emission and capability assembly live in focused components.
+`JavaSourceProgramGraphProvider` remains a stable facade. Discovery/fingerprint, AST parsing, CFG, def-use, interprocedural resolution, taint, deterministic graph emission and capability assembly live in focused components.
 
-The decomposition must preserve:
+The decomposition preserves :
 
 - deterministic node and edge IDs ;
 - provider provenance ;
@@ -44,7 +47,7 @@ The decomposition must preserve:
 
 `WorkerSandboxBackend` exposes a `NetworkGuarantee`; `WorkerSandboxQualification` exposes network-deny, trust and platform dispositions.
 
-The native backend is explicitly classified as:
+The process-only backend remains explicit :
 
 ```text
 PROCESS_EPHEMERAL_WORKSPACE
@@ -54,13 +57,48 @@ UNTRUSTED_CODE_UNSUPPORTED
 WORKER_SANDBOX_CLAIM_PROHIBITED
 ```
 
-Windows and Linux remain blocked until dedicated OS mechanisms and escape tests are implemented. `DENY` is rejected before provider execution when the selected backend cannot prove OS enforcement.
+`DENY` is rejected before provider execution whenever the selected backend cannot prove OS enforcement.
+
+The post-audit implementation adds two real platform backends.
+
+#### Linux
+
+`LinuxBubblewrapWorkerSandboxBackend` uses :
+
+- `bubblewrap --unshare-all` ;
+- isolated network namespace for `DENY`, explicit host network sharing only for `ALLOW` ;
+- host root mounted read-only ;
+- writable workspace, artifact and run roots only ;
+- dropped capabilities ;
+- `prlimit` bounds for address space, process count, open files and CPU ;
+- a bounded runtime capability probe before `OS_ENFORCED` is advertised.
+
+> Superseded on the resource-containment dimension by
+> [0038](0038-aggregate-worker-resource-containment.md): `prlimit` bounds are per process and are
+> multiplied by every `fork`. The aggregate job boundary is a per-run cgroup v2, and untrusted
+> execution is refused when that boundary cannot be created.
+
+On Ubuntu 24.04 qualification, the distribution-provided AppArmor profile `bwrap-userns-restrict` is loaded so the same unprivileged-user-namespace boundary exercised by production can be tested. If kernel/LSM policy or required tools do not permit the sandbox, discovery fails and MINOS remains process-only / fail-closed.
+
+#### Windows
+
+`WindowsAppContainerWorkerSandboxBackend` uses :
+
+- an AppContainer token with an empty capability set for `DENY`, or only the system `internetClient` capability for `ALLOW` ;
+- verification of `TokenIsAppContainer` before child resume ;
+- temporary ACL grants limited to MINOS/provider-owned roots ;
+- no mutation of Windows system ACLs ;
+- a Job Object with kill-on-close, active-process, job-memory and CPU hard-cap limits, hardened by
+  [0038](0038-aggregate-worker-resource-containment.md) with job-time limits, verified membership,
+  refused breakaway and explicit termination on every exit path.
+
+Both OS implementations are accepted only with negative tests for network/filesystem escape and with a real path test through `ProcessIndexerExecutor → sandbox → provider → artefact`.
 
 ### 4. Separate the embedded hosted control plane from operated-service claims
 
 `HostedControlPlaneService` is a facade over cohesive tenant, authorization, membership, workspace, retention, token, audit and mutation services.
 
-Operator boundaries are explicit ports:
+Operator boundaries remain explicit ports :
 
 - `HostedIdentityProvider` ;
 - `HostedTenantKeyProvider` ;
@@ -68,7 +106,7 @@ Operator boundaries are explicit ports:
 - `HostedTransportSecurityPort` ;
 - `HostedAvailabilityPort`.
 
-The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRST` and cannot claim qualified transport/TLS, backup/availability, SaaS operation or process isolation.
+The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRST` and cannot claim qualified transport/TLS, backup/availability, SaaS operation or process isolation that has not been independently provided and qualified.
 
 ## Consequences
 
@@ -78,16 +116,20 @@ The embedded baseline exposes `HostedProductionBoundary.Mode.EMBEDDED_LOCAL_FIRS
 - the Java provider can evolve without recreating a monolith ;
 - stale-source analysis is prevented rather than merely documented ;
 - remote and hosted claims are machine-readable and fail closed ;
-- future OS/KMS/IdP/transport/availability adapters have explicit contracts ;
+- Linux and Windows workers accept remote `ALLOW` or `DENY` only when an actual OS sandbox is available ;
+- sandbox availability itself is capability-probed rather than inferred from an executable name ;
+- future KMS/IdP/transport/availability adapters retain explicit contracts ;
 - backend evolution remains measurement-gated.
 
 ### Costs
 
 - more focused classes and tests must remain synchronized ;
 - exact fingerprint validation adds source hashing on ProgramGraph cache misses ;
-- the native remote worker cannot satisfy `DENY` and cannot run untrusted code ;
-- the embedded hosted mode is intentionally not sufficient for an operated service ;
-- audit-sink export occurs after tenant persistence and therefore needs idempotent retry handling in an operated adapter.
+- Linux sandbox operation depends on available `bubblewrap`/util-linux primitives and an LSM/userns policy that permits them ;
+- Windows AppContainer setup requires correct ACL lifecycle and PowerShell/Win32 interop ;
+- environments without a qualified sandbox cannot execute remote providers, with either `ALLOW` or `DENY`, and deliberately fail closed ;
+- the embedded hosted mode remains intentionally insufficient for an operated SaaS service ;
+- audit-sink export still needs idempotent retry handling in an operated adapter.
 
 ## Rejected alternatives
 
@@ -97,11 +139,15 @@ Rejected because it obscures responsibility boundaries, makes targeted qualifica
 
 ### Treat process separation as a sandbox
 
-Rejected because it would overclaim filesystem and network guarantees absent from the operating system boundary.
+Rejected because it would overclaim filesystem and network guarantees absent from the operating-system boundary.
+
+### Advertise a sandbox from tool presence alone
+
+Rejected after post-audit qualification showed that kernel/LSM policy can reject user namespaces even when `bwrap` is installed. A bounded runtime capability probe is mandatory on Linux.
 
 ### Silently downgrade `DENY` to `ALLOW`
 
-Rejected because the caller’s security intent would be violated. Failure is mandatory.
+Rejected because the caller's security intent would be violated. Failure is mandatory.
 
 ### Present embedded hosted mode as production SaaS
 
@@ -109,16 +155,21 @@ Rejected because identity federation, KMS, TLS transport, tenant/process isolati
 
 ### Introduce ANN or a database-backed ProgramGraph cache immediately
 
-Rejected until the M28 performance profile demonstrates a concrete bottleneck.
+Rejected until performance profiles demonstrate a concrete bottleneck.
 
 ## Validation
 
-This ADR may become **Accepted** only after the same immutable M28 head passes:
+This ADR is **Accepted** because the convergence gates have been exercised across the delivered M28+ state and the post-audit remediation adds the previously missing sandbox evidence.
 
-- decomposition and vertical capability gates ;
-- Product Facts and module fitness functions ;
-- targeted JaCoCo and security-negative tests ;
-- ProgramGraph profiles on Windows and Linux ;
-- M21-S2 / required-check governance after 1 August 2026.
+The acceptance evidence includes :
 
-Execution state and exact-head evidence are maintained in `docs/roadmap/M28_EXECUTION.md` and the M28 milestone evidence, not in this ADR.
+- module fitness functions and decomposition gates ;
+- Product Facts and targeted JaCoCo ;
+- ProgramGraph and security-negative tests ;
+- PostgreSQL/pgvector real integration on Linux ;
+- exact-head sandbox qualification on Linux and Windows with no skipped sandbox tests ;
+- negative network/filesystem tests and resource-bound checks ;
+- real `ProcessIndexerExecutor` execution through each OS sandbox ;
+- fail-closed fallback when an OS backend cannot be qualified.
+
+Execution state remains summarized in `docs/STATUS.md`, `docs/ROADMAP.md` and the post-audit PR/issue evidence. Historical M28 evidence remains in `docs/roadmap/M28_EXECUTION.md` and milestone records.

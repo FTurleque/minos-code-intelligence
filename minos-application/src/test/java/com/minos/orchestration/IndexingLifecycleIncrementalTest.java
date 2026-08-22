@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -39,8 +40,9 @@ class IndexingLifecycleIncrementalTest {
     void incrementalPlanForwardsModeAndChangedFiles(@TempDir Path root) throws Exception {
         Path artifact = Files.writeString(root.resolve("java.scip"), "java");
         RecordingExecutor executor = new RecordingExecutor("java-indexer", Language.JAVA, artifact);
-        IndexingLifecycleService service = service(executor);
         UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = stateWithSnapshot(projectId, "snapshot-old");
+        IndexingLifecycleService service = service(executor, store);
         IndexerNegotiationResult negotiation = negotiation(selection("java-indexer", Language.JAVA, true));
         IncrementalIndexingPlan plan = planner.plan(partial(projectId), negotiation);
 
@@ -57,8 +59,9 @@ class IndexingLifecycleIncrementalTest {
     void fullFallbackNeverLeaksPartialFileScope(@TempDir Path root) throws Exception {
         Path artifact = Files.writeString(root.resolve("java.scip"), "java");
         RecordingExecutor executor = new RecordingExecutor("java-indexer", Language.JAVA, artifact);
-        IndexingLifecycleService service = service(executor);
         UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = stateWithSnapshot(projectId, "snapshot-old");
+        IndexingLifecycleService service = service(executor, store);
         IndexerNegotiationResult negotiation = negotiation(selection("java-indexer", Language.JAVA, false));
         IncrementalIndexingPlan plan = planner.plan(partial(projectId), negotiation);
 
@@ -71,17 +74,35 @@ class IndexingLifecycleIncrementalTest {
     }
 
     @Test
+    void stalePlanIsRejectedAfterAnotherLifecycleAdvancesTheSnapshot(@TempDir Path root) throws Exception {
+        Path artifact = Files.writeString(root.resolve("java.scip"), "java");
+        RecordingExecutor executor = new RecordingExecutor("java-indexer", Language.JAVA, artifact);
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = stateWithSnapshot(projectId, "snapshot-newer");
+        IndexingLifecycleService service = service(executor, store);
+        IndexerNegotiationResult negotiation = negotiation(selection("java-indexer", Language.JAVA, true));
+        IncrementalIndexingPlan stale = planner.plan(partial(projectId), negotiation);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> service.executePlanned(projectId, root, negotiation, stale));
+
+        assertTrue(failure.getMessage().contains("indexing plan is stale"));
+        assertEquals(0, executor.calls.get());
+    }
+
+    @Test
     void noChangePlanCreatesNoRunAndDoesNotCallExecutor(@TempDir Path root) throws Exception {
         Path artifact = Files.writeString(root.resolve("java.scip"), "java");
         RecordingExecutor executor = new RecordingExecutor("java-indexer", Language.JAVA, artifact);
-        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        UUID projectId = UUID.randomUUID();
+        InMemoryIndexStateStore store = stateWithSnapshot(projectId, "snapshot-old");
         IndexingLifecycleService service = new IndexingLifecycleService(
                 List.of(executor),
                 request -> "snapshot-new",
-                (projectId, runId, stagedSnapshotId) -> { },
+                (id, runId, stagedSnapshotId) -> { },
                 store
         );
-        UUID projectId = UUID.randomUUID();
         IndexerNegotiationResult negotiation = negotiation(selection("java-indexer", Language.JAVA, false));
         IncrementalIndexingPlan plan = planner.plan(unchanged(projectId), negotiation);
 
@@ -120,13 +141,25 @@ class IndexingLifecycleIncrementalTest {
         );
     }
 
-    private static IndexingLifecycleService service(RecordingExecutor executor) {
+    private static IndexingLifecycleService service(RecordingExecutor executor, InMemoryIndexStateStore store) {
         return new IndexingLifecycleService(
                 List.of(executor),
                 request -> "snapshot-new",
                 (projectId, runId, stagedSnapshotId) -> { },
-                new InMemoryIndexStateStore()
+                store
         );
+    }
+
+    private static InMemoryIndexStateStore stateWithSnapshot(UUID projectId, String snapshotId) {
+        InMemoryIndexStateStore store = new InMemoryIndexStateStore();
+        store.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.READY,
+                Optional.of(snapshotId),
+                Optional.empty(),
+                Instant.EPOCH,
+                Optional.of("test baseline")));
+        return store;
     }
 
     private static ProjectInvalidationAssessment partial(UUID projectId) {
@@ -170,9 +203,7 @@ class IndexingLifecycleIncrementalTest {
                 IndexerCapability.SYMBOLS,
                 IndexerCapability.REFERENCES
         );
-        if (incremental) {
-            capabilities.add(IndexerCapability.INCREMENTAL_INDEXING);
-        }
+        if (incremental) capabilities.add(IndexerCapability.INCREMENTAL_INDEXING);
         return new IndexerSelection(
                 language,
                 new IndexerDescriptor(
@@ -206,10 +237,7 @@ class IndexingLifecycleIncrementalTest {
             this.artifact = artifact;
         }
 
-        @Override
-        public String indexerId() {
-            return id;
-        }
+        @Override public String indexerId() { return id; }
 
         @Override
         public IndexingArtifact execute(IndexingExecutionRequest request) {

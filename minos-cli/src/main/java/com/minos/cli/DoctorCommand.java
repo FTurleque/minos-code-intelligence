@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.io.PrivateLocalStorage;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.runtime.CommandLocator;
 
@@ -36,41 +37,92 @@ public final class DoctorCommand {
         for (String command : List.of("java", "javac", "mvn", "node", "npm", "python", "docker")) {
             commands.put(command, CommandLocator.find(command).map(Path::toString).orElse(null));
         }
+        Map<String, String> privateStorage = privateStorageDiagnostics();
         boolean ready = providers.stream()
                 .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
                 .allMatch(provider -> "READY".equals(provider.state()));
         if (format == SymbolOutputFormat.JSON) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("minosHome", home.toString());
-            map.put("javaRuntime", System.getProperty("java.runtime.version"));
-            map.put("javaHome", System.getProperty("java.home"));
-            map.put("commands", commands);
-            List<Map<String, Object>> values = new ArrayList<>();
-            for (var provider : providers) {
-                Map<String, Object> value = new LinkedHashMap<>();
-                value.put("id", provider.id());
-                value.put("version", provider.version());
-                value.put("state", provider.state());
-                value.put("requiredByDefault", provider.requiredByDefault());
-                value.put("executable", provider.executable());
-                value.put("diagnostics", provider.diagnostics());
-                values.add(value);
-            }
-            map.put("providers", values);
-            map.put("ready", ready);
-            output.append(CliJson.render(map)).append('\n');
+            renderJson(output, providers, commands, privateStorage, ready);
         } else {
-            output.append("MINOS_HOME: ").append(home.toString()).append('\n');
-            output.append("Java runtime: ").append(System.getProperty("java.runtime.version", "unknown")).append('\n');
-            output.append("Java home: ").append(System.getProperty("java.home", "unknown")).append('\n');
-            for (Map.Entry<String, String> entry : commands.entrySet()) {
-                output.append("command[").append(entry.getKey()).append("]: ")
-                        .append(entry.getValue() == null ? "NOT_FOUND" : entry.getValue()).append('\n');
-            }
-            output.append(ToolsCommand.render(providers, SymbolOutputFormat.TEXT)).append('\n');
-            output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
+            renderText(output, providers, commands, privateStorage, ready);
         }
         return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
+    }
+
+    private void renderJson(
+            Appendable output,
+            List<AutonomousIndexOperations.ProviderView> providers,
+            Map<String, String> commands,
+            Map<String, String> privateStorage,
+            boolean ready
+    ) throws IOException {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("minosHome", home.toString());
+        map.put("javaRuntime", System.getProperty("java.runtime.version"));
+        map.put("javaHome", System.getProperty("java.home"));
+        map.put("commands", commands);
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (var provider : providers) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("id", provider.id());
+            value.put("version", provider.version());
+            value.put("state", provider.state());
+            value.put("requiredByDefault", provider.requiredByDefault());
+            value.put("executable", provider.executable());
+            value.put("diagnostics", CliCommandSupport.publicDiagnostics(provider.diagnostics()));
+            values.add(value);
+        }
+        map.put("providers", values);
+        map.put("privateStoragePermissions", privateStorage);
+        map.put("ready", ready);
+        output.append(CliJson.render(map)).append('\n');
+    }
+
+    private void renderText(
+            Appendable output,
+            List<AutonomousIndexOperations.ProviderView> providers,
+            Map<String, String> commands,
+            Map<String, String> privateStorage,
+            boolean ready
+    ) throws IOException {
+        output.append("MINOS_HOME: ").append(home.toString()).append('\n');
+        output.append("Java runtime: ").append(System.getProperty("java.runtime.version", "unknown")).append('\n');
+        output.append("Java home: ").append(System.getProperty("java.home", "unknown")).append('\n');
+        for (Map.Entry<String, String> entry : commands.entrySet()) {
+            output.append("command[").append(entry.getKey()).append("]: ")
+                    .append(entry.getValue() == null ? "NOT_FOUND" : entry.getValue()).append('\n');
+        }
+        output.append(ToolsCommand.render(providers, SymbolOutputFormat.TEXT)).append('\n');
+        for (Map.Entry<String, String> entry : privateStorage.entrySet()) {
+            output.append("privateStorage[").append(entry.getKey()).append("]: ")
+                    .append(entry.getValue()).append('\n');
+        }
+        output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
+    }
+
+    /**
+     * Reports the confidentiality actually enforced on the locations that hold user code and its
+     * derivatives. Only the location and its enforcement level are reported -- never any content.
+     *
+     * <p>{@code EXPOSED} means the directory grants access beyond its owner, which MINOS repairs the
+     * next time it opens that store; {@code UNSUPPORTED} means the filesystem has no permission
+     * model to enforce, which is surfaced rather than silently treated as private.</p>
+     */
+    private Map<String, String> privateStorageDiagnostics() {
+        Map<String, String> report = new LinkedHashMap<>();
+        for (String relative : List.of(
+                "", "snapshots", "projects", "runs", "semantic-vectors", "runtime-observations",
+                "remote-cache", "remote-cache/repositories", "distributed-artifacts",
+                "postgresql-snapshot-scratch")) {
+            Path target = relative.isEmpty() ? home : home.resolve(relative);
+            String label = relative.isEmpty() ? "MINOS_HOME" : relative;
+            try {
+                report.put(label, PrivateLocalStorage.privacyOf(target).name());
+            } catch (IOException unreadable) {
+                report.put(label, "UNKNOWN");
+            }
+        }
+        return report;
     }
 
     private static SymbolOutputFormat parse(String[] arguments) {

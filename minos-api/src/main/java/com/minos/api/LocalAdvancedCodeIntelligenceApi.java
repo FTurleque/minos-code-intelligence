@@ -9,7 +9,6 @@ import com.minos.program.ProgramGraphNode;
 import com.minos.program.analysis.AdvancedImpactService;
 import com.minos.program.analysis.SecurityAnalysisService;
 
-import java.io.IOException;
 import java.util.Objects;
 
 /** Local M19 implementation backed only by shared MinosApplication services. */
@@ -95,23 +94,10 @@ public final class LocalAdvancedCodeIntelligenceApi implements AdvancedCodeIntel
     }
 
     private static <T> T required(T value, String name) {
-        return Objects.requireNonNull(value, name);
+        return MinosApiSupport.required(value, name);
     }
 
-    private static <T> T execute(ThrowingSupplier<T> action) throws MinosApi.MinosApiException {
-        try {
-            return action.get();
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.INVALID_REQUEST, exception.getMessage(), exception);
-        } catch (IOException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, exception.getMessage(), exception);
-        } catch (RuntimeException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.EXECUTION_FAILURE, exception.getMessage(), exception);
-        }
-    }
-
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws IOException;
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 }

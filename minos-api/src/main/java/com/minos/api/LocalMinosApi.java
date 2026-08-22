@@ -1,15 +1,15 @@
 package com.minos.api;
 
+import com.minos.application.LocalProjectOperations;
+import com.minos.application.LocalProjectSymbolQuery;
 import com.minos.application.MinosApplication;
+import com.minos.application.ProjectOperations;
+import com.minos.application.ProjectSymbolQuery;
 import com.minos.architecture.ArchitectureIntelligenceView;
 import com.minos.architecture.ArchitectureModule;
 import com.minos.architecture.ArchitectureModuleContext;
 import com.minos.architecture.ArchitectureModuleDependency;
 import com.minos.architecture.ProjectArchitectureQuery;
-import com.minos.cli.LocalProjectOperations;
-import com.minos.cli.LocalProjectSymbolQuery;
-import com.minos.cli.ProjectOperations;
-import com.minos.cli.ProjectSymbolQuery;
 import com.minos.domain.CodeEntityRef;
 import com.minos.domain.CodeEntityType;
 import com.minos.domain.Evidence;
@@ -47,8 +47,10 @@ import java.util.Set;
  * <p>This class is an exposure layer only: it maps the public API contract to
  * M1-M8 query services and never reimplements code-intelligence analysis.</p>
  */
-public final class LocalMinosApi implements MinosApi {
+public final class LocalMinosApi implements MinosApi, AutoCloseable {
 
+    private final MinosApplication application;
+    private final boolean ownsApplication;
     private final ProjectOperations projectOperations;
     private final ProjectSymbolQuery symbolQuery;
     private final ProjectArchitectureQuery architectureQuery;
@@ -56,13 +58,35 @@ public final class LocalMinosApi implements MinosApi {
     private final MinosTeamApi teamApi;
 
     public LocalMinosApi(Path home) throws MinosApiException {
-        this(openApplication(home));
+        this(openApplication(home), true);
     }
 
     /** Uses an already-composed application so API and other surfaces share stateful infrastructure. */
     public LocalMinosApi(MinosApplication application) {
+        this(application, false);
+    }
+
+    /**
+     * Test seam: substitutes the application-level import port so every commit outcome the port can
+     * report is reachable from a test without staging the storage failure that produces it.
+     */
+    LocalMinosApi(MinosApplication application, ProjectOperations projectOperations) {
+        this(application, false, Objects.requireNonNull(projectOperations, "projectOperations"));
+    }
+
+    private LocalMinosApi(MinosApplication application, boolean ownsApplication) {
+        this(application, ownsApplication, null);
+    }
+
+    private LocalMinosApi(
+            MinosApplication application,
+            boolean ownsApplication,
+            ProjectOperations projectOperations
+    ) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        this.projectOperations = new LocalProjectOperations(app);
+        this.application = app;
+        this.ownsApplication = ownsApplication;
+        this.projectOperations = projectOperations != null ? projectOperations : new LocalProjectOperations(app);
         this.symbolQuery = new LocalProjectSymbolQuery(app.projectRegistry(), app.snapshotStore());
         this.architectureQuery = app.architectureQuery();
         this.impactQuery = app.impactQuery();
@@ -71,7 +95,7 @@ public final class LocalMinosApi implements MinosApi {
 
     @Override
     public ProjectDto addProject(Path rootPath, String displayName) throws MinosApiException {
-        return execute(() -> project(projectOperations.addProject(rootPath, displayName)));
+        return execute(() -> project(projectOperations.addProject(required(rootPath, "rootPath"), displayName)));
     }
 
     @Override
@@ -90,17 +114,34 @@ public final class LocalMinosApi implements MinosApi {
             Path indexFile,
             IndexImportRequest request
     ) throws MinosApiException {
-        return execute(() -> {
-            IndexImportRequest value = required(request, "request");
-            return indexImport(projectOperations.importScip(
-                    projectIdentifier,
-                    indexFile,
-                    value.providerId(),
-                    value.providerVersion(),
-                    value.moduleId(),
-                    value.snapshotId()
-            ));
-        });
+        return execute(() -> indexImport(runImport(projectIdentifier, indexFile, request)));
+    }
+
+    @Override
+    public IndexImportOutcomeDto importScipOutcome(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws MinosApiException {
+        return execute(() -> importOutcome(runImport(projectIdentifier, indexFile, request)));
+    }
+
+    /** One import path for both operations so they can never diverge on validation or arguments. */
+    private ProjectOperations.IndexImportResult runImport(
+            String projectIdentifier,
+            Path indexFile,
+            IndexImportRequest request
+    ) throws IOException {
+        IndexImportRequest value = required(request, "request");
+        required(indexFile, "indexFile");
+        return projectOperations.importScip(
+                projectIdentifier,
+                indexFile,
+                value.providerId(),
+                value.providerVersion(),
+                value.moduleId(),
+                value.snapshotId()
+        );
     }
 
     @Override
@@ -192,6 +233,16 @@ public final class LocalMinosApi implements MinosApi {
         return teamApi;
     }
 
+    @Override
+    public void close() throws MinosApiException {
+        if (!ownsApplication) return;
+        try {
+            application.close();
+        } catch (Exception exception) {
+            throw MinosApiSupport.publicFailure(ErrorCode.IO_FAILURE, "MINOS API shutdown failed", exception);
+        }
+    }
+
     private static ProjectDto project(ProjectOperations.ProjectView view) {
         return new ProjectDto(
                 view.id(), view.name(), view.rootPath(), view.rootAvailable(),
@@ -207,6 +258,32 @@ public final class LocalMinosApi implements MinosApi {
                 result.relatedTestRelationshipCount(), result.unresolvedOccurrenceCount(),
                 result.unresolvedRelationshipCount(), result.completedAt()
         );
+    }
+
+    /** Package-private so the mapping itself, not only a full import run, is directly testable. */
+    static IndexImportOutcomeDto importOutcome(ProjectOperations.IndexImportResult result) {
+        return new IndexImportOutcomeDto(
+                indexImport(result),
+                commitStatus(result.commitStatus()),
+                MinosApiSupport.publicDiagnostic(result.diagnostic())
+        );
+    }
+
+    /**
+     * Maps the application commit status onto the published one.
+     *
+     * <p>The switch is deliberately exhaustive without a {@code default}: adding a state to {@link
+     * ProjectOperations.IndexImportCommitStatus} must break this compilation rather than silently
+     * collapse a new state onto an existing published one.</p>
+     */
+    private static ImportCommitStatus commitStatus(ProjectOperations.IndexImportCommitStatus status) {
+        return switch (status) {
+            case COMMITTED -> ImportCommitStatus.COMMITTED;
+            case COMMITTED_DURABILITY_PENDING -> ImportCommitStatus.COMMITTED_DURABILITY_PENDING;
+            case COMMITTED_METADATA_PENDING -> ImportCommitStatus.COMMITTED_METADATA_PENDING;
+            case COMMITTED_DURABILITY_AND_METADATA_PENDING ->
+                    ImportCommitStatus.COMMITTED_DURABILITY_AND_METADATA_PENDING;
+        };
     }
 
     private static SymbolDto symbol(SymbolResult value) {
@@ -421,45 +498,14 @@ public final class LocalMinosApi implements MinosApi {
     }
 
     private static <T> T required(T value, String field) {
-        if (value == null) {
-            throw new IllegalArgumentException(field + " must not be null");
-        }
-        return value;
+        return MinosApiSupport.required(value, field);
     }
 
-    private static <T> T execute(ApiCall<T> call) throws MinosApiException {
-        try {
-            return call.call();
-        } catch (MinosApiException exception) {
-            throw exception;
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApiException(ErrorCode.INVALID_REQUEST, failureMessage(exception), exception);
-        } catch (IllegalStateException exception) {
-            throw new MinosApiException(ErrorCode.UNAVAILABLE, failureMessage(exception), exception);
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, failureMessage(exception), exception);
-        } catch (Exception exception) {
-            throw new MinosApiException(ErrorCode.EXECUTION_FAILURE, failureMessage(exception), exception);
-        }
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 
     private static MinosApplication openApplication(Path home) throws MinosApiException {
-        try {
-            return MinosApplication.open(Objects.requireNonNull(home, "home"));
-        } catch (IOException exception) {
-            throw new MinosApiException(ErrorCode.IO_FAILURE, "MINOS API bootstrap failed", exception);
-        }
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    @FunctionalInterface
-    private interface ApiCall<T> {
-        T call() throws Exception;
+        return MinosApiSupport.openApplication(home, "MINOS API bootstrap failed");
     }
 }

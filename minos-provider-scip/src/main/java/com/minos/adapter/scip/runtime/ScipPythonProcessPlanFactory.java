@@ -6,11 +6,13 @@ import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
 import com.minos.runtime.IndexerProcessPlanFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -60,10 +62,12 @@ public final class ScipPythonProcessPlanFactory implements IndexerProcessPlanFac
         );
     }
 
-    private static boolean containsPythonSource(Path root) throws Exception {
-        try (var paths = Files.walk(root)) {
-            return paths.filter(Files::isRegularFile)
-                    .anyMatch(path -> path.getFileName().toString().toLowerCase().endsWith(".py"));
-        }
+    private static boolean containsPythonSource(Path root) throws IOException {
+        return BoundedProviderSourceProbe.contains(
+                root,
+                Integer.MAX_VALUE,
+                "scip-python source preflight",
+                name -> name.toLowerCase(Locale.ROOT).endsWith(".py")
+        );
     }
 }

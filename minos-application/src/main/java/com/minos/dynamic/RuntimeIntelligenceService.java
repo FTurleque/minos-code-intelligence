@@ -98,7 +98,7 @@ public final class RuntimeIntelligenceService {
         if (limit < 1 || limit > MAX_SESSION_RESULTS) throw new IllegalArgumentException("session limit must be between 1 and " + MAX_SESSION_RESULTS);
         RegisteredProject project = projects.resolve(projectReference);
         String activeSnapshotId = activeSnapshot(project).snapshotId();
-        return store.list(project.id()).stream().limit(limit)
+        return store.list(project.id(), null, limit).stream()
                 .map(value -> sessionView(value, activeSnapshotId))
                 .toList();
     }
@@ -218,9 +218,7 @@ public final class RuntimeIntelligenceService {
             requireSnapshotAlignment(selected, snapshotId);
             return List.of(selected);
         }
-        return store.list(projectId).stream()
-                .filter(value -> snapshotId.equals(value.session().snapshotId()))
-                .toList();
+        return store.list(projectId, snapshotId, MAX_SESSION_RESULTS);
     }
 
     private static void requireSnapshotAlignment(CorrelatedRuntimeSession session, String activeSnapshotId) {

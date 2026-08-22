@@ -1,5 +1,7 @@
 package com.minos.store;
 
+import com.minos.io.BoundedInputStream;
+import com.minos.io.DurableAtomicFile;
 import com.minos.hosted.HostedAuditEvent;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedPrincipal;
@@ -24,11 +26,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** AES-256-GCM, tenant-addressed and optimistic-concurrency local M27 control-plane store. */
 public final class FileHostedControlPlaneStore implements HostedControlPlaneStore {
@@ -47,6 +48,8 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     private static final int NONCE_BYTES = 12;
     private static final int GCM_TAG_BITS = 128;
     private static final int MAX_STRING_BYTES = 128 * 1024;
+    private static final int JVM_LOCK_STRIPES = 64;
+    private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path root;
     private final HostedTenantKeyProvider keys;
@@ -69,7 +72,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         if (Files.exists(this.root, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(this.root)) {
             throw new IOException("hosted control-plane root must not be a symbolic link");
         }
-        Files.createDirectories(this.root);
+        DurableAtomicFile.ensureDirectory(this.root, "hosted control-plane root");
         if (!Files.isDirectory(this.root, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("hosted control-plane root is not a directory");
         }
@@ -85,7 +88,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("hosted tenant already exists: " + state.tenantId());
             }
-            writeAtomically(target, state);
+            writeAtomically(target, state, false);
         }
     }
 
@@ -118,7 +121,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
                         + expectedVersion + " but found " + current.version());
             }
             if (!current.tenantId().equals(state.tenantId())) throw new IOException("hosted tenant identity mutation");
-            writeAtomically(target, state);
+            writeAtomically(target, state, true);
         }
     }
 
@@ -128,9 +131,12 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
 
     private HostedTenantState read(Path file, UUID expectedTenant) throws IOException {
         requireRegularFile(file);
-        long size = Files.size(file);
-        if (size < 1 || size > maxTenantBytes) throw new IOException("hosted tenant file size is invalid");
-        byte[] bytes = Files.readAllBytes(file);
+        byte[] bytes;
+        try (BoundedInputStream input = new BoundedInputStream(
+                Files.newInputStream(file), maxTenantBytes, "hosted tenant file")) {
+            bytes = input.readAllBytes();
+        }
+        if (bytes.length < 1) throw new IOException("hosted tenant file size is invalid");
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid hosted tenant magic");
             if (input.readInt() != VERSION) throw new IOException("unsupported hosted tenant version");
@@ -164,7 +170,7 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         }
     }
 
-    private void writeAtomically(Path target, HostedTenantState state) throws IOException {
+    private void writeAtomically(Path target, HostedTenantState state, boolean replaceExisting) throws IOException {
         byte[] plaintext = encodePlaintext(state);
         byte[] nonce = new byte[NONCE_BYTES];
         random.nextBytes(nonce);
@@ -193,7 +199,11 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         Path temporary = Files.createTempFile(root, ".hosted-tenant-", ".tmp");
         try {
             Files.write(temporary, envelope, StandardOpenOption.TRUNCATE_EXISTING);
-            moveAtomically(temporary, target);
+            if (replaceExisting) {
+                DurableAtomicFile.replace(temporary, target, "hosted tenant state replacement");
+            } else {
+                DurableAtomicFile.publish(temporary, target, "hosted tenant state publication");
+            }
         } finally {
             Files.deleteIfExists(temporary);
             java.util.Arrays.fill(envelope, (byte) 0);
@@ -350,13 +360,17 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
     private TenantLock lock(UUID tenantId) throws IOException {
         Path lockPath = root.resolve(tenantId + ".lock");
         rejectUnsafeEntry(lockPath);
-        FileChannel channel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+        ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockPath.hashCode(), JVM_LOCKS.length)];
+        jvmLock.lock();
+        FileChannel channel = null;
         try {
+            channel = FileChannel.open(lockPath,
+                    StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
             FileLock fileLock = channel.lock();
-            return new TenantLock(channel, fileLock);
+            return new TenantLock(jvmLock, channel, fileLock);
         } catch (IOException | RuntimeException exception) {
-            channel.close();
+            if (channel != null) channel.close();
+            jvmLock.unlock();
             throw exception;
         }
     }
@@ -377,14 +391,6 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         rejectUnsafeEntry(path);
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("hosted tenant entry is not a regular file");
-        }
-    }
-
-    private static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new IOException("atomic move is required for hosted tenant state", exception);
         }
     }
 
@@ -439,14 +445,23 @@ public final class FileHostedControlPlaneStore implements HostedControlPlaneStor
         return value;
     }
 
-    private record TenantLock(FileChannel channel, FileLock lock) implements AutoCloseable {
+    private static ReentrantLock[] locks() {
+        ReentrantLock[] locks = new ReentrantLock[JVM_LOCK_STRIPES];
+        for (int index = 0; index < locks.length; index++) locks[index] = new ReentrantLock();
+        return locks;
+    }
+
+    private record TenantLock(ReentrantLock jvmLock, FileChannel channel, FileLock lock) implements AutoCloseable {
         @Override
         public void close() throws IOException {
-            try {
-                lock.close();
+            IOException failure = null;
+            try { lock.close(); } catch (IOException exception) { failure = exception; }
+            try { channel.close(); } catch (IOException exception) {
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
             } finally {
-                channel.close();
+                jvmLock.unlock();
             }
+            if (failure != null) throw failure;
         }
     }
 }

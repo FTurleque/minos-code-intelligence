@@ -32,30 +32,39 @@ public final class ImportScipCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        try {
-            Options options = Options.parse(arguments);
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             ProjectOperations.IndexImportResult result = operations.importScip(
                     options.project, options.file, options.provider, options.providerVersion,
                     options.module, options.snapshot);
-            output.append(render(result, options.format)).append('\n');
+            String diagnostic = CliCommandSupport.publicDiagnostic(result.diagnostic());
+            output.append(render(result, options.format, diagnostic)).append('\n');
+            String warning = warning(result.commitStatus());
+            if (warning != null) {
+                error.append("warning: ").append(warning)
+                        .append(diagnostic == null ? "" : ": " + diagnostic)
+                        .append('\n');
+            }
             return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        } catch (Exception exception) {
-            String message = exception.getMessage();
-            error.append("error: import-scip failed: ")
-                    .append(message == null || message.isBlank() ? exception.getClass().getSimpleName() : message)
-                    .append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
-    private static String render(ProjectOperations.IndexImportResult result, SymbolOutputFormat format) {
+    private static String warning(ProjectOperations.IndexImportCommitStatus status) {
+        return switch (status) {
+            case COMMITTED -> null;
+            case COMMITTED_DURABILITY_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement is pending";
+            case COMMITTED_METADATA_PENDING ->
+                    "snapshot committed but project metadata recovery is pending";
+            case COMMITTED_DURABILITY_AND_METADATA_PENDING ->
+                    "snapshot committed and authoritative but durability acknowledgement and metadata recovery are pending";
+        };
+    }
+
+    private static String render(
+            ProjectOperations.IndexImportResult result,
+            SymbolOutputFormat format,
+            String diagnostic
+    ) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("projectId", result.projectId());
         map.put("snapshotId", result.snapshotId());
@@ -68,6 +77,8 @@ public final class ImportScipCommand {
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
         map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -76,7 +87,9 @@ public final class ImportScipCommand {
                 + "providerId: " + result.providerId() + "\n"
                 + "normalizedSymbols: " + result.normalizedSymbolCount() + "\n"
                 + "occurrences: " + result.occurrenceCount() + "\n"
-                + "relationships: " + result.relationshipCount();
+                + "relationships: " + result.relationshipCount() + "\n"
+                + "commitStatus: " + result.commitStatus().name()
+                + (diagnostic == null ? "" : "\ndiagnostic: " + diagnostic);
     }
 
     private static final class Options {
@@ -103,10 +116,7 @@ public final class ImportScipCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = arguments[0];
-            if (project == null || project.isBlank() || project.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <project> operand");
-            }
+            String project = CliCommandSupport.operand(arguments[0], "project");
             Path file = null;
             String provider = null;
             String providerVersion = null;

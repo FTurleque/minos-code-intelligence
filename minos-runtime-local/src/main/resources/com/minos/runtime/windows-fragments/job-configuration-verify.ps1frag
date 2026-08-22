@@ -1,0 +1,15 @@
+        }
+    }
+
+    private static IntPtr BuildEnvironmentBlock(string[] environment) {
+        StringBuilder block = new StringBuilder();
+        foreach (string entry in environment) {
+            if (String.IsNullOrEmpty(entry) || entry.IndexOf('\0') >= 0) {
+                throw new ArgumentException("invalid environment entry");
+            }
+            block.Append(entry);
+            block.Append('\0');
+        }
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
+    }

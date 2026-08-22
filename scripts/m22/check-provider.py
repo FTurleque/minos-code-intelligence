@@ -50,6 +50,15 @@ def main() -> int:
         runner_path = "scripts/m22/run-final.ps1"
 
         provider = read(provider_path)
+        implementation_paths = (
+            "minos-application/src/main/java/com/minos/program/analysis/JavaSourceWorkspace.java",
+            "minos-application/src/main/java/com/minos/program/analysis/JavaAstParser.java",
+            "minos-application/src/main/java/com/minos/program/analysis/JavaProgramGraphContext.java",
+            "minos-application/src/main/java/com/minos/program/analysis/JavaProgramGraphAssembler.java",
+            "minos-application/src/main/java/com/minos/program/analysis/JavaDefUseAnalyzer.java",
+            "minos-application/src/main/java/com/minos/program/analysis/JavaTaintAnalyzer.java",
+        )
+        implementation = "\n".join(read(path) for path in implementation_paths)
         service = read(service_path)
         tests = read(test_path)
         roadmap = read(roadmap_path)
@@ -61,11 +70,15 @@ def main() -> int:
         for expected in (
             'PROVIDER_ID = "minos-java-source-v1"',
             'SECURITY_CONFIG = ".minos/java-advanced-provider.properties"',
+        ):
+            require(provider_path, provider, expected)
+
+        for expected in (
             "MAX_SOURCE_FILES = 2_000",
             "MAX_SOURCE_BYTES = 4L * 1024L * 1024L",
             "MAX_TOTAL_SOURCE_BYTES = 64L * 1024L * 1024L",
             'List.of("-proc:none", "-Xlint:none")',
-            "new Origin(PROVIDER_ID, \"JAVA_COMPILER_AST\"",
+            '"JAVA_COMPILER_AST"',
             "OriginType.AST",
             "OriginType.DERIVED_BY_MINOS",
             "ProgramGraphCapability.CONTROL_FLOW",
@@ -80,12 +93,12 @@ def main() -> int:
             "TreeScanner",
             "JavacTask",
         ):
-            require(provider_path, provider, expected)
+            require("Java advanced provider implementation", implementation, expected)
 
         # M22 v1 intentionally refuses guessed/full compiler attribution. A future
         # provider may add it only with explicit classpath provenance and new proof.
-        forbid(provider_path, provider, "task.analyze(")
-        forbid(provider_path, provider, "Trees.instance(task).getElement")
+        forbid("Java advanced provider implementation", implementation, "task.analyze(")
+        forbid("Java advanced provider implementation", implementation, "Trees.instance(task).getElement")
 
         require(service_path, service, "new JavaSourceProgramGraphProvider()")
         require(service_path, service, "new RelationshipProgramGraphProvider()")

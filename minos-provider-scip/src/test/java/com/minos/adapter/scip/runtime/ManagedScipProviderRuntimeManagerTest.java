@@ -121,14 +121,18 @@ class ManagedScipProviderRuntimeManagerTest {
     void requiresThePinnedVersionInTheInstallationProbeLog() throws IOException {
         Path validLog = temporaryDirectory.resolve("valid.log");
         Path invalidLog = temporaryDirectory.resolve("invalid.log");
+        Path oversizedLineLog = temporaryDirectory.resolve("oversized-line.log");
         Files.writeString(validLog, "scip-java version 0.13.1\n");
         Files.writeString(invalidLog, "scip-java version 0.12.3\n");
+        Files.writeString(oversizedLineLog, "x".repeat(64 * 1024 + 1));
 
         assertDoesNotThrow(() -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(validLog));
         IllegalStateException failure = assertThrows(
                 IllegalStateException.class,
                 () -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(invalidLog));
         assertTrue(failure.getMessage().contains("scip-java version 0.13.1"));
+        assertThrows(IOException.class,
+                () -> ManagedScipProviderRuntimeManager.requireExpectedScipJavaVersion(oversizedLineLog));
     }
 
     @Test

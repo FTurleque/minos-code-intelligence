@@ -1,11 +1,8 @@
 package com.minos.domain;
 
-/**
- * Critères structurés et indépendants du backend pour rechercher des symboles.
- *
- * <p>Le texte est une recherche lexicale insensible à la casse. Le nom qualifié,
- * lorsqu'il est fourni, est un filtre exact. Les filtres peuvent être combinés.</p>
- */
+import java.nio.charset.StandardCharsets;
+
+/** Backend-independent structured symbol-search criteria. */
 public record SymbolSearchCriteria(
         String text,
         String qualifiedName,
@@ -13,17 +10,16 @@ public record SymbolSearchCriteria(
         String moduleId,
         int limit) {
 
-    public SymbolSearchCriteria {
-        text = blankToNull(text);
-        qualifiedName = blankToNull(qualifiedName);
-        moduleId = blankToNull(moduleId);
+    public static final int MAX_TEXT_UTF8_BYTES = 64 * 1024;
 
+    public SymbolSearchCriteria {
+        text = bounded(blankToNull(text), "text");
+        qualifiedName = bounded(blankToNull(qualifiedName), "qualifiedName");
+        moduleId = bounded(blankToNull(moduleId), "moduleId");
         if (text == null && qualifiedName == null && kind == null && moduleId == null) {
             throw new IllegalArgumentException("at least one symbol search criterion is required");
         }
-        if (limit < 1) {
-            throw new IllegalArgumentException("limit must be greater than zero");
-        }
+        if (limit < 1) throw new IllegalArgumentException("limit must be greater than zero");
     }
 
     public static SymbolSearchCriteria lexical(String text, int limit) {
@@ -34,7 +30,12 @@ public record SymbolSearchCriteria(
         return new SymbolSearchCriteria(null, qualifiedName, null, null, limit);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
+    private static String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
+
+    private static String bounded(String value, String field) {
+        if (value != null && value.getBytes(StandardCharsets.UTF_8).length > MAX_TEXT_UTF8_BYTES) {
+            throw new IllegalArgumentException(field + " exceeds UTF-8 byte limit: " + MAX_TEXT_UTF8_BYTES);
+        }
+        return value;
     }
 }

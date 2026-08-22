@@ -10,6 +10,8 @@ import com.minos.dynamic.RuntimeObservationType;
 import com.minos.dynamic.RuntimeResolutionStatus;
 import com.minos.dynamic.RuntimeSymbolReference;
 import com.minos.dynamic.RuntimeSymbolResolution;
+import com.minos.io.BoundedFileLease;
+import com.minos.io.DurableAtomicFile;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -18,8 +20,6 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
@@ -30,6 +30,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** Atomic, bounded and checksum-verified local persistence for M26 runtime sessions. */
 public final class FileRuntimeObservationStore implements RuntimeObservationStore {
@@ -51,6 +53,9 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     private static final int MAX_STRING_BYTES = 128 * 1024;
     private static final int MAX_CANDIDATES = RuntimeSymbolResolution.MAX_CANDIDATE_SYMBOL_IDS;
     private static final String EXTENSION = ".mrt";
+    private static final int LOCK_STRIPES = 64;
+    private static final Duration LOCK_TIMEOUT = Duration.ofSeconds(10);
+    private static final ReentrantLock[] JVM_LOCKS = locks();
 
     private final Path root;
     private final int maxSessionsPerProject;
@@ -75,7 +80,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         this.maxSessionsPerProject = maxSessionsPerProject;
         this.maxProjectBytes = maxProjectBytes;
         this.maxSessionBytes = maxSessionBytes;
-        Files.createDirectories(this.root);
+        DurableAtomicFile.ensureDirectory(this.root, "runtime observation root");
     }
 
     @Override
@@ -84,7 +89,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         UUID projectId = session.session().projectId();
         Path project = projectDirectory(projectId);
         rejectUnsafeProjectEntry(project);
-        Files.createDirectories(project);
+        DurableAtomicFile.ensureDirectory(project, "runtime observation project directory");
         requireProjectDirectory(project);
         try (LockedProject ignored = lock(project)) {
             Optional<CorrelatedRuntimeSession> existing = findUnlocked(project, projectId, session.session().sessionId());
@@ -136,22 +141,64 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
 
     @Override
     public List<CorrelatedRuntimeSession> list(UUID projectId) throws IOException {
+        return list(projectId, null, maxSessionsPerProject);
+    }
+
+    @Override
+    public List<CorrelatedRuntimeSession> list(UUID projectId, String snapshotId, int limit) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        if (limit < 1) throw new IllegalArgumentException("runtime session limit must be positive");
         Path project = projectDirectory(projectId);
         rejectUnsafeProjectEntry(project);
         if (!Files.exists(project, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireProjectDirectory(project);
         try (LockedProject ignored = lock(project)) {
-            List<CorrelatedRuntimeSession> sessions = new ArrayList<>();
-            for (Path file : sessionFiles(project)) sessions.add(readVerified(file, projectId));
-            sessions.sort(Comparator.comparing(CorrelatedRuntimeSession::importedAt).reversed()
-                    .thenComparing(value -> value.session().sessionId()));
+            List<SessionMetadata> metadata = new ArrayList<>();
+            for (Path file : sessionFiles(project)) {
+                SessionMetadata candidate = readMetadata(file, projectId);
+                if (snapshotId == null || snapshotId.equals(candidate.snapshotId())) metadata.add(candidate);
+            }
+            metadata.sort(Comparator.comparing(SessionMetadata::importedAt).reversed()
+                    .thenComparing(SessionMetadata::sessionId));
+            List<CorrelatedRuntimeSession> sessions = new ArrayList<>(Math.min(limit, metadata.size()));
+            for (SessionMetadata candidate : metadata) {
+                if (sessions.size() >= limit) break;
+                sessions.add(readVerified(candidate.file(), projectId));
+            }
             return List.copyOf(sessions);
         }
     }
 
     public Path root() {
         return root;
+    }
+
+    private SessionMetadata readMetadata(Path file, UUID expectedProjectId) throws IOException {
+        requireRegularSessionFile(file);
+        long size = Files.size(file);
+        if (size < 1L || size > maxSessionBytes) throw new IOException("persisted runtime session size is invalid");
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+            if (input.readInt() != MAGIC) throw new IOException("invalid runtime session magic");
+            int version = input.readInt();
+            if (version != VERSION) throw new IOException("unsupported runtime session version: " + version);
+            readString(input, "format");
+            String sessionId = readString(input, "sessionId");
+            UUID projectId = parseUuid(readString(input, "projectId"));
+            if (!expectedProjectId.equals(projectId)) throw new IOException("runtime session project identity mismatch");
+            String snapshotId = readString(input, "snapshotId");
+            readInstant(input);
+            readInstant(input);
+            readString(input, "collectorId");
+            readString(input, "collectorVersion");
+            readString(input, "environment");
+            readString(input, "completeness");
+            Instant importedAt = readInstant(input);
+            readString(input, "sourceSha256");
+            return new SessionMetadata(file, snapshotId, sessionId, importedAt);
+        } catch (EOFException exception) {
+            throw new IOException("truncated runtime session metadata", exception);
+        }
     }
 
     private Optional<CorrelatedRuntimeSession> findUnlocked(Path project, UUID projectId, String sessionId) throws IOException {
@@ -168,9 +215,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private CorrelatedRuntimeSession readVerified(Path file, UUID expectedProjectId) throws IOException {
-        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(file)) {
-            throw new IOException("runtime session entry must be a regular non-symlink file: " + file.getFileName());
-        }
+        requireRegularSessionFile(file);
         long size = Files.size(file);
         if (size < 1 || size > maxSessionBytes) throw new IOException("persisted runtime session size is invalid");
         String name = file.getFileName().toString();
@@ -212,7 +257,9 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static CorrelatedRuntimeSession read(Path file) throws IOException {
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+        requireRegularSessionFile(file);
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid runtime session magic");
             int version = input.readInt();
             if (version != VERSION) throw new IOException("unsupported runtime session version: " + version);
@@ -375,9 +422,7 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         List<Path> files = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(project, "session-*" + EXTENSION)) {
             for (Path path : stream) {
-                if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new IOException("invalid runtime observation storage entry: " + path.getFileName());
-                }
+                requireRegularSessionFile(path);
                 files.add(path);
             }
         }
@@ -404,20 +449,10 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static LockedProject lock(Path project) throws IOException {
-        Path lockFile = project.resolve(".lock");
-        if (Files.isSymbolicLink(lockFile)
-                || (Files.exists(lockFile, LinkOption.NOFOLLOW_LINKS)
-                && !Files.isRegularFile(lockFile, LinkOption.NOFOLLOW_LINKS))) {
-            throw new IOException("runtime observation lock must be a regular non-symlink file");
-        }
-        FileChannel channel = FileChannel.open(lockFile,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        try {
-            return new LockedProject(channel, channel.lock());
-        } catch (IOException | RuntimeException exception) {
-            channel.close();
-            throw exception;
-        }
+        Path lockFile = project.resolve(".lock").toAbsolutePath().normalize();
+        ReentrantLock jvmLock = JVM_LOCKS[Math.floorMod(lockFile.hashCode(), JVM_LOCKS.length)];
+        return new LockedProject(BoundedFileLease.acquire(
+                lockFile, jvmLock, LOCK_TIMEOUT, "runtime observation project lease"));
     }
 
     private static void moveAtomically(Path source, Path target) throws IOException {
@@ -429,8 +464,9 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
     }
 
     private static String sha256(Path file) throws IOException {
+        requireRegularSessionFile(file);
         MessageDigest digest = sha256Digest();
-        try (var input = Files.newInputStream(file)) {
+        try (var input = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) >= 0) {
@@ -438,6 +474,12 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             }
         }
         return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void requireRegularSessionFile(Path file) throws IOException {
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("runtime session entry must be a regular non-symlink file: " + file.getFileName());
+        }
     }
 
     private static String digest(byte[] bytes) {
@@ -449,6 +491,15 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private record SessionMetadata(Path file, String snapshotId, String sessionId, Instant importedAt) {
+        private SessionMetadata {
+            Objects.requireNonNull(file, "file");
+            Objects.requireNonNull(snapshotId, "snapshotId");
+            Objects.requireNonNull(sessionId, "sessionId");
+            Objects.requireNonNull(importedAt, "importedAt");
         }
     }
 
@@ -468,19 +519,20 @@ public final class FileRuntimeObservationStore implements RuntimeObservationStor
         }
     }
 
-    private record LockedProject(FileChannel channel, FileLock lock) implements AutoCloseable {
+    private static ReentrantLock[] locks() {
+        ReentrantLock[] result = new ReentrantLock[LOCK_STRIPES];
+        for (int index = 0; index < result.length; index++) result[index] = new ReentrantLock();
+        return result;
+    }
+
+    private record LockedProject(BoundedFileLease lease) implements AutoCloseable {
         private LockedProject {
-            Objects.requireNonNull(channel, "channel");
-            Objects.requireNonNull(lock, "lock");
+            Objects.requireNonNull(lease, "lease");
         }
 
         @Override
         public void close() throws IOException {
-            try {
-                lock.close();
-            } finally {
-                channel.close();
-            }
+            lease.close();
         }
     }
 }

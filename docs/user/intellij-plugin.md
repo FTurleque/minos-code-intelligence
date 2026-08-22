@@ -13,6 +13,16 @@ M21-S6 étend la surface M18 avec Program Graph, Impact v2, chemins sécurité e
 
 Le plugin et le moteur sont volontairement séparés : le plugin s'exécute en Java 21 avec la JVM IntelliJ, tandis que MINOS reste un processus local Java 24 indépendant.
 
+### Ownership OS des commandes CLI
+
+Le plugin ne lance plus le CLI sous une simple supervision PID. La frontière d'ownership doit être disponible **avant** l'exécution du CLI :
+
+- **Windows** : Job Object `KILL_ON_JOB_CLOSE`, processus CLI créé suspendu, assigné/vérifié dans le job puis repris ;
+- **Linux** : scope utilisateur systemd/cgroup transitoire ; un user manager systemd opérationnel est requis ;
+- **autres plateformes** : aucune garantie forte n'est annoncée et les commandes du plugin restent fail-closed tant qu'une primitive équivalente n'est pas qualifiée.
+
+Le polling `ProcessHandle` reste actif uniquement comme défense en profondeur et protection PID-reuse.
+
 ## Installation du plugin
 
 Artefact :
@@ -44,10 +54,12 @@ Settings → Tools / MINOS
 
 ou rechercher `MINOS` dans Settings.
 
+Les réglages de provenance du processus — **MINOS executable** et **MINOS_HOME** — sont des réglages **IDE-globaux**, même lorsque la page Settings est ouverte depuis un projet. Ils ne sont pas chargés depuis la configuration versionnable d'un projet et un dépôt ne peut donc pas imposer son propre launcher MINOS.
+
 | Champ | Rôle | Défaut |
 |---|---|---|
-| MINOS executable | launcher CLI local | `minos.cmd` sous Windows, `minos` ailleurs |
-| MINOS_HOME | home de données explicite ; vide = résolution MINOS habituelle | vide |
+| MINOS executable | launcher CLI local, réglage IDE-global | `minos.cmd` sous Windows, `minos` ailleurs |
+| MINOS_HOME | home de données explicite IDE-global ; vide = résolution MINOS habituelle | vide |
 | Command timeout | délai maximum d'une commande IDE | 30 s |
 | Maximum architecture nodes | borne des graphes chargés dans l'IDE | 120 |
 
@@ -56,6 +68,8 @@ Si MINOS n'est pas dans le `PATH`, renseigner le chemin absolu du launcher, par 
 ```text
 C:\Users\<user>\AppData\Local\Programs\MINOS\bin\minos.cmd
 ```
+
+Un nom simple comme `minos.cmd` ou `minos` est résolu **avant** l'application du working directory projet et uniquement à partir d'entrées `PATH` absolues. Les éléments `PATH` vides ou relatifs et les chemins de launcher relatifs tels que `tools\minos.cmd` sont refusés : la racine du projet ne participe jamais à la résolution de l'exécutable.
 
 ## Protocole IDE
 
@@ -324,6 +338,8 @@ Les commandes MINOS sont exécutées hors de l'Event Dispatch Thread IntelliJ.
 
 Le client :
 
+- résout d'abord le launcher MINOS en chemin réel absolu hors de la racine projet ;
+- applique seulement ensuite le working directory projet à `ProcessBuilder` ;
 - transmet les arguments séparément à `ProcessBuilder` ;
 - adapte explicitement les launchers `.cmd/.bat` sous Windows ;
 - lit stdout/stderr sans bloquer le processus ;
@@ -341,7 +357,7 @@ Tester :
 minos.cmd ide handshake --format json
 ```
 
-puis vérifier **MINOS executable**.
+puis vérifier **MINOS executable**. Un chemin relatif contenant un répertoire n'est pas accepté ; utiliser un nom disponible dans le `PATH` ou un chemin absolu.
 
 ### `Connected MINOS runtime does not advertise IDE capability ...`
 

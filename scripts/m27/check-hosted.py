@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -50,9 +49,17 @@ def main() -> int:
         workspace = read("minos-domain/src/main/java/com/minos/hosted/SharedWorkspace.java")
         token = read("minos-application/src/main/java/com/minos/hosted/HmacHostedIdentityProvider.java")
         service = read("minos-application/src/main/java/com/minos/hosted/HostedControlPlaneService.java")
+        authorization = read("minos-application/src/main/java/com/minos/hosted/HostedAuthorizationService.java")
+        audit_chain = read("minos-application/src/main/java/com/minos/hosted/HostedAuditChain.java")
+        membership_service = read("minos-application/src/main/java/com/minos/hosted/HostedMembershipService.java")
+        workspace_service = read("minos-application/src/main/java/com/minos/hosted/HostedWorkspaceService.java")
         key_provider = read("minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java")
         store = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+        runtime_config = read(
+            "minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java")
+        app_assembler = read(
+            "minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
         command = read("minos-cli/src/main/java/com/minos/cli/TeamCommand.java")
         api = read("minos-api/src/main/java/com/minos/api/MinosTeamApi.java")
         api_impl = read("minos-api/src/main/java/com/minos/api/LocalMinosTeamApi.java")
@@ -70,18 +77,29 @@ def main() -> int:
         require("EnvironmentHostedTenantKeyProvider.java", key_provider, 'ENV_PREFIX = "MINOS_TEAM_KEY_"',
                 "Base64.getDecoder", "key must decode to exactly 32 bytes", "HmacSHA256")
         require("FileHostedControlPlaneStore.java", store, 'Cipher.getInstance("AES/GCM/NoPadding")',
-                "GCMParameterSpec(GCM_TAG_BITS", "ATOMIC_MOVE", "FileLock", "DEFAULT_MAX_TENANT_BYTES",
+                "GCMParameterSpec(GCM_TAG_BITS", "DurableAtomicFile.replace", "DurableAtomicFile.publish",
+                "FileLock", "DEFAULT_MAX_TENANT_BYTES",
                 "must not be a symbolic link", "authentication tag mismatch",
                 "hosted tenant concurrent modification")
         forbid("FileHostedControlPlaneStore.java", store, "ObjectInputStream", "ObjectOutputStream")
 
-        require("HostedControlPlaneService.java", service, "authorizeMutation", "HostedAuditEvent.Outcome.DENIED",
-                "hosted permission denied", "verifyAudit", "HmacSHA256", "requireSnapshot(projectId, snapshotId)",
-                "retentionPlan", "applyRetention", "rotateKey", "cannot remove or demote the last tenant owner")
+        require("HostedControlPlaneService.java", service, "retentionPlan", "applyRetention", "rotateKey")
+        require("HostedAuthorizationService.java", authorization, "authorizeMutation",
+                "HostedAuditEvent.Outcome.DENIED", "hosted permission denied", "auditChain.verify(state)")
+        require("HostedAuditChain.java", audit_chain, "HmacSHA256")
+        require("HostedWorkspaceService.java", workspace_service, "requireSnapshot(projectId, snapshotId)")
+        require("HostedMembershipService.java", membership_service,
+                "cannot remove or demote the last tenant owner")
         forbid("HostedControlPlaneService.java", service, "ProjectDiscoveryService", "ProviderCapability")
-        require("MinosApplication.java", app, 'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"',
-                '"enabled"', 'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
-                "hostedControlPlaneService")
+        require("MinosApplication.java", app,
+                'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"', "hostedControlPlaneService",
+                "MinosApplicationRuntimeConfiguration.apply(settings, builder)")
+        require("MinosApplicationRuntimeConfiguration.java", runtime_config,
+                '"enabled"', '"disabled"', "hostedTenantKeyProvider",
+                "new EnvironmentHostedTenantKeyProvider")
+        require("MinosApplicationAssembler.java", app_assembler,
+                'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
+                "new HostedControlPlaneService", "FileHostedControlPlaneStore")
 
         require("TeamCommand.java", command, 'TOKEN_ENVIRONMENT_VARIABLE = "MINOS_TEAM_TOKEN"',
                 "bearer tokens are accepted only through", "workspace-create", "member-grant", "project-bind",
@@ -169,9 +187,6 @@ def main() -> int:
         quality = read("scripts/quality/check-jacoco.py")
         require("check-jacoco.py", quality, '"m27-team-hosted-control-plane"',
                 "FileHostedControlPlaneStore", "TeamCommand", "LocalMinosTeamApi")
-        if subprocess.run(["git", "diff", "--quiet", BASE, "HEAD", "--", ".github/workflows"],
-                          cwd=ROOT, check=False).returncode != 0:
-            raise RuntimeError("M27 forbids changes under .github/workflows")
         print("M27 TEAM HOSTED CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:

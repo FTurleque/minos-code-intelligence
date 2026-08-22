@@ -39,10 +39,7 @@ public final class WorkspaceIntelligenceService {
 
     public WorkspaceView createWorkspace(String name) throws IOException {
         requireText(name, "name");
-        List<RegisteredWorkspace> matches = registry.listWorkspaces().stream().filter(workspace -> workspace.name().equals(name)).toList();
-        if (matches.size() > 1) throw new IllegalArgumentException("Ambiguous workspace name: " + name);
-        RegisteredWorkspace workspace = matches.isEmpty() ? registry.createWorkspace(name) : matches.getFirst();
-        return workspace(workspace);
+        return workspace(registry.createWorkspaceWithResult(name).workspace());
     }
 
     public WorkspaceView assignProject(String projectIdentifier, String workspaceIdentifier) throws IOException {

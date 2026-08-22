@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,7 +33,12 @@ class ScipProjectSnapshotLifecycleTest {
     void stagesAllProvidersBeforePublishingTheActiveProjectSnapshot() throws Exception {
         UUID projectId = UUID.randomUUID();
         UUID runId = UUID.randomUUID();
-        Path javaIndex = root.resolve("java.scip");
+        Path home = root.resolve("home");
+        Path javaRun = home.resolve("runs").resolve(runId.toString()).resolve("scip-java");
+        Path javaIndex = javaRun.resolve("index.scip");
+        Path javaWorkspace = javaRun.resolve("workspace");
+        Files.createDirectories(javaWorkspace);
+        Files.writeString(javaWorkspace.resolve("source.java"), "class Source {}");
         Path tsIndex = root.resolve("typescript.scip");
         writeIndex(
                 javaIndex,
@@ -49,8 +55,8 @@ class ScipProjectSnapshotLifecycleTest {
                 "TsService"
         );
 
-        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(root.resolve("home"));
-        FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(root.resolve("home/symbol-snapshots"));
+        ScipProjectSnapshotLifecycle lifecycle = new ScipProjectSnapshotLifecycle(home);
+        FileSymbolSnapshotStore active = new FileSymbolSnapshotStore(home.resolve("symbol-snapshots"));
 
         String stagedId = lifecycle.stage(new IndexSnapshotStageRequest(
                 runId,
@@ -63,6 +69,9 @@ class ScipProjectSnapshotLifecycleTest {
 
         assertTrue(active.loadActiveKnowledge(projectId).isEmpty(),
                 "staging must not make provider data active");
+        assertFalse(Files.exists(javaWorkspace),
+                "provider source workspace must be removed after artifact normalization");
+        assertTrue(Files.isDirectory(home.resolve("staged-snapshots").resolve(runId.toString())));
 
         lifecycle.promote(projectId, runId, stagedId);
         var snapshot = active.loadActiveKnowledge(projectId).orElseThrow();
@@ -71,6 +80,8 @@ class ScipProjectSnapshotLifecycleTest {
         assertEquals(2, snapshot.symbols().size());
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "JavaService".equals(symbol.name())));
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "TsService".equals(symbol.name())));
+        assertFalse(Files.exists(home.resolve("staged-snapshots").resolve(runId.toString())),
+                "staged snapshot tree must be removed after successful promotion");
     }
 
     @Test
@@ -122,6 +133,7 @@ class ScipProjectSnapshotLifecycleTest {
             String rawSymbol,
             String displayName
     ) throws Exception {
+        if (file.getParent() != null) Files.createDirectories(file.getParent());
         SymbolInformation symbol = SymbolInformation.newBuilder()
                 .setSymbol(rawSymbol)
                 .setDisplayName(displayName)

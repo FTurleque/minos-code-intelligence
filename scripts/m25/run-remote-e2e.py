@@ -149,7 +149,7 @@ def main() -> int:
                 "remote", "index", *common[:-2],
                 "--name", "m25-remote-go",
                 "--provider", "scip-go",
-                "--worker", "local-native",
+                "--worker", "local-qualified",
                 "--worker-network", "allow",
                 "--format", "json",
             )

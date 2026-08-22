@@ -122,6 +122,10 @@ La qualification principale a exercé le dépôt GitHub privé `FTurleque/minos-
 
 Restent hors qualification M25 : GitLab privé live, réseau `DENY` effectivement isolé, GitHub/GitLab Enterprise, SSH, submodules, scheduler/control plane hosted, workers non fiables et multi-tenant.
 
+## Correctif post-merge — MINOS-02 : scope-swap distribué
+
+Vulnérabilité identifiée après le merge de M25 : dans un monorepo, un worker peut renvoyer un bundle produit pour le module B alors que le coordinateur a demandé le module A, car `minos-distributed-artifact-v1` ne porte pas de `projectRelativeRoot`. Le correctif introduit `minos-distributed-artifact-v2` avec le champ `projectRelativeRoot` et ajoute sa comparaison cryptographique dans `verifyManifest`. Un manifest v1 est fail-closed pour toute requête non-racine. La clé de cache est partitionnée par scope. Les tests adversariaux (`ScopeSwapRejectionTest`) couvrent les six variantes d'attaque. Ce correctif est appliqué sur la branche `develop` et n'affecte ni les invariants M25 ni les dispositions finales.
+
 ## Critères de sortie
 
 M25 a satisfait les critères de sortie :

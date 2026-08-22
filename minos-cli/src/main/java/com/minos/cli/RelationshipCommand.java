@@ -14,9 +14,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Commande paramétrée pour les vues relationnelles M3/M5.
- */
+/** Commande paramétrée pour les vues relationnelles M3/M5. */
 public final class RelationshipCommand {
 
     public enum Operation {
@@ -72,18 +70,12 @@ public final class RelationshipCommand {
                 ? RelationshipSearchCriteria.incoming(anchor, Set.of(operation.kind), options.limit())
                 : RelationshipSearchCriteria.outgoing(anchor, Set.of(operation.kind), options.limit());
         try {
-            List<RelationshipResult> relationships = List.copyOf(query.findRelationships(
-                    options.projectId(),
-                    criteria
-            ));
-            output.append(CodeIntelligenceResultRenderer.renderRelationships(
-                    relationships,
-                    options.format()
-            )).append('\n');
+            List<RelationshipResult> relationships = List.copyOf(query.findRelationships(options.projectId(), criteria));
+            output.append(CodeIntelligenceResultRenderer.renderRelationships(relationships, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
         } catch (Exception exception) {
             error.append("error: ").append(operation.commandName).append(" failed: ")
-                    .append(failureMessage(exception)).append('\n');
+                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
     }
@@ -103,25 +95,13 @@ public final class RelationshipCommand {
         return "--help".equals(value) || "-h".equals(value);
     }
 
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
-    private record Options(
-            String projectId,
-            String symbolId,
-            int limit,
-            SymbolOutputFormat format
-    ) {
+    private record Options(String projectId, String symbolId, int limit, SymbolOutputFormat format) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
             }
-            String project = operand(arguments[0], "project");
-            String symbol = operand(arguments[1], "symbol-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
             int limit = FindSymbolCommand.DEFAULT_LIMIT;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
@@ -141,33 +121,12 @@ public final class RelationshipCommand {
                     throw new IllegalArgumentException("missing value for " + option);
                 }
                 if ("--limit".equals(option)) {
-                    limit = parseLimit(value);
+                    limit = CliCommandSupport.parseLimit(value, FindSymbolCommand.MAX_LIMIT);
                 } else {
                     format = SymbolOutputFormat.parse(value);
                 }
             }
             return new Options(project, symbol, limit, format);
-        }
-
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
-
-        private static int parseLimit(String value) {
-            try {
-                int limit = Integer.parseInt(value);
-                if (limit < 1 || limit > FindSymbolCommand.MAX_LIMIT) {
-                    throw new IllegalArgumentException(
-                            "limit must be between 1 and " + FindSymbolCommand.MAX_LIMIT
-                    );
-                }
-                return limit;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid limit: " + value, exception);
-            }
         }
     }
 }

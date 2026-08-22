@@ -16,7 +16,24 @@ public interface ProjectRegistry {
 
     RegisteredProject registerProject(Path rootPath, String displayName) throws IOException;
 
+    /**
+     * Atomically reports whether this call created the durable registration. Implementations
+     * that cannot prove creation return createdByThisCall=false so higher-level rollback never
+     * deletes a registration that may belong to another concurrent operation.
+     */
+    default RegistrationResult registerProjectWithResult(Path rootPath, String displayName) throws IOException {
+        return new RegistrationResult(registerProject(rootPath, displayName), false);
+    }
+
     RegisteredWorkspace createWorkspace(String name) throws IOException;
+
+    /**
+     * Atomically gets or creates the unique workspace identified by its exact name. Implementations
+     * that cannot prove creation return createdByThisCall=false.
+     */
+    default WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        return new WorkspaceRegistrationResult(createWorkspace(name), false);
+    }
 
     RegisteredProject assignProjectToWorkspace(UUID projectId, UUID workspaceId) throws IOException;
 
@@ -29,4 +46,24 @@ public interface ProjectRegistry {
     List<RegisteredProject> listProjects() throws IOException;
 
     List<RegisteredWorkspace> listWorkspaces() throws IOException;
+
+    /**
+     * Removes one project registration when a higher-level operation must roll back a registration.
+     * Implementations that do not support deletion remain source-compatible and fail explicitly.
+     */
+    default boolean deleteProject(UUID projectId) throws IOException {
+        throw new UnsupportedOperationException("project deletion is not supported by this registry");
+    }
+
+    record RegistrationResult(RegisteredProject project, boolean createdByThisCall) {
+        public RegistrationResult {
+            java.util.Objects.requireNonNull(project, "project");
+        }
+    }
+
+    record WorkspaceRegistrationResult(RegisteredWorkspace workspace, boolean createdByThisCall) {
+        public WorkspaceRegistrationResult {
+            java.util.Objects.requireNonNull(workspace, "workspace");
+        }
+    }
 }

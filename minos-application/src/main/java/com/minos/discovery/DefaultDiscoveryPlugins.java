@@ -8,12 +8,13 @@ import com.minos.discovery.spi.BuildSystemDetector;
 import com.minos.discovery.spi.LanguageDetector;
 import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.FileTreeOperations;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
@@ -22,9 +23,9 @@ import java.util.Set;
 
 /** Built-in discovery extensions. The orchestration service only consumes the SPI lists. */
 public final class DefaultDiscoveryPlugins {
+    private static final String JAVA_EXTENSION = ".java";
 
-    private DefaultDiscoveryPlugins() {
-    }
+    private DefaultDiscoveryPlugins() { }
 
     public static List<ProjectDetector> projectDetectors() {
         return List.of(
@@ -56,7 +57,7 @@ public final class DefaultDiscoveryPlugins {
 
     public static List<LanguageDetector> languageDetectors() {
         return List.of(
-                extensionLanguage(Language.JAVA, ".java"),
+                extensionLanguage(Language.JAVA, JAVA_EXTENSION),
                 extensionLanguage(Language.KOTLIN, ".kt", ".kts"),
                 extensionLanguage(Language.TYPESCRIPT, ".ts", ".tsx"),
                 extensionLanguage(Language.PYTHON, ".py"),
@@ -70,8 +71,8 @@ public final class DefaultDiscoveryPlugins {
 
     public static List<SourceRootDetector> sourceRootDetectors() {
         return List.of(
-                conventionalRoot("src/main/java", SourceRootKind.SOURCE, Language.JAVA, ".java"),
-                conventionalRoot("src/test/java", SourceRootKind.TEST, Language.JAVA, ".java"),
+                conventionalRoot("src/main/java", SourceRootKind.SOURCE, Language.JAVA, JAVA_EXTENSION),
+                conventionalRoot("src/test/java", SourceRootKind.TEST, Language.JAVA, JAVA_EXTENSION),
                 conventionalRoot("src/main/kotlin", SourceRootKind.SOURCE, Language.KOTLIN, ".kt", ".kts"),
                 conventionalRoot("src/test/kotlin", SourceRootKind.TEST, Language.KOTLIN, ".kt", ".kts"),
                 conventionalRoot("src", SourceRootKind.SOURCE, Language.TYPESCRIPT, ".ts", ".tsx"),
@@ -137,12 +138,8 @@ public final class DefaultDiscoveryPlugins {
                 boolean present = names.stream()
                         .map(directory::resolve)
                         .anyMatch(file -> visibleFile(root, file, ignorePolicy));
-                if (present) {
-                    return Optional.of(system);
-                }
-                if (current.equals(root)) {
-                    break;
-                }
+                if (present) return Optional.of(system);
+                if (current.equals(root)) break;
                 current = current.getParent();
             }
             return Optional.empty();
@@ -158,16 +155,12 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static SourceRootDetector conventionalRoot(
-            String relative,
-            SourceRootKind kind,
-            Language language,
-            String... extensions
-    ) {
+            String relative, SourceRootKind kind, Language language, String... extensions) {
         Set<String> values = normalizedSuffixes(extensions);
         return (projectRoot, moduleRoot, ignorePolicy) -> {
             Path candidate = moduleRoot.resolve(relative).normalize();
             Path projectRelative = projectRoot.relativize(candidate);
-            if (!Files.isDirectory(candidate)
+            if (!isPhysicalDirectory(projectRoot, candidate)
                     || ignorePolicy.isIgnored(projectRelative, true)
                     || !containsVisibleExtension(projectRoot, candidate, values, ignorePolicy)) {
                 return List.of();
@@ -183,17 +176,10 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static boolean containsVisibleMarkerExtension(
-            Path projectRoot,
-            Path directory,
-            Set<String> suffixes,
-            ProjectIgnorePolicy ignorePolicy
-    ) {
-        if (!Files.isDirectory(directory)) {
-            return false;
-        }
+            Path projectRoot, Path directory, Set<String> suffixes, ProjectIgnorePolicy ignorePolicy) {
+        if (!isPhysicalDirectory(projectRoot, directory)) return false;
         try (var entries = Files.list(directory)) {
-            return entries.filter(Files::isRegularFile)
-                    .filter(file -> !ignorePolicy.isIgnored(projectRoot.relativize(file), false))
+            return entries.filter(file -> visibleFile(projectRoot, file, ignorePolicy))
                     .map(file -> file.getFileName().toString().toLowerCase(Locale.ROOT))
                     .anyMatch(name -> suffixes.stream().anyMatch(name::endsWith));
         } catch (IOException exception) {
@@ -202,39 +188,45 @@ public final class DefaultDiscoveryPlugins {
     }
 
     private static boolean containsVisibleExtension(
-            Path projectRoot,
-            Path sourceRoot,
-            Set<String> extensions,
-            ProjectIgnorePolicy ignorePolicy) throws IOException {
-        boolean[] found = {false};
-        Files.walkFileTree(sourceRoot, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs) {
-                if (!directory.equals(sourceRoot)
-                        && ignorePolicy.isHardIgnored(projectRoot.relativize(directory))) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                Path relative = projectRoot.relativize(file);
-                if (!ignorePolicy.isIgnored(relative, false)) {
-                    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-                    if (extensions.stream().anyMatch(name::endsWith)) {
-                        found[0] = true;
-                        return FileVisitResult.TERMINATE;
-                    }
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
-        return found[0];
+            Path projectRoot, Path sourceRoot, Set<String> extensions, ProjectIgnorePolicy ignorePolicy)
+            throws IOException {
+        if (!sourceRoot.toAbsolutePath().normalize().startsWith(projectRoot.toAbsolutePath().normalize())) {
+            throw new IOException("source root escapes project root");
+        }
+        return ignorePolicy.containsVisibleExtension(sourceRoot, extensions);
     }
 
     private static boolean visibleFile(Path projectRoot, Path file, ProjectIgnorePolicy ignorePolicy) {
-        return Files.isRegularFile(file)
-                && !ignorePolicy.isIgnored(projectRoot.relativize(file), false);
+        Path root = projectRoot.toAbsolutePath().normalize();
+        Path candidate = file.toAbsolutePath().normalize();
+        if (candidate.equals(root) || !candidate.startsWith(root)) return false;
+        Path relative = root.relativize(candidate);
+        try (var ignored = ConfinedFileOpener.openConfinedRegularFile(root, relative)) {
+            return !ignorePolicy.isIgnored(relative, false);
+        } catch (IOException | SecurityException exception) {
+            return false;
+        }
+    }
+
+    private static boolean isPhysicalDirectory(Path projectRoot, Path directory) {
+        Path root = projectRoot.toAbsolutePath().normalize();
+        Path candidate = directory.toAbsolutePath().normalize();
+        if (!candidate.startsWith(root)) return false;
+        try {
+            BasicFileAttributes rootAttributes =
+                    Files.readAttributes(root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!FileTreeOperations.isRecursableDirectory(rootAttributes)) return false;
+            Path current = root;
+            Path relative = root.relativize(candidate);
+            for (int index = 0; index < relative.getNameCount(); index++) {
+                current = current.resolve(relative.getName(index));
+                BasicFileAttributes attributes =
+                        Files.readAttributes(current, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                if (!FileTreeOperations.isRecursableDirectory(attributes)) return false;
+            }
+            return true;
+        } catch (IOException | SecurityException exception) {
+            return false;
+        }
     }
 }

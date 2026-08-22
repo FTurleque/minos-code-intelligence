@@ -109,7 +109,7 @@ limitations
 
 ## Historique borné
 
-Bornes internes/publics principales :
+Bornes de la **requête publique** (`ActivityQuery`) — elles décrivent la forme du résultat demandé :
 
 ```text
 max commits  10000
@@ -118,6 +118,30 @@ zone depth   8
 ```
 
 Un historique dépassant les bornes est signalé comme tronqué plutôt que présenté comme exhaustif.
+
+### Frontière de ressources de l'analyse
+
+`maxFiles` borne ce qui est **retourné**, pas ce que produire la réponse **coûte**. Les deux sont distincts et le rester est délibéré : détourner `maxFiles` en budget de travail changerait le sens d'un paramètre publié. `GitIntelligenceService.ActivityBudget` borne donc explicitement le travail pendant la marche d'historique :
+
+```text
+maxDiffEntriesPerCommit   2000
+maxTrackedFiles          20000
+maxTrackedZones           5000
+maxRetainedChangedPaths  50000
+```
+
+La taille du diff d'un commit est **mesurée avant matérialisation** : un `TreeWalk` compte et s'arrête une entrée au-delà du budget (linéaire en `min(taille, budget)`, mémoire constante). Un commit dans le budget passe ensuite par `DiffFormatter.scan`, ce qui conserve la détection de renommage — et donc les chemins restitués — à l'identique pour tout commit normal ; un commit au-delà du budget retombe sur les chemins bornés de cette marche.
+
+Toute limite atteinte est restituée dans `limitations` plutôt que de façonner silencieusement la réponse :
+
+```text
+DIFF_SCAN_TRUNCATED
+PATHS_TRUNCATED
+FILE_TRACKING_TRUNCATED
+ZONE_TRACKING_TRUNCATED
+```
+
+La troncature reste déterministe (ordre d'arbre, puis tri), et les valeurs par défaut sont très au-dessus de tout commit d'ingénierie réaliste : un dépôt normal est analysé exactement comme avant.
 
 ## Activité par fichier
 

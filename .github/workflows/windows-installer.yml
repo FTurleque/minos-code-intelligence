@@ -1,12 +1,21 @@
 name: Windows Installer Validation
 
 on:
+  # `release-windows.yml` and the supply-chain pin gate are in the filters because both directly
+  # define the Windows release invariants this workflow proves: changing how the release compiles,
+  # or how the pins are enforced, must run the full candidate build, Inno setup, isolated install,
+  # MCP handshake, uninstall and artifact validation.
+  #
+  # The pull_request and push filters are kept identical on purpose -- a change qualified on a PR
+  # must be re-qualified on the branch it lands on. GitHub Actions does not support YAML anchors, so
+  # they are spelled out twice and check-workflow-pins.py enforces that they match.
   pull_request:
     branches: [main, develop]
     paths:
       - 'packaging/windows/**'
       - 'scripts/install/**'
       - 'scripts/release/**'
+      - 'scripts/quality/check-workflow-pins.py'
       - 'scripts/m14/MinosNativeMcpSmoke.java'
       - 'docker/**'
       - 'pom.xml'
@@ -14,12 +23,14 @@ on:
       - 'docs/releases/1.0.1.md'
       - 'docs/user/production-installation.md'
       - '.github/workflows/windows-installer.yml'
+      - '.github/workflows/release-windows.yml'
   push:
     branches: [main, develop]
     paths:
       - 'packaging/windows/**'
       - 'scripts/install/**'
       - 'scripts/release/**'
+      - 'scripts/quality/check-workflow-pins.py'
       - 'scripts/m14/MinosNativeMcpSmoke.java'
       - 'docker/**'
       - 'pom.xml'
@@ -27,6 +38,7 @@ on:
       - 'docs/releases/1.0.1.md'
       - 'docs/user/production-installation.md'
       - '.github/workflows/windows-installer.yml'
+      - '.github/workflows/release-windows.yml'
   workflow_dispatch:
 
 permissions:
@@ -36,72 +48,96 @@ concurrency:
   group: windows-installer-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  # Cross the GitHub Actions -> PowerShell boundary only through env vars, never through direct
+  # ${{ }} interpolation inside a run: block -- see release-windows.yml for the full rationale.
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  INNO_SETUP_VERSION: '6.7.1'
+
 jobs:
   candidate:
     name: Build and smoke Windows 1.0.1 candidate
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 75
 
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # PR workflows normally checkout GitHub's synthetic merge ref. Release
-          # provenance must instead identify the exact branch HEAD being qualified.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Java 24
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '24'
           cache: maven
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+
+      - name: Inno Setup provenance rules
+        shell: pwsh
+        run: .\scripts\release\test-iscc-provenance.ps1
 
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --yes --no-progress
-          $iscc = @(
-            (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
-            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
-            'C:\Program Files\Inno Setup 7\ISCC.exe',
-            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-            'C:\Program Files\Inno Setup 6\ISCC.exe',
-            'C:\ProgramData\chocolatey\bin\ISCC.exe'
-          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-          if (-not $iscc) { throw 'Inno Setup installation did not expose ISCC.exe.' }
-          Write-Host "ISCC: $iscc"
+          $installOutput = (choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress 2>&1 | Out-String)
+          Write-Host $installOutput
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup --version=$env:INNO_SETUP_VERSION failed (exit=$LASTEXITCODE):`n$installOutput" }
+
+          # Resolve the exact binary the choco package above just installed -- do NOT search PATH or
+          # any other Inno Setup install location. A stray pre-existing Inno Setup 7 (or any other
+          # ISCC.exe reachable via PATH/chocolatey shim) must never be able to silently take over
+          # compilation of the candidate setup.exe just because it happened to be found first.
+          $isccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
+            throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
+          }
+
+          # ISCC.exe itself exposes no trustworthy version signal: its FileVersion/ProductVersion PE
+          # resources are both unset (observed as 0.0.0.0), and its bare-invocation usage banner
+          # omits the minor/patch version (only an actual compile run prints the full versioned
+          # banner). Verify against Chocolatey's own installed-package record instead -- the nuspec
+          # it writes for every package -- cross-checked against Chocolatey's own install-time
+          # confirmation message captured above.
+          $nuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+          if (-not (Test-Path -LiteralPath $nuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $nuspecPath; cannot verify the installed Inno Setup version."
+          }
+          [xml]$nuspec = Get-Content -LiteralPath $nuspecPath -Raw
+          $installedVersion = $nuspec.package.metadata.version
+          if ($installedVersion -ne $env:INNO_SETUP_VERSION) {
+            throw "Chocolatey innosetup package metadata at $nuspecPath reports version '$installedVersion', expected $env:INNO_SETUP_VERSION."
+          }
+          if ($installOutput -notmatch [regex]::Escape($env:INNO_SETUP_VERSION)) {
+            throw "Chocolatey's own install output did not confirm version $env:INNO_SETUP_VERSION:`n$installOutput"
+          }
+          Write-Host "Qualified ISCC: $isccPath (chocolatey innosetup package version=$installedVersion)"
+          "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
 
       - name: Build exact-head non-published candidate
         shell: powershell
-        run: |
-          .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify
+        run: .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION
 
       - name: Install, handshake and uninstall isolated candidate
         shell: powershell
         run: |
           $head = (git rev-parse HEAD).Trim()
-          if ($head -ne '${{ github.event.pull_request.head.sha || github.sha }}') {
-            throw "Exact-head mismatch before smoke validation: checkout=$head expected=${{ github.event.pull_request.head.sha || github.sha }}"
-          }
-          .\scripts\release\publish-windows-release.ps1 `
-            -Version 1.0.1 `
-            -TargetCommit $head `
-            -SkipBuild `
-            -ValidateOnly
+          if ($head -ne $env:EXPECTED_HEAD) { throw "Exact-head mismatch before smoke validation: checkout=$head expected=$env:EXPECTED_HEAD" }
+          # -SkipBuild skips the production setup but the isolated smoke setup is still compiled here,
+          # so this call must carry the same qualified compiler provenance as the build above --
+          # otherwise the smoke setup would fall back to auto-detection and could be built by a
+          # different ISCC.exe than the artifact it is supposed to be validating.
+          .\scripts\release\publish-windows-release.ps1 -Version 1.0.1 -TargetCommit $head -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION -SkipBuild -ValidateOnly
 
       - name: Verify candidate artifacts
         shell: powershell
         run: |
-          # ValidateOnly intentionally removes the isolated .smoke setup after it
-          # has been installed, handshaken and uninstalled. Only durable release
-          # artifacts and their checksums must remain after successful validation.
           $expected = @(
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe',
             'target\dist\MINOS-1.0.1-windows-x64-setup.exe.sha256',
@@ -118,7 +154,7 @@ jobs:
 
       - name: Upload Windows candidate diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: minos-windows-installer-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore

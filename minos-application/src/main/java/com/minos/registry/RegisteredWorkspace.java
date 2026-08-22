@@ -18,9 +18,7 @@ public record RegisteredWorkspace(
 ) {
     public RegisteredWorkspace {
         Objects.requireNonNull(id, "id");
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
-        }
+        ProjectRegistryLimits.requireName(name, "name");
         projectIds = Objects.requireNonNull(projectIds, "projectIds").stream()
                 .distinct()
                 .sorted(Comparator.comparing(UUID::toString))

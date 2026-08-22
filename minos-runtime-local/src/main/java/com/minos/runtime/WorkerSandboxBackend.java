@@ -30,7 +30,42 @@ public interface WorkerSandboxBackend {
     ) throws Exception;
 
     default boolean enforcesNetworkDeny() {
-        return networkGuarantee() == NetworkGuarantee.OS_ENFORCED;
+        if (networkGuarantee() != NetworkGuarantee.OS_ENFORCED) {
+            return false;
+        }
+        WorkerSandboxQualification evidence = qualification();
+        return evidence.networkGuarantee() == NetworkGuarantee.OS_ENFORCED
+                && evidence.networkDeny() == WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED
+                && evidence.qualifiedForCurrentPlatform();
+    }
+
+    /** Returns true only when this backend is qualified to execute hostile/untrusted code on this OS. */
+    default boolean supportsUntrustedCode() {
+        WorkerSandboxQualification evidence = qualification();
+        return evidence.trustDisposition()
+                == WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED
+                && evidence.containment().qualifiedForUntrustedCode()
+                && evidence.qualifiedForCurrentPlatform();
+    }
+
+    /**
+     * Returns true only for the narrower managed-local-provider contract.
+     *
+     * <p>This is intentionally separate from {@link #supportsUntrustedCode()}: supervised filesystem
+     * quotas are accepted here so installed local SCIP providers remain usable, but remote workers
+     * and callers claiming arbitrary hostile-code execution must continue to use the stricter
+     * method.</p>
+     */
+    default boolean supportsManagedLocalProvider() {
+        return qualification().managedLocalProviderClaimPermitted();
+    }
+
+    /**
+     * Aggregate resource containment this backend actually enforces on the current host.
+     * A backend that cannot answer this truthfully must not claim untrusted-code support.
+     */
+    default WorkerResourceContainment resourceContainment() {
+        return qualification().containment();
     }
 
     default WorkerSandboxQualification qualification() {
@@ -83,7 +118,7 @@ public interface WorkerSandboxBackend {
             Objects.requireNonNull(networkPolicy, "networkPolicy");
             if (networkPolicy == WorkerNetworkPolicy.DENY) {
                 throw new IllegalStateException(
-                        "native worker cannot prove OS-level network denial; choose a qualified sandbox backend or ALLOW explicitly");
+                        "native worker cannot prove OS-level network denial; choose a qualified sandbox backend");
             }
             return delegate.execute(request);
         }

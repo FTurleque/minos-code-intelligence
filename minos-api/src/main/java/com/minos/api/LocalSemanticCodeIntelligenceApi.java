@@ -7,11 +7,12 @@ import com.minos.semantic.SemanticDocument;
 import com.minos.semantic.SemanticIndexService;
 import com.minos.semantic.SemanticSearchService;
 
-import java.io.IOException;
 import java.util.Objects;
 
 /** Local M20 implementation backed by the shared long-lived MinosApplication. */
 public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntelligenceApi {
+
+    private static final String QUERY = "query";
 
     private final MinosApplication application;
 
@@ -32,7 +33,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public SemanticSearchDto semanticSearch(String projectIdentifier, SemanticQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            SemanticQuery value = Objects.requireNonNull(query, "query");
+            SemanticQuery value = MinosApiSupport.required(query, QUERY);
             return semantic(application.semanticSearchService().search(projectIdentifier,
                     new SemanticSearchService.SearchRequest(value.query(), value.limit(), value.minimumScore())));
         });
@@ -41,7 +42,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public HybridSearchDto hybridSearch(String projectIdentifier, HybridQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            HybridQuery value = Objects.requireNonNull(query, "query");
+            HybridQuery value = MinosApiSupport.required(query, QUERY);
             return hybrid(application.hybridSearchService().search(projectIdentifier,
                     new HybridSearchService.HybridRequest(value.query(), value.limit(), value.minimumScore())));
         });
@@ -50,7 +51,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
     @Override
     public HybridContextDto buildHybridContext(String projectIdentifier, ContextQuery query) throws MinosApi.MinosApiException {
         return execute(() -> {
-            ContextQuery value = Objects.requireNonNull(query, "query");
+            ContextQuery value = MinosApiSupport.required(query, QUERY);
             return context(application.hybridContextBuilder().build(projectIdentifier,
                     new HybridContextBuilder.ContextRequest(
                             value.query(), value.maxDocuments(), value.maxTokens(), value.maxTokensPerDocument())));
@@ -110,20 +111,7 @@ public final class LocalSemanticCodeIntelligenceApi implements SemanticCodeIntel
         return new RankingSignalDto(value.type(), value.score(), value.nature().name());
     }
 
-    private static <T> T execute(ThrowingSupplier<T> action) throws MinosApi.MinosApiException {
-        try {
-            return action.get();
-        } catch (IllegalArgumentException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.INVALID_REQUEST, exception.getMessage(), exception);
-        } catch (IOException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.IO_FAILURE, exception.getMessage(), exception);
-        } catch (RuntimeException exception) {
-            throw new MinosApi.MinosApiException(MinosApi.ErrorCode.EXECUTION_FAILURE, exception.getMessage(), exception);
-        }
-    }
-
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws IOException;
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(call);
     }
 }

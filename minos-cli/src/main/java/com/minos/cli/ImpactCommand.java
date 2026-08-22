@@ -32,44 +32,18 @@ public final class ImpactCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             ImpactAnalysisReport report = query.analyzeImpact(
                     options.project(),
                     new ImpactAnalysisRequest(options.symbolId(), options.depth(), options.limit())
             );
             output.append(ImpactResultRenderer.render(report, options.format())).append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: impact failed: ").append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() {
         return USAGE;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     private record Options(
@@ -83,8 +57,8 @@ public final class ImpactCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
             }
-            String project = operand(arguments[0], "project");
-            String symbol = operand(arguments[1], "symbol-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String symbol = CliCommandSupport.operand(arguments[1], "symbol-id");
             int depth = 4;
             int limit = 200;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
@@ -123,11 +97,5 @@ public final class ImpactCommand {
             }
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
     }
 }

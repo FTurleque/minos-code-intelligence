@@ -16,8 +16,8 @@ M25 doit permettre l’indexation distante et une frontière d’exécution dist
 2. Les credentials sont référencés par nom de variable d’environnement et résolus uniquement pendant le clone. Ni valeur ni référence ne sont écrites dans l’origin Git, les métadonnées de cache, les manifests ou les évidences CLI.
 3. `JGitRemoteRepositoryMaterializer` clone sans submodule dans une entrée temporaire, vérifie origin, HEAD exact, worktree propre et confinement du sous-répertoire, puis publie atomiquement dans un cache reconstructible et borné.
 4. `DistributedIndexing.Worker` est provider-neutral. L’isolation déclarée est `PROCESS_EPHEMERAL_WORKSPACE`; la politique réseau est obligatoire. Un worker ne peut accepter `DENY` que s’il prouve réellement l’enforcement réseau OS.
-5. Le transport `minos-distributed-artifact-v1` est un ZIP contenant exactement `manifest.properties` et `index.scip`. Le manifest porte source, commit, run, projet, langage, provider/version, worker, isolation, réseau, temps, taille et SHA-256.
-6. Le coordinateur valide format, chemins, bornes, checksum et concordance intégrale de provenance en mode fail-closed. Le bundle reçu est détruit après acceptation ou rejet ; seul le cache vérifié borné subsiste.
+5. Le transport `minos-distributed-artifact-v1` est un ZIP contenant exactement `manifest.properties` et `index.scip`. Le manifest porte source, commit, run, projet, langage, provider/version, worker, isolation, réseau, temps, taille et SHA-256. Le format `minos-distributed-artifact-v2` étend le manifest avec `projectRelativeRoot` pour les monorepos multi-module.
+6. Le coordinateur valide format, chemins, bornes, checksum et concordance intégrale de provenance en mode fail-closed — y compris le `projectRelativeRoot` du manifest face à la requête, ce qui rend un scope-swap entre modules cryptographiquement impossible. Le bundle reçu est détruit après acceptation ou rejet ; seul le cache vérifié borné subsiste.
 7. L’artefact accepté retourne dans `ScipSymbolSnapshotImporter`, le staging et la promotion atomique existants. Les snapshots structurés restent autoritatifs.
 
 ## Consequences

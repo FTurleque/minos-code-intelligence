@@ -8,8 +8,11 @@ import com.minos.discovery.spi.BuildSystemDetector;
 import com.minos.discovery.spi.LanguageDetector;
 import com.minos.discovery.spi.ProjectDetector;
 import com.minos.discovery.spi.SourceRootDetector;
+import com.minos.io.FileTreeOperations;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,13 +38,15 @@ public final class ProjectDiscoveryService {
     private final List<BuildSystemDetector> buildSystemDetectors;
     private final List<SourceRootDetector> sourceRootDetectors;
     private final List<LanguageDetector> languageDetectors;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectDiscoveryService() {
         this(
                 DefaultDiscoveryPlugins.projectDetectors(),
                 DefaultDiscoveryPlugins.buildSystemDetectors(),
                 DefaultDiscoveryPlugins.sourceRootDetectors(),
-                DefaultDiscoveryPlugins.languageDetectors()
+                DefaultDiscoveryPlugins.languageDetectors(),
+                SourceBudgetPolicy.DEFAULT
         );
     }
 
@@ -51,44 +56,60 @@ public final class ProjectDiscoveryService {
             List<SourceRootDetector> sourceRootDetectors,
             List<LanguageDetector> languageDetectors
     ) {
+        this(projectDetectors, buildSystemDetectors, sourceRootDetectors, languageDetectors, SourceBudgetPolicy.DEFAULT);
+    }
+
+    public ProjectDiscoveryService(
+            List<ProjectDetector> projectDetectors,
+            List<BuildSystemDetector> buildSystemDetectors,
+            List<SourceRootDetector> sourceRootDetectors,
+            List<LanguageDetector> languageDetectors,
+            SourceBudgetPolicy sourceBudgetPolicy
+    ) {
         this.projectDetectors = List.copyOf(Objects.requireNonNull(projectDetectors, "projectDetectors"));
         this.buildSystemDetectors = List.copyOf(Objects.requireNonNull(buildSystemDetectors, "buildSystemDetectors"));
         this.sourceRootDetectors = List.copyOf(Objects.requireNonNull(sourceRootDetectors, "sourceRootDetectors"));
         this.languageDetectors = List.copyOf(Objects.requireNonNull(languageDetectors, "languageDetectors"));
+        this.sourceBudgetPolicy = Objects.requireNonNull(sourceBudgetPolicy, "sourceBudgetPolicy");
     }
 
     public ProjectDiscovery discover(Path projectRoot) throws IOException {
-        Path root = projectRoot.toAbsolutePath().normalize();
-        if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+        try {
+            Path root = projectRoot.toAbsolutePath().normalize();
+            if (!Files.isDirectory(root)) {
+                throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+            }
+
+            SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project discovery");
+            ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root, budget);
+            Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy, budget);
+            if (moduleRoots.isEmpty()) {
+                moduleRoots.put(root, EnumSet.noneOf(BuildSystem.class));
+            }
+
+            List<DiscoveredModule> modules = new ArrayList<>();
+            EnumSet<Language> projectLanguages = EnumSet.noneOf(Language.class);
+            EnumSet<BuildSystem> projectBuildSystems = EnumSet.noneOf(BuildSystem.class);
+
+            for (Map.Entry<Path, EnumSet<BuildSystem>> entry : moduleRoots.entrySet()) {
+                Path moduleRoot = entry.getKey();
+                EnumSet<BuildSystem> buildSystems = entry.getValue();
+                List<SourceRoot> sourceRoots = discoverSourceRoots(root, moduleRoot, ignorePolicy);
+                sourceRoots.forEach(sourceRoot -> projectLanguages.add(sourceRoot.language()));
+                projectBuildSystems.addAll(buildSystems);
+                modules.add(new DiscoveredModule(
+                        root.relativize(moduleRoot),
+                        moduleName(root, moduleRoot),
+                        buildSystems,
+                        sourceRoots
+                ));
+            }
+
+            modules.sort(Comparator.comparing(module -> portable(module.relativePath())));
+            return new ProjectDiscovery(root, projectName(root), projectLanguages, projectBuildSystems, modules);
+        } catch (UncheckedIOException exception) {
+            throw exception.getCause();
         }
-
-        ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
-        Map<Path, EnumSet<BuildSystem>> moduleRoots = discoverModuleRoots(root, ignorePolicy);
-        if (moduleRoots.isEmpty()) {
-            moduleRoots.put(root, EnumSet.noneOf(BuildSystem.class));
-        }
-
-        List<DiscoveredModule> modules = new ArrayList<>();
-        EnumSet<Language> projectLanguages = EnumSet.noneOf(Language.class);
-        EnumSet<BuildSystem> projectBuildSystems = EnumSet.noneOf(BuildSystem.class);
-
-        for (Map.Entry<Path, EnumSet<BuildSystem>> entry : moduleRoots.entrySet()) {
-            Path moduleRoot = entry.getKey();
-            EnumSet<BuildSystem> buildSystems = entry.getValue();
-            List<SourceRoot> sourceRoots = discoverSourceRoots(root, moduleRoot, ignorePolicy);
-            sourceRoots.forEach(sourceRoot -> projectLanguages.add(sourceRoot.language()));
-            projectBuildSystems.addAll(buildSystems);
-            modules.add(new DiscoveredModule(
-                    root.relativize(moduleRoot),
-                    moduleName(root, moduleRoot),
-                    buildSystems,
-                    sourceRoots
-            ));
-        }
-
-        modules.sort(Comparator.comparing(module -> portable(module.relativePath())));
-        return new ProjectDiscovery(root, projectName(root), projectLanguages, projectBuildSystems, modules);
     }
 
     /** Exposes registered language classifiers for plugin/conformance diagnostics. */
@@ -98,12 +119,17 @@ public final class ProjectDiscoveryService {
 
     private Map<Path, EnumSet<BuildSystem>> discoverModuleRoots(
             Path root,
-            ProjectIgnorePolicy ignorePolicy
+            ProjectIgnorePolicy ignorePolicy,
+            SourceBudgetPolicy.Tracker budget
     ) throws IOException {
         Map<Path, EnumSet<BuildSystem>> modules = new LinkedHashMap<>();
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attributes)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 Path relative = root.relativize(directory);
                 if (!directory.equals(root) && ignorePolicy.isHardIgnored(relative)) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -113,6 +139,18 @@ public final class ProjectDiscoveryService {
                     modules.put(directory, detectBuildSystems(root, directory, ignorePolicy));
                 }
                 return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
+                budget.accountTraversalEntry();
+                throw exception;
             }
         });
         return modules;

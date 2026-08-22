@@ -61,8 +61,8 @@ final class HostedTenantMutationWriter {
                 context.requestId(),
                 keyId,
                 context.state().version() + 1);
-        store.save(updated, context.state().version());
-        auditSink.publish(updated.auditEvents().getLast());
+        HostedCommitRecovery.save(store, updated, context.state().version());
+        HostedAuditDelivery.publishAfterCommit(auditSink, updated.auditEvents().getLast());
         return updated;
     }
 }

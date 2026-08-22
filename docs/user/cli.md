@@ -323,15 +323,15 @@ minos.cmd remote materialize https://github.com/acme/project --ref main `
 
 L'indexation remote exige le commit exact et conserve provenance/bundle vérifié.
 
-La disposition sécurité reste :
+La disposition sécurité est :
 
 ```text
-network DENY sans backend OS prouvé → fail-closed
-untrusted code                      → non supporté
-claim sandbox OS réelle            → interdit
+ALLOW → réseau autorisé dans une sandbox OS qualifiée
+DENY  → réseau bloqué dans une sandbox OS qualifiée
+backend natif/process-only → refusé dans les deux modes
 ```
 
-L'implémentation future d'une vraie sandbox OS Windows/Linux reste suivie par #98.
+Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
 ## Runtime & Dynamic Intelligence
 
