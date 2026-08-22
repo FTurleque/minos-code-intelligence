@@ -98,7 +98,6 @@ final class JGitRemoteGitClient implements JGitRemoteRepositoryMaterializer.Remo
             return failure != null;
         }
 
-        @Override
         public void showDuration(boolean enabled) {
         }
 
