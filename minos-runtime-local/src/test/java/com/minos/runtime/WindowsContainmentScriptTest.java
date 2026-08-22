@@ -112,48 +112,56 @@ class WindowsContainmentScriptTest {
                 value, privateStorage + "\n", "", "private-storage implementation fragment");
         value = replaceExactlyOnce(
                 value,
-                "        string profileName,\n"
-                        + "        string profileSid,\n"
-                        + "        string[] command,",
-                "        string profileName,\n"
-                        + "        string[] command,",
+                """
+                        string profileName,
+                        string profileSid,
+                        string[] command,\
+                """,
+                """
+                        string profileName,
+                        string[] command,\
+                """,
                 "profile SID RunSandbox parameter");
         value = replaceExactlyOnce(
                 value,
-                "        ulong jobCpuSeconds,\n"
-                        + "        ulong privateStorageMaxBytes,\n"
-                        + "        ulong privateStorageMaxEntries,\n"
-                        + "        uint privateStorageSampleMillis,\n"
-                        + "        bool allowNetwork) {",
-                "        ulong jobCpuSeconds,\n"
-                        + "        bool allowNetwork) {",
+                """
+                        ulong jobCpuSeconds,
+                        ulong privateStorageMaxBytes,
+                        ulong privateStorageMaxEntries,
+                        uint privateStorageSampleMillis,
+                        bool allowNetwork) {\
+                """,
+                """
+                        ulong jobCpuSeconds,
+                        bool allowNetwork) {\
+                """,
                 "private-storage RunSandbox parameters");
         value = replaceExactlyOnce(
                 value,
-                "        if (String.IsNullOrWhiteSpace(profileSid)) "
-                        + "throw new ArgumentException(\"profile SID is blank\");\n",
+                """
+                        if (String.IsNullOrWhiteSpace(profileSid)) throw new ArgumentException("profile SID is blank");
+                """,
                 "",
                 "profile SID validation");
         value = replaceExactlyOnce(
                 value,
-                "        ManualResetEvent privateStorageStop = new ManualResetEvent(false);\n"
-                        + "        Thread privateStorageThread = null;\n",
+                """
+                        ManualResetEvent privateStorageStop = new ManualResetEvent(false);
+                        Thread privateStorageThread = null;
+                """,
                 "",
                 "private-storage supervisor state");
         value = replaceExactlyOnce(
                 value,
-                "            DenyPrivateRegistryWrites(profileName, profileSid);\n",
-                "",
-                "private registry deny invocation");
-        value = replaceExactlyOnce(
-                value,
-                "            privateStorageThread = StartPrivateFileStorageSupervisor(\n"
-                        + "                    profileSid,\n"
-                        + "                    job,\n"
-                        + "                    privateStorageMaxBytes,\n"
-                        + "                    privateStorageMaxEntries,\n"
-                        + "                    privateStorageSampleMillis,\n"
-                        + "                    privateStorageStop);\n",
+                """
+                            privateStorageThread = StartPrivateFileStorageSupervisor(
+                                    profileSid,
+                                    job,
+                                    privateStorageMaxBytes,
+                                    privateStorageMaxEntries,
+                                    privateStorageSampleMillis,
+                                    privateStorageStop);
+                """,
                 "",
                 "private-storage supervisor startup");
         value = replaceExactlyOnce(
@@ -167,29 +175,39 @@ class WindowsContainmentScriptTest {
                 value, "            privateStorageStop.Dispose();\n", "", "private-storage stop disposal");
         value = replaceExactlyOnce(
                 value,
-                "$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']\n"
-                        + "$privateStorageMaxBytes = [UInt64]$values['privateStorageMaxBytes']\n"
-                        + "$privateStorageMaxEntries = [UInt64]$values['privateStorageMaxEntries']\n"
-                        + "$privateStorageSampleMillis = [UInt32]$values['privateStorageSampleMillis']\n",
+                """
+                $jobCpuSeconds = [UInt64]$values['jobCpuSeconds']
+                $privateStorageMaxBytes = [UInt64]$values['privateStorageMaxBytes']
+                $privateStorageMaxEntries = [UInt64]$values['privateStorageMaxEntries']
+                $privateStorageSampleMillis = [UInt32]$values['privateStorageSampleMillis']
+                """,
                 "$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']\n",
                 "private-storage plan values");
         value = replaceExactlyOnce(
                 value,
-                "        $containerProfile,\n"
-                        + "        $sid,\n"
-                        + "        $command,",
-                "        $containerProfile,\n"
-                        + "        $command,",
+                """
+                        $containerProfile,
+                        $sid,
+                        $command,\
+                """,
+                """
+                        $containerProfile,
+                        $command,\
+                """,
                 "profile SID launcher argument");
         return replaceExactlyOnce(
                 value,
-                "        $jobCpuSeconds,\n"
-                        + "        $privateStorageMaxBytes,\n"
-                        + "        $privateStorageMaxEntries,\n"
-                        + "        $privateStorageSampleMillis,\n"
-                        + "        ($networkPolicy -eq 'ALLOW'))",
-                "        $jobCpuSeconds,\n"
-                        + "        ($networkPolicy -eq 'ALLOW'))",
+                """
+                        $jobCpuSeconds,
+                        $privateStorageMaxBytes,
+                        $privateStorageMaxEntries,
+                        $privateStorageSampleMillis,
+                        ($networkPolicy -eq 'ALLOW'))\
+                """,
+                """
+                        $jobCpuSeconds,
+                        ($networkPolicy -eq 'ALLOW'))\
+                """,
                 "private-storage launcher arguments");
     }
 
