@@ -64,6 +64,11 @@ def main() -> int:
 
         app_path = "minos-application/src/main/java/com/minos/application/MinosApplication.java"
         app = read(app_path)
+        runtime_config_path = (
+            "minos-application/src/main/java/com/minos/application/"
+            "MinosApplicationRuntimeConfiguration.java"
+        )
+        runtime_config = read(runtime_config_path)
         require(
             app_path,
             app,
@@ -71,9 +76,15 @@ def main() -> int:
             'SEMANTIC_MODEL_ENV = "MINOS_SEMANTIC_MODEL"',
             'SEMANTIC_DIMENSIONS_ENV = "MINOS_SEMANTIC_DIMENSIONS"',
             'SEMANTIC_ENDPOINT_ENV = "MINOS_SEMANTIC_ENDPOINT"',
+            "MinosApplicationRuntimeConfiguration.apply(settings, builder)",
+        )
+        require(
+            runtime_config_path,
+            runtime_config,
             '"ollama".equals(provider)',
             "new OllamaEmbeddingProvider",
             '"local-hash".equals(provider)',
+            '"disabled".equals(provider)',
         )
 
         store_path = "minos-storage-local/src/main/java/com/minos/store/FileSemanticVectorStore.java"
