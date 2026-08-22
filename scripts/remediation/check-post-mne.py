@@ -86,6 +86,7 @@ def main() -> int:
         worker_contract = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxBackend.java")
         clone_policy = read("minos-integration-git/src/main/java/com/minos/git/RemoteRepositoryCachePolicy.java")
         clone = read("minos-integration-git/src/main/java/com/minos/git/JGitRemoteRepositoryMaterializer.java")
+        clone_budget = read("minos-integration-git/src/main/java/com/minos/git/RemoteCloneBudget.java")
         java_plan = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java")
         source_probe = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/BoundedProviderSourceProbe.java")
         ignore_rules = read("minos-engine/src/main/java/com/minos/source/ProjectIgnoreRules.java")
@@ -95,6 +96,8 @@ def main() -> int:
         registry = read("minos-application/src/main/java/com/minos/registry/LocalProjectRegistry.java")
         storage_config = read("minos-application/src/main/java/com/minos/storage/StorageBackendConfiguration.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresConnectionFactory.java")
+        postgres_policy = read(
+            "minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresJdbcUrlPolicy.java")
         mcp_tools = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         json = read("minos-application/src/main/java/com/minos/output/DeterministicJson.java")
@@ -148,9 +151,11 @@ def main() -> int:
         require("RemoteRepositoryCachePolicy.java", clone_policy,
                 "maxBytes", "maxFiles", "maxDirectories", "maxTraversalEntries", "cloneTimeout")
         require("JGitRemoteRepositoryMaterializer.java", clone,
-                "new CloneBudget(repositoryRoot, cachePolicy)", "files > maxFiles", "directories > maxDirectories",
-                "traversalEntries > maxTraversalEntries", "Files.walkFileTree",
+                "new CloneBudget(repositoryRoot, cachePolicy)", "Files.walkFileTree",
                 "MAX_CACHE_ROOT_SCAN_ENTRIES", "LinkOption.NOFOLLOW_LINKS")
+        require("RemoteCloneBudget.java", clone_budget,
+                "files > maxFiles", "directories > maxDirectories",
+                "traversalEntries > maxTraversalEntries", "Files.walkFileTree")
         forbid("JGitRemoteRepositoryMaterializer.java", clone,
                ".sorted(Comparator.reverseOrder()).toList()")
 
@@ -182,10 +187,12 @@ def main() -> int:
         # 05/08: PostgreSQL external transport/diagnostics and stale connection reuse are hardened.
         require("StorageBackendConfiguration.java", storage_config,
                 "postgresManaged", "safePostgresUrl", "managed=")
+        require("PostgresJdbcUrlPolicy.java", postgres_policy,
+                'ALLOWED_URL_PARAMETERS = Set.of("sslmode")', '"verify-full"', "duplicate parameter")
         require("PostgresConnectionFactory.java", postgres,
-                'ALLOWED_URL_PARAMETERS = Set.of("sslmode")', '"verify-full"',
-                "connection.isValid", "state.startsWith(\"08\")", "duplicate parameter")
+                "connection.isValid", "state.startsWith(\"08\")")
         forbid("PostgresConnectionFactory.java", postgres, "SENSITIVE_URL_PARAMETERS")
+        forbid("PostgresJdbcUrlPolicy.java", postgres_policy, "SENSITIVE_URL_PARAMETERS")
         require("configure-runtime-settings.ps1", installer,
                 "Assert-ExternalPostgresUrl", "sslmode=verify-full", "Read-BoundedUtf8",
                 "'minos.postgres.managed'] = 'false'", "PostgresUrl contains unsupported parameter",
