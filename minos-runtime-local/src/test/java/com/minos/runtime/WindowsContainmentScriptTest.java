@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -14,9 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Splitting a containment launcher into shared fragments is only safe if assembly reproduces the
  * script that was reviewed and qualified. The golden copies remain the pre-remediation qualified
- * baseline; after normalizing platform line endings, the only accepted drift is the explicit
- * one-shot deletion of the credential-bearing plan immediately before {@code Read-Plan} returns.
- * Any other content drift remains a test failure.
+ * baseline. After normalizing platform line endings, the accepted drift is limited to the explicit
+ * one-shot deletion of the credential-bearing plan and, for AppContainer only, the separately
+ * fingerprinted private-storage hardening introduced after that baseline. Any other content drift
+ * remains a test failure.
  */
 class WindowsContainmentScriptTest {
 
@@ -28,6 +30,10 @@ class WindowsContainmentScriptTest {
             Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
             return $values
         }""";
+    private static final String PRIVATE_STORAGE_USINGS_SHA256 =
+            "29b40f2d578a3e9a0d191e72d48dd93b16296b8efc512f0bd35f9d307fbad6ad";
+    private static final String PRIVATE_STORAGE_SHA256 =
+            "fa5ed8c517237ca180652403cb6a812cbb6233f7023cde773f91809c06999ef7";
 
     @Test
     void jobObjectLauncherMatchesQualifiedBaselineExceptForApprovedPlanConsumption() throws Exception {
@@ -87,8 +93,138 @@ class WindowsContainmentScriptTest {
                 + APPROVED_PLAN_CONSUMPTION
                 + golden.substring(marker + QUALIFIED_PLAN_RETURN.length());
         String assembled = normalizeLineEndings(WindowsContainmentScript.assemble(launcher));
+        if ("windows-appcontainer-sandbox-v4.ps1".equals(launcher)) {
+            assembled = removeApprovedPrivateStorageHardening(assembled);
+        }
         assertEquals(expected, assembled,
-                launcher + " drifted beyond the approved one-shot plan-consumption remediation");
+                launcher + " drifted beyond the approved containment remediations");
+    }
+
+    private static String removeApprovedPrivateStorageHardening(String assembled) throws Exception {
+        String usings = approvedFragment(
+                "appcontainer-private-storage-usings", PRIVATE_STORAGE_USINGS_SHA256);
+        String privateStorage = approvedFragment(
+                "appcontainer-private-storage", PRIVATE_STORAGE_SHA256);
+
+        String value = replaceExactlyOnce(
+                assembled, "\n" + usings + "\n", "\n", "private-storage using fragment");
+        value = replaceExactlyOnce(
+                value, privateStorage + "\n", "", "private-storage implementation fragment");
+        value = replaceExactlyOnce(
+                value,
+                "        string profileName,\n"
+                        + "        string profileSid,\n"
+                        + "        string[] command,",
+                "        string profileName,\n"
+                        + "        string[] command,",
+                "profile SID RunSandbox parameter");
+        value = replaceExactlyOnce(
+                value,
+                "        ulong jobCpuSeconds,\n"
+                        + "        ulong privateStorageMaxBytes,\n"
+                        + "        ulong privateStorageMaxEntries,\n"
+                        + "        uint privateStorageSampleMillis,\n"
+                        + "        bool allowNetwork) {",
+                "        ulong jobCpuSeconds,\n"
+                        + "        bool allowNetwork) {",
+                "private-storage RunSandbox parameters");
+        value = replaceExactlyOnce(
+                value,
+                "        if (String.IsNullOrWhiteSpace(profileSid)) "
+                        + "throw new ArgumentException(\"profile SID is blank\");\n",
+                "",
+                "profile SID validation");
+        value = replaceExactlyOnce(
+                value,
+                "        ManualResetEvent privateStorageStop = new ManualResetEvent(false);\n"
+                        + "        Thread privateStorageThread = null;\n",
+                "",
+                "private-storage supervisor state");
+        value = replaceExactlyOnce(
+                value,
+                "            DenyPrivateRegistryWrites(profileName, profileSid);\n",
+                "",
+                "private registry deny invocation");
+        value = replaceExactlyOnce(
+                value,
+                "            privateStorageThread = StartPrivateFileStorageSupervisor(\n"
+                        + "                    profileSid,\n"
+                        + "                    job,\n"
+                        + "                    privateStorageMaxBytes,\n"
+                        + "                    privateStorageMaxEntries,\n"
+                        + "                    privateStorageSampleMillis,\n"
+                        + "                    privateStorageStop);\n",
+                "",
+                "private-storage supervisor startup");
+        value = replaceExactlyOnce(
+                value, "                privateStorageStop.Set();\n", "", "private-storage stop signal");
+        value = replaceExactlyOnce(
+                value,
+                "                if (privateStorageThread != null) privateStorageThread.Join(1000);\n",
+                "",
+                "private-storage supervisor join");
+        value = replaceExactlyOnce(
+                value, "            privateStorageStop.Dispose();\n", "", "private-storage stop disposal");
+        value = replaceExactlyOnce(
+                value,
+                "$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']\n"
+                        + "$privateStorageMaxBytes = [UInt64]$values['privateStorageMaxBytes']\n"
+                        + "$privateStorageMaxEntries = [UInt64]$values['privateStorageMaxEntries']\n"
+                        + "$privateStorageSampleMillis = [UInt32]$values['privateStorageSampleMillis']\n",
+                "$jobCpuSeconds = [UInt64]$values['jobCpuSeconds']\n",
+                "private-storage plan values");
+        value = replaceExactlyOnce(
+                value,
+                "        $containerProfile,\n"
+                        + "        $sid,\n"
+                        + "        $command,",
+                "        $containerProfile,\n"
+                        + "        $command,",
+                "profile SID launcher argument");
+        return replaceExactlyOnce(
+                value,
+                "        $jobCpuSeconds,\n"
+                        + "        $privateStorageMaxBytes,\n"
+                        + "        $privateStorageMaxEntries,\n"
+                        + "        $privateStorageSampleMillis,\n"
+                        + "        ($networkPolicy -eq 'ALLOW'))",
+                "        $jobCpuSeconds,\n"
+                        + "        ($networkPolicy -eq 'ALLOW'))",
+                "private-storage launcher arguments");
+    }
+
+    private static String approvedFragment(String fragment, String expectedSha256) throws Exception {
+        String resource = "/com/minos/runtime/windows-fragments/" + fragment + ".ps1frag";
+        String value = normalizeLineEndings(
+                new String(readResource(resource), StandardCharsets.UTF_8));
+        assertEquals(expectedSha256, sha256(value), fragment + " drifted from its approved hardening bytes");
+        return value;
+    }
+
+    private static String replaceExactlyOnce(
+            String value,
+            String target,
+            String replacement,
+            String description
+    ) {
+        int marker = value.indexOf(target);
+        assertTrue(marker >= 0, "approved AppContainer hardening lost " + description);
+        assertEquals(marker, value.lastIndexOf(target),
+                "approved AppContainer hardening made " + description + " ambiguous");
+        return value.substring(0, marker)
+                + replacement
+                + value.substring(marker + target.length());
+    }
+
+    private static String sha256(String value) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder(digest.length * 2);
+        for (byte item : digest) {
+            hex.append(Character.forDigit((item >>> 4) & 0x0f, 16));
+            hex.append(Character.forDigit(item & 0x0f, 16));
+        }
+        return hex.toString();
     }
 
     private static String normalizeLineEndings(String value) {
@@ -96,9 +232,12 @@ class WindowsContainmentScriptTest {
     }
 
     private static byte[] readGolden(String launcher) throws IOException {
-        String resource = "/com/minos/runtime/golden/" + launcher;
+        return readResource("/com/minos/runtime/golden/" + launcher);
+    }
+
+    private static byte[] readResource(String resource) throws IOException {
         try (InputStream input = WindowsContainmentScriptTest.class.getResourceAsStream(resource)) {
-            if (input == null) throw new IOException("missing golden launcher: " + resource);
+            if (input == null) throw new IOException("missing containment resource: " + resource);
             return input.readAllBytes();
         }
     }
