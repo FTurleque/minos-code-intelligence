@@ -6,11 +6,8 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.io.SharedCacheLeaseRegistry;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryRequest;
-import com.minos.remote.RemoteRepositoryRequest.RemoteHost;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.ProgressMonitor;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -37,7 +34,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -74,7 +70,7 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     }
 
     public JGitRemoteRepositoryMaterializer(Path minosHome, RemoteRepositoryCachePolicy cachePolicy) throws IOException {
-        this(minosHome, cachePolicy, new JGitClient(),
+        this(minosHome, cachePolicy, new JGitRemoteGitClient(),
                 name -> Optional.ofNullable(System.getenv(name)).map(String::toCharArray), Clock.systemUTC());
     }
 
@@ -443,18 +439,10 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
     private static void clearReadOnly(Path path) {
         try {
             DosFileAttributeView attributes = Files.getFileAttributeView(
-                    path, DosFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                    path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
             if (attributes != null && attributes.readAttributes().isReadOnly()) attributes.setReadOnly(false);
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-DOS file systems do not need this Windows-specific cleanup.
-        }
-    }
-
-    private static long checkedAdd(long left, long right) throws IOException {
-        try {
-            return Math.addExact(left, right);
-        } catch (ArithmeticException exception) {
-            throw new IOException("remote cache byte counter overflow", exception);
         }
     }
 
@@ -501,214 +489,14 @@ public final class JGitRemoteRepositoryMaterializer implements RemoteRepositoryM
         Optional<char[]> resolve(String environmentVariable);
     }
 
-    static final class CloneBudget {
-        private static final String TIMEOUT_MESSAGE = "remote repository clone exceeds the configured time limit";
-
-        private final Path destination;
-        private final long maxBytes;
-        private final long maxFiles;
-        private final long maxDirectories;
-        private final long maxTraversalEntries;
-        private final long timeoutNanos;
-        private final long startedNanos = System.nanoTime();
-
+    /** Compatibility type retained for existing package-level transport and tests. */
+    static final class CloneBudget extends RemoteCloneBudget {
         CloneBudget(Path destination, RemoteRepositoryCachePolicy policy) {
-            this.destination = Objects.requireNonNull(destination, "destination");
-            RemoteRepositoryCachePolicy limits = Objects.requireNonNull(policy, "policy");
-            this.maxBytes = limits.maxBytes();
-            this.maxFiles = limits.maxFiles();
-            this.maxDirectories = limits.maxDirectories();
-            this.maxTraversalEntries = limits.maxTraversalEntries();
-            this.timeoutNanos = limits.cloneTimeout().toNanos();
+            super(destination, policy);
         }
-
-        TreeMetrics checkpoint() throws IOException {
-            enforceTimeout();
-            if (!Files.exists(destination)) return new TreeMetrics(0L, 0L, 0L, 0L);
-            final long[] bytes = {0L};
-            final long[] files = {0L};
-            final long[] directories = {0L};
-            final long[] entries = {0L};
-            Files.walkFileTree(destination, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
-                        throws IOException {
-                    enforceTimeout();
-                    entries[0] = increment(entries[0], "traversal entry");
-                    directories[0] = increment(directories[0], "directory");
-                    enforceCardinality(files[0], directories[0], entries[0]);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                    enforceTimeout();
-                    entries[0] = increment(entries[0], "traversal entry");
-                    files[0] = increment(files[0], "file");
-                    enforceCardinality(files[0], directories[0], entries[0]);
-                    if (attributes.isRegularFile()) {
-                        bytes[0] = checkedAdd(bytes[0], attributes.size());
-                        if (bytes[0] > maxBytes) {
-                            throw new IOException("remote repository exceeds the configured clone byte limit");
-                        }
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException failure) throws IOException {
-                    enforceTimeout();
-                    entries[0] = increment(entries[0], "traversal entry");
-                    enforceCardinality(files[0], directories[0], entries[0]);
-                    throw failure;
-                }
-            });
-            enforceTimeout();
-            return new TreeMetrics(bytes[0], files[0], directories[0], entries[0]);
-        }
-
-        int transportTimeoutSeconds() {
-            long seconds = TimeUnit.NANOSECONDS.toSeconds(timeoutNanos);
-            if (TimeUnit.SECONDS.toNanos(seconds) < timeoutNanos) seconds++;
-            return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, seconds));
-        }
-
-        int remainingTimeoutMillis() throws IOException {
-            long remainingNanos = remainingNanos();
-            if (remainingNanos <= 0L) throw timeoutFailure();
-            long millis = TimeUnit.NANOSECONDS.toMillis(remainingNanos);
-            if (TimeUnit.MILLISECONDS.toNanos(millis) < remainingNanos) millis++;
-            return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, millis));
-        }
-
-        int clampTimeoutMillis(int configuredMillis) {
-            int remaining;
-            try {
-                remaining = remainingTimeoutMillis();
-            } catch (IOException timeout) {
-                throw new CloneDeadlineExceededException(timeout);
-            }
-            return configuredMillis <= 0 ? remaining : Math.min(configuredMillis, remaining);
-        }
-
-        void enforceTimeoutUnchecked() {
-            try {
-                enforceTimeout();
-            } catch (IOException timeout) {
-                throw new CloneDeadlineExceededException(timeout);
-            }
-        }
-
-        void enforceTimeout() throws IOException {
-            if (remainingNanos() <= 0L) throw timeoutFailure();
-        }
-
-        private long remainingNanos() {
-            return timeoutNanos - (System.nanoTime() - startedNanos);
-        }
-
-        private IOException timeoutFailure() {
-            return new IOException(TIMEOUT_MESSAGE);
-        }
-
-        private long increment(long value, String counter) throws IOException {
-            try {
-                return Math.addExact(value, 1L);
-            } catch (ArithmeticException exception) {
-                throw new IOException("remote repository " + counter + " counter overflow", exception);
-            }
-        }
-
-        private void enforceCardinality(long files, long directories, long traversalEntries) throws IOException {
-            if (files > maxFiles) {
-                throw new IOException("remote repository exceeds the configured clone file limit");
-            }
-            if (directories > maxDirectories) {
-                throw new IOException("remote repository exceeds the configured clone directory limit");
-            }
-            if (traversalEntries > maxTraversalEntries) {
-                throw new IOException("remote repository exceeds the configured clone traversal entry limit");
-            }
-        }
-    }
-
-    private static final class CloneDeadlineExceededException extends RuntimeException {
-        private CloneDeadlineExceededException(IOException cause) {
-            super(cause.getMessage(), cause);
-        }
-    }
-
-    private static final class JGitClient implements RemoteGitClient {
-        @Override
-        public void cloneRepository(RemoteRepositoryRequest request, Path destination, char[] secret, CloneBudget budget)
-                throws Exception {
-            CloneProgressMonitor monitor = new CloneProgressMonitor(budget);
-            var command = Git.cloneRepository()
-                    .setURI(request.canonicalRepositoryUri())
-                    .setDirectory(destination.toFile())
-                    .setBranch(request.reference())
-                    .setBranchesToClone(List.of(request.reference()))
-                    .setCloneAllBranches(false)
-                    .setCloneSubmodules(false)
-                    .setDepth(1)
-                    .setTimeout(budget.transportTimeoutSeconds())
-                    .setTransportConfigCallback(transport -> JGitCloneDeadline.configure(transport, budget))
-                    .setProgressMonitor(monitor);
-            UsernamePasswordCredentialsProvider credentials = null;
-            if (secret != null) {
-                String username = request.host() == RemoteHost.GITHUB ? "x-access-token" : "oauth2";
-                credentials = new UsernamePasswordCredentialsProvider(username, secret);
-                command.setCredentialsProvider(credentials);
-            }
-            try {
-                try (Git ignored = command.call()) {
-                    // CloneCommand has completed and resources are closed through Git.close().
-                }
-                budget.checkpoint();
-            } catch (Exception exception) {
-                IOException budgetFailure = monitor.failure();
-                if (budgetFailure != null) throw budgetFailure;
-                // A deadline exception raised through the HTTP proxy may be wrapped by JGit.
-                // Re-checking the monotonic absolute budget maps every such failure to the stable
-                // timeout contract rather than leaking transport-specific detail.
-                budget.enforceTimeout();
-                throw exception;
-            } finally {
-                if (credentials != null) credentials.clear();
-            }
-        }
-    }
-
-    private static final class CloneProgressMonitor implements ProgressMonitor {
-        private static final long MIN_CHECKPOINT_INTERVAL_NANOS = Duration.ofSeconds(1).toNanos();
-        private final CloneBudget budget;
-        private volatile IOException failure;
-        private int updates;
-        private long lastCheckpointNanos;
-
-        private CloneProgressMonitor(CloneBudget budget) { this.budget = budget; }
-        @Override public void start(int totalTasks) { checkpoint(true); }
-        @Override public void beginTask(String title, int totalWork) { checkpoint(false); }
-        @Override public void update(int completed) {
-            updates += Math.max(1, completed);
-            if (updates >= 1024) { updates = 0; checkpoint(false); }
-        }
-        @Override public void endTask() { checkpoint(true); }
-        @Override public boolean isCancelled() { checkpoint(false); return failure != null; }
-        public void showDuration(boolean enabled) { }
-        private void checkpoint(boolean force) {
-            if (failure != null) return;
-            long now = System.nanoTime();
-            if (!force && now - lastCheckpointNanos < MIN_CHECKPOINT_INTERVAL_NANOS) return;
-            try { budget.checkpoint(); }
-            catch (IOException exception) { failure = exception; }
-            finally { lastCheckpointNanos = now; }
-        }
-        private IOException failure() { return failure; }
     }
 
     private record CacheEntry(Path repositoryRoot, Properties metadata, Instant materializedAt) { }
-    private record TreeMetrics(long bytes, long files, long directories, long traversalEntries) { }
     private record EvictionCandidate(
             Path path, String cacheKey, Instant lastAccessAt, long size, boolean invalid) { }
 }

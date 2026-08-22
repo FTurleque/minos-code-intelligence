@@ -56,6 +56,10 @@ def main() -> int:
         key_provider = read("minos-storage-local/src/main/java/com/minos/store/EnvironmentHostedTenantKeyProvider.java")
         store = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+        runtime_config = read(
+            "minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java")
+        app_assembler = read(
+            "minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
         command = read("minos-cli/src/main/java/com/minos/cli/TeamCommand.java")
         api = read("minos-api/src/main/java/com/minos/api/MinosTeamApi.java")
         api_impl = read("minos-api/src/main/java/com/minos/api/LocalMinosTeamApi.java")
@@ -87,9 +91,15 @@ def main() -> int:
         require("HostedMembershipService.java", membership_service,
                 "cannot remove or demote the last tenant owner")
         forbid("HostedControlPlaneService.java", service, "ProjectDiscoveryService", "ProviderCapability")
-        require("MinosApplication.java", app, 'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"',
-                '"enabled"', 'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
-                "hostedControlPlaneService")
+        require("MinosApplication.java", app,
+                'HOSTED_MODE_ENV = "MINOS_HOSTED_MODE"', "hostedControlPlaneService",
+                "MinosApplicationRuntimeConfiguration.apply(settings, builder)")
+        require("MinosApplicationRuntimeConfiguration.java", runtime_config,
+                '"enabled"', '"disabled"', "hostedTenantKeyProvider",
+                "new EnvironmentHostedTenantKeyProvider")
+        require("MinosApplicationAssembler.java", app_assembler,
+                'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
+                "new HostedControlPlaneService", "FileHostedControlPlaneStore")
 
         require("TeamCommand.java", command, 'TOKEN_ENVIRONMENT_VARIABLE = "MINOS_TEAM_TOKEN"',
                 "bearer tokens are accepted only through", "workspace-create", "member-grant", "project-bind",

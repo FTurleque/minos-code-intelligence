@@ -18,6 +18,26 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.minos.mcp.McpToolSchemas.architectureGraphSchema;
+import static com.minos.mcp.McpToolSchemas.emptySchema;
+import static com.minos.mcp.McpToolSchemas.hybridContextSchema;
+import static com.minos.mcp.McpToolSchemas.hybridSearchSchema;
+import static com.minos.mcp.McpToolSchemas.impactSchema;
+import static com.minos.mcp.McpToolSchemas.moduleSchema;
+import static com.minos.mcp.McpToolSchemas.programGraphSchema;
+import static com.minos.mcp.McpToolSchemas.projectSchema;
+import static com.minos.mcp.McpToolSchemas.relationSchema;
+import static com.minos.mcp.McpToolSchemas.runtimeReportSchema;
+import static com.minos.mcp.McpToolSchemas.runtimeSessionsSchema;
+import static com.minos.mcp.McpToolSchemas.runtimeSymbolSchema;
+import static com.minos.mcp.McpToolSchemas.searchSchema;
+import static com.minos.mcp.McpToolSchemas.securitySchema;
+import static com.minos.mcp.McpToolSchemas.semanticSearchSchema;
+import static com.minos.mcp.McpToolSchemas.symbolContextSchema;
+import static com.minos.mcp.McpToolSchemas.symbolSearchSchema;
+import static com.minos.mcp.McpToolSchemas.teamAuditSchema;
+import static com.minos.mcp.McpToolSchemas.teamWorkspaceSchema;
+
 /** MCP catalogue mapping protocol arguments directly to shared application services. */
 public final class MinosMcpTools implements AutoCloseable {
 
@@ -393,205 +413,9 @@ public final class MinosMcpTools implements AutoCloseable {
         return arguments == null ? Map.of() : arguments;
     }
 
-    private static String projectSchema() {
-        return objectSchema(projectProperty(), "\"project\"");
-    }
-
-    private static String moduleSchema() {
-        return objectSchema(projectProperty() + "," + moduleProperty(), "\"project\",\"module\"");
-    }
-
-    private static String architectureGraphSchema() {
-        return objectSchema(
-                projectProperty() + "," + moduleProperty() + "," +
-                        "\"format\":{\"type\":\"string\",\"enum\":[\"json\",\"mermaid\",\"dot\"]}",
-                "\"project\"");
-    }
-
-    private static String relationSchema() {
-        return objectSchema(
-                projectProperty() + "," + symbolIdProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
-                "\"project\",\"symbolId\"");
-    }
-
-    private static String symbolSearchSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() +
-                        ",\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
-                "\"project\",\"query\"");
-    }
-
-    private static String searchSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":20}," +
-                        "\"depth\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":3}," +
-                        "\"usages\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
-                        "\"relationships\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
-                        "\"contextLines\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
-                        "\"maxTokens\":{\"type\":\"integer\",\"minimum\":256,\"maximum\":32768}," +
-                        "\"includeSource\":{\"type\":\"boolean\"}",
-                "\"project\",\"query\"");
-    }
-
-    private static String symbolContextSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," + commonSymbolProperties() + "," +
-                        "\"depth\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":3}," +
-                        "\"contextLines\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":50}," +
-                        "\"maxTokens\":{\"type\":\"integer\",\"minimum\":256,\"maximum\":32768}," +
-                        "\"includeSource\":{\"type\":\"boolean\"}",
-                "\"project\",\"query\"");
-    }
-
-    private static String impactSchema() {
-        return objectSchema(
-                projectProperty() + "," + symbolIdProperty() + "," +
-                        "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}",
-                "\"project\",\"symbolId\"");
-    }
-
-    private static String programGraphSchema() {
-        return objectSchema(
-                projectProperty() + "," +
-                        "\"maxNodes\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}," +
-                        "\"maxEdges\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50000}",
-                "\"project\"");
-    }
-
-    private static String securitySchema() {
-        return objectSchema(
-                projectProperty() + "," + sourceNodeIdProperty() + "," +
-                        "\"depth\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":32}," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
-                "\"project\"");
-    }
-
-    private static String semanticSearchSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}," +
-                        "\"minimumScore\":{\"type\":\"number\",\"minimum\":-1,\"maximum\":1}",
-                "\"project\",\"query\"");
-    }
-
-    private static String hybridSearchSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500}," +
-                        "\"minimumScore\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1}",
-                "\"project\",\"query\"");
-    }
-
-    private static String hybridContextSchema() {
-        return objectSchema(
-                projectProperty() + "," + queryProperty() + "," +
-                        "\"maxDocuments\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}," +
-                        "\"maxTokens\":{\"type\":\"integer\",\"minimum\":128,\"maximum\":65536}," +
-                        "\"maxTokensPerDocument\":{\"type\":\"integer\",\"minimum\":32,\"maximum\":65536}",
-                "\"project\",\"query\"");
-    }
-
-    private static String runtimeSessionsSchema() {
-        return objectSchema(
-                projectProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":128}",
-                "\"project\"");
-    }
-
-    private static String runtimeReportSchema() {
-        return objectSchema(
-                projectProperty() + "," + sessionIdProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
-                "\"project\"");
-    }
-
-    private static String runtimeSymbolSchema() {
-        return objectSchema(
-                projectProperty() + "," + symbolIdProperty() + "," + sessionIdProperty() + "," +
-                        "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}",
-                "\"project\",\"symbolId\"");
-    }
-
     private static int teamAuditLimit(Map<String, Object> args) {
         Integer value = optionalInteger(args, ARG_LIMIT, 1, 10_000);
         return value == null ? 200 : value;
-    }
-
-    private static String emptySchema() {
-        return objectSchema("", "");
-    }
-
-    private static String teamWorkspaceSchema() {
-        return objectSchema(
-                stringProperty("workspaceId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES, "\"format\":\"uuid\""),
-                "\"workspaceId\"");
-    }
-
-    private static String teamAuditSchema() {
-        return objectSchema("\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}", "");
-    }
-
-    private static String commonSymbolProperties() {
-        return stringProperty("qualifiedName", McpArgumentBounds.QUALIFIED_NAME_MAX_UTF8_BYTES) + "," +
-                stringProperty("kind", McpArgumentBounds.KIND_MAX_UTF8_BYTES) + "," +
-                moduleProperty();
-    }
-
-    private static String projectProperty() {
-        return stringProperty("project", McpArgumentBounds.PROJECT_REFERENCE_MAX_UTF8_BYTES);
-    }
-
-    private static String queryProperty() {
-        return stringProperty("query", McpArgumentBounds.QUERY_MAX_UTF8_BYTES);
-    }
-
-    private static String symbolIdProperty() {
-        return stringProperty("symbolId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES);
-    }
-
-    private static String sourceNodeIdProperty() {
-        return stringProperty("sourceNodeId", McpArgumentBounds.SCIP_SYMBOL_ID_MAX_UTF8_BYTES);
-    }
-
-    private static String sessionIdProperty() {
-        return stringProperty("sessionId", McpArgumentBounds.HANDLE_MAX_UTF8_BYTES);
-    }
-
-    private static String moduleProperty() {
-        return stringProperty(ARG_MODULE, McpArgumentBounds.MODULE_NAME_MAX_UTF8_BYTES);
-    }
-
-    private static String stringProperty(String name, int maxUtf8Bytes) {
-        return stringProperty(name, maxUtf8Bytes, null);
-    }
-
-    /**
-     * Publishes one bounded string argument.
-     *
-     * <p>{@code maxLength} is a character count and is derived through {@link
-     * McpArgumentBounds#schemaMaxCharacters} rather than being the byte budget under a misleading
-     * name; the budget MINOS actually enforces is stated in the description, because JSON Schema has
-     * no keyword for a byte length. A client that honours the schema is never rejected for a length
-     * it was told was valid, and a client that ignores it still meets {@link #bounded} on the
-     * server.</p>
-     */
-    private static String stringProperty(String name, int maxUtf8Bytes, String extraKeywords) {
-        return "\"" + name + "\":{\"type\":\"string\","
-                + (extraKeywords == null || extraKeywords.isBlank() ? "" : extraKeywords + ",")
-                + "\"minLength\":1,"
-                + "\"maxLength\":" + McpArgumentBounds.schemaMaxCharacters(maxUtf8Bytes) + ","
-                + "\"description\":\"UTF-8 text; the server accepts at most " + maxUtf8Bytes
-                + " UTF-8 bytes, which is fewer characters than maxLength when the value is not ASCII.\"}";
-    }
-
-    private static String objectSchema(String properties, String required) {
-        return "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"," +
-                "\"type\":\"object\",\"properties\":{" + properties + "}," +
-                (required.isEmpty() ? "" : "\"required\":[" + required + "],") +
-                "\"additionalProperties\":false}";
     }
 
     @FunctionalInterface
