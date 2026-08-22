@@ -1,4 +1,5 @@
 #minos-include:script-preamble
+#minos-include:appcontainer-private-storage-usings
 public static class MinosAppContainerNativeV3 {
     private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
@@ -178,8 +179,10 @@ public static class MinosAppContainerNativeV3 {
         if (hr < 0) Marshal.ThrowExceptionForHR(hr);
     }
 
+#minos-include:appcontainer-private-storage
     public static int RunSandbox(
         string profileName,
+        string profileSid,
         string[] command,
         string[] environment,
         string workingDirectory,
@@ -187,9 +190,13 @@ public static class MinosAppContainerNativeV3 {
         uint activeProcesses,
         uint cpuRate,
         ulong jobCpuSeconds,
+        ulong privateStorageMaxBytes,
+        ulong privateStorageMaxEntries,
+        uint privateStorageSampleMillis,
         bool allowNetwork) {
         if (command == null || command.Length == 0) throw new ArgumentException("command is empty");
         if (environment == null) throw new ArgumentNullException("environment");
+        if (String.IsNullOrWhiteSpace(profileSid)) throw new ArgumentException("profile SID is blank");
         IntPtr sid = IntPtr.Zero;
         IntPtr attributeList = IntPtr.Zero;
         IntPtr securityCapabilitiesPtr = IntPtr.Zero;
@@ -197,10 +204,13 @@ public static class MinosAppContainerNativeV3 {
         IntPtr internetClientSid = IntPtr.Zero;
         IntPtr environmentBlock = IntPtr.Zero;
         IntPtr job = IntPtr.Zero;
+        ManualResetEvent privateStorageStop = new ManualResetEvent(false);
+        Thread privateStorageThread = null;
         PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
         try {
             int hr = DeriveAppContainerSidFromAppContainerName(profileName, out sid);
             if (hr < 0) Marshal.ThrowExceptionForHR(hr);
+            DenyPrivateRegistryWrites(profileName, profileSid);
 
             if (allowNetwork) {
                 if (!ConvertStringSidToSid("S-1-15-3-1", out internetClientSid)) {
@@ -296,13 +306,23 @@ public static class MinosAppContainerNativeV3 {
             if (!inJob) {
                 throw new InvalidOperationException("sandbox process is not a member of the MINOS job object");
             }
+            privateStorageThread = StartPrivateFileStorageSupervisor(
+                    profileSid,
+                    job,
+                    privateStorageMaxBytes,
+                    privateStorageMaxEntries,
+                    privateStorageSampleMillis,
+                    privateStorageStop);
 #minos-include:resume-and-verify
+                privateStorageStop.Set();
                 // No descendant may outlive the job, whatever the outcome was.
                 TerminateJobObject(job, 1);
+                if (privateStorageThread != null) privateStorageThread.Join(1000);
             }
             if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
             if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
             if (job != IntPtr.Zero) CloseHandle(job);
+            privateStorageStop.Dispose();
             if (environmentBlock != IntPtr.Zero) Marshal.FreeHGlobal(environmentBlock);
             if (attributeList != IntPtr.Zero) {
                 DeleteProcThreadAttributeList(attributeList);
@@ -504,6 +524,9 @@ $memoryBytes = [UInt64]$values['jobMemoryBytes']
 $activeProcesses = [UInt32]$values['activeProcesses']
 $cpuRate = [UInt32]$values['cpuRate']
 $jobCpuSeconds = [UInt64]$values['jobCpuSeconds']
+$privateStorageMaxBytes = [UInt64]$values['privateStorageMaxBytes']
+$privateStorageMaxEntries = [UInt64]$values['privateStorageMaxEntries']
+$privateStorageSampleMillis = [UInt32]$values['privateStorageSampleMillis']
 $networkPolicy = [string]$values['networkPolicy']
 if ($networkPolicy -ne 'ALLOW' -and $networkPolicy -ne 'DENY') {
     throw "Invalid sandbox network policy: $networkPolicy"
@@ -537,6 +560,7 @@ try {
     }
     $exitCode = [MinosAppContainerNativeV3]::RunSandbox(
         $containerProfile,
+        $sid,
         $command,
         $environment,
         $workingDirectory,
@@ -544,6 +568,9 @@ try {
         $activeProcesses,
         $cpuRate,
         $jobCpuSeconds,
+        $privateStorageMaxBytes,
+        $privateStorageMaxEntries,
+        $privateStorageSampleMillis,
         ($networkPolicy -eq 'ALLOW'))
     exit $exitCode
 }

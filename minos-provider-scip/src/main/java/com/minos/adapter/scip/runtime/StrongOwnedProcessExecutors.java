@@ -33,8 +33,16 @@ final class StrongOwnedProcessExecutors {
     }
 
     /**
-     * Downgrades an otherwise-ready runtime when the host cannot provide both strong descendant
-     * ownership and the qualified managed-local-provider sandbox used by production local indexing.
+     * Downgrades an otherwise-ready runtime unless the exact sandbox selected by managed local
+     * execution is qualified on this host.
+     *
+     * <p>The three-argument {@link StrongProcessOwnershipIndexerExecutor} does not execute through
+     * its ownership-only boundary. It copies the project and then delegates directly to
+     * {@link WorkerSandboxBackends#strongestAvailableForManagedLocalProvider(Path)}. Requiring a
+     * second, unused ownership-only capability here would make READY describe a different execution
+     * path from the one production actually uses. The managed sandbox already requires aggregate
+     * process/memory/CPU and descendant ownership to be OS-enforced, so it is the single readiness
+     * authority for this composition.</p>
      *
      * <p>This deliberately does not require {@code supportsUntrustedCode()}: the current Linux and
      * Windows backends enforce filesystem quotas through a supervised hard kill rather than a kernel
@@ -43,27 +51,19 @@ final class StrongOwnedProcessExecutors {
      */
     static ProviderRuntimeStatus qualifyOwnership(ProviderRuntimeStatus status, Path minosHome) {
         if (!status.ready()) return status;
-        StrongProcessOwnershipIndexerExecutor.Capability ownership =
-                StrongProcessOwnershipIndexerExecutor.detectCapability(minosHome);
         WorkerSandboxBackend sandbox = WorkerSandboxBackends
                 .strongestAvailableForManagedLocalProvider(minosHome);
-        return qualifyOwnership(status, ownership, sandbox);
+        return qualifySandbox(status, sandbox);
     }
 
     /** Package-visible seam used to lock the production composition contract without OS assumptions. */
-    static ProviderRuntimeStatus qualifyOwnership(
+    static ProviderRuntimeStatus qualifySandbox(
             ProviderRuntimeStatus status,
-            StrongProcessOwnershipIndexerExecutor.Capability ownership,
             WorkerSandboxBackend sandbox
     ) {
         Objects.requireNonNull(status, "status");
-        Objects.requireNonNull(ownership, "ownership");
         Objects.requireNonNull(sandbox, "sandbox");
         if (!status.ready()) return status;
-        if (!ownership.strong()) {
-            return blocked(status, "strong process ownership is unavailable (" + ownership.mechanism() + "): "
-                    + String.join("; ", ownership.diagnostics()));
-        }
         if (!sandbox.supportsManagedLocalProvider()) {
             return blocked(status, "qualified managed local provider sandbox is unavailable: " + sandbox.id());
         }

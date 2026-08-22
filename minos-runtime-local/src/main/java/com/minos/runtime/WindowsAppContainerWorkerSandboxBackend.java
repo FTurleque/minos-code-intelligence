@@ -1,12 +1,13 @@
 package com.minos.runtime;
 
+import com.minos.io.FileTreeOperations;
+import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
-import com.minos.io.PrivateLocalStorage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,6 +24,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Windows worker sandbox backed by an AppContainer token and a Job Object.
@@ -31,6 +36,12 @@ import java.util.Set;
  * roots. Arbitrary provider file arguments never cause their complete parent directory (notably a
  * user profile) to become readable. A recovery journal allows the next sandbox launch to reconcile
  * ACL/profile residue left by a forcibly terminated wrapper.</p>
+ *
+ * <p>Windows also gives every AppContainer its own implicit file/registry storage. That storage is
+ * not one of the ACL roots visible to the Java-side quota supervisor, so the launcher supervises it
+ * inside the same Job Object boundary. The global provider budget is split between the explicit
+ * MINOS roots and this private AppContainer storage; the two independent ceilings therefore still
+ * sum to at most {@link ProviderWriteQuota#DEFAULT}.</p>
  */
 public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSandboxBackend {
 
@@ -40,8 +51,20 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     /** Aggregate job CPU seconds granted per wall-clock second of the provider timeout. */
     static final long JOB_CPU_SECONDS_PER_WALL_CLOCK_SECOND = 8L;
 
+    /** Reserved part of the global write budget for implicit AppContainer file/registry storage. */
+    static final long PRIVATE_STORAGE_MAX_BYTES = 1L * 1024L * 1024L * 1024L;
+    static final long PRIVATE_STORAGE_MAX_ENTRIES = 50_000L;
+    static final long PRIVATE_STORAGE_SAMPLE_MILLIS =
+            ProviderWriteQuota.DEFAULT_SAMPLE_PERIOD.toMillis();
+    static final ProviderWriteQuota EXPLICIT_ROOT_WRITE_QUOTA = new ProviderWriteQuota(
+            ProviderWriteQuota.DEFAULT_MAX_BYTES - PRIVATE_STORAGE_MAX_BYTES,
+            ProviderWriteQuota.DEFAULT_MAX_ENTRIES - PRIVATE_STORAGE_MAX_ENTRIES,
+            ProviderWriteQuota.DEFAULT_SAMPLE_PERIOD);
+
+    private static final String SANDBOX_DIRECTORY = "sandbox";
     private static final String LAUNCHER_SCRIPT_NAME = "windows-appcontainer-sandbox-v4.ps1";
     private static final String RESOURCE = "/com/minos/runtime/" + LAUNCHER_SCRIPT_NAME;
+    private static final Map<Path, Boolean> CAPABILITY_PROBE_CACHE = new ConcurrentHashMap<>();
 
     private static final System.Logger LOGGER =
             System.getLogger(WindowsAppContainerWorkerSandboxBackend.class.getName());
@@ -64,7 +87,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Optional<Path> shell = CommandLocator.windowsPowerShell();
         if (shell.isEmpty()) return Optional.empty();
         try {
-            return Optional.of(new WindowsAppContainerWorkerSandboxBackend(minosHome, shell.orElseThrow()));
+            Path home = minosHome.toAbsolutePath().normalize();
+            WindowsAppContainerWorkerSandboxBackend candidate =
+                    new WindowsAppContainerWorkerSandboxBackend(home, shell.orElseThrow());
+            boolean qualified = CAPABILITY_PROBE_CACHE.computeIfAbsent(home, ignored -> candidate.probeOsIsolation());
+            if (!qualified) {
+                LOGGER.log(System.Logger.Level.WARNING,
+                        "MINOS Windows AppContainer worker sandbox is unavailable: the real AppContainer/Job Object "
+                                + "capability probe failed; managed provider execution stays fail-closed");
+                return Optional.empty();
+            }
+            return Optional.of(candidate);
         } catch (IOException | IllegalArgumentException exception) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
@@ -127,6 +160,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         "WINDOWS_JOB_ACTIVE_PROCESS_LIMIT",
                         "WINDOWS_JOB_MEMORY_LIMIT",
                         "WINDOWS_JOB_CPU_HARD_CAP_AND_AGGREGATE_JOB_TIME_LIMIT",
+                        "WINDOWS_APPCONTAINER_PRIVATE_FILE_AND_REGISTRY_STORAGE_SUPERVISED",
+                        "WINDOWS_RUNTIME_CAPABILITY_PROBE_REQUIRED",
                         "MINOS_SUPERVISED_PROVIDER_WRITE_QUOTA_BYTES_AND_ENTRIES",
                         "MINOS_WALL_CLOCK_TIMEOUT_AND_RUN_RESIDUE_RECLAMATION"));
     }
@@ -148,9 +183,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         "JOB_OBJECT_LIMIT_JOB_MEMORY",
                         "JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP",
                         "JOB_OBJECT_LIMIT_JOB_TIME",
-                        "JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE",
+                        "JOB_OBJECT_LIMIT_KILL_ON_CLOSE",
                         "TERMINATE_JOB_OBJECT_ON_EVERY_EXIT_PATH",
                         "MINOS_PROVIDER_WRITE_QUOTA_SUPERVISOR",
+                        "MINOS_APPCONTAINER_PRIVATE_STORAGE_QUOTA_SUPERVISOR",
                         "MINOS_WALL_CLOCK_TIMEOUT",
                         "MINOS_RUN_RESIDUE_RECLAMATION"));
     }
@@ -186,7 +222,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
 
                     @Override
                     public Optional<ProviderWriteQuota> providerWriteQuota() {
-                        return Optional.of(ProviderWriteQuota.DEFAULT);
+                        return Optional.of(EXPLICIT_ROOT_WRITE_QUOTA);
                     }
                 });
     }
@@ -234,7 +270,8 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 new ProcessBuilder().environment(),
                 plan.environment());
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
-        Path recovery = minosHome.resolve("sandbox").resolve("appcontainer-recovery").toAbsolutePath().normalize();
+        Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
+                .resolve("appcontainer-recovery").toAbsolutePath().normalize();
         Files.createDirectories(recovery);
         writePlan(
                 planFile,
@@ -267,8 +304,79 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                 plan.timeout());
     }
 
+    /**
+     * Executes the actual packaged launcher with a harmless suspended child. A host is never
+     * reported as qualified merely because PowerShell and the launcher file exist: profile creation,
+     * AppContainer token creation, Job Object configuration/read-back, assignment and resume must
+     * all succeed once per MINOS home/JVM.
+     */
+    private boolean probeOsIsolation() {
+        Path probeRoot = minosHome.resolve(SANDBOX_DIRECTORY)
+                .resolve("appcontainer-probe-" + Long.toHexString(System.nanoTime()))
+                .toAbsolutePath().normalize();
+        try {
+            Path working = Files.createDirectories(probeRoot.resolve("working"));
+            Path run = Files.createDirectories(probeRoot.resolve("run"));
+            IndexerProcessPlan original = new IndexerProcessPlan(
+                    List.of(
+                            powershell.toString(),
+                            "-NoLogo",
+                            "-NoProfile",
+                            "-NonInteractive",
+                            "-Command",
+                            "exit 0"),
+                    working,
+                    Map.of(),
+                    run.resolve("probe.scip"),
+                    Duration.ofSeconds(15));
+            IndexerProcessPlan sandboxed = sandboxPlan(original, run, WorkerNetworkPolicy.DENY);
+            Process process = new ProcessBuilder(sandboxed.command())
+                    .directory(working.toFile())
+                    .redirectErrorStream(true)
+                    .start();
+            if (!awaitProbeCompletion(process, Duration.ofSeconds(15))) {
+                ProcessTreeTermination.terminateTree(process, Duration.ZERO, Duration.ofSeconds(5));
+                LOGGER.log(System.Logger.Level.WARNING, "MINOS Windows AppContainer capability probe timed out");
+                return false;
+            }
+            return probeExitedCleanly(process);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (IOException | RuntimeException exception) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Windows AppContainer capability probe could not complete", exception);
+            return false;
+        } finally {
+            try {
+                FileTreeOperations.deleteRecursively(probeRoot);
+            } catch (IOException ignored) {
+                // Disposable probe residue is beneath MINOS_HOME/sandbox and can be reclaimed later.
+            }
+        }
+    }
+
+    private static boolean awaitProbeCompletion(Process process, Duration timeout) throws InterruptedException {
+        try {
+            process.onExit().get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return true;
+        } catch (TimeoutException timeoutException) {
+            return false;
+        } catch (ExecutionException failure) {
+            throw new IllegalStateException("AppContainer capability probe completion failed", failure.getCause());
+        }
+    }
+
+    private static boolean probeExitedCleanly(Process process) throws IOException {
+        String output = new String(process.getInputStream().readNBytes(8192), StandardCharsets.UTF_8).trim();
+        if (process.exitValue() == 0) return true;
+        LOGGER.log(System.Logger.Level.WARNING,
+                "MINOS Windows AppContainer capability probe failed (exit=" + process.exitValue() + "): " + output);
+        return false;
+    }
+
     private static Path installLauncher(Path minosHome) throws IOException {
-        Path directory = minosHome.resolve("sandbox").toAbsolutePath().normalize();
+        Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
         Files.createDirectories(directory);
         Path target = directory.resolve(LAUNCHER_SCRIPT_NAME);
         // Assembled from its template and the shared Win32 fragments, then published as one
@@ -310,6 +418,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         lines.add("activeProcesses=" + MAX_ACTIVE_PROCESSES);
         lines.add("cpuRate=" + CPU_HARD_CAP);
         lines.add("jobCpuSeconds=" + jobCpuSeconds);
+        lines.add("privateStorageMaxBytes=" + PRIVATE_STORAGE_MAX_BYTES);
+        lines.add("privateStorageMaxEntries=" + PRIVATE_STORAGE_MAX_ENTRIES);
+        lines.add("privateStorageSampleMillis=" + PRIVATE_STORAGE_SAMPLE_MILLIS);
         Files.write(target, lines, StandardCharsets.UTF_8);
     }
 

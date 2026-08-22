@@ -6,7 +6,6 @@ import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.runtime.ProviderRuntimeStatus;
-import com.minos.runtime.StrongProcessOwnershipIndexerExecutor;
 import com.minos.runtime.WorkerResourceContainment;
 import com.minos.runtime.WorkerSandboxBackend;
 import com.minos.runtime.WorkerSandboxQualification;
@@ -24,37 +23,12 @@ class StrongOwnedProcessExecutorsQualificationTest {
 
     @Test
     void supervisedFilesystemQuotaKeepsManagedLocalProviderReadyWithoutClaimingHostileCode() {
-        WorkerResourceContainment containment = new WorkerResourceContainment(
-                "fixture-local-provider-boundary",
-                WorkerResourceContainment.Disposition.OS_ENFORCED,
-                WorkerResourceContainment.Disposition.OS_ENFORCED,
-                WorkerResourceContainment.Disposition.OS_ENFORCED,
-                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                WorkerResourceContainment.Disposition.OS_ENFORCED,
-                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                List.of("fixture"));
-        WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+        WorkerSandboxBackend backend = qualifiedBackend(
                 "fixture-local-provider",
-                WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
-                WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
-                WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
-                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
-                containment,
-                Map.of(
-                        WorkerSandboxQualification.currentPlatform(),
-                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
-                List.of());
-        WorkerSandboxBackend backend = backend(qualification);
-        ProviderRuntimeStatus ready = new ProviderRuntimeStatus(
-                "fixture-provider", "1.0.0", ProviderRuntimeStatus.State.READY,
-                Optional.of(Path.of("fixture-provider")), List.of());
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED);
+        ProviderRuntimeStatus ready = readyStatus();
 
-        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifyOwnership(
-                ready,
-                StrongProcessOwnershipIndexerExecutor.Capability.available("fixture-job-boundary"),
-                backend);
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(ready, backend);
 
         assertFalse(backend.supportsUntrustedCode(),
                 "supervised filesystem quotas must not become hostile-code support");
@@ -65,19 +39,61 @@ class StrongOwnedProcessExecutorsQualificationTest {
     }
 
     @Test
-    void missingOsSandboxStillBlocksManagedLocalProvider() {
-        ProviderRuntimeStatus ready = new ProviderRuntimeStatus(
-                "fixture-provider", "1.0.0", ProviderRuntimeStatus.State.READY,
-                Optional.of(Path.of("fixture-provider")), List.of());
+    void managedReadinessDependsOnTheSandboxActuallyUsedAtExecution() {
+        WorkerSandboxBackend backend = qualifiedBackend(
+                "fixture-execution-sandbox",
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED);
 
-        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifyOwnership(
-                ready,
-                StrongProcessOwnershipIndexerExecutor.Capability.available("fixture-job-boundary"),
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(readyStatus(), backend);
+
+        assertTrue(qualified.ready(),
+                "an unrelated ownership-only launcher must not be a second READY authority for managed execution");
+    }
+
+    @Test
+    void missingOsSandboxStillBlocksManagedLocalProvider() {
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                readyStatus(),
                 WorkerSandboxBackend.nativeEphemeralWorkspace());
 
         assertFalse(qualified.ready());
         assertTrue(qualified.diagnostics().stream()
                 .anyMatch(value -> value.contains("qualified managed local provider sandbox is unavailable")));
+    }
+
+    private static ProviderRuntimeStatus readyStatus() {
+        return new ProviderRuntimeStatus(
+                "fixture-provider", "1.0.0", ProviderRuntimeStatus.State.READY,
+                Optional.of(Path.of("fixture-provider")), List.of());
+    }
+
+    private static WorkerSandboxBackend qualifiedBackend(
+            String backendId,
+            WorkerSandboxQualification.TrustDisposition trustDisposition
+    ) {
+        WorkerResourceContainment containment = new WorkerResourceContainment(
+                "fixture-qualified-job",
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                WorkerResourceContainment.Disposition.OS_ENFORCED,
+                WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                List.of("fixture"));
+        WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+                backendId,
+                WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
+                WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                trustDisposition,
+                containment,
+                Map.of(
+                        WorkerSandboxQualification.currentPlatform(),
+                        WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                List.of());
+        return backend(qualification);
     }
 
     private static WorkerSandboxBackend backend(WorkerSandboxQualification qualification) {

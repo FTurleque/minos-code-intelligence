@@ -82,6 +82,6 @@ class WorkerResourceContainmentTest {
         assertFalse(linux.qualifiedForUntrustedCode());
         assertFalse(windows.qualifiedForUntrustedCode());
         assertTrue(linux.evidence().contains("CGROUP_V2_CGROUP_KILL"));
-        assertTrue(windows.evidence().contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE"));
+        assertTrue(windows.evidence().contains("JOB_OBJECT_LIMIT_KILL_ON_CLOSE"));
     }
 }
