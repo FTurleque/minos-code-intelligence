@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Splitting a containment launcher into shared fragments is only safe if assembly reproduces the
  * script that was reviewed and qualified. The golden copies remain the pre-remediation qualified
- * baseline. After normalizing platform line endings, the accepted drift is limited to the explicit
- * one-shot deletion of the credential-bearing plan and, for AppContainer only, the separately
- * fingerprinted private-storage hardening introduced after that baseline. Any other content drift
- * remains a test failure.
+ * baseline. After normalizing platform and terminal line endings, the accepted drift is limited to
+ * the explicit one-shot deletion of the credential-bearing plan and, for AppContainer only, the
+ * separately fingerprinted private-storage hardening introduced after that baseline. Any other
+ * content drift remains a test failure.
  */
 class WindowsContainmentScriptTest {
 
@@ -84,7 +84,7 @@ class WindowsContainmentScriptTest {
     }
 
     private static void assertAssemblesToQualifiedBaseline(String launcher) throws Exception {
-        String golden = normalizeLineEndings(new String(readGolden(launcher), StandardCharsets.UTF_8));
+        String golden = normalizeScriptText(new String(readGolden(launcher), StandardCharsets.UTF_8));
         int marker = golden.indexOf(QUALIFIED_PLAN_RETURN);
         assertTrue(marker >= 0, launcher + " qualified baseline lost the plan return marker");
         assertEquals(marker, golden.lastIndexOf(QUALIFIED_PLAN_RETURN),
@@ -92,7 +92,7 @@ class WindowsContainmentScriptTest {
         String expected = golden.substring(0, marker)
                 + APPROVED_PLAN_CONSUMPTION
                 + golden.substring(marker + QUALIFIED_PLAN_RETURN.length());
-        String assembled = normalizeLineEndings(WindowsContainmentScript.assemble(launcher));
+        String assembled = normalizeScriptText(WindowsContainmentScript.assemble(launcher));
         if ("windows-appcontainer-sandbox-v4.ps1".equals(launcher)) {
             assembled = removeApprovedPrivateStorageHardening(assembled);
         }
@@ -225,6 +225,11 @@ class WindowsContainmentScriptTest {
             hex.append(Character.forDigit(item & 0x0f, 16));
         }
         return hex.toString();
+    }
+
+    private static String normalizeScriptText(String value) {
+        String normalized = normalizeLineEndings(value);
+        return normalized.endsWith("\n") ? normalized : normalized + "\n";
     }
 
     private static String normalizeLineEndings(String value) {
