@@ -20,7 +20,6 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.program.analysis.ProgramGraphProvider;
-import com.minos.program.analysis.ProgramGraphService;
 import com.minos.registry.ProjectRegistry;
 import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -108,7 +107,8 @@ final class MinosApplicationAssembler {
             GitIntelligenceService effectiveGit = builder.gitIntelligence != null
                     ? builder.gitIntelligence : new GitIntelligenceService();
             List<ProgramGraphProvider> effectiveProgramGraphProviders = builder.programGraphProviders != null
-                    ? builder.programGraphProviders : ProgramGraphService.productionProviders(effectiveFingerprints);
+                    ? builder.programGraphProviders
+                    : MinosApplication.productionProgramGraphProviders(effectiveFingerprints);
             Optional<HostedControlPlaneService> effectiveHosted = hostedControlPlane(
                     builder, home, effectiveSnapshots);
 
