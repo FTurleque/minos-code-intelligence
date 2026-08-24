@@ -118,6 +118,10 @@ Require 'SaveStringToFile(ScriptPath, ScriptText, False)' 'Uninstall payload cle
 # this installer must support) would corrupt the reconstructed script text.
 Forbid '-ExecutionPolicy Bypass -Command "& {param($InstallRoot' 'Uninstall payload cleanup must not pass {app} through -Command''s trailing-argument reparsing -- use -File with a real script file instead.'
 Require '''''app'''',''''lib'''',''''docker'''',''''integration'''',''''supply-chain''''' 'Uninstall payload cleanup does not enumerate the managed program directories.'
+# Inno's own "remove {app} if empty" pass runs during usUninstall, before
+# this usPostUninstall cleanup has emptied it -- without an explicit final
+# removal here, the (now genuinely empty) install root is left behind.
+Require 'Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue' 'Uninstall payload cleanup does not remove the install root itself once it is empty.'
 Require 'RemoveMinosProgramPayload;' 'Uninstaller does not invoke managed-directory payload cleanup at usPostUninstall.'
 
 # Uninstall must preserve user data by default, offer an explicit destructive

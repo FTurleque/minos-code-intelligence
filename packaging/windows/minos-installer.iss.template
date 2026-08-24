@@ -1102,6 +1102,16 @@ begin
     'foreach ($name in $Names) {' + #13#10 +
     '    $p = Join-Path $InstallRoot $name' + #13#10 +
     '    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }' + #13#10 +
+    '}' + #13#10 +
+    // Inno's own "remove {app} if empty" check runs earlier, during
+    // usUninstall, before this usPostUninstall cleanup has had a chance to
+    // empty it (the managed files were still there when Inno checked) -- so
+    // the now-empty root is never revisited unless removed explicitly here.
+    // Only fires when truly empty: anything unexpected/foreign left behind
+    // is left alone, same as everywhere else in this script.
+    'if (Test-Path -LiteralPath $InstallRoot) {' + #13#10 +
+    '    $remaining = @(Get-ChildItem -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue)' + #13#10 +
+    '    if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue }' + #13#10 +
     '}' + #13#10;
   ScriptPath := ExpandConstant('{tmp}\uninstall-program-payload-inline.ps1');
   if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
