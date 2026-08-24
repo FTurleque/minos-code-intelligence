@@ -310,7 +310,9 @@ foreach ($IntegrationScript in @(
     'detect-mcp-clients.ps1',
     'uninstall-mcp-clients.ps1',
     'probe-mcp-backend.ps1',
-    'switch-mcp-backend.ps1'
+    'switch-mcp-backend.ps1',
+    'update-installation.ps1',
+    'uninstall-program-payload.ps1'
 )) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts\install\$IntegrationScript") `
         -Destination (Join-Path $IntegrationDirectory $IntegrationScript) -Force

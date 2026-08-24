@@ -73,6 +73,8 @@ foreach ($Required in @(
     'integration\uninstall-mcp-clients.ps1',
     'integration\probe-mcp-backend.ps1',
     'integration\switch-mcp-backend.ps1',
+    'integration\update-installation.ps1',
+    'integration\uninstall-program-payload.ps1',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',
@@ -149,9 +151,26 @@ New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out
 $GeneratedIss = Join-Path $InstallerWork $GeneratedIssName
 $Setup = Join-Path $InstallerOutput "$OutputBaseFilename.exe"
 $Checksum = "$Setup.sha256"
+# Fixed literal name, not version-suffixed: minos-installer.iss.template's
+# PrepareToInstall calls ExtractTemporaryFile('minos-payload.zip') by this
+# exact leaf name (dontcopy resources are resolved by source filename, not by
+# the full -PackageRoot/-InstallerWork path). Production and smoke builds run
+# sequentially and each removes its own copy in the `finally` block below, so
+# reusing this fixed name across both is safe.
+$PayloadZip = Join-Path $InstallerWork 'minos-payload.zip'
 
 Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $PayloadZip -Force -ErrorAction SilentlyContinue
+
+# The payload the transactional updater (update-installation.ps1, invoked from
+# PrepareToInstall) activates -- top-level entries so Expand-Archive at
+# install time reproduces $DistributionRoot's layout directly under
+# -PackageRoot, with no wrapping folder.
+Compress-Archive -Path (Join-Path $DistributionRoot '*') -DestinationPath $PayloadZip -CompressionLevel Optimal
+if (-not (Test-Path -LiteralPath $PayloadZip -PathType Leaf)) {
+    throw "MINOS installer payload zip was not produced: $PayloadZip"
+}
 
 function Escape-InnoString([string] $Value) {
     return $Value.Replace('"', '""')
@@ -188,6 +207,7 @@ $Iss = $Iss.Replace('@@APP_VERSION@@', (Escape-InnoString $NumericVersion))
 $Iss = $Iss.Replace('@@APP_ID@@', (Escape-InnoString $AppId))
 $Iss = $Iss.Replace('@@SMOKE_MODE@@', $SmokeMode)
 $Iss = $Iss.Replace('@@SOURCE_DIR@@', (Escape-InnoString $DistributionRoot))
+$Iss = $Iss.Replace('@@PAYLOAD_ZIP@@', (Escape-InnoString $PayloadZip))
 $Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $InstallerOutput))
 $Iss = $Iss.Replace('@@OUTPUT_BASENAME@@', (Escape-InnoString $OutputBaseFilename))
 if ($Iss -match '@@[A-Z0-9_]+@@') {
@@ -243,4 +263,5 @@ try {
 }
 finally {
     Remove-Item -LiteralPath $GeneratedIss -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $PayloadZip -Force -ErrorAction SilentlyContinue
 }

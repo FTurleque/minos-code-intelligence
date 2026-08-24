@@ -4,6 +4,7 @@
 #define MinosAppId "@@APP_ID@@"
 #define MinosSmokeMode @@SMOKE_MODE@@
 #define MinosSourceDir "@@SOURCE_DIR@@"
+#define MinosPayloadZip "@@PAYLOAD_ZIP@@"
 #define MinosOutputDir "@@OUTPUT_DIR@@"
 #define MinosOutputBaseFilename "@@OUTPUT_BASENAME@@"
 
@@ -25,6 +26,15 @@ SolidCompression=yes
 WizardStyle=modern
 ChangesEnvironment=yes
 SetupLogging=yes
+; An upgrade reuses the previous {app} directory -- PrepareToInstall below
+; delegates the actual payload swap to the transactional updater before Inno
+; commits any of its own metadata.
+UsePreviousAppDir=yes
+; The payload is no longer tracked file-by-file in Inno's own uninstall log
+; (see [Files] below -- update-installation.ps1 owns the program directories
+; instead), so the log is kept fresh on every install rather than appended,
+; and CurUninstallStepChanged removes the managed directories itself.
+UninstallLogMode=overwrite
 UninstallDisplayName={#MinosName}
 VersionInfoVersion={#MinosAppVersion}
 VersionInfoCompany=FTurleque
@@ -37,7 +47,11 @@ VersionInfoProductTextVersion={#MinosVersion}
 Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupDescription: "Intégration Windows :"; Flags: checkedonce
 
 [Files]
-Source: "{#MinosSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The setup never overwrites {app} directly. update-installation.ps1 performs
+; a staged, ownership-checked, rollback-capable activation of this payload
+; zip in PrepareToInstall before Inno writes any of its own setup metadata.
+Source: "{#MinosPayloadZip}"; Flags: dontcopy noencryption
+Source: "{#MinosSourceDir}\integration\update-installation.ps1"; Flags: dontcopy
 Source: "{#MinosSourceDir}\integration\detect-mcp-clients.ps1"; Flags: dontcopy
 
 [Icons]
@@ -1003,6 +1017,111 @@ begin
   RegDeleteKeyIncludingSubkeys(HKCU, InstallerRegistryPath());
 end;
 
+function ExtractMinosPayload(): String;
+var
+  PowerShell: String;
+  Parameters: String;
+  ResultCode: Integer;
+  PayloadZip: String;
+  PayloadDir: String;
+begin
+  Result := '';
+  try ExtractTemporaryFile('minos-payload.zip');
+  except
+    Result := 'Le paquet MINOS n''a pas pu etre extrait de l''installateur.';
+    exit;
+  end;
+  PayloadZip := ExpandConstant('{tmp}\minos-payload.zip');
+  PayloadDir := ExpandConstant('{tmp}\minos-payload');
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters :=
+    '-NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath ''' + PayloadZip +
+    ''' -DestinationPath ''' + PayloadDir + ''' -Force"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Result := 'Le paquet MINOS n''a pas pu etre decompresse (code ' + IntToStr(ResultCode) + ').';
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  PowerShell: String;
+  Updater: String;
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  Result := '';
+  NeedsRestart := False;
+
+  Result := ExtractMinosPayload();
+  if Result <> '' then exit;
+
+  try ExtractTemporaryFile('update-installation.ps1');
+  except
+    Result := 'Le moteur de mise a jour transactionnel MINOS est introuvable dans cet installateur.';
+    exit;
+  end;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Updater := ExpandConstant('{tmp}\update-installation.ps1');
+  Parameters :=
+    '-NoProfile -ExecutionPolicy Bypass -File "' + Updater +
+    '" -PackageRoot "' + ExpandConstant('{tmp}\minos-payload') +
+    '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Result :=
+      'La mise a jour transactionnelle de MINOS a echoue (code ' + IntToStr(ResultCode) + ').' + #13#10 + #13#10 +
+      'Aucune modification partielle n''a ete conservee : toute version precedente a ete restauree automatiquement,' + #13#10 +
+      'et aucun fallback silencieux n''a ete applique. Consultez le journal de l''installateur pour le detail.';
+end;
+
+procedure RemoveMinosProgramPayload;
+var
+  PowerShell: String;
+  ScriptPath: String;
+  ScriptText: String;
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  // dontcopy + ExtractTemporaryFile is only reliable during install, not
+  // uninstall (a dontcopy resource is not guaranteed embedded in unins*.exe's
+  // own data) -- scripts/install/uninstall-program-payload.ps1 still ships in
+  // {app}\integration for reference/manual recovery, but the script actually
+  // run here is written directly to {tmp} via SaveStringToFile, which needs
+  // no extraction and works identically during install and uninstall.
+  //
+  // -File, not -Command: -Command re-parses everything after the command
+  // text as PowerShell script syntax, so a trailing "-InstallRoot <value>"
+  // there is NOT passed as a literal argv-style argument the way it is under
+  // -File -- an apostrophe in {app} (user-chosen, and exactly what this
+  // installer must support) would corrupt the reconstructed script text.
+  // -File binds trailing arguments literally, matching every other Exec()
+  // call in this template.
+  ScriptText :=
+    'param([Parameter(Mandatory = $true)][string] $InstallRoot)' + #13#10 +
+    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
+    'foreach ($name in $Names) {' + #13#10 +
+    '    $p = Join-Path $InstallRoot $name' + #13#10 +
+    '    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }' + #13#10 +
+    '}' + #13#10 +
+    // Inno's own "remove {app} if empty" check runs earlier, during
+    // usUninstall, before this usPostUninstall cleanup has had a chance to
+    // empty it (the managed files were still there when Inno checked) -- so
+    // the now-empty root is never revisited unless removed explicitly here.
+    // Only fires when truly empty: anything unexpected/foreign left behind
+    // is left alone, same as everywhere else in this script.
+    'if (Test-Path -LiteralPath $InstallRoot) {' + #13#10 +
+    '    $remaining = @(Get-ChildItem -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue)' + #13#10 +
+    '    if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue }' + #13#10 +
+    '}' + #13#10;
+  ScriptPath := ExpandConstant('{tmp}\uninstall-program-payload-inline.ps1');
+  if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('RemoveMinosProgramPayload: cleanup script did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
@@ -1026,5 +1145,8 @@ begin
     end;
   end
   else if CurUninstallStep = usPostUninstall then
+  begin
+    RemoveMinosProgramPayload;
     DeleteMinosUserData;
+  end;
 end;
