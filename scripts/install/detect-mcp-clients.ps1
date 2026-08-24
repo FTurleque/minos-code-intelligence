@@ -25,6 +25,18 @@ function Ui([string] $Value) {
     return $Value.Replace('{e}', $EAcute).Replace('{dash}', $EmDash)
 }
 
+# Reads the corresponding environment variable first, falling back to the
+# WinAPI special-folder lookup only if it is unset. On any real Windows
+# session these are identical (both ultimately derive from the same user
+# profile), but the env var is overridable per-process, which is what lets a
+# test harness isolate this script's filesystem-marker detection from
+# whatever happens to actually be installed on the host running the test.
+function Get-UserFolderPath([string] $EnvironmentVariableName, [string] $SpecialFolder) {
+    $Value = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if (-not [string]::IsNullOrWhiteSpace($Value)) { return $Value }
+    return [Environment]::GetFolderPath($SpecialFolder)
+}
+
 function Resolve-CommandPath([string] $Name) {
     $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $Command) { return '' }
@@ -43,7 +55,7 @@ function Test-VsCodeCopilotShim([string] $Path) {
 function Find-EmbeddedClaudeCli {
     # Claude Code Desktop ships its own claude.exe under
     # %APPDATA%\Claude\claude-code\<version>\claude.exe -- never on PATH.
-    $ClaudeCodeDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Claude\claude-code'
+    $ClaudeCodeDir = Join-Path (Get-UserFolderPath 'APPDATA' 'ApplicationData') 'Claude\claude-code'
     if (-not (Test-Path -LiteralPath $ClaudeCodeDir -PathType Container)) { return '' }
     foreach ($Dir in @(Get-ChildItem -LiteralPath $ClaudeCodeDir -Directory -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending)) {
@@ -152,8 +164,8 @@ function Test-Capability([string] $ToolPath, [string[]] $Arguments) {
 }
 
 function Test-JetBrainsCopilot {
-    $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
-    $Roaming = [Environment]::GetFolderPath('ApplicationData')
+    $LocalAppData = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
+    $Roaming = Get-UserFolderPath 'APPDATA' 'ApplicationData'
     if (Test-Path -LiteralPath (Join-Path $LocalAppData 'github-copilot\intellij')) { return $true }
 
     foreach ($Root in @((Join-Path $Roaming 'JetBrains'), (Join-Path $LocalAppData 'JetBrains'))) {
@@ -171,7 +183,7 @@ function Test-JetBrainsCopilot {
 
 function Test-ClaudeCodeDesktop {
     # Claude Code Desktop (claude.ai/code app) creates ~/.claude/ with these marker files.
-    $UserProfile = [Environment]::GetFolderPath('UserProfile')
+    $UserProfile = Get-UserFolderPath 'USERPROFILE' 'UserProfile'
     foreach ($Marker in @('.claude\settings.json', '.claude\.credentials.json')) {
         if (Test-Path -LiteralPath (Join-Path $UserProfile $Marker) -PathType Leaf) {
             return $true
@@ -184,7 +196,7 @@ function Find-ClaudeDesktopMsixDir {
     # Claude Desktop installed from the Windows Store (MSIX) uses a sandboxed
     # LocalCache path instead of %APPDATA%\Claude.
     # Pattern: %LOCALAPPDATA%\Packages\Claude_<publisher>\LocalCache\Roaming\Claude
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
     $PackagesDir = Join-Path $Local 'Packages'
     if (-not (Test-Path -LiteralPath $PackagesDir -PathType Container)) { return '' }
     foreach ($Dir in @(Get-ChildItem -LiteralPath $PackagesDir -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
@@ -196,8 +208,8 @@ function Find-ClaudeDesktopMsixDir {
 }
 
 function Test-ClaudeDesktop {
-    $Roaming = [Environment]::GetFolderPath('ApplicationData')
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    $Roaming = Get-UserFolderPath 'APPDATA' 'ApplicationData'
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
     # Windows Store (MSIX) installation — sandboxed LocalCache path.
     if (-not [string]::IsNullOrWhiteSpace((Find-ClaudeDesktopMsixDir))) {
         return $true
@@ -216,8 +228,8 @@ function Test-ClaudeDesktop {
 }
 
 function Test-CodexDesktop {
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
-    $HomeDir = [Environment]::GetFolderPath('UserProfile')
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
+    $HomeDir = Get-UserFolderPath 'USERPROFILE' 'UserProfile'
     return (Test-Path -LiteralPath (Join-Path $HomeDir '.codex\config.toml') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Programs\Codex\Codex.exe') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Codex\Codex.exe') -PathType Leaf)

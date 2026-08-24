@@ -32,8 +32,51 @@ function Read-IniValue([string] $Path, [string] $Section, [string] $Key) {
     return ''
 }
 
+function Resolve-CSharpCompiler {
+    $Candidates = @(
+        (Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+        (Join-Path $env:SystemRoot 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+    )
+    foreach ($Candidate in $Candidates) {
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { return $Candidate }
+    }
+    return $null
+}
+
+# A batch/PowerShell script renamed to .exe will not run -- Windows requires a
+# real PE executable for a .exe file. Find-EmbeddedClaudeCli specifically
+# looks for a literal claude.exe, so proving it works end to end (found AND
+# capability-probed successfully) needs one. Add-Type -OutputType
+# ConsoleApplication is not supported under PowerShell 7, so this compiles
+# directly with the .NET Framework C# compiler that ships on every Windows
+# image (including GitHub-hosted windows-2022 runners).
+function New-FakeClaudeExe([string] $Path) {
+    $Compiler = Resolve-CSharpCompiler
+    if (-not $Compiler) { return $false }
+    $SourcePath = [System.IO.Path]::ChangeExtension($Path, '.cs')
+    $CSharp = @'
+using System;
+class Program {
+    static int Main(string[] args) {
+        if (args.Length >= 2 &&
+            string.Equals(args[0], "mcp", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(args[1], "--help", StringComparison.OrdinalIgnoreCase)) {
+            return 0;
+        }
+        return 1;
+    }
+}
+'@
+    Set-Content -LiteralPath $SourcePath -Value $CSharp -Encoding ascii
+    & $Compiler /nologo "/out:$Path" $SourcePath 2>&1 | Out-Null
+    return (Test-Path -LiteralPath $Path -PathType Leaf)
+}
+
 $Root = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-mcp-preflight-' + [Guid]::NewGuid())
 $OldPath = $env:Path
+$OldAppData = $env:APPDATA
+$OldLocalAppData = $env:LOCALAPPDATA
+$OldUserProfile = $env:USERPROFILE
 
 # Resolved against the real, unmodified PATH before any scenario below
 # narrows $env:Path -- looking it up later would search whatever narrowed
@@ -84,20 +127,29 @@ exit /b 1
     $HasUtf16LeBom = $Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE
     Assert-True $HasUtf16LeBom 'Preflight INI must be UTF-16 LE with BOM for deterministic Windows/Inno Setup Unicode parsing.'
 
-    # --- Absent: no copilot command resolves. Scoped to Copilot CLI only --
-    # unlike Claude/Codex, it has no filesystem-marker fallback (only PATH
-    # resolution), so it's the one client this can isolate reliably: Claude
-    # Code's embedded-CLI and Claude/Codex Desktop's filesystem-marker checks
-    # look at real locations under the current user profile ($env:APPDATA
-    # etc.) that this test cannot safely fake without a seam in
-    # detect-mcp-clients.ps1 to override them -- clearing PATH alone doesn't
-    # isolate a dev/CI machine that happens to have any of those installed.
+    # --- Absent: nothing resolves on PATH and no filesystem marker exists for
+    # any client. Isolates $env:APPDATA/LOCALAPPDATA/USERPROFILE to fresh,
+    # empty directories via detect-mcp-clients.ps1's Get-UserFolderPath seam
+    # -- without it, a dev/CI machine that happens to have any real client
+    # installed would leak through and this assertion would be unreliable.
     $AbsentBin = Join-Path $Root 'absent-bin'
-    New-Item -ItemType Directory -Force -Path $AbsentBin | Out-Null
+    $AbsentAppData = Join-Path $Root 'absent-appdata\Roaming'
+    $AbsentLocalAppData = Join-Path $Root 'absent-appdata\Local'
+    $AbsentUserProfile = Join-Path $Root 'absent-appdata\profile'
+    New-Item -ItemType Directory -Force -Path $AbsentBin, $AbsentAppData, $AbsentLocalAppData, $AbsentUserProfile | Out-Null
     $env:Path = $AbsentBin
+    $env:APPDATA = $AbsentAppData
+    $env:LOCALAPPDATA = $AbsentLocalAppData
+    $env:USERPROFILE = $AbsentUserProfile
     $AbsentOutput = Join-Path $Root 'preflight-absent.ini'
     & $Detector -OutputPath $AbsentOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $AbsentOutput 'CopilotJetBrains' 'Available') -eq '0') 'Absent Copilot JetBrains was incorrectly reported as available.'
     Assert-True ((Read-IniValue $AbsentOutput 'CopilotCli' 'Available') -eq '0') 'Absent Copilot CLI was incorrectly reported as available.'
+    Assert-True ((Read-IniValue $AbsentOutput 'ClaudeCode' 'Available') -eq '0') 'Absent Claude CLI / Code was incorrectly reported as available.'
+    Assert-True ((Read-IniValue $AbsentOutput 'ClaudeDesktop' 'Available') -eq '0') 'Absent Claude Desktop was incorrectly reported as available.'
+    Assert-True ((Read-IniValue $AbsentOutput 'CodexCli' 'Available') -eq '0') 'Absent Codex CLI was incorrectly reported as available.'
+    Assert-True ((Read-IniValue $AbsentOutput 'CodexDesktop' 'Available') -eq '0') 'Absent Codex Desktop was incorrectly reported as available.'
+    Assert-True ((Read-IniValue $AbsentOutput 'Codex' 'Available') -eq '0') 'Absent aggregate Codex was incorrectly reported as available.'
 
     # --- Real, non-shim Copilot CLI compatible with MCP: proves the VS Code
     # shim rejection above isn't the only path Copilot CLI can ever take ---
@@ -162,10 +214,120 @@ exit 0
         Assert-True ($null -eq (Get-Process -Id $HangingProcessId -ErrorAction SilentlyContinue)) 'The timed-out Copilot CLI preflight probe process was left running.'
     }
 
+    # --- Claude Desktop, classic install: isolated via the APPDATA/LOCALAPPDATA/
+    # USERPROFILE env-var seam in detect-mcp-clients.ps1 (Get-UserFolderPath) --
+    # not previously exercisable without depending on whatever happens to
+    # actually be installed on the machine running the test ---
+    $ClassicRoot = Join-Path $Root 'claude-desktop-classic'
+    $ClassicAppData = Join-Path $ClassicRoot 'Roaming'
+    $ClassicLocalAppData = Join-Path $ClassicRoot 'Local'
+    New-Item -ItemType Directory -Force -Path (Join-Path $ClassicAppData 'Claude'), $ClassicLocalAppData | Out-Null
+    $env:Path = $AbsentBin
+    $env:APPDATA = $ClassicAppData
+    $env:LOCALAPPDATA = $ClassicLocalAppData
+    $env:USERPROFILE = $ClassicRoot
+    $ClassicOutput = Join-Path $Root 'preflight-claude-desktop-classic.ini'
+    & $Detector -OutputPath $ClassicOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $ClassicOutput 'ClaudeDesktop' 'Available') -eq '1') 'Classic Claude Desktop installation (%APPDATA%\Claude marker) was not detected.'
+
+    # --- Claude Desktop, Microsoft Store (MSIX) install ---
+    $MsixRoot = Join-Path $Root 'claude-desktop-msix'
+    $MsixAppData = Join-Path $MsixRoot 'Roaming'
+    $MsixLocalAppData = Join-Path $MsixRoot 'Local'
+    New-Item -ItemType Directory -Force -Path $MsixAppData, (Join-Path $MsixLocalAppData 'Packages\Claude_8wekyb3d8bbwe\LocalCache\Roaming\Claude') | Out-Null
+    $env:Path = $AbsentBin
+    $env:APPDATA = $MsixAppData
+    $env:LOCALAPPDATA = $MsixLocalAppData
+    $env:USERPROFILE = $MsixRoot
+    $MsixOutput = Join-Path $Root 'preflight-claude-desktop-msix.ini'
+    & $Detector -OutputPath $MsixOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $MsixOutput 'ClaudeDesktop' 'Available') -eq '1') 'MSIX Claude Desktop installation (LocalCache marker) was not detected.'
+
+    # --- Both classic and MSIX markers present: must still detect (the
+    # production code checks MSIX first and short-circuits, but either
+    # signal alone must be sufficient) ---
+    $BothRoot = Join-Path $Root 'claude-desktop-both'
+    $BothAppData = Join-Path $BothRoot 'Roaming'
+    $BothLocalAppData = Join-Path $BothRoot 'Local'
+    New-Item -ItemType Directory -Force -Path (Join-Path $BothAppData 'Claude'), (Join-Path $BothLocalAppData 'Packages\Claude_8wekyb3d8bbwe\LocalCache\Roaming\Claude') | Out-Null
+    $env:Path = $AbsentBin
+    $env:APPDATA = $BothAppData
+    $env:LOCALAPPDATA = $BothLocalAppData
+    $env:USERPROFILE = $BothRoot
+    $BothOutput = Join-Path $Root 'preflight-claude-desktop-both.ini'
+    & $Detector -OutputPath $BothOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $BothOutput 'ClaudeDesktop' 'Available') -eq '1') 'Claude Desktop was not detected when both classic and MSIX markers are present.'
+
+    # --- Claude Code Desktop's embedded CLI (%APPDATA%\Claude\claude-code\<version>\claude.exe),
+    # used only as a fallback when nothing named "claude" resolves on PATH ---
+    $EmbeddedRoot = Join-Path $Root 'claude-embedded-cli'
+    $EmbeddedAppData = Join-Path $EmbeddedRoot 'Roaming'
+    $EmbeddedLocalAppData = Join-Path $EmbeddedRoot 'Local'
+    $EmbeddedClaudeCodeDir = Join-Path $EmbeddedAppData 'Claude\claude-code\1.2.3'
+    New-Item -ItemType Directory -Force -Path $EmbeddedClaudeCodeDir, $EmbeddedLocalAppData | Out-Null
+    $EmbeddedExe = Join-Path $EmbeddedClaudeCodeDir 'claude.exe'
+    if (New-FakeClaudeExe -Path $EmbeddedExe) {
+        $env:Path = $AbsentBin
+        $env:APPDATA = $EmbeddedAppData
+        $env:LOCALAPPDATA = $EmbeddedLocalAppData
+        $env:USERPROFILE = $EmbeddedRoot
+        $EmbeddedOutput = Join-Path $Root 'preflight-claude-embedded.ini'
+        & $Detector -OutputPath $EmbeddedOutput -ProbeTimeoutSeconds 3
+        Assert-True ((Read-IniValue $EmbeddedOutput 'ClaudeCode' 'Available') -eq '1') "Claude Code Desktop's embedded claude.exe (no claude on PATH) was not detected as a compatible CLI."
+        Assert-True ((Read-IniValue $EmbeddedOutput 'ClaudeCode' 'Mode') -eq 'cli') 'Embedded Claude CLI mode should be cli.'
+    } else {
+        Write-Warning 'Skipping embedded Claude CLI scenario: no C# compiler (csc.exe) found to build a real claude.exe.'
+    }
+
+    # --- Codex Desktop only (no codex CLI on PATH) ---
+    $CodexDesktopRoot = Join-Path $Root 'codex-desktop-only'
+    $CodexDesktopAppData = Join-Path $CodexDesktopRoot 'Roaming'
+    $CodexDesktopLocalAppData = Join-Path $CodexDesktopRoot 'Local'
+    New-Item -ItemType Directory -Force -Path (Join-Path $CodexDesktopRoot '.codex'), $CodexDesktopAppData, $CodexDesktopLocalAppData | Out-Null
+    'model = "gpt-5.6"' | Set-Content -LiteralPath (Join-Path $CodexDesktopRoot '.codex\config.toml') -Encoding ascii
+    $env:Path = $AbsentBin
+    $env:APPDATA = $CodexDesktopAppData
+    $env:LOCALAPPDATA = $CodexDesktopLocalAppData
+    $env:USERPROFILE = $CodexDesktopRoot
+    $CodexDesktopOutput = Join-Path $Root 'preflight-codex-desktop-only.ini'
+    & $Detector -OutputPath $CodexDesktopOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $CodexDesktopOutput 'CodexCli' 'Available') -eq '0') 'Codex CLI was incorrectly reported as available with no codex command on PATH.'
+    Assert-True ((Read-IniValue $CodexDesktopOutput 'CodexDesktop' 'Available') -eq '1') 'Codex Desktop (~/.codex/config.toml marker, no CLI) was not detected.'
+    Assert-True ((Read-IniValue $CodexDesktopOutput 'Codex' 'Mode') -eq 'desktop') 'Aggregate Codex mode should fall back to desktop when only the Desktop marker is present.'
+
+    # --- Codex CLI and Desktop marker both present: production code
+    # deterministically prefers CLI (detect-mcp-clients.ps1 checks
+    # $CodexCliAvailable before $CodexDesktopAvailable for the aggregate
+    # section) -- proven here with a controlled fixture instead of
+    # incidentally depending on whatever the host machine happens to have. ---
+    $CodexBothRoot = Join-Path $Root 'codex-both'
+    $CodexBothBin = Join-Path $CodexBothRoot 'bin'
+    $CodexBothAppData = Join-Path $CodexBothRoot 'Roaming'
+    $CodexBothLocalAppData = Join-Path $CodexBothRoot 'Local'
+    New-Item -ItemType Directory -Force -Path $CodexBothBin, (Join-Path $CodexBothRoot '.codex'), $CodexBothAppData, $CodexBothLocalAppData | Out-Null
+    'model = "gpt-5.6"' | Set-Content -LiteralPath (Join-Path $CodexBothRoot '.codex\config.toml') -Encoding ascii
+    @'
+@echo off
+if /I "%~1"=="mcp" if /I "%~2"=="--help" exit /b 0
+exit /b 1
+'@ | Set-Content -LiteralPath (Join-Path $CodexBothBin 'codex.cmd') -Encoding ascii
+    $env:Path = "$CodexBothBin;$AbsentBin"
+    $env:APPDATA = $CodexBothAppData
+    $env:LOCALAPPDATA = $CodexBothLocalAppData
+    $env:USERPROFILE = $CodexBothRoot
+    $CodexBothOutput = Join-Path $Root 'preflight-codex-both.ini'
+    & $Detector -OutputPath $CodexBothOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $CodexBothOutput 'CodexCli' 'Available') -eq '1') 'Codex CLI was not detected when both CLI and Desktop markers are present.'
+    Assert-True ((Read-IniValue $CodexBothOutput 'CodexDesktop' 'Available') -eq '1') 'Codex Desktop marker was not detected alongside a compatible CLI.'
+    Assert-True ((Read-IniValue $CodexBothOutput 'Codex' 'Mode') -eq 'cli') 'Aggregate Codex mode did not deterministically prefer CLI when both CLI and Desktop are available.'
+
     Write-Host 'MINOS MCP CLIENT PREFLIGHT VERIFICATION SUCCESS' -ForegroundColor Green
 }
 finally {
     $env:Path = $OldPath
+    $env:APPDATA = $OldAppData
+    $env:LOCALAPPDATA = $OldLocalAppData
+    $env:USERPROFILE = $OldUserProfile
     Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction SilentlyContinue
 }
 
