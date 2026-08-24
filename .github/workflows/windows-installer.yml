@@ -20,7 +20,7 @@ on:
       - 'docker/**'
       - 'pom.xml'
       - 'minos-*/pom.xml'
-      - 'docs/releases/1.0.1.md'
+      - 'docs/releases/*.md'
       - 'docs/user/production-installation.md'
       - '.github/workflows/windows-installer.yml'
       - '.github/workflows/release-windows.yml'
@@ -35,7 +35,7 @@ on:
       - 'docker/**'
       - 'pom.xml'
       - 'minos-*/pom.xml'
-      - 'docs/releases/1.0.1.md'
+      - 'docs/releases/*.md'
       - 'docs/user/production-installation.md'
       - '.github/workflows/windows-installer.yml'
       - '.github/workflows/release-windows.yml'
@@ -56,7 +56,7 @@ env:
 
 jobs:
   candidate:
-    name: Build and smoke Windows 1.0.1 candidate
+    name: Build and smoke Windows candidate
     runs-on: windows-2022
     timeout-minutes: 75
 
@@ -78,6 +78,17 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+
+      - name: Resolve candidate version from pom.xml
+        shell: pwsh
+        run: |
+          [xml]$Pom = Get-Content -LiteralPath 'pom.xml' -Raw
+          $Revision = [string]$Pom.project.properties.revision
+          if ([string]::IsNullOrWhiteSpace($Revision)) { throw 'pom.xml does not define <revision>.' }
+          $Version = $Revision -replace '-SNAPSHOT$', ''
+          if ($Version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') { throw "Resolved version '$Version' is not valid SemVer." }
+          "MINOS_VERSION=$Version" >> $env:GITHUB_ENV
+          Write-Host "Resolved candidate version: $Version"
 
       - name: Inno Setup provenance rules
         shell: pwsh
@@ -122,7 +133,7 @@ jobs:
 
       - name: Build exact-head non-published candidate
         shell: powershell
-        run: .\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1 -SkipMavenVerify -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION
+        run: .\scripts\release\build-local-windows-candidate.ps1 -Version $env:MINOS_VERSION -SkipMavenVerify -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION
 
       - name: Install, handshake and uninstall isolated candidate
         shell: powershell
@@ -133,20 +144,21 @@ jobs:
           # so this call must carry the same qualified compiler provenance as the build above --
           # otherwise the smoke setup would fall back to auto-detection and could be built by a
           # different ISCC.exe than the artifact it is supposed to be validating.
-          .\scripts\release\publish-windows-release.ps1 -Version 1.0.1 -TargetCommit $head -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION -SkipBuild -ValidateOnly
+          .\scripts\release\publish-windows-release.ps1 -Version $env:MINOS_VERSION -TargetCommit $head -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION -SkipBuild -ValidateOnly
 
       - name: Verify candidate artifacts
         shell: powershell
         run: |
+          $version = $env:MINOS_VERSION
           $expected = @(
-            'target\dist\MINOS-1.0.1-windows-x64-setup.exe',
-            'target\dist\MINOS-1.0.1-windows-x64-setup.exe.sha256',
-            'target\dist\minos-1.0.1-windows-x64.zip',
-            'target\dist\minos-1.0.1-windows-x64.zip.sha256',
-            'target\dist\minos-1.0.1.cdx.json',
-            'target\dist\minos-1.0.1.cdx.json.sha256',
-            'target\dist\MINOS-1.0.1-THIRD-PARTY-NOTICES.txt',
-            'target\dist\MINOS-1.0.1-THIRD-PARTY-NOTICES.txt.sha256'
+            "target\dist\MINOS-$version-windows-x64-setup.exe",
+            "target\dist\MINOS-$version-windows-x64-setup.exe.sha256",
+            "target\dist\minos-$version-windows-x64.zip",
+            "target\dist\minos-$version-windows-x64.zip.sha256",
+            "target\dist\minos-$version.cdx.json",
+            "target\dist\minos-$version.cdx.json.sha256",
+            "target\dist\MINOS-$version-THIRD-PARTY-NOTICES.txt",
+            "target\dist\MINOS-$version-THIRD-PARTY-NOTICES.txt.sha256"
           )
           $missing = @($expected | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
           if ($missing.Count -gt 0) { throw "Missing Windows candidate artifacts: $($missing -join ', ')" }
@@ -160,12 +172,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
           path: |
-            target/dist/MINOS-1.0.1-windows-x64-setup.exe
-            target/dist/MINOS-1.0.1-windows-x64-setup.exe.sha256
-            target/dist/minos-1.0.1-windows-x64.zip
-            target/dist/minos-1.0.1-windows-x64.zip.sha256
-            target/dist/minos-1.0.1.cdx.json
-            target/dist/minos-1.0.1.cdx.json.sha256
-            target/dist/MINOS-1.0.1-THIRD-PARTY-NOTICES.txt
-            target/dist/MINOS-1.0.1-THIRD-PARTY-NOTICES.txt.sha256
+            target/dist/MINOS-*-windows-x64-setup.exe
+            target/dist/MINOS-*-windows-x64-setup.exe.sha256
+            target/dist/minos-*-windows-x64.zip
+            target/dist/minos-*-windows-x64.zip.sha256
+            target/dist/minos-*.cdx.json
+            target/dist/minos-*.cdx.json.sha256
+            target/dist/MINOS-*-THIRD-PARTY-NOTICES.txt
+            target/dist/MINOS-*-THIRD-PARTY-NOTICES.txt.sha256
             target/dist/.installer/**

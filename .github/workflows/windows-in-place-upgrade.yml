@@ -1,0 +1,283 @@
+name: Windows In-place Upgrade
+
+# Proves the transactional upgrade engine (scripts/install/update-installation.ps1) end to end:
+# the fast PS1-level fault-injection suite (rollback, crash recovery, journal integrity), then a
+# real Inno Setup smoke build reinstalled in place over itself, asserting stale program files are
+# removed, everything the engine does not own is preserved byte-for-byte, and the reinstalled
+# binary still passes a real MCP handshake.
+#
+# The pull_request and push filters are kept identical on purpose -- a change qualified on a PR
+# must be re-qualified on the branch it lands on. GitHub Actions does not support YAML anchors, so
+# they are spelled out twice and check-workflow-pins.py enforces that they match.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packaging/windows/**'
+      - 'scripts/install/**'
+      - 'scripts/release/build-windows-*.ps1'
+      - 'scripts/quality/check-workflow-pins.py'
+      - 'pom.xml'
+      - '.github/workflows/windows-in-place-upgrade.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'packaging/windows/**'
+      - 'scripts/install/**'
+      - 'scripts/release/build-windows-*.ps1'
+      - 'scripts/quality/check-workflow-pins.py'
+      - 'pom.xml'
+      - '.github/workflows/windows-in-place-upgrade.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-in-place-upgrade-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Cross the GitHub Actions -> PowerShell boundary only through env vars, never through direct
+  # ${{ }} interpolation inside a run: block -- see release-windows.yml for the full rationale.
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  INNO_SETUP_VERSION: '6.7.1'
+
+jobs:
+  upgrade:
+    name: Transactional upgrade engine (fault injection + real in-place reinstall)
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Verify checkout matches expected head
+        shell: pwsh
+        run: |
+          $Head = (git rev-parse HEAD).Trim()
+          if ($Head -ne $env:EXPECTED_HEAD) { throw "Exact-head mismatch at checkout: got=$Head expected=$env:EXPECTED_HEAD" }
+          Write-Host "Exact-head checkout confirmed: $Head"
+
+      - name: Resolve candidate version from pom.xml
+        shell: pwsh
+        run: |
+          [xml]$Pom = Get-Content -LiteralPath 'pom.xml' -Raw
+          $Revision = [string]$Pom.project.properties.revision
+          if ([string]::IsNullOrWhiteSpace($Revision)) { throw 'pom.xml does not define <revision>.' }
+          $Version = $Revision -replace '-SNAPSHOT$', ''
+          if ($Version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') { throw "Resolved version '$Version' is not valid SemVer." }
+          "MINOS_VERSION=$Version" >> $env:GITHUB_ENV
+          Write-Host "Resolved candidate version: $Version"
+
+      - name: Parse-validate installer PowerShell under Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $Files = @(Get-ChildItem -Path 'scripts\install','scripts\release' -Filter '*.ps1' -Recurse -File)
+          $Failures = @()
+          foreach ($File in $Files) {
+            $Tokens = $null; $ParseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($File.FullName, [ref]$Tokens, [ref]$ParseErrors) | Out-Null
+            foreach ($ParseError in @($ParseErrors)) { $Failures += "$($File.FullName): $($ParseError.Message)" }
+          }
+          if ($Failures.Count -gt 0) {
+            $Failures | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+            throw "PowerShell 5.1 parse validation failed for $($Failures.Count) issue(s)."
+          }
+          Write-Host "WINDOWS_POWERSHELL_5_1_PARSE_VALIDATION_SUCCESS ($($Files.Count) files)" -ForegroundColor Green
+
+      - name: Fault-injection suite for the transactional upgrade engine
+        shell: pwsh
+        run: .\scripts\install\verify-windows-upgrade-transaction.ps1
+
+      - name: Installer template static verification
+        shell: pwsh
+        run: .\scripts\install\verify-installer-template.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $installOutput = (choco install innosetup --version=$env:INNO_SETUP_VERSION --yes --no-progress 2>&1 | Out-String)
+          Write-Host $installOutput
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup --version=$env:INNO_SETUP_VERSION failed (exit=$LASTEXITCODE):`n$installOutput" }
+
+          # Resolve the exact binary the choco package above just installed -- do NOT search PATH or
+          # any other Inno Setup install location. See windows-installer.yml for the full rationale.
+          $isccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath -PathType Leaf)) {
+            throw "Expected ISCC.exe was not installed by 'choco install innosetup --version=$env:INNO_SETUP_VERSION' at $isccPath."
+          }
+
+          $nuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+          if (-not (Test-Path -LiteralPath $nuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $nuspecPath; cannot verify the installed Inno Setup version."
+          }
+          [xml]$nuspec = Get-Content -LiteralPath $nuspecPath -Raw
+          $installedVersion = $nuspec.package.metadata.version
+          if ($installedVersion -ne $env:INNO_SETUP_VERSION) {
+            throw "Chocolatey innosetup package metadata at $nuspecPath reports version '$installedVersion', expected $env:INNO_SETUP_VERSION."
+          }
+          if ($installOutput -notmatch [regex]::Escape($env:INNO_SETUP_VERSION)) {
+            throw "Chocolatey's own install output did not confirm version $env:INNO_SETUP_VERSION:`n$installOutput"
+          }
+          Write-Host "Qualified ISCC: $isccPath (chocolatey innosetup package version=$installedVersion)"
+          "ISCC_PATH=$isccPath" >> $env:GITHUB_ENV
+
+      - name: Build MINOS distribution (candidate)
+        shell: pwsh
+        run: .\scripts\release\build-windows-distribution.ps1 -Version $env:MINOS_VERSION -SkipVerify
+
+      - name: Build isolated smoke setup
+        shell: pwsh
+        run: .\scripts\release\build-windows-installer.ps1 -Version $env:MINOS_VERSION -Smoke -IsccPath $env:ISCC_PATH -RequiredIsccVersion $env:INNO_SETUP_VERSION
+
+      - name: Install smoke setup into an isolated, quote-hostile directory
+        shell: pwsh
+        run: |
+          # Deliberately embeds a space and an apostrophe to catch PowerShell/Inno/cmd quoting bugs.
+          $InstallDir = Join-Path $env:RUNNER_TEMP "MINOS O'Brien upgrade test"
+          "MINOS_UPGRADE_TEST_INSTALL_DIR=$InstallDir" >> $env:GITHUB_ENV
+          $Setup = Get-ChildItem -Path 'target\dist\.smoke' -Filter 'MINOS-*-windows-x64-smoke-setup.exe' -File | Select-Object -First 1
+          if (-not $Setup) { throw 'Smoke setup executable not found under target\dist\.smoke.' }
+          "MINOS_UPGRADE_TEST_SETUP=$($Setup.FullName)" >> $env:GITHUB_ENV
+          $LogPath = Join-Path $env:RUNNER_TEMP 'minos-smoke-install.log'
+          $Arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $InstallDir + '" /LOG="' + $LogPath + '"'
+          $Process = Start-Process -FilePath $Setup.FullName -ArgumentList $Arguments -PassThru -Wait
+          if ($Process.ExitCode -ne 0) {
+            Get-Content -LiteralPath $LogPath -ErrorAction SilentlyContinue
+            throw "Smoke install failed with exit code $($Process.ExitCode)."
+          }
+
+      - name: Verify fresh smoke install
+        shell: pwsh
+        run: |
+          $InstallDir = $env:MINOS_UPGRADE_TEST_INSTALL_DIR
+          if (-not (Test-Path -LiteralPath (Join-Path $InstallDir '.minos-installation.json'))) { throw 'Ownership marker missing after fresh install.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $InstallDir 'app\minos.exe'))) { throw 'app\minos.exe missing after fresh install.' }
+          $Marker = Get-Content -LiteralPath (Join-Path $InstallDir '.minos-installation.json') -Raw | ConvertFrom-Json
+          "MINOS_UPGRADE_TEST_INSTALLATION_ID=$($Marker.installationId)" >> $env:GITHUB_ENV
+
+          & (Join-Path $InstallDir 'app\minos.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw "minos.exe --version failed with exit code $LASTEXITCODE." }
+
+          $Probe = Join-Path $InstallDir 'integration\probe-mcp-backend.ps1'
+          $SmokeHome = Join-Path $env:RUNNER_TEMP ('minos-upgrade-mcp-pre-' + [Guid]::NewGuid())
+          New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
+          try {
+            & $Probe -LauncherPath (Join-Path $InstallDir 'app\minos.exe') -CandidateHome $SmokeHome -TimeoutSeconds 30
+            if ($LASTEXITCODE -ne 0) { throw "MCP handshake failed for the fresh smoke install (exit=$LASTEXITCODE)." }
+          }
+          finally {
+            Remove-Item -LiteralPath $SmokeHome -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host 'Fresh smoke install verified: ownership marker, --version, MCP handshake.' -ForegroundColor Green
+
+      - name: Mutate installed tree to simulate an old version
+        shell: pwsh
+        run: |
+          $InstallDir = $env:MINOS_UPGRADE_TEST_INSTALL_DIR
+          'docker-marker-from-old-version' | Set-Content -LiteralPath (Join-Path $InstallDir '.docker-mcp-managed') -Encoding ascii
+          'stale program file from an old MINOS version' | Set-Content -LiteralPath (Join-Path $InstallDir 'app\STALE-FROM-OLD-VERSION.txt') -Encoding ascii
+
+      - name: Reinstall the same setup in place
+        shell: pwsh
+        run: |
+          $InstallDir = $env:MINOS_UPGRADE_TEST_INSTALL_DIR
+          $Setup = $env:MINOS_UPGRADE_TEST_SETUP
+          $LogPath = Join-Path $env:RUNNER_TEMP 'minos-smoke-upgrade.log'
+          $Arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="' + $InstallDir + '" /LOG="' + $LogPath + '"'
+          $Process = Start-Process -FilePath $Setup -ArgumentList $Arguments -PassThru -Wait
+          if ($Process.ExitCode -ne 0) {
+            Get-Content -LiteralPath $LogPath -ErrorAction SilentlyContinue
+            throw "In-place reinstall failed with exit code $($Process.ExitCode)."
+          }
+
+      - name: Verify in-place upgrade outcome
+        shell: pwsh
+        run: |
+          $InstallDir = $env:MINOS_UPGRADE_TEST_INSTALL_DIR
+          if (Test-Path -LiteralPath (Join-Path $InstallDir 'app\STALE-FROM-OLD-VERSION.txt')) {
+            throw 'Stale program file from the simulated old version survived the in-place upgrade.'
+          }
+          $DockerMarker = Join-Path $InstallDir '.docker-mcp-managed'
+          if (-not (Test-Path -LiteralPath $DockerMarker)) { throw '.docker-mcp-managed did not survive the in-place upgrade.' }
+          if ((Get-Content -LiteralPath $DockerMarker -Raw).Trim() -ne 'docker-marker-from-old-version') {
+            throw '.docker-mcp-managed content was altered by the in-place upgrade.'
+          }
+          if (Test-Path -LiteralPath (Join-Path $InstallDir '.install-staging')) { throw 'Staging residue left after the in-place upgrade.' }
+          if (Test-Path -LiteralPath (Join-Path $InstallDir '.install-rollback')) { throw 'Rollback residue left after the in-place upgrade.' }
+
+          $Marker = Get-Content -LiteralPath (Join-Path $InstallDir '.minos-installation.json') -Raw | ConvertFrom-Json
+          if ([string]$Marker.installationId -ne $env:MINOS_UPGRADE_TEST_INSTALLATION_ID) {
+            throw 'Ownership marker installationId changed across an in-place upgrade -- it must be created once and stay stable.'
+          }
+
+          & (Join-Path $InstallDir 'app\minos.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw "minos.exe --version failed after upgrade with exit code $LASTEXITCODE." }
+
+          $Probe = Join-Path $InstallDir 'integration\probe-mcp-backend.ps1'
+          $SmokeHome = Join-Path $env:RUNNER_TEMP ('minos-upgrade-mcp-post-' + [Guid]::NewGuid())
+          New-Item -ItemType Directory -Force -Path $SmokeHome | Out-Null
+          try {
+            & $Probe -LauncherPath (Join-Path $InstallDir 'app\minos.exe') -CandidateHome $SmokeHome -TimeoutSeconds 30
+            if ($LASTEXITCODE -ne 0) { throw "MCP handshake failed after the in-place upgrade (exit=$LASTEXITCODE)." }
+          }
+          finally {
+            Remove-Item -LiteralPath $SmokeHome -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host 'WINDOWS_IN_PLACE_UPGRADE_OUTCOME_VALID' -ForegroundColor Green
+
+      - name: Uninstall and verify full removal
+        shell: pwsh
+        run: |
+          $InstallDir = $env:MINOS_UPGRADE_TEST_INSTALL_DIR
+          $Uninstaller = Get-ChildItem -Path $InstallDir -Filter 'unins*.exe' -File | Select-Object -First 1
+          if (-not $Uninstaller) { throw 'Uninstaller executable not found.' }
+          $LogPath = Join-Path $env:RUNNER_TEMP 'minos-smoke-uninstall.log'
+          $Arguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $LogPath + '"'
+          $Process = Start-Process -FilePath $Uninstaller.FullName -ArgumentList $Arguments -PassThru -Wait
+          if ($Process.ExitCode -ne 0) {
+            Get-Content -LiteralPath $LogPath -ErrorAction SilentlyContinue
+            throw "Uninstall failed with exit code $($Process.ExitCode)."
+          }
+          Start-Sleep -Seconds 2
+          if (Test-Path -LiteralPath $InstallDir) {
+            Get-ChildItem -LiteralPath $InstallDir -Recurse -Force | ForEach-Object { Write-Host $_.FullName }
+            throw "Install directory was not fully removed by uninstall: $InstallDir"
+          }
+          Write-Host 'WINDOWS_IN_PLACE_UPGRADE_UNINSTALL_CLEAN' -ForegroundColor Green
+
+      - name: Re-verify exact head after all build/test steps
+        shell: pwsh
+        run: |
+          $Head = (git rev-parse HEAD).Trim()
+          if ($Head -ne $env:EXPECTED_HEAD) { throw "Exact-head mismatch after workflow steps: checkout=$Head expected=$env:EXPECTED_HEAD" }
+          Write-Host "Exact-head re-verification PASS: $Head"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minos-windows-in-place-upgrade-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}\minos-smoke-install.log
+            ${{ runner.temp }}\minos-smoke-upgrade.log
+            ${{ runner.temp }}\minos-smoke-uninstall.log

@@ -110,7 +110,7 @@ Ce runner est prévu pour la validation locale avant publication. Il :
 - construit la distribution ;
 - vérifie les intégrations MCP et leur préflight ;
 - lance un vrai handshake MCP sur le binaire packagé ;
-- génère le setup production ;
+- génère le setup production (payload embarqué, activé via `integration\update-installation.ps1` — voir `docs/user/production-installation.md` §11.2) ;
 - n'installe pas automatiquement ce setup ;
 - ne crée pas de tag ;
 - ne publie pas de GitHub Release ;
@@ -123,6 +123,12 @@ target\dist\MINOS-1.0.1-windows-x64-setup.exe
 ```
 
 La prochaine étape est humaine : lancer ce setup, vérifier le Wizard/détection MCP et tester un client réel avant toute publication.
+
+Pour vérifier le moteur de mise à jour transactionnel lui-même (staging, rollback, crash recovery), indépendamment d'une vraie compilation Inno Setup :
+
+```powershell
+.\scripts\install\verify-windows-upgrade-transaction.ps1
+```
 
 ## Validation de release complète
 
