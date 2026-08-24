@@ -74,7 +74,6 @@ foreach ($Required in @(
     'integration\probe-mcp-backend.ps1',
     'integration\switch-mcp-backend.ps1',
     'integration\update-installation.ps1',
-    'integration\uninstall-program-payload.ps1',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',

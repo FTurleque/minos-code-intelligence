@@ -64,6 +64,33 @@ try {
     Assert-True $FailedAsExpected 'Codex unmanaged MINOS section should block installation in strict mode.'
     Assert-True (([System.IO.File]::ReadAllText($Config, [System.Text.Encoding]::UTF8)).Contains('command = "other.exe"')) 'Codex unmanaged section was modified.'
 
+    # Modification safety: a block MINOS itself created and manages must be
+    # preserved -- not silently removed -- if the user edits it before
+    # uninstall (blockHash mismatch path). Distinct from the unmanaged-section
+    # case above, where MINOS never owned the section in the first place.
+    $ModifiedConfig = Join-Path $Root 'modified\.codex\config.toml'
+    $ModifiedState = Join-Path $Root 'modified\state\codex.json'
+    $ModifiedLog = Join-Path $Root 'modified\logs\mcp.log'
+    $ModifiedBackups = Join-Path $Root 'modified\backups'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ModifiedConfig) | Out-Null
+    [System.IO.File]::WriteAllText($ModifiedConfig, "model = `"gpt-5.6`"`r`n", [System.Text.UTF8Encoding]::new($false))
+    & $Manager -InstallRoot $InstallRoot -Action Install -Mode desktop -Strict `
+        -DataRoot $DataRoot -ConfigPath $ModifiedConfig -StatePath $ModifiedState -LogPath $ModifiedLog -BackupRoot $ModifiedBackups
+
+    $ManagedText = [System.IO.File]::ReadAllText($ModifiedConfig, [System.Text.Encoding]::UTF8)
+    $MutatedText = $ManagedText.Replace('MINOS_HOME', 'MINOS_HOME_EDITED_BY_USER')
+    Assert-True ($MutatedText -ne $ManagedText) 'Failed to mutate the managed Codex TOML block for the modification-safety test.'
+    [System.IO.File]::WriteAllText($ModifiedConfig, $MutatedText, [System.Text.UTF8Encoding]::new($false))
+
+    $ModifiedPreserveRaised = $false
+    try {
+        & $Manager -InstallRoot $InstallRoot -Action Uninstall -Strict `
+            -DataRoot $DataRoot -ConfigPath $ModifiedConfig -StatePath $ModifiedState -LogPath $ModifiedLog -BackupRoot $ModifiedBackups
+    } catch { $ModifiedPreserveRaised = $true }
+    Assert-True $ModifiedPreserveRaised 'A user-modified managed Codex TOML block should have caused a strict-mode failure on uninstall.'
+    $ModifiedAfter = [System.IO.File]::ReadAllText($ModifiedConfig, [System.Text.Encoding]::UTF8)
+    Assert-True ($ModifiedAfter.Contains('MINOS_HOME_EDITED_BY_USER')) 'User-modified managed Codex TOML block was overwritten/removed instead of being preserved.'
+
     Write-Host 'MINOS CODEX MCP INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green
 }
 finally {

@@ -1024,6 +1024,8 @@ var
   ResultCode: Integer;
   PayloadZip: String;
   PayloadDir: String;
+  ExpandScriptPath: String;
+  ExpandScriptText: String;
 begin
   Result := '';
   try ExtractTemporaryFile('minos-payload.zip');
@@ -1033,10 +1035,25 @@ begin
   end;
   PayloadZip := ExpandConstant('{tmp}\minos-payload.zip');
   PayloadDir := ExpandConstant('{tmp}\minos-payload');
+
+  // -File, not -Command: see RemoveMinosProgramPayload's comment for the full
+  // rationale -- {tmp} resolves under the current user's profile, and a
+  // Windows username can legitimately contain an apostrophe, which would
+  // corrupt a hand-quoted -Command script text the same way it did there.
+  ExpandScriptText :=
+    'param([Parameter(Mandatory = $true)][string] $PayloadZip, [Parameter(Mandatory = $true)][string] $PayloadDir)' + #13#10 +
+    'Expand-Archive -LiteralPath $PayloadZip -DestinationPath $PayloadDir -Force' + #13#10;
+  ExpandScriptPath := ExpandConstant('{tmp}\expand-minos-payload.ps1');
+  if not SaveStringToFile(ExpandScriptPath, ExpandScriptText, False) then
+  begin
+    Result := 'Le script de decompression du paquet MINOS n''a pas pu etre prepare.';
+    exit;
+  end;
+
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath ''' + PayloadZip +
-    ''' -DestinationPath ''' + PayloadDir + ''' -Force"';
+    '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandScriptPath +
+    '" -PayloadZip "' + PayloadZip + '" -PayloadDir "' + PayloadDir + '"';
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
     Result := 'Le paquet MINOS n''a pas pu etre decompresse (code ' + IntToStr(ResultCode) + ').';
 end;
@@ -1067,11 +1084,18 @@ begin
     '" -PackageRoot "' + ExpandConstant('{tmp}\minos-payload') +
     '" -InstallRoot "' + ExpandConstant('{app}') + '"';
 
+  // The failure could be the process-lock check (nothing was ever staged --
+  // the most common real-world cause: an AI client still has minos.exe
+  // running as its MCP server) or a genuine activation failure that WAS
+  // rolled back. update-installation.ps1 exits non-zero uniformly for both
+  // via an uncaught throw, so the message below stays accurate for either
+  // case rather than overclaiming a restoration that may never have started.
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
     Result :=
       'La mise a jour transactionnelle de MINOS a echoue (code ' + IntToStr(ResultCode) + ').' + #13#10 + #13#10 +
-      'Aucune modification partielle n''a ete conservee : toute version precedente a ete restauree automatiquement,' + #13#10 +
-      'et aucun fallback silencieux n''a ete applique. Consultez le journal de l''installateur pour le detail.';
+      'Si une version precedente etait installee, elle a ete restauree automatiquement ; aucun fallback silencieux' + #13#10 +
+      'n''a ete applique. Si MINOS est actuellement utilise par un client IA (Claude Desktop, VS Code, etc.),' + #13#10 +
+      'fermez-le puis reessayez. Consultez le journal de l''installateur pour le detail.';
 end;
 
 procedure RemoveMinosProgramPayload;
@@ -1084,10 +1108,12 @@ var
 begin
   // dontcopy + ExtractTemporaryFile is only reliable during install, not
   // uninstall (a dontcopy resource is not guaranteed embedded in unins*.exe's
-  // own data) -- scripts/install/uninstall-program-payload.ps1 still ships in
-  // {app}\integration for reference/manual recovery, but the script actually
-  // run here is written directly to {tmp} via SaveStringToFile, which needs
-  // no extraction and works identically during install and uninstall.
+  // own data), so the script run here is written directly to {tmp} via
+  // SaveStringToFile, which needs no extraction and works identically during
+  // install and uninstall. The list below is the single source of truth for
+  // what this installer owns at uninstall time -- it must stay in sync with
+  // update-installation.ps1's own managed-relative-paths list; there is
+  // deliberately no second, separately-shipped copy of this logic to drift.
   //
   // -File, not -Command: -Command re-parses everything after the command
   // text as PowerShell script syntax, so a trailing "-InstallRoot <value>"
@@ -1098,7 +1124,7 @@ begin
   // call in this template.
   ScriptText :=
     'param([Parameter(Mandatory = $true)][string] $InstallRoot)' + #13#10 +
-    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
+    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''install.ps1'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
     'foreach ($name in $Names) {' + #13#10 +
     '    $p = Join-Path $InstallRoot $name' + #13#10 +
     '    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }' + #13#10 +
@@ -1113,7 +1139,7 @@ begin
     '    $remaining = @(Get-ChildItem -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue)' + #13#10 +
     '    if ($remaining.Count -eq 0) { Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue }' + #13#10 +
     '}' + #13#10;
-  ScriptPath := ExpandConstant('{tmp}\uninstall-program-payload-inline.ps1');
+  ScriptPath := ExpandConstant('{tmp}\uninstall-program-payload.ps1');
   if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');

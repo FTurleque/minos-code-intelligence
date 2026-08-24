@@ -10,8 +10,12 @@ $Builder = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) { throw "Installer template not found: $Template" }
 if (-not (Test-Path -LiteralPath $Builder -PathType Leaf)) { throw "Installer builder not found: $Builder" }
 
+$Engine = Join-Path $RepoRoot 'scripts\install\update-installation.ps1'
+if (-not (Test-Path -LiteralPath $Engine -PathType Leaf)) { throw "Transactional updater not found: $Engine" }
+
 $Text = [System.IO.File]::ReadAllText($Template, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
 $BuilderText = [System.IO.File]::ReadAllText($Builder, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
+$EngineText = [System.IO.File]::ReadAllText($Engine, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
 
 function Require([string] $Needle, [string] $Message) {
     if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) { throw $Message }
@@ -112,17 +116,42 @@ Require 'procedure RemoveMinosProgramPayload;' 'Uninstaller is missing the manag
 # an inline script block instead of extracting a helper file.
 Forbid "ExtractTemporaryFile('uninstall-program-payload.ps1')" 'Uninstall payload cleanup must not depend on extracting a dontcopy resource during uninstall.'
 Require 'SaveStringToFile(ScriptPath, ScriptText, False)' 'Uninstall payload cleanup does not write its script directly via SaveStringToFile.'
+Require 'SaveStringToFile(ExpandScriptPath, ExpandScriptText, False)' 'Payload extraction does not write its Expand-Archive script directly via SaveStringToFile.'
 # -Command re-parses everything after the command text as PowerShell script
 # syntax rather than binding trailing tokens as literal argv-style arguments
-# the way -File does -- an apostrophe in {app} (user-chosen, and exactly what
-# this installer must support) would corrupt the reconstructed script text.
-Forbid '-ExecutionPolicy Bypass -Command "& {param($InstallRoot' 'Uninstall payload cleanup must not pass {app} through -Command''s trailing-argument reparsing -- use -File with a real script file instead.'
+# the way -File does -- a path built from {app} or {tmp} can legitimately
+# contain an apostrophe (a user-chosen install directory, or a Windows
+# username), which would corrupt the reconstructed script text. Enforced as a
+# positive invariant across the WHOLE template, not just this one call site:
+# every PowerShell invocation here must use -File.
+Forbid '-ExecutionPolicy Bypass -Command' 'Every PowerShell invocation in this template must use -File, not -Command -- -Command re-parses trailing arguments as script text and corrupts on a path containing an apostrophe.'
 Require '''''app'''',''''lib'''',''''docker'''',''''integration'''',''''supply-chain''''' 'Uninstall payload cleanup does not enumerate the managed program directories.'
 # Inno's own "remove {app} if empty" pass runs during usUninstall, before
 # this usPostUninstall cleanup has emptied it -- without an explicit final
 # removal here, the (now genuinely empty) install root is left behind.
 Require 'Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue' 'Uninstall payload cleanup does not remove the install root itself once it is empty.'
 Require 'RemoveMinosProgramPayload;' 'Uninstaller does not invoke managed-directory payload cleanup at usPostUninstall.'
+
+# update-installation.ps1's $StagedDirectoryRelativePaths/$StagedFileRelativePaths
+# is the single canonical source of what this installer owns; the uninstall
+# cleanup script's $Names array above is a second, necessarily hand-written
+# copy (Inno Setup Script cannot read a sibling PowerShell file at compile
+# time). Rather than trust the two stay in sync by inspection, forward-check
+# every canonical name is actually present (Pascal-escaped) in the template.
+function Get-QuotedListItems([string] $SourceText, [string] $Pattern, [string] $What) {
+    $Match = [regex]::Match($SourceText, $Pattern)
+    if (-not $Match.Success) { throw "update-installation.ps1: could not locate $What." }
+    return @([regex]::Matches($Match.Groups[1].Value, "'([^']*)'") | ForEach-Object { $_.Groups[1].Value })
+}
+$EngineDirs = Get-QuotedListItems $EngineText '\$StagedDirectoryRelativePaths\s*=\s*@\(([^)]*)\)' 'the staged-directory list'
+$EngineFiles = Get-QuotedListItems $EngineText '\$StagedFileRelativePaths\s*=\s*@\(([^)]*)\)' 'the staged-file list'
+$EngineManaged = @($EngineDirs + $EngineFiles + @('.install-staging', '.install-rollback', '.minos-installation.json'))
+foreach ($Name in $EngineManaged) {
+    $Needle = "''" + $Name + "''"
+    if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) {
+        throw "Uninstall payload cleanup's managed-names list is missing '$Name' (staged by update-installation.ps1) -- the two lists have drifted out of sync."
+    }
+}
 
 # Uninstall must preserve user data by default, offer an explicit destructive
 # choice in interactive mode, avoid prompts/mutations in silent/smoke runs, and
@@ -154,7 +183,6 @@ Require-Builder 'MINOS-Release-Smoke-' 'Installer builder does not expose the is
 Require-Builder 'integration\probe-mcp-backend.ps1' 'Installer builder does not require the packaged backend handshake probe.'
 Require-Builder 'integration\switch-mcp-backend.ps1' 'Installer builder does not require the packaged backend switcher.'
 Require-Builder 'integration\update-installation.ps1' 'Installer builder does not require the packaged transactional updater.'
-Require-Builder 'integration\uninstall-program-payload.ps1' 'Installer builder does not require the packaged uninstall payload-cleanup helper.'
 Require-Builder 'Compress-Archive' 'Installer builder does not produce the transactional payload zip.'
 Require-Builder '@@PAYLOAD_ZIP@@' 'Installer builder does not substitute the payload zip token.'
 # ExtractTemporaryFile resolves a dontcopy resource by its exact source leaf

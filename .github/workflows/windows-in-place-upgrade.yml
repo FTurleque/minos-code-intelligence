@@ -106,9 +106,14 @@ jobs:
         shell: pwsh
         run: .\scripts\install\verify-windows-upgrade-transaction.ps1
 
-      - name: Installer template static verification
+      - name: MCP client detection and integration certification
         shell: pwsh
-        run: .\scripts\install\verify-installer-template.ps1
+        # Chains through detect-mcp-clients.ps1 (fake-CLI preflight matrix,
+        # including VS Code-shim rejection and a real timeout/kill probe),
+        # configure-codex-mcp.ps1, backend-agnostic client-config routing, and
+        # (as its final follow-up) the installer template static checks --
+        # previously never wired into any CI workflow at all.
+        run: .\scripts\install\verify-mcp-client-preflight.ps1
 
       - name: Install Inno Setup
         shell: pwsh
@@ -150,8 +155,11 @@ jobs:
       - name: Install smoke setup into an isolated, quote-hostile directory
         shell: pwsh
         run: |
-          # Deliberately embeds a space and an apostrophe to catch PowerShell/Inno/cmd quoting bugs.
-          $InstallDir = Join-Path $env:RUNNER_TEMP "MINOS O'Brien upgrade test"
+          # Deliberately embeds a space, an apostrophe, and accented characters
+          # to catch PowerShell/Inno/cmd quoting and encoding bugs across the
+          # real production invocation chain (Inno -> Windows PowerShell 5.1
+          # -> update-installation.ps1), not just the fault-injection harness.
+          $InstallDir = Join-Path $env:RUNNER_TEMP "MINOS O'Brien tst éè upgrade"
           "MINOS_UPGRADE_TEST_INSTALL_DIR=$InstallDir" >> $env:GITHUB_ENV
           $Setup = Get-ChildItem -Path 'target\dist\.smoke' -Filter 'MINOS-*-windows-x64-smoke-setup.exe' -File | Select-Object -First 1
           if (-not $Setup) { throw 'Smoke setup executable not found under target\dist\.smoke.' }

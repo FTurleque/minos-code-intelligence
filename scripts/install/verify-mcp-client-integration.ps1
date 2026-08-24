@@ -447,6 +447,94 @@ try {
     Assert-True ($null -ne $TimeoutValue.servers.memory) 'Timeout handling removed a pre-existing MCP server.'
     Assert-True ($TimeoutValue.keepMe -eq 'timeout-value') 'Timeout handling changed an unrelated JSON property.'
 
+    # Fail-closed on invalid JSON: a malformed config for one client must
+    # never be silently treated as empty, must never be overwritten, and --
+    # in non-strict mode -- must not block configuring a sibling client whose
+    # own config is valid.
+    $InvalidJsonConfig = Join-Path $Root 'invalid-json\copilot\mcp.json'
+    $InvalidJsonSiblingConfig = Join-Path $Root 'invalid-json\claude-desktop\claude_desktop_config.json'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InvalidJsonConfig) | Out-Null
+    '{not valid json,,,' | Set-Content -LiteralPath $InvalidJsonConfig -Encoding utf8 -NoNewline
+    $InvalidJsonRawBefore = [System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8)
+    Write-Utf8Json -Path $InvalidJsonSiblingConfig -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -ClaudeDesktop `
+        -DataRoot $DataRoot `
+        -StatePath (Join-Path $Root 'invalid-json\state.json') `
+        -LogPath (Join-Path $Root 'invalid-json\log.txt') `
+        -BackupRoot (Join-Path $Root 'invalid-json\backups') `
+        -CopilotJetBrainsConfigPath $InvalidJsonConfig `
+        -ClaudeDesktopConfigPath $InvalidJsonSiblingConfig
+
+    Assert-True ([System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8) -eq $InvalidJsonRawBefore) 'Invalid JSON configuration was overwritten instead of being left untouched.'
+    $InvalidJsonSiblingAfter = Read-Json -Path $InvalidJsonSiblingConfig
+    Assert-True ($null -ne $InvalidJsonSiblingAfter.mcpServers.minos) 'A sibling client with valid JSON was not configured after another selected client had invalid JSON (non-strict mode must not abort the whole run).'
+
+    $InvalidJsonRaised = $false
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -CopilotJetBrains `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath (Join-Path $Root 'invalid-json\strict-state.json') `
+            -LogPath (Join-Path $Root 'invalid-json\strict-log.txt') `
+            -BackupRoot (Join-Path $Root 'invalid-json\strict-backups') `
+            -CopilotJetBrainsConfigPath $InvalidJsonConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $InvalidJsonRaised = $true
+        Assert-True ($_.Exception.Message -match 'Invalid JSON configuration') 'Strict-mode invalid JSON failure did not report the expected diagnostic.'
+    }
+    Assert-True $InvalidJsonRaised 'Invalid JSON configuration should have caused a strict-mode failure.'
+    Assert-True ([System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8) -eq $InvalidJsonRawBefore) 'Invalid JSON configuration was overwritten by the strict-mode run.'
+
+    # Modification safety (JSON kind): an entry MINOS created and manages must
+    # be preserved -- not silently removed -- if the user edits it before
+    # uninstall. Already proven for the CLI kind above; this is the JSON-kind
+    # equivalent (Test-ManagedJsonEntryMatches mismatch handling).
+    $ModifiedJsonConfig = Join-Path $Root 'modified-json\copilot\mcp.json'
+    $ModifiedJsonState = Join-Path $Root 'modified-json\state.json'
+    $ModifiedJsonLog = Join-Path $Root 'modified-json\log.txt'
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $ModifiedJsonState `
+        -LogPath $ModifiedJsonLog `
+        -BackupRoot (Join-Path $Root 'modified-json\backups') `
+        -CopilotJetBrainsConfigPath $ModifiedJsonConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $ModifiedJsonValue = Read-Json -Path $ModifiedJsonConfig
+    $ModifiedJsonValue.servers.minos.command = 'C:\Other\minos.exe'
+    Write-Utf8Json -Path $ModifiedJsonConfig -Value $ModifiedJsonValue
+
+    $ModifiedJsonPreserveRaised = $false
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -Action Uninstall `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath $ModifiedJsonState `
+            -LogPath $ModifiedJsonLog `
+            -BackupRoot (Join-Path $Root 'modified-json\backups') `
+            -CopilotJetBrainsConfigPath $ModifiedJsonConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $ModifiedJsonPreserveRaised = $true
+    }
+    Assert-True $ModifiedJsonPreserveRaised 'Modified managed JSON entry should have been preserved with a strict-mode warning.'
+    $ModifiedJsonAfter = Read-Json -Path $ModifiedJsonConfig
+    Assert-True ($ModifiedJsonAfter.servers.minos.command -eq 'C:\Other\minos.exe') 'Modified managed JSON entry was overwritten/removed instead of being preserved.'
+
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green
     Write-Host 'Clients : Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop, Codex'
