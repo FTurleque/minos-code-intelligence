@@ -195,11 +195,12 @@ $SbomChecksum = "$Sbom.sha256"
 $Notices = Join-Path $RepoRoot "target\dist\MINOS-$Version-THIRD-PARTY-NOTICES.txt"
 $NoticesChecksum = "$Notices.sha256"
 $RequiredInstalledFiles = @(
-    'minos.cmd','minos-mcp.cmd','VERSION','RUNTIME-MODULES.txt','RELEASE-MANIFEST.json',
+    'minos.cmd','minos-mcp.cmd','VERSION','RUNTIME-MODULES.txt','RELEASE-MANIFEST.json','install.ps1',
     'app\minos.exe','app\runtime\bin\java.exe','app\runtime\bin\server\jvm.dll','app\runtime\lib\modules',
     'lib\minos.jar','supply-chain\minos.cdx.json','supply-chain\THIRD-PARTY-NOTICES.txt',
     'integration\configure-mcp-clients.ps1','integration\configure-mcp-clients-setup.ps1',
     'integration\configure-codex-mcp.ps1','integration\detect-mcp-clients.ps1','integration\uninstall-mcp-clients.ps1',
+    'integration\update-installation.ps1','integration\switch-mcp-backend.ps1','integration\probe-mcp-backend.ps1',
     'docker\Dockerfile.mcp.release','docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1','docker\scripts\configure-docker-mcp.ps1'
 )
@@ -263,6 +264,12 @@ if (-not $PublishOnly) {
         if ([string]::IsNullOrWhiteSpace($Uninstaller)) { throw "Isolated setup did not register an uninstaller under $SetupInstallRoot" }
         Invoke-ProcessChecked -File $Uninstaller -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Failure 'MINOS isolated setup silent uninstall failed'
         $SetupUninstalled = $true
+        # Inno's own uninstaller self-deletes (unins*.exe/.dat) via a detached
+        # helper process that starts only after the waited-on process this
+        # call already blocked on has exited -- give it a moment before
+        # checking, or this flakes on a race that has nothing to do with
+        # RemoveMinosProgramPayload's own cleanup already having completed.
+        Start-Sleep -Seconds 2
         if (Test-Path -LiteralPath $SetupInstallRoot) { throw "MINOS isolated setup uninstall left the program directory behind: $SetupInstallRoot" }
     }
     finally {

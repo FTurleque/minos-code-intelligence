@@ -15,7 +15,9 @@ if (-not (Test-Path -LiteralPath $Updater -PathType Leaf)) {
 }
 
 # Deliberately embeds a space to catch path-quoting bugs across PowerShell/Exec boundaries.
-$Sandbox = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-upgrade-verify-' + [Guid]::NewGuid().ToString('N') + ' with spaces')
+# Space, apostrophe, and accented characters together -- catches PowerShell
+# quoting/encoding bugs across the whole path, not just the ASCII subset.
+$Sandbox = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-upgrade-verify-' + [Guid]::NewGuid().ToString('N') + " O'Brien tst éè with spaces")
 New-Item -ItemType Directory -Force -Path $Sandbox | Out-Null
 
 function Assert-True([bool] $Condition, [string] $Message) {
@@ -42,6 +44,11 @@ function New-FixturePackage {
     "# probe-mcp-backend $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\probe-mcp-backend.ps1') -Encoding ascii
     "# detect-mcp-clients $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\detect-mcp-clients.ps1') -Encoding ascii
     "# configure-mcp-clients $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\configure-mcp-clients.ps1') -Encoding ascii
+    "# configure-mcp-clients-setup $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\configure-mcp-clients-setup.ps1') -Encoding ascii
+    "# configure-codex-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\configure-codex-mcp.ps1') -Encoding ascii
+    "# configure-runtime-settings $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\configure-runtime-settings.ps1') -Encoding ascii
+    "# uninstall-mcp-clients $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\uninstall-mcp-clients.ps1') -Encoding ascii
+    "# update-installation $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\update-installation.ps1') -Encoding ascii
     "# Dockerfile $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\Dockerfile.mcp.release') -Encoding ascii
     "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.prod.yaml') -Encoding ascii
     "# prod-mcp-release $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\prod-mcp-release.ps1') -Encoding ascii
@@ -52,6 +59,7 @@ function New-FixturePackage {
     "@echo off`r`nrem minos-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos-mcp.cmd') -Encoding ascii
     "java.base" | Set-Content -LiteralPath (Join-Path $Root 'RUNTIME-MODULES.txt') -Encoding ascii
     "MINOS $Version" | Set-Content -LiteralPath (Join-Path $Root 'README.txt') -Encoding ascii
+    "# install $Version" | Set-Content -LiteralPath (Join-Path $Root 'install.ps1') -Encoding ascii
 
     $Commit = '0' * 40
     ([ordered]@{ schemaVersion = 1; version = $Version; commit = $Commit } | ConvertTo-Json) |

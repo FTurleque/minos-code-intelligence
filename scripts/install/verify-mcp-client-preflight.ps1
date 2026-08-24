@@ -34,6 +34,14 @@ function Read-IniValue([string] $Path, [string] $Section, [string] $Key) {
 
 $Root = Join-Path ([System.IO.Path]::GetTempPath()) ('minos-mcp-preflight-' + [Guid]::NewGuid())
 $OldPath = $env:Path
+
+# Resolved against the real, unmodified PATH before any scenario below
+# narrows $env:Path -- looking it up later would search whatever narrowed
+# PATH happens to be active at that point instead of the real one.
+$RealPwshCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+if (-not $RealPwshCommand) { $RealPwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue }
+$RealPwshDir = if ($RealPwshCommand) { Split-Path -Parent $RealPwshCommand.Source } else { $null }
+
 try {
     $VsCodeBin = Join-Path $Root 'Microsoft VS Code\bin'
     $CliBin = Join-Path $Root 'cli'
@@ -75,6 +83,84 @@ exit /b 1
     $Bytes = [System.IO.File]::ReadAllBytes($Output)
     $HasUtf16LeBom = $Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE
     Assert-True $HasUtf16LeBom 'Preflight INI must be UTF-16 LE with BOM for deterministic Windows/Inno Setup Unicode parsing.'
+
+    # --- Absent: no copilot command resolves. Scoped to Copilot CLI only --
+    # unlike Claude/Codex, it has no filesystem-marker fallback (only PATH
+    # resolution), so it's the one client this can isolate reliably: Claude
+    # Code's embedded-CLI and Claude/Codex Desktop's filesystem-marker checks
+    # look at real locations under the current user profile ($env:APPDATA
+    # etc.) that this test cannot safely fake without a seam in
+    # detect-mcp-clients.ps1 to override them -- clearing PATH alone doesn't
+    # isolate a dev/CI machine that happens to have any of those installed.
+    $AbsentBin = Join-Path $Root 'absent-bin'
+    New-Item -ItemType Directory -Force -Path $AbsentBin | Out-Null
+    $env:Path = $AbsentBin
+    $AbsentOutput = Join-Path $Root 'preflight-absent.ini'
+    & $Detector -OutputPath $AbsentOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $AbsentOutput 'CopilotCli' 'Available') -eq '0') 'Absent Copilot CLI was incorrectly reported as available.'
+
+    # --- Real, non-shim Copilot CLI compatible with MCP: proves the VS Code
+    # shim rejection above isn't the only path Copilot CLI can ever take ---
+    $RealCliBin = Join-Path $Root 'real-cli'
+    New-Item -ItemType Directory -Force -Path $RealCliBin | Out-Null
+    @'
+@echo off
+if /I "%~1"=="mcp" if /I "%~2"=="--help" exit /b 0
+exit /b 1
+'@ | Set-Content -LiteralPath (Join-Path $RealCliBin 'copilot.cmd') -Encoding ascii
+    $env:Path = "$RealCliBin;$AbsentBin"
+    $RealCliOutput = Join-Path $Root 'preflight-real-copilot.ini'
+    & $Detector -OutputPath $RealCliOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $RealCliOutput 'CopilotCli' 'Available') -eq '1') 'A real, non-VS-Code-shim Copilot CLI compatible with MCP was not detected.'
+    Assert-True ((Read-IniValue $RealCliOutput 'CopilotCli' 'Mode') -eq 'cli') 'Real Copilot CLI mode should be cli.'
+
+    # --- Copilot CLI resolves (not a shim) but fails the mcp --help capability
+    # probe -- covers both "exits with an error code" and "present without MCP
+    # support", which the detector treats identically (non-zero exit = incompatible) ---
+    $NoMcpBin = Join-Path $Root 'no-mcp-cli'
+    New-Item -ItemType Directory -Force -Path $NoMcpBin | Out-Null
+    @'
+@echo off
+exit /b 3
+'@ | Set-Content -LiteralPath (Join-Path $NoMcpBin 'copilot.cmd') -Encoding ascii
+    $env:Path = "$NoMcpBin;$AbsentBin"
+    $NoMcpOutput = Join-Path $Root 'preflight-no-mcp-copilot.ini'
+    & $Detector -OutputPath $NoMcpOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $NoMcpOutput 'CopilotCli' 'Available') -eq '0') 'A Copilot CLI that fails the mcp --help probe was incorrectly reported as available.'
+    $NoMcpReason = Read-IniValue $NoMcpOutput 'CopilotCli' 'Reason'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($NoMcpReason)) 'A Copilot CLI without MCP support must still report a diagnostic reason.'
+
+    # --- Copilot CLI resolves but hangs: the detector's own capability-probe
+    # timeout/kill path (Invoke-CapabilityProbe), independent of and distinct
+    # from configure-mcp-clients.ps1's separate timeout implementation ---
+    $HangingBin = Join-Path $Root 'hanging-cli'
+    New-Item -ItemType Directory -Force -Path $HangingBin | Out-Null
+    $HangingPidPath = Join-Path $HangingBin 'copilot.pid'
+    @"
+[System.IO.File]::WriteAllText('$($HangingPidPath.Replace("'", "''"))', [string]`$PID, [System.Text.Encoding]::ASCII)
+Start-Sleep -Seconds 30
+exit 0
+"@ | Set-Content -LiteralPath (Join-Path $HangingBin 'copilot.ps1') -Encoding utf8
+    # .ps1 launchers are routed through pwsh.exe (Resolve-ProbePowerShell), so
+    # pwsh must actually resolve here -- without it the probe fails instantly
+    # with a "pwsh required" diagnostic instead of exercising the timeout/kill
+    # path this scenario exists to prove.
+    Assert-True ($null -ne $RealPwshDir) 'pwsh.exe must be resolvable to exercise the hanging-.ps1-launcher timeout scenario.'
+    $env:Path = "$HangingBin;$RealPwshDir;$AbsentBin"
+    $HangingOutput = Join-Path $Root 'preflight-hanging-copilot.ini'
+    $HangingWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    & $Detector -OutputPath $HangingOutput -ProbeTimeoutSeconds 2
+    $HangingWatch.Stop()
+    Assert-True ((Read-IniValue $HangingOutput 'CopilotCli' 'Available') -eq '0') 'A hanging Copilot CLI was incorrectly reported as available.'
+    # Lower bound proves the probe actually waited out its configured timeout
+    # rather than failing instantly for an unrelated reason (e.g. pwsh missing).
+    Assert-True ($HangingWatch.Elapsed.TotalSeconds -ge 1.5) 'The hanging Copilot CLI preflight probe returned too fast to have actually exercised the timeout.'
+    Assert-True ($HangingWatch.Elapsed.TotalSeconds -lt 15) 'The hanging Copilot CLI preflight probe was not bounded by its configured timeout.'
+    if (Test-Path -LiteralPath $HangingPidPath -PathType Leaf) {
+        $HangingProcessId = [int](Get-Content -Raw -LiteralPath $HangingPidPath)
+        Start-Sleep -Milliseconds 200
+        Assert-True ($null -eq (Get-Process -Id $HangingProcessId -ErrorAction SilentlyContinue)) 'The timed-out Copilot CLI preflight probe process was left running.'
+    }
 
     Write-Host 'MINOS MCP CLIENT PREFLIGHT VERIFICATION SUCCESS' -ForegroundColor Green
 }

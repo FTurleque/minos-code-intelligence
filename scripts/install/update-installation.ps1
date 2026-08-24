@@ -28,6 +28,34 @@ if ($env:OS -ne 'Windows_NT') {
 $PackageRoot = [System.IO.Path]::GetFullPath($PackageRoot)
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 
+# Move-Item -Force is NOT atomic when the destination already exists: it
+# deletes then moves as two separate operations (empirically confirmed via
+# FileSystemWatcher -- a Deleted event fires before the Renamed event), which
+# is exactly the crash window this journal's durability guarantee depends on
+# not having, since transaction.json is overwritten on the 'activating' ->
+# 'committed' transition. MoveFileEx with MOVEFILE_REPLACE_EXISTING is the
+# genuinely atomic Windows primitive for this (the same one the reference
+# transactional-upgrade design uses). Guarded because this script can be
+# invoked multiple times within one PowerShell process (e.g. by the
+# fault-injection test harness), and Add-Type throws if the same type is
+# defined twice in one AppDomain.
+if (-not ([System.Management.Automation.PSTypeName]'Minos.Update.NativeMethods').Type) {
+    Add-Type -Namespace 'Minos.Update' -Name 'NativeMethods' -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, uint dwFlags);
+'@ | Out-Null
+}
+$MoveFileExReplaceExisting = 0x1
+$MoveFileExWriteThrough = 0x8
+
+function Publish-DurableFile([string] $Source, [string] $Destination) {
+    $Succeeded = [Minos.Update.NativeMethods]::MoveFileEx($Source, $Destination, $MoveFileExReplaceExisting -bor $MoveFileExWriteThrough)
+    if (-not $Succeeded) {
+        $ErrorCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw "MINOS_UPDATE_DURABLE_WRITE_FAILED: MoveFileEx a echoue (code $ErrorCode) en publiant $Destination"
+    }
+}
+
 $ManagedApplicationName = 'MINOS'
 $TransactionSchemaVersion = '1.1'
 $StageRoot = Join-Path $InstallRoot '.install-staging'
@@ -40,7 +68,11 @@ $OwnershipMarkerPath = Join-Path $InstallRoot '.minos-installation.json'
 # old version's directory but absent from the new package's directory is
 # implicitly discarded along with the rest of that directory's rollback backup.
 $StagedDirectoryRelativePaths = @('app', 'lib', 'docker', 'integration', 'supply-chain')
-$StagedFileRelativePaths = @('minos.cmd', 'minos-mcp.cmd', 'RUNTIME-MODULES.txt', 'RELEASE-MANIFEST.json', 'VERSION', 'README.txt')
+# install.ps1 is the portable/ZIP distribution's own bootstrapper; it has no
+# function once already Inno-installed, but the pre-transactional-engine
+# wildcard [Files] copy always shipped it into {app} too. Keep staging it so
+# an Inno-managed install still matches that prior behavior exactly.
+$StagedFileRelativePaths = @('minos.cmd', 'minos-mcp.cmd', 'RUNTIME-MODULES.txt', 'RELEASE-MANIFEST.json', 'VERSION', 'README.txt', 'install.ps1')
 $ManagedRelativePaths = $StagedDirectoryRelativePaths + $StagedFileRelativePaths + @(
     '.install-staging', '.install-rollback', '.minos-installation.json'
 )
@@ -132,7 +164,7 @@ function Write-DurableJson([string] $Path, [object] $Object, [int] $Depth = 6) {
     $Json = $Object | ConvertTo-Json -Depth $Depth
     try {
         [System.IO.File]::WriteAllText($Temporary, $Json, [System.Text.UTF8Encoding]::new($false))
-        Move-Item -LiteralPath $Temporary -Destination $Path -Force
+        Publish-DurableFile -Source $Temporary -Destination $Path
     }
     finally {
         Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue
@@ -214,6 +246,11 @@ function Assert-Package {
         'integration\probe-mcp-backend.ps1',
         'integration\detect-mcp-clients.ps1',
         'integration\configure-mcp-clients.ps1',
+        'integration\configure-mcp-clients-setup.ps1',
+        'integration\configure-codex-mcp.ps1',
+        'integration\configure-runtime-settings.ps1',
+        'integration\uninstall-mcp-clients.ps1',
+        'integration\update-installation.ps1',
         'docker\Dockerfile.mcp.release',
         'docker\compose.mcp.prod.yaml',
         'docker\scripts\prod-mcp-release.ps1',
@@ -225,7 +262,8 @@ function Assert-Package {
         'RUNTIME-MODULES.txt',
         'RELEASE-MANIFEST.json',
         'VERSION',
-        'README.txt'
+        'README.txt',
+        'install.ps1'
     )
     $Missing = @($Required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $PackageRoot $_)) })
     if ($Missing.Count -gt 0) {
@@ -287,11 +325,11 @@ function ConvertTo-NormalizedTransactionEntries([array] $Entries) {
     return , $Normalized
 }
 
-function Get-TransactionCoreJson([string] $Phase, [array] $Entries, [string] $UpdatedAt) {
+function Get-TransactionCoreJson([string] $Phase, [array] $NormalizedEntries, [string] $UpdatedAt) {
     $Core = [ordered]@{
         schemaVersion = $TransactionSchemaVersion
         phase         = $Phase
-        entries       = ConvertTo-NormalizedTransactionEntries $Entries
+        entries       = $NormalizedEntries
         updatedAt     = $UpdatedAt
     }
     return ($Core | ConvertTo-Json -Depth 6 -Compress)
@@ -299,11 +337,12 @@ function Get-TransactionCoreJson([string] $Phase, [array] $Entries, [string] $Up
 
 function Write-TransactionManifest([string] $Phase, [array] $Entries) {
     $UpdatedAt = [DateTime]::UtcNow.ToString('o')
-    $Checksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase $Phase -Entries $Entries -UpdatedAt $UpdatedAt)
+    $NormalizedEntries = ConvertTo-NormalizedTransactionEntries $Entries
+    $Checksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase $Phase -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
     $Document = [ordered]@{
         schemaVersion  = $TransactionSchemaVersion
         phase          = $Phase
-        entries        = ConvertTo-NormalizedTransactionEntries $Entries
+        entries        = $NormalizedEntries
         updatedAt      = $UpdatedAt
         checksumSha256 = $Checksum
     }
@@ -314,7 +353,8 @@ function Write-TransactionManifest([string] $Phase, [array] $Entries) {
 function Read-TransactionManifest {
     $Parsed = (Get-Content -LiteralPath $TransactionPath -Raw) | ConvertFrom-Json
     $UpdatedAt = ConvertTo-TransactionTimestampString $Parsed.updatedAt
-    $ExpectedChecksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase ([string]$Parsed.phase) -Entries @($Parsed.entries) -UpdatedAt $UpdatedAt)
+    $NormalizedEntries = ConvertTo-NormalizedTransactionEntries @($Parsed.entries)
+    $ExpectedChecksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase ([string]$Parsed.phase) -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
     if ([string]$Parsed.checksumSha256 -ne $ExpectedChecksum) {
         throw 'MINOS_UPDATE_RECOVERY_REQUIRED: checksum du journal de transaction invalide.'
     }
@@ -362,8 +402,9 @@ function Get-InstalledMcpProcesses {
 
 function Stop-InstalledMcpProcesses {
     if ($SkipProcessStop) { return }
-    if ((Get-InstalledMcpProcesses).Count -eq 0) { return }
-    foreach ($Process in (Get-InstalledMcpProcesses)) {
+    $Running = Get-InstalledMcpProcesses
+    if ($Running.Count -eq 0) { return }
+    foreach ($Process in $Running) {
         try { Stop-Process -Id ([int]$Process.ProcessId) -Force -ErrorAction Stop } catch { }
     }
     Start-Sleep -Milliseconds 500
@@ -547,7 +588,7 @@ function Recover-InterruptedTransaction {
 # Main.
 # ---------------------------------------------------------------------------
 
-[void](Assert-Package)
+$PackageManifest = Assert-Package
 Assert-SafeInstallRoot
 New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
 Ensure-OwnershipMarker
@@ -581,5 +622,7 @@ if ($CleanupFailures.Count -gt 0) {
     Write-Warning "MINOS_UPDATE_CLEANUP_PENDING: $($CleanupFailures -join '; ')"
 }
 
-$FinalManifest = Get-Content -LiteralPath (Join-Path $InstallRoot 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
-Write-Host "MINOS_UPDATE_COMMITTED version=$($FinalManifest.version) root=$InstallRoot cleanup=$CleanupState" -ForegroundColor Green
+# RELEASE-MANIFEST.json is one of the staged flat files, so the copy now at
+# $InstallRoot is byte-identical to what Assert-Package already parsed and
+# validated at $PackageRoot -- no need to re-read and re-parse it here.
+Write-Host "MINOS_UPDATE_COMMITTED version=$($PackageManifest.version) root=$InstallRoot cleanup=$CleanupState" -ForegroundColor Green
