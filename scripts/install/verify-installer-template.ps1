@@ -107,7 +107,11 @@ Require 'minos-payload' 'Installer does not reference the extracted payload dire
 Require 'UsePreviousAppDir=yes' 'Installer does not reuse the previous install directory on upgrade.'
 Require 'UninstallLogMode=overwrite' 'Installer does not keep the uninstall log consistent with updater-owned payload files.'
 Require 'procedure RemoveMinosProgramPayload;' 'Uninstaller is missing the managed-directory payload cleanup.'
-Require "ExtractTemporaryFile('uninstall-program-payload.ps1')" 'Uninstaller does not extract the payload-cleanup helper.'
+# dontcopy + ExtractTemporaryFile is not reliably available during uninstall
+# (unlike during install, where it is required below), so cleanup must run as
+# an inline script block instead of extracting a helper file.
+Forbid "ExtractTemporaryFile('uninstall-program-payload.ps1')" 'Uninstall payload cleanup must not depend on extracting a dontcopy resource during uninstall.'
+Require '-Names app,lib,docker,integration,supply-chain' 'Uninstall payload cleanup does not enumerate the managed program directories.'
 Require 'RemoveMinosProgramPayload;' 'Uninstaller does not invoke managed-directory payload cleanup at usPostUninstall.'
 
 # Uninstall must preserve user data by default, offer an explicit destructive

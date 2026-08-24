@@ -52,7 +52,6 @@ Name: "addtopath"; Description: "Ajouter MINOS au PATH de l'utilisateur"; GroupD
 ; zip in PrepareToInstall before Inno writes any of its own setup metadata.
 Source: "{#MinosPayloadZip}"; Flags: dontcopy noencryption
 Source: "{#MinosSourceDir}\integration\update-installation.ps1"; Flags: dontcopy
-Source: "{#MinosSourceDir}\integration\uninstall-program-payload.ps1"; Flags: dontcopy
 Source: "{#MinosSourceDir}\integration\detect-mcp-clients.ps1"; Flags: dontcopy
 
 [Icons]
@@ -1078,17 +1077,24 @@ end;
 procedure RemoveMinosProgramPayload;
 var
   PowerShell: String;
-  Script: String;
   Parameters: String;
   ResultCode: Integer;
 begin
-  try ExtractTemporaryFile('uninstall-program-payload.ps1');
-  except
-    exit;
-  end;
+  // dontcopy + ExtractTemporaryFile is only reliable during install, not
+  // uninstall (a dontcopy resource is not guaranteed embedded in unins*.exe's
+  // own data) -- scripts/install/uninstall-program-payload.ps1 still ships in
+  // {app}\integration for reference/manual recovery, but the actual removal
+  // here runs as an inline script block so it never depends on extracting
+  // anything. {app} is passed as a real argument value (never embedded in the
+  // single-quoted script text below) because, unlike {tmp}, it is user-chosen
+  // and can legitimately contain an apostrophe.
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Script := ExpandConstant('{tmp}\uninstall-program-payload.ps1');
-  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+  Parameters :=
+    '-NoProfile -ExecutionPolicy Bypass -Command "& {param($InstallRoot, [string[]]$Names) ' +
+    'foreach ($name in $Names) { $p = Join-Path $InstallRoot $name; ' +
+    'if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } } }" ' +
+    '-InstallRoot "' + ExpandConstant('{app}') + '" ' +
+    '-Names app,lib,docker,integration,supply-chain,minos.cmd,minos-mcp.cmd,RUNTIME-MODULES.txt,RELEASE-MANIFEST.json,VERSION,README.txt,.install-staging,.install-rollback,.minos-installation.json';
   Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
