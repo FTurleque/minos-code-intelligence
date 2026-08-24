@@ -111,7 +111,13 @@ Require 'procedure RemoveMinosProgramPayload;' 'Uninstaller is missing the manag
 # (unlike during install, where it is required below), so cleanup must run as
 # an inline script block instead of extracting a helper file.
 Forbid "ExtractTemporaryFile('uninstall-program-payload.ps1')" 'Uninstall payload cleanup must not depend on extracting a dontcopy resource during uninstall.'
-Require '-Names app,lib,docker,integration,supply-chain' 'Uninstall payload cleanup does not enumerate the managed program directories.'
+Require 'SaveStringToFile(ScriptPath, ScriptText, False)' 'Uninstall payload cleanup does not write its script directly via SaveStringToFile.'
+# -Command re-parses everything after the command text as PowerShell script
+# syntax rather than binding trailing tokens as literal argv-style arguments
+# the way -File does -- an apostrophe in {app} (user-chosen, and exactly what
+# this installer must support) would corrupt the reconstructed script text.
+Forbid '-ExecutionPolicy Bypass -Command "& {param($InstallRoot' 'Uninstall payload cleanup must not pass {app} through -Command''s trailing-argument reparsing -- use -File with a real script file instead.'
+Require '''''app'''',''''lib'''',''''docker'''',''''integration'''',''''supply-chain''''' 'Uninstall payload cleanup does not enumerate the managed program directories.'
 Require 'RemoveMinosProgramPayload;' 'Uninstaller does not invoke managed-directory payload cleanup at usPostUninstall.'
 
 # Uninstall must preserve user data by default, offer an explicit destructive

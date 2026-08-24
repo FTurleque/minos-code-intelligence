@@ -1077,25 +1077,39 @@ end;
 procedure RemoveMinosProgramPayload;
 var
   PowerShell: String;
+  ScriptPath: String;
+  ScriptText: String;
   Parameters: String;
   ResultCode: Integer;
 begin
   // dontcopy + ExtractTemporaryFile is only reliable during install, not
   // uninstall (a dontcopy resource is not guaranteed embedded in unins*.exe's
   // own data) -- scripts/install/uninstall-program-payload.ps1 still ships in
-  // {app}\integration for reference/manual recovery, but the actual removal
-  // here runs as an inline script block so it never depends on extracting
-  // anything. {app} is passed as a real argument value (never embedded in the
-  // single-quoted script text below) because, unlike {tmp}, it is user-chosen
-  // and can legitimately contain an apostrophe.
+  // {app}\integration for reference/manual recovery, but the script actually
+  // run here is written directly to {tmp} via SaveStringToFile, which needs
+  // no extraction and works identically during install and uninstall.
+  //
+  // -File, not -Command: -Command re-parses everything after the command
+  // text as PowerShell script syntax, so a trailing "-InstallRoot <value>"
+  // there is NOT passed as a literal argv-style argument the way it is under
+  // -File -- an apostrophe in {app} (user-chosen, and exactly what this
+  // installer must support) would corrupt the reconstructed script text.
+  // -File binds trailing arguments literally, matching every other Exec()
+  // call in this template.
+  ScriptText :=
+    'param([Parameter(Mandatory = $true)][string] $InstallRoot)' + #13#10 +
+    '$Names = @(''app'',''lib'',''docker'',''integration'',''supply-chain'',''minos.cmd'',''minos-mcp.cmd'',''RUNTIME-MODULES.txt'',''RELEASE-MANIFEST.json'',''VERSION'',''README.txt'',''.install-staging'',''.install-rollback'',''.minos-installation.json'')' + #13#10 +
+    'foreach ($name in $Names) {' + #13#10 +
+    '    $p = Join-Path $InstallRoot $name' + #13#10 +
+    '    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }' + #13#10 +
+    '}' + #13#10;
+  ScriptPath := ExpandConstant('{tmp}\uninstall-program-payload-inline.ps1');
+  if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
+
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Parameters :=
-    '-NoProfile -ExecutionPolicy Bypass -Command "& {param($InstallRoot, [string[]]$Names) ' +
-    'foreach ($name in $Names) { $p = Join-Path $InstallRoot $name; ' +
-    'if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } } }" ' +
-    '-InstallRoot "' + ExpandConstant('{app}') + '" ' +
-    '-Names app,lib,docker,integration,supply-chain,minos.cmd,minos-mcp.cmd,RUNTIME-MODULES.txt,RELEASE-MANIFEST.json,VERSION,README.txt,.install-staging,.install-rollback,.minos-installation.json';
-  Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" -InstallRoot "' + ExpandConstant('{app}') + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('RemoveMinosProgramPayload: cleanup script did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
