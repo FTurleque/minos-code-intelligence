@@ -151,7 +151,13 @@ New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out
 $GeneratedIss = Join-Path $InstallerWork $GeneratedIssName
 $Setup = Join-Path $InstallerOutput "$OutputBaseFilename.exe"
 $Checksum = "$Setup.sha256"
-$PayloadZip = Join-Path $InstallerWork "$DistributionName-payload.zip"
+# Fixed literal name, not version-suffixed: minos-installer.iss.template's
+# PrepareToInstall calls ExtractTemporaryFile('minos-payload.zip') by this
+# exact leaf name (dontcopy resources are resolved by source filename, not by
+# the full -PackageRoot/-InstallerWork path). Production and smoke builds run
+# sequentially and each removes its own copy in the `finally` block below, so
+# reusing this fixed name across both is safe.
+$PayloadZip = Join-Path $InstallerWork 'minos-payload.zip'
 
 Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue

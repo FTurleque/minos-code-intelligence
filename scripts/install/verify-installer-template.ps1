@@ -143,5 +143,11 @@ Require-Builder 'integration\update-installation.ps1' 'Installer builder does no
 Require-Builder 'integration\uninstall-program-payload.ps1' 'Installer builder does not require the packaged uninstall payload-cleanup helper.'
 Require-Builder 'Compress-Archive' 'Installer builder does not produce the transactional payload zip.'
 Require-Builder '@@PAYLOAD_ZIP@@' 'Installer builder does not substitute the payload zip token.'
+# ExtractTemporaryFile resolves a dontcopy resource by its exact source leaf
+# filename, not by the -PackageRoot/-InstallerWork path it was built under --
+# a version-suffixed zip filename here would silently break PrepareToInstall
+# at real-install time (caught only by a compiled-EXE-level test, not by any
+# static or PS1-level check).
+Require-Builder "'minos-payload.zip'" 'Installer builder does not use the fixed payload zip filename PrepareToInstall expects.'
 
 Write-Host 'MINOS INSTALLER TEMPLATE VERIFICATION SUCCESS' -ForegroundColor Green
