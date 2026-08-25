@@ -89,7 +89,12 @@ function Resolve-SemanticProvider([string] $Requested) {
 }
 
 function Compose([string[]] $Arguments) {
-    & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
+    # Stdin MUST be a non-terminal pipe here: some invocation contexts (notably an
+    # installer's inherited console) leave stdin attached to a handle that satisfies
+    # isatty() without any human able to answer it. Compose only prompts interactively
+    # ("... Recreate (data will be lost)?") when it believes stdin is a real terminal;
+    # forcing it through a PowerShell pipe guarantees non-interactive, fail-fast behavior.
+    $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
 }
 
