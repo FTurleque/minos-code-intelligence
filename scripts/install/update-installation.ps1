@@ -325,9 +325,9 @@ function ConvertTo-NormalizedTransactionEntries([array] $Entries) {
     return , $Normalized
 }
 
-function Get-TransactionCoreJson([string] $Phase, [array] $NormalizedEntries, [string] $UpdatedAt) {
+function Get-TransactionCoreJson([string] $SchemaVersion, [string] $Phase, [array] $NormalizedEntries, [string] $UpdatedAt) {
     $Core = [ordered]@{
-        schemaVersion = $TransactionSchemaVersion
+        schemaVersion = $SchemaVersion
         phase         = $Phase
         entries       = $NormalizedEntries
         updatedAt     = $UpdatedAt
@@ -338,7 +338,7 @@ function Get-TransactionCoreJson([string] $Phase, [array] $NormalizedEntries, [s
 function Write-TransactionManifest([string] $Phase, [array] $Entries) {
     $UpdatedAt = [DateTime]::UtcNow.ToString('o')
     $NormalizedEntries = ConvertTo-NormalizedTransactionEntries $Entries
-    $Checksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase $Phase -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
+    $Checksum = Get-Sha256Hex (Get-TransactionCoreJson -SchemaVersion $TransactionSchemaVersion -Phase $Phase -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
     $Document = [ordered]@{
         schemaVersion  = $TransactionSchemaVersion
         phase          = $Phase
@@ -354,7 +354,10 @@ function Read-TransactionManifest {
     $Parsed = (Get-Content -LiteralPath $TransactionPath -Raw) | ConvertFrom-Json
     $UpdatedAt = ConvertTo-TransactionTimestampString $Parsed.updatedAt
     $NormalizedEntries = ConvertTo-NormalizedTransactionEntries @($Parsed.entries)
-    $ExpectedChecksum = Get-Sha256Hex (Get-TransactionCoreJson -Phase ([string]$Parsed.phase) -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
+    # Recompute using the schemaVersion actually recorded in the journal, not this
+    # script's own $TransactionSchemaVersion constant -- a future schema bump must
+    # not make every journal written by a prior version look tampered with.
+    $ExpectedChecksum = Get-Sha256Hex (Get-TransactionCoreJson -SchemaVersion ([string]$Parsed.schemaVersion) -Phase ([string]$Parsed.phase) -NormalizedEntries $NormalizedEntries -UpdatedAt $UpdatedAt)
     if ([string]$Parsed.checksumSha256 -ne $ExpectedChecksum) {
         throw 'MINOS_UPDATE_RECOVERY_REQUIRED: checksum du journal de transaction invalide.'
     }
@@ -381,6 +384,30 @@ function Get-CurrentProcessLineage {
     return , $Chain
 }
 
+function Test-ProcessRunsMinosExe([object] $Candidate, [string] $Needle) {
+    # Prefer WMI's own resolved executable path -- an exact match, not a
+    # substring search, so an unrelated process that merely references this
+    # path in one of its arguments (a log viewer, an editor, a grep-like
+    # tool) is never mistaken for a running minos.exe and force-killed.
+    $ExecutablePath = [string]$Candidate.ExecutablePath
+    if (-not [string]::IsNullOrEmpty($ExecutablePath)) {
+        return $ExecutablePath.Equals($Needle, [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    # ExecutablePath can be unresolved by WMI in rare cases; fall back to the
+    # command line's own leading token (the invoked executable itself, not
+    # its arguments), still an exact match rather than IndexOf-anywhere.
+    $CommandLine = [string]$Candidate.CommandLine
+    if ([string]::IsNullOrEmpty($CommandLine)) { return $false }
+    $Leading = if ($CommandLine.StartsWith('"')) {
+        $EndQuote = $CommandLine.IndexOf('"', 1)
+        if ($EndQuote -lt 0) { $CommandLine.Substring(1) } else { $CommandLine.Substring(1, $EndQuote - 1) }
+    }
+    else {
+        $CommandLine.Split(' ')[0]
+    }
+    return $Leading.Equals($Needle, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-InstalledMcpProcesses {
     $Lineage = Get-CurrentProcessLineage
     $Needle = Join-Path $InstallRoot 'app\minos.exe'
@@ -390,9 +417,7 @@ function Get-InstalledMcpProcesses {
     catch { return , $MatchedProcesses }
     foreach ($Candidate in $Candidates) {
         if ($Lineage.Contains([int]$Candidate.ProcessId)) { continue }
-        $CommandLine = [string]$Candidate.CommandLine
-        if ([string]::IsNullOrEmpty($CommandLine)) { continue }
-        if ($CommandLine.IndexOf($Needle, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        if (Test-ProcessRunsMinosExe -Candidate $Candidate -Needle $Needle) {
             $MatchedProcesses.Add($Candidate)
         }
     }
