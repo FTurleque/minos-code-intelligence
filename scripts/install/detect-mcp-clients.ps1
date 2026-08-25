@@ -10,7 +10,16 @@ param(
     # configure-codex-mcp.ps1. Read-only here: this script only reports whether
     # a client is already MINOS-managed, it never writes or repairs state.
     [string] $StatePath = '',
-    [string] $CodexStatePath = ''
+    [string] $CodexStatePath = '',
+
+    # When supplied, AlreadyManaged additionally requires the tracked entry's
+    # command/dataRoot to match this exact install -- a client tracked under a
+    # different install root or data root (moved install, changed data root)
+    # is reported as needing configuration again, not as already-managed.
+    # Left blank, AlreadyManaged falls back to "tracked at all", matching every
+    # existing caller that predates this parameter.
+    [string] $InstallRoot = '',
+    [string] $DataRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,9 +59,31 @@ if ([string]::IsNullOrWhiteSpace($CodexStatePath)) {
     $CodexStatePath = Join-Path (Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData') 'MINOS\codex-mcp-integration.json'
 }
 
+# Both blank unless the caller (the installer wizard) supplied them -- console/test callers
+# that predate -InstallRoot/-DataRoot keep the pre-existing "tracked at all" behavior.
+$ExpectedExe = if (-not [string]::IsNullOrWhiteSpace($InstallRoot)) {
+    [System.IO.Path]::GetFullPath((Join-Path $InstallRoot 'app\minos.exe'))
+} else { $null }
+$ExpectedDataRoot = if (-not [string]::IsNullOrWhiteSpace($DataRoot)) {
+    [System.IO.Path]::GetFullPath($DataRoot)
+} else { $null }
+
+function Test-TrackedWiringCurrent([object] $Entry) {
+    if ($null -eq $ExpectedExe) { return $true }
+    $Command = [string]$Entry.command
+    $TrackedDataRoot = [string]$Entry.dataRoot
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    if (-not $Command.Equals($ExpectedExe, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($TrackedDataRoot)) { return $true }
+    return $TrackedDataRoot.Equals($ExpectedDataRoot, [StringComparison]::OrdinalIgnoreCase)
+}
+
 # Ids already tracked in mcp-client-integrations.json, managed or preexisting alike -- both
 # mean MINOS already confirmed this client is correctly wired, which is exactly what the
-# wizard needs to tell the user apart from "merely capable of being configured".
+# wizard needs to tell the user apart from "merely capable of being configured". A tracked
+# entry whose command/dataRoot no longer matches this exact install (moved install, changed
+# data root) does not count -- that client still needs (re)configuration, not a locked
+# already-done checkbox.
 function Get-ManagedClientIds([string] $Path) {
     $Ids = New-Object System.Collections.Generic.HashSet[string]
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return , $Ids }
@@ -60,7 +91,7 @@ function Get-ManagedClientIds([string] $Path) {
     catch { return , $Ids }
     foreach ($Client in @($Parsed.clients)) {
         $Id = [string]$Client.id
-        if (-not [string]::IsNullOrWhiteSpace($Id)) { [void]$Ids.Add($Id) }
+        if (-not [string]::IsNullOrWhiteSpace($Id) -and (Test-TrackedWiringCurrent $Client)) { [void]$Ids.Add($Id) }
     }
     # Unary comma: see the note in update-installation.ps1 -- without it a
     # single-entry (or empty) HashSet is unrolled on return, and .Contains()
@@ -73,6 +104,7 @@ function Test-CodexManaged([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
     try { $Parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
     catch { return $false }
+    if (-not (Test-TrackedWiringCurrent $Parsed)) { return $false }
     return -not [string]::IsNullOrWhiteSpace([string]$Parsed.ownership)
 }
 
