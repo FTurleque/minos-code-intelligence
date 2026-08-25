@@ -176,8 +176,13 @@ configuredAt=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))
 "@ | Set-Content -LiteralPath $ManagedMarker -Encoding ascii
 
     if ($Start -and -not $NeedsM30Services) {
+        # Validate re-runs the exact same data/tools/admin sequence Install just ran
+        # against the same unchanged image and volume (see prod-mcp-release.ps1's
+        # 'Install' and 'Validate' actions) -- calling it here would just repeat ~8
+        # ephemeral container create/run/remove cycles for zero new information.
+        # The persistent query container Start just (re)created is proven for real
+        # by switch-mcp-backend.ps1's MCP protocol handshake that always follows.
         Invoke-DockerWorkflow -Action Start
-        Invoke-DockerWorkflow -Action Validate
     }
 
     Write-Host 'MINOS Docker MCP setup SUCCESS' -ForegroundColor Green
