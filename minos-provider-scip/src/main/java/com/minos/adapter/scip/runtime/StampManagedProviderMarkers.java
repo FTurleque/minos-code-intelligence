@@ -25,7 +25,7 @@ public final class StampManagedProviderMarkers {
 
     public static void main(String[] arguments) throws Exception {
         if (arguments.length != 3) {
-            System.err.println("usage: StampManagedProviderMarkers <directory> <version> <sourceId>");
+            System.err.println("usage: StampManagedProviderMarkers <directory> <version> <sourceId>"); // NOSONAR: java:S106 -- Docker-build-time CLI stub, matches DockerRuntimeBootstrap/MinosLauncher's own System.err usage
             System.exit(2);
             return;
         }
