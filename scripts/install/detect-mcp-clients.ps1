@@ -4,7 +4,13 @@ param(
     [string] $OutputPath,
 
     [ValidateRange(1, 30)]
-    [int] $ProbeTimeoutSeconds = 5
+    [int] $ProbeTimeoutSeconds = 5,
+
+    # Managed-integration state written by configure-mcp-clients.ps1 /
+    # configure-codex-mcp.ps1. Read-only here: this script only reports whether
+    # a client is already MINOS-managed, it never writes or repairs state.
+    [string] $StatePath = '',
+    [string] $CodexStatePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +42,42 @@ function Get-UserFolderPath([string] $EnvironmentVariableName, [string] $Special
     if (-not [string]::IsNullOrWhiteSpace($Value)) { return $Value }
     return [Environment]::GetFolderPath($SpecialFolder)
 }
+
+if ([string]::IsNullOrWhiteSpace($StatePath)) {
+    $StatePath = Join-Path (Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData') 'MINOS\mcp-client-integrations.json'
+}
+if ([string]::IsNullOrWhiteSpace($CodexStatePath)) {
+    $CodexStatePath = Join-Path (Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData') 'MINOS\codex-mcp-integration.json'
+}
+
+# Ids already tracked in mcp-client-integrations.json, managed or preexisting alike -- both
+# mean MINOS already confirmed this client is correctly wired, which is exactly what the
+# wizard needs to tell the user apart from "merely capable of being configured".
+function Get-ManagedClientIds([string] $Path) {
+    $Ids = New-Object System.Collections.Generic.HashSet[string]
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return , $Ids }
+    try { $Parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
+    catch { return , $Ids }
+    foreach ($Client in @($Parsed.clients)) {
+        $Id = [string]$Client.id
+        if (-not [string]::IsNullOrWhiteSpace($Id)) { [void]$Ids.Add($Id) }
+    }
+    # Unary comma: see the note in update-installation.ps1 -- without it a
+    # single-entry (or empty) HashSet is unrolled on return, and .Contains()
+    # at the caller fails.
+    return , $Ids
+}
+
+# codex-mcp-integration.json is a single tracked object, not a clients[] array.
+function Test-CodexManaged([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    try { $Parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
+    catch { return $false }
+    return -not [string]::IsNullOrWhiteSpace([string]$Parsed.ownership)
+}
+
+$ManagedClientIds = Get-ManagedClientIds $StatePath
+$CodexManaged = Test-CodexManaged $CodexStatePath
 
 function Resolve-CommandPath([string] $Name) {
     $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -235,18 +277,19 @@ function Test-CodexDesktop {
         (Test-Path -LiteralPath (Join-Path $Local 'Codex\Codex.exe') -PathType Leaf)
 }
 
-function New-Result([bool] $Available, [string] $Reason, [string] $Mode = '') {
+function New-Result([bool] $Available, [string] $Reason, [string] $Mode = '', [bool] $AlreadyManaged = $false) {
     return [pscustomobject][ordered]@{
         Available = $Available
         Reason = $Reason
         Mode = $Mode
+        AlreadyManaged = $AlreadyManaged
     }
 }
 
 $Results = [ordered]@{}
 
 if (Test-JetBrainsCopilot) {
-    $Results['CopilotJetBrains'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
+    $Results['CopilotJetBrains'] = New-Result $true (Ui 'D{e}tect{e}') 'json' ($ManagedClientIds.Contains('copilot-jetbrains'))
 } else {
     $Results['CopilotJetBrains'] = New-Result $false (Ui 'Non disponible {dash} GitHub Copilot JetBrains / IntelliJ non d{e}tect{e}')
 }
@@ -259,7 +302,7 @@ if ([string]::IsNullOrWhiteSpace($Copilot)) {
     # return success for generic help while not being the standalone Copilot CLI.
     $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} launcher VS Code d{e}tect{e}, vrai CLI absent')
 } elseif (Test-Capability $Copilot @('mcp', '--help')) {
-    $Results['CopilotCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
+    $Results['CopilotCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli' ($ManagedClientIds.Contains('copilot-cli'))
 } else {
     $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} commande copilot d{e}tect{e}e mais interface MCP incompatible')
 }
@@ -269,7 +312,7 @@ if ([string]::IsNullOrWhiteSpace($Claude)) {
     $Claude = Find-EmbeddedClaudeCli
 }
 if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('mcp', '--help'))) {
-    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} Claude CLI / Code compatible MCP') 'cli'
+    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} Claude CLI / Code compatible MCP') 'cli' ($ManagedClientIds.Contains('claude-code'))
 } elseif (-not [string]::IsNullOrWhiteSpace($Claude)) {
     $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande claude d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -277,7 +320,7 @@ if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('
 }
 
 if (Test-ClaudeDesktop) {
-    $Results['ClaudeDesktop'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
+    $Results['ClaudeDesktop'] = New-Result $true (Ui 'D{e}tect{e}') 'json' ($ManagedClientIds.Contains('claude-desktop'))
 } else {
     $Results['ClaudeDesktop'] = New-Result $false (Ui 'Non disponible {dash} Claude Desktop non d{e}tect{e}')
 }
@@ -285,7 +328,7 @@ if (Test-ClaudeDesktop) {
 $Codex = Resolve-CommandPath 'codex'
 $CodexCliAvailable = -not [string]::IsNullOrWhiteSpace($Codex) -and (Test-Capability $Codex @('mcp', '--help'))
 if ($CodexCliAvailable) {
-    $Results['CodexCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI MCP compatible') 'cli'
+    $Results['CodexCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI MCP compatible') 'cli' $CodexManaged
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
     $Results['CodexCli'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -294,7 +337,7 @@ if ($CodexCliAvailable) {
 
 $CodexDesktopAvailable = Test-CodexDesktop
 if ($CodexDesktopAvailable) {
-    $Results['CodexDesktop'] = New-Result $true (Ui 'D{e}tect{e} {dash} configuration Codex Desktop disponible') 'desktop'
+    $Results['CodexDesktop'] = New-Result $true (Ui 'D{e}tect{e} {dash} configuration Codex Desktop disponible') 'desktop' $CodexManaged
 } else {
     $Results['CodexDesktop'] = New-Result $false (Ui 'Non disponible {dash} Codex Desktop / config utilisateur non d{e}tect{e}')
 }
@@ -302,9 +345,9 @@ if ($CodexDesktopAvailable) {
 # Backward-compatible aggregate section retained for existing verifier fixtures and
 # non-wizard consumers. New installer UI uses CodexCli and CodexDesktop explicitly.
 if ($CodexCliAvailable) {
-    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli' $CodexManaged
 } elseif ($CodexDesktopAvailable) {
-    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop' $CodexManaged
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
     $Results['Codex'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -322,6 +365,7 @@ foreach ($Name in $Results.Keys) {
     $Lines.Add('Available=' + $(if ($Value.Available) { '1' } else { '0' }))
     $Lines.Add('Reason=' + ([string]$Value.Reason).Replace("`r", ' ').Replace("`n", ' '))
     $Lines.Add('Mode=' + [string]$Value.Mode)
+    $Lines.Add('AlreadyManaged=' + $(if ($Value.AlreadyManaged) { '1' } else { '0' }))
     $Lines.Add('')
 }
 [System.IO.File]::WriteAllLines(
@@ -332,5 +376,5 @@ foreach ($Name in $Results.Keys) {
 Write-Host "MINOS MCP client preflight written: $OutputPath"
 foreach ($Name in $Results.Keys) {
     $Value = $Results[$Name]
-    Write-Host ("{0}: available={1} mode={2} reason={3}" -f $Name, $Value.Available, $Value.Mode, $Value.Reason)
+    Write-Host ("{0}: available={1} mode={2} alreadyManaged={3} reason={4}" -f $Name, $Value.Available, $Value.Mode, $Value.AlreadyManaged, $Value.Reason)
 }
