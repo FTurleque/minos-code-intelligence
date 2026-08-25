@@ -260,6 +260,8 @@ claude mcp list
 
 MINOS fusionne `mcpServers.<nom>` dans la configuration Claude Desktop détectée, avec backup/ownership. Relancer complètement Claude Desktop après modification.
 
+La détection couvre l'installation classique (`%APPDATA%\Claude`) et l'installation Microsoft Store/MSIX (`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude`).
+
 ### OpenAI Codex CLI
 
 Lorsque la capability MCP du CLI est prouvée, MINOS peut utiliser le mode `cli` pour enregistrer l'intégration.

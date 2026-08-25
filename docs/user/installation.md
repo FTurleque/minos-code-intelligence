@@ -130,6 +130,14 @@ Pour vérifier le moteur de mise à jour transactionnel lui-même (staging, roll
 .\scripts\install\verify-windows-upgrade-transaction.ps1
 ```
 
+Pour vérifier la détection/configuration des clients IA (Copilot JetBrains/CLI, Claude CLI/Code/Desktop classique et MSIX, Codex CLI/Desktop) de façon isolée, sans dépendre de ce qui est réellement installé sur la machine qui exécute le test :
+
+```powershell
+.\scripts\install\verify-mcp-client-preflight.ps1
+```
+
+Ce script enchaîne également `verify-codex-mcp-integration.ps1` (TOML géré, fallback CLI→TOML, entrées préexistantes), `verify-mcp-client-backend-routing.ps1` et `verify-installer-template.ps1`.
+
 ## Validation de release complète
 
 `scripts/release/publish-windows-release.ps1` est le script de qualification/publication. En mode `-ValidateOnly`, il ne publie pas mais exerce également un setup de smoke **isolé** avec un AppId distinct et un handshake MCP réel.
