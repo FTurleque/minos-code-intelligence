@@ -69,13 +69,22 @@ jobs:
         run: |
           $head = (git rev-parse HEAD).Trim()
           if ($head -ne $env:TARGET_COMMIT) { throw "Exact-head mismatch before CI gate: checkout=$head expected=$env:TARGET_COMMIT" }
+          # Both gated workflows are path-filtered (packaging/windows/**, scripts/install/**, ...)
+          # for their automatic push trigger, so a release commit that does not itself touch those
+          # paths -- the common case -- never produces a push-triggered run to find here. Accepting
+          # a workflow_dispatch run too lets a maintainer manually re-run either workflow against
+          # this exact commit before publishing when nothing installer-related changed; the gate
+          # still fails closed on "no run" or "run did not succeed" either way.
           foreach ($workflow in @('windows-installer.yml', 'windows-in-place-upgrade.yml')) {
-            $runsJson = gh run list --repo $env:GITHUB_REPOSITORY --workflow $workflow --branch main --event push --json headSha,status,conclusion,databaseId --limit 20
+            $runsJson = gh run list --repo $env:GITHUB_REPOSITORY --workflow $workflow --branch main --json headSha,status,conclusion,databaseId,event --limit 20
             if ($LASTEXITCODE -ne 0) { throw "Unable to list CI runs for $workflow." }
             $runs = @($runsJson | ConvertFrom-Json)
-            $matching = @($runs | Where-Object { $_.headSha -eq $head -and $_.status -eq 'completed' -and $_.conclusion -eq 'success' })
+            $matching = @($runs | Where-Object {
+                $_.headSha -eq $head -and $_.status -eq 'completed' -and $_.conclusion -eq 'success' -and
+                $_.event -in @('push', 'workflow_dispatch')
+            })
             if ($matching.Count -eq 0) {
-              throw "No successful '$workflow' run found on main (push event) for exact head $head. The Windows release certification chain requires this workflow to have passed for this exact commit before qualifying a release."
+              throw "No successful '$workflow' run found on main (push or workflow_dispatch) for exact head $head. The Windows release certification chain requires this workflow to have passed for this exact commit before qualifying a release -- if this commit does not touch installer-related paths, manually dispatch the workflow against this commit first."
             }
             Write-Host "CI exact-head gate PASS for $workflow (run id $($matching[0].databaseId))"
           }
