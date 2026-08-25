@@ -32,13 +32,6 @@ ARG RUST_ANALYZER_RELEASE=2026-07-27
 ARG RUST_ANALYZER_VERSION=0.3.2989
 ARG RUST_ANALYZER_COMMIT=12c3381
 
-LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
-      org.opencontainers.image.version="${MINOS_VERSION}" \
-      org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
-      org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
-      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence" \
-      io.minos.providers.prepared="true"
-
 ENV MINOS_HOME=/var/lib/minos \
     MINOS_RUNTIME_LOCATION=docker \
     JAVA_HOME=/opt/java/openjdk \
@@ -243,6 +236,22 @@ RUN set -eux; \
       '  ]' \
       '}' > /opt/minos/provider-evidence/provider-inventory.json; \
     chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence
+
+# LABEL lives here, not at the top of the file, on purpose: org.opencontainers.image.version/
+# revision/created change on every build (every release, every commit), and Docker's layer cache
+# is a strict linear chain -- one invalidated layer invalidates every layer after it regardless
+# of whether that layer's own instruction actually changed. A LABEL this early used to invalidate
+# every expensive toolchain-install RUN step below on every single update, defeating the caching
+# those steps were written to rely on and turning what should be a fast rebuild into a full
+# from-scratch one every time. Keeping it here, alongside the other version-specific content that
+# already had to live this late (COPY minos.jar, StampManagedProviderMarkers), means only these
+# last few cheap layers rebuild when just the version/commit changes.
+LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
+      org.opencontainers.image.version="${MINOS_VERSION}" \
+      org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
+      org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
+      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence" \
+      io.minos.providers.prepared="true"
 
 WORKDIR /opt/minos
 COPY minos.jar /opt/minos/minos.jar
