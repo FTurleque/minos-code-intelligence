@@ -235,6 +235,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/provider-inventory.json' | Set-Content -LiteralPath $ProviderInventoryFile -Encoding utf8
         Read-ImageFile -Image $Image -Path '/opt/minos/provider-evidence/binary-sha256.txt' | Set-Content -LiteralPath $ProviderChecksumsFile -Encoding ascii
 
+        Compose @('run', '--rm', '--no-deps', 'minos-data-bootstrap')
         Initialize-And-VerifyProviderTools
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')
@@ -296,6 +297,7 @@ MINOS_SEMANTIC_PROVIDER=$ResolvedSemanticProvider
         Compose @('config', '--quiet')
         $Metadata = Get-Content -Raw -LiteralPath $MetadataFile | ConvertFrom-Json
         Assert-DockerJavaRuntime -Image $Metadata.image -Failure 'MINOS Docker validation failed.'
+        Compose @('run', '--rm', '--no-deps', 'minos-data-bootstrap')
         Initialize-And-VerifyProviderTools
         Compose @('run', '--rm', '--no-deps', 'minos-bootstrap')
         Compose @('run', '--rm', '--no-deps', 'minos-admin', '--help')

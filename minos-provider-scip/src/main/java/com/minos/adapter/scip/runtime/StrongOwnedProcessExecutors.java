@@ -53,21 +53,63 @@ final class StrongOwnedProcessExecutors {
         if (!status.ready()) return status;
         WorkerSandboxBackend sandbox = WorkerSandboxBackends
                 .strongestAvailableForManagedLocalProvider(minosHome);
-        return qualifySandbox(status, sandbox);
+        return qualifySandbox(status, sandbox, isDockerRuntimeLocation());
     }
 
-    /** Package-visible seam used to lock the production composition contract without OS assumptions. */
+    /**
+     * Package-visible seam used to lock the production composition contract without OS assumptions.
+     * Defaults to the native disposition: a missing sandbox always {@link #blocked}. Existing callers
+     * (and every test written before the Docker MCP backend existed) keep exactly today's behavior.
+     */
     static ProviderRuntimeStatus qualifySandbox(
             ProviderRuntimeStatus status,
             WorkerSandboxBackend sandbox
+    ) {
+        return qualifySandbox(status, sandbox, false);
+    }
+
+    /**
+     * <p>On a native host, a provider whose managed-local-provider sandbox is unqualified is a real,
+     * blocking failure -- {@code sandbox.id()} should have been a genuinely qualified backend on that
+     * platform. Inside the Docker MCP backend, the container itself is already the hardened boundary
+     * for this narrower (not remote-worker) contract, and it cannot nest a second OS sandbox inside
+     * itself by construction -- that is expected, not broken, so it must never count as a blocking
+     * failure. Either way, the provider must never be reported READY when the sandbox check itself
+     * did not pass -- only the failure disposition (fatal vs. informational-and-non-blocking) differs
+     * by backend. See {@link ProviderRuntimeStatus.State#UNSUPPORTED_BY_BACKEND}.</p>
+     */
+    static ProviderRuntimeStatus qualifySandbox(
+            ProviderRuntimeStatus status,
+            WorkerSandboxBackend sandbox,
+            boolean dockerBackend
     ) {
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(sandbox, "sandbox");
         if (!status.ready()) return status;
         if (!sandbox.supportsManagedLocalProvider()) {
+            if (dockerBackend) {
+                return unsupportedByBackend(status,
+                        "managed local provider sandbox tier is not provided by the Docker MCP backend "
+                                + "(the container itself is the hardened boundary for this plane; this is "
+                                + "not a failure and does not block installation or use): " + sandbox.id());
+            }
             return blocked(status, "qualified managed local provider sandbox is unavailable: " + sandbox.id());
         }
         return status;
+    }
+
+    /**
+     * {@code minos.runtime.location} system property first, then {@code MINOS_RUNTIME_LOCATION} --
+     * matching {@code com.minos.registry.ProjectPathMapping}'s established precedence. Read directly
+     * rather than shared with that class: it lives in minos-application, which does not sit below
+     * minos-provider-scip/minos-runtime-local in the module graph.
+     */
+    private static boolean isDockerRuntimeLocation() {
+        String property = System.getProperty("minos.runtime.location");
+        String configured = (property == null || property.isBlank())
+                ? System.getenv("MINOS_RUNTIME_LOCATION")
+                : property;
+        return configured != null && "docker".equalsIgnoreCase(configured.trim());
     }
 
     /**
@@ -83,12 +125,24 @@ final class StrongOwnedProcessExecutors {
     }
 
     private static ProviderRuntimeStatus blocked(ProviderRuntimeStatus status, String diagnostic) {
+        return withState(status, ProviderRuntimeStatus.State.BLOCKED, diagnostic);
+    }
+
+    private static ProviderRuntimeStatus unsupportedByBackend(ProviderRuntimeStatus status, String diagnostic) {
+        return withState(status, ProviderRuntimeStatus.State.UNSUPPORTED_BY_BACKEND, diagnostic);
+    }
+
+    private static ProviderRuntimeStatus withState(
+            ProviderRuntimeStatus status,
+            ProviderRuntimeStatus.State state,
+            String diagnostic
+    ) {
         List<String> diagnostics = new ArrayList<>(status.diagnostics());
         diagnostics.add(diagnostic);
         return new ProviderRuntimeStatus(
                 status.providerId(),
                 status.version(),
-                ProviderRuntimeStatus.State.BLOCKED,
+                state,
                 status.executable(),
                 diagnostics,
                 status.requiredByDefault());

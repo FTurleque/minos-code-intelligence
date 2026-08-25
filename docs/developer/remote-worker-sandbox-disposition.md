@@ -15,6 +15,29 @@ Cette disposition conserve l'invariant diagnostique `WORKER_SANDBOX_CLAIM_PROHIB
 
 La provenance, les checksums, le bundle distribué, le rejet des symlinks, les budgets de source et les règles `.gitignore`/`.minosignore` restent appliqués en complément de la sandbox.
 
+## Trois responsabilités distinctes, jamais confondues
+
+Le backend Docker MCP recouvre trois plans qui ne partagent ni le même modèle de menace ni la même garantie :
+
+| Plan | Rôle | Isolation |
+|---|---|---|
+| **Docker MCP query** (`minos-mcp`) | sert l'index déjà construit aux clients MCP | conteneur `read_only`, `network_mode: none`, non-root |
+| **Docker MCP admin/indexing** (`minos-admin`) | exécute les providers gérés (scip-java, scip-typescript, …) sur du code **local et déjà indexé/confié** | conteneur durci (`cap_drop: [ALL]`, non-root, `no-new-privileges`) — le conteneur lui-même est la frontière ; il n'imbrique pas une seconde sandbox OS |
+| **Remote worker** (`LocalIsolatedIndexWorker`) | exécute un provider sur du dépôt/code **non fiable** | exige une sandbox OS explicitement qualifiée (Bubblewrap+cgroup v2 délégué, ou AppContainer) ; refuse fail-closed sinon |
+
+Le plan admin/indexing Docker n'est **pas** le sandbox remote-worker qualifié : à l'intérieur d'un conteneur déjà durci, MINOS ne peut structurellement pas construire une seconde sandbox Bubblewrap/cgroup2 imbriquée. C'est attendu, pas une panne — mais cela ne doit jamais être confondu avec une qualification remote-worker, ni la remplacer silencieusement.
+
+### Invariant
+
+> Une capability volontairement non disponible pour le backend sélectionné ne bloque pas une installation sans rapport avec cette capability. En revanche, toute exécution de code non fiable nécessitant cette capability reste strictement interdite tant qu'un sandbox remote-worker qualifié n'est pas disponible.
+
+Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
+
+- un provider dont la sandbox « managed local provider » (`WorkerSandboxBackend.supportsManagedLocalProvider()`) n'est pas fournie par le backend Docker est rapporté `UNSUPPORTED_BY_BACKEND` — jamais `READY` (la capability plus forte reste réellement absente) et jamais `BLOCKED` (ce n'est pas une panne : le conteneur est déjà la frontière pour ce plan) ;
+- sur un hôte natif, la même absence de sandbox qualifiée reste `BLOCKED` — là, la sandbox aurait dû être qualifiable, et son absence est une vraie panne bloquante ;
+- `ToolsCommand`'s `tools verify`/`tools verify --all` exclut explicitement `UNSUPPORTED_BY_BACKEND` du calcul « notReady », mais bloque toujours sur tout autre état non-`READY` — un provider réellement requis et cassé continue de faire échouer la porte d'installation, `--all` ou non ;
+- ce mécanisme ne touche ni aux critères de qualification de `supportsUntrustedCode()`, ni au sélecteur `WorkerSandboxBackends.strongestAvailable()` utilisé par `LocalIsolatedIndexWorker` : le contrat remote-worker ci-dessus reste inchangé et fail-closed dans tous les cas.
+
 ## Confinement agrégé des ressources
 
 `WorkerResourceContainment` décrit, dimension par dimension, ce que la plateforme garantit réellement. Trois dispositions distinctes ne sont jamais confondues :

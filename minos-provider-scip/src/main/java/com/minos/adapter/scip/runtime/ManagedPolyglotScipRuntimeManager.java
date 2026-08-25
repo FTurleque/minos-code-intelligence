@@ -366,7 +366,8 @@ public final class ManagedPolyglotScipRuntimeManager implements ProviderRuntimeM
         return directory.resolve(CommandLocator.isWindows() ? basename + ".exe" : basename);
     }
 
-    private static void writeManagedMarkers(Path directory, String version, String source) throws IOException {
+    /** Package-visible for {@link StampManagedProviderMarkers}: see that class for why. */
+    static void writeManagedMarkers(Path directory, String version, String source) throws IOException {
         Files.writeString(directory.resolve(VERSION_MARKER), version, StandardCharsets.UTF_8);
         Files.writeString(directory.resolve(SOURCE_MARKER), source, StandardCharsets.UTF_8);
         Files.writeString(directory.resolve(INTEGRITY_MARKER), directoryDigest(directory), StandardCharsets.UTF_8);

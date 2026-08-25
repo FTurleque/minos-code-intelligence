@@ -38,8 +38,14 @@ public final class ToolsCommand {
             List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
             output.append(render(providers, parsed.format())).append('\n');
             if ("verify".equals(parsed.action())) {
+                // UNSUPPORTED_BY_BACKEND means the currently selected backend (e.g. the Docker MCP
+                // admin/indexing plane) never claims the stronger sandbox tier this provider would
+                // otherwise need -- not that the provider itself is broken. It must never silently
+                // pass as READY, but it must also never block a verification/installation that does
+                // not actually depend on that tier. Every other non-READY state still blocks.
                 boolean notReady = providers.stream()
                         .filter(provider -> parsed.all() || provider.requiredByDefault())
+                        .filter(provider -> !"UNSUPPORTED_BY_BACKEND".equals(provider.state()))
                         .anyMatch(provider -> !"READY".equals(provider.state()));
                 if (notReady) {
                     return FindSymbolCommand.EXECUTION_ERROR;
