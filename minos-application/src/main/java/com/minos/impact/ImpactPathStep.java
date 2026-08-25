@@ -1,6 +1,7 @@
 package com.minos.impact;
 
 import com.minos.domain.InformationNature;
+import com.minos.domain.ProbabilityInvariant;
 import com.minos.domain.RelationshipKind;
 
 import java.util.Objects;
@@ -23,9 +24,7 @@ public record ImpactPathStep(
         requireText(relationshipId, "relationshipId");
         Objects.requireNonNull(relationshipKind, "relationshipKind");
         Objects.requireNonNull(relationshipNature, "relationshipNature");
-        if (confidence < 0.0 || confidence > 1.0) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
-        }
+        ProbabilityInvariant.require(confidence, "confidence");
     }
 
     private static void requireText(String value, String label) {

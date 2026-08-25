@@ -9,11 +9,32 @@ param(
 
     # Build a non-shippable setup with a distinct AppId and cleanup hooks disabled.
     # This is the only setup variant release smoke tests are allowed to install.
-    [switch] $Smoke
+    [switch] $Smoke,
+
+    # RELEASE/CI path: the caller (the workflow, right after installing a pinned Inno Setup
+    # version) resolves ISCC.exe itself and passes its exact path here. When set, this script MUST
+    # use exactly that binary -- it never falls back to searching PATH or other Inno Setup install
+    # locations, because that search is exactly how a stray Inno Setup 7 (or any other ISCC.exe)
+    # could silently take over compilation of the release setup.exe.
+    [string] $IsccPath = '',
+
+    # The exact engine version the compiler must report while compiling. Supplied together with
+    # -IsccPath on the qualified release/CI path; the build is discarded if the compiler that
+    # actually ran reports anything else.
+    [string] $RequiredIsccVersion = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# Both or neither: a caller that pins the binary must also pin the version it has to report, and a
+# caller that demands a version must say which binary it trusts. Accepting one alone would leave a
+# half-qualified path where either the compiler or its version goes unproven.
+if ([string]::IsNullOrWhiteSpace($IsccPath) -ne [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+    throw 'Provide -IsccPath and -RequiredIsccVersion together, or neither: a qualified release build pins both the compiler binary and the engine version it must report.'
+}
+
+. (Join-Path $PSScriptRoot 'iscc-provenance.ps1')
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
@@ -52,6 +73,7 @@ foreach ($Required in @(
     'integration\uninstall-mcp-clients.ps1',
     'integration\probe-mcp-backend.ps1',
     'integration\switch-mcp-backend.ps1',
+    'integration\update-installation.ps1',
     'docker\Dockerfile.mcp.release',
     'docker\compose.mcp.prod.yaml',
     'docker\scripts\prod-mcp-release.ps1',
@@ -62,28 +84,57 @@ foreach ($Required in @(
     }
 }
 
-$IsccCandidates = @()
-$IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-if ($IsccCommand) { $IsccCandidates += $IsccCommand.Source }
-if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
-}
-if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
-    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
-}
-if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
-    $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
-}
-$IsccCandidates += 'C:\ProgramData\chocolatey\bin\ISCC.exe'
+if (-not [string]::IsNullOrWhiteSpace($IsccPath)) {
+    # Release/CI path: the compiler identity was already resolved and pinned by the caller. Do not
+    # second-guess it by searching anywhere else.
+    if (-not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
+        throw "Qualified Inno Setup compiler not found at -IsccPath: $IsccPath"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+        # First provenance layer: what Chocolatey recorded as installed. This proves the provisioned
+        # package but NOT which binary will execute, so it is a cross-check, not the assertion --
+        # the authoritative check is the engine version the compiler itself reports below. Verified
+        # here independently of any check the caller already did, so this script never trusts an
+        # -IsccPath it cannot itself corroborate. A missing nuspec fails closed rather than
+        # silently skipping the check.
+        $NuspecPath = 'C:\ProgramData\chocolatey\lib\innosetup\innosetup.nuspec'
+        if (-not (Test-Path -LiteralPath $NuspecPath -PathType Leaf)) {
+            throw "Chocolatey package metadata not found at $NuspecPath; cannot verify the Inno Setup compiler at -IsccPath against -RequiredIsccVersion $RequiredIsccVersion."
+        }
+        [xml]$Nuspec = Get-Content -LiteralPath $NuspecPath -Raw
+        $InstalledIsccVersion = $Nuspec.package.metadata.version
+        if ($InstalledIsccVersion -ne $RequiredIsccVersion) {
+            throw "Chocolatey innosetup package metadata at $NuspecPath reports version '$InstalledIsccVersion', required $RequiredIsccVersion. Refusing to build with an unverified Inno Setup compiler."
+        }
+    }
+    $Iscc = $IsccPath
+} else {
+    # Developer/local fallback only: resolve automatically so `pwsh build-windows-installer.ps1`
+    # keeps working on a workstation without a pre-resolved path. Never used on the release/CI path
+    # (the workflow always passes -IsccPath), so this ambiguity cannot silently affect a release.
+    $IsccCandidates = @()
+    $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($IsccCommand) { $IsccCandidates += $IsccCommand.Source }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
+        $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
+        $IsccCandidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+    }
+    $IsccCandidates += 'C:\ProgramData\chocolatey\bin\ISCC.exe'
 
-$Iscc = $IsccCandidates |
-    Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
-    Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($Iscc)) {
-    throw 'Inno Setup is required to build MINOS setup.exe. Install Inno Setup 6/7 or expose ISCC.exe in PATH.'
+    $Iscc = $IsccCandidates |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($Iscc)) {
+        throw 'Inno Setup is required to build MINOS setup.exe. Install Inno Setup 6/7 or expose ISCC.exe in PATH.'
+    }
 }
 
 $Template = Join-Path $RepoRoot 'packaging\windows\minos-installer.iss.template'
@@ -99,9 +150,26 @@ New-Item -ItemType Directory -Force -Path $InstallerWork, $InstallerOutput | Out
 $GeneratedIss = Join-Path $InstallerWork $GeneratedIssName
 $Setup = Join-Path $InstallerOutput "$OutputBaseFilename.exe"
 $Checksum = "$Setup.sha256"
+# Fixed literal name, not version-suffixed: minos-installer.iss.template's
+# PrepareToInstall calls ExtractTemporaryFile('minos-payload.zip') by this
+# exact leaf name (dontcopy resources are resolved by source filename, not by
+# the full -PackageRoot/-InstallerWork path). Production and smoke builds run
+# sequentially and each removes its own copy in the `finally` block below, so
+# reusing this fixed name across both is safe.
+$PayloadZip = Join-Path $InstallerWork 'minos-payload.zip'
 
 Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $Checksum -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $PayloadZip -Force -ErrorAction SilentlyContinue
+
+# The payload the transactional updater (update-installation.ps1, invoked from
+# PrepareToInstall) activates -- top-level entries so Expand-Archive at
+# install time reproduces $DistributionRoot's layout directly under
+# -PackageRoot, with no wrapping folder.
+Compress-Archive -Path (Join-Path $DistributionRoot '*') -DestinationPath $PayloadZip -CompressionLevel Optimal
+if (-not (Test-Path -LiteralPath $PayloadZip -PathType Leaf)) {
+    throw "MINOS installer payload zip was not produced: $PayloadZip"
+}
 
 function Escape-InnoString([string] $Value) {
     return $Value.Replace('"', '""')
@@ -138,6 +206,7 @@ $Iss = $Iss.Replace('@@APP_VERSION@@', (Escape-InnoString $NumericVersion))
 $Iss = $Iss.Replace('@@APP_ID@@', (Escape-InnoString $AppId))
 $Iss = $Iss.Replace('@@SMOKE_MODE@@', $SmokeMode)
 $Iss = $Iss.Replace('@@SOURCE_DIR@@', (Escape-InnoString $DistributionRoot))
+$Iss = $Iss.Replace('@@PAYLOAD_ZIP@@', (Escape-InnoString $PayloadZip))
 $Iss = $Iss.Replace('@@OUTPUT_DIR@@', (Escape-InnoString $InstallerOutput))
 $Iss = $Iss.Replace('@@OUTPUT_BASENAME@@', (Escape-InnoString $OutputBaseFilename))
 if ($Iss -match '@@[A-Z0-9_]+@@') {
@@ -147,8 +216,34 @@ Assert-InnoTaskNames -ScriptContent $Iss
 [System.IO.File]::WriteAllText($GeneratedIss, $Iss, $Utf8)
 
 try {
-    & $Iscc $GeneratedIss
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+    # Stream the compiler's output to the log AND capture it: the "Compiler engine version:" line it
+    # prints is the only evidence of which binary actually produced this setup.exe. ErrorActionPreference
+    # is relaxed only around the native call so that 2>&1 stderr lines stay diagnostics instead of
+    # terminating the pipeline before the exit code can be inspected.
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $Iscc $GeneratedIss 2>&1 | Tee-Object -Variable CompilerOutput
+        $CompilerExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $Previous }
+    if ($CompilerExitCode -ne 0) { throw "Inno Setup compilation failed with exit code $CompilerExitCode" }
+
+    $EngineVersion = '(not asserted: no -RequiredIsccVersion supplied)'
+    if (-not [string]::IsNullOrWhiteSpace($RequiredIsccVersion)) {
+        # Authoritative provenance check on the qualified release/CI path. A setup produced by an
+        # unqualified compiler is deleted rather than left on disk where a later step could pick it up.
+        try {
+            $EngineVersion = Assert-IsccEngineVersion `
+                -CompilerOutput @($CompilerOutput | ForEach-Object { [string] $_ }) `
+                -RequiredVersion $RequiredIsccVersion `
+                -IsccPath $Iscc
+        }
+        catch {
+            Remove-Item -LiteralPath $Setup -Force -ErrorAction SilentlyContinue
+            throw
+        }
+    }
     if (-not (Test-Path -LiteralPath $Setup -PathType Leaf)) { throw "MINOS setup executable was not produced: $Setup" }
 
     $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -163,7 +258,9 @@ try {
     Write-Host "Distribution : $DistributionRoot"
     Write-Host "AppId mode   : $ModeLabel"
     Write-Host "Inno Setup   : $Iscc"
+    Write-Host "Engine ver.  : $EngineVersion"
 }
 finally {
     Remove-Item -LiteralPath $GeneratedIss -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $PayloadZip -Force -ErrorAction SilentlyContinue
 }

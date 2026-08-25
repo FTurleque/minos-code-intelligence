@@ -1,17 +1,17 @@
 package com.minos.store;
 
+import com.minos.io.DurableAtomicFile;
+
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Owns snapshot file-system layout and atomic file publication, but not binary encoding. */
+/** Owns snapshot file-system layout and durable atomic file publication, but not binary encoding. */
 public final class SnapshotRepository {
 
     private final Path storageRoot;
@@ -20,7 +20,7 @@ public final class SnapshotRepository {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot")
                 .toAbsolutePath()
                 .normalize();
-        Files.createDirectories(this.storageRoot);
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "snapshot storage root");
     }
 
     public Path storageRoot() {
@@ -33,7 +33,7 @@ public final class SnapshotRepository {
 
     public Path ensureProjectDirectory(UUID projectId) throws IOException {
         Path directory = projectDirectory(projectId);
-        Files.createDirectories(directory);
+        DurableAtomicFile.ensureDirectory(directory, "snapshot project directory");
         return directory;
     }
 
@@ -47,13 +47,13 @@ public final class SnapshotRepository {
 
     public Path publishSnapshot(UUID projectId, String fileName, Path temporary) throws IOException {
         Path target = resolveSnapshotFile(projectId, fileName);
-        moveAtomically(temporary, target);
+        DurableAtomicFile.replace(temporary, target, "snapshot publication");
         return target;
     }
 
     public void replaceActivePointer(UUID projectId, Path temporary, String activeFileName) throws IOException {
         Path target = ensureProjectDirectory(projectId).resolve(activeFileName);
-        moveAtomically(temporary, target);
+        DurableAtomicFile.replace(temporary, target, "active snapshot pointer replacement");
     }
 
     public Path resolveSnapshotFile(UUID projectId, String fileName) throws IOException {
@@ -76,9 +76,7 @@ public final class SnapshotRepository {
 
     public List<Path> listSnapshotFiles(UUID projectId) throws IOException {
         Path directory = projectDirectory(projectId);
-        if (!Files.isDirectory(directory)) {
-            return List.of();
-        }
+        if (!Files.isDirectory(directory)) return List.of();
         try (var files = Files.list(directory)) {
             return files
                     .filter(Files::isRegularFile)
@@ -88,19 +86,6 @@ public final class SnapshotRepository {
                     })
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .toList();
-        }
-    }
-
-    static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(
-                    source,
-                    target,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }

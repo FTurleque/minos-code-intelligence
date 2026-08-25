@@ -33,20 +33,7 @@ public final class FindUsagesCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n')
-                    .append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             List<UsageResult> usages = List.copyOf(query.findUsages(
                     options.projectId(),
                     options.symbolId(),
@@ -55,26 +42,11 @@ public final class FindUsagesCommand {
             output.append(CodeIntelligenceResultRenderer.renderUsages(usages, options.format()))
                     .append('\n');
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: find-usages failed: ")
-                    .append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     static String usage() {
         return USAGE;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     private record Options(
@@ -87,8 +59,8 @@ public final class FindUsagesCommand {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <symbol-id>");
             }
-            String projectId = operand(arguments[0], "project");
-            String symbolId = operand(arguments[1], "symbol-id");
+            String projectId = CliCommandSupport.operand(arguments[0], "project");
+            String symbolId = CliCommandSupport.operand(arguments[1], "symbol-id");
             int limit = FindSymbolCommand.DEFAULT_LIMIT;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Set<String> seen = new HashSet<>();
@@ -108,7 +80,7 @@ public final class FindUsagesCommand {
                     throw new IllegalArgumentException("missing value for " + option);
                 }
                 if ("--limit".equals(option)) {
-                    limit = parseLimit(value);
+                    limit = CliCommandSupport.parseLimit(value, FindSymbolCommand.MAX_LIMIT);
                 } else {
                     format = SymbolOutputFormat.parse(value);
                 }
@@ -116,25 +88,6 @@ public final class FindUsagesCommand {
             return new Options(projectId, symbolId, limit, format);
         }
 
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
-        }
 
-        private static int parseLimit(String value) {
-            try {
-                int limit = Integer.parseInt(value);
-                if (limit < 1 || limit > FindSymbolCommand.MAX_LIMIT) {
-                    throw new IllegalArgumentException(
-                            "limit must be between 1 and " + FindSymbolCommand.MAX_LIMIT
-                    );
-                }
-                return limit;
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("invalid limit: " + value, exception);
-            }
-        }
     }
 }

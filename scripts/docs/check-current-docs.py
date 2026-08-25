@@ -183,7 +183,7 @@ def validate_ci_contracts() -> None:
     require_all(RELEASE_WORKFLOW, release, (
         "Preflight exact ref and immutable tag", "git ls-remote --tags", "already exists on origin",
         "IntelliJ Plugin Verifier", "verifyPlugin", "Set up Java 24 for MINOS release",
-        "publish-windows-release.ps1", "TargetCommit '${{ github.sha }}'",
+        "publish-windows-release.ps1", "TargetCommit $env:TARGET_COMMIT",
     ))
 
 

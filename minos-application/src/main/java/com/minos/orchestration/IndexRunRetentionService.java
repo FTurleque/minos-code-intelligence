@@ -1,7 +1,6 @@
 package com.minos.orchestration;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,12 +14,10 @@ import java.util.UUID;
 /** Applies bounded retention to persisted indexing-run history without invalidating project state. */
 public final class IndexRunRetentionService {
 
-    private final Path runRoot;
     private final FileIndexStateStore stateStore;
 
     public IndexRunRetentionService(Path storageRoot, FileIndexStateStore stateStore) {
-        Path root = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
-        this.runRoot = root.resolve("runs");
+        Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
     }
 
@@ -48,13 +45,8 @@ public final class IndexRunRetentionService {
 
         List<UUID> deleted = new ArrayList<>();
         for (IndexingRun run : runs) {
-            if (retained.contains(run.id())) {
-                continue;
-            }
-            Path file = runRoot.resolve(run.id() + ".properties");
-            if (Files.deleteIfExists(file)) {
-                deleted.add(run.id());
-            }
+            if (retained.contains(run.id())) continue;
+            if (stateStore.deleteRun(projectId, run.id())) deleted.add(run.id());
         }
 
         List<UUID> retainedOrdered = runs.stream()
@@ -72,9 +64,7 @@ public final class IndexRunRetentionService {
     }
 
     private static void keep(Set<UUID> retained, List<IndexingRun> runs, int count) {
-        for (int index = 0; index < Math.min(count, runs.size()); index++) {
-            retained.add(runs.get(index).id());
-        }
+        for (int index = 0; index < Math.min(count, runs.size()); index++) retained.add(runs.get(index).id());
     }
 
     public record RetentionResult(

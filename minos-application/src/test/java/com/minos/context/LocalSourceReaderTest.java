@@ -48,6 +48,25 @@ class LocalSourceReaderTest {
     }
 
     @Test
+    void rereadsCurrentContentsWhenTheSameSourcePathChanges(@TempDir Path root) throws IOException {
+        Path source = root.resolve("src/Mutable.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "class VersionOne {}", StandardCharsets.UTF_8);
+        LocalSourceReader reader = new LocalSourceReader(root);
+        SymbolLocation location = new SymbolLocation(
+                "src/Mutable.java", 1, 0, 1, 10, PositionEncoding.UTF16_CODE_UNITS);
+
+        SourceExcerpt first = reader.readExcerpt(location, 0, 100).orElseThrow();
+        Files.writeString(source, "class VersionTwoChanged {}", StandardCharsets.UTF_8);
+        SourceExcerpt second = reader.readExcerpt(location, 0, 100).orElseThrow();
+
+        assertTrue(first.content().contains("VersionOne"));
+        assertTrue(second.content().contains("VersionTwoChanged"));
+        assertFalse(second.content().contains("VersionOne"),
+                "a long-lived source reader must never return stale cached source");
+    }
+
+    @Test
     void shrinksContextToBudgetAndTreatsOpaqueIdsAsUnavailable(@TempDir Path root)
             throws IOException {
         Path source = root.resolve("src/Long.java");

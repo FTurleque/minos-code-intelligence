@@ -49,6 +49,48 @@ class ToolsCommandTest {
     }
 
     @Test
+    void verifyAllPassesWhenTheOnlyNonReadyProviderIsUnsupportedByBackend() throws Exception {
+        ToolsCommand command = new ToolsCommand(operations(List.of(
+                provider("required", true, "READY"),
+                provider("docker-only-remote-worker", false, "UNSUPPORTED_BY_BACKEND")
+        )));
+
+        int exit = command.run(new String[]{"verify", "--all"}, new StringBuilder(), new StringBuilder());
+
+        assertEquals(FindSymbolCommand.SUCCESS, exit,
+                "a capability the selected backend never provides must not block installation/verification");
+    }
+
+    @Test
+    void verifyPassesWhenARequiredProviderItselfIsUnsupportedByBackend() throws Exception {
+        // Without --all, only requiredByDefault providers gate the plain `tools verify` exit code --
+        // this proves UNSUPPORTED_BY_BACKEND is excluded even when it is the required provider itself,
+        // not just when it happens to be an optional one.
+        ToolsCommand command = new ToolsCommand(operations(List.of(
+                provider("scip-java", true, "UNSUPPORTED_BY_BACKEND")
+        )));
+
+        int exit = command.run(new String[]{"verify"}, new StringBuilder(), new StringBuilder());
+
+        assertEquals(FindSymbolCommand.SUCCESS, exit);
+    }
+
+    @Test
+    void verifyAllStillFailsWhenARequiredProviderIsGenuinelyBrokenAlongsideAnUnsupportedByBackendOne() throws Exception {
+        // A capability legitimately absent from this backend (UNSUPPORTED_BY_BACKEND) must never mask
+        // an unrelated, genuinely broken required provider (BLOCKED) -- the applicable/failing case
+        // still fails closed.
+        ToolsCommand command = new ToolsCommand(operations(List.of(
+                provider("required", true, "BLOCKED"),
+                provider("docker-only-remote-worker", false, "UNSUPPORTED_BY_BACKEND")
+        )));
+
+        int exit = command.run(new String[]{"verify", "--all"}, new StringBuilder(), new StringBuilder());
+
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+    }
+
+    @Test
     void allOptionIsRejectedOutsideVerify() throws Exception {
         ToolsCommand command = new ToolsCommand(operations(List.of(provider("required", true, "READY"))));
         StringBuilder error = new StringBuilder();

@@ -1,9 +1,13 @@
 package com.minos.incremental;
 
 import com.minos.discovery.ProjectIgnorePolicy;
+import com.minos.io.ConfinedFileOpener;
+import com.minos.io.FileTreeOperations;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -31,13 +35,22 @@ public final class ProjectFingerprintService {
     );
 
     private final BuildDescriptorPolicy buildDescriptorPolicy;
+    private final SourceBudgetPolicy sourceBudgetPolicy;
 
     public ProjectFingerprintService() {
-        this(BuildDescriptorPolicy.m24Defaults());
+        this(BuildDescriptorPolicy.m24Defaults(), SourceBudgetPolicy.DEFAULT);
     }
 
     public ProjectFingerprintService(BuildDescriptorPolicy buildDescriptorPolicy) {
+        this(buildDescriptorPolicy, SourceBudgetPolicy.DEFAULT);
+    }
+
+    public ProjectFingerprintService(
+            BuildDescriptorPolicy buildDescriptorPolicy,
+            SourceBudgetPolicy sourceBudgetPolicy
+    ) {
         this.buildDescriptorPolicy = Objects.requireNonNull(buildDescriptorPolicy, "buildDescriptorPolicy");
+        this.sourceBudgetPolicy = Objects.requireNonNull(sourceBudgetPolicy, "sourceBudgetPolicy");
     }
 
     public ProjectFingerprint capture(Path projectRoot) throws IOException {
@@ -48,11 +61,16 @@ public final class ProjectFingerprintService {
         }
 
         ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
+        SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project fingerprint");
         List<FileFingerprint> files = new ArrayList<>();
 
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attributes)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 if (!directory.equals(root)
                         && ignorePolicy.isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
@@ -62,6 +80,7 @@ public final class ProjectFingerprintService {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
                 if (!attributes.isRegularFile()) {
                     return FileVisitResult.CONTINUE;
                 }
@@ -71,10 +90,12 @@ public final class ProjectFingerprintService {
                     return FileVisitResult.CONTINUE;
                 }
 
+                budget.accountFile();
+                HashedFile hashed = hashFile(root, relative, budget);
                 files.add(new FileFingerprint(
                         portable(relative),
-                        attributes.size(),
-                        hashFile(file)
+                        hashed.sizeBytes(),
+                        hashed.sha256()
                 ));
                 return FileVisitResult.CONTINUE;
             }
@@ -164,18 +185,32 @@ public final class ProjectFingerprintService {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static String hashFile(Path file) throws IOException {
+    private static HashedFile hashFile(
+            Path root,
+            Path relative,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
         MessageDigest digest = sha256();
         byte[] buffer = new byte[8192];
-        try (InputStream input = Files.newInputStream(file)) {
+        long bytes = 0L;
+        // The tree walk is only discovery. Re-open the relative path through the confinement
+        // primitive so neither a junction nor an ancestor replacement can redirect the bytes read.
+        try (InputStream input = Channels.newInputStream(
+                ConfinedFileOpener.openConfinedRegularFile(root, relative))) {
             int read;
             while ((read = input.read(buffer)) >= 0) {
                 if (read > 0) {
+                    budget.accountBytes(read);
+                    try {
+                        bytes = Math.addExact(bytes, read);
+                    } catch (ArithmeticException exception) {
+                        throw new IOException("project fingerprint file byte counter overflow", exception);
+                    }
                     digest.update(buffer, 0, read);
                 }
             }
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return new HashedFile(HexFormat.of().formatHex(digest.digest()), bytes);
     }
 
     private static MessageDigest sha256() {
@@ -193,4 +228,6 @@ public final class ProjectFingerprintService {
     private static String portable(Path path) {
         return path.toString().replace('\\', '/');
     }
+
+    private record HashedFile(String sha256, long sizeBytes) { }
 }

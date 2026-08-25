@@ -324,6 +324,50 @@ try {
     Assert-True ($null -ne $PreexistingAfterUninstall.servers.minos) 'Pre-existing compatible MINOS entry was removed during uninstall.'
     Assert-True (-not (Test-Path -LiteralPath $PreexistingState)) 'Pre-existing integration tracking state remained after uninstall.'
 
+    # Preexisting (CLI kind): a compatible entry is already connected through a
+    # CLI's own `mcp get` output, with no prior MINOS tracking state at all
+    # (the JSON-kind equivalent above proves ownership tracking; this proves
+    # the same fail-safe adoption for the probe-based CLI path). It must be
+    # adopted without ever invoking `mcp add`/`mcp remove`, and must remain
+    # untouched during MINOS uninstall because MINOS did not create it.
+    $CliPreexistingState = Join-Path $Root 'cli-preexisting\state.json'
+    $CliPreexistingLog = Join-Path $Root 'cli-preexisting\log.txt'
+    $CliPreexistingBackups = Join-Path $Root 'cli-preexisting\backups'
+    $ClaudeFakeState = Join-Path $FakeBin 'claude.state'
+    Assert-True (-not (Test-Path -LiteralPath $ClaudeFakeState)) 'Claude Code CLI fake state leaked from an earlier scenario.'
+    "mcp add minos -- $ExpectedExe mcp --scope user -- env MINOS_HOME=$DataRoot" |
+        Set-Content -LiteralPath $ClaudeFakeState -Encoding ascii
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -ClaudeCode `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $CliPreexistingState `
+        -LogPath $CliPreexistingLog `
+        -BackupRoot $CliPreexistingBackups `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $CliPreexistingTracking = Read-Json -Path $CliPreexistingState
+    Assert-True (@($CliPreexistingTracking.clients).Count -eq 1) 'Expected exactly one managed entry for the CLI-preexisting scenario.'
+    Assert-True ($CliPreexistingTracking.clients[0].ownership -eq 'preexisting') 'Compatible pre-existing Claude Code CLI entry ownership was not tracked safely.'
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -Action Uninstall `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $CliPreexistingState `
+        -LogPath $CliPreexistingLog `
+        -BackupRoot $CliPreexistingBackups `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    Assert-True (Test-Path -LiteralPath $ClaudeFakeState -PathType Leaf) 'Pre-existing compatible Claude Code CLI entry was removed during uninstall.'
+    Assert-True (-not (Test-Path -LiteralPath $CliPreexistingState)) 'Pre-existing CLI integration tracking state remained after uninstall.'
+    Remove-Item -LiteralPath $ClaudeFakeState -Force
+
     # Collision safety: an unmanaged existing JSON `minos` entry with a
     # different target must never be overwritten.
     $CollisionConfig = Join-Path $Root 'collision\mcp.json'
@@ -446,6 +490,138 @@ try {
     Assert-True ($TimeoutState.clients[0].ownership -eq 'managed') 'Partial MCP client ownership was not persisted as managed.'
     Assert-True ($null -ne $TimeoutValue.servers.memory) 'Timeout handling removed a pre-existing MCP server.'
     Assert-True ($TimeoutValue.keepMe -eq 'timeout-value') 'Timeout handling changed an unrelated JSON property.'
+
+    # Fail-closed on invalid JSON: a malformed config for one client must
+    # never be silently treated as empty, must never be overwritten, and --
+    # in non-strict mode -- must not block configuring a sibling client whose
+    # own config is valid.
+    $InvalidJsonConfig = Join-Path $Root 'invalid-json\copilot\mcp.json'
+    $InvalidJsonSiblingConfig = Join-Path $Root 'invalid-json\claude-desktop\claude_desktop_config.json'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InvalidJsonConfig) | Out-Null
+    '{not valid json,,,' | Set-Content -LiteralPath $InvalidJsonConfig -Encoding utf8 -NoNewline
+    $InvalidJsonRawBefore = [System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8)
+    Write-Utf8Json -Path $InvalidJsonSiblingConfig -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -ClaudeDesktop `
+        -DataRoot $DataRoot `
+        -StatePath (Join-Path $Root 'invalid-json\state.json') `
+        -LogPath (Join-Path $Root 'invalid-json\log.txt') `
+        -BackupRoot (Join-Path $Root 'invalid-json\backups') `
+        -CopilotJetBrainsConfigPath $InvalidJsonConfig `
+        -ClaudeDesktopConfigPath $InvalidJsonSiblingConfig
+
+    Assert-True ([System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8) -eq $InvalidJsonRawBefore) 'Invalid JSON configuration was overwritten instead of being left untouched.'
+    $InvalidJsonSiblingAfter = Read-Json -Path $InvalidJsonSiblingConfig
+    Assert-True ($null -ne $InvalidJsonSiblingAfter.mcpServers.minos) 'A sibling client with valid JSON was not configured after another selected client had invalid JSON (non-strict mode must not abort the whole run).'
+
+    $InvalidJsonRaised = $false
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -CopilotJetBrains `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath (Join-Path $Root 'invalid-json\strict-state.json') `
+            -LogPath (Join-Path $Root 'invalid-json\strict-log.txt') `
+            -BackupRoot (Join-Path $Root 'invalid-json\strict-backups') `
+            -CopilotJetBrainsConfigPath $InvalidJsonConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $InvalidJsonRaised = $true
+        Assert-True ($_.Exception.Message -match 'Invalid JSON configuration') 'Strict-mode invalid JSON failure did not report the expected diagnostic.'
+    }
+    Assert-True $InvalidJsonRaised 'Invalid JSON configuration should have caused a strict-mode failure.'
+    Assert-True ([System.IO.File]::ReadAllText($InvalidJsonConfig, [System.Text.Encoding]::UTF8) -eq $InvalidJsonRawBefore) 'Invalid JSON configuration was overwritten by the strict-mode run.'
+
+    # Modification safety (JSON kind): an entry MINOS created and manages must
+    # be preserved -- not silently removed -- if the user edits it before
+    # uninstall. Already proven for the CLI kind above; this is the JSON-kind
+    # equivalent (Test-ManagedJsonEntryMatches mismatch handling).
+    $ModifiedJsonConfig = Join-Path $Root 'modified-json\copilot\mcp.json'
+    $ModifiedJsonState = Join-Path $Root 'modified-json\state.json'
+    $ModifiedJsonLog = Join-Path $Root 'modified-json\log.txt'
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -CopilotJetBrains `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $ModifiedJsonState `
+        -LogPath $ModifiedJsonLog `
+        -BackupRoot (Join-Path $Root 'modified-json\backups') `
+        -CopilotJetBrainsConfigPath $ModifiedJsonConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $ModifiedJsonValue = Read-Json -Path $ModifiedJsonConfig
+    $ModifiedJsonValue.servers.minos.command = 'C:\Other\minos.exe'
+    Write-Utf8Json -Path $ModifiedJsonConfig -Value $ModifiedJsonValue
+
+    $ModifiedJsonPreserveRaised = $false
+    try {
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -Action Uninstall `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath $ModifiedJsonState `
+            -LogPath $ModifiedJsonLog `
+            -BackupRoot (Join-Path $Root 'modified-json\backups') `
+            -CopilotJetBrainsConfigPath $ModifiedJsonConfig `
+            -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+    }
+    catch {
+        $ModifiedJsonPreserveRaised = $true
+    }
+    Assert-True $ModifiedJsonPreserveRaised 'Modified managed JSON entry should have been preserved with a strict-mode warning.'
+    $ModifiedJsonAfter = Read-Json -Path $ModifiedJsonConfig
+    Assert-True ($ModifiedJsonAfter.servers.minos.command -eq 'C:\Other\minos.exe') 'Modified managed JSON entry was overwritten/removed instead of being preserved.'
+
+    # Default Claude Desktop path selection (no -ClaudeDesktopConfigPath given): when both a
+    # Windows Store (MSIX) profile and a traditional %APPDATA%\Claude profile exist on the same
+    # machine, the more recently active one must be chosen. Unconditionally preferring MSIX
+    # whenever its package directory merely exists configured a stale, abandoned profile while
+    # the genuinely active one was never touched -- exactly the shape a real user hit.
+    $DefaultPathRoot = Join-Path $Root 'default-path'
+    $DefaultLocalAppData = Join-Path $DefaultPathRoot 'local'
+    $DefaultRoamingAppData = Join-Path $DefaultPathRoot 'roaming'
+    $MsixProfileDir = Join-Path $DefaultLocalAppData 'Packages\Claude_stalepkg\LocalCache\Roaming\Claude'
+    $ClassicProfileDir = Join-Path $DefaultRoamingAppData 'Claude'
+    New-Item -ItemType Directory -Force -Path $MsixProfileDir, $ClassicProfileDir | Out-Null
+    Write-Utf8Json -Path (Join-Path $MsixProfileDir 'claude_desktop_config.json') -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+    Write-Utf8Json -Path (Join-Path $ClassicProfileDir 'claude_desktop_config.json') -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+    # Writing the config file above just touched each directory's mtime; now make the MSIX
+    # profile look stale (last used days ago) and the classic one look genuinely active (just
+    # now) -- an abandoned Store trial next to an actively used standalone install.
+    (Get-Item -LiteralPath $MsixProfileDir).LastWriteTime = (Get-Date).AddDays(-4)
+    (Get-Item -LiteralPath $ClassicProfileDir).LastWriteTime = Get-Date
+
+    $PreviousLocalAppData = $env:LOCALAPPDATA
+    $PreviousAppData = $env:APPDATA
+    try {
+        $env:LOCALAPPDATA = $DefaultLocalAppData
+        $env:APPDATA = $DefaultRoamingAppData
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -ClaudeDesktop `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath (Join-Path $DefaultPathRoot 'state.json') `
+            -LogPath (Join-Path $DefaultPathRoot 'log.txt') `
+            -BackupRoot (Join-Path $DefaultPathRoot 'backups')
+        # Deliberately no -ClaudeDesktopConfigPath: exercises the default-path auto-detection itself.
+    }
+    finally {
+        $env:LOCALAPPDATA = $PreviousLocalAppData
+        $env:APPDATA = $PreviousAppData
+    }
+
+    $ClassicConfigAfter = Read-Json -Path (Join-Path $ClassicProfileDir 'claude_desktop_config.json')
+    $MsixConfigAfter = Read-Json -Path (Join-Path $MsixProfileDir 'claude_desktop_config.json')
+    Assert-True ($null -ne $ClassicConfigAfter.mcpServers.minos) 'The more recently active (classic) Claude Desktop profile was not configured by default-path auto-detection; a stale MSIX profile must never shadow the actually-used install.'
+    Assert-True ($null -eq $MsixConfigAfter.mcpServers.PSObject.Properties['minos']) 'The stale MSIX Claude Desktop profile was configured instead of the actually-used classic one.'
 
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green

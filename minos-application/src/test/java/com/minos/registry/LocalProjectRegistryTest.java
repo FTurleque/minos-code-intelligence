@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -58,6 +59,41 @@ class LocalProjectRegistryTest {
         reloaded.removeProjectFromWorkspace(project.id());
         assertTrue(reloaded.findProject(project.id()).orElseThrow().workspaceId().isEmpty());
         assertTrue(reloaded.findWorkspace(workspace.id()).orElseThrow().projectIds().isEmpty());
+    }
+
+    @Test
+    void rejectsProjectMetadataWhoseEmbeddedIdentityDoesNotMatchFilename(@TempDir Path temp) throws IOException {
+        Path storage = temp.resolve("project-identity-registry");
+        Path projectRoot = Files.createDirectories(temp.resolve("project-identity-root"));
+        LocalProjectRegistry registry = new LocalProjectRegistry(storage);
+        RegisteredProject project = registry.registerProject(projectRoot, "Identity project");
+        UUID otherId = UUID.randomUUID();
+
+        Path file = storage.resolve("projects").resolve(project.id() + ".properties");
+        Files.writeString(file, Files.readString(file).replace(
+                "id=" + project.id(),
+                "id=" + otherId));
+
+        IOException lookupFailure = assertThrows(IOException.class, () -> registry.findProject(project.id()));
+        assertTrue(lookupFailure.getMessage().contains("identity mismatch"));
+        assertThrows(IOException.class, registry::listProjects);
+    }
+
+    @Test
+    void rejectsWorkspaceMetadataWhoseEmbeddedIdentityDoesNotMatchFilename(@TempDir Path temp) throws IOException {
+        Path storage = temp.resolve("workspace-identity-registry");
+        LocalProjectRegistry registry = new LocalProjectRegistry(storage);
+        RegisteredWorkspace workspace = registry.createWorkspace("Identity workspace");
+        UUID otherId = UUID.randomUUID();
+
+        Path file = storage.resolve("workspaces").resolve(workspace.id() + ".properties");
+        Files.writeString(file, Files.readString(file).replace(
+                "id=" + workspace.id(),
+                "id=" + otherId));
+
+        IOException lookupFailure = assertThrows(IOException.class, () -> registry.findWorkspace(workspace.id()));
+        assertTrue(lookupFailure.getMessage().contains("identity mismatch"));
+        assertThrows(IOException.class, registry::listWorkspaces);
     }
 
     @Test

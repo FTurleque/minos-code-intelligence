@@ -31,13 +31,13 @@ java -version
 La ligne de maintenance courante est :
 
 ```text
-1.0.1-SNAPSHOT
+1.1.0-SNAPSHOT
 ```
 
 Le shaded JAR de développement est donc notamment :
 
 ```text
-target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar
+target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar
 ```
 
 Les scripts de release remplacent la propriété Maven CI-friendly `revision` avec `-Drevision=<version>` ; ils ne nécessitent pas de modifier temporairement les POM.
@@ -46,7 +46,7 @@ Les scripts de release remplacent la propriété Maven CI-friendly `revision` av
 
 ```powershell
 $env:MINOS_HOME = 'C:\minos-data'
-$minos = '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar'
+$minos = '.\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar'
 
 java -jar $minos --help
 java -jar $minos doctor
@@ -82,12 +82,12 @@ Attention : un succès avec le JDK complet de développement ne prouve pas que l
 Le script bas niveau est :
 
 ```powershell
-.\scripts\release\build-windows-distribution.ps1 -Version 1.0.1
+.\scripts\release\build-windows-distribution.ps1 -Version 1.1.0
 ```
 
 Il :
 
-- construit le reactor avec `-Drevision=1.0.1` ;
+- construit le reactor avec `-Drevision=1.1.0` ;
 - analyse le fat JAR via le `jdeps.exe` du JDK 24 ;
 - génère l'image `jpackage` avec les modules requis ;
 - vérifie les modules du runtime créé ;
@@ -98,10 +98,10 @@ Il :
 
 ## Construire le setup local à vérifier avant release
 
-Pour la maintenance 1.0.1, utiliser de préférence :
+Pour la maintenance 1.1.0, utiliser de préférence :
 
 ```powershell
-.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
+.\scripts\release\build-local-windows-candidate.ps1 -Version 1.1.0
 ```
 
 Ce runner est prévu pour la validation locale avant publication. Il :
@@ -110,7 +110,7 @@ Ce runner est prévu pour la validation locale avant publication. Il :
 - construit la distribution ;
 - vérifie les intégrations MCP et leur préflight ;
 - lance un vrai handshake MCP sur le binaire packagé ;
-- génère le setup production ;
+- génère le setup production (payload embarqué, activé via `integration\update-installation.ps1` — voir `docs/user/production-installation.md` §11.2) ;
 - n'installe pas automatiquement ce setup ;
 - ne crée pas de tag ;
 - ne publie pas de GitHub Release ;
@@ -119,10 +119,24 @@ Ce runner est prévu pour la validation locale avant publication. Il :
 Sortie principale :
 
 ```text
-target\dist\MINOS-1.0.1-windows-x64-setup.exe
+target\dist\MINOS-1.1.0-windows-x64-setup.exe
 ```
 
 La prochaine étape est humaine : lancer ce setup, vérifier le Wizard/détection MCP et tester un client réel avant toute publication.
+
+Pour vérifier le moteur de mise à jour transactionnel lui-même (staging, rollback, crash recovery), indépendamment d'une vraie compilation Inno Setup :
+
+```powershell
+.\scripts\install\verify-windows-upgrade-transaction.ps1
+```
+
+Pour vérifier la détection/configuration des clients IA (Copilot JetBrains/CLI, Claude CLI/Code/Desktop classique et MSIX, Codex CLI/Desktop) de façon isolée, sans dépendre de ce qui est réellement installé sur la machine qui exécute le test :
+
+```powershell
+.\scripts\install\verify-mcp-client-preflight.ps1
+```
+
+Ce script enchaîne également `verify-codex-mcp-integration.ps1` (TOML géré, fallback CLI→TOML, entrées préexistantes), `verify-mcp-client-backend-routing.ps1` et `verify-installer-template.ps1`.
 
 ## Validation de release complète
 

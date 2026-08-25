@@ -1,0 +1,87 @@
+name: Post-MNE Remediation Invariants
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-mne-remediation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    name: Post-MNE exact-head invariants (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert exact candidate HEAD (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Assert exact candidate HEAD (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:EXPECTED_SHA) { throw 'Exact-head mismatch' }
+
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Immutable workflow supply-chain gate
+        run: python scripts/quality/check-workflow-pins.py
+
+      - name: Post-MNE structural remediation invariants
+        run: python scripts/remediation/check-post-mne.py
+
+      - name: Prepare Maven Wrapper (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x mvnw
+
+      - name: Provider trust-boundary behavioral regression (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./mvnw -B -ntp -pl minos-runtime-local -am -Dtest=ProviderSandboxSecurityRegressionTest -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Provider trust-boundary behavioral regression (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & '.\mvnw.cmd' '-B' '-ntp' '-pl' 'minos-runtime-local' '-am' `
+              '-Dtest=ProviderSandboxSecurityRegressionTest' `
+              '-Dsurefire.failIfNoSpecifiedTests=false' 'test'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Product facts consistency
+        run: python scripts/docs/product-facts.py --check

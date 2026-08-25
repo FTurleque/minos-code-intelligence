@@ -18,8 +18,7 @@ public final class IndexCommand {
     public static final String NAME = "index";
     private static final Set<String> SUPPORTED_OPTIONS = Set.of(
             "--provider", "--force-full", "--dry-run", "--format",
-            "--scip", "--provider-version", "--module", "--snapshot"
-    );
+            "--scip", "--provider-version", "--module", "--snapshot");
     private static final String USAGE = """
             Usage: minos index <project> [options]
 
@@ -52,24 +51,19 @@ public final class IndexCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1 && isHelp(arguments[0])) {
-            output.append(USAGE).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        }
-        Options options;
-        try {
-            options = Options.parse(arguments);
-        } catch (IllegalArgumentException exception) {
-            error.append("error: ").append(exception.getMessage()).append('\n').append(USAGE).append('\n');
-            return FindSymbolCommand.USAGE_ERROR;
-        }
-        try {
+        return CliCommandSupport.run(arguments, output, error, USAGE, Options::parse, NAME, options -> {
             if (options.scipFile() != null) {
                 error.append("warning: `minos index --scip` is deprecated; use `minos import-scip`\n");
                 ProjectOperations.IndexImportResult imported = projectOperations.importScip(
                         options.project(), options.scipFile(), options.providerId(),
                         options.providerVersion(), options.moduleId(), options.snapshotId());
-                output.append(renderImport(imported, options.format())).append('\n');
+                String diagnostic = CliCommandSupport.publicDiagnostic(imported.diagnostic());
+                output.append(renderImport(imported, options.format(), diagnostic)).append('\n');
+                if (imported.commitStatus() == ProjectOperations.IndexImportCommitStatus.COMMITTED_METADATA_PENDING) {
+                    error.append("warning: snapshot committed but project metadata recovery is pending")
+                            .append(diagnostic == null ? "" : ": " + diagnostic)
+                            .append('\n');
+                }
                 return FindSymbolCommand.SUCCESS;
             }
             if (autonomousOperations == null) {
@@ -83,10 +77,7 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
-        } catch (Exception exception) {
-            error.append("error: index failed: ").append(failureMessage(exception)).append('\n');
-            return FindSymbolCommand.EXECUTION_ERROR;
-        }
+        });
     }
 
     public static String usage() {
@@ -109,8 +100,9 @@ public final class IndexCommand {
         lines.add("reasons: " + String.join(",", plan.reasons()));
         lines.add("changedFiles: " + plan.changedFiles().size());
         for (AutonomousIndexOperations.ProviderView runtime : plan.providerRuntimes()) {
+            List<String> diagnostics = CliCommandSupport.publicDiagnostics(runtime.diagnostics());
             lines.add("runtime[" + runtime.id() + "]: " + runtime.state()
-                    + (runtime.diagnostics().isEmpty() ? "" : " — " + String.join("; ", runtime.diagnostics())));
+                    + (diagnostics.isEmpty() ? "" : " — " + String.join("; ", diagnostics)));
         }
         return String.join("\n", lines);
     }
@@ -119,13 +111,14 @@ public final class IndexCommand {
             AutonomousIndexOperations.IndexExecutionView execution,
             SymbolOutputFormat format
     ) {
+        String diagnostic = CliCommandSupport.publicDiagnostic(execution.diagnostic());
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("plan", planMap(execution.plan()));
         map.put("runId", execution.runId());
         map.put("status", execution.status());
         map.put("activeSnapshotId", execution.activeSnapshotId());
         map.put("fingerprintPromoted", execution.fingerprintPromoted());
-        map.put("diagnostic", execution.diagnostic());
+        map.put("diagnostic", diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -134,7 +127,7 @@ public final class IndexCommand {
                 + "status: " + execution.status() + "\n"
                 + "activeSnapshotId: " + nullable(execution.activeSnapshotId()) + "\n"
                 + "fingerprintPromoted: " + execution.fingerprintPromoted() + "\n"
-                + "diagnostic: " + nullable(execution.diagnostic());
+                + "diagnostic: " + nullable(diagnostic);
     }
 
     private static Map<String, Object> planMap(AutonomousIndexOperations.IndexPlanView plan) {
@@ -156,14 +149,18 @@ public final class IndexCommand {
             value.put("version", runtime.version());
             value.put("state", runtime.state());
             value.put("executable", runtime.executable());
-            value.put("diagnostics", runtime.diagnostics());
+            value.put("diagnostics", CliCommandSupport.publicDiagnostics(runtime.diagnostics()));
             runtimes.add(value);
         }
         map.put("providerRuntimes", runtimes);
         return map;
     }
 
-    private static String renderImport(ProjectOperations.IndexImportResult result, SymbolOutputFormat format) {
+    private static String renderImport(
+            ProjectOperations.IndexImportResult result,
+            SymbolOutputFormat format,
+            String diagnostic
+    ) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("projectId", result.projectId());
         map.put("snapshotId", result.snapshotId());
@@ -176,6 +173,8 @@ public final class IndexCommand {
         map.put("unresolvedOccurrenceCount", result.unresolvedOccurrenceCount());
         map.put("unresolvedRelationshipCount", result.unresolvedRelationshipCount());
         map.put("completedAt", result.completedAt());
+        map.put("commitStatus", result.commitStatus().name());
+        map.put("diagnostic", diagnostic);
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -190,22 +189,13 @@ public final class IndexCommand {
                 "relatedTests: " + result.relatedTestRelationshipCount(),
                 "unresolvedOccurrences: " + result.unresolvedOccurrenceCount(),
                 "unresolvedRelationships: " + result.unresolvedRelationshipCount(),
-                "completedAt: " + result.completedAt());
+                "completedAt: " + result.completedAt(),
+                "commitStatus: " + result.commitStatus().name(),
+                "diagnostic: " + nullable(diagnostic));
     }
 
     private static String nullable(String value) {
         return value == null ? "-" : value;
-    }
-
-    private static boolean isHelp(String value) {
-        return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
     }
 
     private record Options(
@@ -223,7 +213,7 @@ public final class IndexCommand {
             if (arguments.length < 1) {
                 throw new IllegalArgumentException("expected <project>");
             }
-            String project = operand(arguments[0], "project");
+            String project = CliCommandSupport.operand(arguments[0], "project");
             String provider = null;
             boolean forceFull = false;
             boolean dryRun = false;
@@ -275,13 +265,6 @@ public final class IndexCommand {
                 throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
             }
             return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
-        }
-
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
         }
     }
 }

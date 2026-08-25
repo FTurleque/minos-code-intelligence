@@ -1,12 +1,20 @@
 package com.minos.context;
 
 import com.minos.domain.SymbolLocation;
+import com.minos.io.BoundedInputStream;
+import com.minos.io.ConfinedFileOpener;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,7 +53,8 @@ public final class LocalSourceReader implements SourceReader {
         if (source.isEmpty()) {
             return Optional.empty();
         }
-        List<String> lines = readLines(source.orElseThrow());
+        LoadedSource loaded = readSource(source.orElseThrow());
+        List<String> lines = loaded.lines();
         if (lines.isEmpty() || location.startLine() > lines.size()) {
             return Optional.empty();
         }
@@ -74,7 +83,7 @@ public final class LocalSourceReader implements SourceReader {
         if (contentTruncated) {
             content = TokenEstimator.truncate(content, maxTokens);
         }
-        int totalFileTokens = TokenEstimator.estimate(String.join("\n", lines));
+        int totalFileTokens = loaded.totalTokens();
         boolean truncated = start != requestedStart || end != requestedEnd || contentTruncated;
         int actualEnd = content.isEmpty()
                 ? start + 1
@@ -98,8 +107,7 @@ public final class LocalSourceReader implements SourceReader {
         Path source = resolveReadableSource(requireFileId(fileId))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "source file is not resolvable inside the project: " + fileId));
-        ensureSize(source);
-        String content = Files.readString(source, StandardCharsets.UTF_8);
+        String content = readText(source);
         int totalLines = content.isEmpty()
                 ? 0
                 : 1 + (int) content.chars().filter(character -> character == '\n').count();
@@ -117,18 +125,71 @@ public final class LocalSourceReader implements SourceReader {
         );
     }
 
-    private List<String> readLines(Path source) throws IOException {
-        ensureSize(source);
-        return Files.readAllLines(source, StandardCharsets.UTF_8);
+    /**
+     * Reads the current file contents for every excerpt request.
+     *
+     * <p>The previous single-path cache could return stale source indefinitely when a file changed
+     * between requests. Timestamp/size based invalidation would still be heuristic on file systems
+     * with coarse timestamp resolution, so correctness takes precedence over this tiny cache.</p>
+     */
+    private LoadedSource readSource(Path source) throws IOException {
+        List<String> lines = new ArrayList<>();
+        int utf8Bytes = 0;
+        try (SeekableByteChannel channel = openConfined(source);
+             BoundedInputStream input = new BoundedInputStream(
+                     Channels.newInputStream(channel), MAX_SOURCE_BYTES, "source file");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            String line;
+            boolean first = true;
+            while ((line = reader.readLine()) != null) {
+                if (!first) utf8Bytes = Math.addExact(utf8Bytes, 1);
+                utf8Bytes = Math.addExact(utf8Bytes, line.getBytes(StandardCharsets.UTF_8).length);
+                lines.add(line);
+                first = false;
+            }
+        } catch (ArithmeticException exception) {
+            throw new IOException("source token byte counter overflow", exception);
+        }
+        int totalTokens = utf8Bytes == 0 ? 0 : Math.max(1, (utf8Bytes + 3) / 4);
+        return new LoadedSource(List.copyOf(lines), totalTokens);
     }
 
-    private void ensureSize(Path source) throws IOException {
-        long size = Files.size(source);
-        if (size > MAX_SOURCE_BYTES) {
-            throw new IOException("source file exceeds 16 MiB safety limit: " + source);
+    private String readText(Path source) throws IOException {
+        try (SeekableByteChannel channel = openConfined(source);
+             BoundedInputStream input = new BoundedInputStream(
+                     Channels.newInputStream(channel), MAX_SOURCE_BYTES, "source file")) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
+    /**
+     * Opens a validated project-relative source under the confinement guarantee.
+     *
+     * <p>The byte ceiling stays on the stream rather than on a pre-read {@code Files.size()} for the
+     * same reason the open itself is confined: a size observed before the read says nothing about
+     * the bytes that follow it.</p>
+     */
+    private SeekableByteChannel openConfined(Path relativeSource) throws IOException {
+        try {
+            return ConfinedFileOpener.openConfinedRegularFile(projectRoot, relativeSource);
+        } catch (ConfinedFileOpener.ConfinementException exception) {
+            // Kept as an invalid-argument failure, exactly as the previous escaping-symlink check
+            // was: the request named something the project is not allowed to serve. The message is
+            // deliberately path-free.
+            throw new IllegalArgumentException("source file is not a confined project file", exception);
+        }
+    }
+
+    /**
+     * Validates the requested identifier and answers the project-relative path to open.
+     *
+     * <p>It deliberately stops at the relative path and no longer hands back a resolved real path.
+     * A real path is a <em>pathname</em>, and re-walking a pathname at open time is precisely the
+     * gap this reader had: whatever was proven about the object it named could stop being true
+     * before the bytes were read. Containment is therefore established once here on the request
+     * shape, and then again -- against the actual object -- by {@link ConfinedFileOpener} at the
+     * moment of the open.</p>
+     */
     private Optional<Path> resolveReadableSource(String fileId) throws IOException {
         String required = requireFileId(fileId);
         if (required.startsWith("file:")) {
@@ -149,14 +210,10 @@ public final class LocalSourceReader implements SourceReader {
         if (!candidate.startsWith(projectRoot)) {
             throw new IllegalArgumentException("fileId escapes the project root");
         }
-        if (!Files.isRegularFile(candidate)) {
+        if (!Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
         }
-        Path real = candidate.toRealPath();
-        if (!real.startsWith(projectRoot)) {
-            throw new IllegalArgumentException("source symlink escapes the project root");
-        }
-        return Optional.of(real);
+        return Optional.of(relative);
     }
 
     private static String requireFileId(String fileId) {
@@ -169,4 +226,6 @@ public final class LocalSourceReader implements SourceReader {
     private static String join(List<String> lines, int start, int end) {
         return String.join("\n", lines.subList(start, end + 1));
     }
+
+    private record LoadedSource(List<String> lines, int totalTokens) { }
 }

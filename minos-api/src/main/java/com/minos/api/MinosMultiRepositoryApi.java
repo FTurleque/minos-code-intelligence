@@ -2,7 +2,6 @@ package com.minos.api;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Additive M12 public contract for workspaces, cross-repository intelligence and Git activity.
@@ -44,7 +43,9 @@ public interface MinosMultiRepositoryApi extends MinosApi {
 
     record GitActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
         public GitActivityQuery {
-            Objects.requireNonNull(since, "since");
+            if (since == null) {
+                throw new IllegalArgumentException("since must not be null");
+            }
             requireRange(maxCommits, 1, 10_000, "maxCommits");
             requireRange(maxFiles, 1, 10_000, "maxFiles");
             requireRange(zoneDepth, 1, 8, "zoneDepth");

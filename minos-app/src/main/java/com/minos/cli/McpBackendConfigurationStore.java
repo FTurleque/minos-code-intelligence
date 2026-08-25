@@ -1,13 +1,15 @@
 package com.minos.cli;
 
+import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
+import com.minos.io.PrivateLocalStorage;
+
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
@@ -20,33 +22,40 @@ public final class McpBackendConfigurationStore {
     public static final String RUNTIME_DIRECTORY = "runtime";
     public static final String FILE_NAME = "backend.properties";
 
+    private static final long MAX_CONFIGURATION_BYTES = 64L * 1024L;
+    private static final int MAX_CONFIGURATION_ENTRIES = 16;
     private static final Set<String> ALLOWED_KEYS = Set.of(
             "formatVersion", "backend", "docker.containerName", "docker.probeTimeoutMillis");
 
+    private final Path home;
     private final Path file;
 
     public McpBackendConfigurationStore(Path minosHome) {
-        Objects.requireNonNull(minosHome, "minosHome");
-        this.file = minosHome.toAbsolutePath().normalize().resolve(RUNTIME_DIRECTORY).resolve(FILE_NAME);
+        this.home = Objects.requireNonNull(minosHome, "minosHome").toAbsolutePath().normalize();
+        this.file = home.resolve(RUNTIME_DIRECTORY).resolve(FILE_NAME);
     }
 
     /**
      * Loads the explicit backend configuration. Existing pre-M29 homes are migrated once to native.
-     * This compatibility migration is not a runtime fallback: once a file exists, invalid content fails closed.
+     * MINOS_HOME itself, the runtime directory and an existing configuration file are each verified
+     * owner-only before configuration bytes are read.
      */
     public synchronized McpBackendConfiguration loadOrMigrate() throws IOException {
-        if (!Files.exists(file)) {
+        ensurePrivateRuntimeDirectory();
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
             McpBackendConfiguration configuration = McpBackendConfiguration.nativeDefault();
             save(configuration);
             return configuration;
         }
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("MCP backend configuration is not a regular file: " + file);
-        }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        secureExistingConfigurationFile();
+        Properties properties = BoundedProperties.load(
+                file,
+                MAX_CONFIGURATION_BYTES,
+                MAX_CONFIGURATION_ENTRIES,
+                128,
+                1024,
+                "MCP backend configuration"
+        );
         for (Object rawKey : properties.keySet()) {
             String key = String.valueOf(rawKey);
             if (!ALLOWED_KEYS.contains(key)) {
@@ -66,14 +75,17 @@ public final class McpBackendConfigurationStore {
 
     public synchronized void save(McpBackendConfiguration configuration) throws IOException {
         Objects.requireNonNull(configuration, "configuration");
-        Files.createDirectories(file.getParent());
+        ensurePrivateRuntimeDirectory();
+        if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+            secureExistingConfigurationFile();
+        }
         Properties properties = new Properties();
         properties.setProperty("formatVersion", Integer.toString(configuration.formatVersion()));
         properties.setProperty("backend", configuration.backend().configurationValue());
         properties.setProperty("docker.containerName", configuration.dockerContainerName());
         properties.setProperty("docker.probeTimeoutMillis", Long.toString(configuration.dockerProbeTimeout().toMillis()));
 
-        Path temporary = Files.createTempFile(file.getParent(), FILE_NAME + ".", ".tmp");
+        Path temporary = PrivateLocalStorage.createPrivateTempFile(file.getParent(), FILE_NAME + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
                     temporary,
@@ -82,11 +94,8 @@ public final class McpBackendConfigurationStore {
                     StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS MCP backend configuration v1");
             }
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            DurableAtomicFile.replace(temporary, file, "MCP backend configuration replacement");
+            PrivateLocalStorage.verifyPrivateFile(file);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -94,6 +103,18 @@ public final class McpBackendConfigurationStore {
 
     public Path file() {
         return file;
+    }
+
+    private void ensurePrivateRuntimeDirectory() throws IOException {
+        PrivateLocalStorage.ensurePrivateDirectory(home);
+        PrivateLocalStorage.ensurePrivateDirectory(file.getParent());
+    }
+
+    private void secureExistingConfigurationFile() throws IOException {
+        if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("MCP backend configuration is not a real regular file: " + file);
+        }
+        PrivateLocalStorage.hardenExistingFile(file);
     }
 
     private static String required(Properties properties, String key) {

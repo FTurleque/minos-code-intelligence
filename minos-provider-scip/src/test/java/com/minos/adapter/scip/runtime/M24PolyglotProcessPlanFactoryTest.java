@@ -86,6 +86,20 @@ class M24PolyglotProcessPlanFactoryTest {
     }
 
     @Test
+    void typeScriptWritesTheIndexUnderTheRunDirectory(@TempDir Path temp) throws Exception {
+        Path executable = Files.createFile(temp.resolve("scip-typescript"));
+        Path project = Files.createDirectories(temp.resolve("ts-project"));
+        Path run = temp.resolve("ts-run");
+        Files.writeString(project.resolve("tsconfig.json"), "{}");
+        var plan = new ScipTypeScriptProcessPlanFactory(executable).create(request(project), run);
+        Path output = run.resolve("index.scip").toAbsolutePath().normalize();
+        assertEquals(output, plan.generatedArtifact());
+        assertFalse(plan.generatedArtifact().startsWith(project));
+        assertTrue(plan.command().contains("--output"));
+        assertTrue(plan.command().contains(output.toString()));
+    }
+
+    @Test
     void everyNewProcessPlanRejectsIncrementalMode(@TempDir Path temp) throws Exception {
         Path executable = Files.createFile(temp.resolve("provider"));
         Path project = Files.createDirectories(temp.resolve("project"));

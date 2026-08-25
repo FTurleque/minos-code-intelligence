@@ -1,10 +1,11 @@
 package com.minos.adapter.scip.runtime;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.io.FileTreeOperations;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
+import com.minos.runtime.BoundedProcessOutput;
 import com.minos.runtime.CommandLocator;
 import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.ProcessIndexerExecutor;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
 
@@ -16,7 +17,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,6 +31,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     public static final String VERSION = ScipIndexerCatalog.SCIP_PYTHON_VERSION;
 
     private static final String WINDOWS_COMPATIBILITY_PRELOAD = "minos-windows-regexp-compat.cjs";
+    private static final String NPM_LOCK_RESOURCE = "scip-python-package-lock.json";
+    private static final String NPM_INTEGRITY = "sha512-qoKL1Rggg0o5newAFbCFAKlS0AjWxG5MA+mC28BtgxOv0DhO4zdL8u7151FxEppDpXMVvm7+yXSjXotoVH9cMQ==";
     private static final String WINDOWS_COMPATIBILITY_SOURCE = """
             // MINOS compatibility shim for sourcegraph/scip-python#210 / PR #211.
             // scip-python 0.6.6 evaluates new RegExp(path.sep, 'g'); on Windows path.sep is a lone
@@ -71,12 +73,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
     public ProviderRuntimeStatus inspect(String providerId) {
         requireProvider(providerId);
         List<String> diagnostics = new ArrayList<>();
-        if (CommandLocator.find("node").isEmpty()) {
-            diagnostics.add("Node.js 16+ is required by scip-python");
-        }
-        if (CommandLocator.find("npm").isEmpty()) {
-            diagnostics.add("npm is required to install scip-python");
-        }
+        if (CommandLocator.find("node").isEmpty()) diagnostics.add("Node.js 16+ is required by scip-python");
+        if (CommandLocator.find("npm").isEmpty()) diagnostics.add("npm is required to install scip-python");
         Optional<Path> python = pythonExecutable();
         if (python.isEmpty()) {
             diagnostics.add("Python 3.10+ is required in PATH by scip-python");
@@ -88,24 +86,15 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         if (!installed) {
             diagnostics.add("managed scip-python " + VERSION + " is not installed");
         } else if (CommandLocator.isWindows()) {
-            if (!Files.isRegularFile(packageEntryPoint())) {
-                diagnostics.add("managed scip-python package entry point is missing");
-            }
-            if (!Files.isRegularFile(windowsCompatibilityPreload())) {
-                diagnostics.add("managed scip-python Windows compatibility preload is missing");
-            }
+            if (!Files.isRegularFile(packageEntryPoint())) diagnostics.add("managed scip-python package entry point is missing");
+            if (!Files.isRegularFile(windowsCompatibilityPreload())) diagnostics.add("managed scip-python Windows compatibility preload is missing");
         }
         ProviderRuntimeStatus.State state = diagnostics.isEmpty()
                 ? ProviderRuntimeStatus.State.READY
                 : installed ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
-        return new ProviderRuntimeStatus(
-                PROVIDER_ID,
-                VERSION,
-                state,
-                installed ? Optional.of(executable) : Optional.empty(),
-                diagnostics,
-                false
-        );
+        ProviderRuntimeStatus status = new ProviderRuntimeStatus(PROVIDER_ID, VERSION, state,
+                installed ? Optional.of(executable) : Optional.empty(), diagnostics, false);
+        return StrongOwnedProcessExecutors.qualifyOwnership(status, home);
     }
 
     @Override
@@ -127,12 +116,18 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         deleteRecursively(partial);
         Files.createDirectories(partial);
         try {
+            LockedNpmPackage.prepare(
+                    ManagedScipPythonRuntimeManager.class,
+                    partial,
+                    NPM_LOCK_RESOURCE,
+                    "@sourcegraph/scip-python",
+                    VERSION,
+                    NPM_INTEGRITY);
             run(CommandLocator.invocation(
                     npm,
-                    "install",
+                    "ci",
                     "--prefix", partial.toString(),
-                    "--no-audit", "--no-fund",
-                    "@sourcegraph/scip-python@" + VERSION
+                    "--no-audit", "--no-fund", "--ignore-scripts"
             ), home, toolsRoot.resolve("scip-python-install.log"), Duration.ofMinutes(10));
             Path installed = partial.resolve("node_modules").resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-python.cmd" : "scip-python");
@@ -145,11 +140,8 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
                 if (!Files.isRegularFile(entryPoint)) {
                     throw new IllegalStateException("scip-python package entry point was not created: " + entryPoint);
                 }
-                Files.writeString(
-                        partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
-                        WINDOWS_COMPATIBILITY_SOURCE,
-                        StandardCharsets.UTF_8
-                );
+                Files.writeString(partial.resolve(WINDOWS_COMPATIBILITY_PRELOAD),
+                        WINDOWS_COMPATIBILITY_SOURCE, StandardCharsets.UTF_8);
             }
             deleteRecursively(destination);
             move(partial, destination);
@@ -180,17 +172,12 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
             delegate = new ScipPythonProcessPlanFactory(List.of(
                     node.toAbsolutePath().normalize().toString(),
                     "--require", windowsCompatibilityPreload().toString(),
-                    packageEntryPoint().toString()
-            ));
+                    packageEntryPoint().toString()));
         } else {
             delegate = new ScipPythonProcessPlanFactory(status.executable().orElseThrow());
         }
-        return new ProcessIndexerExecutor(
-                providerId,
-                home,
-                (request, runDirectory) -> withEnvironment(
-                        delegate.create(request, runDirectory), providerEnvironment)
-        );
+        return StrongOwnedProcessExecutors.required(providerId, home,
+                (request, runDirectory) -> withEnvironment(delegate.create(request, runDirectory), providerEnvironment));
     }
 
     private Path root() {
@@ -212,29 +199,19 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
 
     private static Optional<Path> pythonExecutable() {
         Optional<Path> python = CommandLocator.find("python");
-        if (python.isPresent()) {
-            return python;
-        }
-        return CommandLocator.find("python3");
+        return python.isPresent() ? python : CommandLocator.find("python3");
     }
 
     private static Optional<Path> pipExecutable(Path python) {
         Optional<Path> pip = CommandLocator.find("pip3");
-        if (pip.isPresent()) {
-            return pip;
-        }
+        if (pip.isPresent()) return pip;
         pip = CommandLocator.find("pip");
-        if (pip.isPresent()) {
-            return pip;
-        }
-
+        if (pip.isPresent()) return pip;
         LinkedHashSet<Path> directories = new LinkedHashSet<>();
         Path pythonDirectory = python.toAbsolutePath().normalize().getParent();
         if (pythonDirectory != null) {
             directories.add(pythonDirectory);
-            if (CommandLocator.isWindows()) {
-                directories.add(pythonDirectory.resolve("Scripts"));
-            }
+            if (CommandLocator.isWindows()) directories.add(pythonDirectory.resolve("Scripts"));
         }
         List<String> names = CommandLocator.isWindows()
                 ? List.of("pip3.exe", "pip.exe", "pip3.cmd", "pip.cmd", "pip3", "pip")
@@ -242,9 +219,7 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         for (Path directory : directories) {
             for (String name : names) {
                 Path candidate = directory.resolve(name).toAbsolutePath().normalize();
-                if (Files.isRegularFile(candidate)) {
-                    return Optional.of(candidate);
-                }
+                if (Files.isRegularFile(candidate)) return Optional.of(candidate);
             }
         }
         return Optional.empty();
@@ -252,39 +227,24 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
 
     private static Map<String, String> providerEnvironment(Path python, Path pip) {
         LinkedHashSet<String> directories = new LinkedHashSet<>();
-        if (pip.getParent() != null) {
-            directories.add(pip.getParent().toAbsolutePath().normalize().toString());
-        }
-        if (python.getParent() != null) {
-            directories.add(python.getParent().toAbsolutePath().normalize().toString());
-        }
+        if (pip.getParent() != null) directories.add(pip.getParent().toAbsolutePath().normalize().toString());
+        if (python.getParent() != null) directories.add(python.getParent().toAbsolutePath().normalize().toString());
         String inheritedPath = System.getenv("PATH");
         String prefix = String.join(File.pathSeparator, directories);
         String effectivePath = inheritedPath == null || inheritedPath.isBlank()
-                ? prefix
-                : prefix + File.pathSeparator + inheritedPath;
+                ? prefix : prefix + File.pathSeparator + inheritedPath;
         return Map.of("PATH", effectivePath);
     }
 
-    private static IndexerProcessPlan withEnvironment(
-            IndexerProcessPlan plan,
-            Map<String, String> providerEnvironment
-    ) {
+    private static IndexerProcessPlan withEnvironment(IndexerProcessPlan plan, Map<String, String> providerEnvironment) {
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.putAll(providerEnvironment);
-        return new IndexerProcessPlan(
-                plan.command(),
-                plan.workingDirectory(),
-                environment,
-                plan.generatedArtifact(),
-                plan.timeout()
-        );
+        return new IndexerProcessPlan(plan.command(), plan.workingDirectory(), environment,
+                plan.generatedArtifact(), plan.timeout());
     }
 
     private static void requireProvider(String providerId) {
-        if (!PROVIDER_ID.equals(providerId)) {
-            throw new IllegalArgumentException("unknown managed provider: " + providerId);
-        }
+        if (!PROVIDER_ID.equals(providerId)) throw new IllegalArgumentException("unknown managed provider: " + providerId);
     }
 
     private static void run(List<String> command, Path workingDirectory, Path log, Duration timeout)
@@ -293,28 +253,26 @@ public final class ManagedScipPythonRuntimeManager implements ProviderRuntimeMan
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile());
         builder.redirectErrorStream(true);
-        builder.redirectOutput(log.toFile());
         Process process = builder.start();
+        BoundedProcessOutput.Capture capture = BoundedProcessOutput.capture(process, log, null);
         boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         if (!completed) {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
+            process.descendants().toList().reversed().forEach(handle -> {
+                if (handle.isAlive()) handle.destroyForcibly();
+            });
+            if (process.isAlive()) process.destroyForcibly();
+            process.waitFor(5, TimeUnit.SECONDS);
+            capture.await();
             throw new IllegalStateException("tool command timed out; see " + log);
         }
+        capture.await();
         if (process.exitValue() != 0) {
             throw new IllegalStateException("tool command failed with code " + process.exitValue() + "; see " + log);
         }
     }
 
     private static void deleteRecursively(Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return;
-        }
-        try (var stream = Files.walk(path)) {
-            for (Path current : stream.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(current);
-            }
-        }
+        FileTreeOperations.deleteRecursively(path);
     }
 
     private static void move(Path source, Path target) throws IOException {

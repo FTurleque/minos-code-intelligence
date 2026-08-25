@@ -11,7 +11,6 @@ import com.minos.hosted.HostedRole;
 import com.minos.hosted.HostedTenantState;
 import com.minos.hosted.SharedWorkspace;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -21,6 +20,7 @@ import java.util.UUID;
 /** Direct Java mapping to the shared M27 control-plane service. */
 public final class LocalMinosTeamApi implements MinosTeamApi {
     private static final String TOKEN_HANDLING = "SECRET_OUTPUT_ONCE_DO_NOT_LOG";
+    private static final String REQUEST = "request";
     private final Optional<HostedControlPlaneService> service;
 
     public LocalMinosTeamApi(MinosApplication application) {
@@ -29,7 +29,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
 
     @Override public BootstrapDto bootstrap(BootstrapRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            BootstrapRequest value = Objects.requireNonNull(request, "request");
+            BootstrapRequest value = MinosApiSupport.required(request, REQUEST);
             var result = hosted().bootstrap(value.tenantId(), value.tenantName(), value.keyId(), value.ownerPrincipalId(),
                     value.ownerDisplayName(), value.tokenLifetime(), value.requestId());
             return new BootstrapDto(tenantDto(result.state()), result.bearerToken(), TOKEN_HANDLING);
@@ -55,7 +55,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public MemberDto grantMember(String token, String requestId, MemberGrantRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            MemberGrantRequest value = Objects.requireNonNull(request, "request");
+            MemberGrantRequest value = MinosApiSupport.required(request, REQUEST);
             return memberDto(hosted().grantMember(token, requestId, value.principalId(), value.displayName(), role(value.role())));
         });
     }
@@ -64,7 +64,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public BindingDto bindProject(String token, String requestId, BindingRequest request) throws MinosApi.MinosApiException {
         return execute(() -> {
-            BindingRequest value = Objects.requireNonNull(request, "request");
+            BindingRequest value = MinosApiSupport.required(request, REQUEST);
             return bindingDto(hosted().bindProject(token, requestId, value.workspaceId(), value.projectId(), value.snapshotId()));
         });
     }
@@ -80,7 +80,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
     }
     @Override public RetentionDto setRetention(String token, String requestId, RetentionPolicyDto policy) throws MinosApi.MinosApiException {
         return execute(() -> {
-            RetentionPolicyDto value = Objects.requireNonNull(policy, "policy");
+            RetentionPolicyDto value = MinosApiSupport.required(policy, "policy");
             var saved = hosted().setRetention(token, requestId, new HostedRetentionPolicy(value.maxAuditEvents(),
                     value.auditRetentionDays(), value.archivedWorkspaceRetentionDays()));
             return new RetentionDto(policyDto(saved), planDto(hosted().retentionPlan(token)), false);
@@ -141,18 +141,7 @@ public final class LocalMinosTeamApi implements MinosTeamApi {
         return new RetentionPlanDto(value.tenantId(), value.evaluatedAt().toString(), value.auditEventsToRemove(),
                 value.archivedWorkspacesToRemove());
     }
-    private static <T> T execute(Call<T> call) throws MinosApi.MinosApiException {
-        try { return call.run(); }
-        catch (SecurityException exception) { throw failure(MinosApi.ErrorCode.ACCESS_DENIED, exception); }
-        catch (IllegalArgumentException exception) { throw failure(MinosApi.ErrorCode.INVALID_REQUEST, exception); }
-        catch (IllegalStateException exception) { throw failure(MinosApi.ErrorCode.UNAVAILABLE, exception); }
-        catch (IOException exception) { throw failure(MinosApi.ErrorCode.IO_FAILURE, exception); }
-        catch (Exception exception) { throw failure(MinosApi.ErrorCode.EXECUTION_FAILURE, exception); }
+    private static <T> T execute(MinosApiSupport.ApiCall<T> call) throws MinosApi.MinosApiException {
+        return MinosApiSupport.execute(call);
     }
-    private static MinosApi.MinosApiException failure(MinosApi.ErrorCode code, Exception exception) {
-        String message = exception.getMessage();
-        return new MinosApi.MinosApiException(code, message == null || message.isBlank()
-                ? exception.getClass().getSimpleName() : message.replace('\r', ' ').replace('\n', ' '), exception);
-    }
-    @FunctionalInterface private interface Call<T> { T run() throws Exception; }
 }

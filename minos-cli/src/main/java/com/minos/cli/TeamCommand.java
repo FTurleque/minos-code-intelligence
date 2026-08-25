@@ -235,9 +235,7 @@ final class TeamCommand {
     }
 
     private static String safeMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
+        return CliCommandSupport.failureMessage(exception);
     }
 
     private static String jsonEscape(String value) {

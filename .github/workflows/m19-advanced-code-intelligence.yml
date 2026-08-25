@@ -32,18 +32,30 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Java 24
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '24'
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+
+      # The helper bounds each apt attempt and falls back to a pinned mirror if the runner's
+      # mirrorlist stalls; timeout-minutes is the outer backstop.
+      - name: Install and authorize Linux worker sandbox runtime
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          bash scripts/ci/install-linux-sandbox-toolchain.sh
+
+      - name: Delegate a cgroup v2 job boundary to the worker sandbox
+        shell: bash
+        run: bash scripts/ci/delegate-linux-cgroup.sh
 
       - name: Prepare Maven Wrapper
         shell: bash
@@ -52,8 +64,15 @@ jobs:
       - name: Product facts
         run: python scripts/docs/product-facts.py --check
 
+      # --attach-pid keeps the privileged cgroup migration in the provisioning helper instead of
+      # granting the MINOS account root cgroup.procs access; each `run:` block is its own shell, so
+      # the attach must happen in the same step as the workload.
       - name: Maven verification
-        run: ./mvnw -B -ntp clean verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
+          ./mvnw -B -ntp clean verify
 
       - name: JaCoCo gates
         run: python scripts/quality/check-jacoco.py
@@ -66,29 +85,31 @@ jobs:
 
     steps:
       - name: Checkout exact M19 head
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Java 24
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '24'
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
 
       - name: Run complete M19 exact-head qualification
         shell: powershell
-        run: .\scripts\m19\run-final.ps1 -ExpectedHead '${{ github.event.pull_request.head.sha }}'
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .\scripts\m19\run-final.ps1 -ExpectedHead $env:EXPECTED_HEAD
 
       - name: Upload M19 diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: m19-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore

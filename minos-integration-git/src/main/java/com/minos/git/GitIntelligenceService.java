@@ -9,8 +9,12 @@ import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.treewalk.EmptyTreeIterator;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.TreeFilter;
 import org.eclipse.jgit.util.io.DisabledOutputStream;
 
 import java.io.IOException;
@@ -33,6 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * M12 factual Git intelligence over a local repository.
@@ -45,6 +50,22 @@ public final class GitIntelligenceService {
     private static final int MAX_COMMITS = 10_000;
     private static final int MAX_FILES = 10_000;
     private static final int MAX_ZONE_DEPTH = 8;
+
+    private final ActivityBudget budget;
+
+    public GitIntelligenceService() {
+        this(ActivityBudget.DEFAULT);
+    }
+
+    /** Explicit budget, so a caller (and an adversarial test) can bound the analysis frontier itself. */
+    public GitIntelligenceService(ActivityBudget budget) {
+        this.budget = Objects.requireNonNull(budget, "budget");
+    }
+
+    /** The resource frontier this service enforces while it walks history. */
+    public ActivityBudget budget() {
+        return budget;
+    }
 
     public RepositoryView inspect(Path projectRoot) throws IOException, GitAPIException {
         try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
@@ -76,6 +97,7 @@ public final class GitIntelligenceService {
                     history = List.of();
                 }
 
+                int retainedPathCount = 0;
                 for (RevCommit commit : history) {
                     Instant committedAt = commit.getCommitterIdent().getWhenAsInstant();
                     if (committedAt.isBefore(query.since())) {
@@ -87,22 +109,18 @@ public final class GitIntelligenceService {
                         break;
                     }
 
-                    List<String> changedPaths = changedPaths(commit, formatter, revWalk);
-                    String author = authorKey(commit);
-                    for (String path : changedPaths) {
-                        files.computeIfAbsent(path, MutableFileActivity::new)
-                                .record(commit.getName(), committedAt, author);
-                        String zone = zone(path, query.zoneDepth());
-                        zones.computeIfAbsent(zone, MutableZoneActivity::new)
-                                .record(path, committedAt);
-                    }
+                    List<String> changedPaths = changedPaths(commit, formatter, revWalk, repository, limitations);
+                    recordActivity(commit, committedAt, changedPaths, query, files, zones, limitations);
+                    List<String> retained = retainedPaths(
+                            changedPaths, budget.maxRetainedChangedPaths() - retainedPathCount, limitations);
+                    retainedPathCount += retained.size();
                     commits.add(new CommitActivity(
                             commit.getName(),
                             committedAt,
                             commit.getAuthorIdent().getName(),
                             commit.getAuthorIdent().getEmailAddress(),
                             commit.getShortMessage(),
-                            changedPaths
+                            retained
                     ));
                     processed++;
                 }
@@ -201,24 +219,131 @@ public final class GitIntelligenceService {
         );
     }
 
-    private static List<String> changedPaths(
+    /**
+     * Folds one commit's changed paths into the tracked file and zone activity, within budget.
+     *
+     * <p>An entry that already exists keeps being updated once a map is full: the budget bounds how
+     * many distinct files and zones are <em>tracked</em>, not how accurately the tracked ones are
+     * counted. Refusing an update would understate a file MINOS is already reporting on.</p>
+     */
+    private void recordActivity(
+            RevCommit commit,
+            Instant committedAt,
+            List<String> changedPaths,
+            ActivityQuery query,
+            Map<String, MutableFileActivity> files,
+            Map<String, MutableZoneActivity> zones,
+            Set<String> limitations
+    ) {
+        String author = authorKey(commit);
+        for (String path : changedPaths) {
+            if (!files.containsKey(path) && files.size() >= budget.maxTrackedFiles()) {
+                limitations.add("FILE_TRACKING_TRUNCATED");
+            } else {
+                files.computeIfAbsent(path, MutableFileActivity::new)
+                        .record(commit.getName(), committedAt, author);
+            }
+            String zone = zone(path, query.zoneDepth());
+            if (!zones.containsKey(zone) && zones.size() >= budget.maxTrackedZones()) {
+                limitations.add("ZONE_TRACKING_TRUNCATED");
+            } else {
+                zones.computeIfAbsent(zone, MutableZoneActivity::new).record(path, committedAt);
+            }
+        }
+    }
+
+    /** The prefix of {@code changedPaths} this report is still allowed to retain, whole or none. */
+    private static List<String> retainedPaths(List<String> changedPaths, int remaining, Set<String> limitations) {
+        if (changedPaths.size() <= remaining) {
+            return changedPaths;
+        }
+        limitations.add("PATHS_TRUNCATED");
+        return changedPaths.subList(0, Math.max(0, remaining));
+    }
+
+    /**
+     * Returns the changed paths of one commit without ever materializing an unbounded diff.
+     *
+     * <p>{@code DiffFormatter.scan} answers a fully materialized {@code List<DiffEntry>}: for a
+     * commit that touches a million paths it allocates a million entries before any MINOS budget
+     * could look at the result. The diff size is therefore measured first, with a plain {@link
+     * TreeWalk} that counts and stops one entry past the budget -- linear in {@code
+     * min(diffSize, budget)} and constant in memory. Only a commit that fits inside the budget goes
+     * through {@code scan}, which keeps rename detection, and therefore the reported paths, exactly
+     * as they were for every normal commit. A commit over budget falls back to the bounded walk's
+     * own paths and is reported as {@code DIFF_SCAN_TRUNCATED}.</p>
+     */
+    private List<String> changedPaths(
             RevCommit commit,
             DiffFormatter formatter,
-            RevWalk revWalk
+            RevWalk revWalk,
+            Repository repository,
+            Set<String> limitations
     ) throws IOException {
-        List<DiffEntry> entries;
-        if (commit.getParentCount() == 0) {
-            entries = formatter.scan(null, commit.getTree());
-        } else {
-            RevCommit parent = revWalk.parseCommit(commit.getParent(0).getId());
-            entries = formatter.scan(parent.getTree(), commit.getTree());
+        RevTree parentTree = commit.getParentCount() == 0
+                ? null
+                : revWalk.parseCommit(commit.getParent(0).getId()).getTree();
+        if (exceedsDiffBudget(repository, parentTree, commit.getTree())) {
+            limitations.add("DIFF_SCAN_TRUNCATED");
+            return boundedChangedPaths(repository, parentTree, commit.getTree());
         }
+        List<DiffEntry> entries = formatter.scan(parentTree, commit.getTree());
         return entries.stream()
                 .map(GitIntelligenceService::path)
                 .filter(Objects::nonNull)
                 .distinct()
                 .sorted()
                 .toList();
+    }
+
+    /** Whether this commit's raw diff has more entries than one commit is allowed to cost. */
+    private boolean exceedsDiffBudget(Repository repository, RevTree parentTree, RevTree tree)
+            throws IOException {
+        int limit = budget.maxDiffEntriesPerCommit();
+        int seen = 0;
+        try (TreeWalk walk = diffWalk(repository, parentTree, tree)) {
+            while (walk.next()) {
+                if (++seen > limit) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The first {@code maxDiffEntriesPerCommit} changed paths in tree order, then sorted. */
+    private List<String> boundedChangedPaths(Repository repository, RevTree parentTree, RevTree tree)
+            throws IOException {
+        int limit = budget.maxDiffEntriesPerCommit();
+        Set<String> paths = new TreeSet<>();
+        try (TreeWalk walk = diffWalk(repository, parentTree, tree)) {
+            while (paths.size() < limit && walk.next()) {
+                paths.add(walk.getPathString());
+            }
+        }
+        return List.copyOf(paths);
+    }
+
+    private static TreeWalk diffWalk(Repository repository, RevTree parentTree, RevTree tree)
+            throws IOException {
+        TreeWalk walk = new TreeWalk(repository);
+        boolean created = false;
+        try {
+            walk.setRecursive(true);
+            if (parentTree == null) {
+                walk.addTree(new EmptyTreeIterator());
+            } else {
+                walk.addTree(parentTree);
+            }
+            walk.addTree(tree);
+            walk.setFilter(TreeFilter.ANY_DIFF);
+            created = true;
+            return walk;
+        } finally {
+            if (!created) {
+                walk.close();
+            }
+        }
     }
 
     private static String path(DiffEntry entry) {
@@ -291,6 +416,44 @@ public final class GitIntelligenceService {
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    /**
+     * Resource frontier applied <em>while</em> history is analysed, as opposed to {@code
+     * ActivityQuery.maxFiles}, which shapes the answer once the work is already done.
+     *
+     * <p>These two limits answer different questions and must stay separate. {@code maxFiles} is
+     * part of the published query contract ("return at most N files/zones"); silently reusing it as
+     * a work budget would change what a caller asked for. The budget below is what stops one
+     * pathological commit -- an import of a vendored tree, a repository-wide reformat -- from
+     * costing memory and CPU proportional to the repository rather than to the request. Reaching
+     * any of these limits is reported through the report's {@code limitations}, never hidden.</p>
+     *
+     * <p>The defaults are deliberately far above any realistic engineering commit, so a normal
+     * repository is analysed exactly as before and only a genuinely adversarial history is
+     * bounded.</p>
+     */
+    public record ActivityBudget(
+            int maxDiffEntriesPerCommit,
+            int maxTrackedFiles,
+            int maxTrackedZones,
+            int maxRetainedChangedPaths
+    ) {
+        /** Bounds one commit's diff, the tracked file/zone maps, and the retained per-commit paths. */
+        public static final ActivityBudget DEFAULT = new ActivityBudget(2_000, 20_000, 5_000, 50_000);
+
+        public ActivityBudget {
+            requirePositive(maxDiffEntriesPerCommit, "maxDiffEntriesPerCommit");
+            requirePositive(maxTrackedFiles, "maxTrackedFiles");
+            requirePositive(maxTrackedZones, "maxTrackedZones");
+            requirePositive(maxRetainedChangedPaths, "maxRetainedChangedPaths");
+        }
+
+        private static void requirePositive(int value, String field) {
+            if (value < 1) {
+                throw new IllegalArgumentException(field + " must be greater than zero");
+            }
         }
     }
 

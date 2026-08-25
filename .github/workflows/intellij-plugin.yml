@@ -38,19 +38,19 @@ jobs:
 
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle 9.6.1
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
         with:
           gradle-version: '9.6.1'
           cache-provider: basic
@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload plugin and verification reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: minos-intellij-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -83,51 +83,42 @@ jobs:
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**
 
-  m18-final-windows:
-    name: M18 final Windows exact-head gate
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/m18-minos-intellij'
+  windows-ownership:
+    name: Windows process ownership / Java 21
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout exact M18 head
-        uses: actions/checkout@v7
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Set up Java 24
-        uses: actions/setup-java@v5
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '24'
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
+          java-version: '21'
 
       - name: Set up Gradle 9.6.1
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
         with:
           gradle-version: '9.6.1'
           cache-provider: basic
 
-      - name: Run complete M18 exact-head qualification
-        shell: powershell
-        run: .\scripts\m18\run-final.ps1 -ExpectedHead '${{ github.event.pull_request.head.sha }}'
+      - name: Run IntelliJ unit tests on Windows
+        working-directory: minos-intellij
+        shell: pwsh
+        run: gradle --no-daemon test
 
-      - name: Upload M18 final diagnostics and plugin ZIP
+      - name: Upload Windows ownership diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: m18-final-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          name: minos-intellij-windows-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 30
           path: |
-            **/target/surefire-reports/**
-            **/target/failsafe-reports/**
-            target/site/jacoco-aggregate/**
-            minos-intellij/build/distributions/*.zip
             minos-intellij/build/reports/**
             minos-intellij/build/test-results/**

@@ -11,7 +11,6 @@ import com.intellij.openapi.project.Project;
 import com.minos.intellij.settings.MinosSettingsState;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -20,7 +19,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Service(Service.Level.PROJECT)
 public final class MinosCliClient {
@@ -29,6 +27,8 @@ public final class MinosCliClient {
     public static final String PROTOCOL_VERSION = "1";
 
     private static final long PROCESS_POLL_MILLIS = 200L;
+    private static final String LIMIT_OPTION = "--limit";
+    private static final String SYMBOL_ID_LABEL = "symbolId";
 
     private final Project project;
     private volatile String verifiedConfiguration;
@@ -58,14 +58,10 @@ public final class MinosCliClient {
         JsonObject root = runJsonRaw(List.of("project", "list", "--format", "json"));
         JsonArray projects = root.has("projects") ? root.getAsJsonArray("projects") : new JsonArray();
         for (JsonElement element : projects) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
+            if (!element.isJsonObject()) continue;
             JsonObject candidate = element.getAsJsonObject();
             String rootPath = nullableString(candidate, "rootPath");
-            if (rootPath != null && pathsEqual(expected, normalizePath(rootPath))) {
-                return candidate;
-            }
+            if (rootPath != null && pathsEqual(expected, normalizePath(rootPath))) return candidate;
         }
         throw new MinosProjectNotRegisteredException(
                 "This IntelliJ project is not registered in MINOS. Run `minos project add \"" + basePath + "\"` first.");
@@ -74,108 +70,66 @@ public final class MinosCliClient {
     public JsonObject registerProject() throws MinosProtocolException {
         ensureHandshake();
         String basePath = project.getBasePath();
-        if (basePath == null || basePath.isBlank()) {
-            throw new MinosProtocolException("IntelliJ project has no local base path");
-        }
+        if (basePath == null || basePath.isBlank()) throw new MinosProtocolException("IntelliJ project has no local base path");
         return runJsonRaw(List.of("project", "add", basePath, "--format", "json"));
     }
 
-    public JsonObject indexStatus(String projectId) throws MinosProtocolException {
-        return executeJson(List.of("index-status", projectId, "--format", "json"));
-    }
+    public JsonObject indexStatus(String projectId) throws MinosProtocolException { return executeJson(List.of("index-status", projectId, "--format", "json")); }
 
     public JsonObject findSymbols(String projectId, String text, int limit) throws MinosProtocolException {
-        return executeJson(List.of(
-                "find-symbol", projectId, requireText(text, "symbol"),
-                "--limit", Integer.toString(Math.max(1, Math.min(limit, 1000))),
-                "--format", "json"));
+        return executeJson(List.of("find-symbol", projectId, requireText(text, "symbol"), LIMIT_OPTION,
+                Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
     public JsonObject findUsages(String projectId, String symbolId, int limit) throws MinosProtocolException {
-        return executeJson(List.of(
-                "find-usages", projectId, requireText(symbolId, "symbolId"),
-                "--limit", Integer.toString(Math.max(1, Math.min(limit, 1000))),
-                "--format", "json"));
+        return executeJson(List.of("find-usages", projectId, requireText(symbolId, SYMBOL_ID_LABEL), LIMIT_OPTION,
+                Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
-    public JsonObject relationships(String command, String projectId, String symbolId, int limit)
-            throws MinosProtocolException {
-        if (!List.of("find-implementations", "dependencies", "dependents", "related-tests",
-                "find-callers", "find-callees").contains(command)) {
+    public JsonObject relationships(String command, String projectId, String symbolId, int limit) throws MinosProtocolException {
+        if (!List.of("find-implementations", "dependencies", "dependents", "related-tests", "find-callers", "find-callees").contains(command)) {
             throw new IllegalArgumentException("Unsupported relationship command: " + command);
         }
-        return executeJson(List.of(
-                command, projectId, requireText(symbolId, "symbolId"),
-                "--limit", Integer.toString(Math.max(1, Math.min(limit, 1000))),
-                "--format", "json"));
+        return executeJson(List.of(command, projectId, requireText(symbolId, SYMBOL_ID_LABEL), LIMIT_OPTION,
+                Integer.toString(Math.max(1, Math.min(limit, 1000))), "--format", "json"));
     }
 
-    public JsonObject architecture(String projectId) throws MinosProtocolException {
-        return executeJson(List.of("architecture", projectId, "--format", "json"));
-    }
-
-    public JsonObject impact(String projectId, String symbolId) throws MinosProtocolException {
-        return executeJson(List.of("impact", projectId, requireText(symbolId, "symbolId"), "--format", "json"));
-    }
+    public JsonObject architecture(String projectId) throws MinosProtocolException { return executeJson(List.of("architecture", projectId, "--format", "json")); }
+    public JsonObject impact(String projectId, String symbolId) throws MinosProtocolException { return executeJson(List.of("impact", projectId, requireText(symbolId, SYMBOL_ID_LABEL), "--format", "json")); }
 
     public JsonObject index(String projectId, boolean forceFull, boolean dryRun) throws MinosProtocolException {
         List<String> arguments = new ArrayList<>();
-        arguments.add("index");
-        arguments.add(projectId);
-        if (forceFull) {
-            arguments.add("--force-full");
-        }
-        if (dryRun) {
-            arguments.add("--dry-run");
-        }
-        arguments.add("--format");
-        arguments.add("json");
+        arguments.add("index"); arguments.add(projectId);
+        if (forceFull) arguments.add("--force-full");
+        if (dryRun) arguments.add("--dry-run");
+        arguments.add("--format"); arguments.add("json");
         return executeJson(arguments);
     }
 
-    public JsonObject doctor() throws MinosProtocolException {
-        ensureHandshake();
-        return runJsonRaw(List.of("doctor", "--format", "json"), Set.of(0, 1));
-    }
+    public JsonObject doctor() throws MinosProtocolException { ensureHandshake(); return runJsonRaw(List.of("doctor", "--format", "json"), Set.of(0, 1)); }
 
     public JsonObject gitActivity(String projectId) throws MinosProtocolException {
-        return executeJson(List.of(
-                "git-activity", projectId,
-                "--days", "30",
-                "--max-commits", "500",
-                "--max-files", "500",
-                "--zone-depth", "2",
-                "--format", "json"));
+        return executeJson(List.of("git-activity", projectId, "--days", "30", "--max-commits", "500", "--max-files", "500", "--zone-depth", "2", "--format", "json"));
     }
 
-    public JsonObject executeJson(List<String> arguments) throws MinosProtocolException {
-        ensureHandshake();
-        return runJsonRaw(arguments);
-    }
+    public JsonObject executeJson(List<String> arguments) throws MinosProtocolException { ensureHandshake(); return runJsonRaw(arguments); }
 
     private void ensureHandshake() throws MinosProtocolException {
         String key = configurationKey();
-        if (!Objects.equals(verifiedConfiguration, key)) {
-            handshake();
-        }
+        if (!Objects.equals(verifiedConfiguration, key)) handshake();
     }
 
-    private JsonObject runJsonRaw(List<String> arguments) throws MinosProtocolException {
-        return runJsonRaw(arguments, Set.of(0));
-    }
+    private JsonObject runJsonRaw(List<String> arguments) throws MinosProtocolException { return runJsonRaw(arguments, Set.of(0)); }
 
     private JsonObject runJsonRaw(List<String> arguments, Set<Integer> acceptedExitCodes) throws MinosProtocolException {
         ProcessResult result = run(arguments);
         if (!acceptedExitCodes.contains(result.exitCode())) {
             String diagnostic = result.stderr().isBlank() ? result.stdout() : result.stderr();
-            throw new MinosProtocolException(
-                    "MINOS command failed (exit " + result.exitCode() + "): " + diagnostic.trim());
+            throw new MinosProtocolException("MINOS command failed (exit " + result.exitCode() + "): " + diagnostic.trim());
         }
         try {
             JsonElement parsed = JsonParser.parseString(result.stdout().trim());
-            if (!parsed.isJsonObject()) {
-                throw new MinosProtocolException("MINOS command did not return a JSON object");
-            }
+            if (!parsed.isJsonObject()) throw new MinosProtocolException("MINOS command did not return a JSON object");
             return parsed.getAsJsonObject();
         } catch (RuntimeException exception) {
             throw new MinosProtocolException("Invalid JSON returned by MINOS: " + abbreviate(result.stdout()), exception);
@@ -184,112 +138,48 @@ public final class MinosCliClient {
 
     private ProcessResult run(List<String> arguments) throws MinosProtocolException {
         MinosSettingsState.Settings settings = MinosSettingsState.getInstance(project).value();
-        List<String> command = MinosCommandLine.build(settings.executable, arguments, System.getProperty("os.name", ""));
-        ProcessBuilder builder = new ProcessBuilder(command);
-        String basePath = project.getBasePath();
-        if (basePath != null) {
-            try {
-                Path directory = Path.of(basePath);
-                if (Files.isDirectory(directory)) {
-                    builder.directory(directory.toFile());
-                }
-            } catch (RuntimeException ignored) {
-                // ProcessBuilder will use the IDE working directory if the project path cannot be represented locally.
-            }
-        }
-        if (!settings.minosHome.isBlank()) {
-            builder.environment().put("MINOS_HOME", settings.minosHome);
-        }
+        String osName = System.getProperty("os.name", "");
         try {
-            Process process = builder.start();
-            AtomicReference<byte[]> stdout = new AtomicReference<>(new byte[0]);
-            AtomicReference<byte[]> stderr = new AtomicReference<>(new byte[0]);
-            AtomicReference<IOException> readFailure = new AtomicReference<>();
-            Thread outReader = Thread.ofVirtual().name("minos-stdout").start(() -> read(process, true, stdout, readFailure));
-            Thread errReader = Thread.ofVirtual().name("minos-stderr").start(() -> read(process, false, stderr, readFailure));
-
-            boolean completed = false;
-            boolean timedOut = false;
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
-            try {
-                while (!(completed = process.waitFor(PROCESS_POLL_MILLIS, TimeUnit.MILLISECONDS))) {
-                    ProgressManager.checkCanceled();
-                    if (System.nanoTime() >= deadline) {
-                        timedOut = true;
-                        break;
-                    }
+            Path resolvedExecutable = MinosExecutableResolver.resolve(settings.executable, osName);
+            List<String> command = MinosCommandLine.build(resolvedExecutable.toString(), arguments, osName);
+            ProcessBuilder builder = new ProcessBuilder(command);
+            String basePath = project.getBasePath();
+            if (basePath != null) {
+                try {
+                    Path directory = Path.of(basePath);
+                    if (Files.isDirectory(directory)) builder.directory(directory.toFile());
+                } catch (RuntimeException ignored) {
+                    // ProcessBuilder will use the IDE working directory if the project path cannot be represented locally.
                 }
-            } catch (ProcessCanceledException canceled) {
-                terminate(process);
-                joinAfterTermination(outReader, errReader);
-                throw canceled;
             }
-
-            if (!completed) {
-                terminate(process);
+            if (!settings.minosHome.isBlank()) builder.environment().put("MINOS_HOME", settings.minosHome);
+            MinosStrongProcessLauncher.Launch launch = MinosStrongProcessLauncher.start(builder, settings.minosHome);
+            try (MinosProcessSupervisor supervisor = new MinosProcessSupervisor(launch)) {
+                boolean completed = false;
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(settings.timeoutSeconds);
+                try {
+                    while (!(completed = supervisor.waitFor(PROCESS_POLL_MILLIS))) {
+                        ProgressManager.checkCanceled();
+                        if (System.nanoTime() >= deadline) break;
+                    }
+                } catch (ProcessCanceledException canceled) {
+                    supervisor.stop(canceled);
+                }
+                if (!completed) {
+                    supervisor.stop(null);
+                    throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
+                }
+                supervisor.drainOutput();
+                if (supervisor.readFailure() != null) throw supervisor.readFailure();
+                return new ProcessResult(supervisor.exitValue(), supervisor.stdout(), supervisor.stderr());
             }
-            outReader.join();
-            errReader.join();
-            if (readFailure.get() != null) {
-                throw readFailure.get();
-            }
-            if (timedOut) {
-                throw new MinosProtocolException("MINOS command timed out after " + settings.timeoutSeconds + " seconds");
-            }
-            return new ProcessResult(
-                    process.exitValue(),
-                    new String(stdout.get(), StandardCharsets.UTF_8),
-                    new String(stderr.get(), StandardCharsets.UTF_8));
-        } catch (ProcessCanceledException canceled) {
-            throw canceled;
-        } catch (MinosProtocolException exception) {
+        } catch (ProcessCanceledException | MinosProtocolException exception) {
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new MinosProtocolException("MINOS command was interrupted", exception);
         } catch (IOException exception) {
-            throw new MinosProtocolException(
-                    "Cannot start MINOS executable `" + settings.executable + "`: " + exception.getMessage(), exception);
-        }
-    }
-
-    private static void terminate(Process process) {
-        if (!process.isAlive()) {
-            return;
-        }
-        process.destroy();
-        try {
-            if (!process.waitFor(1, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException interrupted) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static void joinAfterTermination(Thread... readers) {
-        for (Thread reader : readers) {
-            try {
-                reader.join(5_000L);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-    }
-
-    private static void read(
-            Process process,
-            boolean standardOutput,
-            AtomicReference<byte[]> target,
-            AtomicReference<IOException> failure
-    ) {
-        try {
-            target.set((standardOutput ? process.getInputStream() : process.getErrorStream()).readAllBytes());
-        } catch (IOException exception) {
-            failure.compareAndSet(null, exception);
+            throw new MinosProtocolException("Cannot start MINOS executable `" + settings.executable + "`: " + exception.getMessage(), exception);
         }
     }
 
@@ -306,9 +196,7 @@ public final class MinosCliClient {
     private static String normalizePath(String value) {
         try {
             Path path = Path.of(value).toAbsolutePath().normalize();
-            if (Files.exists(path)) {
-                path = path.toRealPath();
-            }
+            if (Files.exists(path)) path = path.toRealPath();
             return path.toString();
         } catch (IOException | RuntimeException ignored) {
             return value.replace('\\', '/');
@@ -321,9 +209,7 @@ public final class MinosCliClient {
     }
 
     private static String requireText(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
-        }
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
         return value;
     }
 
@@ -332,6 +218,5 @@ public final class MinosCliClient {
         return normalized.length() <= 240 ? normalized : normalized.substring(0, 240) + "…";
     }
 
-    private record ProcessResult(int exitCode, String stdout, String stderr) {
-    }
+    private record ProcessResult(int exitCode, String stdout, String stderr) { }
 }

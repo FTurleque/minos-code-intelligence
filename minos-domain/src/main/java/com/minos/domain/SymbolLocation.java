@@ -26,7 +26,9 @@ public record SymbolLocation(
         if (startColumn < 0 || endColumn < 0) {
             throw new IllegalArgumentException("columns must be positive or zero");
         }
-        Objects.requireNonNull(fileId, "fileId");
+        if (startLine == endLine && endColumn < startColumn) {
+            throw new IllegalArgumentException("end column must not precede start column on the same line");
+        }
         Objects.requireNonNull(positionEncoding, "positionEncoding");
     }
 }

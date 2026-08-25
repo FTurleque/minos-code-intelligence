@@ -10,8 +10,12 @@ $Builder = Join-Path $RepoRoot 'scripts\release\build-windows-installer.ps1'
 if (-not (Test-Path -LiteralPath $Template -PathType Leaf)) { throw "Installer template not found: $Template" }
 if (-not (Test-Path -LiteralPath $Builder -PathType Leaf)) { throw "Installer builder not found: $Builder" }
 
+$Engine = Join-Path $RepoRoot 'scripts\install\update-installation.ps1'
+if (-not (Test-Path -LiteralPath $Engine -PathType Leaf)) { throw "Transactional updater not found: $Engine" }
+
 $Text = [System.IO.File]::ReadAllText($Template, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
 $BuilderText = [System.IO.File]::ReadAllText($Builder, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
+$EngineText = [System.IO.File]::ReadAllText($Engine, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n").Replace("`r", "`n")
 
 function Require([string] $Needle, [string] $Message) {
     if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) { throw $Message }
@@ -93,6 +97,62 @@ Require 'if IsSmokeBuild() then' 'Installer smoke mode does not guard global mut
 Require 'integration\uninstall-mcp-clients.ps1' 'Installer does not use the canonical MCP uninstall wrapper.'
 Require 'Flags: dontcopy' 'Installer detector is not embedded for pre-install extraction.'
 
+# Transactional program-payload upgrade: {app} is never overwritten directly.
+# PrepareToInstall runs update-installation.ps1 (staging/journal/rollback/
+# crash-recovery) against the embedded payload zip before Inno commits any of
+# its own setup metadata, and blocks the install by returning a non-empty
+# Result on failure -- Inno's own contract for aborting before ssInstall.
+Forbid 'DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs' 'Installer must not copy the payload directly into {app} -- upgrades must go through the transactional updater.'
+Require 'Source: "{#MinosPayloadZip}"; Flags: dontcopy noencryption' 'Installer does not embed the transactional payload zip.'
+Require 'function PrepareToInstall(var NeedsRestart: Boolean): String;' 'Installer is missing the transactional PrepareToInstall hook.'
+Require "ExtractTemporaryFile('update-installation.ps1')" 'Installer does not extract the transactional updater before installing.'
+Require '-PackageRoot "' 'Installer does not point the transactional updater at the extracted payload.'
+Require 'minos-payload' 'Installer does not reference the extracted payload directory.'
+Require 'UsePreviousAppDir=yes' 'Installer does not reuse the previous install directory on upgrade.'
+Require 'UninstallLogMode=overwrite' 'Installer does not keep the uninstall log consistent with updater-owned payload files.'
+Require 'procedure RemoveMinosProgramPayload;' 'Uninstaller is missing the managed-directory payload cleanup.'
+# dontcopy + ExtractTemporaryFile is not reliably available during uninstall
+# (unlike during install, where it is required below), so cleanup must run as
+# an inline script block instead of extracting a helper file.
+Forbid "ExtractTemporaryFile('uninstall-program-payload.ps1')" 'Uninstall payload cleanup must not depend on extracting a dontcopy resource during uninstall.'
+Require 'SaveStringToFile(ScriptPath, ScriptText, False)' 'Uninstall payload cleanup does not write its script directly via SaveStringToFile.'
+Require 'SaveStringToFile(ExpandScriptPath, ExpandScriptText, False)' 'Payload extraction does not write its Expand-Archive script directly via SaveStringToFile.'
+# -Command re-parses everything after the command text as PowerShell script
+# syntax rather than binding trailing tokens as literal argv-style arguments
+# the way -File does -- a path built from {app} or {tmp} can legitimately
+# contain an apostrophe (a user-chosen install directory, or a Windows
+# username), which would corrupt the reconstructed script text. Enforced as a
+# positive invariant across the WHOLE template, not just this one call site:
+# every PowerShell invocation here must use -File.
+Forbid '-ExecutionPolicy Bypass -Command' 'Every PowerShell invocation in this template must use -File, not -Command -- -Command re-parses trailing arguments as script text and corrupts on a path containing an apostrophe.'
+Require '''''app'''',''''lib'''',''''docker'''',''''integration'''',''''supply-chain''''' 'Uninstall payload cleanup does not enumerate the managed program directories.'
+# Inno's own "remove {app} if empty" pass runs during usUninstall, before
+# this usPostUninstall cleanup has emptied it -- without an explicit final
+# removal here, the (now genuinely empty) install root is left behind.
+Require 'Remove-Item -LiteralPath $InstallRoot -Force -ErrorAction SilentlyContinue' 'Uninstall payload cleanup does not remove the install root itself once it is empty.'
+Require 'RemoveMinosProgramPayload;' 'Uninstaller does not invoke managed-directory payload cleanup at usPostUninstall.'
+
+# update-installation.ps1's $StagedDirectoryRelativePaths/$StagedFileRelativePaths
+# is the single canonical source of what this installer owns; the uninstall
+# cleanup script's $Names array above is a second, necessarily hand-written
+# copy (Inno Setup Script cannot read a sibling PowerShell file at compile
+# time). Rather than trust the two stay in sync by inspection, forward-check
+# every canonical name is actually present (Pascal-escaped) in the template.
+function Get-QuotedListItems([string] $SourceText, [string] $Pattern, [string] $What) {
+    $Match = [regex]::Match($SourceText, $Pattern)
+    if (-not $Match.Success) { throw "update-installation.ps1: could not locate $What." }
+    return @([regex]::Matches($Match.Groups[1].Value, "'([^']*)'") | ForEach-Object { $_.Groups[1].Value })
+}
+$EngineDirs = Get-QuotedListItems $EngineText '\$StagedDirectoryRelativePaths\s*=\s*@\(([^)]*)\)' 'the staged-directory list'
+$EngineFiles = Get-QuotedListItems $EngineText '\$StagedFileRelativePaths\s*=\s*@\(([^)]*)\)' 'the staged-file list'
+$EngineManaged = @($EngineDirs + $EngineFiles + @('.install-staging', '.install-rollback', '.minos-installation.json'))
+foreach ($Name in $EngineManaged) {
+    $Needle = "''" + $Name + "''"
+    if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) {
+        throw "Uninstall payload cleanup's managed-names list is missing '$Name' (staged by update-installation.ps1) -- the two lists have drifted out of sync."
+    }
+}
+
 # Uninstall must preserve user data by default, offer an explicit destructive
 # choice in interactive mode, avoid prompts/mutations in silent/smoke runs, and
 # only purge %LOCALAPPDATA%\MINOS after normal uninstall cleanup has completed.
@@ -115,12 +175,21 @@ Forbid 'Name: "mcp_codex"' 'MCP clients must not be static Inno [Tasks] entries.
 Forbid "WizardIsTaskSelected('docker')" 'Docker MCP must not depend on the legacy generic task contract.'
 Forbid 'Type: filesandordirs; Name: "{localappdata}\MINOS"' 'User data must never be deleted unconditionally by [UninstallDelete].'
 
-foreach ($Token in @('@@VERSION@@','@@APP_VERSION@@','@@APP_ID@@','@@SMOKE_MODE@@','@@SOURCE_DIR@@','@@OUTPUT_DIR@@','@@OUTPUT_BASENAME@@')) {
+foreach ($Token in @('@@VERSION@@','@@APP_VERSION@@','@@APP_ID@@','@@SMOKE_MODE@@','@@SOURCE_DIR@@','@@PAYLOAD_ZIP@@','@@OUTPUT_DIR@@','@@OUTPUT_BASENAME@@')) {
     if ($Text.IndexOf($Token, [StringComparison]::Ordinal) -lt 0) { throw "Installer template token missing: $Token" }
 }
 Require-Builder "[switch] `$Smoke" 'Installer builder does not expose smoke mode.'
 Require-Builder 'MINOS-Release-Smoke-' 'Installer builder does not expose the isolated smoke AppId contract.'
 Require-Builder 'integration\probe-mcp-backend.ps1' 'Installer builder does not require the packaged backend handshake probe.'
 Require-Builder 'integration\switch-mcp-backend.ps1' 'Installer builder does not require the packaged backend switcher.'
+Require-Builder 'integration\update-installation.ps1' 'Installer builder does not require the packaged transactional updater.'
+Require-Builder 'Compress-Archive' 'Installer builder does not produce the transactional payload zip.'
+Require-Builder '@@PAYLOAD_ZIP@@' 'Installer builder does not substitute the payload zip token.'
+# ExtractTemporaryFile resolves a dontcopy resource by its exact source leaf
+# filename, not by the -PackageRoot/-InstallerWork path it was built under --
+# a version-suffixed zip filename here would silently break PrepareToInstall
+# at real-install time (caught only by a compiled-EXE-level test, not by any
+# static or PS1-level check).
+Require-Builder "'minos-payload.zip'" 'Installer builder does not use the fixed payload zip filename PrepareToInstall expects.'
 
 Write-Host 'MINOS INSTALLER TEMPLATE VERIFICATION SUCCESS' -ForegroundColor Green

@@ -14,18 +14,10 @@ import java.util.Objects;
 final class RetrievalStatusCommand {
 
     enum Mode {
-        SEMANTIC("semantic"),
-        HYBRID("hybrid");
-
+        SEMANTIC("semantic"), HYBRID("hybrid");
         private final String commandName;
-
-        Mode(String commandName) {
-            this.commandName = commandName;
-        }
-
-        String commandName() {
-            return commandName;
-        }
+        Mode(String commandName) { this.commandName = commandName; }
+        String commandName() { return commandName; }
     }
 
     @FunctionalInterface
@@ -57,18 +49,23 @@ final class RetrievalStatusCommand {
             output.append(usage(mode)).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
+
+        Options options;
         try {
-            Options options = Options.parse(arguments);
-            SemanticIndexService.Status status = statusReader.status(options.projectReference());
-            output.append(render(status, mode, options.format())).append('\n');
-            return FindSymbolCommand.SUCCESS;
+            options = Options.parse(arguments);
         } catch (IllegalArgumentException exception) {
             error.append("error: ").append(exception.getMessage()).append('\n')
                     .append(usage(mode)).append('\n');
             return FindSymbolCommand.USAGE_ERROR;
+        }
+
+        try {
+            SemanticIndexService.Status status = statusReader.status(options.projectReference());
+            output.append(render(status, mode, options.format())).append('\n');
+            return FindSymbolCommand.SUCCESS;
         } catch (RuntimeException exception) {
             error.append("error: ").append(mode.commandName()).append(" status failed: ")
-                    .append(message(exception)).append('\n');
+                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
     }
@@ -125,11 +122,6 @@ final class RetrievalStatusCommand {
 
     private static boolean isHelp(String value) {
         return "--help".equals(value) || "-h".equals(value);
-    }
-
-    private static String message(RuntimeException exception) {
-        String value = exception.getMessage();
-        return value == null || value.isBlank() ? exception.getClass().getSimpleName() : value;
     }
 
     private record Options(String projectReference, SymbolOutputFormat format) {

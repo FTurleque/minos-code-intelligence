@@ -1,44 +1,36 @@
 package com.minos.adapter.scip.runtime;
 
-import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 /** Plan d'exécution du provider scip-typescript. */
-public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPlanFactory {
-
-    private final Path executable;
+public final class ScipTypeScriptProcessPlanFactory extends AbstractScipProcessPlanFactory {
 
     public ScipTypeScriptProcessPlanFactory(Path executable) {
-        this.executable = Objects.requireNonNull(executable, "executable").toAbsolutePath().normalize();
+        super(executable, "scip-typescript", "scip-typescript incremental execution is not qualified");
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws java.io.IOException {
-        Path root = request.projectRoot().toAbsolutePath().normalize();
+    protected void validateProject(Path root) {
         if (!Files.isRegularFile(root.resolve("tsconfig.json"))
                 && !Files.isRegularFile(root.resolve("package.json"))) {
             throw new IllegalArgumentException("scip-typescript requires tsconfig.json or package.json: " + root);
         }
-        if (!Files.isRegularFile(executable)) {
-            throw new IllegalStateException("scip-typescript executable is missing: " + executable);
-        }
-        if (request.mode() == IndexingMode.INCREMENTAL) {
-            throw new IllegalStateException("scip-typescript incremental execution is not qualified");
-        }
+    }
 
-        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
-        Files.createDirectories(output.getParent());
+    @Override
+    protected List<String> command(
+            IndexingExecutionRequest request,
+            Path root,
+            Path runRoot,
+            Path output
+    ) throws IOException {
         List<String> arguments = new ArrayList<>();
         arguments.add("index");
         arguments.add("--output");
@@ -46,12 +38,6 @@ public final class ScipTypeScriptProcessPlanFactory implements IndexerProcessPla
         if (!Files.isRegularFile(root.resolve("tsconfig.json")) && Files.isRegularFile(root.resolve("package.json"))) {
             arguments.add("--infer-tsconfig");
         }
-        return new IndexerProcessPlan(
-                CommandLocator.invocation(executable, arguments.toArray(String[]::new)),
-                root,
-                Map.of(),
-                output,
-                Duration.ofMinutes(30)
-        );
+        return CommandLocator.invocation(executable(), arguments.toArray(String[]::new));
     }
 }

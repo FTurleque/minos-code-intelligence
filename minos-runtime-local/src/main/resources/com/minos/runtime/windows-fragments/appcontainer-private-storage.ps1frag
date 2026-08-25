@@ -1,0 +1,177 @@
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetAppContainerFolderPath(
+        string pszAppContainerSid,
+        out IntPtr ppszPath);
+
+    [DllImport("ole32.dll")]
+    private static extern void CoTaskMemFree(IntPtr pv);
+
+    private sealed class PrivateStorageSample {
+        public ulong Bytes;
+        public ulong Entries;
+    }
+
+    /**
+     * AppContainer profiles receive a private registry storage area even when MINOS grants no
+     * registry capability. Provider code does not need persistent registry mutation for indexing,
+     * so deny it before the suspended child is resumed. This removes an otherwise-unmeasured disk
+     * sink from the managed-provider write contract.
+     */
+    private static void DenyPrivateRegistryWrites(string profileName, string profileSid) {
+        string relative = @"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppContainer\Storage\"
+                + profileName;
+        using (RegistryKey key = Registry.CurrentUser.CreateSubKey(
+                relative, RegistryKeyPermissionCheck.ReadWriteSubTree)) {
+            if (key == null) {
+                throw new InvalidOperationException("AppContainer private registry storage is unavailable");
+            }
+            SecurityIdentifier identity = new SecurityIdentifier(profileSid);
+            RegistryRights denied = RegistryRights.SetValue
+                    | RegistryRights.CreateSubKey
+                    | RegistryRights.Delete
+                    | RegistryRights.ChangePermissions
+                    | RegistryRights.TakeOwnership;
+            RegistrySecurity security = key.GetAccessControl(AccessControlSections.Access);
+            security.AddAccessRule(new RegistryAccessRule(
+                    identity,
+                    denied,
+                    InheritanceFlags.ContainerInherit,
+                    PropagationFlags.None,
+                    AccessControlType.Deny));
+            key.SetAccessControl(security);
+
+            bool verified = false;
+            AuthorizationRuleCollection rules = security.GetAccessRules(true, false, typeof(SecurityIdentifier));
+            foreach (RegistryAccessRule rule in rules) {
+                SecurityIdentifier sid = rule.IdentityReference as SecurityIdentifier;
+                if (sid != null
+                        && sid.Equals(identity)
+                        && rule.AccessControlType == AccessControlType.Deny
+                        && (rule.RegistryRights & denied) == denied) {
+                    verified = true;
+                    break;
+                }
+            }
+            if (!verified) {
+                throw new InvalidOperationException("AppContainer private registry deny ACL was not verified");
+            }
+        }
+    }
+
+    private static string AppContainerFolder(string profileSid) {
+        IntPtr value = IntPtr.Zero;
+        int hr = GetAppContainerFolderPath(profileSid, out value);
+        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
+        if (value == IntPtr.Zero) throw new InvalidOperationException("AppContainer profile folder is unavailable");
+        try {
+            string path = Marshal.PtrToStringUni(value);
+            if (String.IsNullOrWhiteSpace(path)) {
+                throw new InvalidOperationException("AppContainer profile folder is blank");
+            }
+            return path;
+        } finally {
+            CoTaskMemFree(value);
+        }
+    }
+
+    /**
+     * Supervises the implicit LOCALAPPDATA/TEMP/TMP profile tree while the provider runs. The
+     * provider child is still suspended when this starts, so there is no pre-supervision write
+     * window. Reparse points are counted but never traversed. Access-denied or other visibility loss
+     * is fail-closed and terminates the whole Job Object.
+     */
+    private static Thread StartPrivateFileStorageSupervisor(
+            string profileSid,
+            IntPtr job,
+            ulong maxBytes,
+            ulong maxEntries,
+            uint sampleMillis,
+            ManualResetEvent stop) {
+        if (maxBytes == 0 || maxEntries == 0 || sampleMillis == 0 || sampleMillis > 60000) {
+            throw new ArgumentException("invalid AppContainer private storage quota");
+        }
+        string root = AppContainerFolder(profileSid);
+        PrivateStorageSample initial = SamplePrivateFileStorage(root, maxBytes, maxEntries);
+        if (initial.Bytes > maxBytes || initial.Entries > maxEntries) {
+            throw new InvalidOperationException("AppContainer private storage already exceeds its quota");
+        }
+
+        Thread thread = new Thread(delegate() {
+            while (!stop.WaitOne((int)sampleMillis)) {
+                try {
+                    PrivateStorageSample sample = SamplePrivateFileStorage(root, maxBytes, maxEntries);
+                    if (sample.Bytes > maxBytes || sample.Entries > maxEntries) {
+                        Console.Error.WriteLine(
+                                "MINOS_APPCONTAINER_PRIVATE_STORAGE_QUOTA_BREACH bytes=" + sample.Bytes
+                                + "/" + maxBytes + " entries=" + sample.Entries + "/" + maxEntries);
+                        TerminateJobObject(job, 1);
+                        return;
+                    }
+                } catch (Exception failure) {
+                    Console.Error.WriteLine(
+                            "MINOS_APPCONTAINER_PRIVATE_STORAGE_VISIBILITY_LOST "
+                            + failure.GetType().Name);
+                    TerminateJobObject(job, 1);
+                    return;
+                }
+            }
+        });
+        thread.IsBackground = true;
+        thread.Name = "minos-appcontainer-private-storage-quota";
+        thread.Start();
+        return thread;
+    }
+
+    private static PrivateStorageSample SamplePrivateFileStorage(
+            string root,
+            ulong maxBytes,
+            ulong maxEntries) {
+        DirectoryInfo rootDirectory = new DirectoryInfo(root);
+        if (!rootDirectory.Exists || (rootDirectory.Attributes & FileAttributes.ReparsePoint) != 0) {
+            throw new IOException("AppContainer private storage root is not a physical directory");
+        }
+
+        PrivateStorageSample sample = new PrivateStorageSample();
+        sample.Entries = 1;
+        Stack<DirectoryInfo> pending = new Stack<DirectoryInfo>();
+        pending.Push(rootDirectory);
+        while (pending.Count > 0) {
+            DirectoryInfo directory = pending.Pop();
+            FileSystemInfo[] entries;
+            try {
+                entries = directory.GetFileSystemInfos();
+            } catch (DirectoryNotFoundException) {
+                // Concurrent provider cleanup is not a visibility failure; the entry disappeared.
+                continue;
+            }
+            foreach (FileSystemInfo entry in entries) {
+                FileAttributes attributes;
+                try {
+                    attributes = entry.Attributes;
+                } catch (FileNotFoundException) {
+                    continue;
+                } catch (DirectoryNotFoundException) {
+                    continue;
+                }
+                sample.Entries = SaturatingAdd(sample.Entries, 1UL);
+                if (sample.Entries > maxEntries) return sample;
+                if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
+                DirectoryInfo childDirectory = entry as DirectoryInfo;
+                if (childDirectory != null) {
+                    pending.Push(childDirectory);
+                    continue;
+                }
+                FileInfo file = entry as FileInfo;
+                if (file != null) {
+                    ulong length = checked((ulong)Math.Max(0L, file.Length));
+                    sample.Bytes = SaturatingAdd(sample.Bytes, length);
+                    if (sample.Bytes > maxBytes) return sample;
+                }
+            }
+        }
+        return sample;
+    }
+
+    private static ulong SaturatingAdd(ulong left, ulong right) {
+        return UInt64.MaxValue - left < right ? UInt64.MaxValue : left + right;
+    }

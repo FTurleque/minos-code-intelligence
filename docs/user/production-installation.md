@@ -4,7 +4,7 @@ Ce guide décrit le parcours utilisateur de MINOS sous Windows.
 
 Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java. Les toolchains d'un projet analysé peuvent en revanche rester nécessaires à ses providers.
 
-> État au **8 août 2026** : `v1.0.0` est publiée et immuable. `1.0.1` reste **NON PUBLIÉE** ; M29 et M30 sont intégrés, puis le hardening release/installer est qualifié sur PR #113 avant construction d'un nouveau candidat.
+> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 de sandbox worker OS réelle est fermée/completed et qualifiée Linux + Windows.
 
 ## 1. Parcours recommandé
 
@@ -96,6 +96,14 @@ Données par défaut :
 
 Le programme et les données sont séparés afin qu'un upgrade ou une désinstallation standard ne détruise pas les index/snapshots de l'utilisateur.
 
+Le dossier programme porte sa propre preuve d'ownership :
+
+```text
+%LOCALAPPDATA%\Programs\MINOS\.minos-installation.json
+```
+
+Voir §11.2 pour son rôle exact dans la mise à jour transactionnelle.
+
 ## 4. Type d'installation
 
 ### Standard — recommandé
@@ -176,6 +184,8 @@ Le backend PostgreSQL est réel et utilise pgvector pour le stockage/retrieval v
 - avec runtime natif : le wizard demande une URL JDBC, un utilisateur, un secret et un schéma ; la base est externe au setup ;
 - avec runtime Docker : MINOS peut gérer PostgreSQL/pgvector dans le stack Docker et un volume persistant dédié.
 
+Pour une base PostgreSQL **externe non-loopback**, l'URL JDBC doit utiliser `sslmode=verify-full`. Les credentials et secrets sont refusés dans l'URL JDBC et restent fournis séparément ; le secret peut être importé depuis un fichier dédié dont la lecture est bornée. Le PostgreSQL Docker géré par MINOS est explicitement identifié comme interne au runtime et n'est pas soumis à cette règle TLS externe.
+
 Il n'existe pas de fallback silencieux PostgreSQL→local.
 
 Une base PostgreSQL externe n'est jamais supprimée par l'uninstaller MINOS.
@@ -250,6 +260,8 @@ claude mcp list
 
 MINOS fusionne `mcpServers.<nom>` dans la configuration Claude Desktop détectée, avec backup/ownership. Relancer complètement Claude Desktop après modification.
 
+La détection couvre l'installation classique (`%APPDATA%\Claude`) et l'installation Microsoft Store/MSIX (`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude`).
+
 ### OpenAI Codex CLI
 
 Lorsque la capability MCP du CLI est prouvée, MINOS peut utiliser le mode `cli` pour enregistrer l'intégration.
@@ -298,7 +310,11 @@ Elle affiche :
 
 Le but est de montrer **ce qui sera réellement installé/configuré** avant le lancement.
 
-## 11. Installation transactionnelle
+## 11. Transactions internes de l'installateur
+
+MINOS a **deux** moteurs transactionnels distincts, chacun protégeant une couche différente. Ne pas les confondre.
+
+### 11.1 Switch de backend MCP (natif ↔ Docker)
 
 Le backend MCP est activé selon :
 
@@ -326,6 +342,32 @@ Journal principal :
 %LOCALAPPDATA%\MINOS\data\runtime\backend-switch.log
 ```
 
+Ce moteur ne touche jamais aux fichiers programme de MINOS (`app\`, `lib\`, `docker\`, `integration\`, `supply-chain\`) — il ne fait que sélectionner/valider quel backend MCP le binaire déjà installé doit utiliser.
+
+### 11.2 Mise à jour du programme ({app})
+
+Le remplacement des fichiers programme eux-mêmes (`%LOCALAPPDATA%\Programs\MINOS\{app,lib,docker,integration,supply-chain}` et les quelques fichiers plats à la racine) est géré par un second moteur, `update-installation.ps1`, invoqué depuis `PrepareToInstall` **avant** que le setup Inno n'écrive la moindre métadonnée :
+
+```text
+paquet candidat (zip embarqué dans le setup)
+→ validation du paquet (RELEASE-MANIFEST.json)
+→ vérification d'ownership du dossier cible
+→ staging (.install-staging)
+→ journal de transaction durable et auto-checksummé (.install-rollback\transaction.json)
+→ arrêt des processus minos.exe concernés
+→ activation (déplacement atomique, dossier par dossier)
+→ commit (phase='committed')
+→ nettoyage
+```
+
+En cas d'échec pendant l'activation, le dossier `{app}` est restauré exactement à son état précédent (fichiers **et** anciens fichiers programme devenus obsolètes réapparaissent tels quels) et le setup Inno affiche l'échec sans écrire aucune métadonnée — l'installation précédente reste donc l'installation active.
+
+En cas d'interruption brutale (crash, coupure) pendant l'activation, le prochain lancement de l'installateur détecte le journal `phase='activating'`, le vérifie (checksum SHA-256) et termine soit une restauration, soit poursuit vers le paquet demandé — sans jamais laisser un mélange de fichiers de deux versions. Un journal dont le checksum ne correspond pas à son contenu est traité comme irrécupérable (`MINOS_UPDATE_RECOVERY_REQUIRED`) plutôt que d'être silencieusement accepté.
+
+Le dossier `{app}` doit prouver qu'il appartient à MINOS avant toute mutation d'un dossier non vide — via le marqueur `.minos-installation.json`, via la présence de l'ancien triplet `RELEASE-MANIFEST.json`/`app\minos.exe`/`integration\switch-mcp-backend.ps1` (installations antérieures au marqueur), ou via un journal de transaction récupérable. Un dossier non vide sans aucune de ces preuves est refusé (`MINOS_UPDATE_UNSAFE_INSTALL_ROOT`), de même que toute racine dangereuse (`C:\`, `%USERPROFILE%`, `%LOCALAPPDATA%`, `%TEMP%`, etc.) ou tout point de reparse/jonction détecté n'importe où sur un chemin géré.
+
+`.docker-mcp-managed`, à la racine de `{app}`, n'est ni dans la liste des répertoires remplacés ni jamais touché par ce moteur — il traverse une mise à jour sans modification, comme tout ce qui vit en dehors de `{app}` (§3).
+
 ## 12. Vérifier l'installation
 
 Dans un nouveau terminal :
@@ -346,16 +388,26 @@ La preuve MCP réelle reste un handshake `initialize → tools/list` depuis le r
 
 ## 13. Upgrade
 
+Télécharger le nouveau setup, vérifier son SHA-256, puis le lancer directement sur l'installation existante — sans désinstallation préalable. Le setup relance automatiquement dans le même dossier (`UsePreviousAppDir`), avec les mêmes choix par défaut que la dernière installation.
+
 L'upgrade préserve :
 
-- `MINOS_HOME` ;
-- backend MCP reconnu ;
+- `MINOS_HOME` et tout ce qu'il contient (index, snapshots, logs, état runtime) ;
+- backend MCP reconnu (`backend.properties`, jamais touché par le moteur §11.2) ;
 - choix durable storage/semantic ;
-- ownership des intégrations ;
+- ownership des intégrations MCP clientes (`%LOCALAPPDATA%\MINOS\mcp-client-integrations.json`) ;
+- `.docker-mcp-managed` ;
 - données locales ;
-- volumes Docker gérés sauf purge explicitement demandée.
+- volumes Docker gérés sauf purge explicitement demandée ;
+- une base PostgreSQL externe (jamais supprimée, quel que soit le mode).
 
-Le switch backend est rollback-safe et un runtime Docker compatible peut être réutilisé sans reconstruction inutile.
+Tout cela vit en dehors de `{app}` (§3), donc le moteur transactionnel du programme (§11.2) ne le touche structurellement jamais.
+
+L'upgrade supprime en revanche les fichiers programme de l'ancienne version absents de la nouvelle — aucun fichier obsolète ne survit dans `app\`, `lib\`, `docker\`, `integration\` ou `supply-chain\` après une mise à jour réussie.
+
+Le switch backend (§11.1) reste rollback-safe et un runtime Docker compatible peut être réutilisé sans reconstruction inutile.
+
+En cas d'échec de la mise à jour du programme (§11.2), la version précédente est automatiquement restaurée — aucune action manuelle requise. En cas d'interruption (crash, perte d'alimentation), relancer simplement le setup : la récupération est automatique au prochain lancement.
 
 ## 14. Désinstallation
 
@@ -383,8 +435,16 @@ Elle ne supprime jamais une base PostgreSQL externe.
 
 Les smoke/silent uninstall automatisés ne posent pas ce prompt et ne purgent pas les vraies données utilisateur.
 
-## 15. Release 1.0.1
+## 15. Release 1.0.1 — publiée
 
-1.0.1 reste **NON PUBLIÉE** jusqu'à qualification exact-head complète : Windows/Linux, PostgreSQL/pgvector, scan de vulnérabilités, JaCoCo, MCP, IntelliJ et compilation/smoke du setup.
+MINOS **v1.0.1 a été publiée le 9 août 2026** après qualification exact-head Windows/Linux, PostgreSQL/pgvector, scan de vulnérabilités, JaCoCo, MCP, IntelliJ et compilation/smoke du setup.
+
+Tag publié et immuable :
+
+```text
+v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
+```
+
+La publication finale a publié 10 assets et revérifié les 5 paires payload/SHA-256. Les changements postérieurs sur `develop` ne déplacent jamais ce tag.
 
 Voir [`../releases/1.0.1.md`](../releases/1.0.1.md).

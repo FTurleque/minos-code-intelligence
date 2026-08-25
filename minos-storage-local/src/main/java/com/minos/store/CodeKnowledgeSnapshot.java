@@ -4,9 +4,12 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Snapshot immuable M3 regroupant symboles, occurrences et relations d'un projet.
@@ -38,6 +41,20 @@ public record CodeKnowledgeSnapshot(
         if (relationships.stream().anyMatch(relationship ->
                 !expectedProjectId.equals(relationship.projectId()))) {
             throw new IllegalArgumentException("every relationship must belong to snapshot project " + projectId);
+        }
+
+        requireUniqueIds(symbols, Symbol::id, "symbol");
+        requireUniqueIds(occurrences, SymbolOccurrence::id, "occurrence");
+        requireUniqueIds(relationships, Relationship::id, "relationship");
+    }
+
+    private static <T> void requireUniqueIds(List<T> values, Function<T, String> idExtractor, String kind) {
+        Set<String> ids = new HashSet<>();
+        for (T value : values) {
+            String id = Objects.requireNonNull(idExtractor.apply(value), kind + " id");
+            if (!ids.add(id)) {
+                throw new IllegalArgumentException("duplicate " + kind + " id in snapshot: " + id);
+            }
         }
     }
 }

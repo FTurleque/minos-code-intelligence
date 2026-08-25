@@ -1,10 +1,11 @@
 package com.minos.registry;
 
+import com.minos.io.BoundedProperties;
+import com.minos.io.DurableAtomicFile;
+
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -31,6 +32,8 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     private static final String WORKSPACES_DIRECTORY = "workspaces";
     private static final String LEGACY_ROOT_PATH = "rootPath";
     private static final String PORTABLE_ROOT_PATH = "rootRelativePath";
+    private static final long MAX_METADATA_BYTES = 128L * 1024L;
+    private static final int MAX_METADATA_ENTRIES = 16;
 
     private final Path storageRoot;
     private final Path projectsDirectory;
@@ -60,12 +63,13 @@ public final class LocalProjectRegistry implements ProjectRegistry {
             ProjectPathMapping.RuntimeLocation runtimeLocation
     ) throws IOException {
         this.storageRoot = Objects.requireNonNull(storageRoot, "storageRoot").toAbsolutePath().normalize();
+        DurableAtomicFile.ensureDirectory(this.storageRoot, "local project registry root");
         this.projectsDirectory = this.storageRoot.resolve(PROJECTS_DIRECTORY);
         this.workspacesDirectory = this.storageRoot.resolve(WORKSPACES_DIRECTORY);
         this.pathMapping = Objects.requireNonNull(pathMapping, "pathMapping");
         this.runtimeLocation = Objects.requireNonNull(runtimeLocation, "runtimeLocation");
-        Files.createDirectories(projectsDirectory);
-        Files.createDirectories(workspacesDirectory);
+        DurableAtomicFile.ensureDirectory(projectsDirectory, "project registry directory");
+        DurableAtomicFile.ensureDirectory(workspacesDirectory, "workspace registry directory");
     }
 
     @Override
@@ -87,12 +91,26 @@ public final class LocalProjectRegistry implements ProjectRegistry {
 
     @Override
     public synchronized RegisteredWorkspace createWorkspace(String name) throws IOException {
-        validateName(name, "name");
+        return createWorkspaceWithResult(name).workspace();
+    }
+
+    @Override
+    public synchronized WorkspaceRegistrationResult createWorkspaceWithResult(String name) throws IOException {
+        ProjectRegistryLimits.requireName(name, "name");
+        List<RegisteredWorkspace> matches = listWorkspaces().stream()
+                .filter(workspace -> workspace.name().equals(name))
+                .toList();
+        if (matches.size() > 1) {
+            throw new IOException("duplicate workspace names in local registry: " + name);
+        }
+        if (!matches.isEmpty()) {
+            return new WorkspaceRegistrationResult(matches.getFirst(), false);
+        }
         Instant now = Instant.now();
         RegisteredWorkspace workspace = new RegisteredWorkspace(
                 UUID.randomUUID(), name, List.of(), now, now);
         writeWorkspace(workspace);
-        return workspace;
+        return new WorkspaceRegistrationResult(workspace, true);
     }
 
     @Override
@@ -129,7 +147,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(projectId, "projectId");
         Path file = projectsDirectory.resolve(projectId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
-        return Optional.of(readProject(file));
+        return Optional.of(readProject(file, projectId));
     }
 
     @Override
@@ -137,7 +155,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Path file = workspacesDirectory.resolve(workspaceId + ".properties");
         if (!Files.isRegularFile(file)) return Optional.empty();
-        WorkspaceMetadata metadata = readWorkspaceMetadata(file);
+        WorkspaceMetadata metadata = readWorkspaceMetadata(file, workspaceId);
         List<UUID> projectIds = listProjects().stream()
                 .filter(project -> project.workspaceId().filter(workspaceId::equals).isPresent())
                 .map(RegisteredProject::id)
@@ -149,7 +167,9 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     @Override
     public synchronized List<RegisteredProject> listProjects() throws IOException {
         List<RegisteredProject> projects = new ArrayList<>();
-        for (Path file : propertyFiles(projectsDirectory)) projects.add(readProject(file));
+        for (Path file : propertyFiles(projectsDirectory)) {
+            projects.add(readProject(file, idFromPropertiesFile(file)));
+        }
         projects.sort(Comparator.comparing(project -> project.id().toString()));
         return List.copyOf(projects);
     }
@@ -159,7 +179,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         List<RegisteredProject> projects = listProjects();
         List<RegisteredWorkspace> workspaces = new ArrayList<>();
         for (Path file : propertyFiles(workspacesDirectory)) {
-            WorkspaceMetadata metadata = readWorkspaceMetadata(file);
+            WorkspaceMetadata metadata = readWorkspaceMetadata(file, idFromPropertiesFile(file));
             List<UUID> projectIds = projects.stream()
                     .filter(project -> project.workspaceId().filter(metadata.id()::equals).isPresent())
                     .map(RegisteredProject::id)
@@ -171,9 +191,17 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         return List.copyOf(workspaces);
     }
 
-    public Path storageRoot() { return storageRoot; }
-    public Optional<ProjectPathMapping> pathMapping() { return pathMapping; }
-    public ProjectPathMapping.RuntimeLocation runtimeLocation() { return runtimeLocation; }
+    public Path storageRoot() {
+        return storageRoot;
+    }
+
+    public Optional<ProjectPathMapping> pathMapping() {
+        return pathMapping;
+    }
+
+    public ProjectPathMapping.RuntimeLocation runtimeLocation() {
+        return runtimeLocation;
+    }
 
     private void writeProject(RegisteredProject project) throws IOException {
         Properties properties = new Properties();
@@ -206,9 +234,10 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         writePropertiesAtomically(workspacesDirectory.resolve(workspace.id() + ".properties"), properties);
     }
 
-    private RegisteredProject readProject(Path file) throws IOException {
+    private RegisteredProject readProject(Path file, UUID expectedId) throws IOException {
         Properties properties = readProperties(file);
         UUID id = UUID.fromString(required(properties, "id", file));
+        requireIdentity(expectedId, id, file, "project");
         String relativeRoot = properties.getProperty(PORTABLE_ROOT_PATH, "").trim();
         String legacyRoot = properties.getProperty(LEGACY_ROOT_PATH, "").trim();
         if (!relativeRoot.isEmpty() && !legacyRoot.isEmpty()) {
@@ -267,19 +296,46 @@ public final class LocalProjectRegistry implements ProjectRegistry {
         writePropertiesAtomically(file, properties);
     }
 
-    private static WorkspaceMetadata readWorkspaceMetadata(Path file) throws IOException {
+    private static WorkspaceMetadata readWorkspaceMetadata(Path file, UUID expectedId) throws IOException {
         Properties properties = readProperties(file);
+        UUID id = UUID.fromString(required(properties, "id", file));
+        requireIdentity(expectedId, id, file, "workspace");
         return new WorkspaceMetadata(
-                UUID.fromString(required(properties, "id", file)),
+                id,
                 required(properties, "name", file),
                 Instant.parse(required(properties, "createdAt", file)),
                 Instant.parse(required(properties, "updatedAt", file)));
     }
 
+    private static UUID idFromPropertiesFile(Path file) throws IOException {
+        String name = file.getFileName().toString();
+        String suffix = ".properties";
+        if (!name.endsWith(suffix)) {
+            throw new IOException("unexpected registry metadata filename: " + file);
+        }
+        try {
+            return UUID.fromString(name.substring(0, name.length() - suffix.length()));
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("registry metadata filename is not a UUID: " + file, exception);
+        }
+    }
+
+    private static void requireIdentity(UUID expected, UUID actual, Path file, String label) throws IOException {
+        if (!expected.equals(actual)) {
+            throw new IOException(label + " identity mismatch in " + file
+                    + ": expected=" + expected + " persisted=" + actual);
+        }
+    }
+
     private static Properties readProperties(Path file) throws IOException {
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) { properties.load(reader); }
-        return properties;
+        return BoundedProperties.load(
+                file,
+                MAX_METADATA_BYTES,
+                MAX_METADATA_ENTRIES,
+                128,
+                16 * 1024,
+                "local registry metadata"
+        );
     }
 
     private static String required(Properties properties, String key, Path file) {
@@ -300,7 +356,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static void writePropertiesAtomically(Path target, Properties properties) throws IOException {
-        Files.createDirectories(target.getParent());
+        DurableAtomicFile.ensureDirectory(target.getParent(), "local registry metadata directory");
         Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString() + ".", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(
@@ -308,11 +364,7 @@ public final class LocalProjectRegistry implements ProjectRegistry {
                     StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 properties.store(writer, "MINOS local registry");
             }
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            DurableAtomicFile.replace(temporary, target, "local registry metadata replacement");
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -334,8 +386,9 @@ public final class LocalProjectRegistry implements ProjectRegistry {
     }
 
     private static void validateName(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + " must not be blank");
+        ProjectRegistryLimits.requireName(value, label);
     }
 
-    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) { }
+    private record WorkspaceMetadata(UUID id, String name, Instant createdAt, Instant updatedAt) {
+    }
 }

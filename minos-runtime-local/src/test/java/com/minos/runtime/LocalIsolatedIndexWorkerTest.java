@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,13 +39,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LocalIsolatedIndexWorkerTest {
 
     @Test
-    void executesInCopiedWorkspaceTransportsAndVerifiesArtifact(@TempDir Path temp) throws Exception {
+    void qualifiedSandboxWithAllowExecutesInCopiedWorkspaceAndPreservesArtifactEvidence(@TempDir Path temp)
+            throws Exception {
         Fixture fixture = fixture(temp);
         AtomicReference<Path> delegateRoot = new AtomicReference<>();
         IndexerExecutor delegate = delegate(temp, delegateRoot);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
-                "worker-one", temp.resolve("home"), delegate, store);
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", temp.resolve("home"), delegate, store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW));
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
                 "fixture-provider", "1.2.3", fixture.materialization(),
                 WorkerNetworkPolicy.ALLOW, worker, store);
@@ -54,7 +57,7 @@ class LocalIsolatedIndexWorkerTest {
         assertEquals(Language.JAVA, artifact.language());
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
-        assertEquals("native-process-ephemeral-workspace-v1", worker.sandboxBackendId());
+        assertEquals("fixture-os-sandbox", worker.sandboxBackendId());
         assertNotEquals(
                 fixture.projectRoot().toAbsolutePath().normalize(),
                 delegateRoot.get().toAbsolutePath().normalize());
@@ -74,7 +77,7 @@ class LocalIsolatedIndexWorkerTest {
     void nativeWorkerFailsClosedWhenNetworkDenyIsRequired(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
-        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+        LocalIsolatedIndexWorker worker = nativeWorker(
                 "worker-one", temp.resolve("home"),
                 delegate(temp, new AtomicReference<>()), store);
         DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
@@ -84,7 +87,26 @@ class LocalIsolatedIndexWorkerTest {
         IllegalStateException failure = assertThrows(
                 IllegalStateException.class,
                 () -> executor.execute(fixture.execution()));
-        assertTrue(failure.getMessage().contains("cannot prove OS-level network denial"));
+        assertTrue(failure.getMessage().contains("not qualified for untrusted remote code"));
+        assertTrue(executor.verifiedArtifact().isEmpty());
+    }
+
+    @Test
+    void nativeWorkerAlsoFailsClosedWhenNetworkIsAllowed(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixture(temp);
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = nativeWorker(
+                "worker-one", temp.resolve("home"),
+                delegate(temp, new AtomicReference<>()), store);
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(fixture.execution()));
+
+        assertTrue(failure.getMessage().contains("not qualified for untrusted remote code"));
         assertTrue(executor.verifiedArtifact().isEmpty());
     }
 
@@ -101,6 +123,20 @@ class LocalIsolatedIndexWorkerTest {
             }
             @Override public NetworkGuarantee networkGuarantee() {
                 return NetworkGuarantee.OS_ENFORCED;
+            }
+            @Override
+            public WorkerSandboxQualification qualification() {
+                return new WorkerSandboxQualification(
+                        id(),
+                        isolation(),
+                        networkGuarantee(),
+                        WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                        WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        WorkerContainmentFixtures.FULLY_CONTAINED,
+                        Map.of(
+                                WorkerSandboxQualification.currentPlatform(),
+                                WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                        List.of("TEST_FIXTURE_OS_QUALIFIED"));
             }
             @Override
             public IndexingArtifact execute(
@@ -133,6 +169,18 @@ class LocalIsolatedIndexWorkerTest {
     }
 
     @Test
+    void strongestAvailableSelectorNeverOverstatesNetworkGuarantee(@TempDir Path temp) {
+        WorkerSandboxBackend backend = WorkerSandboxBackends.strongestAvailable(temp.resolve("home"));
+        if (backend.networkGuarantee() == WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED) {
+            assertTrue(backend.qualification().qualifiedForCurrentPlatform());
+            assertTrue(backend.qualification().sandboxClaimPermitted());
+        } else {
+            assertEquals("native-process-ephemeral-workspace-v1", backend.id());
+            assertFalse(backend.enforcesNetworkDeny());
+        }
+    }
+
+    @Test
     void coordinatorRejectsCryptographicallyValidArtifactWithWrongProvenance(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
@@ -141,6 +189,7 @@ class LocalIsolatedIndexWorkerTest {
                 DistributedArtifactManifest.FORMAT_V1,
                 fixture.execution().runId(),
                 fixture.execution().projectId(),
+                "",
                 fixture.request().canonicalRepositoryUri(),
                 "b".repeat(40),
                 Language.JAVA,
@@ -178,6 +227,148 @@ class LocalIsolatedIndexWorkerTest {
                 () -> executor.execute(fixture.execution()));
         assertTrue(failure.getMessage().contains("provenance"));
         assertFalse(Files.exists(bundle), "rejected transport envelopes must be removed");
+    }
+
+    @Test
+    void copiedWorkspaceUsesSharedIgnoreRulesIncludingNegationAndHardIgnores(@TempDir Path temp)
+            throws Exception {
+        Fixture fixture = fixture(temp);
+        Path project = fixture.projectRoot();
+        Files.writeString(project.resolve(".minosignore"),
+                ".env\nprivate/**\nignored/**\n!ignored/keep.txt\n");
+        Files.writeString(project.resolve(".env"), "SECRET=hidden");
+        Files.createDirectories(project.resolve("private/nested"));
+        Files.writeString(project.resolve("private/nested/credentials.json"), "hidden");
+        Files.createDirectories(project.resolve("ignored"));
+        Files.writeString(project.resolve("ignored/drop.txt"), "hidden");
+        Files.writeString(project.resolve("ignored/keep.txt"), "visible");
+        Files.createDirectories(project.resolve("target/classes"));
+        Files.writeString(project.resolve("target/classes/secret.pem"), "hidden");
+        Files.writeString(project.resolve("normal.txt"), "visible");
+
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        IndexerExecutor delegate = new IndexerExecutor() {
+            @Override public String indexerId() { return "fixture-provider"; }
+            @Override
+            public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                Path workspace = request.projectRoot();
+                delegateRoot.set(workspace);
+                assertFalse(Files.exists(workspace.resolve(".env")));
+                assertFalse(Files.exists(workspace.resolve("private/nested/credentials.json")));
+                assertFalse(Files.exists(workspace.resolve("ignored/drop.txt")));
+                assertTrue(Files.isRegularFile(workspace.resolve("ignored/keep.txt")));
+                assertFalse(Files.exists(workspace.resolve(".git")));
+                assertFalse(Files.exists(workspace.resolve("target")));
+                assertTrue(Files.isRegularFile(workspace.resolve("normal.txt")));
+                Path output = Files.writeString(temp.resolve("ignored-rules.scip"), "valid-scip-fixture");
+                return new IndexingArtifact(Language.JAVA, indexerId(), output);
+            }
+        };
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-ignore", temp.resolve("home"), delegate, store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        executor.execute(fixture.execution());
+
+        assertFalse(Files.exists(delegateRoot.get()), "ephemeral workspace must be cleaned");
+    }
+
+    @Test
+    void copiedWorkspaceStillEnforcesSourceBudget(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixture(temp);
+        Files.writeString(fixture.projectRoot().resolve("second.txt"), "second");
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+                "worker-budget",
+                temp.resolve("home"),
+                delegate(temp, new AtomicReference<>()),
+                store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW),
+                1,
+                1024 * 1024,
+                Clock.systemUTC());
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        Exception failure = assertThrows(Exception.class, () -> executor.execute(fixture.execution()));
+
+        assertTrue(failure.getMessage().contains("source budget"));
+    }
+
+    @Test
+    void workerPreservesProjectRelativeRootFromRequestInManifest(@TempDir Path temp) throws Exception {
+        Fixture fixture = fixtureWithScope(temp, "services/catalog");
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        IndexerExecutor delegate = delegate(temp, delegateRoot);
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(temp.resolve("home"));
+        LocalIsolatedIndexWorker worker = worker(
+                "worker-one", temp.resolve("home"), delegate, store,
+                qualifiedBackend(WorkerNetworkPolicy.ALLOW));
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        IndexingArtifact artifact = executor.execute(fixture.execution());
+
+        var verified = executor.verifiedArtifact().orElseThrow();
+        assertEquals("services/catalog", verified.manifest().projectRelativeRoot(),
+                "manifest must record the request's scope, not the isolated workspace root");
+        assertEquals(DistributedArtifactManifest.FORMAT_V2, verified.manifest().format());
+        assertEquals(Path.of("services/catalog"), artifact.projectRelativeRoot());
+    }
+
+    private static WorkerSandboxBackend qualifiedBackend(WorkerNetworkPolicy expectedPolicy) {
+        return new WorkerSandboxBackend() {
+            @Override public String id() { return "fixture-os-sandbox"; }
+            @Override public WorkerIsolation isolation() { return WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE; }
+            @Override public NetworkGuarantee networkGuarantee() { return NetworkGuarantee.OS_ENFORCED; }
+            @Override
+            public WorkerSandboxQualification qualification() {
+                return new WorkerSandboxQualification(
+                        id(), isolation(), networkGuarantee(),
+                        WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                        WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        WorkerContainmentFixtures.FULLY_CONTAINED,
+                        Map.of(WorkerSandboxQualification.currentPlatform(),
+                                WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                        List.of("TEST_FIXTURE_OS_QUALIFIED"));
+            }
+            @Override
+            public IndexingArtifact execute(
+                    IndexerExecutor selected,
+                    IndexingExecutionRequest request,
+                    WorkerNetworkPolicy networkPolicy
+            ) throws Exception {
+                assertEquals(expectedPolicy, networkPolicy);
+                return selected.execute(request);
+            }
+        };
+    }
+
+    private static LocalIsolatedIndexWorker worker(
+            String workerId,
+            Path home,
+            IndexerExecutor delegate,
+            DistributedArtifactBundleStore store,
+            WorkerSandboxBackend backend
+    ) {
+        return new LocalIsolatedIndexWorker(
+                workerId, home, delegate, store, backend,
+                100_000, 2L * 1024L * 1024L * 1024L, Clock.systemUTC());
+    }
+
+    private static LocalIsolatedIndexWorker nativeWorker(
+            String workerId,
+            Path home,
+            IndexerExecutor delegate,
+            DistributedArtifactBundleStore store
+    ) {
+        return worker(workerId, home, delegate, store, WorkerSandboxBackend.nativeEphemeralWorkspace());
     }
 
     private static IndexerExecutor delegate(Path temp, AtomicReference<Path> delegateRoot) {
@@ -229,6 +420,47 @@ class LocalIsolatedIndexWorkerTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 projectRoot,
+                new IndexerSelection(Language.JAVA, descriptor),
+                IndexingMode.FULL,
+                List.of());
+        return new Fixture(request, repositoryRoot, projectRoot, materialization, execution);
+    }
+
+    private static Fixture fixtureWithScope(Path temp, String portableScope) throws Exception {
+        Path repositoryRoot = Files.createDirectories(temp.resolve("repository-scoped"));
+        Path registeredRoot = Files.createDirectories(repositoryRoot.resolve("project"));
+        Path projectRoot = Files.createDirectories(registeredRoot.resolve(Path.of(portableScope)));
+        Files.writeString(projectRoot.resolve("pom.xml"), "<project/>");
+        Files.createDirectories(projectRoot.resolve(".git"));
+        RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                "https://github.com/acme/demo",
+                "main",
+                "a".repeat(40),
+                "project/" + portableScope,
+                null);
+        RemoteMaterialization materialization = new RemoteMaterialization(
+                request,
+                repositoryRoot,
+                projectRoot,
+                "c".repeat(64),
+                false,
+                Instant.parse("2026-07-29T00:00:00Z"));
+        IndexerDescriptor descriptor = new IndexerDescriptor(
+                "fixture-provider",
+                "1.2.3",
+                "Fixture provider",
+                Set.of(Language.JAVA),
+                Set.of(BuildSystem.MAVEN),
+                Set.of(IndexerCapability.SYMBOLS),
+                IndexerQualification.QUALIFIED,
+                1,
+                List.of());
+        IndexingExecutionRequest execution = new IndexingExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                registeredRoot,
+                projectRoot,
+                Path.of(portableScope),
                 new IndexerSelection(Language.JAVA, descriptor),
                 IndexingMode.FULL,
                 List.of());

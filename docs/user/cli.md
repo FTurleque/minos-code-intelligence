@@ -11,7 +11,7 @@ minos.cmd <commande>
 Checkout source sur la ligne de maintenance courante :
 
 ```powershell
-java -jar .\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar <commande>
+java -jar .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar <commande>
 ```
 
 `--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe.
@@ -27,7 +27,7 @@ Dans un artefact packagé, la version provient du manifest du JAR afin d'être i
 Version de développement courante :
 
 ```text
-1.0.1-SNAPSHOT
+1.1.0-SNAPSHOT
 ```
 
 ## Formats de sortie
@@ -323,15 +323,15 @@ minos.cmd remote materialize https://github.com/acme/project --ref main `
 
 L'indexation remote exige le commit exact et conserve provenance/bundle vérifié.
 
-La disposition sécurité reste :
+La disposition sécurité est :
 
 ```text
-network DENY sans backend OS prouvé → fail-closed
-untrusted code                      → non supporté
-claim sandbox OS réelle            → interdit
+ALLOW → réseau autorisé dans une sandbox OS qualifiée
+DENY  → réseau bloqué dans une sandbox OS qualifiée
+backend natif/process-only → refusé dans les deux modes
 ```
 
-L'implémentation future d'une vraie sandbox OS Windows/Linux reste suivie par #98.
+Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
 ## Runtime & Dynamic Intelligence
 
@@ -401,12 +401,12 @@ minos_team_audit
 
 Le catalogue exact est généré dans [`../generated/product-facts.md`](../generated/product-facts.md). Voir aussi [Serveur MCP](mcp.md).
 
-### Particularité Windows 1.0.1
+### Particularité Windows
 
 Le binaire `app\minos.exe mcp` de la distribution Windows est désormais directement exercé par les gates de packaging. Une build locale du candidat peut être générée avec :
 
 ```powershell
-.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
+.\scripts\release\build-local-windows-candidate.ps1 -Version 1.1.0
 ```
 
 Ce runner ne crée aucun tag, ne publie aucune release et ne déclenche aucun GitHub Actions.

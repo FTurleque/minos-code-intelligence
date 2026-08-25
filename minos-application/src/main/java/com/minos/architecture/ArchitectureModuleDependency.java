@@ -2,6 +2,7 @@ package com.minos.architecture;
 
 import com.minos.domain.Evidence;
 import com.minos.domain.InformationNature;
+import com.minos.domain.ProbabilityInvariant;
 
 import java.util.List;
 import java.util.Objects;
@@ -40,9 +41,10 @@ public record ArchitectureModuleDependency(
         if (nature == InformationNature.FACTUAL) {
             throw new IllegalArgumentException("module dependency aggregate must be derived");
         }
-        if (confidence == null || confidence < 0.0 || confidence > 1.0) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
+        if (confidence == null) {
+            throw new IllegalArgumentException("confidence is required");
         }
+        ProbabilityInvariant.require(confidence, "confidence");
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (evidence.isEmpty()) {
             throw new IllegalArgumentException("module dependency aggregate requires evidence");

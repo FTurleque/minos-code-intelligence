@@ -25,7 +25,7 @@ public record IndexerDescriptor(
 ) {
 
     public IndexerDescriptor {
-        id = requireText(id, "id");
+        id = ProviderId.require(id);
         version = requireText(version, "version");
         displayName = requireText(displayName, "displayName");
         languages = immutableEnumSet(languages, Language.class, "languages");

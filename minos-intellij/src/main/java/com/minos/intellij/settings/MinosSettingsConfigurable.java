@@ -39,8 +39,8 @@ public final class MinosSettingsConfigurable implements Configurable {
         timeout = new JBTextField();
         maxGraphNodes = new JBTextField();
 
-        addRow(0, "MINOS executable", executable);
-        addRow(1, "MINOS_HOME (optional)", home);
+        addRow(0, "MINOS executable (IDE-global)", executable);
+        addRow(1, "MINOS_HOME (IDE-global, optional)", home);
         addRow(2, "Command timeout (seconds)", timeout);
         addRow(3, "Maximum architecture nodes", maxGraphNodes);
 

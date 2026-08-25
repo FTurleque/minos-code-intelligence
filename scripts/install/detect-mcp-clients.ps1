@@ -4,7 +4,22 @@ param(
     [string] $OutputPath,
 
     [ValidateRange(1, 30)]
-    [int] $ProbeTimeoutSeconds = 5
+    [int] $ProbeTimeoutSeconds = 5,
+
+    # Managed-integration state written by configure-mcp-clients.ps1 /
+    # configure-codex-mcp.ps1. Read-only here: this script only reports whether
+    # a client is already MINOS-managed, it never writes or repairs state.
+    [string] $StatePath = '',
+    [string] $CodexStatePath = '',
+
+    # When supplied, AlreadyManaged additionally requires the tracked entry's
+    # command/dataRoot to match this exact install -- a client tracked under a
+    # different install root or data root (moved install, changed data root)
+    # is reported as needing configuration again, not as already-managed.
+    # Left blank, AlreadyManaged falls back to "tracked at all", matching every
+    # existing caller that predates this parameter.
+    [string] $InstallRoot = '',
+    [string] $DataRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,6 +40,77 @@ function Ui([string] $Value) {
     return $Value.Replace('{e}', $EAcute).Replace('{dash}', $EmDash)
 }
 
+# Reads the corresponding environment variable first, falling back to the
+# WinAPI special-folder lookup only if it is unset. On any real Windows
+# session these are identical (both ultimately derive from the same user
+# profile), but the env var is overridable per-process, which is what lets a
+# test harness isolate this script's filesystem-marker detection from
+# whatever happens to actually be installed on the host running the test.
+function Get-UserFolderPath([string] $EnvironmentVariableName, [string] $SpecialFolder) {
+    $Value = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if (-not [string]::IsNullOrWhiteSpace($Value)) { return $Value }
+    return [Environment]::GetFolderPath($SpecialFolder)
+}
+
+if ([string]::IsNullOrWhiteSpace($StatePath)) {
+    $StatePath = Join-Path (Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData') 'MINOS\mcp-client-integrations.json'
+}
+if ([string]::IsNullOrWhiteSpace($CodexStatePath)) {
+    $CodexStatePath = Join-Path (Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData') 'MINOS\codex-mcp-integration.json'
+}
+
+# Both blank unless the caller (the installer wizard) supplied them -- console/test callers
+# that predate -InstallRoot/-DataRoot keep the pre-existing "tracked at all" behavior.
+$ExpectedExe = if (-not [string]::IsNullOrWhiteSpace($InstallRoot)) {
+    [System.IO.Path]::GetFullPath((Join-Path $InstallRoot 'app\minos.exe'))
+} else { $null }
+$ExpectedDataRoot = if (-not [string]::IsNullOrWhiteSpace($DataRoot)) {
+    [System.IO.Path]::GetFullPath($DataRoot)
+} else { $null }
+
+function Test-TrackedWiringCurrent([object] $Entry) {
+    if ($null -eq $ExpectedExe) { return $true }
+    $Command = [string]$Entry.command
+    $TrackedDataRoot = [string]$Entry.dataRoot
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    if (-not $Command.Equals($ExpectedExe, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($TrackedDataRoot)) { return $true }
+    return $TrackedDataRoot.Equals($ExpectedDataRoot, [StringComparison]::OrdinalIgnoreCase)
+}
+
+# Ids already tracked in mcp-client-integrations.json, managed or preexisting alike -- both
+# mean MINOS already confirmed this client is correctly wired, which is exactly what the
+# wizard needs to tell the user apart from "merely capable of being configured". A tracked
+# entry whose command/dataRoot no longer matches this exact install (moved install, changed
+# data root) does not count -- that client still needs (re)configuration, not a locked
+# already-done checkbox.
+function Get-ManagedClientIds([string] $Path) {
+    $Ids = New-Object System.Collections.Generic.HashSet[string]
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return , $Ids }
+    try { $Parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
+    catch { return , $Ids }
+    foreach ($Client in @($Parsed.clients)) {
+        $Id = [string]$Client.id
+        if (-not [string]::IsNullOrWhiteSpace($Id) -and (Test-TrackedWiringCurrent $Client)) { [void]$Ids.Add($Id) }
+    }
+    # Unary comma: see the note in update-installation.ps1 -- without it a
+    # single-entry (or empty) HashSet is unrolled on return, and .Contains()
+    # at the caller fails.
+    return , $Ids
+}
+
+# codex-mcp-integration.json is a single tracked object, not a clients[] array.
+function Test-CodexManaged([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    try { $Parsed = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json }
+    catch { return $false }
+    if (-not (Test-TrackedWiringCurrent $Parsed)) { return $false }
+    return -not [string]::IsNullOrWhiteSpace([string]$Parsed.ownership)
+}
+
+$ManagedClientIds = Get-ManagedClientIds $StatePath
+$CodexManaged = Test-CodexManaged $CodexStatePath
+
 function Resolve-CommandPath([string] $Name) {
     $Command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $Command) { return '' }
@@ -43,7 +129,7 @@ function Test-VsCodeCopilotShim([string] $Path) {
 function Find-EmbeddedClaudeCli {
     # Claude Code Desktop ships its own claude.exe under
     # %APPDATA%\Claude\claude-code\<version>\claude.exe -- never on PATH.
-    $ClaudeCodeDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Claude\claude-code'
+    $ClaudeCodeDir = Join-Path (Get-UserFolderPath 'APPDATA' 'ApplicationData') 'Claude\claude-code'
     if (-not (Test-Path -LiteralPath $ClaudeCodeDir -PathType Container)) { return '' }
     foreach ($Dir in @(Get-ChildItem -LiteralPath $ClaudeCodeDir -Directory -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending)) {
@@ -152,8 +238,8 @@ function Test-Capability([string] $ToolPath, [string[]] $Arguments) {
 }
 
 function Test-JetBrainsCopilot {
-    $LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
-    $Roaming = [Environment]::GetFolderPath('ApplicationData')
+    $LocalAppData = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
+    $Roaming = Get-UserFolderPath 'APPDATA' 'ApplicationData'
     if (Test-Path -LiteralPath (Join-Path $LocalAppData 'github-copilot\intellij')) { return $true }
 
     foreach ($Root in @((Join-Path $Roaming 'JetBrains'), (Join-Path $LocalAppData 'JetBrains'))) {
@@ -171,7 +257,7 @@ function Test-JetBrainsCopilot {
 
 function Test-ClaudeCodeDesktop {
     # Claude Code Desktop (claude.ai/code app) creates ~/.claude/ with these marker files.
-    $UserProfile = [Environment]::GetFolderPath('UserProfile')
+    $UserProfile = Get-UserFolderPath 'USERPROFILE' 'UserProfile'
     foreach ($Marker in @('.claude\settings.json', '.claude\.credentials.json')) {
         if (Test-Path -LiteralPath (Join-Path $UserProfile $Marker) -PathType Leaf) {
             return $true
@@ -184,7 +270,7 @@ function Find-ClaudeDesktopMsixDir {
     # Claude Desktop installed from the Windows Store (MSIX) uses a sandboxed
     # LocalCache path instead of %APPDATA%\Claude.
     # Pattern: %LOCALAPPDATA%\Packages\Claude_<publisher>\LocalCache\Roaming\Claude
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
     $PackagesDir = Join-Path $Local 'Packages'
     if (-not (Test-Path -LiteralPath $PackagesDir -PathType Container)) { return '' }
     foreach ($Dir in @(Get-ChildItem -LiteralPath $PackagesDir -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
@@ -196,8 +282,8 @@ function Find-ClaudeDesktopMsixDir {
 }
 
 function Test-ClaudeDesktop {
-    $Roaming = [Environment]::GetFolderPath('ApplicationData')
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
+    $Roaming = Get-UserFolderPath 'APPDATA' 'ApplicationData'
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
     # Windows Store (MSIX) installation — sandboxed LocalCache path.
     if (-not [string]::IsNullOrWhiteSpace((Find-ClaudeDesktopMsixDir))) {
         return $true
@@ -216,25 +302,26 @@ function Test-ClaudeDesktop {
 }
 
 function Test-CodexDesktop {
-    $Local = [Environment]::GetFolderPath('LocalApplicationData')
-    $HomeDir = [Environment]::GetFolderPath('UserProfile')
+    $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
+    $HomeDir = Get-UserFolderPath 'USERPROFILE' 'UserProfile'
     return (Test-Path -LiteralPath (Join-Path $HomeDir '.codex\config.toml') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Programs\Codex\Codex.exe') -PathType Leaf) -or
         (Test-Path -LiteralPath (Join-Path $Local 'Codex\Codex.exe') -PathType Leaf)
 }
 
-function New-Result([bool] $Available, [string] $Reason, [string] $Mode = '') {
+function New-Result([bool] $Available, [string] $Reason, [string] $Mode = '', [bool] $AlreadyManaged = $false) {
     return [pscustomobject][ordered]@{
         Available = $Available
         Reason = $Reason
         Mode = $Mode
+        AlreadyManaged = $AlreadyManaged
     }
 }
 
 $Results = [ordered]@{}
 
 if (Test-JetBrainsCopilot) {
-    $Results['CopilotJetBrains'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
+    $Results['CopilotJetBrains'] = New-Result $true (Ui 'D{e}tect{e}') 'json' ($ManagedClientIds.Contains('copilot-jetbrains'))
 } else {
     $Results['CopilotJetBrains'] = New-Result $false (Ui 'Non disponible {dash} GitHub Copilot JetBrains / IntelliJ non d{e}tect{e}')
 }
@@ -247,7 +334,7 @@ if ([string]::IsNullOrWhiteSpace($Copilot)) {
     # return success for generic help while not being the standalone Copilot CLI.
     $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} launcher VS Code d{e}tect{e}, vrai CLI absent')
 } elseif (Test-Capability $Copilot @('mcp', '--help')) {
-    $Results['CopilotCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli'
+    $Results['CopilotCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} CLI MCP compatible') 'cli' ($ManagedClientIds.Contains('copilot-cli'))
 } else {
     $Results['CopilotCli'] = New-Result $false (Ui 'Non disponible {dash} commande copilot d{e}tect{e}e mais interface MCP incompatible')
 }
@@ -257,7 +344,7 @@ if ([string]::IsNullOrWhiteSpace($Claude)) {
     $Claude = Find-EmbeddedClaudeCli
 }
 if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('mcp', '--help'))) {
-    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} Claude CLI / Code compatible MCP') 'cli'
+    $Results['ClaudeCode'] = New-Result $true (Ui 'D{e}tect{e} {dash} Claude CLI / Code compatible MCP') 'cli' ($ManagedClientIds.Contains('claude-code'))
 } elseif (-not [string]::IsNullOrWhiteSpace($Claude)) {
     $Results['ClaudeCode'] = New-Result $false (Ui 'Non disponible {dash} commande claude d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -265,7 +352,7 @@ if (-not [string]::IsNullOrWhiteSpace($Claude) -and (Test-Capability $Claude @('
 }
 
 if (Test-ClaudeDesktop) {
-    $Results['ClaudeDesktop'] = New-Result $true (Ui 'D{e}tect{e}') 'json'
+    $Results['ClaudeDesktop'] = New-Result $true (Ui 'D{e}tect{e}') 'json' ($ManagedClientIds.Contains('claude-desktop'))
 } else {
     $Results['ClaudeDesktop'] = New-Result $false (Ui 'Non disponible {dash} Claude Desktop non d{e}tect{e}')
 }
@@ -273,7 +360,7 @@ if (Test-ClaudeDesktop) {
 $Codex = Resolve-CommandPath 'codex'
 $CodexCliAvailable = -not [string]::IsNullOrWhiteSpace($Codex) -and (Test-Capability $Codex @('mcp', '--help'))
 if ($CodexCliAvailable) {
-    $Results['CodexCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI MCP compatible') 'cli'
+    $Results['CodexCli'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI MCP compatible') 'cli' $CodexManaged
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
     $Results['CodexCli'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -282,7 +369,7 @@ if ($CodexCliAvailable) {
 
 $CodexDesktopAvailable = Test-CodexDesktop
 if ($CodexDesktopAvailable) {
-    $Results['CodexDesktop'] = New-Result $true (Ui 'D{e}tect{e} {dash} configuration Codex Desktop disponible') 'desktop'
+    $Results['CodexDesktop'] = New-Result $true (Ui 'D{e}tect{e} {dash} configuration Codex Desktop disponible') 'desktop' $CodexManaged
 } else {
     $Results['CodexDesktop'] = New-Result $false (Ui 'Non disponible {dash} Codex Desktop / config utilisateur non d{e}tect{e}')
 }
@@ -290,9 +377,9 @@ if ($CodexDesktopAvailable) {
 # Backward-compatible aggregate section retained for existing verifier fixtures and
 # non-wizard consumers. New installer UI uses CodexCli and CodexDesktop explicitly.
 if ($CodexCliAvailable) {
-    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex CLI') 'cli' $CodexManaged
 } elseif ($CodexDesktopAvailable) {
-    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop'
+    $Results['Codex'] = New-Result $true (Ui 'D{e}tect{e} {dash} Codex Desktop (configuration via fichier utilisateur)') 'desktop' $CodexManaged
 } elseif (-not [string]::IsNullOrWhiteSpace($Codex)) {
     $Results['Codex'] = New-Result $false (Ui 'Non disponible {dash} commande codex d{e}tect{e}e mais interface MCP incompatible')
 } else {
@@ -310,6 +397,7 @@ foreach ($Name in $Results.Keys) {
     $Lines.Add('Available=' + $(if ($Value.Available) { '1' } else { '0' }))
     $Lines.Add('Reason=' + ([string]$Value.Reason).Replace("`r", ' ').Replace("`n", ' '))
     $Lines.Add('Mode=' + [string]$Value.Mode)
+    $Lines.Add('AlreadyManaged=' + $(if ($Value.AlreadyManaged) { '1' } else { '0' }))
     $Lines.Add('')
 }
 [System.IO.File]::WriteAllLines(
@@ -320,5 +408,5 @@ foreach ($Name in $Results.Keys) {
 Write-Host "MINOS MCP client preflight written: $OutputPath"
 foreach ($Name in $Results.Keys) {
     $Value = $Results[$Name]
-    Write-Host ("{0}: available={1} mode={2} reason={3}" -f $Name, $Value.Available, $Value.Mode, $Value.Reason)
+    Write-Host ("{0}: available={1} mode={2} alreadyManaged={3} reason={4}" -f $Name, $Value.Available, $Value.Mode, $Value.AlreadyManaged, $Value.Reason)
 }

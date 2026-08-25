@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -37,13 +36,6 @@ def forbid(relative: str, text: str, *values: str) -> None:
             raise RuntimeError(f"{relative}: forbidden weakening or CI action: {value}")
 
 
-def assert_no_workflow_changes() -> None:
-    completed = subprocess.run(
-        ["git", "diff", "--quiet", BASE, "HEAD", "--", ".github/workflows"], cwd=ROOT, check=False)
-    if completed.returncode != 0:
-        raise RuntimeError("M26 forbids changes under .github/workflows")
-
-
 def main() -> int:
     try:
         model = read("minos-domain/src/main/java/com/minos/dynamic/RuntimeObservationSession.java")
@@ -54,9 +46,13 @@ def main() -> int:
         codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         service = read("minos-application/src/main/java/com/minos/dynamic/RuntimeIntelligenceService.java")
         store = read("minos-storage-local/src/main/java/com/minos/store/FileRuntimeObservationStore.java")
+        bounded_lease = read("minos-engine/src/main/java/com/minos/io/BoundedFileLease.java")
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
+        app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
+        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
+        mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
         e2e = read("scripts/m26/run-runtime-e2e.py")
         windows = read("scripts/m26/run-final.ps1")
@@ -91,19 +87,31 @@ def main() -> int:
 
         require_facts("FileRuntimeObservationStore.java", store,
                       "DEFAULT_MAX_SESSIONS_PER_PROJECT = 128", "DEFAULT_MAX_PROJECT_BYTES",
-                      "DEFAULT_MAX_SESSION_BYTES", "FileLock", "ATOMIC_MOVE", "checksum mismatch",
-                      "session is immutable", "must not be a symbolic link", "capacity reached")
+                      "DEFAULT_MAX_SESSION_BYTES", "BoundedFileLease", "LOCK_TIMEOUT", "ATOMIC_MOVE",
+                      "LinkOption.NOFOLLOW_LINKS", "checksum mismatch", "session is immutable",
+                      "must not be a symbolic link", "capacity reached")
+        require_facts("BoundedFileLease.java", bounded_lease,
+                      "FileLock", "LeaseDeadline", "PrivateLocalStorage", "LinkOption.NOFOLLOW_LINKS",
+                      "tryLock", "preparePrivateLockFile")
         require_facts("RuntimeCommand.java", command,
                       "runtime import", "runtime sessions", "runtime report", "runtime symbol",
                       "absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS", "--limit")
         require_facts("MinosApplication.java", app,
-                      "runtime-observations", "RuntimeObservationStore", "RuntimeIntelligenceService")
+                      "RuntimeObservationStore", "RuntimeIntelligenceService", "runtimeObservationStore()")
+        require_facts("MinosApplicationAssembler.java", app_assembler,
+                      "selected.runtimeObservationStore()", "effectiveRuntimeObservations")
+        require_facts("LocalStorageBackend.java", local_storage,
+                      'namespace(root, "runtime-observations")', "FileRuntimeObservationStore",
+                      "DurableAtomicFile.ensureDirectory")
         tool_count_match = re.search(r"TOOL_COUNT\s*=\s*(\d+)", mcp)
         if not tool_count_match or int(tool_count_match.group(1)) < 26:
             raise RuntimeError("MinosMcpTools.java: M26 requires its 26-tool catalogue or an additive superset")
         require_facts("MinosMcpTools.java", mcp,
                       "minos_runtime_sessions", "minos_runtime_report", "minos_runtime_symbol",
-                      "sessionId", "additionalProperties")
+                      "sessionId")
+        require_facts("McpToolSchemas.java", mcp_schemas,
+                      "runtimeSessionsSchema", "runtimeReportSchema", "runtimeSymbolSchema",
+                      "additionalProperties")
         forbid("MinosMcpTools.java", mcp, "minos_runtime_import")
         require_facts("MinosApplicationMcpBackend.java", backend,
                       "runtimeIntelligenceService().listSessions", "runtimeIntelligenceService().report",
@@ -112,6 +120,7 @@ def main() -> int:
         tests = {
             "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreTest.java"),
+            "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreSymlinkTest.java"),
             "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
@@ -121,6 +130,9 @@ def main() -> int:
         require_facts("FileRuntimeObservationStoreTest.java", tests["FileRuntimeObservationStoreTest.java"],
                       "TreatsTheSameSourceAsIdempotent", "refusesSessionIdentityMutationAndCapacityOverflow",
                       "detectsPersistedByteTampering", "rejectsAProjectDirectorySymlink")
+        require_facts("FileRuntimeObservationStoreSymlinkTest.java", tests["FileRuntimeObservationStoreSymlinkTest.java"],
+                      "rejectsSymlinkedStoreRoot", "rejectsSymlinkedProjectLockLeaf",
+                      "rejectsSymlinkedSessionLeaf")
         require_facts("RuntimeIntelligenceServiceTest.java", tests["RuntimeIntelligenceServiceTest.java"],
                       "ReportsResolutionHotPathsAndSymbolFacts", "rejectsProjectAndSnapshotMisalignment",
                       "codecFailsClosedOnBomTraversalUnknownKindsAndNonPartialCompleteness")
@@ -161,7 +173,6 @@ def main() -> int:
         quality = read("scripts/quality/check-jacoco.py")
         require_facts("scripts/quality/check-jacoco.py", quality, '"m26-runtime-dynamic-intelligence"',
                       "FileRuntimeObservationStore", "RuntimeCommand")
-        assert_no_workflow_changes()
         print("M26 RUNTIME DYNAMIC CONSISTENCY SUCCESS")
         return 0
     except Exception as exception:

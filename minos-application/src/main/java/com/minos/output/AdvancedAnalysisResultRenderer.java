@@ -7,7 +7,9 @@ import com.minos.program.analysis.AdvancedImpactService;
 import com.minos.program.analysis.SecurityAnalysisService;
 
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.function.Function;
 
 /** Deterministic JSON renderer for additive M19 public surfaces. */
 public final class AdvancedAnalysisResultRenderer {
@@ -16,15 +18,20 @@ public final class AdvancedAnalysisResultRenderer {
     }
 
     public static String renderProgramGraph(ProgramGraph graph) {
+        return renderProgramGraph(graph, Long.MAX_VALUE);
+    }
+
+    /** Streams node/edge mappings into a bounded JSON encoder instead of materializing result lists. */
+    public static String renderProgramGraph(ProgramGraph graph, long maximumUtf8Bytes) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("contractVersion", "1");
         map.put("projectId", graph.projectId());
         map.put("snapshotId", graph.snapshotId());
         map.put("capabilities", graph.capabilities().stream().map(Enum::name).sorted().toList());
         map.put("limitations", graph.limitations());
-        map.put("nodes", graph.nodes().stream().map(AdvancedAnalysisResultRenderer::node).toList());
-        map.put("edges", graph.edges().stream().map(AdvancedAnalysisResultRenderer::edge).toList());
-        return DeterministicJson.render(map);
+        map.put("nodes", mapped(graph.nodes(), AdvancedAnalysisResultRenderer::node));
+        map.put("edges", mapped(graph.edges(), AdvancedAnalysisResultRenderer::edge));
+        return DeterministicJson.render(map, maximumUtf8Bytes);
     }
 
     public static String renderAdvancedImpact(AdvancedImpactService.AdvancedImpactReport report) {
@@ -101,5 +108,13 @@ public final class AdvancedAnalysisResultRenderer {
         map.put("providerId", edge.origin().providerId());
         map.put("evidence", edge.evidence().stream().map(value -> value.description()).toList());
         return map;
+    }
+
+    private static <T, R> Iterable<R> mapped(Iterable<T> values, Function<T, R> mapper) {
+        return () -> new Iterator<>() {
+            private final Iterator<T> delegate = values.iterator();
+            @Override public boolean hasNext() { return delegate.hasNext(); }
+            @Override public R next() { return mapper.apply(delegate.next()); }
+        };
     }
 }

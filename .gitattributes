@@ -1,0 +1,7 @@
+# Windows containment launchers are assembled from a template plus shared fragments and are then
+# written to disk and executed by powershell.exe. Their end-of-line convention is pinned so the
+# assembled launcher is identical on every checkout, and so the byte-for-byte golden comparison in
+# WindowsContainmentScriptTest compares the same bytes on Linux and Windows agents.
+*.ps1 text eol=crlf
+*.ps1frag text eol=crlf
+*.ps1.template text eol=crlf

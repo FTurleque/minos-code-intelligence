@@ -1,49 +1,36 @@
 package com.minos.adapter.scip.runtime;
 
-import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest;
 import com.minos.runtime.CommandLocator;
-import com.minos.runtime.IndexerProcessPlan;
-import com.minos.runtime.IndexerProcessPlanFactory;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 /** Fail-closed process plan for scip-clang. */
-public final class ScipClangProcessPlanFactory implements IndexerProcessPlanFactory {
-    private final Path executable;
+public final class ScipClangProcessPlanFactory extends AbstractScipProcessPlanFactory {
 
     public ScipClangProcessPlanFactory(Path executable) {
-        this.executable = Objects.requireNonNull(executable, "executable").toAbsolutePath().normalize();
+        super(executable, "scip-clang", "scip-clang incremental execution is not qualified by MINOS M24");
     }
 
     @Override
-    public IndexerProcessPlan create(IndexingExecutionRequest request, Path runDirectory) throws IOException {
-        Path root = request.projectRoot().toAbsolutePath().normalize();
-        if (request.mode() == IndexingMode.INCREMENTAL) {
-            throw new IllegalStateException("scip-clang incremental execution is not qualified by MINOS M24");
-        }
-        if (!Files.isRegularFile(executable)) {
-            throw new IllegalStateException("scip-clang executable is missing: " + executable);
-        }
+    protected void validateProject(Path root) {
+        // scip-clang validates its compilation database after executable validation in command().
+    }
+
+    @Override
+    protected List<String> command(
+            IndexingExecutionRequest request,
+            Path root,
+            Path runRoot,
+            Path output
+    ) {
         Path compilationDatabase = compilationDatabase(root);
-        Path output = runDirectory.toAbsolutePath().normalize().resolve("index.scip");
-        Files.createDirectories(output.getParent());
-        return new IndexerProcessPlan(
-                CommandLocator.invocation(
-                        executable,
-                        "--compdb-path=" + compilationDatabase,
-                        "--index-output-path=" + output),
-                root,
-                Map.of(),
-                output,
-                Duration.ofMinutes(30)
-        );
+        return CommandLocator.invocation(
+                executable(),
+                "--compdb-path=" + compilationDatabase,
+                "--index-output-path=" + output);
     }
 
     static Path compilationDatabase(Path root) {

@@ -111,6 +111,51 @@ services:
       io.minos.revision: "${MINOS_GIT_COMMIT}"
       io.minos.runtime-plane: bootstrap
 
+  # Docker Desktop's WSL2 bind-mount translation always shows a freshly created
+  # Windows-host directory as owned by root inside the container, regardless of
+  # which UID actually created it -- even though it starts world-writable. A
+  # non-root process can write files under it, but POSIX chmod requires being
+  # the owner (or root); MinosApplication.open() hardens MINOS_HOME itself to
+  # owner-only (0700) on every open, so the very first non-root open of a
+  # freshly bind-mounted MINOS_DATA_DIR fails with FileSystemException:
+  # "Operation not permitted". Fix the ownership once, as root, before any
+  # non-root plane (minos-admin, minos-mcp, minos-provider-probe) ever opens
+  # it. chown/chmod are idempotent, so running this on every Install is safe.
+  #
+  # cap_drop: [ALL] (the pattern every other one-shot plane in this file uses)
+  # would strip CAP_CHOWN/CAP_FOWNER too -- without them "root" here can no
+  # longer bypass ownership/permission checks either, and chown/chmod fail
+  # with the same "Operation not permitted" this step exists to fix. Grant
+  # back only those two capabilities instead of the full default set.
+  minos-data-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        chown 10001:10001 /var/lib/minos
+        chmod 700 /var/lib/minos
+        echo "MINOS Docker data root ownership prepared."
+    user: "0:0"
+    init: true
+    network_mode: none
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: data-bootstrap
+
   minos-tools-bootstrap:
     image: "${MINOS_IMAGE}"
     entrypoint: [/bin/sh, -c]

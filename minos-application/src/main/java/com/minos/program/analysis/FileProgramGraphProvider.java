@@ -6,6 +6,10 @@ import com.minos.domain.OriginType;
 import com.minos.domain.PositionEncoding;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolLocation;
+import com.minos.io.BoundedInputStream;
+import com.minos.io.BoundedLineReader;
+import com.minos.io.BoundedProperties;
+import com.minos.io.FixedTsv;
 import com.minos.program.ProgramEdgeKind;
 import com.minos.program.ProgramGraph;
 import com.minos.program.ProgramGraphCapability;
@@ -16,10 +20,12 @@ import com.minos.registry.RegisteredProject;
 import com.minos.store.CodeKnowledgeSnapshot;
 
 import java.io.IOException;
-import java.io.Reader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -34,13 +40,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
-/**
- * Production M21 provider for explicit advanced-program facts stored beside the project.
- *
- * <p>The provider never infers a capability. The sidecar must declare a version, exact active snapshot,
- * provenance and capabilities, and every declared capability must be backed by matching graph facts.
- * The sidecar is local, reconstructible and intentionally outside the structured snapshot authority.</p>
- */
+/** Production M21 provider for explicit advanced-program facts stored beside the project. */
 public final class FileProgramGraphProvider implements ProgramGraphProvider {
 
     public static final String PROVIDER_ID = "minos-program-sidecar-v1";
@@ -55,11 +55,10 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
     private static final int MAX_NODES = 100_000;
     private static final int MAX_EDGES = 500_000;
     private static final long MAX_FILE_BYTES = 64L * 1024L * 1024L;
+    private static final int MAX_LINE_CHARS = 1024 * 1024;
 
     @Override
-    public String id() {
-        return PROVIDER_ID;
-    }
+    public String id() { return PROVIDER_ID; }
 
     @Override
     public String cacheKey(RegisteredProject project, CodeKnowledgeSnapshot snapshot) throws IOException {
@@ -116,25 +115,22 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
 
     private static Path requiredFile(Path directory, String name) throws IOException {
         Path file = directory.resolve(name).normalize();
-        if (!file.startsWith(directory) || !Files.isRegularFile(file)) {
-            throw new IOException("advanced program sidecar missing required file: " + name);
+        if (!file.startsWith(directory)
+                || Files.isSymbolicLink(file)
+                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("advanced program sidecar missing or unsafe required file: " + name);
         }
         long size = Files.size(file);
-        if (size > MAX_FILE_BYTES) {
-            throw new IOException("advanced program sidecar file exceeds 64 MiB: " + name);
-        }
+        if (size > MAX_FILE_BYTES) throw new IOException("advanced program sidecar file exceeds 64 MiB: " + name);
         return file;
     }
 
     private static Metadata readMetadata(Path file) throws IOException {
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-        }
+        Properties properties = BoundedProperties.load(
+                file, 64L * 1024L, 32, 128, 16_384,
+                "advanced program metadata");
         int version = integer(required(properties, "formatVersion"), "formatVersion");
-        if (version != FORMAT_VERSION) {
-            throw new IOException("unsupported advanced program sidecar formatVersion: " + version);
-        }
+        if (version != FORMAT_VERSION) throw new IOException("unsupported advanced program sidecar formatVersion: " + version);
         Set<ProgramGraphCapability> capabilities = new LinkedHashSet<>();
         String rawCapabilities = required(properties, "capabilities");
         for (String token : rawCapabilities.split(",")) {
@@ -159,71 +155,72 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
     }
 
     private static List<ProgramGraphNode> readNodes(
-            Path file,
-            String projectId,
-            Origin origin,
-            Map<String, Symbol> symbols
-    ) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        requireHeader(file, lines, NODE_HEADER);
+            Path file, String projectId, Origin origin, Map<String, Symbol> symbols) throws IOException {
         List<ProgramGraphNode> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
-        for (int index = 1; index < lines.size(); index++) {
-            String raw = lines.get(index);
-            if (raw.isBlank() || raw.startsWith("#")) continue;
-            if (result.size() >= MAX_NODES) throw new IOException("advanced program sidecar exceeds max nodes: " + MAX_NODES);
-            String[] values = raw.split("\\t", -1);
-            if (values.length != 10) throw rowFailure(file, index + 1, "expected 10 tab-separated node columns");
-            String id = field(values[0]);
-            String symbolId = nullable(field(values[1]));
-            ProgramNodeKind kind = enumValue(ProgramNodeKind.class, field(values[2]), file, index + 1, "node kind");
-            String label = field(values[3]);
-            if (id.isBlank() || label.isBlank()) throw rowFailure(file, index + 1, "node id and label must not be blank");
-            if (!ids.add(id)) throw rowFailure(file, index + 1, "duplicate node id: " + id);
-
-            Symbol symbol = symbolId == null ? null : symbols.get(symbolId);
-            if (symbolId != null && symbol == null) {
-                throw rowFailure(file, index + 1, "node references unknown active-snapshot symbol: " + symbolId);
+        try (BoundedInputStream input = new BoundedInputStream(
+                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program nodes");
+             BoundedLineReader reader = new BoundedLineReader(
+                     new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
+            String header = reader.readLine();
+            if (!NODE_HEADER.equals(header)) {
+                throw new IOException(file.getFileName() + " has an incompatible header; expected: " + NODE_HEADER);
             }
-            SymbolLocation location = location(values, file, index + 1);
-            if (location == null && symbol != null) location = symbol.location();
-            result.add(new ProgramGraphNode(
-                    id, projectId, symbolId, kind, label, location,
-                    InformationNature.FACTUAL, null, origin, List.of()));
+            int line = 1;
+            String raw;
+            while ((raw = reader.readLine()) != null) {
+                line++;
+                if (raw.isBlank() || raw.startsWith("#")) continue;
+                if (result.size() >= MAX_NODES) throw new IOException("advanced program sidecar exceeds max nodes: " + MAX_NODES);
+                String[] values = FixedTsv.splitExact(raw, 10, line);
+                String id = field(values[0]);
+                String symbolId = nullable(field(values[1]));
+                ProgramNodeKind kind = enumValue(ProgramNodeKind.class, field(values[2]), file, line, "node kind");
+                String label = field(values[3]);
+                if (id.isBlank() || label.isBlank()) throw rowFailure(file, line, "node id and label must not be blank");
+                if (!ids.add(id)) throw rowFailure(file, line, "duplicate node id: " + id);
+                Symbol symbol = symbolId == null ? null : symbols.get(symbolId);
+                if (symbolId != null && symbol == null) throw rowFailure(file, line, "node references unknown active-snapshot symbol: " + symbolId);
+                SymbolLocation location = location(values, file, line);
+                if (location == null && symbol != null) location = symbol.location();
+                result.add(new ProgramGraphNode(
+                        id, projectId, symbolId, kind, label, location,
+                        InformationNature.FACTUAL, null, origin, List.of()));
+            }
         }
         return List.copyOf(result);
     }
 
     private static List<ProgramGraphEdge> readEdges(
-            Path file,
-            String projectId,
-            Origin origin,
-            List<ProgramGraphNode> nodes
-    ) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        requireHeader(file, lines, EDGE_HEADER);
+            Path file, String projectId, Origin origin, List<ProgramGraphNode> nodes) throws IOException {
         Set<String> nodeIds = nodes.stream().map(ProgramGraphNode::id).collect(java.util.stream.Collectors.toSet());
         List<ProgramGraphEdge> result = new ArrayList<>();
         Set<String> ids = new LinkedHashSet<>();
-        for (int index = 1; index < lines.size(); index++) {
-            String raw = lines.get(index);
-            if (raw.isBlank() || raw.startsWith("#")) continue;
-            if (result.size() >= MAX_EDGES) throw new IOException("advanced program sidecar exceeds max edges: " + MAX_EDGES);
-            String[] values = raw.split("\\t", -1);
-            if (values.length != 4) throw rowFailure(file, index + 1, "expected 4 tab-separated edge columns");
-            String id = field(values[0]);
-            String source = field(values[1]);
-            String target = field(values[2]);
-            ProgramEdgeKind kind = enumValue(ProgramEdgeKind.class, field(values[3]), file, index + 1, "edge kind");
-            if (id.isBlank() || source.isBlank() || target.isBlank()) {
-                throw rowFailure(file, index + 1, "edge id/source/target must not be blank");
+        try (BoundedInputStream input = new BoundedInputStream(
+                     Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program edges");
+             BoundedLineReader reader = new BoundedLineReader(
+                     new InputStreamReader(input, StandardCharsets.UTF_8), MAX_LINE_CHARS)) {
+            String header = reader.readLine();
+            if (!EDGE_HEADER.equals(header)) {
+                throw new IOException(file.getFileName() + " has an incompatible header; expected: " + EDGE_HEADER);
             }
-            if (!ids.add(id)) throw rowFailure(file, index + 1, "duplicate edge id: " + id);
-            if (!nodeIds.contains(source) || !nodeIds.contains(target)) {
-                throw rowFailure(file, index + 1, "edge references a node not declared by this sidecar: " + id);
+            int line = 1;
+            String raw;
+            while ((raw = reader.readLine()) != null) {
+                line++;
+                if (raw.isBlank() || raw.startsWith("#")) continue;
+                if (result.size() >= MAX_EDGES) throw new IOException("advanced program sidecar exceeds max edges: " + MAX_EDGES);
+                String[] values = FixedTsv.splitExact(raw, 4, line);
+                String id = field(values[0]);
+                String source = field(values[1]);
+                String target = field(values[2]);
+                ProgramEdgeKind kind = enumValue(ProgramEdgeKind.class, field(values[3]), file, line, "edge kind");
+                if (id.isBlank() || source.isBlank() || target.isBlank()) throw rowFailure(file, line, "edge id/source/target must not be blank");
+                if (!ids.add(id)) throw rowFailure(file, line, "duplicate edge id: " + id);
+                if (!nodeIds.contains(source) || !nodeIds.contains(target)) throw rowFailure(file, line, "edge references a node not declared by this sidecar: " + id);
+                result.add(new ProgramGraphEdge(
+                        id, projectId, source, target, kind, InformationNature.FACTUAL, null, origin, List.of()));
             }
-            result.add(new ProgramGraphEdge(
-                    id, projectId, source, target, kind, InformationNature.FACTUAL, null, origin, List.of()));
         }
         return List.copyOf(result);
     }
@@ -249,19 +246,15 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         }
     }
 
-    private static void validateCapabilities(
-            Set<ProgramGraphCapability> capabilities,
-            List<ProgramGraphNode> nodes,
-            List<ProgramGraphEdge> edges
-    ) throws IOException {
+    private static void validateCapabilities(Set<ProgramGraphCapability> capabilities,
+                                             List<ProgramGraphNode> nodes,
+                                             List<ProgramGraphEdge> edges) throws IOException {
         Set<ProgramEdgeKind> kinds = EnumSet.noneOf(ProgramEdgeKind.class);
         edges.forEach(edge -> kinds.add(edge.kind()));
         requireCapabilityForEdge(capabilities, kinds, ProgramEdgeKind.CALL, ProgramGraphCapability.CALL_GRAPH);
         requireCapabilityForEdge(capabilities, kinds, ProgramEdgeKind.CONTROL_FLOW, ProgramGraphCapability.CONTROL_FLOW);
-        requireCapabilityForAnyEdge(capabilities, kinds,
-                Set.of(ProgramEdgeKind.DEF_USE, ProgramEdgeKind.DATA_FLOW), ProgramGraphCapability.LOCAL_DATA_FLOW);
-        requireCapabilityForAnyEdge(capabilities, kinds,
-                Set.of(ProgramEdgeKind.ARGUMENT_FLOW, ProgramEdgeKind.RETURN_FLOW), ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW);
+        requireCapabilityForAnyEdge(capabilities, kinds, Set.of(ProgramEdgeKind.DEF_USE, ProgramEdgeKind.DATA_FLOW), ProgramGraphCapability.LOCAL_DATA_FLOW);
+        requireCapabilityForAnyEdge(capabilities, kinds, Set.of(ProgramEdgeKind.ARGUMENT_FLOW, ProgramEdgeKind.RETURN_FLOW), ProgramGraphCapability.INTERPROCEDURAL_DATA_FLOW);
         requireCapabilityForEdge(capabilities, kinds, ProgramEdgeKind.TAINT_FLOW, ProgramGraphCapability.SECURITY_TAINT);
 
         requireFactsForCapability(capabilities, ProgramGraphCapability.CALL_GRAPH, kinds.contains(ProgramEdgeKind.CALL), "CALL edge");
@@ -279,51 +272,30 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         }
     }
 
-    private static void requireCapabilityForEdge(
-            Set<ProgramGraphCapability> capabilities,
-            Set<ProgramEdgeKind> kinds,
-            ProgramEdgeKind edge,
-            ProgramGraphCapability capability
-    ) throws IOException {
-        if (kinds.contains(edge) && !capabilities.contains(capability)) {
-            throw new IOException("sidecar contains " + edge + " facts without declaring capability " + capability);
-        }
+    private static void requireCapabilityForEdge(Set<ProgramGraphCapability> capabilities,
+                                                 Set<ProgramEdgeKind> kinds,
+                                                 ProgramEdgeKind edge,
+                                                 ProgramGraphCapability capability) throws IOException {
+        if (kinds.contains(edge) && !capabilities.contains(capability)) throw new IOException("sidecar contains " + edge + " facts without declaring capability " + capability);
     }
 
-    private static void requireCapabilityForAnyEdge(
-            Set<ProgramGraphCapability> capabilities,
-            Set<ProgramEdgeKind> kinds,
-            Set<ProgramEdgeKind> edges,
-            ProgramGraphCapability capability
-    ) throws IOException {
-        if (edges.stream().anyMatch(kinds::contains) && !capabilities.contains(capability)) {
-            throw new IOException("sidecar contains " + edges + " facts without declaring capability " + capability);
-        }
+    private static void requireCapabilityForAnyEdge(Set<ProgramGraphCapability> capabilities,
+                                                    Set<ProgramEdgeKind> kinds,
+                                                    Set<ProgramEdgeKind> edges,
+                                                    ProgramGraphCapability capability) throws IOException {
+        if (edges.stream().anyMatch(kinds::contains) && !capabilities.contains(capability)) throw new IOException("sidecar contains " + edges + " facts without declaring capability " + capability);
     }
 
-    private static void requireFactsForCapability(
-            Set<ProgramGraphCapability> capabilities,
-            ProgramGraphCapability capability,
-            boolean present,
-            String evidence
-    ) throws IOException {
-        if (capabilities.contains(capability) && !present) {
-            throw new IOException("sidecar declares capability " + capability + " without required " + evidence);
-        }
-    }
-
-    private static void requireHeader(Path file, List<String> lines, String expected) throws IOException {
-        if (lines.isEmpty() || !expected.equals(lines.getFirst())) {
-            throw new IOException(file.getFileName() + " has an incompatible header; expected: " + expected);
-        }
+    private static void requireFactsForCapability(Set<ProgramGraphCapability> capabilities,
+                                                  ProgramGraphCapability capability,
+                                                  boolean present,
+                                                  String evidence) throws IOException {
+        if (capabilities.contains(capability) && !present) throw new IOException("sidecar declares capability " + capability + " without required " + evidence);
     }
 
     private static <E extends Enum<E>> E enumValue(Class<E> type, String value, Path file, int line, String label) throws IOException {
-        try {
-            return Enum.valueOf(type, value);
-        } catch (IllegalArgumentException exception) {
-            throw rowFailure(file, line, "unknown " + label + ": " + value);
-        }
+        try { return Enum.valueOf(type, value); }
+        catch (IllegalArgumentException exception) { throw rowFailure(file, line, "unknown " + label + ": " + value); }
     }
 
     private static String required(Properties properties, String key) throws IOException {
@@ -333,11 +305,8 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
     }
 
     private static int integer(String value, String label) {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(label + " must be an integer", exception);
-        }
+        try { return Integer.parseInt(value); }
+        catch (NumberFormatException exception) { throw new IllegalArgumentException(label + " must be an integer", exception); }
     }
 
     private static String field(String value) {
@@ -347,30 +316,18 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
             char current = value.charAt(index);
             if (escaped) {
                 result.append(switch (current) {
-                    case 't' -> '\t';
-                    case 'n' -> '\n';
-                    case 'r' -> '\r';
-                    case '\\' -> '\\';
-                    default -> current;
+                    case 't' -> '\t'; case 'n' -> '\n'; case 'r' -> '\r'; case '\\' -> '\\'; default -> current;
                 });
                 escaped = false;
-            } else if (current == '\\') {
-                escaped = true;
-            } else {
-                result.append(current);
-            }
+            } else if (current == '\\') escaped = true;
+            else result.append(current);
         }
         if (escaped) result.append('\\');
         return result.toString().trim();
     }
 
-    private static String nullable(String value) {
-        return value.isBlank() ? null : value;
-    }
-
-    private static IOException rowFailure(Path file, int line, String message) {
-        return new IOException(file.getFileName() + ":" + line + ": " + message);
-    }
+    private static String nullable(String value) { return value.isBlank() ? null : value; }
+    private static IOException rowFailure(Path file, int line, String message) { return new IOException(file.getFileName() + ":" + line + ": " + message); }
 
     private static String sha256(Path... files) throws IOException {
         try {
@@ -378,11 +335,10 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
             byte[] buffer = new byte[8192];
             for (Path file : files) {
                 digest.update(file.getFileName().toString().getBytes(StandardCharsets.UTF_8));
-                try (var input = Files.newInputStream(file)) {
+                try (BoundedInputStream input = new BoundedInputStream(
+                        Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), MAX_FILE_BYTES, "advanced program sidecar hash")) {
                     int read;
-                    while ((read = input.read(buffer)) >= 0) {
-                        if (read > 0) digest.update(buffer, 0, read);
-                    }
+                    while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
                 }
             }
             return HexFormat.of().formatHex(digest.digest());
@@ -391,14 +347,9 @@ public final class FileProgramGraphProvider implements ProgramGraphProvider {
         }
     }
 
-    private record Metadata(
-            String snapshotId,
-            String providerId,
-            String providerType,
-            String providerVersion,
-            String indexRunId,
-            Set<ProgramGraphCapability> capabilities
-    ) {
+    private record Metadata(String snapshotId, String providerId, String providerType,
+                            String providerVersion, String indexRunId,
+                            Set<ProgramGraphCapability> capabilities) {
         private Metadata {
             if (providerType == null || providerType.isBlank()) providerType = "PROGRAM_GRAPH_SIDECAR";
             capabilities = Set.copyOf(capabilities);

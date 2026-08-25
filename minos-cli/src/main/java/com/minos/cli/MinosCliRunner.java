@@ -63,7 +63,9 @@ public final class MinosCliRunner {
         Objects.requireNonNull(error, "error");
         if (isStatelessHelpRequest(arguments)) return runStatelessHelp(arguments, output, error);
         if (isIdeHandshake(arguments)) return runIdeHandshake(arguments, output, error);
-        return run(MinosApplication.open(home), arguments, output, error);
+        try (MinosApplication application = MinosApplication.open(home)) {
+            return run(application, arguments, output, error);
+        }
     }
 
     public static int run(MinosApplication application, String[] arguments, Appendable output, Appendable error) throws IOException {

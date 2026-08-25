@@ -1,33 +1,36 @@
-FROM rust:1.97.1-bookworm AS rust-toolchain
-FROM golang:1.26.5-bookworm AS go-toolchain
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS dotnet-toolchain
+# rust:1.97.1-bookworm
+FROM rust@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3 AS rust-toolchain
+# golang:1.26.5-bookworm
+FROM golang@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS go-toolchain
+# 10.0.302-noble
+FROM mcr.microsoft.com/dotnet/sdk@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS dotnet-toolchain
 
-FROM eclipse-temurin:24-jdk
+# eclipse-temurin:24-jdk
+FROM eclipse-temurin@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e
 
 ARG TARGETARCH
 ARG MINOS_VERSION=dev
 ARG MINOS_GIT_COMMIT=unknown
 ARG MINOS_BUILD_TIMESTAMP=unknown
+ARG UBUNTU_APT_SNAPSHOT=20260814T000000Z
 ARG NODE_VERSION=20.20.2
 ARG MAVEN_VERSION=3.9.16
-ARG COURSIER_VERSION=2.1.25-M26
+ARG MAVEN_ZIP_SHA256=5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce
+ARG COURSIER_LAUNCHERS_COMMIT=15f36c167c30be237105f923151adaf177e7ee61
+ARG COURSIER_LINUX_SHA256=62b141b186e4dfdef03af64c36bdcdfeaab2df30de14950ca220e6e43e72c26b
+ARG SCIP_CLANG_LINUX_SHA256=06fd18c576f979a726c651594644ec4a35db4f471f2160b3f72eb89fa6001784
+ARG RUST_ANALYZER_LINUX_GZ_SHA256=ac4f42ddbbd040d75d847e991894776485783e28beb744b9719a660a99abe115
 ARG SCIP_TYPESCRIPT_VERSION=0.4.0
 ARG SCIP_JAVA_VERSION=0.13.1
 ARG SCIP_JAVA_STANDALONE_REPORTED_VERSION=0.0.0-SNAPSHOT
 ARG SCIP_PYTHON_VERSION=0.6.6
 ARG SCIP_CLANG_VERSION=0.4.0
 ARG SCIP_DOTNET_VERSION=0.2.14
+ARG SCIP_DOTNET_NUPKG_SHA256=e2d183fe39b9a56cb8bb2ed2d8b96828fb5434c6db084002bf8a5c6009391b52
 ARG SCIP_GO_VERSION=0.2.7
 ARG RUST_ANALYZER_RELEASE=2026-07-27
 ARG RUST_ANALYZER_VERSION=0.3.2989
 ARG RUST_ANALYZER_COMMIT=12c3381
-
-LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
-      org.opencontainers.image.version="${MINOS_VERSION}" \
-      org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
-      org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
-      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence" \
-      io.minos.providers.prepared="true"
 
 ENV MINOS_HOME=/var/lib/minos \
     MINOS_RUNTIME_LOCATION=docker \
@@ -46,11 +49,21 @@ ENV MINOS_HOME=/var/lib/minos \
 USER root
 RUN test "${TARGETARCH}" = "amd64" || (echo "MINOS M29 provider-complete image is qualified only for linux/amd64" >&2; exit 1)
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+# Resolve OS packages from one immutable Ubuntu archive snapshot instead of the moving archive/security mirrors.
+RUN set -eux; \
+    snapshot="https://snapshot.ubuntu.com/ubuntu/${UBUNTU_APT_SNAPSHOT}"; \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+      sed -i -E "s#https?://(archive|security)\\.ubuntu\\.com/ubuntu/?#${snapshot}/#g" /etc/apt/sources.list.d/ubuntu.sources; \
+      grep -F "${snapshot}" /etc/apt/sources.list.d/ubuntu.sources >/dev/null; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i -E "s#https?://(archive|security)\\.ubuntu\\.com/ubuntu/?#${snapshot}/#g" /etc/apt/sources.list; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
        bash ca-certificates curl file git gzip python3 python3-pip tar unzip xz-utils \
-       build-essential pkg-config libicu-dev \
-    && rm -rf /var/lib/apt/lists/*
+       build-essential pkg-config libicu-dev; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
 COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
@@ -64,16 +77,15 @@ RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
     && dotnet --version
 
 # scip-java's Maven build is executed at runtime against a writable staging copy of the project.
-# Package an exact Maven 3.9 line in the image so the provider never depends on a host Maven install.
+# Package an exact Maven distribution and verify it against a checksum owned by this Dockerfile.
 RUN set -eux; \
     maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \
     maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
     curl -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
-    curl -fsSLo /tmp/maven.sha512 "${maven_base}/${maven_archive}.sha512"; \
-    printf '%s  %s\n' "$(cat /tmp/maven.sha512)" "/tmp/${maven_archive}" | sha512sum -c -; \
+    printf '%s  %s\n' "${MAVEN_ZIP_SHA256}" "/tmp/${maven_archive}" | sha256sum -c -; \
     unzip -q "/tmp/${maven_archive}" -d /opt; \
     ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \
-    rm -f "/tmp/${maven_archive}" /tmp/maven.sha512; \
+    rm -f "/tmp/${maven_archive}"; \
     mvn --version | grep -F "Apache Maven ${MAVEN_VERSION}"
 
 # scip-typescript 0.4.0 documents Node 18/20 support. Keep the last pinned Node 20 line
@@ -89,7 +101,8 @@ RUN set -eux; \
     node --version; npm --version
 
 RUN set -eux; \
-    curl -fsSLo /tmp/cs.gz "https://github.com/coursier/coursier/releases/download/v${COURSIER_VERSION}/cs-x86_64-pc-linux.gz"; \
+    curl -fsSLo /tmp/cs.gz "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_LAUNCHERS_COMMIT}/cs-x86_64-pc-linux.gz"; \
+    printf '%s  %s\n' "${COURSIER_LINUX_SHA256}" /tmp/cs.gz | sha256sum -c -; \
     gunzip /tmp/cs.gz; \
     install -m 0755 /tmp/cs /usr/local/bin/cs; \
     rm -f /tmp/cs; \
@@ -97,6 +110,7 @@ RUN set -eux; \
 
 RUN set -eux; \
     curl -fsSLo /tmp/scip-clang "https://github.com/sourcegraph/scip-clang/releases/download/v${SCIP_CLANG_VERSION}/scip-clang-x86_64-linux"; \
+    printf '%s  %s\n' "${SCIP_CLANG_LINUX_SHA256}" /tmp/scip-clang | sha256sum -c -; \
     install -m 0755 /tmp/scip-clang /usr/local/bin/scip-clang; \
     rm -f /tmp/scip-clang; \
     scip-clang --version | grep -F "${SCIP_CLANG_VERSION}"
@@ -105,6 +119,7 @@ RUN set -eux; \
 # commit are artifact provenance and remain pinned by the download URL + provider inventory.
 RUN set -eux; \
     curl -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
+    printf '%s  %s\n' "${RUST_ANALYZER_LINUX_GZ_SHA256}" /tmp/rust-analyzer.gz | sha256sum -c -; \
     gunzip /tmp/rust-analyzer.gz; \
     install -m 0755 /tmp/rust-analyzer /usr/local/bin/rust-analyzer; \
     rm -f /tmp/rust-analyzer; \
@@ -112,31 +127,59 @@ RUN set -eux; \
     grep -F "rust-analyzer ${RUST_ANALYZER_VERSION}" /tmp/rust-analyzer.version; \
     rm -f /tmp/rust-analyzer.version
 
-RUN set -eux; \
-    mkdir -p "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \
-    npm install --prefix "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}" \
-      --no-audit --no-fund --ignore-scripts "@sourcegraph/scip-typescript@${SCIP_TYPESCRIPT_VERSION}"; \
-    test -x "/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}/node_modules/.bin/scip-typescript"; \
-    mkdir -p "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \
-    npm install --prefix "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}" \
-      --no-audit --no-fund "@sourcegraph/scip-python@${SCIP_PYTHON_VERSION}"; \
-    test -x "/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}/node_modules/.bin/scip-python"; \
-    python3 --version; pip3 --version
+COPY scip-typescript-package-lock.json /tmp/minos-locks/scip-typescript-package-lock.json
+COPY scip-python-package-lock.json /tmp/minos-locks/scip-python-package-lock.json
 
 RUN set -eux; \
-    dotnet tool install --tool-path "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}" \
-      scip-dotnet --version "${SCIP_DOTNET_VERSION}"; \
-    printf '%s\n' "${SCIP_DOTNET_VERSION}" > "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/.minos-version"; \
-    test -x "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet"; \
-    GOBIN="/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}" \
+    ts_root="/opt/minos/provider-tools/scip-typescript/${SCIP_TYPESCRIPT_VERSION}"; \
+    py_root="/opt/minos/provider-tools/scip-python/${SCIP_PYTHON_VERSION}"; \
+    mkdir -p "$ts_root" "$py_root"; \
+    printf '{"private":true,"dependencies":{"@sourcegraph/scip-typescript":"%s"}}\n' "${SCIP_TYPESCRIPT_VERSION}" > "$ts_root/package.json"; \
+    cp /tmp/minos-locks/scip-typescript-package-lock.json "$ts_root/package-lock.json"; \
+    npm ci --prefix "$ts_root" --no-audit --no-fund --ignore-scripts; \
+    test -x "$ts_root/node_modules/.bin/scip-typescript"; \
+    printf '{"private":true,"dependencies":{"@sourcegraph/scip-python":"%s"}}\n' "${SCIP_PYTHON_VERSION}" > "$py_root/package.json"; \
+    cp /tmp/minos-locks/scip-python-package-lock.json "$py_root/package-lock.json"; \
+    npm ci --prefix "$py_root" --no-audit --no-fund --ignore-scripts; \
+    test -x "$py_root/node_modules/.bin/scip-python"; \
+    rm -rf /tmp/minos-locks; \
+    python3 --version; pip3 --version
+
+# Match the native runtime provenance contract: verify the exact NuGet tool package before
+# allowing dotnet to install from a local-only package source. Go uses the public checksum DB
+# with every private/no-sumdb bypass explicitly cleared.
+RUN set -eux; \
+    dotnet_root="/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}"; \
+    nuget_source=/tmp/minos-pinned-nuget; \
+    nuget_package="${nuget_source}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
+    mkdir -p "$nuget_source" "$dotnet_root"; \
+    curl -fsSLo "$nuget_package" \
+      "https://api.nuget.org/v3-flatcontainer/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
+    printf '%s  %s\n' "${SCIP_DOTNET_NUPKG_SHA256}" "$nuget_package" | sha256sum -c -; \
+    printf '%s\n' \
+      '<?xml version="1.0" encoding="utf-8"?>' \
+      '<configuration><packageSources><clear/><add key="minos-pinned" value="/tmp/minos-pinned-nuget"/></packageSources></configuration>' \
+      > /tmp/minos-nuget.config; \
+    dotnet tool install --tool-path "$dotnet_root" scip-dotnet --version "${SCIP_DOTNET_VERSION}" \
+      --configfile /tmp/minos-nuget.config --no-cache --ignore-failed-sources; \
+    rm -rf "$nuget_source" /tmp/minos-nuget.config; \
+    test -x "$dotnet_root/scip-dotnet"; \
+    go_root="/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}"; \
+    mkdir -p "$go_root"; \
+    GOBIN="$go_root" \
+      GOPROXY="https://proxy.golang.org" \
+      GOSUMDB="sum.golang.org" \
+      GONOSUMDB="" \
+      GOPRIVATE="" \
+      GONOPROXY="" \
       go install "github.com/scip-code/scip-go/cmd/scip-go@v${SCIP_GO_VERSION}"; \
-    printf '%s\n' "${SCIP_GO_VERSION}" > "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/.minos-version"; \
-    test -x "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}/scip-go"
+    test -x "$go_root/scip-go"
 
 # Build a standalone scip-java launcher while network is available. The Maven coordinate is
 # verified independently because the standalone wrapper reports 0.0.0-SNAPSHOT even though it
-# embeds the exact 0.13.1 artifact. The standalone launcher still materializes its embedded JAR
-# resources into COURSIER_CACHE at startup; Compose points that cache at writable MINOS/tmp roots.
+# embeds the exact 0.13.1 artifact. Coursier coordinates are immutable upstream inputs but their
+# full transitive graph is not represented by a repository-owned lockfile; the produced executable
+# is therefore recorded in provider evidence rather than advertised as bit-for-bit reproducible.
 # Project dependency resolution for the real Maven build is a separate indexing concern handled by
 # the ephemeral admin plane; the persistent MCP query plane remains networkless.
 RUN set -eux; \
@@ -179,22 +222,57 @@ RUN set -eux; \
       '  "platform": "linux/amd64",' \
       "  \"minosVersion\": \"${MINOS_VERSION}\"," \
       "  \"minosCommit\": \"${MINOS_GIT_COMMIT}\"," \
+      "  \"aptSnapshot\": \"${UBUNTU_APT_SNAPSHOT}\"," \
       '  "networkPolicy": "provider payload is build-time prepared; persistent query runtime network none; ephemeral indexing may resolve project dependencies",' \
       "  \"buildTools\": {\"maven\":\"${MAVEN_VERSION}\"}," \
       '  "providers": [' \
-      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; embedded JARs materialize into a writable runtime COURSIER_CACHE without provider downloads; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
-      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
-      "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm\"}," \
-      "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary\"}," \
-      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"dotnet tool\",\"sdk\":\"10.0.302\"}," \
-      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go install\",\"toolchain\":\"1.26.5\"}," \
+      "    {\"id\":\"scip-java\",\"version\":\"${SCIP_JAVA_VERSION}\",\"reportedVersion\":\"${SCIP_JAVA_STANDALONE_REPORTED_VERSION}\",\"delivery\":\"Coursier standalone bootstrap\",\"limitation\":\"standalone CLI reports embedded build metadata; artifact provenance is Maven coordinate org.scip-code:scip-java:${SCIP_JAVA_VERSION}; Coursier transitive graph is not repository-lockfile-backed; produced binary hash is retained as build evidence; real Maven indexing executes from a writable MINOS staging tree and may resolve project dependencies\"}," \
+      "    {\"id\":\"scip-typescript\",\"version\":\"${SCIP_TYPESCRIPT_VERSION}\",\"delivery\":\"npm-lockfile+ci\",\"runtime\":\"Node ${NODE_VERSION}\",\"limitation\":\"provider 0.4.0 documents Node 18/20 only\"}," \
+      "    {\"id\":\"scip-python\",\"version\":\"${SCIP_PYTHON_VERSION}\",\"delivery\":\"npm-lockfile+ci\"}," \
+      "    {\"id\":\"scip-clang\",\"version\":\"${SCIP_CLANG_VERSION}\",\"delivery\":\"GitHub release binary+sha256\"}," \
+      "    {\"id\":\"scip-dotnet\",\"version\":\"${SCIP_DOTNET_VERSION}\",\"delivery\":\"pinned NuGet nupkg+sha256 local source\",\"sdk\":\"10.0.302\"}," \
+      "    {\"id\":\"scip-go\",\"version\":\"${SCIP_GO_VERSION}\",\"delivery\":\"go proxy+sumdb\",\"toolchain\":\"1.26.5\"}," \
       "    {\"id\":\"rust-analyzer-scip\",\"version\":\"${RUST_ANALYZER_VERSION}\",\"release\":\"${RUST_ANALYZER_RELEASE}\",\"commit\":\"${RUST_ANALYZER_COMMIT}\",\"toolchain\":\"1.97.1\"}" \
       '  ]' \
       '}' > /opt/minos/provider-evidence/provider-inventory.json; \
     chmod -R a+rX /opt/minos/provider-tools /opt/minos/provider-evidence
 
+# LABEL lives here, not at the top of the file, on purpose: org.opencontainers.image.version/
+# revision/created change on every build (every release, every commit), and Docker's layer cache
+# is a strict linear chain -- one invalidated layer invalidates every layer after it regardless
+# of whether that layer's own instruction actually changed. A LABEL this early used to invalidate
+# every expensive toolchain-install RUN step below on every single update, defeating the caching
+# those steps were written to rely on and turning what should be a fast rebuild into a full
+# from-scratch one every time. Keeping it here, alongside the other version-specific content that
+# already had to live this late (COPY minos.jar, StampManagedProviderMarkers), means only these
+# last few cheap layers rebuild when just the version/commit changes.
+LABEL org.opencontainers.image.title="MINOS Code Intelligence MCP" \
+      org.opencontainers.image.version="${MINOS_VERSION}" \
+      org.opencontainers.image.revision="${MINOS_GIT_COMMIT}" \
+      org.opencontainers.image.created="${MINOS_BUILD_TIMESTAMP}" \
+      org.opencontainers.image.source="https://github.com/FTurleque/minos-code-intelligence" \
+      io.minos.providers.prepared="true"
+
 WORKDIR /opt/minos
 COPY minos.jar /opt/minos/minos.jar
+
+# scip-dotnet/scip-go above were installed directly via `dotnet tool install`/`go install`, not
+# through ManagedPolyglotScipRuntimeManager's own install path -- minos.jar was not even copied
+# into the image yet at that point, and moving the COPY earlier would invalidate these expensive,
+# otherwise-cacheable provider layers on every code change. Stamp the same
+# .minos-install-source/.minos-integrity.sha256 markers the native install path would have
+# written, now that the jar is available, reusing its exact digest logic rather than
+# reimplementing it in shell. Without this, `tools verify`/`inspect` report both providers
+# INVALID on every Docker image, forever, even though the pinned/checksummed install above is no
+# less trustworthy than the native one.
+RUN java -cp /opt/minos/minos.jar com.minos.adapter.scip.runtime.StampManagedProviderMarkers \
+      "/opt/minos/provider-tools/scip-dotnet/${SCIP_DOTNET_VERSION}" "${SCIP_DOTNET_VERSION}" \
+      "nuget.org-pinned-nupkg-sha256" \
+    && java -cp /opt/minos/minos.jar com.minos.adapter.scip.runtime.StampManagedProviderMarkers \
+      "/opt/minos/provider-tools/scip-go/${SCIP_GO_VERSION}" "${SCIP_GO_VERSION}" \
+      "proxy.golang.org+sum.golang.org" \
+    && chmod -R a+rX /opt/minos/provider-tools
+
 RUN chmod 0444 /opt/minos/minos.jar \
     && mkdir -p /var/lib/minos \
     && chown 10001:10001 /var/lib/minos

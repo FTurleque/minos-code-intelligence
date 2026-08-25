@@ -4,6 +4,7 @@ import com.minos.domain.CodeEntityRef;
 import com.minos.domain.Evidence;
 import com.minos.domain.InformationNature;
 import com.minos.domain.Origin;
+import com.minos.domain.ProbabilityInvariant;
 import com.minos.domain.Relationship;
 import com.minos.domain.RelationshipKind;
 import com.minos.domain.ResolutionStatus;
@@ -53,9 +54,7 @@ public record RelationshipResult(
         if (target != null && resolutionStatus == ResolutionStatus.UNRESOLVED) {
             throw new IllegalArgumentException("resolved target cannot have UNRESOLVED status");
         }
-        if (confidence != null && (confidence < 0.0 || confidence > 1.0)) {
-            throw new IllegalArgumentException("confidence must be between 0 and 1");
-        }
+        ProbabilityInvariant.requireOptional(confidence, "confidence");
         evidence = List.copyOf(Objects.requireNonNull(evidence, "evidence"));
         if (nature != InformationNature.FACTUAL && confidence == null) {
             throw new IllegalArgumentException("derived or heuristic relationship requires confidence");

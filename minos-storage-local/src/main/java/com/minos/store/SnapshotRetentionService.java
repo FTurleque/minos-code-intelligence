@@ -13,11 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Snapshot-retention mechanism separated from persistence.
- *
- * <p>M16 adds a measured count-based policy while preserving the active snapshot unconditionally.</p>
- */
+/** Snapshot-retention mechanism separated from persistence. */
 public final class SnapshotRetentionService {
 
     private final SnapshotRepository repository;
@@ -32,15 +28,23 @@ public final class SnapshotRetentionService {
                 .toList();
     }
 
-    /**
-     * Deletes only explicitly named historical snapshots and refuses to remove the active file.
-     */
+    /** Deletes only explicitly named historical snapshots and refuses to remove the active file. */
     public int deleteHistoricalSnapshots(
             UUID projectId,
             Collection<String> fileNames,
             String activeFileName
     ) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            return deleteHistoricalSnapshotsLocked(projectId, fileNames, activeFileName);
+        }
+    }
+
+    private int deleteHistoricalSnapshotsLocked(
+            UUID projectId,
+            Collection<String> fileNames,
+            String activeFileName
+    ) throws IOException {
         Objects.requireNonNull(fileNames, "fileNames");
         Set<String> requested = fileNames.stream()
                 .map(name -> Objects.requireNonNull(name, "fileNames must not contain null"))
@@ -59,20 +63,34 @@ public final class SnapshotRetentionService {
         return deleted;
     }
 
-    /**
-     * Applies deterministic count-based retention to historical snapshots.
-     *
-     * <p>The active file is never counted against the historical allowance and is never deleted.
-     * Historical snapshots are ordered newest-first using last-modified time then file name for a
-     * stable tie-breaker.</p>
-     */
+    /** Applies deterministic count-based retention to historical snapshots. */
     public RetentionResult applyPolicy(
             UUID projectId,
             String activeFileName,
             SnapshotRetentionPolicy policy
     ) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            return applyPolicyLocked(projectId, activeFileName, policy);
+        }
+    }
+
+    RetentionResult applyPolicyLocked(
+            UUID projectId,
+            String activeFileName,
+            SnapshotRetentionPolicy policy
+    ) throws IOException {
+        return applyPolicyLocked(projectId, activeFileName, policy, Set.of());
+    }
+
+    RetentionResult applyPolicyLocked(
+            UUID projectId,
+            String activeFileName,
+            SnapshotRetentionPolicy policy,
+            Set<String> protectedFileNamePrefixes
+    ) throws IOException {
         Objects.requireNonNull(policy, "policy");
+        Objects.requireNonNull(protectedFileNamePrefixes, "protectedFileNamePrefixes");
         if (activeFileName == null || activeFileName.isBlank()) {
             throw new IllegalArgumentException("activeFileName must not be blank");
         }
@@ -84,22 +102,32 @@ public final class SnapshotRetentionService {
         }
 
         files.removeIf(path -> path.getFileName().toString().equals(activeFileName));
+        List<Path> protectedHistorical = files.stream()
+                .filter(path -> protectedFileNamePrefixes.stream()
+                        .anyMatch(path.getFileName().toString()::startsWith))
+                .toList();
+        files.removeAll(protectedHistorical);
         files.sort(Comparator
                 .comparing(SnapshotRetentionService::lastModifiedSafe)
                 .reversed()
                 .thenComparing(path -> path.getFileName().toString()));
 
         int keep = Math.min(policy.maxHistoricalSnapshots(), files.size());
-        List<String> retained = files.subList(0, keep).stream()
+        List<String> retained = new ArrayList<>();
+        files.subList(0, keep).stream()
                 .map(path -> path.getFileName().toString())
-                .toList();
+                .forEach(retained::add);
+        protectedHistorical.stream()
+                .map(path -> path.getFileName().toString())
+                .sorted()
+                .forEach(retained::add);
         List<String> deleted = new ArrayList<>();
         for (Path path : files.subList(keep, files.size())) {
             if (Files.deleteIfExists(path)) {
                 deleted.add(path.getFileName().toString());
             }
         }
-        return new RetentionResult(activeFileName, retained, List.copyOf(deleted));
+        return new RetentionResult(activeFileName, List.copyOf(retained), List.copyOf(deleted));
     }
 
     private static FileTime lastModifiedSafe(Path path) {

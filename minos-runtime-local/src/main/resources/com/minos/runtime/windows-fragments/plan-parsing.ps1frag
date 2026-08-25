@@ -1,0 +1,29 @@
+        $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1)
+    }
+    # The plan contains the provider argv and explicit environment, both of which may carry
+    # credentials. Consume it exactly once and remove it before any untrusted provider process is
+    # resumed so secrets never become retained run diagnostics.
+    Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    return $values
+}
+
+function Decode([string] $Value) {
+    return [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Value))
+}
+
+function Read-List($Values, [string] $Prefix) {
+    $count = [int]$Values["$Prefix.count"]
+    $result = New-Object System.Collections.Generic.List[string]
+    for ($index = 0; $index -lt $count; $index++) {
+        $result.Add((Decode ([string]$Values["$Prefix.$index"])))
+    }
+    return [string[]]$result.ToArray()
+}
+
+function Read-Environment($Values) {
+    $count = [int]$Values['environment.count']
+    $result = New-Object System.Collections.Generic.List[string]
+    for ($index = 0; $index -lt $count; $index++) {
+        $key = Decode ([string]$Values["environment.$index.key"])
+        $value = Decode ([string]$Values["environment.$index.value"])
+        if ([string]::IsNullOrEmpty($key) -or $key.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]0) -ge 0) {

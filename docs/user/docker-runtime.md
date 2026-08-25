@@ -1,6 +1,6 @@
 # Runtime Docker autonome MINOS
 
-> État M29 : S3/S4 sont qualifiés exact-head sur `3df1b40ca0daf50779596f6e955d966ed5eb4973`. S5 est implémenté sur un HEAD plus récent et attend sa qualification `run-s5.ps1`. Cette surface ne constitue pas encore une claim de parité native/Docker ni une fonctionnalité publiée de `1.0.1`.
+> **État courant : M29 est terminé et intégré.** Les références S3/S4/S5 ci-dessous sont des checkpoints historiques de qualification, pas l'état produit actuel. Le runtime Docker fait partie du routage `native|docker` décrit par [`STATUS.md`](../STATUS.md). Les claims de sécurité et de supply-chain restent capability-honest : MINOS ne revendique pas une reproductibilité bit-à-bit du bootstrap Coursier `scip-java` tant que son graphe transitif n'est pas verrouillé par un lockfile possédé par le dépôt.
 
 M29 sépare volontairement le runtime Docker en plusieurs plans afin que l'administration et l'indexation puissent écrire l'état MINOS et les artefacts de build sans rendre le serveur MCP mutable.
 
@@ -39,7 +39,7 @@ N:/workspace-dev <-> /workspace/projects
 
 Le registre persiste `rootRelativePath`, pas le chemin physique host/container. Dans Docker, les commandes utilisent `/workspace/projects/...`.
 
-## Provider-complete image M29-S4
+## Image provider-complete
 
 L'image prépare au BUILD :
 
@@ -70,7 +70,21 @@ Le probe `minos-provider-probe` reste le gate explicite offline. La CLI ajoute l
 minos tools verify --all
 ```
 
-### Provenance scip-java
+## Provenance et reproductibilité
+
+La construction provider-complete applique désormais les invariants suivants :
+
+- images de base Docker épinglées par digest OCI ;
+- paquets Ubuntu résolus depuis l'archive datée `20260814T000000Z`, et non depuis les miroirs mouvants `archive/security` ;
+- Maven 3.9.16 vérifié par le SHA-256 possédé par le dépôt, identique au checksum du Maven Wrapper ;
+- Node vérifié par les `SHASUMS256` upstream ;
+- launcher Coursier, `scip-clang` et `rust-analyzer` vérifiés par SHA-256 attendu ;
+- `scip-typescript` et `scip-python` installés avec les lockfiles npm v3 du dépôt et `npm ci --ignore-scripts` ;
+- `scip-dotnet` téléchargé comme `.nupkg` 0.2.14 exact, vérifié par SHA-256, puis installé avec une configuration NuGet contenant `<clear/>` et uniquement la source locale vérifiée ;
+- `scip-go` installé à la version exacte via `proxy.golang.org` avec `sum.golang.org`, les bypass `GONOSUMDB`, `GOPRIVATE` et `GONOPROXY` étant vidés ;
+- les exécutables finaux sont hashés dans `provider-binary-sha256.txt`.
+
+### Limite Coursier `scip-java`
 
 La coordonnée autoritative reste :
 
@@ -79,6 +93,8 @@ org.scip-code:scip-java:0.13.1
 ```
 
 Le launcher standalone construit via Coursier retourne actuellement `scip-java version 0.0.0-SNAPSHOT`; cette chaîne n'est pas la provenance de l'artefact. L'inventaire conserve séparément la coordonnée/version attendue et le checksum du binaire réellement exécuté.
+
+La coordonnée et le launcher Coursier sont épinglés, mais le graphe transitif Maven résolu par Coursier n'est pas encore matérialisé par un lockfile repository-owned. **MINOS ne présente donc pas cette étape comme bit-for-bit reproducible.** Cette limitation est explicitement suivie dans le registre des risques ; elle n'affecte pas la query plane persistante, qui reste offline et n'installe aucun provider à l'exécution.
 
 JNA et le shim `javac` temporaire de scip-java ont besoin d'un emplacement exécutable. Le `/tmp` général reste `noexec`; les plans provider positionnent :
 
@@ -112,7 +128,7 @@ MAVEN_OPTS=-Dmaven.repo.local=/var/lib/minos/cache/maven/repository
 
 Le checkpoint historique `45536e2fc7d32ed67932e2715e458fa26a8239b1` avait précisément exposé `workspace/mvnw` / `error=2, No such file or directory`; ce défaut est corrigé.
 
-## Routage provider → module/build root M29-S5
+## Routage provider → module/build root
 
 Un projet enregistré peut être un monorepo dont la racine globale n'est pas une racine valide pour tous les providers. MINOS distingue désormais :
 
@@ -145,9 +161,9 @@ Les exécutions scoped d'un même provider sont isolées sous :
 
 Un chemin SCIP relatif au module comme `src/app.ts` est transformé en chemin projet `ui/app/src/app.ts` avant création du file ID et de l'identité structurelle path-based. Le snapshot projet n'est promu qu'après réussite de tous les scopes et du staging.
 
-## Configuration sémantique persistante S5
+## Configuration sémantique persistante
 
-Le workflow Docker persiste désormais la sélection sémantique dans le fichier runtime `.env` et dans `installation.json` **format 5**. La même configuration est injectée dans `minos-admin` et `minos-mcp`, afin qu'un query container recréé relise le même store.
+Le workflow Docker persiste la sélection sémantique dans le fichier runtime `.env` et dans `installation.json` **format 5**. La même configuration est injectée dans `minos-admin` et `minos-mcp`, afin qu'un query container recréé relise le même store.
 
 Modes packagés actuellement admis :
 
@@ -156,13 +172,13 @@ disabled
 local-hash
 ```
 
-Installation de qualification S5 :
+Exemple d'installation :
 
 ```powershell
 .\docker\scripts\prod-mcp-release.ps1 `
   -Action Install `
-  -Jar '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar' `
-  -Version '1.0.1-SNAPSHOT' `
+  -Jar '.\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar' `
+  -Version '1.1.0-SNAPSHOT' `
   -Commit (git rev-parse HEAD) `
   -ProjectsRoot 'N:\workspace-dev' `
   -SemanticProvider local-hash
@@ -219,9 +235,9 @@ $Docker = '.\docker\scripts\prod-mcp-release.ps1'
 
 Les sorties provider Java, TypeScript, C/C++, C#, Go et Rust restent sous le run directory MINOS. Tout provider exigeant une écriture dans `/workspace/projects` doit échouer et être corrigé ; le mount projet ne doit pas être rendu writable.
 
-## Qualification courante
+## Qualification et historique M29
 
-S3/S4 sont prouvés sur :
+L'état produit courant est celui de [`STATUS.md`](../STATUS.md) : **M29 terminé et intégré**. Les lignes suivantes sont conservées uniquement comme checkpoints historiques de la montée en qualification :
 
 ```text
 3df1b40ca0daf50779596f6e955d966ed5eb4973
@@ -229,14 +245,6 @@ M29-S3 DOCKER ADMINISTRATION QUALIFICATION SUCCESS
 M29-S4 PROVIDER-COMPLETE DOCKER IMAGE QUALIFICATION SUCCESS
 ```
 
-S5 n'est pas encore PASS. Le gate exact-head est :
+À ce checkpoint historique, S5 n'était pas encore PASS et `run-s5.ps1` devait encore prouver provider scopes `ui/app` + `ui/lib`, structured READY, `index-v2.bin`, semantic READY, hybrid `READY_WITH_SEMANTIC`, second index `NONE/NO_CHANGES`, forced FULL, recreate query et worktree inchangé.
 
-```powershell
-.\scripts\m29\run-s5.ps1 `
-  -ExpectedHead <HEAD> `
-  -ProjectsRoot N:\workspace-dev
-```
-
-Il doit prouver sur la même installation : provider scopes `ui/app` + `ui/lib`, structured READY, `index-v2.bin`, semantic READY, hybrid `READY_WITH_SEMANTIC`, second index `NONE/NO_CHANGES`, forced FULL, recreate query et worktree inchangé.
-
-Aucune parité native/Docker n'est revendiquée avant M29-S8.
+Cette phrase historique **ne décrit plus le HEAD courant** et ne doit pas être utilisée pour conclure que M29 ou la parité native/Docker sont encore en attente. Les nouveaux changements doivent être qualifiés sur leur propre exact HEAD par les gates actuels avant intégration.

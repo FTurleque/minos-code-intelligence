@@ -1,5 +1,6 @@
 package com.minos.incremental;
 
+import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexerNegotiationResult;
 import com.minos.orchestration.IndexingRun;
 
@@ -17,6 +18,8 @@ public record IncrementalIndexingResult(
         boolean fingerprintBaselineAdvanced,
         Optional<String> diagnostic
 ) {
+    private static final String REDACTED_DIAGNOSTIC = "internal diagnostic redacted";
+
     public IncrementalIndexingResult {
         Objects.requireNonNull(negotiation, "negotiation");
         Objects.requireNonNull(plan, "plan");
@@ -25,7 +28,7 @@ public record IncrementalIndexingResult(
             if (text.isBlank()) {
                 throw new IllegalArgumentException("diagnostic must not contain blank text");
             }
-            return text;
+            return PublicErrorMessages.sanitize(text, REDACTED_DIAGNOSTIC);
         });
 
         if (plan.mode() == com.minos.orchestration.IndexingMode.NONE && run.isPresent()) {

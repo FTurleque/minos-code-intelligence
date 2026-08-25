@@ -7,9 +7,7 @@ import com.minos.output.SymbolOutputFormat;
 import java.io.IOException;
 import java.util.Objects;
 
-/**
- * Récupération explicite du contenu complet d'un fichier source local.
- */
+/** Récupération explicite du contenu complet d'un fichier source local. */
 public final class GetSourceCommand {
 
     public static final String NAME = "get-source";
@@ -28,8 +26,7 @@ public final class GetSourceCommand {
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
-        if (arguments.length == 1
-                && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
+        if (arguments.length == 1 && ("--help".equals(arguments[0]) || "-h".equals(arguments[0]))) {
             output.append(USAGE).append('\n');
             return FindSymbolCommand.SUCCESS;
         }
@@ -47,7 +44,7 @@ public final class GetSourceCommand {
             return FindSymbolCommand.SUCCESS;
         } catch (Exception exception) {
             error.append("error: get-source failed: ")
-                    .append(failureMessage(exception)).append('\n');
+                    .append(CliCommandSupport.failureMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
     }
@@ -56,20 +53,13 @@ public final class GetSourceCommand {
         return USAGE;
     }
 
-    private static String failureMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message.replace('\r', ' ').replace('\n', ' ');
-    }
-
     private record Options(String projectId, String fileId, SymbolOutputFormat format) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 2) {
                 throw new IllegalArgumentException("expected <project> and <file-id>");
             }
-            String project = operand(arguments[0], "project");
-            String fileId = operand(arguments[1], "file-id");
+            String project = CliCommandSupport.operand(arguments[0], "project");
+            String fileId = CliCommandSupport.operand(arguments[1], "file-id");
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             if (arguments.length > 2) {
                 if (arguments.length != 4 || !"--format".equals(arguments[2])) {
@@ -78,13 +68,6 @@ public final class GetSourceCommand {
                 format = SymbolOutputFormat.parse(arguments[3]);
             }
             return new Options(project, fileId, format);
-        }
-
-        private static String operand(String value, String name) {
-            if (value == null || value.isBlank() || value.startsWith("-")) {
-                throw new IllegalArgumentException("invalid <" + name + "> operand");
-            }
-            return value;
         }
     }
 }

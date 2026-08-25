@@ -1,11 +1,14 @@
 package com.minos.orchestration;
 
 import com.minos.discovery.ProjectDiscovery.Language;
+import com.minos.orchestration.ExecutionPathIdentityProvider.IdentityPair;
 import com.minos.orchestration.IndexerNegotiationResult.IndexerSelection;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -27,10 +30,172 @@ public final class IndexingRuntimePorts {
     }
 
     /**
+     * Explicit observation of the authoritative active snapshot state.
+     *
+     * <p>The status deliberately distinguishes an authority that cannot be observed from an
+     * observable authority that currently has no active snapshot. This prevents persistent
+     * lifecycle metadata from treating a missing authoritative snapshot as an unsupported
+     * capability.</p>
+     */
+    public record ActiveSnapshotObservation(Status status, Optional<String> snapshotId) {
+        public enum Status {
+            UNSUPPORTED,
+            NO_ACTIVE_SNAPSHOT,
+            ACTIVE
+        }
+
+        public ActiveSnapshotObservation {
+            status = Objects.requireNonNull(status, "status");
+            snapshotId = Objects.requireNonNull(snapshotId, "snapshotId");
+            if (status == Status.ACTIVE) {
+                String id = snapshotId.orElseThrow(() ->
+                        new IllegalArgumentException("ACTIVE observation requires a snapshot id"));
+                if (id.isBlank()) {
+                    throw new IllegalArgumentException("active snapshot id must not be blank");
+                }
+            } else if (snapshotId.isPresent()) {
+                throw new IllegalArgumentException(status + " observation must not carry a snapshot id");
+            }
+        }
+
+        public static ActiveSnapshotObservation unsupported() {
+            return new ActiveSnapshotObservation(Status.UNSUPPORTED, Optional.empty());
+        }
+
+        public static ActiveSnapshotObservation noActiveSnapshot() {
+            return new ActiveSnapshotObservation(Status.NO_ACTIVE_SNAPSHOT, Optional.empty());
+        }
+
+        public static ActiveSnapshotObservation active(String snapshotId) {
+            return new ActiveSnapshotObservation(Status.ACTIVE, Optional.of(
+                    Objects.requireNonNull(snapshotId, "snapshotId")));
+        }
+    }
+
+    /**
      * La promotion fournie par ce port doit être atomique au sens de l'ADR-0006.
      */
     public interface SnapshotPromoter {
         void promote(UUID projectId, UUID runId, String stagedSnapshotId) throws Exception;
+
+        /**
+         * Observes the authoritative snapshot state when supported by this promoter.
+         *
+         * <p>The default is explicitly {@link ActiveSnapshotObservation.Status#UNSUPPORTED}; a
+         * supported promoter must return {@code NO_ACTIVE_SNAPSHOT} when its authority is
+         * observable but empty.</p>
+         */
+        default ActiveSnapshotObservation observeActiveSnapshot(UUID projectId) throws IOException {
+            return ActiveSnapshotObservation.unsupported();
+        }
+    }
+
+    /**
+     * Canonical identity captured before an execution request crosses into the provider runtime.
+     *
+     * <p>The canonical path protects against symlink retargeting while the stable filesystem-object
+     * identity detects replacement of a directory by another object at the same pathname. The
+     * identity can come from the Java provider key, Unix device/inode values or a trusted
+     * platform-specific runtime implementation. A strict authorization is captured only when both
+     * roots expose strong identities. If that proof is unavailable, {@link #tryCapture(Path, Path)}
+     * returns empty and local process execution treats the missing authorization as a hard launch
+     * failure.</p>
+     */
+    public record ExecutionPathAuthorization(
+            Path registeredProjectRoot,
+            Path projectRoot,
+            Optional<String> registeredProjectFileKey,
+            Optional<String> projectFileKey
+    ) {
+        public ExecutionPathAuthorization {
+            registeredProjectRoot = normalizedAbsolute(registeredProjectRoot, "registeredProjectRoot");
+            projectRoot = normalizedAbsolute(projectRoot, "projectRoot");
+            registeredProjectFileKey = Objects.requireNonNull(
+                    registeredProjectFileKey, "registeredProjectFileKey");
+            projectFileKey = Objects.requireNonNull(projectFileKey, "projectFileKey");
+            if (!projectRoot.startsWith(registeredProjectRoot)) {
+                throw new IllegalArgumentException(
+                        "authorized projectRoot must stay inside authorized registeredProjectRoot");
+            }
+        }
+
+        public static Optional<ExecutionPathAuthorization> tryCapture(
+                Path registeredProjectRoot,
+                Path projectRoot
+        ) {
+            try {
+                Path realRegisteredRoot = normalizedAbsolute(
+                        registeredProjectRoot, "registeredProjectRoot").toRealPath();
+                Path realProjectRoot = normalizedAbsolute(projectRoot, "projectRoot").toRealPath();
+                if (!realProjectRoot.startsWith(realRegisteredRoot)) {
+                    throw new IllegalArgumentException(
+                            "projectRoot resolves outside registeredProjectRoot");
+                }
+                Optional<IdentityPair> captured = StableFileSystemIdentity.capture(
+                        realRegisteredRoot, realProjectRoot);
+                if (captured.isEmpty()) {
+                    return Optional.empty();
+                }
+                IdentityPair identity = captured.orElseThrow();
+                return Optional.of(new ExecutionPathAuthorization(
+                        realRegisteredRoot,
+                        realProjectRoot,
+                        Optional.of(identity.registeredProjectIdentity()),
+                        Optional.of(identity.projectIdentity())));
+            } catch (IOException unavailable) {
+                // Some protocol/contract tests intentionally construct requests for paths that are
+                // not materialized. Local process execution rejects an absent authorization before
+                // launch; non-process ports can continue to use the historical request contract.
+                return Optional.empty();
+            }
+        }
+
+        /**
+         * Re-resolves the lexical request roots and fails closed if either identity changed or
+         * cannot be proven with a stable filesystem-object identifier.
+         */
+        public void verifyCurrent(Path currentRegisteredProjectRoot, Path currentProjectRoot) {
+            final Path realRegisteredRoot;
+            final Path realProjectRoot;
+            final Optional<String> currentRegisteredIdentity;
+            final Optional<String> currentProjectIdentity;
+            try {
+                realRegisteredRoot = normalizedAbsolute(
+                        currentRegisteredProjectRoot, "currentRegisteredProjectRoot").toRealPath();
+                realProjectRoot = normalizedAbsolute(currentProjectRoot, "currentProjectRoot").toRealPath();
+                Optional<IdentityPair> captured = StableFileSystemIdentity.capture(
+                        realRegisteredRoot, realProjectRoot);
+                if (captured.isEmpty()) {
+                    throw new IOException("stable filesystem identity is unavailable");
+                }
+                IdentityPair identity = captured.orElseThrow();
+                currentRegisteredIdentity = Optional.of(identity.registeredProjectIdentity());
+                currentProjectIdentity = Optional.of(identity.projectIdentity());
+            } catch (IOException failure) {
+                throw new IllegalStateException(
+                        "provider execution path identity cannot be revalidated before launch", failure);
+            }
+
+            if (!realRegisteredRoot.equals(registeredProjectRoot)
+                    || !realProjectRoot.equals(projectRoot)
+                    || !fileIdentityMatches(registeredProjectFileKey, currentRegisteredIdentity)
+                    || !fileIdentityMatches(projectFileKey, currentProjectIdentity)) {
+                throw new IllegalStateException(
+                        "provider execution path identity changed after canonical authorization");
+            }
+            if (!realProjectRoot.startsWith(realRegisteredRoot)) {
+                throw new IllegalStateException(
+                        "provider execution path no longer resolves inside the registered project root");
+            }
+        }
+
+        private static boolean fileIdentityMatches(Optional<String> authorized, Optional<String> current) {
+            return authorized.isPresent() && authorized.equals(current);
+        }
+
+        private static Path normalizedAbsolute(Path value, String label) {
+            return Objects.requireNonNull(value, label).toAbsolutePath().normalize();
+        }
     }
 
     /**
@@ -41,6 +206,11 @@ public final class IndexingRuntimePorts {
      * equal for a single-root project. In a polyglot monorepo, {@code projectRoot} can be a
      * nested module while {@code projectRelativeRoot} preserves its portable position inside
      * the registered project.</p>
+     *
+     * <p>{@code pathAuthorization} snapshots the canonical filesystem identity at request
+     * construction whenever both roots are materialized and expose strong filesystem-object
+     * identities. Local process execution requires this authorization and revalidates it
+     * immediately before {@code ProcessBuilder.start()}.</p>
      */
     public record IndexingExecutionRequest(
             UUID runId,
@@ -50,7 +220,8 @@ public final class IndexingRuntimePorts {
             Path projectRelativeRoot,
             IndexerSelection selection,
             IndexingMode mode,
-            List<String> changedFiles
+            List<String> changedFiles,
+            Optional<ExecutionPathAuthorization> pathAuthorization
     ) {
         public IndexingExecutionRequest {
             Objects.requireNonNull(runId, "runId");
@@ -71,12 +242,32 @@ public final class IndexingRuntimePorts {
                 throw new IllegalArgumentException("NONE is not an executable indexing mode");
             }
             changedFiles = immutableSortedPaths(changedFiles);
+            pathAuthorization = Objects.requireNonNull(pathAuthorization, "pathAuthorization");
+            if (pathAuthorization.isPresent()) {
+                pathAuthorization.orElseThrow().verifyCurrent(registeredProjectRoot, projectRoot);
+            }
             if (mode == IndexingMode.FULL && !changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("FULL execution must not expose a partial changed-file scope");
             }
             if (mode == IndexingMode.INCREMENTAL && changedFiles.isEmpty()) {
                 throw new IllegalArgumentException("INCREMENTAL execution requires changed files");
             }
+        }
+
+        /** Constructor preserving the historical request shape while capturing path identity. */
+        public IndexingExecutionRequest(
+                UUID runId,
+                UUID projectId,
+                Path registeredProjectRoot,
+                Path projectRoot,
+                Path projectRelativeRoot,
+                IndexerSelection selection,
+                IndexingMode mode,
+                List<String> changedFiles
+        ) {
+            this(runId, projectId, registeredProjectRoot, projectRoot, projectRelativeRoot,
+                    selection, mode, changedFiles,
+                    ExecutionPathAuthorization.tryCapture(registeredProjectRoot, projectRoot));
         }
 
         /** Compatibility constructor for historical single-root executions. */
