@@ -37,8 +37,19 @@ if ($Action -eq 'Install' -and -not (Test-Path -LiteralPath $MinosExe -PathType 
     throw "MINOS native executable not found: $MinosExe"
 }
 
-$LocalAppData = [Environment]::GetFolderPath('LocalApplicationData')
-$RoamingAppData = [Environment]::GetFolderPath('ApplicationData')
+# Reads the corresponding environment variable first, falling back to the WinAPI special-folder
+# lookup only if it is unset. Identical to the real folder on any actual Windows session, but
+# overridable per-process -- lets a test harness isolate Claude Desktop classic-vs-MSIX default
+# path selection from whatever profiles genuinely exist on the host running the test. Matches the
+# same seam already established in detect-mcp-clients.ps1.
+function Get-UserFolderPath([string] $EnvironmentVariableName, [string] $SpecialFolder) {
+    $Value = [Environment]::GetEnvironmentVariable($EnvironmentVariableName)
+    if (-not [string]::IsNullOrWhiteSpace($Value)) { return $Value }
+    return [Environment]::GetFolderPath($SpecialFolder)
+}
+
+$LocalAppData = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
+$RoamingAppData = Get-UserFolderPath 'APPDATA' 'ApplicationData'
 if ([string]::IsNullOrWhiteSpace($DataRoot)) {
     $DataRoot = Join-Path $LocalAppData 'MINOS\data'
 }
@@ -57,8 +68,14 @@ if ([string]::IsNullOrWhiteSpace($CopilotJetBrainsConfigPath)) {
     $CopilotJetBrainsConfigPath = Join-Path $LocalAppData 'github-copilot\intellij\mcp.json'
 }
 if ([string]::IsNullOrWhiteSpace($ClaudeDesktopConfigPath)) {
-    # Prefer the Windows Store (MSIX) sandboxed config path when present;
-    # fall back to the traditional standalone-installer path.
+    # Windows Store (MSIX) and the traditional standalone installer each keep their own,
+    # independent Claude Desktop profile directory. A user can have both present on disk --
+    # e.g. a Store install tried once and abandoned in favor of the standalone build -- with
+    # only one of them genuinely in use. Unconditionally preferring MSIX whenever its package
+    # directory merely exists silently configured a stale, unused profile while the real one
+    # (proven active: its own config file, cache, sessions, lockfile) was never touched. When
+    # both candidates exist, prefer whichever profile directory was actually written to more
+    # recently -- a real signal of current use, not just installation order.
     $PackagesDir = Join-Path $LocalAppData 'Packages'
     $MsixConfig = ''
     if (Test-Path -LiteralPath $PackagesDir -PathType Container) {
@@ -71,10 +88,20 @@ if ([string]::IsNullOrWhiteSpace($ClaudeDesktopConfigPath)) {
             }
         }
     }
-    if (-not [string]::IsNullOrWhiteSpace($MsixConfig)) {
+    $ClassicConfig = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    $ClassicProfileDir = Split-Path -Parent $ClassicConfig
+    $ClassicPresent = Test-Path -LiteralPath $ClassicProfileDir -PathType Container
+
+    if (-not [string]::IsNullOrWhiteSpace($MsixConfig) -and $ClassicPresent) {
+        $MsixActivity = (Get-Item -LiteralPath (Split-Path -Parent $MsixConfig)).LastWriteTime
+        $ClassicActivity = (Get-Item -LiteralPath $ClassicProfileDir).LastWriteTime
+        $ClaudeDesktopConfigPath = if ($ClassicActivity -ge $MsixActivity) { $ClassicConfig } else { $MsixConfig }
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($MsixConfig)) {
         $ClaudeDesktopConfigPath = $MsixConfig
-    } else {
-        $ClaudeDesktopConfigPath = Join-Path $RoamingAppData 'Claude\claude_desktop_config.json'
+    }
+    else {
+        $ClaudeDesktopConfigPath = $ClassicConfig
     }
 }
 

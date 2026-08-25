@@ -579,6 +579,50 @@ try {
     $ModifiedJsonAfter = Read-Json -Path $ModifiedJsonConfig
     Assert-True ($ModifiedJsonAfter.servers.minos.command -eq 'C:\Other\minos.exe') 'Modified managed JSON entry was overwritten/removed instead of being preserved.'
 
+    # Default Claude Desktop path selection (no -ClaudeDesktopConfigPath given): when both a
+    # Windows Store (MSIX) profile and a traditional %APPDATA%\Claude profile exist on the same
+    # machine, the more recently active one must be chosen. Unconditionally preferring MSIX
+    # whenever its package directory merely exists configured a stale, abandoned profile while
+    # the genuinely active one was never touched -- exactly the shape a real user hit.
+    $DefaultPathRoot = Join-Path $Root 'default-path'
+    $DefaultLocalAppData = Join-Path $DefaultPathRoot 'local'
+    $DefaultRoamingAppData = Join-Path $DefaultPathRoot 'roaming'
+    $MsixProfileDir = Join-Path $DefaultLocalAppData 'Packages\Claude_stalepkg\LocalCache\Roaming\Claude'
+    $ClassicProfileDir = Join-Path $DefaultRoamingAppData 'Claude'
+    New-Item -ItemType Directory -Force -Path $MsixProfileDir, $ClassicProfileDir | Out-Null
+    Write-Utf8Json -Path (Join-Path $MsixProfileDir 'claude_desktop_config.json') -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+    Write-Utf8Json -Path (Join-Path $ClassicProfileDir 'claude_desktop_config.json') -Value ([pscustomobject][ordered]@{ mcpServers = [pscustomobject][ordered]@{} })
+    # Writing the config file above just touched each directory's mtime; now make the MSIX
+    # profile look stale (last used days ago) and the classic one look genuinely active (just
+    # now) -- an abandoned Store trial next to an actively used standalone install.
+    (Get-Item -LiteralPath $MsixProfileDir).LastWriteTime = (Get-Date).AddDays(-4)
+    (Get-Item -LiteralPath $ClassicProfileDir).LastWriteTime = Get-Date
+
+    $PreviousLocalAppData = $env:LOCALAPPDATA
+    $PreviousAppData = $env:APPDATA
+    try {
+        $env:LOCALAPPDATA = $DefaultLocalAppData
+        $env:APPDATA = $DefaultRoamingAppData
+        & $Manager `
+            -InstallRoot $InstallRoot `
+            -ClaudeDesktop `
+            -Strict `
+            -DataRoot $DataRoot `
+            -StatePath (Join-Path $DefaultPathRoot 'state.json') `
+            -LogPath (Join-Path $DefaultPathRoot 'log.txt') `
+            -BackupRoot (Join-Path $DefaultPathRoot 'backups')
+        # Deliberately no -ClaudeDesktopConfigPath: exercises the default-path auto-detection itself.
+    }
+    finally {
+        $env:LOCALAPPDATA = $PreviousLocalAppData
+        $env:APPDATA = $PreviousAppData
+    }
+
+    $ClassicConfigAfter = Read-Json -Path (Join-Path $ClassicProfileDir 'claude_desktop_config.json')
+    $MsixConfigAfter = Read-Json -Path (Join-Path $MsixProfileDir 'claude_desktop_config.json')
+    Assert-True ($null -ne $ClassicConfigAfter.mcpServers.minos) 'The more recently active (classic) Claude Desktop profile was not configured by default-path auto-detection; a stale MSIX profile must never shadow the actually-used install.'
+    Assert-True ($null -eq $MsixConfigAfter.mcpServers.PSObject.Properties['minos']) 'The stale MSIX Claude Desktop profile was configured instead of the actually-used classic one.'
+
     Write-Host ''
     Write-Host 'MINOS MCP CLIENT INTEGRATION VERIFICATION SUCCESS' -ForegroundColor Green
     Write-Host 'Clients : Copilot JetBrains, Copilot CLI, Claude Code, Claude Desktop, Codex'
