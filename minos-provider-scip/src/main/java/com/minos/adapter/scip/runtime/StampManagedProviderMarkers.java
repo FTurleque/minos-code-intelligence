@@ -1,5 +1,7 @@
 package com.minos.adapter.scip.runtime;
 
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.nio.file.Path;
 
 /**
@@ -20,12 +22,14 @@ import java.nio.file.Path;
  */
 public final class StampManagedProviderMarkers {
 
+    private static final Logger LOG = System.getLogger(StampManagedProviderMarkers.class.getName());
+
     private StampManagedProviderMarkers() {
     }
 
     public static void main(String[] arguments) throws Exception {
         if (arguments.length != 3) {
-            System.err.println("usage: StampManagedProviderMarkers <directory> <version> <sourceId>"); // NOSONAR: java:S106 -- Docker-build-time CLI stub, matches DockerRuntimeBootstrap/MinosLauncher's own System.err usage
+            LOG.log(Level.ERROR, "usage: StampManagedProviderMarkers <directory> <version> <sourceId>");
             System.exit(2);
             return;
         }
