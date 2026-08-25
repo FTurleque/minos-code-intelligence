@@ -324,6 +324,50 @@ try {
     Assert-True ($null -ne $PreexistingAfterUninstall.servers.minos) 'Pre-existing compatible MINOS entry was removed during uninstall.'
     Assert-True (-not (Test-Path -LiteralPath $PreexistingState)) 'Pre-existing integration tracking state remained after uninstall.'
 
+    # Preexisting (CLI kind): a compatible entry is already connected through a
+    # CLI's own `mcp get` output, with no prior MINOS tracking state at all
+    # (the JSON-kind equivalent above proves ownership tracking; this proves
+    # the same fail-safe adoption for the probe-based CLI path). It must be
+    # adopted without ever invoking `mcp add`/`mcp remove`, and must remain
+    # untouched during MINOS uninstall because MINOS did not create it.
+    $CliPreexistingState = Join-Path $Root 'cli-preexisting\state.json'
+    $CliPreexistingLog = Join-Path $Root 'cli-preexisting\log.txt'
+    $CliPreexistingBackups = Join-Path $Root 'cli-preexisting\backups'
+    $ClaudeFakeState = Join-Path $FakeBin 'claude.state'
+    Assert-True (-not (Test-Path -LiteralPath $ClaudeFakeState)) 'Claude Code CLI fake state leaked from an earlier scenario.'
+    "mcp add minos -- $ExpectedExe mcp --scope user -- env MINOS_HOME=$DataRoot" |
+        Set-Content -LiteralPath $ClaudeFakeState -Encoding ascii
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -ClaudeCode `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $CliPreexistingState `
+        -LogPath $CliPreexistingLog `
+        -BackupRoot $CliPreexistingBackups `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    $CliPreexistingTracking = Read-Json -Path $CliPreexistingState
+    Assert-True (@($CliPreexistingTracking.clients).Count -eq 1) 'Expected exactly one managed entry for the CLI-preexisting scenario.'
+    Assert-True ($CliPreexistingTracking.clients[0].ownership -eq 'preexisting') 'Compatible pre-existing Claude Code CLI entry ownership was not tracked safely.'
+
+    & $Manager `
+        -InstallRoot $InstallRoot `
+        -Action Uninstall `
+        -Strict `
+        -DataRoot $DataRoot `
+        -StatePath $CliPreexistingState `
+        -LogPath $CliPreexistingLog `
+        -BackupRoot $CliPreexistingBackups `
+        -CopilotJetBrainsConfigPath $CopilotConfig `
+        -ClaudeDesktopConfigPath $ClaudeDesktopConfig
+
+    Assert-True (Test-Path -LiteralPath $ClaudeFakeState -PathType Leaf) 'Pre-existing compatible Claude Code CLI entry was removed during uninstall.'
+    Assert-True (-not (Test-Path -LiteralPath $CliPreexistingState)) 'Pre-existing CLI integration tracking state remained after uninstall.'
+    Remove-Item -LiteralPath $ClaudeFakeState -Force
+
     # Collision safety: an unmanaged existing JSON `minos` entry with a
     # different target must never be overwritten.
     $CollisionConfig = Join-Path $Root 'collision\mcp.json'
