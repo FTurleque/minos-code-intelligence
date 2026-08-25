@@ -52,6 +52,18 @@ public record ProviderRuntimeStatus(
         READY,
         NOT_INSTALLED,
         BLOCKED,
-        INVALID
+        INVALID,
+        /**
+         * The stronger local-sandbox tier this provider would otherwise be qualified against is not
+         * provided by the currently selected backend (e.g. the Docker MCP admin/indexing plane, which
+         * is its own hardened boundary but does not nest a second OS sandbox inside itself) -- not
+         * because the provider itself is broken or unavailable. Execution still proceeds through the
+         * existing, unchanged managed-local-provider fallback; this state exists so a capability
+         * genuinely absent from a backend never silently reports READY, while also never blocking an
+         * installation or verification that does not actually require it. Distinct from {@link
+         * #BLOCKED}, which means the provider needed a sandbox this host should have been able to
+         * qualify and could not -- that remains a real, blocking failure.
+         */
+        UNSUPPORTED_BY_BACKEND
     }
 }

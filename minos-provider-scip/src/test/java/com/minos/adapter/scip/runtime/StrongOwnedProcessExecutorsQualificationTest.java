@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,6 +60,38 @@ class StrongOwnedProcessExecutorsQualificationTest {
         assertFalse(qualified.ready());
         assertTrue(qualified.diagnostics().stream()
                 .anyMatch(value -> value.contains("qualified managed local provider sandbox is unavailable")));
+    }
+
+    @Test
+    void missingOsSandboxIsUnsupportedNotBlockedOnTheDockerBackend() {
+        // The Docker MCP admin/indexing plane cannot nest a second OS sandbox inside its own already
+        // -hardened container by construction -- that is expected, not a failure this backend can ever
+        // fix, so it must be reported distinctly from a native host where the sandbox genuinely should
+        // have been qualifiable.
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(
+                readyStatus(),
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                true);
+
+        assertFalse(qualified.ready(), "must never silently report READY when the sandbox check did not pass");
+        assertEquals(ProviderRuntimeStatus.State.UNSUPPORTED_BY_BACKEND, qualified.state());
+        assertTrue(qualified.diagnostics().stream()
+                .anyMatch(value -> value.contains("not provided by the Docker MCP backend")));
+    }
+
+    @Test
+    void dockerBackendStillReportsReadyWhenTheSandboxIsActuallyQualified() {
+        // Capability-aware, not backend-aware: if a genuinely qualified managed-local-provider sandbox
+        // ever is available inside the Docker plane, it must still gate READY normally, exactly as on
+        // a native host -- the docker flag only changes the disposition of an unqualified sandbox, it
+        // never bypasses the check itself.
+        WorkerSandboxBackend backend = qualifiedBackend(
+                "fixture-docker-qualified",
+                WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED);
+
+        ProviderRuntimeStatus qualified = StrongOwnedProcessExecutors.qualifySandbox(readyStatus(), backend, true);
+
+        assertTrue(qualified.ready());
     }
 
     private static ProviderRuntimeStatus readyStatus() {

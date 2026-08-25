@@ -177,8 +177,8 @@ Exemple d'installation :
 ```powershell
 .\docker\scripts\prod-mcp-release.ps1 `
   -Action Install `
-  -Jar '.\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar' `
-  -Version '1.0.1-SNAPSHOT' `
+  -Jar '.\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar' `
+  -Version '1.1.0-SNAPSHOT' `
   -Commit (git rev-parse HEAD) `
   -ProjectsRoot 'N:\workspace-dev' `
   -SemanticProvider local-hash
