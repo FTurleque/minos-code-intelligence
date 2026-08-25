@@ -171,19 +171,26 @@ exit /b 1
     # ClaudeDesktop is left genuinely unavailable -- proves AlreadyManaged is
     # never surfaced for a client the preflight itself reports unavailable.
     New-Item -ItemType Directory -Force -Path (Join-Path $ManagedLocalAppData 'MINOS') | Out-Null
-    [System.IO.File]::WriteAllText(
-        (Join-Path $ManagedLocalAppData 'MINOS\mcp-client-integrations.json'),
-        '{"clients":[{"id":"copilot-jetbrains","ownership":"managed"},{"id":"claude-desktop","ownership":"managed"}]}',
-        [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::WriteAllText(
-        (Join-Path $ManagedLocalAppData 'MINOS\codex-mcp-integration.json'),
-        '{"mode":"cli","ownership":"managed"}',
-        [System.Text.UTF8Encoding]::new($false))
+    $ManagedInstallRoot = Join-Path $Root 'already-managed-install'
+    $ManagedDataRoot = Join-Path $Root 'already-managed-data'
+    $ManagedExe = Join-Path $ManagedInstallRoot 'app\minos.exe'
+    $StateJson = ConvertTo-Json ([ordered]@{
+        clients = @(
+            [ordered]@{ id = 'copilot-jetbrains'; ownership = 'managed'; command = $ManagedExe; dataRoot = $ManagedDataRoot },
+            [ordered]@{ id = 'claude-desktop'; ownership = 'managed'; command = $ManagedExe; dataRoot = $ManagedDataRoot }
+        )
+    }) -Depth 4
+    [System.IO.File]::WriteAllText((Join-Path $ManagedLocalAppData 'MINOS\mcp-client-integrations.json'), $StateJson, [System.Text.UTF8Encoding]::new($false))
+    $CodexStateJson = ConvertTo-Json ([ordered]@{ mode = 'cli'; ownership = 'managed'; command = $ManagedExe; dataRoot = $ManagedDataRoot }) -Depth 4
+    [System.IO.File]::WriteAllText((Join-Path $ManagedLocalAppData 'MINOS\codex-mcp-integration.json'), $CodexStateJson, [System.Text.UTF8Encoding]::new($false))
 
     $env:Path = $ManagedBin
     $env:APPDATA = $ManagedAppData
     $env:LOCALAPPDATA = $ManagedLocalAppData
     $env:USERPROFILE = $ManagedUserProfile
+
+    # Without -InstallRoot/-DataRoot: falls back to "tracked at all", the
+    # pre-existing behavior every caller that predates those parameters keeps.
     $ManagedOutput = Join-Path $Root 'preflight-already-managed.ini'
     & $Detector -OutputPath $ManagedOutput -ProbeTimeoutSeconds 3
     Assert-True ((Read-IniValue $ManagedOutput 'CopilotJetBrains' 'Available') -eq '1') 'CopilotJetBrains marker was not detected for the AlreadyManaged scenario.'
@@ -194,6 +201,24 @@ exit /b 1
     Assert-True ((Read-IniValue $ManagedOutput 'ClaudeDesktop' 'Available') -eq '0') 'ClaudeDesktop should remain unavailable in this scenario.'
     Assert-True ((Read-IniValue $ManagedOutput 'ClaudeDesktop' 'AlreadyManaged') -eq '0') 'An unavailable client must never be reported AlreadyManaged even if a stale tracking entry exists for it.'
     Assert-True ((Read-IniValue $ManagedOutput 'CopilotCli' 'AlreadyManaged') -eq '0') 'An available-but-untracked client was incorrectly reported AlreadyManaged.'
+
+    # With -InstallRoot/-DataRoot matching exactly what the state file already
+    # records: still AlreadyManaged -- passing the parameters must not by
+    # itself change the outcome for wiring that is genuinely current.
+    $MatchingOutput = Join-Path $Root 'preflight-already-managed-matching.ini'
+    & $Detector -OutputPath $MatchingOutput -ProbeTimeoutSeconds 3 -InstallRoot $ManagedInstallRoot -DataRoot $ManagedDataRoot
+    Assert-True ((Read-IniValue $MatchingOutput 'CopilotJetBrains' 'AlreadyManaged') -eq '1') 'AlreadyManaged wiring-match check rejected a tracked entry whose command/dataRoot exactly match this install.'
+    Assert-True ((Read-IniValue $MatchingOutput 'CodexCli' 'AlreadyManaged') -eq '1') 'AlreadyManaged wiring-match check rejected a tracked Codex entry whose command/dataRoot exactly match this install.'
+
+    # With -InstallRoot pointing somewhere else entirely: the tracked entries'
+    # command no longer matches this install, so AlreadyManaged must drop to
+    # false even though the client is still tracked -- a moved install must
+    # never lock a checkbox onto stale wiring the user still needs to fix.
+    $MovedOutput = Join-Path $Root 'preflight-already-managed-moved.ini'
+    & $Detector -OutputPath $MovedOutput -ProbeTimeoutSeconds 3 -InstallRoot (Join-Path $Root 'a-different-install') -DataRoot $ManagedDataRoot
+    Assert-True ((Read-IniValue $MovedOutput 'CopilotJetBrains' 'Available') -eq '1') 'CopilotJetBrains should remain available after moving the install root.'
+    Assert-True ((Read-IniValue $MovedOutput 'CopilotJetBrains' 'AlreadyManaged') -eq '0') 'A tracked entry pointing at a different install root was incorrectly reported AlreadyManaged -- stale wiring must stay unlocked.'
+    Assert-True ((Read-IniValue $MovedOutput 'CodexCli' 'AlreadyManaged') -eq '0') 'A tracked Codex entry pointing at a different install root was incorrectly reported AlreadyManaged.'
 
     # --- Real, non-shim Copilot CLI compatible with MCP: proves the VS Code
     # shim rejection above isn't the only path Copilot CLI can ever take ---

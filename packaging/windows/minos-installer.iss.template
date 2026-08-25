@@ -401,11 +401,12 @@ begin
   Available := GetIniString(Section, 'Available', '0', McpPreflightIni) = '1';
   AlreadyManaged := GetIniString(Section, 'AlreadyManaged', '0', McpPreflightIni) = '1';
   Reason := GetIniString(Section, 'Reason', 'Détection indisponible', McpPreflightIni);
-  CheckBox.Enabled := Available;
-  // A client MINOS already confirmed it wired (managed or adopted preexisting) starts
-  // pre-checked, so a reinstall/repair doesn't read as "nothing is configured yet" -- leaving
-  // it checked is a harmless idempotent no-op; unchecking it here still leaves that client
-  // completely untouched, exactly like any other unchecked row.
+  // A client MINOS already confirmed is wired exactly as this install expects (managed or
+  // adopted preexisting, command/dataRoot matching) shows checked but locked -- there is
+  // nothing to do here, so there is nothing to let the user accidentally toggle. Only a
+  // client that is available yet either untracked or tracked with stale wiring (moved
+  // install, changed data root) stays interactive, unchecked, ready to be (re)configured.
+  CheckBox.Enabled := Available and (not AlreadyManaged);
   CheckBox.Checked := Available and AlreadyManaged;
   if Available and AlreadyManaged then
     Status.Caption := Reason + ' — déjà configuré'
@@ -446,7 +447,8 @@ begin
   // preflight step's inputs are as visible here as every other Exec() call.
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Detector + '" -OutputPath "' + McpPreflightIni + '"' +
     ' -StatePath "' + ExpandConstant('{localappdata}\MINOS\mcp-client-integrations.json') + '"' +
-    ' -CodexStatePath "' + ExpandConstant('{localappdata}\MINOS\codex-mcp-integration.json') + '"';
+    ' -CodexStatePath "' + ExpandConstant('{localappdata}\MINOS\codex-mcp-integration.json') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '" -DataRoot "' + EffectiveDataRoot() + '"';
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
      (ResultCode <> 0) or (not FileExists(McpPreflightIni)) then
   begin
