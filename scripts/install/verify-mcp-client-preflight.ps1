@@ -151,6 +151,50 @@ exit /b 1
     Assert-True ((Read-IniValue $AbsentOutput 'CodexDesktop' 'Available') -eq '0') 'Absent Codex Desktop was incorrectly reported as available.'
     Assert-True ((Read-IniValue $AbsentOutput 'Codex' 'Available') -eq '0') 'Absent aggregate Codex was incorrectly reported as available.'
 
+    # --- AlreadyManaged: a client the wizard can technically configure must be
+    # told apart from one MINOS already confirmed wiring, so a reinstall never
+    # reads as "nothing is configured yet" for an integration that already
+    # works. Isolated LOCALAPPDATA/APPDATA/USERPROFILE, same as Absent above,
+    # plus real state files this scenario pre-seeds itself. ---
+    $ManagedBin = Join-Path $Root 'already-managed-bin'
+    $ManagedAppData = Join-Path $Root 'already-managed-appdata\Roaming'
+    $ManagedLocalAppData = Join-Path $Root 'already-managed-appdata\Local'
+    $ManagedUserProfile = Join-Path $Root 'already-managed-appdata\profile'
+    New-Item -ItemType Directory -Force -Path $ManagedBin, $ManagedAppData, $ManagedLocalAppData, $ManagedUserProfile | Out-Null
+    # CopilotJetBrains available via its filesystem marker; CodexCli available via PATH.
+    New-Item -ItemType Directory -Force -Path (Join-Path $ManagedLocalAppData 'github-copilot\intellij') | Out-Null
+    @'
+@echo off
+if /I "%~1"=="mcp" if /I "%~2"=="--help" exit /b 0
+exit /b 1
+'@ | Set-Content -LiteralPath (Join-Path $ManagedBin 'codex.cmd') -Encoding ascii
+    # ClaudeDesktop is left genuinely unavailable -- proves AlreadyManaged is
+    # never surfaced for a client the preflight itself reports unavailable.
+    New-Item -ItemType Directory -Force -Path (Join-Path $ManagedLocalAppData 'MINOS') | Out-Null
+    [System.IO.File]::WriteAllText(
+        (Join-Path $ManagedLocalAppData 'MINOS\mcp-client-integrations.json'),
+        '{"clients":[{"id":"copilot-jetbrains","ownership":"managed"},{"id":"claude-desktop","ownership":"managed"}]}',
+        [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText(
+        (Join-Path $ManagedLocalAppData 'MINOS\codex-mcp-integration.json'),
+        '{"mode":"cli","ownership":"managed"}',
+        [System.Text.UTF8Encoding]::new($false))
+
+    $env:Path = $ManagedBin
+    $env:APPDATA = $ManagedAppData
+    $env:LOCALAPPDATA = $ManagedLocalAppData
+    $env:USERPROFILE = $ManagedUserProfile
+    $ManagedOutput = Join-Path $Root 'preflight-already-managed.ini'
+    & $Detector -OutputPath $ManagedOutput -ProbeTimeoutSeconds 3
+    Assert-True ((Read-IniValue $ManagedOutput 'CopilotJetBrains' 'Available') -eq '1') 'CopilotJetBrains marker was not detected for the AlreadyManaged scenario.'
+    Assert-True ((Read-IniValue $ManagedOutput 'CopilotJetBrains' 'AlreadyManaged') -eq '1') 'A CopilotJetBrains entry already tracked in mcp-client-integrations.json was not reported AlreadyManaged.'
+    Assert-True ((Read-IniValue $ManagedOutput 'CodexCli' 'Available') -eq '1') 'CodexCli was not detected for the AlreadyManaged scenario.'
+    Assert-True ((Read-IniValue $ManagedOutput 'CodexCli' 'AlreadyManaged') -eq '1') 'A managed codex-mcp-integration.json state was not reported AlreadyManaged on the CodexCli surface.'
+    Assert-True ((Read-IniValue $ManagedOutput 'Codex' 'AlreadyManaged') -eq '1') 'A managed codex-mcp-integration.json state was not reported AlreadyManaged on the aggregate Codex surface.'
+    Assert-True ((Read-IniValue $ManagedOutput 'ClaudeDesktop' 'Available') -eq '0') 'ClaudeDesktop should remain unavailable in this scenario.'
+    Assert-True ((Read-IniValue $ManagedOutput 'ClaudeDesktop' 'AlreadyManaged') -eq '0') 'An unavailable client must never be reported AlreadyManaged even if a stale tracking entry exists for it.'
+    Assert-True ((Read-IniValue $ManagedOutput 'CopilotCli' 'AlreadyManaged') -eq '0') 'An available-but-untracked client was incorrectly reported AlreadyManaged.'
+
     # --- Real, non-shim Copilot CLI compatible with MCP: proves the VS Code
     # shim rejection above isn't the only path Copilot CLI can ever take ---
     $RealCliBin = Join-Path $Root 'real-cli'
