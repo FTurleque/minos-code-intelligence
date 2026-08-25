@@ -23,5 +23,19 @@ class M29DockerNpmLockContractTest {
         assertFalse(dockerfile.contains("npm install --prefix \"/opt/minos/provider-tools/scip-python"));
         assertTrue(release.contains("scip-typescript-package-lock.json"));
         assertTrue(release.contains("scip-python-package-lock.json"));
+
+        // The lockfiles live under a Maven module's src/main/resources tree, compiled INTO the
+        // shaded jar and never itself shipped as loose files under an installed {app}. A
+        // $RepoRoot-relative Copy-Item only ever resolves from a git checkout; from an installed
+        // product it fails with "the system cannot find the path specified" the first time a user
+        // selects the Docker MCP backend. Must extract the bytes from the jar's own classpath
+        // (the one dependency this script already resolves correctly in both contexts) instead.
+        assertFalse(release.contains("minos-provider-scip"),
+                "the provider-complete Docker image build must not reference a Maven module's "
+                        + "source tree by a $RepoRoot-relative path -- that tree does not exist in "
+                        + "an installed distribution");
+        assertTrue(release.contains("Copy-JarResourceEntry"),
+                "npm lockfiles for the Docker build context must be extracted from the packaged "
+                        + "jar's classpath, not copied from a checkout-relative filesystem path");
     }
 }

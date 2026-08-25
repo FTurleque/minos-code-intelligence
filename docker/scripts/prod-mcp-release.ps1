@@ -53,6 +53,30 @@ function ConvertTo-DockerPath([string] $Path) {
     return ([System.IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
+# Unlike docker\Dockerfile.mcp.release and docker\compose.mcp.prod.yaml -- which are shipped
+# verbatim under {app}\docker\ and so remain reachable via a $RepoRoot-relative path from both a
+# git checkout and an installed distribution -- the npm lockfiles below live under a Maven
+# module's src/main/resources tree. That tree is compiled INTO minos.jar and never itself shipped
+# as loose files, so a $RepoRoot-relative Copy-Item only ever works from a checkout; from an
+# installed product it fails with "the system cannot find the path specified". Extract the same
+# bytes directly from $Jar's classpath instead -- the one dependency this script already resolves
+# correctly in both contexts.
+function Copy-JarResourceEntry([string] $JarPath, [string] $EntryName, [string] $Destination) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $Archive = [System.IO.Compression.ZipFile]::OpenRead($JarPath)
+    try {
+        $Entry = $Archive.GetEntry($EntryName)
+        if ($null -eq $Entry) { throw "packaged jar resource is missing: $EntryName" }
+        $Reader = $Entry.Open()
+        try {
+            $Writer = [System.IO.File]::Create($Destination)
+            try { $Reader.CopyTo($Writer) } finally { $Writer.Dispose() }
+        }
+        finally { $Reader.Dispose() }
+    }
+    finally { $Archive.Dispose() }
+}
+
 function Resolve-SemanticProvider([string] $Requested) {
     $Value = $Requested
     if ([string]::IsNullOrWhiteSpace($Value)) { $Value = $env:MINOS_SEMANTIC_PROVIDER }
@@ -182,8 +206,8 @@ switch ($Action) {
             Remove-Item -LiteralPath $BuildContext -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path $BuildContext | Out-Null
             Copy-Item -LiteralPath $Jar -Destination (Join-Path $BuildContext 'minos.jar')
-            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\scip-typescript-package-lock.json') -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
-            Copy-Item -LiteralPath (Join-Path $RepoRoot 'minos-provider-scip\src\main\resources\com\minos\adapter\scip\runtime\scip-python-package-lock.json') -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
+            Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-typescript-package-lock.json' -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
+            Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-python-package-lock.json' -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
             $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
             & docker build --file $Dockerfile --tag $Image `
                 --build-arg "MINOS_VERSION=$Version" `
