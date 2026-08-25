@@ -419,12 +419,12 @@ Pour retirer les intégrations gérées par le setup, préférer le wrapper cano
 Version de développement courante :
 
 ```text
-1.0.1-SNAPSHOT
+1.1.0-SNAPSHOT
 ```
 
 ```powershell
 $env:MINOS_HOME = 'N:\minos-data'
-java -jar .\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar mcp
+java -jar .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar mcp
 ```
 
 Pour activer le sémantique local :
@@ -432,13 +432,13 @@ Pour activer le sémantique local :
 ```powershell
 $env:MINOS_SEMANTIC_PROVIDER = 'local-hash'
 minos.cmd index my-project
-java -jar .\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar mcp
+java -jar .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar mcp
 ```
 
 Le point d'entrée direct reste disponible :
 
 ```powershell
-java -cp .\target\minos-code-intelligence-1.0.1-SNAPSHOT-all.jar `
+java -cp .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar `
   com.minos.mcp.MinosMcpServer
 ```
 
@@ -583,12 +583,12 @@ minos.cmd index my-project
 
 Le client MCP peut ensuite interroger le snapshot actif. Les capabilities avancées et sémantiques disponibles dépendent des facts/providers réellement configurés et conservent leurs limitations explicites.
 
-## Construire/qualifier le candidat Windows 1.0.1
+## Construire/qualifier le candidat Windows
 
 Le runner local sûr est :
 
 ```powershell
-.\scripts\release\build-local-windows-candidate.ps1 -Version 1.0.1
+.\scripts\release\build-local-windows-candidate.ps1 -Version 1.1.0
 ```
 
 Il génère le setup de production à vérifier manuellement, mais ne le publie pas, ne crée aucun tag et ne déclenche aucun GitHub Actions.
