@@ -395,13 +395,22 @@ end;
 procedure SetMcpAvailability(CheckBox: TNewCheckBox; Status: TNewStaticText; Section: String);
 var
   Available: Boolean;
+  AlreadyManaged: Boolean;
   Reason: String;
 begin
   Available := GetIniString(Section, 'Available', '0', McpPreflightIni) = '1';
+  AlreadyManaged := GetIniString(Section, 'AlreadyManaged', '0', McpPreflightIni) = '1';
   Reason := GetIniString(Section, 'Reason', 'Détection indisponible', McpPreflightIni);
   CheckBox.Enabled := Available;
-  CheckBox.Checked := False;
-  Status.Caption := Reason;
+  // A client MINOS already confirmed it wired (managed or adopted preexisting) starts
+  // pre-checked, so a reinstall/repair doesn't read as "nothing is configured yet" -- leaving
+  // it checked is a harmless idempotent no-op; unchecking it here still leaves that client
+  // completely untouched, exactly like any other unchecked row.
+  CheckBox.Checked := Available and AlreadyManaged;
+  if Available and AlreadyManaged then
+    Status.Caption := Reason + ' — déjà configuré'
+  else
+    Status.Caption := Reason;
 end;
 
 procedure DisableAllMcpRows(Reason: String);
@@ -430,7 +439,14 @@ begin
   end;
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Detector := ExpandConstant('{tmp}\detect-mcp-clients.ps1');
-  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Detector + '" -OutputPath "' + McpPreflightIni + '"';
+  // Fixed %LOCALAPPDATA%\MINOS\... locations -- this is exactly where
+  // configure-mcp-clients.ps1/configure-codex-mcp.ps1 default to and where the
+  // installer always leaves them; not affected by a custom data root. Passed
+  // explicitly (rather than relying on the detector's own default) so the
+  // preflight step's inputs are as visible here as every other Exec() call.
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + Detector + '" -OutputPath "' + McpPreflightIni + '"' +
+    ' -StatePath "' + ExpandConstant('{localappdata}\MINOS\mcp-client-integrations.json') + '"' +
+    ' -CodexStatePath "' + ExpandConstant('{localappdata}\MINOS\codex-mcp-integration.json') + '"';
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or
      (ResultCode <> 0) or (not FileExists(McpPreflightIni)) then
   begin
