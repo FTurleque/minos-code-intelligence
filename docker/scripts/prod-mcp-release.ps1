@@ -214,7 +214,12 @@ switch ($Action) {
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-typescript-package-lock.json' -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-python-package-lock.json' -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
             $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
-            & docker build --file $Dockerfile --tag $Image `
+            # --network=host: BuildKit's default isolated build network has shown
+            # reproducible indefinite hangs against certain external hosts (observed
+            # against github.com release-asset redirects) with no timeout to recover.
+            # The host network stack reaches the same URLs reliably; this only affects
+            # the build-time RUN steps, not the resulting image's own network config.
+            & docker build --network=host --file $Dockerfile --tag $Image `
                 --build-arg "MINOS_VERSION=$Version" `
                 --build-arg "MINOS_GIT_COMMIT=$Commit" `
                 --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext

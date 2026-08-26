@@ -19,6 +19,19 @@ param(
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]+$')]
     [string] $DockerComposeProject = 'minos-mcp-prod',
 
+    [ValidateSet('local', 'postgresql')]
+    [string] $StorageBackend = 'local',
+
+    [ValidateSet('disabled', 'local-hash', 'ollama')]
+    [string] $SemanticProvider = 'disabled',
+
+    [string] $SemanticModel = 'nomic-embed-text',
+
+    [ValidateRange(32, 16384)]
+    [int] $SemanticDimensions = 768,
+
+    [switch] $ProvisionOllamaModel,
+
     [ValidateRange(1, 120)]
     [int] $ProbeTimeoutSeconds = 20,
 
@@ -307,9 +320,16 @@ try {
                 DockerDataRoot = $DockerDataRoot
                 DockerContainerName = $DockerContainerName
                 DockerComposeProject = $DockerComposeProject
+                StorageBackend = $StorageBackend
+                SemanticProvider = $SemanticProvider
+                SemanticModel = $SemanticModel
+                SemanticDimensions = $SemanticDimensions
             }
             if (-not [string]::IsNullOrWhiteSpace($DockerImageTag)) {
                 $DockerParameters['DockerImageTag'] = $DockerImageTag
+            }
+            if ($ProvisionOllamaModel) {
+                $DockerParameters['ProvisionOllamaModel'] = $true
             }
             & $DockerConfiguratorPath @DockerParameters
             Write-SwitchLog 'PREPARE target=docker mode=install result=success'
