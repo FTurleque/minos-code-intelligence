@@ -89,7 +89,12 @@ function Resolve-SemanticProvider([string] $Requested) {
 }
 
 function Compose([string[]] $Arguments) {
-    & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
+    # Stdin MUST be a non-terminal pipe here: some invocation contexts (notably an
+    # installer's inherited console) leave stdin attached to a handle that satisfies
+    # isatty() without any human able to answer it. Compose only prompts interactively
+    # ("... Recreate (data will be lost)?") when it believes stdin is a real terminal;
+    # forcing it through a PowerShell pipe guarantees non-interactive, fail-fast behavior.
+    $null | & docker compose --project-directory $RuntimeRoot --env-file $EnvironmentFile -f $ComposeFile @Arguments
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
 }
 
@@ -209,7 +214,12 @@ switch ($Action) {
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-typescript-package-lock.json' -Destination (Join-Path $BuildContext 'scip-typescript-package-lock.json')
             Copy-JarResourceEntry -JarPath $Jar -EntryName 'com/minos/adapter/scip/runtime/scip-python-package-lock.json' -Destination (Join-Path $BuildContext 'scip-python-package-lock.json')
             $Dockerfile = Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'
-            & docker build --file $Dockerfile --tag $Image `
+            # --network=host: BuildKit's default isolated build network has shown
+            # reproducible indefinite hangs against certain external hosts (observed
+            # against github.com release-asset redirects) with no timeout to recover.
+            # The host network stack reaches the same URLs reliably; this only affects
+            # the build-time RUN steps, not the resulting image's own network config.
+            & docker build --network=host --file $Dockerfile --tag $Image `
                 --build-arg "MINOS_VERSION=$Version" `
                 --build-arg "MINOS_GIT_COMMIT=$Commit" `
                 --build-arg "MINOS_BUILD_TIMESTAMP=$Timestamp" $BuildContext

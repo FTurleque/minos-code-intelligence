@@ -559,6 +559,38 @@ begin
   if PasswordFile <> '' then DeleteFile(PasswordFile);
 end;
 
+// ConfigureRuntimeSettings above commits StorageBackend=postgresql / SemanticProvider=ollama
+// unconditionally whenever DockerMcpSelected() picked a Docker-managed Postgres/Ollama --
+// before ConfigureSelectedMcpBackend has actually proven the Docker switch succeeds. If that
+// switch then fails and rolls back to the previous (or native) backend, those commitments are
+// left dangling: MINOS boots pointed at a Postgres connection that was never provisioned,
+// failing hard on every invocation even though the rest of the install completed. Only called
+// when the Docker-managed path was the one that failed -- an external/pre-existing Postgres
+// selected without Docker never depended on ConfigureSelectedMcpBackend succeeding, so it is
+// left alone.
+procedure RevertRuntimeSettingsToLocal;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShell: String;
+  SetupMode: String;
+begin
+  if IsSmokeBuild() then exit;
+  if not (DockerMcpSelected() and (PostgreSqlSelected() or OllamaSelected())) then exit;
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if AdvancedSetupSelected() then SetupMode := 'advanced' else SetupMode := 'standard';
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\configure-runtime-settings.ps1') +
+    '" -DataRoot "' + EffectiveDataRoot() +
+    '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
+    '" -SetupMode ' + SetupMode +
+    ' -McpBackend native -McpServerName "' + EffectiveMcpServerName() +
+    '" -StorageBackend local -SemanticProvider disabled' +
+    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('RevertRuntimeSettingsToLocal: fallback did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+end;
+
 function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
@@ -576,11 +608,23 @@ begin
     '" -TargetBackend ' + TargetBackend +
     ' -DataRoot "' + EffectiveDataRoot() + '"';
   if DockerMcpSelected() then
+  begin
     Parameters := Parameters +
       ' -ProjectsRoot "' + DockerProjectsPage.Values[0] +
       '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
       '" -DockerContainerName "' + DockerInstanceEdit.Text +
-      '" -DockerComposeProject "' + DockerInstanceEdit.Text + '"';
+      '" -DockerComposeProject "' + DockerInstanceEdit.Text +
+      '" -StorageBackend ' + EffectiveStorageBackend() +
+      ' -SemanticProvider ' + EffectiveSemanticProvider();
+    if OllamaSelected() then
+    begin
+      Parameters := Parameters +
+        ' -SemanticModel "' + OllamaModelEdit.Text +
+        '" -SemanticDimensions ' + OllamaDimensionsEdit.Text;
+      if OllamaProvisionCheck.Checked then
+        Parameters := Parameters + ' -ProvisionOllamaModel';
+    end;
+  end;
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
     MsgBox(
@@ -1116,6 +1160,56 @@ begin
       'fermez-le puis reessayez. Consultez le journal de l''installateur pour le detail.';
 end;
 
+procedure RemoveMcpClientIntegrations;
+var
+  PowerShell: String;
+  ScriptPath: String;
+  ScriptText: String;
+  Parameters: String;
+  ResultCode: Integer;
+  DataRoot: String;
+  McpServerName: String;
+begin
+  // Must run before RemoveMinosProgramPayload deletes {app}\integration -- this
+  // still calls the live copies there, exactly like ConfigureMcpClients does at
+  // install time. configure-mcp-clients.ps1/configure-codex-mcp.ps1's Uninstall
+  // action is driven entirely by their own state file (mcp-client-integrations.json
+  // / codex-mcp-integration.json under %LOCALAPPDATA%\MINOS), so it removes only
+  // the entries MINOS itself added and correctly leaves any preexisting entry
+  // (ownership=preexisting) untouched -- no client-selection switches needed here.
+  // Routed through invoke-named-mcp-script.ps1 so a custom -McpServerName from
+  // Advanced Setup is honored symmetrically with the install-time call.
+  if IsSmokeBuild() then exit;
+  if not FileExists(ExpandConstant('{app}\integration\invoke-named-mcp-script.ps1')) then exit;
+  DataRoot := ReadInstallerValue('DataRoot', DefaultDataRoot());
+  McpServerName := ReadInstallerValue('McpServerName', 'minos');
+
+  ScriptText :=
+    'param([Parameter(Mandatory = $true)][string] $InstallRoot, [string] $DataRoot, [string] $McpServerName)' + #13#10 +
+    '$ErrorActionPreference = ''Stop''' + #13#10 +
+    '$Manager = Join-Path $InstallRoot ''integration\configure-mcp-clients.ps1''' + #13#10 +
+    '$CodexManager = Join-Path $InstallRoot ''integration\configure-codex-mcp.ps1''' + #13#10 +
+    '$NamedInvoker = Join-Path $InstallRoot ''integration\invoke-named-mcp-script.ps1''' + #13#10 +
+    'if (Test-Path -LiteralPath $Manager -PathType Leaf) {' + #13#10 +
+    '    try { & $NamedInvoker -SourcePath $Manager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } }' + #13#10 +
+    '    catch { Write-Warning "MINOS MCP client integration removal failed: $($_.Exception.Message)" }' + #13#10 +
+    '}' + #13#10 +
+    'if (Test-Path -LiteralPath $CodexManager -PathType Leaf) {' + #13#10 +
+    '    try { & $NamedInvoker -SourcePath $CodexManager -McpServerName $McpServerName -Parameters @{ InstallRoot = $InstallRoot; Action = ''Uninstall''; DataRoot = $DataRoot } -CodexScript }' + #13#10 +
+    '    catch { Write-Warning "MINOS Codex MCP integration removal failed: $($_.Exception.Message)" }' + #13#10 +
+    '}' + #13#10;
+  ScriptPath := ExpandConstant('{tmp}\remove-mcp-client-integrations.ps1');
+  if not SaveStringToFile(ScriptPath, ScriptText, False) then exit;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath +
+    '" -InstallRoot "' + ExpandConstant('{app}') +
+    '" -DataRoot "' + DataRoot +
+    '" -McpServerName "' + McpServerName + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('RemoveMcpClientIntegrations: cleanup did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+end;
+
 procedure RemoveMinosProgramPayload;
 var
   PowerShell: String;
@@ -1174,7 +1268,9 @@ begin
     if not ConfigureRuntimeSettings() then exit;
     PersistInstallerRegistry;
     if ConfigureSelectedMcpBackend() then
-      ConfigureMcpClients;
+      ConfigureMcpClients
+    else
+      RevertRuntimeSettingsToLocal;
   end;
 end;
 
@@ -1184,6 +1280,7 @@ begin
   begin
     if not IsSmokeBuild() then
     begin
+      RemoveMcpClientIntegrations;
       RemoveMinosFromUserPath;
       PromptForUserDataRemoval;
     end;
