@@ -134,6 +134,24 @@ try {
     # M30 then upgrades the runtime compose to the connected internal-service profile
     # only when PostgreSQL and/or Ollama is selected.
     $BaseSemanticProvider = if ($SemanticProvider -eq 'local-hash') { 'local-hash' } else { 'disabled' }
+
+    # The base profile has no PostgreSQL/Ollama service, yet its Install runs real minos-admin
+    # commands against the persisted MINOS configuration in the Docker data root. A leftover
+    # `minos.storage.backend=postgresql` there -- from a previous successful run, or from a run
+    # whose managed services were later torn down -- makes those commands fail with "unable to
+    # initialize MINOS PostgreSQL backend" before M30 ever gets a chance to bring PostgreSQL up.
+    # Neutralise the persisted storage/semantic selection to what the base profile can actually
+    # serve; M30 rewrites the full connected configuration immediately afterwards when needed.
+    # This mirrors the existing $BaseSemanticProvider handling, which already does exactly this
+    # for the semantic side when passing SemanticProvider to the base workflow.
+    $BaseProperties = Join-Path $DockerDataRoot 'config\minos.properties'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BaseProperties) | Out-Null
+    @(
+        '# MINOS runtime configuration managed by the Windows installer',
+        'minos.storage.backend=local',
+        "minos.semantic.provider=$BaseSemanticProvider"
+    ) | Set-Content -LiteralPath $BaseProperties -Encoding ascii
+
     Invoke-DockerWorkflow -Action Install -AdditionalParameters @{
         Jar = $Jar
         Version = $Version

@@ -140,6 +140,46 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(runner.contains("M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS"));
     }
 
+    // The installer runs every shipped .ps1 through {sys}\WindowsPowerShell\v1.0\powershell.exe.
+    // Windows PowerShell 5.1 decodes a BOM-less script as ANSI, so a UTF-8 non-ASCII character
+    // is mis-decoded -- and an em dash becomes a sequence containing U+0094, which PowerShell
+    // accepts as a closing smart quote. Inside a double-quoted string that silently truncates
+    // the string and the whole script fails to PARSE, which is how managed PostgreSQL/Ollama
+    // died with "Le terminateur " est manquant dans la chaine" on a real install. These files
+    // ship without a BOM, so keep them ASCII-only.
+    @Test
+    void shippedPowerShellScriptsAreAsciiOnly() throws Exception {
+        Path root = repoRoot();
+        String distribution = text(root.resolve("scripts/release/build-windows-distribution.ps1"));
+
+        StringBuilder offenders = new StringBuilder();
+        int scanned = 0;
+        for (String directory : new String[]{"scripts/install", "docker/scripts"}) {
+            try (var entries = Files.list(root.resolve(directory))) {
+                for (Path script : entries.filter(p -> p.toString().endsWith(".ps1")).toList()) {
+                    String name = script.getFileName().toString();
+                    if (!distribution.contains(name)) {
+                        continue; // not part of the installed payload
+                    }
+                    scanned++;
+                    String body = Files.readString(script);
+                    for (int i = 0; i < body.length(); i++) {
+                        if (body.charAt(i) > 127) {
+                            offenders.append(directory).append('/').append(name)
+                                    .append(" contains U+")
+                                    .append(String.format("%04X", (int) body.charAt(i)))
+                                    .append('\n');
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(scanned > 0, "shipped-script scan matched nothing; the distribution list moved");
+        assertTrue(offenders.isEmpty(),
+                "shipped scripts must be ASCII-only for Windows PowerShell 5.1:\n" + offenders);
+    }
+
     private static void assertOrdered(String text, String... tokens) {
         int cursor = -1;
         for (String token : tokens) {

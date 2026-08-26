@@ -31,6 +31,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Declared before anything that can fail: PowerShell hoists the rollback `trap` below to the
+# whole script scope, so it also runs for errors raised before the snapshot is taken. Under
+# Set-StrictMode that trap would then fault on an undefined variable and mask the real error.
+$RuntimeStateSnapshot = $null
+
 if ($env:OS -ne 'Windows_NT') {
     throw 'The packaged M30 Docker service configurator currently targets Windows hosts.'
 }
@@ -110,7 +115,12 @@ function New-ManagedPassword([string] $Path) {
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
     $Bytes = New-Object byte[] 36
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($Bytes)
+    # RandomNumberGenerator::Fill is .NET 5+, so it exists under pwsh but NOT under the
+    # Windows PowerShell 5.1 (.NET Framework) that the installer actually uses -- it failed
+    # there with "does not contain a method named 'Fill'". Create()/GetBytes is the same CSPRNG
+    # and is present on both runtimes.
+    $Rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $Rng.GetBytes($Bytes) } finally { $Rng.Dispose() }
     $Password = [Convert]::ToBase64String($Bytes).TrimEnd('=')
     [System.IO.File]::WriteAllText($Path, $Password + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
     $Sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -118,9 +128,21 @@ function New-ManagedPassword([string] $Path) {
     if ($LASTEXITCODE -ne 0) { throw "Unable to restrict PostgreSQL secret ACL: $Path" }
 }
 
+function Test-DockerVolumeExists([string] $Name) {
+    # Same Windows PowerShell 5.1 stderr-is-terminating hazard as Invoke-DockerIgnoringFailure:
+    # `docker volume inspect` on an absent volume writes to stderr, which would abort the script
+    # on a first-ever install (it only survived until now because the volumes already existed).
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & docker volume inspect $Name 2>&1 | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    }
+    finally { $ErrorActionPreference = $Previous }
+}
+
 function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
-    & docker volume inspect $Name *> $null
-    if ($LASTEXITCODE -eq 0) { return }
+    if (Test-DockerVolumeExists $Name) { return }
     & docker volume create `
         --label "io.minos.installation=$ComposeProject" `
         --label "io.minos.runtime-plane=$Plane" `
@@ -149,9 +171,59 @@ function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
 # connected profile's up commands only bring up minos-runtime members). Own a dedicated
 # provisioning network instead -- created immediately before the pull and removed right
 # after, so no persistent egress path is left attached to the runtime topology.
+# Windows PowerShell 5.1 turns anything a native command writes to stderr into an ErrorRecord,
+# which $ErrorActionPreference='Stop' then escalates to a terminating error -- so a best-effort
+# `docker network rm` of an absent network aborts the whole script there. (pwsh 7 dropped that
+# behaviour, which is why this only shows up under the installer's shell.) Mirrors
+# prod-mcp-release.ps1's Invoke-DockerAllowFailure.
+function Invoke-DockerIgnoringFailure([string[]] $Arguments) {
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & docker @Arguments 2>&1 | Out-Null
+    }
+    finally { $ErrorActionPreference = $Previous }
+}
+
+# POSTGRES_PASSWORD_FILE is only consulted by initdb, i.e. the very first time the data
+# directory is created. The data volume is declared `external: true`, so it deliberately
+# survives `docker compose down --volumes` and an uninstall that purges MINOS's own data root.
+# Once the secret file is regenerated without the volume being destroyed -- an uninstall that
+# keeps the volume, a rolled-back run, or the user clearing %LOCALAPPDATA%\MINOS -- the stored
+# role password and the secret permanently disagree, and every later run dies with an opaque
+# "unable to initialize MINOS PostgreSQL backend". Make the secret file authoritative instead:
+# the container's own local socket is trust-authenticated, so the role password can be
+# reconciled without knowing the old one and without touching the stored data.
+function Sync-ManagedPostgresPassword([string] $SecretFile) {
+    $Password = (Read-BoundedUtf8 -Path $SecretFile -MaximumBytes 65536 -Label 'Managed PostgreSQL secret').Trim()
+    if ([string]::IsNullOrWhiteSpace($Password)) { throw "Managed PostgreSQL secret is empty: $SecretFile" }
+
+    $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile,
+        '-f', $ComposeFile, '--profile', 'postgresql', 'ps', '-q', 'minos-postgres')
+    $Container = ((& docker @Base) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Container)) {
+        throw 'Unable to resolve the managed PostgreSQL container.'
+    }
+
+    # Piped through stdin rather than passed as an argument so the secret never appears in the
+    # container's command line. Single quotes are doubled per SQL string-literal escaping.
+    $Escaped = $Password.Replace("'", "''")
+    $Sql = "ALTER ROLE `"$PostgresUser`" WITH LOGIN PASSWORD '$Escaped';"
+    $Previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $Output = ($Sql | & docker exec -i $Container psql -v ON_ERROR_STOP=1 -q `
+            -U $PostgresUser -d $PostgresDatabase -f - 2>&1 | Out-String)
+    }
+    finally { $ErrorActionPreference = $Previous }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to reconcile the managed PostgreSQL role password.`n$($Output.Trim())"
+    }
+}
+
 function New-ProvisioningEgressNetwork {
     $Name = "$ComposeProject-ollama-provisioning-egress"
-    & docker network rm $Name *> $null
+    Invoke-DockerIgnoringFailure @('network', 'rm', $Name)
     & docker network create `
         --label "io.minos.installation=$ComposeProject" `
         --label 'io.minos.network-policy=ollama-provisioning-egress' `
@@ -230,8 +302,10 @@ function Restore-RuntimeStateSnapshot([object[]] $Snapshot) {
 
 $RuntimeStateSnapshot = New-RuntimeStateSnapshot @($ComposeFile, $EnvironmentFile, $PropertiesPath)
 trap {
-    Restore-RuntimeStateSnapshot $RuntimeStateSnapshot
-    Write-Warning 'MINOS M30 managed-service configuration failed; previous runtime state restored.'
+    if ($null -ne $RuntimeStateSnapshot) {
+        Restore-RuntimeStateSnapshot $RuntimeStateSnapshot
+        Write-Warning 'MINOS M30 managed-service configuration failed; previous runtime state restored.'
+    }
     break
 }
 
@@ -286,6 +360,7 @@ $Profiles = @()
 if ($StorageBackend -eq 'postgresql') {
     $Profiles += 'postgresql'
     Invoke-Compose -Arguments @('up', '-d', '--wait', 'minos-postgres') -Profiles @('postgresql')
+    Sync-ManagedPostgresPassword -SecretFile $SecretFile
 }
 if ($SemanticProvider -eq 'ollama') {
     $Profiles += 'ollama'
@@ -303,24 +378,54 @@ if ($SemanticProvider -eq 'ollama') {
             & docker network connect $EgressNetwork $OllamaContainer
             if ($LASTEXITCODE -ne 0) { throw 'Unable to attach temporary Ollama provisioning egress.' }
             $ConnectedForProvisioning = $true
-            & docker exec $OllamaContainer ollama pull $SemanticModel
-            if ($LASTEXITCODE -ne 0) { throw "Ollama model provisioning failed: $SemanticModel" }
+            # `ollama pull` streams its download progress on stderr even when it succeeds, and
+            # Windows PowerShell 5.1 escalates native stderr to a terminating error under
+            # $ErrorActionPreference='Stop'. Fold stderr into stdout for the duration and judge
+            # the result solely by the exit code, which is the actual success signal.
+            $PullPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Continue'
+                # Captured rather than discarded: this is the only place the actual reason a
+                # pull failed (network, disk, unknown model) is reported, and swallowing it
+                # leaves nothing but "provisioning failed" to debug from.
+                $PullOutput = (& docker exec $OllamaContainer ollama pull $SemanticModel 2>&1 | Out-String)
+            }
+            finally { $ErrorActionPreference = $PullPreference }
+            if ($LASTEXITCODE -ne 0) {
+                throw "Ollama model provisioning failed: $SemanticModel`n$($PullOutput.Trim())"
+            }
             $ModelLines = @(& docker exec $OllamaContainer ollama list)
             if ($LASTEXITCODE -ne 0) { throw "Unable to list Ollama models after provisioning: $SemanticModel" }
             $ModelPresent = $ModelLines | Select-Object -Skip 1 | Where-Object { $_ -match "^$([regex]::Escape($SemanticModel))" }
-            if (-not $ModelPresent) { throw "Ollama model '$SemanticModel' not found after pull — provisioning incomplete." }
+            if (-not $ModelPresent) { throw "Ollama model '$SemanticModel' not found after pull - provisioning incomplete." }
         }
         finally {
+            # Both are best-effort cleanup and must never mask the real failure, so they go
+            # through the stderr-tolerant helper (see Invoke-DockerIgnoringFailure).
             if ($ConnectedForProvisioning) {
-                & docker network disconnect $EgressNetwork $OllamaContainer 2>$null | Out-Null
+                Invoke-DockerIgnoringFailure @('network', 'disconnect', $EgressNetwork, $OllamaContainer)
             }
             # Remove the provisioning network unconditionally: it is created per-run, so a
             # leftover on a failed pull would be both a stray artifact and a lingering
             # egress path for the next attempt to reuse.
-            & docker network rm $EgressNetwork 2>$null | Out-Null
+            Invoke-DockerIgnoringFailure @('network', 'rm', $EgressNetwork)
         }
     }
 }
+
+# Warm up the ephemeral admin plane against the freshly written connected configuration,
+# before the persistent query plane is (re)created. Two things depend on it:
+#   * PostgresCodeKnowledgeSnapshotStore creates MINOS_HOME/postgresql-snapshot-scratch on
+#     construction. The query plane mounts MINOS data read-only and overlays a tmpfs there,
+#     and runc cannot create that mountpoint inside a read-only bind -- so the directory has
+#     to exist beforehand. The admin plane runs as uid 10001 with the data mount writable, so
+#     letting MINOS create it here is what also gets the 0700/owner invariant right (neither
+#     the Windows host side nor root-without-DAC_OVERRIDE can).
+#   * It surfaces a bad PostgreSQL/Ollama configuration here, with MINOS's own diagnostics,
+#     instead of as an opaque MCP handshake timeout later.
+# The base workflow's own admin runs all happen before this script rewrites the storage
+# settings, so none of them can serve this purpose.
+Invoke-Compose -Arguments @('run', '--rm', '--no-deps', 'minos-admin', 'tools', 'list', '--format', 'json') -Profiles $Profiles
 
 if ($Start) {
     Invoke-Compose -Arguments @('up', '-d', '--force-recreate', 'minos-mcp') -Profiles $Profiles
