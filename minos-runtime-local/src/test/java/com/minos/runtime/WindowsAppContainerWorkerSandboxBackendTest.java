@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -225,6 +226,98 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertEquals("fixture-provider", artifact.indexerId());
         assertTrue(Files.isRegularFile(artifact.finalArtifact()));
         assertEquals("process-sandbox-artifact", Files.readString(artifact.finalArtifact(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void toolchainHomeEnvironmentGrantsItsRootButNeverAProfileWideLocation() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-toolchain-home-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+        Path projectJdk = Files.createDirectories(
+                Files.createTempDirectory("minos-appcontainer-project-jdk-").resolve("bin").getParent());
+        Path userProfile = Path.of(System.getenv("USERPROFILE")).toAbsolutePath().normalize();
+
+        // A project JDK outside MINOS' own runtime must become readable, or scip-java cannot even
+        // probe its own java.exe; the user profile must stay unreadable whatever the variable says.
+        Set<Path> granted = readRootsOf(backend, childPowerShell,
+                Map.of("JAVA_HOME", projectJdk.toString()));
+        Set<Path> refused = readRootsOf(backend, childPowerShell,
+                Map.of("JAVA_HOME", userProfile.toString()));
+
+        assertTrue(granted.contains(projectJdk.toRealPath()),
+                () -> "project toolchain root must be granted, got " + granted);
+        assertFalse(refused.contains(userProfile),
+                () -> "a profile-wide toolchain value must never be granted, got " + refused);
+    }
+
+    @Test
+    void hostJvmJavaHomeIsNeverGrantedAsAProviderReadRoot() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-javahome-host-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path childPowerShell = CommandLocator.windowsPowerShell().orElseThrow();
+
+        // Reproduces MINOS running under a JDK an IDE run configuration selected (e.g. from Program
+        // Files, as IntelliJ does): indexing must never need to read, let alone ACL, that JDK just
+        // because it happens to be the JVM currently executing MINOS.
+        Path simulatedDevJdk = Files.createTempDirectory("minos-appcontainer-simulated-dev-jdk-");
+        String originalJavaHome = System.getProperty("java.home");
+        System.setProperty("java.home", simulatedDevJdk.toString());
+        try {
+            Set<Path> granted = readRootsOf(backend, childPowerShell, Map.of());
+            assertFalse(granted.contains(simulatedDevJdk.toRealPath()),
+                    () -> "the host JVM's java.home must never be a provider read root, got " + granted);
+        } finally {
+            System.setProperty("java.home", originalJavaHome);
+        }
+    }
+
+    @Test
+    void ungrantableReadRootFailsClosedInsteadOfReachingIcacls() {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        // %SystemRoot% itself (not a MINOS-owned path) is used directly to exercise the ACL
+        // grantability primitive in isolation; addReadRoot never reaches it for a real plan because
+        // isWindowsSystemRoot already excludes it earlier.
+        Path systemRoot = Path.of(System.getenv("SystemRoot")).toAbsolutePath().normalize();
+        boolean grantable = WindowsAppContainerWorkerSandboxBackend.isAclGrantable(systemRoot);
+        assumeTrue(!grantable, "this account unexpectedly holds WRITE_DAC on %SystemRoot%; "
+                + "not representative of a non-elevated standard user");
+        assertThrows(IllegalStateException.class,
+                () -> WindowsAppContainerWorkerSandboxBackend.requireAclGrantable(systemRoot));
+    }
+
+    /** Decodes the read roots the sandbox plan really grants for the given provider environment. */
+    private static Set<Path> readRootsOf(
+            WindowsAppContainerWorkerSandboxBackend backend,
+            Path childExecutable,
+            Map<String, String> environment
+    ) throws Exception {
+        Path working = Files.createTempDirectory("minos-appcontainer-toolchain-working-");
+        Path run = Files.createTempDirectory("minos-appcontainer-toolchain-run-");
+        IndexerProcessPlan original = new IndexerProcessPlan(
+                List.of(childExecutable.toString(), "-NoLogo"),
+                working,
+                environment,
+                run.resolve("index.scip"),
+                Duration.ofSeconds(30));
+        backend.sandboxPlan(original, run);
+        Map<String, String> plan = new java.util.LinkedHashMap<>();
+        for (String line : Files.readAllLines(run.resolve("windows-appcontainer-plan.txt"), StandardCharsets.UTF_8)) {
+            int separator = line.indexOf('=');
+            if (separator > 0) plan.put(line.substring(0, separator), line.substring(separator + 1));
+        }
+        Set<Path> roots = new java.util.LinkedHashSet<>();
+        int count = Integer.parseInt(plan.getOrDefault("read.count", "0"));
+        for (int index = 0; index < count; index++) {
+            byte[] decoded = java.util.Base64.getDecoder().decode(plan.get("read." + index));
+            roots.add(Path.of(new String(decoded, StandardCharsets.UTF_8)).toAbsolutePath().normalize());
+        }
+        return roots;
     }
 
     private static IndexingExecutionRequest executionRequest(Path projectRoot) {

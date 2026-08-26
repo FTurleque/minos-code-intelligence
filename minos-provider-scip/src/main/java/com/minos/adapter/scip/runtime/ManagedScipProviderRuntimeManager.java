@@ -22,15 +22,19 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -53,6 +57,21 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private static final long MAX_COURSIER_ARCHIVE_BYTES = 64L * 1024L * 1024L;
     private static final URI COURSIER_WINDOWS_URI = URI.create(
             "https://raw.githubusercontent.com/coursier/launchers/" + COURSIER_LAUNCHERS_COMMIT + "/cs-x86_64-pc-win32.zip");
+
+    // A project's own Maven wrapper or a host-installed `mvn` cannot be reached by the Windows
+    // AppContainer sandbox in general: wrapper discovery walks ancestor directories the sandbox
+    // never grants, and a host `mvn` may sit anywhere PATH names, most of which carry no MINOS
+    // grant either. scip-java on Windows therefore gets its own MINOS-managed Maven, mirroring how
+    // Coursier and scip-typescript are already fetched, checksummed and confined to MINOS_HOME/tools
+    // — a location the sandbox already grants through the existing managed-tools root.
+    private static final String MAVEN_VERSION = "3.9.16";
+    private static final String MAVEN_SHA256 = "5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce";
+    private static final long MAX_MAVEN_ARCHIVE_BYTES = 16L * 1024L * 1024L;
+    private static final long MAX_MAVEN_ARCHIVE_ENTRIES = 4_096L;
+    private static final long MAX_MAVEN_EXTRACTED_BYTES = 64L * 1024L * 1024L;
+    private static final URI MAVEN_DISTRIBUTION_URI = URI.create(
+            "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/" + MAVEN_VERSION
+                    + "/apache-maven-" + MAVEN_VERSION + "-bin.zip");
     private static final String SCIP_TYPESCRIPT_NPM_LOCK_RESOURCE = "scip-typescript-package-lock.json";
     private static final String SCIP_TYPESCRIPT_NPM_INTEGRITY = "sha512-k+AtsrqmS41Sd5qjkZlHcmvoSQIvBOonRj4jpgp0KNFM6aqvMGpdSuPUqrUcg8ENTKjUbfaUVszgQwq3bCOvwA==";
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
@@ -99,7 +118,8 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     providerId, home, new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow()));
             case SCIP_JAVA_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipJavaProcessPlanFactory(
-                            status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner()));
+                            status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
+                            CommandLocator.isWindows() ? mavenExecutable() : null));
             default -> throw new IllegalArgumentException("unknown managed provider: " + providerId);
         };
     }
@@ -124,8 +144,10 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         List<String> diagnostics = new ArrayList<>();
         Optional<Path> coursier = coursierExecutable();
         boolean windowsRuntimeInstalled = !CommandLocator.isWindows() || windowsRuntimeInstalled();
+        boolean mavenInstalled = !CommandLocator.isWindows() || Files.isRegularFile(mavenExecutable());
         if (coursier.isEmpty()) diagnostics.add("Coursier is not installed in MINOS_HOME/tools and was not found in PATH");
         if (!windowsRuntimeInstalled) diagnostics.add("managed scip-java " + SCIP_JAVA_VERSION + " Windows compatibility runtime is not installed");
+        if (!mavenInstalled) diagnostics.add("managed Maven " + MAVEN_VERSION + " is not installed in MINOS_HOME/tools");
         if (CommandLocator.isWindows()) {
             if (powerShellExecutable().isEmpty()) diagnostics.add("PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows");
             if (!gitBashAvailable()) diagnostics.add("Git Bash (bash.exe) is required for scip-java on Windows");
@@ -138,7 +160,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             Path javac = Path.of(javaHome).resolve("bin").resolve(CommandLocator.isWindows() ? "javac.exe" : "javac");
             if (!Files.isRegularFile(javac)) diagnostics.add("JAVA_HOME does not contain javac: " + javaHome);
         }
-        boolean installed = coursier.isPresent() && windowsRuntimeInstalled;
+        boolean installed = coursier.isPresent() && windowsRuntimeInstalled && mavenInstalled;
         ProviderRuntimeStatus.State state = !installed
                 ? ProviderRuntimeStatus.State.NOT_INSTALLED
                 : diagnostics.isEmpty() ? ProviderRuntimeStatus.State.READY : ProviderRuntimeStatus.State.BLOCKED;
@@ -181,7 +203,10 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private ProviderRuntimeStatus installJava() throws Exception {
         Files.createDirectories(toolsRoot);
         Path coursier = ensureCoursier();
-        if (CommandLocator.isWindows()) installJavaWindowsRuntime();
+        if (CommandLocator.isWindows()) {
+            installJavaWindowsRuntime();
+            ensureMaven();
+        }
         run(List.of(coursier.toString(), "--help"), home, toolsRoot.resolve("coursier-verify.log"), Duration.ofMinutes(1));
         Path scipJavaLog = toolsRoot.resolve("scip-java-install.log");
         run(scipJavaInstallationProbe(coursier), home, scipJavaLog, Duration.ofMinutes(10));
@@ -300,6 +325,115 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
         move(executablePartial, destination);
         return destination;
+    }
+
+    private Path mavenRoot() { return toolsRoot.resolve("maven").resolve(MAVEN_VERSION); }
+
+    Path mavenExecutable() {
+        return mavenRoot().resolve("apache-maven-" + MAVEN_VERSION).resolve("bin")
+                .resolve(CommandLocator.isWindows() ? "mvn.cmd" : "mvn");
+    }
+
+    private Path ensureMaven() throws Exception {
+        Path existing = mavenExecutable();
+        if (Files.isRegularFile(existing)) return existing;
+        Path root = mavenRoot();
+        Files.createDirectories(root);
+        Path archive = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.zip");
+        Path archivePartial = root.resolve("apache-maven-" + MAVEN_VERSION + "-bin.partial.zip");
+        Files.deleteIfExists(archivePartial);
+
+        HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(30)).build();
+        HttpRequest request = HttpRequest.newBuilder(MAVEN_DISTRIBUTION_URI)
+                .timeout(Duration.ofMinutes(3))
+                .header("User-Agent", "MINOS-Code-Intelligence").build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            try (InputStream ignored = response.body()) { /* close error response */ }
+            throw new IllegalStateException("Maven distribution download failed with HTTP " + response.statusCode());
+        }
+        try (InputStream responseBody = response.body();
+             BoundedInputStream bounded = new BoundedInputStream(
+                     responseBody, MAX_MAVEN_ARCHIVE_BYTES, "Maven distribution archive");
+             OutputStream output = Files.newOutputStream(archivePartial)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
+        } catch (Exception exception) {
+            Files.deleteIfExists(archivePartial);
+            throw exception;
+        }
+        if (!Files.isRegularFile(archivePartial, LinkOption.NOFOLLOW_LINKS) || Files.size(archivePartial) == 0L) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Maven distribution download produced an empty archive");
+        }
+        String actualDigest = sha256(archivePartial);
+        if (!MAVEN_SHA256.equalsIgnoreCase(actualDigest)) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Maven distribution checksum mismatch: expected="
+                    + MAVEN_SHA256 + " actual=" + actualDigest);
+        }
+        move(archivePartial, archive);
+
+        extractZipBounded(archive, root, MAX_MAVEN_EXTRACTED_BYTES, MAX_MAVEN_ARCHIVE_ENTRIES);
+        Path mvn = mavenExecutable();
+        if (!Files.isRegularFile(mvn)) {
+            throw new IllegalStateException("Maven distribution archive did not contain " + mvn);
+        }
+        if (!CommandLocator.isWindows()) {
+            try {
+                Set<PosixFilePermission> permissions = EnumSet.copyOf(Files.getPosixFilePermissions(mvn));
+                permissions.add(PosixFilePermission.OWNER_EXECUTE);
+                Files.setPosixFilePermissions(mvn, permissions);
+            } catch (UnsupportedOperationException notPosix) {
+                // Non-POSIX filesystem: the archive's own permission bits are used as-is.
+            }
+        }
+        return mvn;
+    }
+
+    /**
+     * Extracts a zip archive under {@code destinationRoot}, rejecting any entry that would resolve
+     * outside it (zip-slip) and bounding both entry count and total extracted bytes so a corrupted
+     * or oversized archive cannot turn installation into unbounded disk consumption.
+     */
+    private static void extractZipBounded(
+            Path archive, Path destinationRoot, long maxTotalBytes, long maxEntries
+    ) throws IOException {
+        Path root = destinationRoot.toAbsolutePath().normalize();
+        Files.createDirectories(root);
+        long totalBytes = 0L;
+        long entries = 0L;
+        try (InputStream input = Files.newInputStream(archive); ZipInputStream zip = new ZipInputStream(input)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (++entries > maxEntries) throw new IOException("archive has too many entries: " + archive);
+                Path target = root.resolve(entry.getName()).normalize();
+                if (!target.startsWith(root)) {
+                    throw new IOException("archive entry escapes destination: " + entry.getName());
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                    continue;
+                }
+                Files.createDirectories(target.getParent());
+                try (OutputStream output = Files.newOutputStream(
+                        target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int read;
+                    while ((read = zip.read(buffer)) >= 0) {
+                        if (read == 0) continue;
+                        totalBytes += read;
+                        if (totalBytes > maxTotalBytes) {
+                            throw new IOException("archive exceeds extraction size budget: " + archive);
+                        }
+                        output.write(buffer, 0, read);
+                    }
+                }
+            }
+        }
     }
 
     private static String sha256(Path file) throws IOException {
