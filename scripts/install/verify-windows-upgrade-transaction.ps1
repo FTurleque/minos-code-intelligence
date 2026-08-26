@@ -51,8 +51,10 @@ function New-FixturePackage {
     "# update-installation $Version" | Set-Content -LiteralPath (Join-Path $Root 'integration\update-installation.ps1') -Encoding ascii
     "# Dockerfile $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\Dockerfile.mcp.release') -Encoding ascii
     "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.prod.yaml') -Encoding ascii
+    "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.connected.yaml') -Encoding ascii
     "# prod-mcp-release $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\prod-mcp-release.ps1') -Encoding ascii
     "# configure-docker-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-docker-mcp.ps1') -Encoding ascii
+    "# configure-m30-docker-services $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-m30-docker-services.ps1') -Encoding ascii
     '{"bomFormat":"CycloneDX"}' | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\minos.cdx.json') -Encoding ascii
     "Third party notices $Version" | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\THIRD-PARTY-NOTICES.txt') -Encoding ascii
     "@echo off`r`nrem minos $Version" | Set-Content -LiteralPath (Join-Path $Root 'minos.cmd') -Encoding ascii
