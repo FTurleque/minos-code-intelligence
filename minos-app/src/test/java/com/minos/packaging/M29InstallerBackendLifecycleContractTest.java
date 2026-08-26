@@ -76,7 +76,15 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(installer.contains("ExistingMcpBackend"));
         assertTrue(installer.contains("LoadStringFromFile(ConfigPath, ConfigText)"));
         assertTrue(installer.contains("integration\\switch-mcp-backend.ps1"));
-        assertTrue(installer.contains("if ConfigureSelectedMcpBackend() then\n      ConfigureMcpClients;"));
+        assertTrue(installer.contains(
+                "if ConfigureSelectedMcpBackend() then\n      ConfigureMcpClients\n    else\n      RevertRuntimeSettingsToLocal;"));
+        // A Docker-managed Postgres/Ollama selection is committed to MINOS's own
+        // runtime settings before the Docker switch is proven -- if that switch then
+        // fails and rolls back, those settings must be reverted too, or MINOS boots
+        // pointed at a Postgres connection that was never provisioned.
+        assertTrue(installer.contains("procedure RevertRuntimeSettingsToLocal;"));
+        assertTrue(installer.contains(
+                "if not (DockerMcpSelected() and (PostgreSqlSelected() or OllamaSelected())) then exit;"));
         assertTrue(installer.contains("if not DockerReady() then"));
         assertTrue(installer.contains("aucun fallback silencieux"));
         assertFalse(installer.contains("ConfigureDockerMcp;"));
@@ -88,6 +96,18 @@ class M29InstallerBackendLifecycleContractTest {
             assertTrue(zipInstaller.contains("integration\\" + packaged), "ZIP installer omits " + packaged);
         }
         assertTrue(distribution.contains("verify-mcp-backend-lifecycle.ps1"));
+
+        // configure-docker-mcp.ps1 delegates to the M30 configurator whenever
+        // StorageBackend=postgresql or SemanticProvider=ollama is selected, and that
+        // configurator resolves compose.mcp.connected.yaml relative to its own directory.
+        // Both must ship, or selecting managed PostgreSQL/Ollama fails at install time with
+        // "M30 Docker service configurator is missing" -- which is exactly what happened
+        // while these were absent from the distribution.
+        for (String m30 : new String[]{
+                "docker\\scripts\\configure-m30-docker-services.ps1",
+                "docker\\compose.mcp.connected.yaml"}) {
+            assertTrue(distribution.contains(m30), "distribution omits " + m30);
+        }
         assertTrue(zipInstaller.contains("[ValidateSet('none', 'native', 'docker')]"));
         assertTrue(zipInstaller.contains("TargetBackend = $McpBackend"));
         assertTrue(zipInstaller.contains("DataRoot = $DataRoot"));
@@ -118,6 +138,46 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(runner.contains("M29-S7 uninstall-preserve SUCCESS"));
         assertTrue(runner.contains("M29-S7 explicit purge SUCCESS"));
         assertTrue(runner.contains("M29-S7 INSTALLER SWITCHING AND LIFECYCLE QUALIFICATION SUCCESS"));
+    }
+
+    // The installer runs every shipped .ps1 through {sys}\WindowsPowerShell\v1.0\powershell.exe.
+    // Windows PowerShell 5.1 decodes a BOM-less script as ANSI, so a UTF-8 non-ASCII character
+    // is mis-decoded -- and an em dash becomes a sequence containing U+0094, which PowerShell
+    // accepts as a closing smart quote. Inside a double-quoted string that silently truncates
+    // the string and the whole script fails to PARSE, which is how managed PostgreSQL/Ollama
+    // died with "Le terminateur " est manquant dans la chaine" on a real install. These files
+    // ship without a BOM, so keep them ASCII-only.
+    @Test
+    void shippedPowerShellScriptsAreAsciiOnly() throws Exception {
+        Path root = repoRoot();
+        String distribution = text(root.resolve("scripts/release/build-windows-distribution.ps1"));
+
+        StringBuilder offenders = new StringBuilder();
+        int scanned = 0;
+        for (String directory : new String[]{"scripts/install", "docker/scripts"}) {
+            try (var entries = Files.list(root.resolve(directory))) {
+                for (Path script : entries.filter(p -> p.toString().endsWith(".ps1")).toList()) {
+                    String name = script.getFileName().toString();
+                    if (!distribution.contains(name)) {
+                        continue; // not part of the installed payload
+                    }
+                    scanned++;
+                    String body = Files.readString(script);
+                    for (int i = 0; i < body.length(); i++) {
+                        if (body.charAt(i) > 127) {
+                            offenders.append(directory).append('/').append(name)
+                                    .append(" contains U+")
+                                    .append(String.format("%04X", (int) body.charAt(i)))
+                                    .append('\n');
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(scanned > 0, "shipped-script scan matched nothing; the distribution list moved");
+        assertTrue(offenders.isEmpty(),
+                "shipped scripts must be ASCII-only for Windows PowerShell 5.1:\n" + offenders);
     }
 
     private static void assertOrdered(String text, String... tokens) {

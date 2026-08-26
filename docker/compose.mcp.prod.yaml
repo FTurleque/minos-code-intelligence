@@ -250,6 +250,4 @@ volumes:
   minos-provider-tools:
     labels:
       io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
-      io.minos.version: "${MINOS_VERSION}"
-      io.minos.revision: "${MINOS_GIT_COMMIT}"
       io.minos.runtime-plane: provider-tools

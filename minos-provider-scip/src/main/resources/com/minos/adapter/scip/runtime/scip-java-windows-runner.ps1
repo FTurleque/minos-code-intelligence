@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string] $CoursierCommand,
     [Parameter(Mandatory = $true)][string] $Coordinate,
     [Parameter(Mandatory = $true)][ValidateSet('JAVA', 'KOTLIN')][string] $Language,
-    [Parameter(Mandatory = $true)][string] $OutputDirectory
+    [Parameter(Mandatory = $true)][string] $OutputDirectory,
+    [Parameter(Mandatory = $true)][string] $MavenCommand
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,26 +24,17 @@ function Resolve-JdkTool {
 }
 
 function Resolve-MavenCommand {
-    param([Parameter(Mandatory = $true)][string] $Root)
+    param(
+        [Parameter(Mandatory = $true)][string] $Explicit
+    )
 
-    $current = [System.IO.DirectoryInfo]::new($Root)
-    while ($null -ne $current) {
-        foreach ($name in @('mvnw.cmd', 'mvnw.bat')) {
-            $candidate = Join-Path $current.FullName $name
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                return (Resolve-Path -LiteralPath $candidate).Path
-            }
-        }
-        $current = $current.Parent
+    # The AppContainer sandbox only grants exact, MINOS-declared roots. Neither an ancestor
+    # directory's mvnw.cmd nor a host `mvn` found via PATH is reachable from inside it in general,
+    # so MINOS always supplies its own managed Maven explicitly; this is never a fallback search.
+    if (-not (Test-Path -LiteralPath $Explicit -PathType Leaf)) {
+        throw "scip-java requires MINOS-managed Maven, but it is not reachable: $Explicit"
     }
-
-    foreach ($name in @('mvn.cmd', 'mvn.bat', 'mvn.exe', 'mvn')) {
-        $command = Get-Command $name -ErrorAction SilentlyContinue
-        if ($command) {
-            return $command.Source
-        }
-    }
-    throw 'scip-java requires Maven. No mvnw.cmd was found in the project/ancestors and Maven is not available in PATH.'
+    return (Resolve-Path -LiteralPath $Explicit).Path
 }
 
 function Resolve-GitBash {
@@ -365,7 +357,7 @@ New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 $java = Resolve-JdkTool -Name 'java'
 $javac = Resolve-JdkTool -Name 'javac'
 $jar = Resolve-JdkTool -Name 'jar'
-$maven = Resolve-MavenCommand -Root $project
+$maven = Resolve-MavenCommand -Explicit $MavenCommand
 $bash = Resolve-GitBash
 $csc = Resolve-CSharpCompiler
 $shims = Install-CommandShims -DestinationDirectory (Join-Path $workRoot 'command-shims') -Compiler $csc

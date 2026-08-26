@@ -284,7 +284,7 @@ function Find-ClaudeDesktopMsixDir {
 function Test-ClaudeDesktop {
     $Roaming = Get-UserFolderPath 'APPDATA' 'ApplicationData'
     $Local = Get-UserFolderPath 'LOCALAPPDATA' 'LocalApplicationData'
-    # Windows Store (MSIX) installation — sandboxed LocalCache path.
+    # Windows Store (MSIX) installation - sandboxed LocalCache path.
     if (-not [string]::IsNullOrWhiteSpace((Find-ClaudeDesktopMsixDir))) {
         return $true
     }
@@ -293,7 +293,7 @@ function Test-ClaudeDesktop {
         return $true
     }
     # %APPDATA%\Claude exists but only counts as traditional Claude Desktop when the
-    # Claude Code Desktop markers are absent — both apps write to %APPDATA%\Claude.
+    # Claude Code Desktop markers are absent - both apps write to %APPDATA%\Claude.
     if ((Test-Path -LiteralPath (Join-Path $Roaming 'Claude') -PathType Container) -and
         -not (Test-ClaudeCodeDesktop)) {
         return $true

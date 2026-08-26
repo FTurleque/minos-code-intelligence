@@ -39,6 +39,22 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      # PostgresCodeKnowledgeSnapshotStore creates MINOS_HOME/postgresql-snapshot-scratch in
+      # its constructor, but this plane mounts MINOS data read-only by design -- so selecting
+      # the PostgreSQL backend made the MCP server fail to bootstrap with a FileSystemException
+      # before it could answer a single request. The scratch area is ephemeral per-process
+      # working space, so a tmpfs is its correct home: the data mount stays read-only and the
+      # scratch never outlives the container. Owned by the container's unprivileged uid with
+      # private permissions to satisfy PrivateLocalStorage's own checks.
+      #
+      # The mountpoint itself must already exist on the data bind (runc cannot create one
+      # inside a read-only mount). It is not created here by data-bootstrap: that plane runs as
+      # root with only CHOWN/FOWNER, so without DAC_OVERRIDE it cannot write into the 0700
+      # directory it just chown'd to uid 10001. Instead the ephemeral admin plane -- which runs
+      # as 10001 with the data mount writable, and always precedes this plane in
+      # prod-mcp-release.ps1's Install/Validate -- lets MINOS create it through its own
+      # PrivateLocalStorage invariant, which is also what keeps the permissions correct.
+      - /var/lib/minos/postgresql-snapshot-scratch:rw,nosuid,nodev,noexec,size=256m,mode=0700,uid=10001,gid=10001
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
@@ -114,6 +130,39 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: "no"
+
+  # Mirrors the base profile's data-bootstrap. The M30 configurator swaps this connected file
+  # in as the active runtime compose, so every service the base workflow runs must exist here
+  # too -- omitting it made prod-mcp-release.ps1's Install/Validate fail with "no such
+  # service: minos-data-bootstrap" on any run after managed PostgreSQL/Ollama was configured.
+  minos-data-bootstrap:
+    image: "${MINOS_IMAGE}"
+    entrypoint: [/bin/sh, -c]
+    command:
+      - |
+        set -eu
+        chown 10001:10001 /var/lib/minos
+        chmod 700 /var/lib/minos
+        echo "MINOS Docker data root ownership prepared."
+    user: "0:0"
+    init: true
+    network_mode: none
+    volumes:
+      - type: bind
+        source: "${MINOS_DATA_DIR}"
+        target: /var/lib/minos
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    labels:
+      io.minos.installation: "${MINOS_COMPOSE_PROJECT}"
+      io.minos.version: "${MINOS_VERSION}"
+      io.minos.revision: "${MINOS_GIT_COMMIT}"
+      io.minos.runtime-plane: data-bootstrap
 
   minos-tools-bootstrap:
     image: "${MINOS_IMAGE}"

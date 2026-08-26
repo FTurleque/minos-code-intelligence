@@ -40,6 +40,15 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
     /** Idle periods per sampling period, so supervision never burns more than 1/(1+N) of a core. */
     private static final long IDLE_RATIO = 3L;
 
+    /**
+     * Bounded tolerance for a transient inspection failure (e.g. a real-time antivirus scan
+     * briefly locking a just-written executable) before it is treated as a containment breach.
+     * A provider that keeps an entry genuinely unreadable still trips the breach once this short
+     * window is exhausted, so a hostile provider cannot use it to hide writes.
+     */
+    private static final int TRANSIENT_RETRY_ATTEMPTS = 3;
+    private static final long TRANSIENT_RETRY_DELAY_MILLIS = 25L;
+
     private final List<Path> roots;
     private final ProviderWriteQuota quota;
     private final Runnable jobKill;
@@ -245,6 +254,16 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                 if (failure instanceof NoSuchFileException && !file.equals(root)) {
                     return FileVisitResult.CONTINUE;
                 }
+                // Only a regular file's transient failure (e.g. a brief antivirus lock while it is
+                // being written) is recoverable this way: a successful stat proves the file itself
+                // became readable again. A directory that could not be opened for listing stats fine
+                // regardless -- POSIX stat only needs search permission on its parent, not on the
+                // directory itself -- so a successful stat here proves nothing about whether its
+                // contents (still hidden) are inspectable, and must not be treated as recovered.
+                Optional<BasicFileAttributes> recovered = retryReadAttributes(file);
+                if (recovered.isPresent() && !recovered.get().isDirectory()) {
+                    return visitFile(file, recovered.get());
+                }
                 totals[1] = saturatingAdd(totals[1], 1L);
                 visibilityFailure[0] = "cannot inspect an entry below a supervised writable root ("
                         + failure.getClass().getSimpleName() + ")";
@@ -259,6 +278,25 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                         : FileVisitResult.CONTINUE;
             }
         };
+    }
+
+    /** Retries a denied/failed attribute read briefly before conceding visibility is lost. */
+    private static Optional<BasicFileAttributes> retryReadAttributes(Path file) {
+        for (int attempt = 0; attempt < TRANSIENT_RETRY_ATTEMPTS; attempt++) {
+            try {
+                return Optional.of(Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
+            } catch (NoSuchFileException disappeared) {
+                return Optional.empty();
+            } catch (IOException stillDenied) {
+                try {
+                    Thread.sleep(TRANSIENT_RETRY_DELAY_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private static long saturatingAdd(long left, long right) {

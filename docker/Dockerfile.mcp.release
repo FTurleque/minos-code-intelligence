@@ -81,7 +81,7 @@ RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
 RUN set -eux; \
     maven_archive="apache-maven-${MAVEN_VERSION}-bin.zip"; \
     maven_base="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"; \
-    curl -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "/tmp/${maven_archive}" "${maven_base}/${maven_archive}"; \
     printf '%s  %s\n' "${MAVEN_ZIP_SHA256}" "/tmp/${maven_archive}" | sha256sum -c -; \
     unzip -q "/tmp/${maven_archive}" -d /opt; \
     ln -s "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn; \
@@ -92,8 +92,8 @@ RUN set -eux; \
 # for provider compatibility and expose this limitation in the provider inventory.
 RUN set -eux; \
     node_archive="node-v${NODE_VERSION}-linux-x64.tar.xz"; \
-    curl -fsSLo "/tmp/${node_archive}" "https://nodejs.org/dist/v${NODE_VERSION}/${node_archive}"; \
-    curl -fsSLo /tmp/node-SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "/tmp/${node_archive}" "https://nodejs.org/dist/v${NODE_VERSION}/${node_archive}"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo /tmp/node-SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
     cd /tmp; \
     grep " ${node_archive}$" node-SHASUMS256.txt | sha256sum -c -; \
     tar -xJf "${node_archive}" -C /usr/local --strip-components=1; \
@@ -101,7 +101,7 @@ RUN set -eux; \
     node --version; npm --version
 
 RUN set -eux; \
-    curl -fsSLo /tmp/cs.gz "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_LAUNCHERS_COMMIT}/cs-x86_64-pc-linux.gz"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo /tmp/cs.gz "https://raw.githubusercontent.com/coursier/launchers/${COURSIER_LAUNCHERS_COMMIT}/cs-x86_64-pc-linux.gz"; \
     printf '%s  %s\n' "${COURSIER_LINUX_SHA256}" /tmp/cs.gz | sha256sum -c -; \
     gunzip /tmp/cs.gz; \
     install -m 0755 /tmp/cs /usr/local/bin/cs; \
@@ -109,7 +109,7 @@ RUN set -eux; \
     cs --help >/dev/null
 
 RUN set -eux; \
-    curl -fsSLo /tmp/scip-clang "https://github.com/sourcegraph/scip-clang/releases/download/v${SCIP_CLANG_VERSION}/scip-clang-x86_64-linux"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo /tmp/scip-clang "https://github.com/sourcegraph/scip-clang/releases/download/v${SCIP_CLANG_VERSION}/scip-clang-x86_64-linux"; \
     printf '%s  %s\n' "${SCIP_CLANG_LINUX_SHA256}" /tmp/scip-clang | sha256sum -c -; \
     install -m 0755 /tmp/scip-clang /usr/local/bin/scip-clang; \
     rm -f /tmp/scip-clang; \
@@ -118,7 +118,7 @@ RUN set -eux; \
 # The standalone rust-analyzer binary reports only its executable version. Release date and
 # commit are artifact provenance and remain pinned by the download URL + provider inventory.
 RUN set -eux; \
-    curl -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo /tmp/rust-analyzer.gz "https://github.com/rust-lang/rust-analyzer/releases/download/${RUST_ANALYZER_RELEASE}/rust-analyzer-x86_64-unknown-linux-gnu.gz"; \
     printf '%s  %s\n' "${RUST_ANALYZER_LINUX_GZ_SHA256}" /tmp/rust-analyzer.gz | sha256sum -c -; \
     gunzip /tmp/rust-analyzer.gz; \
     install -m 0755 /tmp/rust-analyzer /usr/local/bin/rust-analyzer; \
@@ -153,7 +153,7 @@ RUN set -eux; \
     nuget_source=/tmp/minos-pinned-nuget; \
     nuget_package="${nuget_source}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
     mkdir -p "$nuget_source" "$dotnet_root"; \
-    curl -fsSLo "$nuget_package" \
+    curl --retry 5 --retry-all-errors --retry-delay 2 --max-time 60 -fsSLo "$nuget_package" \
       "https://api.nuget.org/v3-flatcontainer/scip-dotnet/${SCIP_DOTNET_VERSION}/scip-dotnet.${SCIP_DOTNET_VERSION}.nupkg"; \
     printf '%s  %s\n' "${SCIP_DOTNET_NUPKG_SHA256}" "$nuget_package" | sha256sum -c -; \
     printf '%s\n' \
