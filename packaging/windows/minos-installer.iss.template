@@ -559,6 +559,38 @@ begin
   if PasswordFile <> '' then DeleteFile(PasswordFile);
 end;
 
+// ConfigureRuntimeSettings above commits StorageBackend=postgresql / SemanticProvider=ollama
+// unconditionally whenever DockerMcpSelected() picked a Docker-managed Postgres/Ollama --
+// before ConfigureSelectedMcpBackend has actually proven the Docker switch succeeds. If that
+// switch then fails and rolls back to the previous (or native) backend, those commitments are
+// left dangling: MINOS boots pointed at a Postgres connection that was never provisioned,
+// failing hard on every invocation even though the rest of the install completed. Only called
+// when the Docker-managed path was the one that failed -- an external/pre-existing Postgres
+// selected without Docker never depended on ConfigureSelectedMcpBackend succeeding, so it is
+// left alone.
+procedure RevertRuntimeSettingsToLocal;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShell: String;
+  SetupMode: String;
+begin
+  if IsSmokeBuild() then exit;
+  if not (DockerMcpSelected() and (PostgreSqlSelected() or OllamaSelected())) then exit;
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if AdvancedSetupSelected() then SetupMode := 'advanced' else SetupMode := 'standard';
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\integration\configure-runtime-settings.ps1') +
+    '" -DataRoot "' + EffectiveDataRoot() +
+    '" -DockerDataRoot "' + EffectiveDockerDataRoot() +
+    '" -SetupMode ' + SetupMode +
+    ' -McpBackend native -McpServerName "' + EffectiveMcpServerName() +
+    '" -StorageBackend local -SemanticProvider disabled' +
+    ' -DockerInstanceName "' + DockerInstanceEdit.Text + '"';
+  if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('RevertRuntimeSettingsToLocal: fallback did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
+end;
+
 function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
@@ -1236,7 +1268,9 @@ begin
     if not ConfigureRuntimeSettings() then exit;
     PersistInstallerRegistry;
     if ConfigureSelectedMcpBackend() then
-      ConfigureMcpClients;
+      ConfigureMcpClients
+    else
+      RevertRuntimeSettingsToLocal;
   end;
 end;
 
