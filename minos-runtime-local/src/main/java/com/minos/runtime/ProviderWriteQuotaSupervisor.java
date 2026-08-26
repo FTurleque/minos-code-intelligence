@@ -254,8 +254,14 @@ final class ProviderWriteQuotaSupervisor implements AutoCloseable {
                 if (failure instanceof NoSuchFileException && !file.equals(root)) {
                     return FileVisitResult.CONTINUE;
                 }
+                // Only a regular file's transient failure (e.g. a brief antivirus lock while it is
+                // being written) is recoverable this way: a successful stat proves the file itself
+                // became readable again. A directory that could not be opened for listing stats fine
+                // regardless -- POSIX stat only needs search permission on its parent, not on the
+                // directory itself -- so a successful stat here proves nothing about whether its
+                // contents (still hidden) are inspectable, and must not be treated as recovered.
                 Optional<BasicFileAttributes> recovered = retryReadAttributes(file);
-                if (recovered.isPresent()) {
+                if (recovered.isPresent() && !recovered.get().isDirectory()) {
                     return visitFile(file, recovered.get());
                 }
                 totals[1] = saturatingAdd(totals[1], 1L);
