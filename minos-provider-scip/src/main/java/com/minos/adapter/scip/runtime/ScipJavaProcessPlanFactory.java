@@ -37,8 +37,18 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
     private final Path coursier;
     private final String coordinate;
     private final Path windowsRunner;
+    private final Path windowsManagedMaven;
 
     public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner) {
+        this(coursier, coordinate, windowsRunner, null);
+    }
+
+    /**
+     * @param windowsManagedMaven MINOS-managed Maven executable used on Windows so the sandboxed
+     *     runner never has to discover a wrapper or host {@code mvn} itself — both are unreachable
+     *     from inside the AppContainer sandbox in general. Unused off Windows.
+     */
+    public ScipJavaProcessPlanFactory(Path coursier, String coordinate, Path windowsRunner, Path windowsManagedMaven) {
         this.coursier = Objects.requireNonNull(coursier, "coursier").toAbsolutePath().normalize();
         if (coordinate == null || coordinate.isBlank()) {
             throw new IllegalArgumentException("coordinate must not be blank");
@@ -46,6 +56,7 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
         this.coordinate = coordinate;
         this.windowsRunner = Objects.requireNonNull(windowsRunner, "windowsRunner")
                 .toAbsolutePath().normalize();
+        this.windowsManagedMaven = windowsManagedMaven == null ? null : windowsManagedMaven.toAbsolutePath().normalize();
     }
 
     @Override
@@ -73,6 +84,10 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
             Path powershell = ManagedScipProviderRuntimeManager.powerShellExecutable()
                     .orElseThrow(() -> new IllegalStateException(
                             "PowerShell (powershell.exe or pwsh.exe) is required for scip-java on Windows"));
+            if (windowsManagedMaven == null || !Files.isRegularFile(windowsManagedMaven)) {
+                throw new IllegalStateException(
+                        "MINOS-managed Maven is missing; run `minos tools install scip-java`: " + windowsManagedMaven);
+            }
             Path providerOutput = normalizedRunDirectory.resolve("scip-java-output");
             Files.createDirectories(providerOutput);
             return new IndexerProcessPlan(
@@ -86,7 +101,8 @@ public final class ScipJavaProcessPlanFactory implements IndexerProcessPlanFacto
                             "-CoursierCommand", coursier.toString(),
                             "-Coordinate", coordinate,
                             "-Language", request.selection().language().name(),
-                            "-OutputDirectory", providerOutput.toString()
+                            "-OutputDirectory", providerOutput.toString(),
+                            "-MavenCommand", windowsManagedMaven.toString()
                     ),
                     root,
                     Map.of(),

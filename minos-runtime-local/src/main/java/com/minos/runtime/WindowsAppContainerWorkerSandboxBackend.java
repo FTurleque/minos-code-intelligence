@@ -10,10 +10,14 @@ import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -36,6 +40,15 @@ import java.util.concurrent.TimeoutException;
  * roots. Arbitrary provider file arguments never cause their complete parent directory (notably a
  * user profile) to become readable. A recovery journal allows the next sandbox launch to reconcile
  * ACL/profile residue left by a forcibly terminated wrapper.</p>
+ *
+ * <p>The JVM currently running MINOS is never itself treated as a provider runtime root: it is the
+ * host process, not something any {@code IndexerProcessPlan} invokes, and granting it unconditionally
+ * would require mutating the DACL of wherever that JVM happens to live — including a Program
+ * Files-installed JDK selected by an IDE run configuration, which a non-elevated standard user cannot
+ * do. Every read root this backend grants is either a MINOS-managed root it owns, an ephemeral
+ * write/run directory it just created, or an explicitly declared toolchain-home value; any candidate
+ * this process cannot grant without elevation fails the plan closed instead of reaching {@code
+ * icacls}.</p>
  *
  * <p>Windows also gives every AppContainer its own implicit file/registry storage. That storage is
  * not one of the ACL roots visible to the Java-side quota supervisor, so the launcher supervises it
@@ -249,15 +262,34 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         Path executable = resolveExecutable(providerCommand.get(0));
         providerCommand.set(0, executable.toString());
 
+        Map<String, String> providerEnvironment = ProviderProcessEnvironment.sanitize(
+                new ProcessBuilder().environment(),
+                plan.environment());
+
         Set<Path> readRoots = new LinkedHashSet<>();
         Set<Path> readFiles = new LinkedHashSet<>();
         Set<Path> writeRoots = new LinkedHashSet<>();
-        Path javaHome = Path.of(System.getProperty("java.home", ".")).toAbsolutePath().normalize();
         Path tools = minosHome.resolve("tools").toAbsolutePath().normalize();
-        if (Files.isDirectory(javaHome)) addReadRoot(readRoots, javaHome);
-        addExecutableAccess(readRoots, readFiles, executable, tools, javaHome);
+        // The JVM running MINOS itself (System.getProperty("java.home")) is never added here: it is
+        // the host process, not a provider runtime, and no IndexerProcessPlan ever invokes it. Adding
+        // it unconditionally used to grant AppContainer ACL access to whatever JDK happens to be
+        // running MINOS — including a Program Files-installed JDK selected by an IntelliJ run
+        // configuration — which fails without administrator rights, since a non-owner cannot mutate
+        // a Program Files object's DACL. Every runtime a provider actually needs is either a
+        // MINOS-managed root under `tools` or an explicitly declared toolchain-home below.
+        addExecutableAccess(readRoots, readFiles, executable, tools);
         for (int index = 1; index < providerCommand.size(); index++) {
-            addExistingArgumentAccess(readRoots, readFiles, providerCommand.get(index), tools, javaHome);
+            addExistingArgumentAccess(readRoots, readFiles, providerCommand.get(index), tools);
+        }
+        // A toolchain-home variable (notably JAVA_HOME for a project JDK distinct from MINOS' own
+        // bundled runtime) names a runtime root the sandboxed provider must read; without it
+        // scip-java cannot even probe its own java.exe. Only these specific keys grant a root:
+        // the sanitized environment also carries USERPROFILE/APPDATA/ProgramFiles-style values, and
+        // granting those would make a whole profile readable — exactly what this backend forbids.
+        for (Map.Entry<String, String> entry : providerEnvironment.entrySet()) {
+            if (isToolchainHomeKey(entry.getKey())) {
+                addToolchainHomeReadRoot(readRoots, entry.getValue());
+            }
         }
 
         addWriteRoot(writeRoots, working);
@@ -266,9 +298,6 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         readRoots.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
         readFiles.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
 
-        Map<String, String> providerEnvironment = ProviderProcessEnvironment.sanitize(
-                new ProcessBuilder().environment(),
-                plan.environment());
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
         Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
                 .resolve("appcontainer-recovery").toAbsolutePath().normalize();
@@ -375,6 +404,16 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         return false;
     }
 
+    /**
+     * Bounded tolerance for a transient replace failure while publishing the launcher (e.g. a
+     * real-time antivirus scan briefly holding the just-written or the previous script). This is
+     * MINOS' own trusted, MINOS-authored script content, not attacker-controlled input, so
+     * retrying a plain filesystem replace here carries none of the containment implications a
+     * provider-controlled path would.
+     */
+    private static final int LAUNCHER_INSTALL_RETRY_ATTEMPTS = 5;
+    private static final long LAUNCHER_INSTALL_RETRY_DELAY_MILLIS = 50L;
+
     private static Path installLauncher(Path minosHome) throws IOException {
         Path directory = minosHome.resolve(SANDBOX_DIRECTORY).toAbsolutePath().normalize();
         Files.createDirectories(directory);
@@ -386,11 +425,30 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         try {
             Files.writeString(partial, launcher, StandardCharsets.UTF_8,
                     StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
+            replaceWithRetry(partial, target);
         } finally {
             Files.deleteIfExists(partial);
         }
         return target;
+    }
+
+    private static void replaceWithRetry(Path source, Path target) throws IOException {
+        for (int attempt = 1; attempt <= LAUNCHER_INSTALL_RETRY_ATTEMPTS; attempt++) {
+            try {
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (FileSystemException failure) {
+                if (attempt == LAUNCHER_INSTALL_RETRY_ATTEMPTS) {
+                    throw failure;
+                }
+                try {
+                    Thread.sleep(LAUNCHER_INSTALL_RETRY_DELAY_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw failure;
+                }
+            }
+        }
     }
 
     private static void writePlan(
@@ -460,15 +518,12 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Set<Path> roots,
             Set<Path> files,
             Path executable,
-            Path tools,
-            Path javaHome
+            Path tools
     ) throws IOException {
         Path real = executable.toRealPath();
         if (isWindowsSystemRoot(real)) return;
         if (real.startsWith(tools)) {
             addReadRoot(roots, managedRuntimeRoot(real, tools));
-        } else if (real.startsWith(javaHome)) {
-            addReadRoot(roots, javaHome);
         } else {
             addReadFile(files, real);
         }
@@ -478,8 +533,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             Set<Path> roots,
             Set<Path> files,
             String value,
-            Path tools,
-            Path javaHome
+            Path tools
     ) {
         try {
             Path candidate = Path.of(value);
@@ -488,12 +542,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
             if (isWindowsSystemRoot(real)) return;
             if (real.startsWith(tools)) {
                 addReadRoot(roots, managedRuntimeRoot(real, tools));
-            } else if (real.startsWith(javaHome)) {
-                addReadRoot(roots, javaHome);
             } else if (Files.isRegularFile(real)) {
                 addReadFile(files, real);
             }
-        } catch (IOException | RuntimeException ignored) {
+        } catch (IOException | InvalidPathException ignored) {
             // Non-path provider arguments intentionally stay opaque.
         }
     }
@@ -513,6 +565,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (value == null || !Files.isDirectory(value)) return;
         Path normalized = value.toAbsolutePath().normalize();
         if (isWindowsSystemRoot(normalized)) return;
+        requireAclGrantable(normalized);
         roots.add(normalized);
     }
 
@@ -520,7 +573,111 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         if (value == null || !Files.isRegularFile(value)) return;
         Path normalized = value.toAbsolutePath().normalize();
         if (isWindowsSystemRoot(normalized)) return;
+        requireAclGrantable(normalized);
         files.add(normalized);
+    }
+
+    /**
+     * Fails closed, before any PowerShell/icacls invocation, when the current process cannot grant
+     * an AppContainer ACE on {@code path} without elevation. Granting a temporary ACE always requires
+     * WRITE_DAC on the target; a standard user has that on anything MINOS itself created (its own
+     * managed tools, working/run directories) but never on a Program Files- or SystemRoot-owned
+     * object it merely reads. Probing by round-tripping the real ACL (read it, write the same content
+     * back) is the only way to ask the OS the exact question icacls itself would answer, without
+     * duplicating Windows' access-check logic in Java.
+     */
+    static void requireAclGrantable(Path path) {
+        if (isAclGrantable(path)) return;
+        throw new IllegalStateException(
+                "Provider runtime is not compatible with the non-elevated Windows sandbox: cannot grant "
+                        + "AppContainer read access to " + path + " without administrator privileges. Move this "
+                        + "dependency under a user-owned location (for example under %LOCALAPPDATA%), point the "
+                        + "relevant toolchain variable at a user-owned installation instead, or use a "
+                        + "MINOS-managed toolchain.");
+    }
+
+    static boolean isAclGrantable(Path path) {
+        try {
+            AclFileAttributeView view = Files.getFileAttributeView(path, AclFileAttributeView.class);
+            if (view == null) return false;
+            List<AclEntry> acl = view.getAcl();
+            view.setAcl(acl);
+            return true;
+        } catch (IOException | UnsupportedOperationException | SecurityException notGrantable) {
+            return false;
+        }
+    }
+
+    /** Environment keys whose value legitimately names a toolchain root the provider reads. */
+    private static final Set<String> TOOLCHAIN_HOME_KEYS = Set.of(
+            "JAVA_HOME",
+            "JDK_HOME",
+            "DOTNET_ROOT",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "COURSIER_CACHE");
+
+    /** Broad locations a toolchain-home grant must never cover, even transitively. */
+    private static final List<String> OVER_BROAD_GRANT_KEYS = List.of(
+            "USERPROFILE",
+            "HOME",
+            "PUBLIC",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "ProgramW6432",
+            "ProgramData",
+            "ALLUSERSPROFILE",
+            "SystemDrive");
+
+    private static boolean isToolchainHomeKey(String candidate) {
+        return candidate != null && TOOLCHAIN_HOME_KEYS.stream().anyMatch(key -> key.equalsIgnoreCase(candidate));
+    }
+
+    /**
+     * Grants read access to an existing toolchain root, never to a profile-wide or system location.
+     * Delegates the actual grant to {@link #addReadRoot}, which fails closed (rather than silently
+     * granting nothing) when the root cannot be ACL'd without elevation — e.g. a project JDK that
+     * itself lives under Program Files.
+     */
+    private static void addToolchainHomeReadRoot(Set<Path> roots, String value) {
+        if (value == null || value.isBlank()) return;
+        Path candidate;
+        try {
+            candidate = Path.of(value);
+        } catch (InvalidPathException notAPath) {
+            return;
+        }
+        if (!candidate.isAbsolute()) return;
+        Path real;
+        try {
+            real = candidate.toRealPath();
+        } catch (IOException unresolvable) {
+            return;
+        }
+        if (!Files.isDirectory(real)) return;
+        if (isWindowsSystemRoot(real) || isOverBroadGrant(real)) return;
+        addReadRoot(roots, real);
+    }
+
+    /**
+     * Rejects a directory whose grant would cover a drive root, {@code C:\Users}-style container or
+     * any well-known profile/system location, so a manipulated toolchain variable cannot widen the
+     * sandbox beyond the toolchain it is supposed to name.
+     */
+    private static boolean isOverBroadGrant(Path directory) {
+        if (directory.getNameCount() < 2) return true;
+        for (String key : OVER_BROAD_GRANT_KEYS) {
+            String raw = System.getenv(key);
+            if (raw == null || raw.isBlank()) continue;
+            try {
+                if (Path.of(raw).toAbsolutePath().normalize().startsWith(directory)) return true;
+            } catch (RuntimeException ignored) {
+                // An unparseable broad location cannot be compared and constrains nothing.
+            }
+        }
+        return false;
     }
 
     private static boolean isWindowsSystemRoot(Path value) {

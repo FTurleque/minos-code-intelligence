@@ -47,10 +47,12 @@ class ManagedScipProviderRuntimeManagerTest {
         if (CommandLocator.isWindows()) {
             Path project = temporaryDirectory.resolve("kotlin-project");
             Path runner = temporaryDirectory.resolve("scip-java-windows-runner.ps1");
+            Path maven = temporaryDirectory.resolve("mvn.cmd");
             Files.createDirectories(project);
             Files.writeString(project.resolve("pom.xml"), "<project/>\n");
             Files.createFile(coursier);
             Files.createFile(runner);
+            Files.createFile(maven);
             IndexerDescriptor descriptor = new IndexerDescriptor(
                     "scip-java", "0.13.1", "scip-java", Set.of(Language.KOTLIN), Set.of(), Set.of(),
                     IndexerQualification.QUALIFIED, 1, List.of());
@@ -58,12 +60,15 @@ class ManagedScipProviderRuntimeManagerTest {
                     UUID.randomUUID(), UUID.randomUUID(), project,
                     new IndexerSelection(Language.KOTLIN, descriptor));
 
-            var plan = new ScipJavaProcessPlanFactory(coursier, "org.scip-code:scip-java:0.13.1", runner)
+            var plan = new ScipJavaProcessPlanFactory(coursier, "org.scip-code:scip-java:0.13.1", runner, maven)
                     .create(request, temporaryDirectory.resolve("run"));
             int languageArgument = plan.command().indexOf("-Language");
+            int mavenArgument = plan.command().indexOf("-MavenCommand");
 
             assertTrue(languageArgument >= 0);
             assertEquals("KOTLIN", plan.command().get(languageArgument + 1));
+            assertTrue(mavenArgument >= 0);
+            assertEquals(maven.toString(), plan.command().get(mavenArgument + 1));
         }
     }
 
