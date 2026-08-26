@@ -29,9 +29,10 @@ class JGitCloneEndpointPinTest {
                 budget(),
                 "github.com");
 
+        URL crossHostRedirect = new URL("https://attacker.example/acme/demo.git?service=git-upload-pack");
         IOException failure = assertThrows(
                 IOException.class,
-                () -> factory.create(new URL("https://attacker.example/acme/demo.git?service=git-upload-pack")));
+                () -> factory.create(crossHostRedirect));
 
         assertEquals("JGit attempted a connection outside the pinned remote repository HTTPS endpoint",
                 failure.getMessage());
@@ -46,10 +47,10 @@ class JGitCloneEndpointPinTest {
                 budget(),
                 "gitlab.com");
 
-        assertThrows(IOException.class,
-                () -> factory.create(new URL("http://gitlab.com/acme/demo.git")));
-        assertThrows(IOException.class,
-                () -> factory.create(new URL("https://gitlab.com:8443/acme/demo.git")));
+        URL protocolChange = new URL("http://gitlab.com/acme/demo.git");
+        assertThrows(IOException.class, () -> factory.create(protocolChange));
+        URL portChange = new URL("https://gitlab.com:8443/acme/demo.git");
+        assertThrows(IOException.class, () -> factory.create(portChange));
 
         HttpConnection allowed = factory.create(
                 new URL("https://gitlab.com/acme/demo.git?service=git-upload-pack"));
