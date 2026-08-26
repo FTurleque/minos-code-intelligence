@@ -76,7 +76,15 @@ class M29InstallerBackendLifecycleContractTest {
         assertTrue(installer.contains("ExistingMcpBackend"));
         assertTrue(installer.contains("LoadStringFromFile(ConfigPath, ConfigText)"));
         assertTrue(installer.contains("integration\\switch-mcp-backend.ps1"));
-        assertTrue(installer.contains("if ConfigureSelectedMcpBackend() then\n      ConfigureMcpClients;"));
+        assertTrue(installer.contains(
+                "if ConfigureSelectedMcpBackend() then\n      ConfigureMcpClients\n    else\n      RevertRuntimeSettingsToLocal;"));
+        // A Docker-managed Postgres/Ollama selection is committed to MINOS's own
+        // runtime settings before the Docker switch is proven -- if that switch then
+        // fails and rolls back, those settings must be reverted too, or MINOS boots
+        // pointed at a Postgres connection that was never provisioned.
+        assertTrue(installer.contains("procedure RevertRuntimeSettingsToLocal;"));
+        assertTrue(installer.contains(
+                "if not (DockerMcpSelected() and (PostgreSqlSelected() or OllamaSelected())) then exit;"));
         assertTrue(installer.contains("if not DockerReady() then"));
         assertTrue(installer.contains("aucun fallback silencieux"));
         assertFalse(installer.contains("ConfigureDockerMcp;"));
