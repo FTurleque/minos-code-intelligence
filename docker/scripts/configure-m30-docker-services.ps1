@@ -131,7 +131,13 @@ function Ensure-ManagedVolume([string] $Name, [string] $Plane) {
 function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
     $Base = @('compose', '--project-directory', $RuntimeRoot, '--env-file', $EnvironmentFile, '-f', $ComposeFile)
     foreach ($Profile in $Profiles) { $Base += @('--profile', $Profile) }
-    & docker @Base @Arguments
+    # Stdin MUST be a non-terminal pipe here, for the same reason as prod-mcp-release.ps1's
+    # Compose helper: some invocation contexts (notably an installer's inherited console)
+    # leave stdin attached to a handle that satisfies isatty() with no human able to answer.
+    # Compose only prompts ("... Recreate (data will be lost)?") when it believes stdin is a
+    # real terminal; forcing a pipe guarantees non-interactive, fail-fast behavior instead of
+    # an indefinite hang.
+    $null | & docker @Base @Arguments
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
 }
 

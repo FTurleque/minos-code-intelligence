@@ -297,10 +297,18 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release') `
     -Destination (Join-Path $DockerDirectory 'Dockerfile.mcp.release') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml') `
     -Destination (Join-Path $DockerDirectory 'compose.mcp.prod.yaml') -Force
+# The M30 connected profile (managed PostgreSQL/pgvector + Ollama sidecars) must ship
+# alongside the base profile: configure-docker-mcp.ps1 delegates to the M30 configurator
+# whenever StorageBackend=postgresql or SemanticProvider=ollama is selected, and that
+# configurator resolves the connected template relative to its own directory.
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.connected.yaml') `
+    -Destination (Join-Path $DockerDirectory 'compose.mcp.connected.yaml') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
     -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
     -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-m30-docker-services.ps1') `
+    -Destination (Join-Path $DockerScripts 'configure-m30-docker-services.ps1') -Force
 foreach ($IntegrationScript in @(
     'configure-runtime-settings.ps1',
     'invoke-named-mcp-script.ps1',

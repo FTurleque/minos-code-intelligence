@@ -96,6 +96,18 @@ class M29InstallerBackendLifecycleContractTest {
             assertTrue(zipInstaller.contains("integration\\" + packaged), "ZIP installer omits " + packaged);
         }
         assertTrue(distribution.contains("verify-mcp-backend-lifecycle.ps1"));
+
+        // configure-docker-mcp.ps1 delegates to the M30 configurator whenever
+        // StorageBackend=postgresql or SemanticProvider=ollama is selected, and that
+        // configurator resolves compose.mcp.connected.yaml relative to its own directory.
+        // Both must ship, or selecting managed PostgreSQL/Ollama fails at install time with
+        // "M30 Docker service configurator is missing" -- which is exactly what happened
+        // while these were absent from the distribution.
+        for (String m30 : new String[]{
+                "docker\\scripts\\configure-m30-docker-services.ps1",
+                "docker\\compose.mcp.connected.yaml"}) {
+            assertTrue(distribution.contains(m30), "distribution omits " + m30);
+        }
         assertTrue(zipInstaller.contains("[ValidateSet('none', 'native', 'docker')]"));
         assertTrue(zipInstaller.contains("TargetBackend = $McpBackend"));
         assertTrue(zipInstaller.contains("DataRoot = $DataRoot"));
