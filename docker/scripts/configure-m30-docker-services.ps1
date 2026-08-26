@@ -141,15 +141,23 @@ function Invoke-Compose([string[]] $Arguments, [string[]] $Profiles = @()) {
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
 }
 
-function Find-Network([string] $Policy) {
-    $Result = @(& docker network ls `
-        --filter "label=io.minos.installation=$ComposeProject" `
-        --filter "label=io.minos.network-policy=$Policy" `
-        --format '{{.ID}}')
-    if ($LASTEXITCODE -ne 0 -or $Result.Count -ne 1) {
-        throw "Unable to resolve unique MINOS Docker network policy '$Policy'."
-    }
-    return [string]$Result[0]
+# Ollama's steady-state plane is minos-runtime, which is `internal: true` (no egress by
+# design). Pulling the embedding model needs outbound access exactly once, at provisioning
+# time. The compose-declared minos-admin-egress network cannot serve that here: it is
+# attached only to the ephemeral minos-admin service, so Compose has not materialized it at
+# this point (the base compose.mcp.prod.yaml profile declares no networks at all, and the
+# connected profile's up commands only bring up minos-runtime members). Own a dedicated
+# provisioning network instead -- created immediately before the pull and removed right
+# after, so no persistent egress path is left attached to the runtime topology.
+function New-ProvisioningEgressNetwork {
+    $Name = "$ComposeProject-ollama-provisioning-egress"
+    & docker network rm $Name *> $null
+    & docker network create `
+        --label "io.minos.installation=$ComposeProject" `
+        --label 'io.minos.network-policy=ollama-provisioning-egress' `
+        $Name | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to create MINOS Ollama provisioning egress network: $Name" }
+    return $Name
 }
 
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
@@ -181,6 +189,50 @@ $NeedsConnectedRuntime = $StorageBackend -eq 'postgresql' -or $SemanticProvider 
 if (-not $NeedsConnectedRuntime) {
     Write-Host 'M30 managed Docker services are not required for the selected local configuration.' -ForegroundColor Green
     return
+}
+
+# This script commits three pieces of durable state (the connected compose file, the runtime
+# .env, and MINOS's own minos.properties) BEFORE the managed services are proven healthy. A
+# failure after those writes used to leave them behind: minos.properties would still declare
+# storage=postgresql pointing at a PostgreSQL that the base profile does not run, so the very
+# next install attempt failed early with "unable to initialize MINOS PostgreSQL backend" --
+# an unrecoverable-looking state produced by a merely-failed optional step. Snapshot the three
+# files first and restore them on any failure, matching the transactional discipline
+# switch-mcp-backend.ps1 already applies to the Docker runtime generation.
+$PropertiesPath = Join-Path $DataRoot 'config\minos.properties'
+
+function New-RuntimeStateSnapshot([string[]] $Paths) {
+    return @($Paths | ForEach-Object {
+        [pscustomobject]@{
+            Path = $_
+            Existed = Test-Path -LiteralPath $_ -PathType Leaf
+            Bytes = if (Test-Path -LiteralPath $_ -PathType Leaf) { [System.IO.File]::ReadAllBytes($_) } else { $null }
+        }
+    })
+}
+
+function Restore-RuntimeStateSnapshot([object[]] $Snapshot) {
+    foreach ($Entry in $Snapshot) {
+        try {
+            if ($Entry.Existed) {
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Entry.Path) | Out-Null
+                [System.IO.File]::WriteAllBytes($Entry.Path, $Entry.Bytes)
+            }
+            else {
+                Remove-Item -LiteralPath $Entry.Path -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            Write-Warning "MINOS M30 rollback could not restore '$($Entry.Path)': $($_.Exception.Message)"
+        }
+    }
+}
+
+$RuntimeStateSnapshot = New-RuntimeStateSnapshot @($ComposeFile, $EnvironmentFile, $PropertiesPath)
+trap {
+    Restore-RuntimeStateSnapshot $RuntimeStateSnapshot
+    Write-Warning 'MINOS M30 managed-service configuration failed; previous runtime state restored.'
+    break
 }
 
 Copy-Item -LiteralPath $ConnectedTemplate -Destination $ComposeFile -Force
@@ -226,7 +278,7 @@ if ($SemanticProvider -eq 'ollama') {
     $Environment['MINOS_SEMANTIC_PROVIDER'] = $SemanticProvider
 }
 
-Write-MinosProperties -Path (Join-Path $DataRoot 'config\minos.properties') -Values $Configuration
+Write-MinosProperties -Path $PropertiesPath -Values $Configuration
 Write-EnvironmentFile -Path $EnvironmentFile -Values $Environment
 Invoke-Compose -Arguments @('config', '--quiet')
 
@@ -245,7 +297,7 @@ if ($SemanticProvider -eq 'ollama') {
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($OllamaContainer)) {
             throw 'Unable to resolve managed Ollama container.'
         }
-        $EgressNetwork = Find-Network 'admin-dependency-egress'
+        $EgressNetwork = New-ProvisioningEgressNetwork
         $ConnectedForProvisioning = $false
         try {
             & docker network connect $EgressNetwork $OllamaContainer
@@ -262,6 +314,10 @@ if ($SemanticProvider -eq 'ollama') {
             if ($ConnectedForProvisioning) {
                 & docker network disconnect $EgressNetwork $OllamaContainer 2>$null | Out-Null
             }
+            # Remove the provisioning network unconditionally: it is created per-run, so a
+            # leftover on a failed pull would be both a stray artifact and a lingering
+            # egress path for the next attempt to reuse.
+            & docker network rm $EgressNetwork 2>$null | Out-Null
         }
     }
 }

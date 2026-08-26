@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -275,6 +279,52 @@ class M29DockerAdministrationContractTest {
         assertTrue(s4.contains("provider-binary-sha256.txt"));
         assertTrue(s4.contains("FAIL_OR_BLOCKED"));
     }
+
+    // configure-m30-docker-services.ps1 copies the connected template over the ACTIVE runtime
+    // compose file, after which prod-mcp-release.ps1 keeps running the base workflow services
+    // (Install/Validate call minos-data-bootstrap, minos-tools-bootstrap, minos-provider-probe,
+    // minos-bootstrap and minos-admin against it). So the connected profile must define every
+    // service the base profile does; it only adds the managed PostgreSQL/Ollama sidecars.
+    // minos-data-bootstrap was missing, and every install run after selecting managed
+    // PostgreSQL/Ollama failed with "no such service: minos-data-bootstrap".
+    @Test
+    void connectedProfileDefinesEveryBaseProfileService() throws Exception {
+        String base = normalizedText(repoRoot().resolve("docker/compose.mcp.prod.yaml"));
+        String connected = normalizedText(repoRoot().resolve("docker/compose.mcp.connected.yaml"));
+
+        List<String> baseServices = serviceNames(base);
+        assertTrue(baseServices.contains("minos-data-bootstrap"),
+                "base profile parsing failed to find its own services: " + baseServices);
+
+        List<String> connectedServices = serviceNames(connected);
+        List<String> missing = baseServices.stream().filter(s -> !connectedServices.contains(s)).toList();
+        assertTrue(missing.isEmpty(),
+                "connected profile omits base profile services " + missing
+                        + " -- the base Docker workflow runs them against whichever compose file is active");
+    }
+
+    // Service keys are the two-space-indented mapping keys inside `services:`, stopping at the
+    // next top-level block (networks:/volumes:) so those siblings are never mistaken for services.
+    private static List<String> serviceNames(String compose) {
+        String body = compose;
+        int servicesAt = body.indexOf("\nservices:\n");
+        if (servicesAt >= 0) {
+            body = body.substring(servicesAt + "\nservices:\n".length());
+        }
+        List<String> names = new ArrayList<>();
+        for (String line : body.split("\n")) {
+            if (!line.isBlank() && !line.startsWith(" ") && !line.startsWith("#")) {
+                break;
+            }
+            Matcher matcher = SERVICE_KEY.matcher(line);
+            if (matcher.matches()) {
+                names.add(matcher.group(1));
+            }
+        }
+        return names;
+    }
+
+    private static final Pattern SERVICE_KEY = Pattern.compile("^ {2}([a-z][a-z0-9-]*):\\s*$");
 
     private static String normalizedText(Path path) throws IOException {
         return Files.readString(path).replace("\r\n", "\n").replace('\r', '\n');
