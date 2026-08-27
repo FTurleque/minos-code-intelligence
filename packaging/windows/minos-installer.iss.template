@@ -505,6 +505,7 @@ var
 begin
   Result := True;
   if IsSmokeBuild() then exit;
+  WizardForm.StatusLabel.Caption := 'Préparation des paramètres d''exécution MINOS...';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if AdvancedSetupSelected() then SetupMode := 'advanced' else SetupMode := 'standard';
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
@@ -592,16 +593,45 @@ begin
     Log('RevertRuntimeSettingsToLocal: fallback did not complete successfully (ResultCode=' + IntToStr(ResultCode) + ').');
 end;
 
+// The backend-switch log is a plain append-only line log (see switch-mcp-backend.ps1's own
+// BEGIN/PREPARE/HANDSHAKE/COMMIT/FAIL/ROLLBACK entries); the last non-blank line is always either
+// the terminal SUCCESS of a prior run or the FAIL reason of this one, so it is a reliable one-line
+// summary of what actually happened without requiring the user to go open the file themselves.
+function LastBackendSwitchLogLine(LogPath: String): String;
+var
+  LogText: AnsiString;
+  Lines: TArrayOfString;
+  Index: Integer;
+begin
+  Result := '';
+  if not (FileExists(LogPath) and LoadStringFromFile(LogPath, LogText)) then exit;
+  Lines := StringSplit(LogText, [#13#10], stExcludeEmpty);
+  for Index := GetArrayLength(Lines) - 1 downto 0 do
+  begin
+    if Trim(Lines[Index]) <> '' then
+    begin
+      Result := Trim(Lines[Index]);
+      exit;
+    end;
+  end;
+end;
+
 function ConfigureSelectedMcpBackend(): Boolean;
 var
   ResultCode: Integer;
   Parameters: String;
   PowerShell: String;
   TargetBackend: String;
+  LogPath: String;
+  LastLogLine: String;
+  DiagnosticLine: String;
 begin
   Result := True;
   if IsSmokeBuild() or NoMcpSelected() then exit;
   if NativeMcpSelected() then TargetBackend := 'native' else TargetBackend := 'docker';
+  WizardForm.StatusLabel.Caption :=
+    'Configuration et validation du backend MCP MINOS (peut prendre plusieurs minutes lors d''une ' +
+    'préparation Docker)...';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\integration\switch-mcp-backend.ps1') +
@@ -628,10 +658,21 @@ begin
   end;
   if (not Exec(PowerShell, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
   begin
+    LogPath := EffectiveDataRoot() + '\runtime\backend-switch.log';
+    LastLogLine := LastBackendSwitchLogLine(LogPath);
+    if LastLogLine <> '' then
+      DiagnosticLine := 'Dernière ligne du journal : ' + LastLogLine
+    else
+      DiagnosticLine := 'Journal complet : ' + LogPath;
     MsgBox(
-      'Le backend MCP sélectionné n''a pas atteint son gate de validation/handshake.' + #13#10 + #13#10 +
-      'La configuration précédente a été conservée ou restaurée ; aucun fallback silencieux n''a été appliqué.' + #13#10 +
-      'Diagnostic : ' + EffectiveDataRoot() + '\runtime\backend-switch.log',
+      'MINOS Code Intelligence a été installé/mis à jour avec succès.' + #13#10 + #13#10 +
+      'En revanche, la (re)configuration du backend MCP n''a pas abouti : la validation/handshake ' +
+      'a échoué. Cela n''affecte PAS les fichiers du programme, qui sont à jour.' + #13#10 + #13#10 +
+      'Aucun changement silencieux n''a été appliqué : le backend MCP précédemment actif a été ' +
+      'conservé ou restauré automatiquement et reste utilisable normalement.' + #13#10 + #13#10 +
+      DiagnosticLine + #13#10 + #13#10 +
+      'Pour réessayer, relancez cet installeur (les paramètres saisis seront proposés à nouveau), ' +
+      'ou consultez le journal complet : ' + LogPath,
       mbError, MB_OK);
     Result := False;
   end;
@@ -644,6 +685,7 @@ var
   PowerShell: String;
 begin
   if IsSmokeBuild() or (not McpBackendSelected()) or (not McpClientSelected()) then exit;
+  WizardForm.StatusLabel.Caption := 'Configuration des intégrations clientes IA détectées...';
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\integration\configure-mcp-clients-setup.ps1') +

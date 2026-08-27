@@ -90,6 +90,16 @@ Require '-TargetBackend ' 'Installer does not pass the selected backend to the s
 Require '-ProjectsRoot ' 'Installer does not pass the Docker project root to the switcher.'
 Require 'if ConfigureSelectedMcpBackend() then' 'Installer does not gate client setup on backend validation success.'
 Require 'ConfigureMcpClients;' 'Installer does not configure shared clients after backend activation.'
+# A backend-switch failure must never leave the user unsure whether the update actually happened:
+# the program files are already installed by the time this can fire (ssPostInstall runs after
+# ssInstall), so the dialog must say so explicitly instead of a bare "gate de
+# validation/handshake" message that reads as if nothing happened at all.
+Require 'a été installé/mis à jour avec succès' 'Backend-switch failure dialog does not clarify that the MINOS program files were already installed successfully.'
+Require 'function LastBackendSwitchLogLine' 'Installer does not surface the actual backend-switch failure reason inline instead of only pointing at a log file.'
+# Inno's own progress bar reflects file-copy progress only; the long-running Docker/MCP [Code]
+# steps that follow it give no visual feedback at all unless the script explicitly updates the
+# status text, which otherwise reads as a frozen/hung installer during a multi-minute Docker build.
+Require 'WizardForm.StatusLabel.Caption :=' 'Installer gives no textual progress feedback during its long-running post-install configuration steps.'
 Require 'if not DockerReady() then' 'Installer does not block an explicitly selected unavailable Docker backend.'
 Require 'Result := False;' 'Installer Docker prerequisite failure does not block wizard progression.'
 Require 'aucun fallback silencieux' 'Installer does not explain fail-closed backend selection.'
