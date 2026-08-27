@@ -46,6 +46,12 @@ Require 'DockerProjectsPage := CreateInputDirPage(' 'Installer is missing the Do
 Require 'McpClientsPage.ID,' 'Docker projects page must follow client integration.'
 Require 'Result := NoMcpSelected()' 'Shared MCP client page must be skipped only when MCP configuration is disabled.'
 Require 'Result := not DockerMcpSelected()' 'Docker projects page is not conditional on Docker MCP mode.'
+# A previously customized Docker projects root must survive an upgrade. Without this, every
+# upgrade wizard run resets the field to {%USERPROFILE} regardless of what was configured before,
+# and the fail-closed project-path-mapping guard then refuses to silently replace the differing
+# on-disk mapping -- surfacing as a backend-switch failure on every single future update.
+Require "ReadInstallerValue('ProjectsRoot'" 'Installer does not restore a previously configured Docker projects root on upgrade -- every upgrade will reset it to {%USERPROFILE} and trip the project-path-mapping guard.'
+Require "RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot'" 'Installer does not persist the configured Docker projects root for the next upgrade.'
 Require 'McpCopilotJetBrains := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot JetBrains MCP row.'
 Require 'McpCopilotCli := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Copilot CLI MCP row.'
 Require 'McpClaudeCode := TNewCheckBox.Create(McpClientsPage)' 'Installer is missing the Claude CLI / Code MCP row.'
