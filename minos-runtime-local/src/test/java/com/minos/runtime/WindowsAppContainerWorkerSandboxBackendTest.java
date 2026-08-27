@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -181,6 +182,51 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     }
 
     @Test
+    void realWindowsSandboxRunsAManagedBatchFileProviderWithoutDoubleQuoting() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path home = Files.createTempDirectory("minos-appcontainer-batch-home-");
+        var discovered = WindowsAppContainerWorkerSandboxBackend.discover(home);
+        assumeTrue(discovered.isPresent(), "qualified Windows AppContainer backend is required");
+        WindowsAppContainerWorkerSandboxBackend backend = discovered.orElseThrow();
+        Path tools = Files.createDirectories(home.resolve("tools").resolve("fixture-batch-provider").resolve("1.0.0"));
+        Path working = Files.createTempDirectory("minos-appcontainer-batch-working-");
+        Path run = Files.createTempDirectory("minos-appcontainer-batch-run-");
+        Path artifact = run.resolve("index.scip");
+
+        // A .cmd provider goes through CommandLocator.windowsBatchInvocation, which pre-builds one
+        // "cmd /S /C <self-contained quoted command>" argument specifically so the launcher's own
+        // BuildCommandLine must not re-escape it -- doing so double-quotes the whole thing and
+        // cmd.exe rejects it as an unrecognized command (reproduced with the real scip-typescript.cmd
+        // on a real install). Mirror that exact shape here with a throwaway .cmd instead.
+        Path batchProvider = tools.resolve("provider.cmd");
+        Files.writeString(batchProvider, """
+                @echo off
+                echo qualified-batch-artifact> "%~2"
+                exit /b 0
+                """, StandardCharsets.US_ASCII);
+        List<String> command = new ArrayList<>(CommandLocator.invocation(batchProvider, "index", artifact.toString()));
+
+        IndexerProcessPlan original = new IndexerProcessPlan(
+                command,
+                working,
+                Map.of(),
+                artifact,
+                Duration.ofSeconds(30));
+
+        IndexerProcessPlan sandboxed = backend.sandboxPlan(original, run);
+        Process process = new ProcessBuilder(sandboxed.command())
+                .directory(working.toFile())
+                .redirectErrorStream(true)
+                .start();
+        boolean completed = process.waitFor(30, TimeUnit.SECONDS);
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(completed, () -> "batch provider process timed out; output=" + output);
+        assertEquals(0, process.exitValue(),
+                () -> "batch provider was not recognized/executed correctly; output=" + output);
+        assertEquals("qualified-batch-artifact", Files.readString(artifact, StandardCharsets.UTF_8).strip());
+    }
+
+    @Test
     void qualifiedBackendLaunchesRealProcessIndexerExecutor() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path home = Files.createTempDirectory("minos-windows-process-home-");
@@ -303,7 +349,7 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         // DACL, unreadable by anyone including its owner, once a whole-ACL-list read/write-back probe
         // captured and persisted a transient state from mid-flight through someone else's own
         // icacls call.
-        assertEquals(0, runIcacls(target, "/grant", currentUser + ":(W)"), "marker grant must succeed");
+        assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(W)"), "marker grant must succeed");
 
         java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean(false);
         java.util.concurrent.atomic.AtomicReference<Exception> racerFailure = new java.util.concurrent.atomic.AtomicReference<>();
@@ -331,8 +377,57 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         assertEquals(null, racerFailure.get(), () -> "racer thread failed: " + racerFailure.get());
 
         String finalAcl = icaclsOutput(target);
-        assertTrue(finalAcl.contains(currentUser),
-                () -> "the pre-existing marker ACE must survive concurrent probing, got:\n" + finalAcl);
+        assertTrue(finalAcl.contains(currentUser + ":(W)"),
+                () -> "the pre-existing marker ACE's exact rights must survive concurrent probing "
+                        + "(not merely some unrelated, possibly inherited, entry for the same user), got:\n" + finalAcl);
+    }
+
+    @Test
+    void requireInheritableOwnerAccessLetsFilesWrittenInsideTheRootInheritTheUsersAccess() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        // A freshly created directory's owner grant is not inheritable by default: a provider process
+        // writing into a MINOS-owned write root under a different (ephemeral AppContainer) identity
+        // would create files carrying no ACE at all for the current user, leaving MINOS's own process
+        // unable to read its own provider's output back afterward -- observed in practice as a
+        // successfully-generated SCIP artifact reported "missing or unreadable" moments after being
+        // written. This proves the write root's grant is actually inheritable, not merely present, by
+        // checking that a freshly created file inside it -- the exact mechanism NTFS inheritance uses
+        // regardless of which identity creates the file -- picks up the current user's access
+        // automatically.
+        Path writeRoot = Files.createTempDirectory("minos-write-root-");
+        String currentUser = System.getProperty("user.name");
+
+        WindowsAppContainerWorkerSandboxBackend.requireInheritableOwnerAccess(writeRoot);
+
+        Path artifact = Files.createFile(writeRoot.resolve("artifact.scip"));
+        String artifactAcl = icaclsOutput(artifact);
+        assertTrue(artifactAcl.contains(currentUser) && artifactAcl.contains("(I)"),
+                () -> "a file created inside the write root must inherit the current user's access, got:\n"
+                        + artifactAcl);
+    }
+
+    @Test
+    void aclGrantabilityProbeNeverStripsTheCallingUsersOwnPreExistingAccess() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        // The overwhelmingly common case in production: MINOS probes grantability on a directory it
+        // owns and already has explicit Full Control over (its own managed tools/run directories),
+        // not some unrelated path. A probe that mutates the CALLING USER's own identity -- as opposed
+        // to a synthetic identity that could never legitimately already hold an ACE -- must not let
+        // its own cleanup (icacls /remove:g, which deletes every existing grant for the named
+        // identity, not just the one the probe just added) destroy that pre-existing access. Observed
+        // in practice as a MINOS-managed tools directory silently losing the current user's Full
+        // Control the moment a real indexing run happened to probe it.
+        Path target = Files.createTempDirectory("minos-acl-self-access-");
+        String currentUser = System.getProperty("user.name");
+        assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(F)"),
+                "pre-existing explicit Full Control grant must succeed");
+
+        assertTrue(WindowsAppContainerWorkerSandboxBackend.isAclGrantable(target));
+
+        String finalAcl = icaclsOutput(target);
+        assertTrue(finalAcl.contains(currentUser + ":(F)"),
+                () -> "the calling user's own pre-existing Full Control must survive the grantability "
+                        + "probe, got:\n" + finalAcl);
     }
 
     private static int runIcacls(Path target, String... arguments) throws Exception {
