@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class IndexingRunExecutorTest {
 
     @Test
-    void awaitReadableRecoversFromAnArtifactThatBrieflyAppearsUnreadable(@TempDir Path temp) throws Exception {
+    void awaitReadableRecoversFromAnArtifactThatBrieflyAppearsUnreadable(@TempDir Path temp) {
         // A real-time antivirus scan can hold a transient handle on a just-written artifact for a
         // moment after the provider process that wrote it has already exited. This proves the
         // bounded retry survives exactly that window instead of failing the whole run on the first
