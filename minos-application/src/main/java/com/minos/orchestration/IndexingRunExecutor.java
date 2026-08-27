@@ -387,14 +387,36 @@ final class IndexingRunExecutor {
                 .map(path -> path.substring(prefix.length())).sorted().toList();
     }
 
+    /** Bounded tolerance for a freshly-written artifact briefly appearing unreadable to this
+     * process -- e.g. a real-time antivirus scan holding a transient handle on it -- immediately
+     * after the provider process that wrote it has already exited. This is MINOS' own run
+     * directory, not attacker-controlled input, so a short poll here carries none of the
+     * containment implications a provider-controlled path would. */
+    private static final int ARTIFACT_READABILITY_RETRY_ATTEMPTS = 10;
+    private static final long ARTIFACT_READABILITY_RETRY_DELAY_MILLIS = 100L;
+
     private static Path validateArtifact(IndexerNegotiationResult.IndexerSelection selection,
                                          IndexingArtifact artifact, Path expectedRoot) {
         if (artifact.language() != selection.language()) throw new IllegalStateException("executor returned an artifact for an unexpected language");
         if (!artifact.indexerId().equals(selection.indexer().id())) throw new IllegalStateException("executor returned an artifact for an unexpected indexer");
         if (!artifact.projectRelativeRoot().normalize().equals(expectedRoot.normalize())) throw new IllegalStateException("executor returned an artifact for an unexpected project scope");
         Path path = artifact.finalArtifact().toAbsolutePath().normalize();
-        if (!Files.exists(path) || !Files.isReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable: " + path);
+        if (!awaitReadable(path)) throw new IllegalStateException("final index artifact is missing or unreadable: " + path);
         return path;
+    }
+
+    static boolean awaitReadable(Path path) {
+        for (int attempt = 1; attempt <= ARTIFACT_READABILITY_RETRY_ATTEMPTS; attempt++) {
+            if (Files.exists(path) && Files.isReadable(path)) return true;
+            if (attempt == ARTIFACT_READABILITY_RETRY_ATTEMPTS) return false;
+            try {
+                Thread.sleep(ARTIFACT_READABILITY_RETRY_DELAY_MILLIS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
     }
 
     private static IndexingRun running(UUID runId, UUID projectId, Instant createdAt, Phase phase,

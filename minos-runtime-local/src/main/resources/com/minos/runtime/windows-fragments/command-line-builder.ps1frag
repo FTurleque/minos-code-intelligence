@@ -2,7 +2,18 @@
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < args.Length; i++) {
             if (i > 0) result.Append(' ');
-            result.Append(QuoteArgument(args[i]));
+            // cmd.exe's own /S /C (or /S /K) contract requires the portion after /C to be one
+            // pre-quoted, self-contained unit (see CommandLocator.windowsBatchInvocation, which
+            // builds exactly that shape for a Windows batch-file invocation). Re-escaping that
+            // unit here would double-quote an argument that is already correctly quoted for
+            // cmd's contract, corrupting it -- observed in practice as scip-typescript.cmd (and
+            // any other managed .cmd provider) never being recognized as a command. Every other
+            // argument, including cmd.exe itself and its flags, still goes through the normal
+            // escaping below.
+            bool isPreQuotedForCmdShell = i > 0
+                    && (string.Equals(args[i - 1], "/c", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(args[i - 1], "/k", StringComparison.OrdinalIgnoreCase));
+            result.Append(isPreQuotedForCmdShell ? args[i] : QuoteArgument(args[i]));
         }
         return result.ToString();
     }

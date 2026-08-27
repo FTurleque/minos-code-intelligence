@@ -72,6 +72,26 @@ class CommandLocatorTest {
     }
 
     @Test
+    void windowsBatchExecutableRecoversTheExecutableHiddenInsideTheQuotedCommandLine() {
+        Path executable = Path.of("C:\\Program Files\\MINOS & Tools\\provider.cmd");
+        List<String> command = CommandLocator.windowsBatchInvocation(
+                executable, "space value", "a&b", "x^y", "(z)", "bang!value", "é漢字");
+
+        assertEquals(executable, CommandLocator.windowsBatchExecutable(command).orElseThrow(),
+                "the sandbox must be able to recover the real executable to grant it access");
+    }
+
+    @Test
+    void windowsBatchExecutableIsEmptyForAnyOtherCommandShape() {
+        assertTrue(CommandLocator.windowsBatchExecutable(
+                List.of("C:\\tool.exe", "index", "--output", "out.scip")).isEmpty(),
+                "a plain (non-cmd-wrapped) executable never hides a second path");
+        assertTrue(CommandLocator.windowsBatchExecutable(
+                List.of("cmd.exe", "/c", "\"\"tool.cmd\" \"arg\"\"")).isEmpty(),
+                "a shape missing the /d /v:off /s hardening flags must not be treated as the batch pattern");
+    }
+
+    @Test
     void batchInvocationRejectsExpansionAndUnrepresentableTokens() {
         Path executable = Path.of("tool.cmd");
         assertThrows(IllegalArgumentException.class,
