@@ -43,6 +43,9 @@ import java.util.zip.ZipInputStream;
 public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeManager {
 
     private static final int MAX_INSTALL_LOG_LINE_CHARS = 64 * 1024;
+    private static final String NODE_MODULES_DIR = "node_modules";
+    private static final String USER_AGENT_HEADER = "User-Agent";
+    private static final String MINOS_USER_AGENT = "MINOS-Code-Intelligence";
 
     public static final String SCIP_TYPESCRIPT_ID = "scip-typescript";
     public static final String SCIP_TYPESCRIPT_VERSION = "0.4.0";
@@ -83,12 +86,13 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     // package's entry script (bypassing the cmd.exe shim, and cmd.exe entirely) so both the
     // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
     private static final String NODE_VERSION = "24.20.0";
+    private static final String NODE_DISTRIBUTION_ID = "node-v" + NODE_VERSION + "-win-x64";
     private static final String NODE_SHA256 = "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba";
     private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
     private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
     private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
     private static final URI NODE_DISTRIBUTION_URI = URI.create(
-            "https://nodejs.org/dist/v" + NODE_VERSION + "/node-v" + NODE_VERSION + "-win-x64.zip");
+            "https://nodejs.org/dist/v" + NODE_VERSION + "/" + NODE_DISTRIBUTION_ID + ".zip");
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
@@ -159,9 +163,14 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             if (npm.isEmpty()) diagnostics.add("npm is not available in PATH");
             executable = typeScriptExecutable();
         }
-        ProviderRuntimeStatus.State state = diagnostics.isEmpty()
-                ? ProviderRuntimeStatus.State.READY
-                : packageInstalled ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
+        ProviderRuntimeStatus.State state;
+        if (diagnostics.isEmpty()) {
+            state = ProviderRuntimeStatus.State.READY;
+        } else if (packageInstalled) {
+            state = ProviderRuntimeStatus.State.BLOCKED;
+        } else {
+            state = ProviderRuntimeStatus.State.NOT_INSTALLED;
+        }
         return new ProviderRuntimeStatus(
                 SCIP_TYPESCRIPT_ID, SCIP_TYPESCRIPT_VERSION, state,
                 Files.isRegularFile(executable) ? Optional.of(executable) : Optional.empty(), diagnostics);
@@ -217,7 +226,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             run(CommandLocator.invocation(
                     npm, "ci", "--prefix", partial.toString(), "--no-audit", "--no-fund", "--ignore-scripts"),
                     home, toolsRoot.resolve("scip-typescript-install.log"), Duration.ofMinutes(10));
-            Path installed = partial.resolve("node_modules").resolve(".bin")
+            Path installed = partial.resolve(NODE_MODULES_DIR).resolve(".bin")
                     .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
             if (!Files.isRegularFile(installed)) throw new IllegalStateException("scip-typescript executable was not created: " + installed);
             deleteRecursively(destination);
@@ -310,7 +319,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .connectTimeout(Duration.ofSeconds(30)).build();
         HttpRequest request = HttpRequest.newBuilder(COURSIER_WINDOWS_URI)
                 .timeout(Duration.ofMinutes(2))
-                .header("User-Agent", "MINOS-Code-Intelligence").build();
+                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             try (InputStream ignored = response.body()) { /* close error response */ }
@@ -378,7 +387,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .connectTimeout(Duration.ofSeconds(30)).build();
         HttpRequest request = HttpRequest.newBuilder(MAVEN_DISTRIBUTION_URI)
                 .timeout(Duration.ofMinutes(3))
-                .header("User-Agent", "MINOS-Code-Intelligence").build();
+                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             try (InputStream ignored = response.body()) { /* close error response */ }
@@ -427,16 +436,16 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private Path nodeRoot() { return toolsRoot.resolve("nodejs").resolve(NODE_VERSION); }
 
     Path nodeExecutable() {
-        return nodeRoot().resolve("node-v" + NODE_VERSION + "-win-x64").resolve("node.exe");
+        return nodeRoot().resolve(NODE_DISTRIBUTION_ID).resolve("node.exe");
     }
 
-    private Path ensureNode() throws Exception {
+    private Path ensureNode() throws IOException, InterruptedException {
         Path existing = nodeExecutable();
         if (Files.isRegularFile(existing)) return existing;
         Path root = nodeRoot();
         Files.createDirectories(root);
-        Path archive = root.resolve("node-v" + NODE_VERSION + "-win-x64.zip");
-        Path archivePartial = root.resolve("node-v" + NODE_VERSION + "-win-x64.partial.zip");
+        Path archive = root.resolve(NODE_DISTRIBUTION_ID + ".zip");
+        Path archivePartial = root.resolve(NODE_DISTRIBUTION_ID + ".partial.zip");
         Files.deleteIfExists(archivePartial);
 
         HttpClient client = HttpClient.newBuilder()
@@ -444,7 +453,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .connectTimeout(Duration.ofSeconds(30)).build();
         HttpRequest request = HttpRequest.newBuilder(NODE_DISTRIBUTION_URI)
                 .timeout(Duration.ofMinutes(3))
-                .header("User-Agent", "MINOS-Code-Intelligence").build();
+                .header(USER_AGENT_HEADER, MINOS_USER_AGENT).build();
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             try (InputStream ignored = response.body()) { /* close error response */ }
@@ -457,7 +466,7 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
-        } catch (Exception exception) {
+        } catch (IOException exception) {
             Files.deleteIfExists(archivePartial);
             throw exception;
         }
@@ -546,12 +555,12 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private Path typeScriptRoot() { return toolsRoot.resolve("scip-typescript").resolve(SCIP_TYPESCRIPT_VERSION); }
 
     private Path typeScriptExecutable() {
-        return typeScriptRoot().resolve("node_modules").resolve(".bin")
+        return typeScriptRoot().resolve(NODE_MODULES_DIR).resolve(".bin")
                 .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
     }
 
     Path typeScriptMainScript() {
-        return typeScriptRoot().resolve("node_modules").resolve("@sourcegraph")
+        return typeScriptRoot().resolve(NODE_MODULES_DIR).resolve("@sourcegraph")
                 .resolve("scip-typescript").resolve("dist").resolve("src").resolve("main.js");
     }
 

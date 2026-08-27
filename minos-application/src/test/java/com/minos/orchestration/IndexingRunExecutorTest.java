@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -20,20 +22,19 @@ class IndexingRunExecutorTest {
         // bounded retry survives exactly that window instead of failing the whole run on the first
         // (still momentarily unreadable) check.
         Path artifact = temp.resolve("index.scip");
-        Thread writer = new Thread(() -> {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.schedule(() -> {
             try {
-                TimeUnit.MILLISECONDS.sleep(150);
                 Files.writeString(artifact, "scip");
-            } catch (IOException | InterruptedException ignored) {
+            } catch (IOException ignored) {
                 // Test failure surfaces via the missing file below.
             }
-        });
-        writer.start();
+        }, 150, TimeUnit.MILLISECONDS);
         try {
             assertTrue(IndexingRunExecutor.awaitReadable(artifact),
                     "the artifact must become visible within the retry window");
         } finally {
-            writer.join();
+            scheduler.shutdown();
         }
     }
 
