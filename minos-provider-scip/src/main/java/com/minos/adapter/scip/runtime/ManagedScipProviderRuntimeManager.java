@@ -74,6 +74,21 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                     + "/apache-maven-" + MAVEN_VERSION + "-bin.zip");
     private static final String SCIP_TYPESCRIPT_NPM_LOCK_RESOURCE = "scip-typescript-package-lock.json";
     private static final String SCIP_TYPESCRIPT_NPM_INTEGRITY = "sha512-k+AtsrqmS41Sd5qjkZlHcmvoSQIvBOonRj4jpgp0KNFM6aqvMGpdSuPUqrUcg8ENTKjUbfaUVszgQwq3bCOvwA==";
+
+    // A host `node` resolved from PATH can sit anywhere -- typically under Program Files or a
+    // per-user npm install -- none of which the non-elevated Windows AppContainer sandbox can grant
+    // access to. scip-typescript.cmd's own npm-generated shim resolves `node` via PATH internally,
+    // which the sandbox's static command-line ACL computation can never see. scip-typescript on
+    // Windows therefore gets its own MINOS-managed, portable Node.js, invoked directly against the
+    // package's entry script (bypassing the cmd.exe shim, and cmd.exe entirely) so both the
+    // interpreter and the script are ordinary, sandbox-grantable paths under MINOS_HOME/tools.
+    private static final String NODE_VERSION = "24.20.0";
+    private static final String NODE_SHA256 = "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba";
+    private static final long MAX_NODE_ARCHIVE_BYTES = 128L * 1024L * 1024L;
+    private static final long MAX_NODE_ARCHIVE_ENTRIES = 8_192L;
+    private static final long MAX_NODE_EXTRACTED_BYTES = 256L * 1024L * 1024L;
+    private static final URI NODE_DISTRIBUTION_URI = URI.create(
+            "https://nodejs.org/dist/v" + NODE_VERSION + "/node-v" + NODE_VERSION + "-win-x64.zip");
     private static final String WINDOWS_RUNNER_RESOURCE = "scip-java-windows-runner.ps1";
     private static final String WINDOWS_PATCH_RESOURCE = "ScipWriter.java";
 
@@ -115,7 +130,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         }
         return switch (providerId) {
             case SCIP_TYPESCRIPT_ID -> StrongOwnedProcessExecutors.required(
-                    providerId, home, new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow()));
+                    providerId, home, CommandLocator.isWindows()
+                            ? new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow(), typeScriptMainScript())
+                            : new ScipTypeScriptProcessPlanFactory(status.executable().orElseThrow()));
             case SCIP_JAVA_ID -> StrongOwnedProcessExecutors.required(
                     providerId, home, new ScipJavaProcessPlanFactory(
                             status.executable().orElseThrow(), SCIP_JAVA_COORDINATE, scipJavaWindowsRunner(),
@@ -126,15 +143,25 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
 
     private ProviderRuntimeStatus inspectTypeScript() {
         List<String> diagnostics = new ArrayList<>();
-        Optional<Path> node = CommandLocator.find("node");
-        Optional<Path> npm = CommandLocator.find("npm");
-        if (node.isEmpty()) diagnostics.add("Node.js is not available in PATH");
-        if (npm.isEmpty()) diagnostics.add("npm is not available in PATH");
-        Path executable = typeScriptExecutable();
-        if (!Files.isRegularFile(executable)) diagnostics.add("managed scip-typescript " + SCIP_TYPESCRIPT_VERSION + " is not installed");
+        boolean packageInstalled = Files.isRegularFile(typeScriptMainScript());
+        if (!packageInstalled) diagnostics.add("managed scip-typescript " + SCIP_TYPESCRIPT_VERSION + " is not installed");
+
+        Path executable;
+        if (CommandLocator.isWindows()) {
+            executable = nodeExecutable();
+            if (!Files.isRegularFile(executable)) {
+                diagnostics.add("managed Node.js " + NODE_VERSION + " runtime is not installed in MINOS_HOME/tools");
+            }
+        } else {
+            Optional<Path> node = CommandLocator.find("node");
+            Optional<Path> npm = CommandLocator.find("npm");
+            if (node.isEmpty()) diagnostics.add("Node.js is not available in PATH");
+            if (npm.isEmpty()) diagnostics.add("npm is not available in PATH");
+            executable = typeScriptExecutable();
+        }
         ProviderRuntimeStatus.State state = diagnostics.isEmpty()
                 ? ProviderRuntimeStatus.State.READY
-                : Files.isRegularFile(executable) ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
+                : packageInstalled ? ProviderRuntimeStatus.State.BLOCKED : ProviderRuntimeStatus.State.NOT_INSTALLED;
         return new ProviderRuntimeStatus(
                 SCIP_TYPESCRIPT_ID, SCIP_TYPESCRIPT_VERSION, state,
                 Files.isRegularFile(executable) ? Optional.of(executable) : Optional.empty(), diagnostics);
@@ -172,6 +199,9 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
                 .orElseThrow(() -> new IllegalStateException("npm is required to install scip-typescript"));
         CommandLocator.find("node").orElseThrow(() -> new IllegalStateException("Node.js is required to run scip-typescript"));
         Files.createDirectories(toolsRoot);
+        if (CommandLocator.isWindows()) {
+            ensureNode();
+        }
         Path destination = typeScriptRoot();
         Path partial = destination.resolveSibling(destination.getFileName() + ".partial");
         deleteRecursively(partial);
@@ -394,6 +424,63 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
         return mvn;
     }
 
+    private Path nodeRoot() { return toolsRoot.resolve("nodejs").resolve(NODE_VERSION); }
+
+    Path nodeExecutable() {
+        return nodeRoot().resolve("node-v" + NODE_VERSION + "-win-x64").resolve("node.exe");
+    }
+
+    private Path ensureNode() throws Exception {
+        Path existing = nodeExecutable();
+        if (Files.isRegularFile(existing)) return existing;
+        Path root = nodeRoot();
+        Files.createDirectories(root);
+        Path archive = root.resolve("node-v" + NODE_VERSION + "-win-x64.zip");
+        Path archivePartial = root.resolve("node-v" + NODE_VERSION + "-win-x64.partial.zip");
+        Files.deleteIfExists(archivePartial);
+
+        HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(30)).build();
+        HttpRequest request = HttpRequest.newBuilder(NODE_DISTRIBUTION_URI)
+                .timeout(Duration.ofMinutes(3))
+                .header("User-Agent", "MINOS-Code-Intelligence").build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            try (InputStream ignored = response.body()) { /* close error response */ }
+            throw new IllegalStateException("Node.js distribution download failed with HTTP " + response.statusCode());
+        }
+        try (InputStream responseBody = response.body();
+             BoundedInputStream bounded = new BoundedInputStream(
+                     responseBody, MAX_NODE_ARCHIVE_BYTES, "Node.js distribution archive");
+             OutputStream output = Files.newOutputStream(archivePartial)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = bounded.read(buffer)) >= 0) if (read > 0) output.write(buffer, 0, read);
+        } catch (Exception exception) {
+            Files.deleteIfExists(archivePartial);
+            throw exception;
+        }
+        if (!Files.isRegularFile(archivePartial, LinkOption.NOFOLLOW_LINKS) || Files.size(archivePartial) == 0L) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Node.js distribution download produced an empty archive");
+        }
+        String actualDigest = sha256(archivePartial);
+        if (!NODE_SHA256.equalsIgnoreCase(actualDigest)) {
+            Files.deleteIfExists(archivePartial);
+            throw new IllegalStateException("Node.js distribution checksum mismatch: expected="
+                    + NODE_SHA256 + " actual=" + actualDigest);
+        }
+        move(archivePartial, archive);
+
+        extractZipBounded(archive, root, MAX_NODE_EXTRACTED_BYTES, MAX_NODE_ARCHIVE_ENTRIES);
+        Path node = nodeExecutable();
+        if (!Files.isRegularFile(node)) {
+            throw new IllegalStateException("Node.js distribution archive did not contain " + node);
+        }
+        return node;
+    }
+
     /**
      * Extracts a zip archive under {@code destinationRoot}, rejecting any entry that would resolve
      * outside it (zip-slip) and bounding both entry count and total extracted bytes so a corrupted
@@ -461,6 +548,11 @@ public final class ManagedScipProviderRuntimeManager implements ProviderRuntimeM
     private Path typeScriptExecutable() {
         return typeScriptRoot().resolve("node_modules").resolve(".bin")
                 .resolve(CommandLocator.isWindows() ? "scip-typescript.cmd" : "scip-typescript");
+    }
+
+    Path typeScriptMainScript() {
+        return typeScriptRoot().resolve("node_modules").resolve("@sourcegraph")
+                .resolve("scip-typescript").resolve("dist").resolve("src").resolve("main.js");
     }
 
     private Path scipJavaRuntimeRoot() { return toolsRoot.resolve("scip-java").resolve(SCIP_JAVA_VERSION).resolve("runtime"); }

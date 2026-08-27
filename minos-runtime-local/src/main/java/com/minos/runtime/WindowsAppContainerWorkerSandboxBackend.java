@@ -276,6 +276,15 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         // a Program Files object's DACL. Every runtime a provider actually needs is either a
         // MINOS-managed root under `tools` or an explicitly declared toolchain-home below.
         addExecutableAccess(readRoots, readFiles, executable, tools);
+        // A .cmd/.bat provider's real executable is invisible above: CommandLocator.invocation()
+        // already rewrote providerCommand.get(0) into the Windows command processor, with the
+        // actual batch file hidden inside one pre-quoted argument cmd.exe's own /S /C contract
+        // requires. Without this, the AppContainer is never granted access to the batch file
+        // itself and the sandboxed launch fails closed with Access Denied.
+        Optional<Path> batchExecutable = CommandLocator.windowsBatchExecutable(providerCommand);
+        if (batchExecutable.isPresent()) {
+            addExecutableAccess(readRoots, readFiles, batchExecutable.orElseThrow(), tools);
+        }
         for (int index = 1; index < providerCommand.size(); index++) {
             addExistingArgumentAccess(readRoots, readFiles, providerCommand.get(index), tools);
         }
@@ -295,6 +304,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         addWriteRoot(writeRoots, run);
         readRoots.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
         readFiles.removeIf(path -> writeRoots.stream().anyMatch(path::startsWith));
+        for (Path writeRoot : writeRoots) {
+            requireInheritableOwnerAccess(writeRoot);
+        }
 
         Path planFile = run.resolve("windows-appcontainer-plan.txt").toAbsolutePath().normalize();
         Path recovery = minosHome.resolve(SANDBOX_DIRECTORY)
@@ -576,6 +588,33 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     /**
+     * Grants the current user an inheritable Full Control ACE on a write root MINOS itself just
+     * created, before the sandboxed provider (running under a completely different, ephemeral
+     * AppContainer identity) writes anything into it. A freshly created directory's owner grant is
+     * not inheritable by default: a file the AppContainer identity creates inside it then carries no
+     * ACE for the current user at all -- MINOS's own process, reading its provider's output back
+     * afterward, gets denied on a file it just watched get written. Observed in practice as a
+     * successfully-generated SCIP artifact reported as "missing or unreadable" moments later.
+     */
+    static void requireInheritableOwnerAccess(Path writeRoot) {
+        String identity = System.getProperty("user.name");
+        if (identity == null || identity.isBlank()) {
+            throw new IllegalStateException("cannot determine the current user to secure write root: " + writeRoot);
+        }
+        boolean granted;
+        try {
+            granted = runIcacls(writeRoot.toString(), "/grant", identity + ":(OI)(CI)F");
+        } catch (IOException | InterruptedException failure) {
+            if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+            granted = false;
+        }
+        if (!granted) {
+            throw new IllegalStateException(
+                    "Unable to secure inheritable owner access on sandbox write root: " + writeRoot);
+        }
+    }
+
+    /**
      * Fails closed, before any PowerShell/icacls invocation, when the current process cannot grant
      * an AppContainer ACE on {@code path} without elevation. Granting a temporary ACE always requires
      * WRITE_DAC on the target; a standard user has that on anything MINOS itself created (its own
@@ -593,6 +632,19 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
     }
 
     /**
+     * A probe identity that can never legitimately already hold an explicit ACE on a path MINOS
+     * manages. {@code /remove:g} (see below) deletes <em>every</em> existing grant for the identity
+     * it names, not just the one the probe itself just added -- probing under the current user's own
+     * account was tried first and silently destroyed that user's pre-existing, broader access (e.g.
+     * their own Full Control) the moment they already had any access at all, which for a MINOS-owned
+     * managed-tools directory is the common case, not the exception. ANONYMOUS LOGON is a universal
+     * well-known SID that resolves on every Windows system without a name lookup; a real, pre-existing
+     * explicit grant to it on a user-owned path would itself be a misconfiguration outside MINOS's
+     * remit, so the probe's cleanup can never claim more than the single ACE it just created.
+     */
+    private static final String PROBE_SID = "S-1-5-7";
+
+    /**
      * Probes WRITE_DAC the same way the launcher itself will actually exercise it: an additive,
      * single-identity {@code icacls /grant}, immediately undone with a single-identity {@code icacls
      * /remove:g}. Both are targeted mutations of one ACE, never a wholesale replace of the object's
@@ -600,18 +652,17 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * concurrency: a whole-list {@code setAcl} call racing against another sandboxed run's own
      * grant/revoke on a shared resource can capture and then permanently persist a transient,
      * incomplete ACL (observed in practice as a file left with an empty DACL, unreadable and
-     * unrepairable by anyone including its owner without elevation). Granting to the current user's
-     * own account is redundant when the answer is "yes" -- they already have access -- and briefly
-     * grants access to no one new even when it briefly widens anything, unlike probing with a broad
-     * identity such as Everyone.
+     * unrepairable by anyone including its owner without elevation). The probe targets {@link
+     * #PROBE_SID}, never the current user's own account: unlike a wholesale replace, {@code
+     * /remove:g} on a self-probe is scoped to one identity, but that identity's OWN pre-existing ACE
+     * is exactly what it deletes -- observed in practice as a MINOS-owned tools directory silently
+     * losing the current user's Full Control the moment {@code isAclGrantable} ran against it.
      */
     static boolean isAclGrantable(Path path) {
-        String identity = System.getProperty("user.name");
-        if (identity == null || identity.isBlank()) return false;
         String target = path.toString();
         boolean granted;
         try {
-            granted = runIcacls(target, "/grant", identity + ":(RX)");
+            granted = runIcacls(target, "/grant", "*" + PROBE_SID + ":(RX)");
         } catch (IOException failure) {
             return false;
         } catch (InterruptedException interrupted) {
@@ -620,10 +671,10 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         }
         if (!granted) return false;
         try {
-            runIcacls(target, "/remove:g", identity);
+            runIcacls(target, "/remove:g", "*" + PROBE_SID);
         } catch (IOException | InterruptedException cleanupFailure) {
             if (cleanupFailure instanceof InterruptedException) Thread.currentThread().interrupt();
-            // The redundant self-grant ACE may remain; WRITE_DAC is already proven either way.
+            // The redundant probe ACE may remain; WRITE_DAC is already proven either way.
         }
         return true;
     }

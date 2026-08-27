@@ -182,6 +182,41 @@ public final class CommandLocator {
         return List.of(commandProcessor, "/d", "/v:off", "/s", "/c", commandLine);
     }
 
+    /**
+     * If {@code command} matches the exact shape {@link #windowsBatchInvocation} produces, returns
+     * the original batch executable its one pre-quoted argument encodes. A sandbox granting access
+     * by inspecting {@code command} would otherwise never see that path at all: cmd.exe's own /S /C
+     * contract requires it hidden inside a single argument, so nothing about the command's other
+     * elements names it directly. Empty for any other command shape, including a plain executable.
+     *
+     * <p>Extraction is unambiguous, not a heuristic: {@link #appendBatchToken} rejects any token
+     * containing an embedded quote, so the first quoted token in the rendered line -- delimited by
+     * the very next {@code "} after the two leading quote characters -- can only be the executable
+     * {@link #windowsBatchInvocation} itself appended first.</p>
+     */
+    static Optional<Path> windowsBatchExecutable(List<String> command) {
+        if (command.size() != 6
+                || !"/d".equalsIgnoreCase(command.get(1))
+                || !"/v:off".equalsIgnoreCase(command.get(2))
+                || !"/s".equalsIgnoreCase(command.get(3))
+                || !"/c".equalsIgnoreCase(command.get(4))) {
+            return Optional.empty();
+        }
+        String commandLine = command.get(5);
+        if (commandLine.length() < 4 || commandLine.charAt(0) != '"' || commandLine.charAt(1) != '"') {
+            return Optional.empty();
+        }
+        int closingQuote = commandLine.indexOf('"', 2);
+        if (closingQuote < 0) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Path.of(commandLine.substring(2, closingQuote)));
+        } catch (InvalidPathException notAPath) {
+            return Optional.empty();
+        }
+    }
+
     public static boolean isWindows() {
         return System.getProperty("os.name", "")
                 .toLowerCase(Locale.ROOT)
