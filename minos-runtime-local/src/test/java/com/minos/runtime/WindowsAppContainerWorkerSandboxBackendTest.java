@@ -291,6 +291,71 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 () -> WindowsAppContainerWorkerSandboxBackend.requireAclGrantable(systemRoot));
     }
 
+    @Test
+    void aclGrantabilityProbeSurvivesConcurrentGrantRevokeWithoutWipingTheAcl() throws Exception {
+        if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
+        Path target = Files.createTempFile("minos-acl-race-", ".ps1");
+        String currentUser = System.getProperty("user.name");
+        // A distinctive marker ACE that must survive the stress below: proves the grantability probe
+        // never wipes an ACE it did not itself add, even raced against another process's own
+        // concurrent, unrelated grant/remove on the very same file -- exactly the interleaving that
+        // used to leave a shared sandbox resource (the AppContainer launcher script) with an empty
+        // DACL, unreadable by anyone including its owner, once a whole-ACL-list read/write-back probe
+        // captured and persisted a transient state from mid-flight through someone else's own
+        // icacls call.
+        assertEquals(0, runIcacls(target, "/grant", currentUser + ":(W)"), "marker grant must succeed");
+
+        java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicReference<Exception> racerFailure = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread racer = new Thread(() -> {
+            while (!stop.get()) {
+                try {
+                    runIcacls(target, "/grant", "*S-1-1-0:(R)");
+                    runIcacls(target, "/remove:g", "*S-1-1-0");
+                } catch (Exception failure) {
+                    racerFailure.set(failure);
+                    return;
+                }
+            }
+        });
+        racer.start();
+        try {
+            for (int attempt = 0; attempt < 40; attempt++) {
+                assertTrue(WindowsAppContainerWorkerSandboxBackend.isAclGrantable(target),
+                        "own temp file must remain ACL-grantable throughout");
+            }
+        } finally {
+            stop.set(true);
+            racer.join(10_000);
+        }
+        assertEquals(null, racerFailure.get(), () -> "racer thread failed: " + racerFailure.get());
+
+        String finalAcl = icaclsOutput(target);
+        assertTrue(finalAcl.contains(currentUser),
+                () -> "the pre-existing marker ACE must survive concurrent probing, got:\n" + finalAcl);
+    }
+
+    private static int runIcacls(Path target, String... arguments) throws Exception {
+        List<String> command = new java.util.ArrayList<>();
+        command.add(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString());
+        command.add(target.toString());
+        command.addAll(List.of(arguments));
+        command.add("/q");
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        process.getInputStream().readAllBytes();
+        return process.waitFor();
+    }
+
+    private static String icaclsOutput(Path target) throws Exception {
+        Process process = new ProcessBuilder(
+                Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString(),
+                target.toString())
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        process.waitFor();
+        return output;
+    }
+
     /** Decodes the read roots the sandbox plan really grants for the given provider environment. */
     private static Set<Path> readRootsOf(
             WindowsAppContainerWorkerSandboxBackend backend,
