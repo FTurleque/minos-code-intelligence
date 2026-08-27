@@ -16,8 +16,6 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.AclEntry;
-import java.nio.file.attribute.AclFileAttributeView;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -582,9 +580,7 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
      * an AppContainer ACE on {@code path} without elevation. Granting a temporary ACE always requires
      * WRITE_DAC on the target; a standard user has that on anything MINOS itself created (its own
      * managed tools, working/run directories) but never on a Program Files- or SystemRoot-owned
-     * object it merely reads. Probing by round-tripping the real ACL (read it, write the same content
-     * back) is the only way to ask the OS the exact question icacls itself would answer, without
-     * duplicating Windows' access-check logic in Java.
+     * object it merely reads.
      */
     static void requireAclGrantable(Path path) {
         if (isAclGrantable(path)) return;
@@ -596,16 +592,50 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
                         + "MINOS-managed toolchain.");
     }
 
+    /**
+     * Probes WRITE_DAC the same way the launcher itself will actually exercise it: an additive,
+     * single-identity {@code icacls /grant}, immediately undone with a single-identity {@code icacls
+     * /remove:g}. Both are targeted mutations of one ACE, never a wholesale replace of the object's
+     * ACL -- unlike a naive "read the ACL, write the same list back" probe, which is not safe under
+     * concurrency: a whole-list {@code setAcl} call racing against another sandboxed run's own
+     * grant/revoke on a shared resource can capture and then permanently persist a transient,
+     * incomplete ACL (observed in practice as a file left with an empty DACL, unreadable and
+     * unrepairable by anyone including its owner without elevation). Granting to the current user's
+     * own account is redundant when the answer is "yes" -- they already have access -- and briefly
+     * grants access to no one new even when it briefly widens anything, unlike probing with a broad
+     * identity such as Everyone.
+     */
     static boolean isAclGrantable(Path path) {
+        String identity = System.getProperty("user.name");
+        if (identity == null || identity.isBlank()) return false;
+        String target = path.toString();
+        boolean granted;
         try {
-            AclFileAttributeView view = Files.getFileAttributeView(path, AclFileAttributeView.class);
-            if (view == null) return false;
-            List<AclEntry> acl = view.getAcl();
-            view.setAcl(acl);
-            return true;
-        } catch (IOException | UnsupportedOperationException | SecurityException notGrantable) {
+            granted = runIcacls(target, "/grant", identity + ":(RX)");
+        } catch (IOException failure) {
+            return false;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
             return false;
         }
+        if (!granted) return false;
+        try {
+            runIcacls(target, "/remove:g", identity);
+        } catch (IOException | InterruptedException cleanupFailure) {
+            if (cleanupFailure instanceof InterruptedException) Thread.currentThread().interrupt();
+            // The redundant self-grant ACE may remain; WRITE_DAC is already proven either way.
+        }
+        return true;
+    }
+
+    private static boolean runIcacls(String... arguments) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getenv("SystemRoot"), "System32", "icacls.exe").toString());
+        command.addAll(List.of(arguments));
+        command.add("/q");
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        process.getInputStream().readAllBytes();
+        return process.waitFor() == 0;
     }
 
     /** Environment keys whose value legitimately names a toolchain root the provider reads. */
