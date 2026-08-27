@@ -492,6 +492,7 @@ begin
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'StorageBackend', EffectiveStorageBackend());
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'SemanticProvider', EffectiveSemanticProvider());
   RegWriteStringValue(HKCU, InstallerRegistryPath(), 'DockerInstanceName', DockerInstanceEdit.Text);
+  RegWriteStringValue(HKCU, InstallerRegistryPath(), 'ProjectsRoot', DockerProjectsPage.Values[0]);
 end;
 
 function ConfigureRuntimeSettings(): Boolean;
@@ -897,7 +898,7 @@ begin
     'MCP Docker MINOS', 'Configurez les données et projets exposés au runtime Docker',
     'Les projets sont montés en lecture seule. PostgreSQL/Ollama gérés ne publient aucun port réseau sur l''hôte.', False, '');
   DockerProjectsPage.Add('Racine des projets :');
-  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ExpandConstant('{%USERPROFILE}') + '}');
+  DockerProjectsPage.Values[0] := ExpandConstant('{param:DOCKERPROJECTSROOT|' + ReadInstallerValue('ProjectsRoot', ExpandConstant('{%USERPROFILE}')) + '}');
   DockerDataRootLabel := TNewStaticText.Create(DockerProjectsPage);
   DockerDataRootLabel.Parent := DockerProjectsPage.Surface;
   DockerDataRootLabel.Caption := 'Données Docker persistantes :';
