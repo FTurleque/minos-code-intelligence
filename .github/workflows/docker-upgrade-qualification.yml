@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       previous_ref:
-        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the first parent of the selected candidate.'
+        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/develop, then first-parent fallback.'
         required: false
         default: ''
         type: string
