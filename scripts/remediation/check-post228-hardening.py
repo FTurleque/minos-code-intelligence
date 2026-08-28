@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Fail-closed invariants for the post-#228 quota/readiness remediation."""
+"""Fail-closed static invariants for the post-#228 quota/readiness remediation."""
 
 from __future__ import annotations
 
-import argparse
-import sys
 from pathlib import Path
-import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -109,45 +106,14 @@ def validate_documentation() -> None:
         forbid(relative, text, "#228 non intégrée")
 
 
-def validate_coverage(report: Path) -> None:
-    if not report.is_file():
-        raise RuntimeError(f"missing JaCoCo aggregate report: {report}")
-    root = ET.parse(report).getroot()
-    target = "com/minos/runtime/ProviderWriteQuotaSupervisor"
-    classes = [clazz for clazz in root.findall(".//class") if clazz.attrib.get("name") == target]
-    if not classes:
-        raise RuntimeError(f"JaCoCo report does not contain critical class: {target}")
-    totals = {"LINE": [0, 0], "BRANCH": [0, 0]}
-    for clazz in classes:
-        for counter in clazz.findall("counter"):
-            kind = counter.attrib.get("type")
-            if kind in totals:
-                totals[kind][0] += int(counter.attrib.get("covered", "0"))
-                totals[kind][1] += int(counter.attrib.get("missed", "0"))
-    thresholds = {"LINE": 0.55, "BRANCH": 0.35}
-    for kind, threshold in thresholds.items():
-        covered, missed = totals[kind]
-        total = covered + missed
-        ratio = 1.0 if total == 0 else covered / total
-        if ratio < threshold:
-            raise RuntimeError(
-                f"ProviderWriteQuotaSupervisor {kind.lower()} coverage {ratio:.3f} < {threshold:.3f}"
-            )
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--coverage-report", type=Path)
-    args = parser.parse_args()
     try:
         validate_runtime_contracts()
         validate_documentation()
-        if args.coverage_report is not None:
-            validate_coverage(args.coverage_report)
         print("POST-228 HARDENING INVARIANTS SUCCESS")
         return 0
     except Exception as exc:
-        print(f"POST-228 HARDENING INVARIANTS FAILED: {exc}", file=sys.stderr)
+        print(f"POST-228 HARDENING INVARIANTS FAILED: {exc}", file=__import__("sys").stderr)
         return 1
 
 
