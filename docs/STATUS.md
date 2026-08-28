@@ -10,18 +10,21 @@ Ce fichier est la synthèse autoritative de l'état produit courant. Les réconc
 - **M29 issue #107** : **CLOSED** ; **M29 PR #108** intégrée.
 - **M30 PR #110** et **M30 promotion PR #111** intégrées.
 - **hardening PR #113** intégré ; **M28 Windows CI PR #117** intégré.
-- **#98 sandbox OS réelle** : implémentée et qualifiée sur Linux et Windows.
+- **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
+- **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit 28 août — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
 - Ligne de développement : **1.1.0-SNAPSHOT**.
 
 ## Release 1.0.1
 
-La release **MINOS v1.0.1 est PUBLIÉE et immuable**.
+La release **MINOS v1.0.1** a été publiée le **9 août 2026** après validation utilisateur réelle du setup Windows.
 
 ```text
 v1.0.1 → f762025d66e33c40324c811079f1527d122f90f9
 ```
+
+La release **v1.0.1 est PUBLIÉE et immuable**.
 
 - URL : https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.0.1
 - publication : **10 assets**, soit **5 paires** artefact/checksum ;
