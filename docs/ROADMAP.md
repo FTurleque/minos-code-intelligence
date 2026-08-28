@@ -1,10 +1,8 @@
 # Feuille de route — MINOS
 
-Statut au **27 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#248 intégré ; ligne de développement 1.1.0-SNAPSHOT ouverte.**
+Statut au **28 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#260 intégré dans la ligne auditée ; 1.1.0-SNAPSHOT ouverte.**
 
-La remédiation quota/readiness issue du réaudit de #228 est **intégrée** (PR #229), tout comme le moteur de mise à jour transactionnelle Windows (#231), le hardening MCP/installateur qui a suivi (#232–#241), et les trois corrections Windows non-admin / Docker MCP de fin août (#242/#243, #246, #247/#248).
-
-La version historique détaillée antérieure à la réconciliation post-#226 est conservée intégralement dans [`history/reconciliations/ROADMAP-pre-post226-audit-20260821.md`](history/reconciliations/ROADMAP-pre-post226-audit-20260821.md) ; la version courante au 21 août 2026 (remédiation post-#228 encore en qualification) dans [`history/reconciliations/ROADMAP-pre-post243-audit-20260827.md`](history/reconciliations/ROADMAP-pre-post243-audit-20260827.md). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
+Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
 ## Principes durables
 
@@ -14,13 +12,13 @@ La version historique détaillée antérieure à la réconciliation post-#226 es
 - les providers absents ou non qualifiés ne sont jamais extrapolés ;
 - CLI, API, MCP, NEXUS et IntelliJ restent des surfaces au-dessus du métier ;
 - remote/hosted/sandbox restent fail-closed lorsqu'une garantie n'est pas prouvée ;
-- le contrat managed-local-provider reste distinct d'une claim hostile/untrusted ;
 - l'accès réseau d'un provider est `DENY` par défaut ;
 - les exécutables qui constituent l'autorité de sandbox ne sont pas choisis dans un PATH utilisateur ;
 - une release publiée est immuable ;
 - le runtime packagé doit être testé, pas seulement le JAR ;
 - une publication est bloquée par les vulnérabilités connues ou l'absence de qualification exacte du candidat ;
-- l'indexation Windows ne requiert jamais de droits administrateur, y compris pendant le développement (IDE) et pendant une mise à jour de backend déjà configuré.
+- l'indexation Windows ne requiert pas de droits administrateur ;
+- `main` doit rester ancêtre de la ligne `develop` afin que les promotions ne réintroduisent pas une divergence d'historique.
 
 ## Trajectoire livrée
 
@@ -35,63 +33,86 @@ La version historique détaillée antérieure à la réconciliation post-#226 es
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ M30 PR #110 + M30 promotion PR #111 |
 | Hardening release/installer | supply-chain, Windows CI, sécurité release | ✅ #113 ; M28 Windows CI PR #117 |
 | #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ implémenté et qualifié |
-| #224–#227 | confinement filesystem/provider, provenance, egress | ✅ intégrés |
-| #228 | composition managed-local-provider + provenance des autorités de sandbox | ✅ intégrée ; head qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712` |
-| Réaudit post-#228 (#229) | exhaustivité quota provider + qualification Windows `READY` + gates/docs | ✅ intégrée |
-| #230 | refactors de maintenabilité + décomposition CI M23/M25/M26/M27 | ✅ intégrée |
-| #231–#232 | moteur de mise à jour transactionnelle Windows + revue de sécurité à 8 angles | ✅ intégrées |
-| #233–#236 | hardening test/doc des clients MCP + capstone de sécurité | ✅ intégrées |
-| #237 | ouverture de la ligne **1.1.0-SNAPSHOT** | ✅ intégrée |
-| #238–#241 | détection MSIX Claude Desktop, UX assistant MCP, cache image provider, verrouillage checkbox | ✅ intégrées |
-| #242/#243 | indexation Windows sans droits administrateur (JVM hôte jamais traitée comme runtime provider) | ✅ intégrée ; promue sur `main` |
-| #246 | fin du blocage `docker compose` en mise à jour de backend Docker MCP | ✅ intégrée |
-| #247/#248 | correction de la course sur la sonde ACL (`isAclGrantable`) | ✅ intégrée ; promue sur `main` |
+| PR #227 | provider egress, provenance CommandLocator, reparse private storage et fallback confinement | ✅ intégrée |
+| #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
+| #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
+| #260 | confinement fingerprint/secrets, quotas/couverture ciblée, simplification Post-228 et durcissements restants | ✅ intégrée dans `develop` |
+| Réconciliation audit 28/08 | Docker A→B réel, I/O snapshot bornée, UTF-8 secrets strict, crypto hygiene, Gradle Dependabot, docs/topologie | 🔄 qualifiée par la PR qui contient ce document avant merge |
 
-## Ligne de sécurité après #228
+## Ligne de sécurité courante
 
-### Deux niveaux de qualification sandbox
+### Sandbox et providers
 
-Le worker distant/hostile conserve le niveau fort : process/memory/CPU/descendants et filesystem bytes+entries doivent satisfaire le contrat hostile, notamment un quota filesystem `OS_ENFORCED`. Tant que le hard quota disque n'existe pas, ce chemin reste fail-closed.
+Le worker distant/hostile conserve le niveau fort : process/memory/CPU/descendants et filesystem bytes+entries doivent satisfaire le contrat hostile, notamment un quota filesystem `OS_ENFORCED`. Tant que ce hard quota disque n'existe pas, ce chemin reste fail-closed.
 
-Le provider local géré possède un contrat distinct. Il exige réseau OS-enforced, job boundary agrégé OS, timeout, quotas filesystem appliqués pendant l'exécution et reclamation scratch. `SUPERVISED_HARD_KILL` reste accepté uniquement pour ce niveau local ; il ne modifie jamais `supportsUntrustedCode()`.
+Le provider local géré possède un contrat distinct : réseau OS-enforced, job boundary agrégé OS, timeout, quotas filesystem supervisés et reclamation scratch. `SUPERVISED_HARD_KILL` reste accepté uniquement pour ce niveau local et ne modifie jamais `supportsUntrustedCode()`.
 
-### Remédiation quota/readiness post-#228 — intégrée
+Sous Windows, la JVM hôte n'est jamais traitée comme runtime provider ; toute racine non accordable sans élévation échoue avant l'exécution. Les mutations ACL AppContainer restent additives et ciblées sur une identité, jamais un remplacement intégral de DACL sous concurrence.
 
-Le réaudit du merge #228 a montré que la garantie supervisée devait couvrir non seulement les paths explicitement accordés par MINOS mais aussi les sinks implicites de la sandbox. La PR #229 a intégré :
+### Secrets, formats persistés et hosted control plane
 
-- Linux/Java : une perte réelle de visibilité d'un writable root est désormais un breach ; les suppressions concurrentes normales restent tolérées ;
-- Windows : le budget historique **8 GiB / 400 000 entrées** est partitionné de façon conservative entre roots explicites (**7 GiB / 350 000**) et stockage fichier privé AppContainer (**1 GiB / 50 000**) ;
-- les mutations du registre privé AppContainer sont refusées avant le démarrage effectif du child ;
-- le superviseur privé est armé avant `ResumeThread` ;
-- la découverte Windows exécute un probe réel AppContainer/Job Object avant d'autoriser le backend ;
-- l'état `READY` des providers gérés dépend du sandbox réellement utilisé en production, sans deuxième autorité ownership-only inutilisée.
+Les secrets relatifs restent physiquement confinés à `MINOS_HOME`. Tous les fichiers secrets utilisent désormais un lecteur UTF-8 borné et strict. Les snapshots structurés v1/v2 imposent leur plafond **256 MiB pendant l'I/O** au moyen de flux d'entrée/sortie bornés, en complément des cardinalités déjà limitées.
 
-### Indexation Windows sans droits administrateur (#242/#243, #247/#248)
+Le hosted control plane conserve AES-256-GCM + AAD ; les buffers de clé maître et de clé dérivée temporaires sont nettoyés après usage.
 
-Deux défauts distincts ont pu forcer un usage administrateur pour indexer sur Windows, tous deux corrigés fin août 2026 :
+### Git / PostgreSQL / source
 
-- la JVM qui exécute MINOS elle-même (`System.getProperty("java.home")`, par exemple le JDK sélectionné par une configuration d'exécution IntelliJ sous `Program Files`) était traitée inconditionnellement comme une racine de lecture à accorder à l'AppContainer, ce qui exige un `icacls` impossible sans élévation sur un chemin non possédé par l'utilisateur. La JVM hôte n'est plus jamais une racine de sandbox ; toute racine candidate non accordable sans élévation fait échouer le plan proprement (`isAclGrantable`/`requireAclGrantable`) avant tout appel `icacls`, avec un diagnostic explicite ;
-- la sonde de vérification `isAclGrantable` elle-même, ajoutée par la correction précédente, remplaçait l'intégralité de la DACL d'un fichier par une copie de ce qu'elle venait de lire — une opération non sûre sous concurrence qui a produit, en conditions réelles, un fichier de lancement AppContainer partagé avec une **DACL entièrement vide**. Remplacée par les mêmes opérations additives et ciblées sur une seule identité (`icacls /grant` puis `/remove:g`) déjà utilisées par le lanceur réel, avec un test de régression qui stresse directement cette course.
+Git distant conserve HTTPS, host/ref/SHA/path validation. PostgreSQL externe conserve sa politique TLS qualifiée et les requêtes préparées. Les lectures de source passent par le confinement objet `ConfinedFileOpener` et un plafond d'octets.
 
-### Mise à jour du backend Docker MCP sans blocage (#246)
+## Gates actuels
 
-La mise à jour d'un backend Docker MCP déjà configuré vers une nouvelle version pouvait bloquer indéfiniment sur l'invite interactive `docker compose` *« Recreate (data will be lost)? »* (le volume `minos-provider-tools` porte des labels qui changent à chaque build). Les invocations `docker compose` concernées passent désormais systématiquement par un stdin non-interactif garanti, échouant vite au lieu de bloquer pour toujours. La PR porte également plusieurs correctifs du profil PostgreSQL/Ollama managé (réseau de provisioning Ollama dédié, service `minos-data-bootstrap` présent dans le profil connecté, scratch dir pour le plan requête) et la compatibilité PowerShell 5.1 (le shell réellement utilisé par l'installateur).
+### PR Validation — autorité produit courante
 
-### Provenance des commandes de sécurité
+Le workflow **PR Validation** porte :
 
-Les protections de #228 restent inchangées : `bwrap`, `prlimit`, `sh`, `systemctl` et `systemd-run` proviennent de racines système Linux canoniques root-owned et non group/world-writable. PowerShell et `cmd.exe` sont ancrés à `SystemRoot\System32` ; `ComSpec` n'est pas une autorité de confiance.
+- OSV ;
+- Maven `clean verify` Linux + Windows ;
+- PostgreSQL obligatoire Linux ;
+- tests sandbox réels applicables ;
+- JaCoCo ciblé Linux + Windows ;
+- invariants architecture/supply-chain/docs ;
+- contrôle que `origin/main` est ancêtre du HEAD candidat.
 
-### Gates
+### Post-228 — invariants statiques ciblés
 
-Le workflow **Post-228 Hardening Invariants** est exact-head sur Linux et Windows. Il exécute :
+**Post-228 Hardening Invariants** n'est plus une deuxième matrice Maven/Windows/JaCoCo. Il exécute les invariants statiques post-#228 sur Ubuntu ; les tests/builds/couvertures sont autoritairement dans PR Validation.
 
-- le gate documentaire courant ;
-- les invariants statiques quota/readiness ;
-- `mvn verify` ;
-- les tests réels AppContainer/Job Object sous Windows ;
-- un seuil JaCoCo ciblé sur `ProviderWriteQuotaSupervisor`.
+La preuve historique reste attachée aux SHA Post-#228 : candidat exact qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces références décrivent la qualification #228 historique et ne réintroduisent aucune duplication Maven/Windows/JaCoCo dans le workflow courant.
 
-Cette barrière complète les workflows historiques sans diminuer leurs seuils ni supprimer leurs contrôles.
+### Qualifications historiques
+
+Les replays M15/M28 sont disponibles par `workflow_dispatch` dans `historical-qualification.yml`, séparés du chemin de PR courant.
+
+### IntelliJ
+
+Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1**, avec `buildPlugin`, `verifyPluginProjectConfiguration`, `verifyPluginStructure`, **Plugin Verifier** et les tests Windows ownership. Dependabot couvre désormais `/minos-intellij` en plus de Maven et GitHub Actions.
+
+### Docker release et upgrade réel
+
+`docker-release-validation.yml` valide l'image provider-complete exacte sur Linux/amd64.
+
+La transition réelle d'une version Docker MCP à une autre possède maintenant une qualification dédiée :
+
+- workflow : `.github/workflows/docker-upgrade-qualification.yml` ;
+- runner requis : Windows x64 auto-hébergé + Docker Desktop Linux containers, label `minos-docker` ;
+- script : `scripts/ci/qualify-docker-upgrade.ps1` ;
+- candidat A et candidat B construits depuis **deux commits/JAR distincts** ;
+- vrai `prod-mcp-release.ps1`, vraies images provider-complete, vrai Compose et vrais providers ;
+- projet Maven fixture enregistré et indexé avant l'upgrade ;
+- handshake MCP avant et après ;
+- persistance du `MINOS_HOME`, du projet et de l'index vérifiée ;
+- un candidat suivant volontairement invalide doit échouer sans remplacer B, qui est re-handshaké après l'échec.
+
+Le blocage historique `docker compose` interactif de #246 est ainsi couvert par un chemin de qualification reproductible au lieu d'une note de vérification manuelle ouverte.
+
+## Supply-chain et toolchains
+
+- cœur : Java 24 / Maven 3.9.x, wrapper Maven 3.9.16 avec checksum ;
+- IntelliJ : Java 21 / Gradle 9.6.1 / IntelliJ Platform 2026.1 ;
+- Dependabot : Maven + Gradle `minos-intellij` + GitHub Actions ;
+- workflows GitHub : actions épinglées par SHA ;
+- Docker release : toolchains/images/checksums immuables lorsque cette garantie est revendiquée ;
+- Docker MCP local : base Temurin 24 JRE désormais épinglée par digest et non plus par tag flottant.
 
 ## Release 1.0.1 — publiée
 
@@ -103,10 +124,8 @@ La **Release 1.0.1 est publiée** et reste immuable :
 - **10 assets** publiés ;
 - qualification incluant OSV, packaging et **Plugin Verifier**.
 
-La ligne de développement courante est **1.1.0-SNAPSHOT** (PR #237). Aucune release 1.1.0 n'est publiée à ce jour.
+La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0 n'est publiée à ce jour.
 
 ## Suite
 
-Aucun nouveau jalon fonctionnel n'est ouvert. La dette durable reste le hard filesystem quota : si une exécution distante réellement hostile doit être activée, elle devra obtenir une primitive qui refuse l'écriture avant dépassement au lieu de reclassifier une supervision périodique.
-
-Vérification manuelle encore ouverte : reproduire la transition d'image Docker MCP d'une version à l'autre (pas seulement un rafraîchissement à l'identique) pour confirmer que #246 couvre aussi ce chemin précis — la seule occurrence observée en conditions réelles n'a pas pu être rejouée faute d'avoir conservé le journal `backend-switch.log` de l'échec avant réinstallation.
+Aucun nouveau jalon fonctionnel n'est ouvert. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.

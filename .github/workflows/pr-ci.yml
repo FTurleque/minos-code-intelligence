@@ -65,6 +65,17 @@ jobs:
             throw "Exact-head mismatch: actual=$actual expected=$env:EXPECTED_SHA"
           }
 
+      - name: Require main ancestry in every candidate
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            echo 'main is not an ancestor of the candidate HEAD. Synchronize main into develop before continuing.' >&2
+            exit 1
+          fi
+
       - name: Set up Java 24
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -79,6 +90,10 @@ jobs:
 
       - name: Immutable workflow supply-chain gate
         run: python scripts/quality/check-workflow-pins.py
+
+      - name: Audit remediation v2 invariants
+        if: runner.os != 'Windows'
+        run: python scripts/remediation/check-audit-remediation-v2.py
 
       - name: Inno Setup provenance rules
         shell: pwsh

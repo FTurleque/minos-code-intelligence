@@ -1,7 +1,8 @@
 package com.minos.io;
 
-import java.io.IOException;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.CodingErrorAction;
@@ -75,7 +76,7 @@ public final class BoundedProperties {
         }
     }
 
-    private static Reader strictUtf8Reader(java.io.InputStream input) {
+    private static Reader strictUtf8Reader(InputStream input) {
         return new InputStreamReader(input, StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT));
@@ -105,11 +106,28 @@ public final class BoundedProperties {
 
     public static String readUtf8(Path file, long maximumBytes, String boundary) throws IOException {
         Path source = requireRegularFile(file, boundary);
-        try (BoundedInputStream input = new BoundedInputStream(
-                Files.newInputStream(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS),
-                maximumBytes, boundary)) {
-            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        try (InputStream input = Files.newInputStream(
+                source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            return readUtf8(input, maximumBytes, boundary);
         }
+    }
+
+    /**
+     * Reads one already-open stream using the same bounded, fail-closed UTF-8 decoder as property files.
+     * The supplied stream is consumed and closed by this method.
+     */
+    public static String readUtf8(InputStream source, long maximumBytes, String boundary) throws IOException {
+        Objects.requireNonNull(source, "source");
+        StringBuilder value = new StringBuilder();
+        try (BoundedInputStream input = new BoundedInputStream(source, maximumBytes, boundary);
+             Reader reader = strictUtf8Reader(input)) {
+            char[] buffer = new char[4096];
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                value.append(buffer, 0, read);
+            }
+        }
+        return value.toString();
     }
 
     private static Path requireRegularFile(Path file, String boundary) throws IOException {

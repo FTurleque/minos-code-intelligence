@@ -150,6 +150,30 @@ class StorageBackendConfigurationTest {
     }
 
     @Test
+    void rejectsMalformedUtf8InRelativeSecretFile() throws IOException {
+        Path home = Files.createTempDirectory("minos-secret-malformed-relative-");
+        Path secret = home.resolve("secrets/postgres.password");
+        Files.createDirectories(secret.getParent());
+        Files.write(secret, new byte[]{(byte) 0xc3, (byte) 0x28});
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(
+                home, postgresPasswordFile("secrets/postgres.password"), Map.of(), new Properties());
+
+        assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+    }
+
+    @Test
+    void rejectsMalformedUtf8InExplicitAbsoluteSecretFile() throws IOException {
+        Path parent = Files.createTempDirectory("minos-secret-malformed-absolute-");
+        Path home = Files.createDirectories(parent.resolve("home"));
+        Path secret = parent.resolve("mounted-secret.password").toAbsolutePath();
+        Files.write(secret, new byte[]{(byte) 0xc3, (byte) 0x28});
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(
+                home, postgresPasswordFile(secret.toString()), Map.of(), new Properties());
+
+        assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+    }
+
+    @Test
     void fileSettingsRemainScopedToEachHomeAndNeverMutateJvmProperties() throws IOException {
         String property = "minos.test.homeScopedSetting";
         String environment = "MINOS_TEST_HOME_SCOPED_SETTING";

@@ -1,6 +1,5 @@
 package com.minos.storage;
 
-import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedProperties;
 import com.minos.io.ConfinedFileOpener;
 
@@ -8,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -144,9 +142,8 @@ public final class MinosRuntimeSettings {
 
         Path relative = home.relativize(candidate);
         try (SeekableByteChannel channel = ConfinedFileOpener.openConfinedRegularFile(home, relative);
-             InputStream stream = Channels.newInputStream(channel);
-             BoundedInputStream input = new BoundedInputStream(stream, MAX_SECRET_BYTES, "MINOS secret file")) {
-            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+             InputStream stream = Channels.newInputStream(channel)) {
+            return BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES, "MINOS secret file");
         } catch (ConfinedFileOpener.ConfinementException exception) {
             throw new IOException("relative MINOS secret file failed physical confinement: "
                     + configuredSecretPath, exception);

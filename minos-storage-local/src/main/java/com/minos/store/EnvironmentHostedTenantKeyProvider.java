@@ -45,13 +45,17 @@ public final class EnvironmentHostedTenantKeyProvider implements HostedTenantKey
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException("hosted tenant key is not valid base64: " + variable, exception);
         }
+        byte[] derived = null;
         try {
             if (master.length != 32) {
                 throw new IllegalStateException("hosted tenant key must decode to exactly 32 bytes: " + variable);
             }
-            byte[] derived = derive(master, tenantId, safeKeyId, purpose);
+            derived = derive(master, tenantId, safeKeyId, purpose);
+            // SecretKeySpec defensively copies the supplied key material, so the temporary HKDF-like
+            // derivation buffer can be scrubbed immediately after the key object has been created.
             return new SecretKeySpec(derived, purpose == Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
         } finally {
+            if (derived != null) Arrays.fill(derived, (byte) 0);
             Arrays.fill(master, (byte) 0);
         }
     }
