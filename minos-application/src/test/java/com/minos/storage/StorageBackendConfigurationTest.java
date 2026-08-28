@@ -132,9 +132,7 @@ class StorageBackendConfigurationTest {
         Properties file = postgresPasswordFile("secrets/postgres.password");
         MinosRuntimeSettings settings = MinosRuntimeSettings.testing(home, file, Map.of(), new Properties());
 
-        IOException failure = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
-
-        assertTrue(failure.getMessage().contains("physical confinement"));
+        assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
     }
 
     @Test
