@@ -137,7 +137,10 @@ class WindowsAppContainerWorkerSandboxBackendTest {
                 .directory(working.toFile())
                 .redirectErrorStream(true)
                 .start();
-        boolean completed = process.waitFor(30, TimeUnit.SECONDS);
+        // The sandbox launcher owns the provider's 30-second runtime timeout. The outer test harness
+        // needs bounded headroom for AppContainer startup and cleanup, otherwise it races the exact
+        // same deadline and can kill a correctly-contained provider before the launcher reports it.
+        boolean completed = process.waitFor(60, TimeUnit.SECONDS);
         if (!completed) {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
@@ -342,13 +345,6 @@ class WindowsAppContainerWorkerSandboxBackendTest {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
         Path target = Files.createTempFile("minos-acl-race-", ".ps1");
         String currentUser = System.getProperty("user.name");
-        // A distinctive marker ACE that must survive the stress below: proves the grantability probe
-        // never wipes an ACE it did not itself add, even raced against another process's own
-        // concurrent, unrelated grant/remove on the very same file -- exactly the interleaving that
-        // used to leave a shared sandbox resource (the AppContainer launcher script) with an empty
-        // DACL, unreadable by anyone including its owner, once a whole-ACL-list read/write-back probe
-        // captured and persisted a transient state from mid-flight through someone else's own
-        // icacls call.
         assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(W)"), "marker grant must succeed");
 
         java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -385,15 +381,6 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     @Test
     void requireInheritableOwnerAccessLetsFilesWrittenInsideTheRootInheritTheUsersAccess() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
-        // A freshly created directory's owner grant is not inheritable by default: a provider process
-        // writing into a MINOS-owned write root under a different (ephemeral AppContainer) identity
-        // would create files carrying no ACE at all for the current user, leaving MINOS's own process
-        // unable to read its own provider's output back afterward -- observed in practice as a
-        // successfully-generated SCIP artifact reported "missing or unreadable" moments after being
-        // written. This proves the write root's grant is actually inheritable, not merely present, by
-        // checking that a freshly created file inside it -- the exact mechanism NTFS inheritance uses
-        // regardless of which identity creates the file -- picks up the current user's access
-        // automatically.
         Path writeRoot = Files.createTempDirectory("minos-write-root-");
         String currentUser = System.getProperty("user.name");
 
@@ -409,14 +396,6 @@ class WindowsAppContainerWorkerSandboxBackendTest {
     @Test
     void aclGrantabilityProbeNeverStripsTheCallingUsersOwnPreExistingAccess() throws Exception {
         if (WorkerSandboxQualification.currentPlatform() != WorkerSandboxQualification.Platform.WINDOWS) return;
-        // The overwhelmingly common case in production: MINOS probes grantability on a directory it
-        // owns and already has explicit Full Control over (its own managed tools/run directories),
-        // not some unrelated path. A probe that mutates the CALLING USER's own identity -- as opposed
-        // to a synthetic identity that could never legitimately already hold an ACE -- must not let
-        // its own cleanup (icacls /remove:g, which deletes every existing grant for the named
-        // identity, not just the one the probe just added) destroy that pre-existing access. Observed
-        // in practice as a MINOS-managed tools directory silently losing the current user's Full
-        // Control the moment a real indexing run happened to probe it.
         Path target = Files.createTempDirectory("minos-acl-self-access-");
         String currentUser = System.getProperty("user.name");
         assertEquals(0, runIcacls(target, "/grant:r", currentUser + ":(F)"),
