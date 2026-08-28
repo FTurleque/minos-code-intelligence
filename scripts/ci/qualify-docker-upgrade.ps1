@@ -228,7 +228,7 @@ public final class UpgradeFixture {
     $FailedAsExpected = $false
     try {
         Invoke-DockerWorkflow -Script $WorkflowB -Action Install -Jar $BrokenJar `
-            -Version 'qualification-c-broken' -Commit ('f' * 40) -ImageTag "upgrade-c-broken-$Suffix"
+            -Version 'qualification-c-broken' -Commit 'ffffffffffffffffffffffffffffffffffffffff' -ImageTag "upgrade-c-broken-$Suffix"
     }
     catch {
         $FailedAsExpected = $true
