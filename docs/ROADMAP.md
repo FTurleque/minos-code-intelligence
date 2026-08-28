@@ -33,6 +33,7 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ M30 PR #110 + M30 promotion PR #111 |
 | Hardening release/installer | supply-chain, Windows CI, sécurité release | ✅ #113 ; M28 Windows CI PR #117 |
 | #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ implémenté et qualifié |
+| PR #227 | provider egress, provenance CommandLocator, reparse private storage et fallback confinement | ✅ intégrée |
 | #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
 | #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
 | #260 | confinement fingerprint/secrets, quotas/couverture ciblée, simplification Post-228 et durcissements restants | ✅ intégrée dans `develop` |
