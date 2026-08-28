@@ -3,6 +3,7 @@ package com.minos.io;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -67,6 +68,23 @@ class BoundedPropertiesTest {
 
         assertThrows(IOException.class,
                 () -> BoundedProperties.load(file, 1024, 10, 64, 64, "test config"));
+    }
+
+    @Test
+    void strictTextReaderRejectsMalformedUtf8FromFileAndOpenStream(@TempDir Path root) throws Exception {
+        byte[] malformed = new byte[] {(byte) 0xc3, (byte) 0x28};
+        Path file = root.resolve("malformed-secret.txt");
+        Files.write(file, malformed);
+
+        assertThrows(IOException.class, () -> BoundedProperties.readUtf8(file, 32, "secret"));
+        assertThrows(IOException.class, () -> BoundedProperties.readUtf8(
+                new ByteArrayInputStream(malformed), 32, "secret"));
+    }
+
+    @Test
+    void strictTextReaderKeepsByteLimitForOpenStreams() {
+        assertThrows(IOException.class, () -> BoundedProperties.readUtf8(
+                new ByteArrayInputStream("abcdef".getBytes(StandardCharsets.UTF_8)), 3, "secret"));
     }
 
     @Test
