@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -113,7 +114,7 @@ def main() -> int:
         print("POST-228 HARDENING INVARIANTS SUCCESS")
         return 0
     except Exception as exc:
-        print(f"POST-228 HARDENING INVARIANTS FAILED: {exc}", file=__import__("sys").stderr)
+        print(f"POST-228 HARDENING INVARIANTS FAILED: {exc}", file=sys.stderr)
         return 1
 
 
