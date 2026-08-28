@@ -1,0 +1,13 @@
+# Default owner. This does not require an approval today; it documents ownership for future collaboration.
+* @FTurleque
+
+# Security- and release-sensitive surfaces.
+/.github/ @FTurleque
+/scripts/release/ @FTurleque
+/docker/ @FTurleque
+/minos-mcp/ @FTurleque
+/minos-api/ @FTurleque
+/minos-runtime-local/ @FTurleque
+/minos-storage-local/ @FTurleque
+/minos-storage-postgresql/ @FTurleque
+/minos-integration-git/ @FTurleque
