@@ -1,7 +1,9 @@
 package com.minos.incremental;
 
+import com.minos.io.BoundedInputStream;
 import com.minos.io.CommitUncertainException;
 import com.minos.io.DurableAtomicFile;
+import com.minos.source.SourceBudgetPolicy;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -45,8 +47,11 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final int SNAPSHOT_MAGIC = 0x4D4E4650; // MNFP
     private static final int POINTER_MAGIC = 0x4D4E4641; // MNFA
     private static final int FORMAT_VERSION = 1;
-    private static final int MAX_FILES = 10_000_000;
-    private static final int MAX_STRING_BYTES = 8 * 1024 * 1024;
+    static final int MAX_FILES = Math.toIntExact(SourceBudgetPolicy.DEFAULT_MAX_FILES);
+    static final int MAX_STRING_BYTES = 64 * 1024;
+    static final long MAX_SNAPSHOT_BYTES = 64L * 1024L * 1024L;
+    private static final long MAX_POINTER_BYTES = 512L * 1024L;
+    private static final int MAX_INITIAL_LIST_CAPACITY = 16_384;
     private static final String ACTIVE_FILE = "active.pointer";
     private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
     private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
@@ -312,6 +317,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static String writeSnapshot(Path file, ProjectFingerprintSnapshot snapshot) throws IOException {
+        validateSnapshotEncoding(snapshot);
         MessageDigest digest = sha256Digest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
@@ -335,17 +341,19 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
 
     private static ProjectFingerprintSnapshot readVerifiedSnapshot(UUID expectedProjectId, Path file)
             throws IOException {
-        requireRegularFile(file, "fingerprint snapshot");
+        requireBoundedRegularFile(file, "fingerprint snapshot", MAX_SNAPSHOT_BYTES);
         verifyFileNameChecksum(file);
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             BoundedInputStream boundedInput = new BoundedInputStream(
+                     fileInput, MAX_SNAPSHOT_BYTES, "fingerprint snapshot");
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             requireHeader(input, SNAPSHOT_MAGIC, "fingerprint snapshot");
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String indexSnapshotId = readString(input, "indexSnapshotId");
             String projectSha256 = readString(input, "projectSha256");
             String buildSha256 = readString(input, "buildSha256");
             int fileCount = readCount(input, MAX_FILES, "fileCount");
-            List<FileFingerprint> files = new ArrayList<>(fileCount);
+            List<FileFingerprint> files = new ArrayList<>(Math.min(fileCount, MAX_INITIAL_LIST_CAPACITY));
             for (int index = 0; index < fileCount; index++) {
                 String relativePath = readString(input, "relativePath");
                 long sizeBytes = input.readLong();
@@ -376,6 +384,44 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         } catch (EOFException exception) {
             throw new IOException("truncated fingerprint snapshot", exception);
         }
+    }
+
+    private static void validateSnapshotEncoding(ProjectFingerprintSnapshot snapshot) throws IOException {
+        int fileCount = snapshot.fingerprint().files().size();
+        if (fileCount > MAX_FILES) {
+            throw new IOException("fingerprint snapshot exceeds file count limit: " + fileCount + "/" + MAX_FILES);
+        }
+        long bytes = 2L * Integer.BYTES + 2L * Long.BYTES;
+        bytes = addEncodedString(bytes, snapshot.indexSnapshotId(), "indexSnapshotId");
+        bytes = addEncodedString(bytes, snapshot.fingerprint().projectSha256(), "projectSha256");
+        bytes = addEncodedString(bytes, snapshot.fingerprint().buildSha256(), "buildSha256");
+        bytes = addSnapshotBytes(bytes, Integer.BYTES);
+        for (FileFingerprint fingerprint : snapshot.fingerprint().files()) {
+            bytes = addEncodedString(bytes, fingerprint.relativePath(), "relativePath");
+            bytes = addSnapshotBytes(bytes, Long.BYTES);
+            bytes = addEncodedString(bytes, fingerprint.sha256(), "fileSha256");
+        }
+    }
+
+    private static long addEncodedString(long current, String value, String label) throws IOException {
+        byte[] bytes = requireText(value, label).getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_STRING_BYTES) {
+            throw new IOException(label + " exceeds UTF-8 byte limit: " + bytes.length + "/" + MAX_STRING_BYTES);
+        }
+        return addSnapshotBytes(addSnapshotBytes(current, Integer.BYTES), bytes.length);
+    }
+
+    private static long addSnapshotBytes(long current, long additional) throws IOException {
+        long total;
+        try {
+            total = Math.addExact(current, additional);
+        } catch (ArithmeticException exception) {
+            throw new IOException("fingerprint snapshot size overflow", exception);
+        }
+        if (total > MAX_SNAPSHOT_BYTES) {
+            throw new IOException("fingerprint snapshot exceeds byte limit: " + total + "/" + MAX_SNAPSHOT_BYTES);
+        }
+        return total;
     }
 
     private static void verifyFingerprint(ProjectFingerprint fingerprint) throws IOException {
@@ -426,9 +472,11 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static ActivePointer readPointer(Path file) throws IOException {
-        requireRegularFile(file, "fingerprint active pointer");
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)))) {
+        requireBoundedRegularFile(file, "fingerprint active pointer", MAX_POINTER_BYTES);
+        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             BoundedInputStream boundedInput = new BoundedInputStream(
+                     fileInput, MAX_POINTER_BYTES, "fingerprint active pointer");
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             requireHeader(input, POINTER_MAGIC, "fingerprint active pointer");
             ActivePointer pointer;
             try {
@@ -498,6 +546,14 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static void requireRegularFile(Path file, String label) throws IOException {
         if (Files.isSymbolicLink(file) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException(label + " must be a regular non-symlink file: " + file);
+        }
+    }
+
+    private static void requireBoundedRegularFile(Path file, String label, long maximumBytes) throws IOException {
+        requireRegularFile(file, label);
+        long size = Files.size(file);
+        if (size > maximumBytes) {
+            throw new IOException(label + " exceeds byte limit: " + size + "/" + maximumBytes);
         }
     }
 
@@ -578,7 +634,7 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static void writeString(DataOutputStream output, String value) throws IOException {
         byte[] bytes = requireText(value, "string").getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_STRING_BYTES) {
-            throw new IOException("string is too large");
+            throw new IOException("string exceeds UTF-8 byte limit: " + bytes.length + "/" + MAX_STRING_BYTES);
         }
         output.writeInt(bytes.length);
         output.write(bytes);
@@ -601,10 +657,12 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static String checksum(Path file) throws IOException {
-        requireRegularFile(file, "fingerprint snapshot");
+        requireBoundedRegularFile(file, "fingerprint snapshot", MAX_SNAPSHOT_BYTES);
         MessageDigest digest = sha256Digest();
-        try (InputStream input = new DigestInputStream(
-                Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), digest)) {
+        try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             BoundedInputStream boundedInput = new BoundedInputStream(
+                     fileInput, MAX_SNAPSHOT_BYTES, "fingerprint snapshot checksum");
+             InputStream input = new DigestInputStream(boundedInput, digest)) {
             input.transferTo(OutputStream.nullOutputStream());
         }
         return HEX.formatHex(digest.digest());
@@ -649,8 +707,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             sha256 = FileFingerprint.requireSha256(sha256);
             projectSha256 = FileFingerprint.requireSha256(projectSha256);
             buildSha256 = FileFingerprint.requireSha256(buildSha256);
-            if (fileCount < 0) {
-                throw new IllegalArgumentException("fileCount must be >= 0");
+            if (fileCount < 0 || fileCount > MAX_FILES) {
+                throw new IllegalArgumentException("fileCount must be between 0 and " + MAX_FILES);
             }
         }
     }
