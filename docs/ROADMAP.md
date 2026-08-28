@@ -76,6 +76,8 @@ Le workflow **PR Validation** porte :
 
 **Post-228 Hardening Invariants** n'est plus une deuxième matrice Maven/Windows/JaCoCo. Il exécute les invariants statiques post-#228 sur Ubuntu ; les tests/builds/couvertures sont autoritairement dans PR Validation.
 
+La preuve historique reste attachée aux SHA Post-#228 : candidat exact qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces références décrivent la qualification #228 historique et ne réintroduisent aucune duplication Maven/Windows/JaCoCo dans le workflow courant.
+
 ### Qualifications historiques
 
 Les replays M15/M28 sont disponibles par `workflow_dispatch` dans `historical-qualification.yml`, séparés du chemin de PR courant.
