@@ -18,7 +18,9 @@ import java.util.Properties;
  * instance in the same JVM.</p>
  *
  * <p>Secret values are never required in the properties file. Password-file indirection is
- * supported so installers can ACL the secret independently from the human-readable config.</p>
+ * supported so installers can ACL the secret independently from the human-readable config.
+ * Relative secret paths are confined to the physical MINOS home even when symlinks are involved;
+ * absolute secret paths remain an explicit operator escape hatch for mounted secret stores.</p>
  */
 public final class MinosRuntimeSettings {
     public static final String CONFIG_DIRECTORY = "config";
@@ -96,9 +98,10 @@ public final class MinosRuntimeSettings {
         if (!blank(direct)) return direct;
         String configuredPath = value(fileProperty, fileEnvironment);
         if (blank(configuredPath)) return null;
-        Path secretPath = Path.of(configuredPath);
-        if (!secretPath.isAbsolute()) secretPath = home.resolve(secretPath);
-        secretPath = secretPath.normalize();
+        Path configuredSecretPath = Path.of(configuredPath);
+        Path secretPath = configuredSecretPath.isAbsolute()
+                ? configuredSecretPath.normalize()
+                : confinedRelativeSecretPath(configuredSecretPath);
         if (!Files.isRegularFile(secretPath)) {
             throw new IOException("configured MINOS secret file does not exist: " + secretPath);
         }
@@ -106,6 +109,23 @@ public final class MinosRuntimeSettings {
                 secretPath, MAX_SECRET_BYTES, "MINOS secret file").trim();
         if (secret.isEmpty()) throw new IOException("configured MINOS secret file is empty: " + secretPath);
         return secret;
+    }
+
+    private Path confinedRelativeSecretPath(Path configuredSecretPath) throws IOException {
+        Path candidate = home.resolve(configuredSecretPath).normalize();
+        if (!candidate.startsWith(home)) {
+            throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + configuredSecretPath);
+        }
+        if (!Files.isRegularFile(candidate)) {
+            throw new IOException("configured MINOS secret file does not exist: " + candidate);
+        }
+        Path physicalHome = home.toRealPath();
+        Path physicalSecret = candidate.toRealPath();
+        if (!physicalSecret.startsWith(physicalHome)) {
+            throw new IOException("relative MINOS secret file escapes MINOS_HOME through a symbolic link: "
+                    + configuredSecretPath);
+        }
+        return physicalSecret;
     }
 
     public Path home() {

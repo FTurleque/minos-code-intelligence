@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class StorageBackendConfigurationTest {
 
@@ -81,6 +82,56 @@ class StorageBackendConfigurationTest {
     }
 
     @Test
+    void rejectsRelativeSecretPathTraversalOutsideMinosHome() throws IOException {
+        Path parent = Files.createTempDirectory("minos-secret-traversal-");
+        Path home = Files.createDirectories(parent.resolve("home"));
+        Path outside = parent.resolve("outside.password");
+        Files.writeString(outside, "outside-secret\n");
+        Properties file = postgresPasswordFile(home.relativize(outside).toString());
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(home, file, Map.of(), new Properties());
+
+        IOException failure = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+
+        assertTrue(failure.getMessage().contains("must stay inside MINOS_HOME"));
+    }
+
+    @Test
+    void rejectsRelativeSecretSymlinkThatEscapesMinosHomeWhenSupported() throws IOException {
+        Path parent = Files.createTempDirectory("minos-secret-symlink-");
+        Path home = Files.createDirectories(parent.resolve("home"));
+        Path secretDirectory = Files.createDirectories(home.resolve("secrets"));
+        Path outside = parent.resolve("outside.password");
+        Files.writeString(outside, "outside-secret\n");
+        Path link = secretDirectory.resolve("postgres.password");
+        try {
+            Files.createSymbolicLink(link, outside);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            assumeTrue(false, "symbolic links are unavailable on this runner: " + exception.getMessage());
+            return;
+        }
+        Properties file = postgresPasswordFile("secrets/postgres.password");
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(home, file, Map.of(), new Properties());
+
+        IOException failure = assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+
+        assertTrue(failure.getMessage().contains("escapes MINOS_HOME through a symbolic link"));
+    }
+
+    @Test
+    void allowsExplicitAbsoluteSecretFileOutsideMinosHome() throws IOException {
+        Path parent = Files.createTempDirectory("minos-secret-absolute-");
+        Path home = Files.createDirectories(parent.resolve("home"));
+        Path outside = parent.resolve("mounted-secret.password").toAbsolutePath();
+        Files.writeString(outside, "mounted-secret\n");
+        Properties file = postgresPasswordFile(outside.toString());
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(home, file, Map.of(), new Properties());
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(settings);
+
+        assertEquals("mounted-secret", value.postgresPassword());
+    }
+
+    @Test
     void fileSettingsRemainScopedToEachHomeAndNeverMutateJvmProperties() throws IOException {
         String property = "minos.test.homeScopedSetting";
         String environment = "MINOS_TEST_HOME_SCOPED_SETTING";
@@ -110,6 +161,13 @@ class StorageBackendConfigurationTest {
         properties.setProperty(StorageBackendConfiguration.POSTGRES_SCHEMA_PROPERTY, "minos;drop schema public");
         assertThrows(IllegalArgumentException.class, () -> StorageBackendConfiguration.resolve(
                 Path.of("target/test-minos-home"), Map.of(), properties));
+    }
+
+    private static Properties postgresPasswordFile(String path) {
+        Properties file = new Properties();
+        file.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        file.setProperty(StorageBackendConfiguration.POSTGRES_PASSWORD_FILE_PROPERTY, path);
+        return file;
     }
 
     private static void writeSetting(Path home, String property, String value) throws IOException {
