@@ -50,6 +50,8 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 `.github/workflows/post-228-hardening.yml` est désormais un **gate statique ciblé Ubuntu**. Il vérifie les invariants post-#228 sans dupliquer Maven, Windows ou JaCoCo, qui restent sous l'autorité de **PR Validation**.
 
+Les preuves historiques Post-#228 restent explicitement conservées : candidat qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, puis merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces SHA décrivent l'intégration historique #228 ; ils ne changent pas la répartition actuelle des responsabilités CI.
+
 ### Qualifications historiques
 
 Les replays M15/M28 historiques sont isolés dans `.github/workflows/historical-qualification.yml` et ne font pas partie du chemin PR courant par défaut.
