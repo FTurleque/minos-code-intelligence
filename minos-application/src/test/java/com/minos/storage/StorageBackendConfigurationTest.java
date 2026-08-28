@@ -118,6 +118,24 @@ class StorageBackendConfigurationTest {
     }
 
     @Test
+    void rejectsRelativeSecretThroughSymlinkedAncestorEvenWhenTargetStaysInsideHome() throws IOException {
+        Path home = Files.createTempDirectory("minos-secret-ancestor-link-");
+        Path physicalSecretDirectory = Files.createDirectories(home.resolve("physical-secrets"));
+        Files.writeString(physicalSecretDirectory.resolve("postgres.password"), "inside-secret\n");
+        Path linkedDirectory = home.resolve("secrets");
+        try {
+            Files.createSymbolicLink(linkedDirectory, physicalSecretDirectory);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            assumeTrue(false, "symbolic links are unavailable on this runner: " + exception.getMessage());
+            return;
+        }
+        Properties file = postgresPasswordFile("secrets/postgres.password");
+        MinosRuntimeSettings settings = MinosRuntimeSettings.testing(home, file, Map.of(), new Properties());
+
+        assertThrows(IOException.class, () -> StorageBackendConfiguration.resolve(settings));
+    }
+
+    @Test
     void allowsExplicitAbsoluteSecretFileOutsideMinosHome() throws IOException {
         Path parent = Files.createTempDirectory("minos-secret-absolute-");
         Path home = Files.createDirectories(parent.resolve("home"));

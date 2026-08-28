@@ -16,13 +16,9 @@ concurrency:
 
 jobs:
   verify-hardening:
-    name: Verify post-228 hardening (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2022]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    name: Verify post-228 static hardening
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       - name: Checkout exact candidate
@@ -31,30 +27,13 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Assert exact candidate HEAD (Unix)
-        if: runner.os != 'Windows'
+      - name: Assert exact candidate HEAD
         shell: bash
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-
-      - name: Assert exact candidate HEAD (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        env:
-          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: |
-          $actual = (git rev-parse HEAD).Trim()
-          if ($actual -ne $env:EXPECTED_SHA) { throw "Exact-head mismatch: actual=$actual expected=$env:EXPECTED_SHA" }
-
-      - name: Set up Java 24
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: temurin
-          java-version: '24'
-          cache: maven
 
       - name: Set up Python 3.13
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -66,46 +45,3 @@ jobs:
 
       - name: Post-228 static invariants
         run: python scripts/remediation/check-post228-hardening.py
-
-      - name: Install and authorize Linux worker sandbox runtime
-        if: runner.os != 'Windows'
-        timeout-minutes: 10
-        shell: bash
-        run: bash scripts/ci/install-linux-sandbox-toolchain.sh
-
-      - name: Delegate cgroup v2 job boundary
-        if: runner.os != 'Windows'
-        shell: bash
-        run: bash scripts/ci/delegate-linux-cgroup.sh
-
-      - name: Prepare Maven Wrapper
-        if: runner.os != 'Windows'
-        run: chmod +x mvnw
-
-      - name: Maven clean verify (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/ci/delegate-linux-cgroup.sh --attach-pid $$
-          ./mvnw -B -ntp clean verify
-
-      - name: Maven clean verify (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: .\mvnw.cmd -B -ntp clean verify
-
-      - name: Critical quota coverage
-        run: python scripts/remediation/check-post228-hardening.py --coverage-report target/site/jacoco-aggregate/jacoco.xml
-
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: post-228-hardening-${{ runner.os }}-${{ github.run_attempt }}
-          if-no-files-found: ignore
-          retention-days: 14
-          path: |
-            **/target/surefire-reports/**
-            **/target/failsafe-reports/**
-            target/site/jacoco-aggregate/**

@@ -1,8 +1,14 @@
 package com.minos.storage;
 
+import com.minos.io.BoundedInputStream;
 import com.minos.io.BoundedProperties;
+import com.minos.io.ConfinedFileOpener;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -98,20 +104,26 @@ public final class MinosRuntimeSettings {
         if (!blank(direct)) return direct;
         String configuredPath = value(fileProperty, fileEnvironment);
         if (blank(configuredPath)) return null;
+
         Path configuredSecretPath = Path.of(configuredPath);
-        Path secretPath = configuredSecretPath.isAbsolute()
-                ? configuredSecretPath.normalize()
-                : confinedRelativeSecretPath(configuredSecretPath);
-        if (!Files.isRegularFile(secretPath)) {
-            throw new IOException("configured MINOS secret file does not exist: " + secretPath);
+        String secret = configuredSecretPath.isAbsolute()
+                ? readAbsoluteSecret(configuredSecretPath.normalize())
+                : readConfinedRelativeSecret(configuredSecretPath);
+        secret = secret.trim();
+        if (secret.isEmpty()) {
+            throw new IOException("configured MINOS secret file is empty: " + configuredSecretPath);
         }
-        String secret = BoundedProperties.readUtf8(
-                secretPath, MAX_SECRET_BYTES, "MINOS secret file").trim();
-        if (secret.isEmpty()) throw new IOException("configured MINOS secret file is empty: " + secretPath);
         return secret;
     }
 
-    private Path confinedRelativeSecretPath(Path configuredSecretPath) throws IOException {
+    private String readAbsoluteSecret(Path secretPath) throws IOException {
+        if (!Files.isRegularFile(secretPath)) {
+            throw new IOException("configured MINOS secret file does not exist: " + secretPath);
+        }
+        return BoundedProperties.readUtf8(secretPath, MAX_SECRET_BYTES, "MINOS secret file");
+    }
+
+    private String readConfinedRelativeSecret(Path configuredSecretPath) throws IOException {
         Path candidate = home.resolve(configuredSecretPath).normalize();
         if (!candidate.startsWith(home)) {
             throw new IOException("relative MINOS secret file must stay inside MINOS_HOME: " + configuredSecretPath);
@@ -119,13 +131,26 @@ public final class MinosRuntimeSettings {
         if (!Files.isRegularFile(candidate)) {
             throw new IOException("configured MINOS secret file does not exist: " + candidate);
         }
+
+        // Preserve the explicit diagnostic for a statically visible symlink escape, but do not rely
+        // on this pathname check for the actual read: ConfinedFileOpener binds the read to the
+        // physically traversed object and prevents a validate-then-reopen race on supported hosts.
         Path physicalHome = home.toRealPath();
         Path physicalSecret = candidate.toRealPath();
         if (!physicalSecret.startsWith(physicalHome)) {
             throw new IOException("relative MINOS secret file escapes MINOS_HOME through a symbolic link: "
                     + configuredSecretPath);
         }
-        return physicalSecret;
+
+        Path relative = home.relativize(candidate);
+        try (SeekableByteChannel channel = ConfinedFileOpener.openConfinedRegularFile(home, relative);
+             InputStream stream = Channels.newInputStream(channel);
+             BoundedInputStream input = new BoundedInputStream(stream, MAX_SECRET_BYTES, "MINOS secret file")) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (ConfinedFileOpener.ConfinementException exception) {
+            throw new IOException("relative MINOS secret file failed physical confinement: "
+                    + configuredSecretPath, exception);
+        }
     }
 
     public Path home() {
