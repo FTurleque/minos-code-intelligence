@@ -127,7 +127,13 @@ try {
 
     $CandidateSha = Resolve-Commit $CandidateRef
     if ([string]::IsNullOrWhiteSpace($PreviousRef)) {
-        $PreviousRef = "$CandidateSha^1"
+        $MergeBase = ((& git -C $RepoRoot merge-base $CandidateSha origin/develop) | Select-Object -First 1).Trim()
+        if ($LASTEXITCODE -eq 0 -and $MergeBase -match '^[0-9a-f]{40}$' -and $MergeBase -ne $CandidateSha) {
+            $PreviousRef = $MergeBase
+        }
+        else {
+            $PreviousRef = "$CandidateSha^1"
+        }
     }
     $PreviousSha = Resolve-Commit $PreviousRef
     if ($PreviousSha -eq $CandidateSha) { throw 'Previous and candidate commits must differ.' }
