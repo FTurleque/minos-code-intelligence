@@ -20,7 +20,7 @@ public record ProjectFingerprint(
         projectSha256 = FileFingerprint.requireSha256(projectSha256);
         buildSha256 = FileFingerprint.requireSha256(buildSha256);
         Objects.requireNonNull(files, "files");
-        if ((long) files.size() > SourceBudgetPolicy.DEFAULT_MAX_FILES) {
+        if (files.size() > SourceBudgetPolicy.DEFAULT_MAX_FILES) {
             throw new IllegalArgumentException(
                     "files exceeds source budget: " + files.size() + "/" + SourceBudgetPolicy.DEFAULT_MAX_FILES);
         }

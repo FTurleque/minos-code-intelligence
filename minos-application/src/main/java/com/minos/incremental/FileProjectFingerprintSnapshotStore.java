@@ -56,6 +56,9 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     private static final BuildDescriptorPolicy CURRENT_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m24Defaults();
     private static final BuildDescriptorPolicy LEGACY_BUILD_DESCRIPTOR_POLICY = BuildDescriptorPolicy.m17Defaults();
     private static final HexFormat HEX = HexFormat.of();
+    private static final String FIELD_PROJECT_SHA256 = "projectSha256";
+    private static final String FIELD_BUILD_SHA256 = "buildSha256";
+    private static final String FINGERPRINT_ACTIVE_POINTER_LABEL = "fingerprint active pointer";
 
     private final Path storageRoot;
 
@@ -350,8 +353,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
             requireHeader(input, SNAPSHOT_MAGIC, "fingerprint snapshot");
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String indexSnapshotId = readString(input, "indexSnapshotId");
-            String projectSha256 = readString(input, "projectSha256");
-            String buildSha256 = readString(input, "buildSha256");
+            String projectSha256 = readString(input, FIELD_PROJECT_SHA256);
+            String buildSha256 = readString(input, FIELD_BUILD_SHA256);
             int fileCount = readCount(input, MAX_FILES, "fileCount");
             List<FileFingerprint> files = new ArrayList<>(Math.min(fileCount, MAX_INITIAL_LIST_CAPACITY));
             for (int index = 0; index < fileCount; index++) {
@@ -393,8 +396,8 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
         }
         long bytes = 2L * Integer.BYTES + 2L * Long.BYTES;
         bytes = addEncodedString(bytes, snapshot.indexSnapshotId(), "indexSnapshotId");
-        bytes = addEncodedString(bytes, snapshot.fingerprint().projectSha256(), "projectSha256");
-        bytes = addEncodedString(bytes, snapshot.fingerprint().buildSha256(), "buildSha256");
+        bytes = addEncodedString(bytes, snapshot.fingerprint().projectSha256(), FIELD_PROJECT_SHA256);
+        bytes = addEncodedString(bytes, snapshot.fingerprint().buildSha256(), FIELD_BUILD_SHA256);
         bytes = addSnapshotBytes(bytes, Integer.BYTES);
         for (FileFingerprint fingerprint : snapshot.fingerprint().files()) {
             bytes = addEncodedString(bytes, fingerprint.relativePath(), "relativePath");
@@ -472,20 +475,20 @@ public final class FileProjectFingerprintSnapshotStore implements ProjectFingerp
     }
 
     private static ActivePointer readPointer(Path file) throws IOException {
-        requireBoundedRegularFile(file, "fingerprint active pointer", MAX_POINTER_BYTES);
+        requireBoundedRegularFile(file, FINGERPRINT_ACTIVE_POINTER_LABEL, MAX_POINTER_BYTES);
         try (InputStream fileInput = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              BoundedInputStream boundedInput = new BoundedInputStream(
-                     fileInput, MAX_POINTER_BYTES, "fingerprint active pointer");
+                     fileInput, MAX_POINTER_BYTES, FINGERPRINT_ACTIVE_POINTER_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
-            requireHeader(input, POINTER_MAGIC, "fingerprint active pointer");
+            requireHeader(input, POINTER_MAGIC, FINGERPRINT_ACTIVE_POINTER_LABEL);
             ActivePointer pointer;
             try {
                 pointer = new ActivePointer(
                         readString(input, "indexSnapshotId"),
                         readString(input, "fileName"),
                         readString(input, "sha256"),
-                        readString(input, "projectSha256"),
-                        readString(input, "buildSha256"),
+                        readString(input, FIELD_PROJECT_SHA256),
+                        readString(input, FIELD_BUILD_SHA256),
                         readCount(input, MAX_FILES, "fileCount")
                 );
             } catch (IllegalArgumentException exception) {

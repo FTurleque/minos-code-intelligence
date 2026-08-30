@@ -69,6 +69,14 @@ Les replays M15/M28 historiques sont isolés dans `.github/workflows/historical-
 
 `.github/workflows/docker-upgrade-qualification.yml` fournit en plus la qualification réelle **Docker MCP A → B** sur un runner Windows x64 auto-hébergé portant le label `minos-docker` et Docker Desktop Linux containers. `scripts/ci/qualify-docker-upgrade.ps1` construit deux commits/JAR distincts, utilise le vrai workflow `prod-mcp-release.ps1`, les providers/Compose réels, indexe un projet fixture, exécute le handshake MCP avant/après upgrade, vérifie la persistance du `MINOS_HOME` et s'assure qu'un candidat suivant invalide ne remplace pas le candidat B qualifié.
 
+### SonarCloud
+
+`SonarCloud Code Analysis` s'exécute aujourd'hui en **Automatic Analysis** (application GitHub installée sur le dépôt), sans étape `sonar-scanner`/`mvn sonar:sonar` dans `pr-ci.yml` et sans secret `SONAR_TOKEN` configuré côté dépôt. Ce mode ne clone et n'analyse le code que statiquement : il ne peut **structurellement pas** importer de rapport de couverture, quelle que soit la qualité de la configuration JaCoCo. C'est la cause racine du `0.0% Coverage on New Code` affiché par le Quality Gate — ce n'est pas un défaut d'intégration JaCoCo côté build (JaCoCo XML est bien généré et vérifié, voir `scripts/quality/check-jacoco.py` et la gate décrite plus haut).
+
+L'autorité réelle de couverture sur le nouveau code reste donc la **gate JaCoCo ciblée** de `PR Validation` (seuils par composant, voir `scripts/quality/check-jacoco.py`), pas le pourcentage SonarCloud affiché sur la PR. Le Quality Gate SonarCloud reste utile pour les bugs/vulnérabilités/hotspots (aujourd'hui à 0) et pour les code smells de maintenabilité, qu'il faut corriger au fil de l'eau.
+
+Un scaffold d'analyse SonarCloud pilotée par CI (`mvn sonar:sonar` avec `sonar.coverage.jacoco.xmlReportPaths` pointant vers l'agrégat JaCoCo) existe, gardé derrière la variable de dépôt `SONAR_CI_ANALYSIS_ENABLED` (désactivée par défaut, donc sans effet tant qu'elle n'est pas positionnée). Pour l'activer et obtenir une couverture SonarCloud représentative : provisionner un `SONAR_TOKEN` (secret du dépôt), désactiver l'Automatic Analysis dans les paramètres du projet SonarCloud (les deux modes sont mutuellement exclusifs), puis positionner `SONAR_CI_ANALYSIS_ENABLED=true`. Cette étape nécessite un accès SonarCloud que l'automatisation de ce dépôt n'a pas et reste une action externe pour l'opérateur humain.
+
 ## Garanties de stockage et secrets
 
 - les chemins de secrets relatifs sont confinés physiquement à `MINOS_HOME` ; les chemins absolus restent une option opérateur explicite pour les secret stores montés ;

@@ -70,6 +70,8 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
     static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
+    private static final String SYMBOL_SNAPSHOT_LABEL = "symbol snapshot";
+    private static final String KNOWLEDGE_SNAPSHOT_LABEL = "knowledge snapshot";
 
     private SnapshotBinaryCodecSupport() {
     }
@@ -84,7 +86,7 @@ final class SnapshotBinaryCodecSupport {
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, "symbol snapshot");
+                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             output.writeInt(SNAPSHOT_MAGIC);
             output.writeInt(FORMAT_VERSION_V1);
@@ -105,9 +107,9 @@ final class SnapshotBinaryCodecSupport {
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
-                     "symbol snapshot");
+                     SYMBOL_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
-            requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V1, "symbol snapshot");
+            requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V1, SYMBOL_SNAPSHOT_LABEL);
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String snapshotId = readRequiredString(input, "snapshotId");
             int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
@@ -143,7 +145,7 @@ final class SnapshotBinaryCodecSupport {
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, "knowledge snapshot");
+                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
@@ -154,7 +156,7 @@ final class SnapshotBinaryCodecSupport {
     static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (BoundedOutputStream boundedOutput = new BoundedOutputStream(
-                     baos, MAX_PERSISTED_SNAPSHOT_BYTES, "knowledge snapshot");
+                     baos, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
@@ -190,7 +192,7 @@ final class SnapshotBinaryCodecSupport {
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
-                     "knowledge snapshot");
+                     KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotV2Body(input);
         } catch (EOFException exception) {
@@ -205,7 +207,7 @@ final class SnapshotBinaryCodecSupport {
         try (BoundedInputStream boundedInput = new BoundedInputStream(
                      new ByteArrayInputStream(payload),
                      MAX_PERSISTED_SNAPSHOT_BYTES,
-                     "knowledge snapshot");
+                     KNOWLEDGE_SNAPSHOT_LABEL);
              DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotV2Body(input);
         } catch (EOFException exception) {
@@ -214,7 +216,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static CodeKnowledgeSnapshot readKnowledgeSnapshotV2Body(DataInputStream input) throws IOException {
-        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, "knowledge snapshot");
+        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, KNOWLEDGE_SNAPSHOT_LABEL);
         UUID projectId = new UUID(input.readLong(), input.readLong());
         String snapshotId = readRequiredString(input, "snapshotId");
         int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
