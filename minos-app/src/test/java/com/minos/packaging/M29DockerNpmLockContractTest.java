@@ -13,7 +13,9 @@ class M29DockerNpmLockContractTest {
     void releaseImageUsesRepositoryOwnedLockfilesAndNpmCi() throws Exception {
         Path root = Path.of(".").toAbsolutePath().normalize();
         String dockerfile = Files.readString(root.resolve("docker/Dockerfile.mcp.release"));
-        String release = Files.readString(root.resolve("docker/scripts/prod-mcp-release.ps1"));
+        // Copy-JarResourceEntry and the Install logic this test verifies live in mcp-lifecycle.ps1,
+        // the portable core prod-mcp-release.ps1 delegates every action to.
+        String release = Files.readString(root.resolve("docker/scripts/mcp-lifecycle.ps1"));
 
         assertTrue(dockerfile.contains("COPY scip-typescript-package-lock.json"));
         assertTrue(dockerfile.contains("COPY scip-python-package-lock.json"));
