@@ -1,5 +1,14 @@
 name: Docker A-to-B Upgrade Qualification
 
+# Manual/ad-hoc entry point for the real Docker A -> B upgrade qualification. The automatic path
+# used by the develop -> main promotion gate is embedded directly in release-promotion-gate.yml
+# (one workflow, sequential jobs) rather than triggered from here, so this workflow intentionally
+# has no pull_request trigger: it must never run twice for the same promotion candidate.
+#
+# Runs on a standard GitHub-hosted ubuntu-24.04 runner: no privately-registered runner, no personal
+# machine, no private infrastructure repository - this repository is public and qualification here
+# must not depend on infrastructure this project doesn't control or disclose.
+
 on:
   workflow_dispatch:
     inputs:
@@ -17,10 +26,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  real-windows-docker-upgrade:
-    name: Real Windows Docker Desktop A -> B upgrade
-    runs-on: [self-hosted, Windows, X64, minos-docker]
-    timeout-minutes: 180
+  real-docker-upgrade:
+    name: Real Docker A -> B upgrade (GitHub-hosted)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     steps:
       - name: Checkout exact candidate
@@ -37,22 +46,28 @@ jobs:
           cache: maven
 
       - name: Assert exact candidate HEAD
-        shell: powershell
+        shell: bash
         env:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
-          $actual = (git rev-parse HEAD).Trim()
-          if ($actual -ne $env:EXPECTED_SHA) {
-            throw "Exact-head mismatch: actual=$actual expected=$env:EXPECTED_SHA"
-          }
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Verify Docker Engine and Compose are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version --format '{{.Server.Version}}'
+          docker compose version
 
       - name: Run real Docker A-to-B upgrade qualification
-        shell: powershell
+        shell: pwsh
         env:
           EXPECTED_SHA: ${{ github.sha }}
           PREVIOUS_REF: ${{ inputs.previous_ref }}
         run: |
-          .\scripts\ci\qualify-docker-upgrade.ps1 `
+          ./scripts/ci/qualify-docker-upgrade.ps1 `
             -CandidateRef $env:EXPECTED_SHA `
             -PreviousRef $env:PREVIOUS_REF
 
