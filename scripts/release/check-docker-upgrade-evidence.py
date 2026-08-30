@@ -12,7 +12,9 @@ tampered/incomplete artifact whose manifest doesn't actually say PASS.
 Confirms:
   1. a non-expired artifact named `docker-upgrade-<candidate-sha>-*` exists;
   2. the workflow run that produced it has that same candidate SHA as its head commit;
-  3. that run's conclusion is "success" (not merely "completed" - a failed run also uploads evidence);
+  3. the qualification job in that run concluded "success" (not merely "completed" - a failed job
+     also uploads evidence, and the containing run may still be in progress - see
+     qualification_job_conclusion());
   4. the artifact's qualification.json manifest itself says candidate == the expected SHA and
      result == "PASS" (defense in depth: don't trust the artifact name/run metadata alone);
   5. optionally, that the manifest's `previous` field matches an expected previous SHA (e.g. the
@@ -68,9 +70,25 @@ def list_artifacts(repo: str) -> list[dict]:
     )
 
 
-def run_conclusion(repo: str, run_id: int) -> str | None:
-    runs = gh_jq_lines(f"repos/{repo}/actions/runs/{run_id}", ".conclusion")
-    return runs[0] if runs else None
+# release-promotion-gate.yml runs the qualification and the evidence check as two jobs of the SAME
+# workflow run (by design - see that file's header comment). That means the artifact's
+# workflow_run.id is this check's OWN run, whose overall conclusion cannot be "success" yet: this
+# very job is still in progress and is part of that run. Checking the run's conclusion here is
+# self-referential and always sees None. What actually matters - and is checked instead - is
+# whether the specific job that performed the qualification succeeded, independent of whether
+# anything else in the same run (like this check) has finished yet.
+QUALIFICATION_JOB_NAMES = {
+    "Docker A -> B upgrade qualification (GitHub-hosted)",  # release-promotion-gate.yml
+    "Real Docker A -> B upgrade (GitHub-hosted)",  # docker-upgrade-qualification.yml (manual dispatch)
+}
+
+
+def qualification_job_conclusion(repo: str, run_id: int) -> str | None:
+    jobs = gh_jq_lines(f"repos/{repo}/actions/runs/{run_id}/jobs", ".jobs[] | {name, conclusion}")
+    for job in jobs:
+        if job.get("name") in QUALIFICATION_JOB_NAMES:
+            return job.get("conclusion")
+    return None
 
 
 def download_manifest(repo: str, artifact_id: int) -> dict | None:
@@ -129,12 +147,12 @@ def find_evidence(repo: str, candidate_sha: str, expected_previous_sha: str | No
     if not matches:
         return None, "no non-expired artifact found matching this candidate SHA"
 
-    last_error = "no matching artifact came from a successful run"
+    last_error = "no matching artifact came from a successful qualification job"
     for artifact in matches:
         run_id = artifact["workflow_run"]["id"]
-        conclusion = run_conclusion(repo, run_id)
+        conclusion = qualification_job_conclusion(repo, run_id)
         if conclusion != "success":
-            last_error = f"artifact {artifact['name']!r} run concluded {conclusion!r}, not 'success'"
+            last_error = f"artifact {artifact['name']!r} qualification job concluded {conclusion!r}, not 'success'"
             continue
         manifest = download_manifest(repo, artifact["id"])
         manifest_error = validate_manifest(manifest, candidate_sha, expected_previous_sha)
