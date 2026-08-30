@@ -33,7 +33,7 @@ Statut : **OPEN** (toujours vrai) / **MITIGATED** (réduit, pas totalement clos)
 
 | Réf | Description | Module concerné | Priorité | Statut | Preuve / note |
 |-----|------------|-----------------|---------|--------|--------------|
-| DT-01 | Suppression du routage métier `minos-mcp → minos-cli` transitoire | `minos-mcp`, `minos-cli` | Haute | **OPEN** — non réévalué dans cette passe | Aucune preuve de clôture identifiée pendant cette réconciliation ; à revalider explicitement avant de le clore. |
+| DT-01 | Suppression du routage métier `minos-mcp → minos-cli` transitoire | `minos-mcp`, `minos-cli` | Haute | **CLOSED** | Supprimé en M15-S4 (PR #59, merge `d317efd8de4517b23c2f87e409d38b8454fa3e92`, qualifié `fe4d6d2b8205c1539371661854f59521571294a6`, 242 PASS — voir `docs/roadmap/M15_EXECUTION.md`). `minos-mcp/pom.xml` ne déclare plus de dépendance `minos-cli` (seulement `minos-application` et le SDK MCP) ; aucun import/appel `minos-cli` dans `minos-mcp/src/main/java`, et réciproquement aucune référence `com.minos.mcp` dans `minos-cli` — vérifié directement sur le HEAD `develop` du 30/08/2026, pas seulement sur la documentation historique. |
 | DT-02 | CI automatique de PR (GitHub Actions ou équivalent) | Tous | Haute | **CLOSED** | Voir R-02. |
 | DT-03 | Tests d'intégration IDE (plugin IntelliJ vs protocole CLI JSON) | `minos-cli`, `minos-api` | Moyenne | **MITIGATED** | `intellij-plugin.yml` qualifie build/tests/structure/Plugin Verifier ; `MinosCliClientTest`/`MinosExecutableIdentityTest` couvrent désormais le cache de handshake (PR #263). Pas revendiqué exhaustif sur l'ensemble du protocole. |
 | DT-04 | Provider d'embeddings réel (au-delà de `LocalHashEmbeddingProvider`) | `minos-application` | Moyenne | **CLOSED** | Voir R-03. |
