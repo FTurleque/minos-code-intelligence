@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 SCOPES = {
-    "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.35, "branch": 0.20},
+    "domain-invariants": {"prefixes": ("com/minos/domain/",), "line": 0.80, "branch": 0.60},
     "persistence-cache-indexes": {
         "prefixes": (
             "com/minos/store/FileSymbolSnapshotStore", "com/minos/store/ActiveSnapshotRepository",
@@ -38,7 +38,7 @@ SCOPES = {
             "com/minos/program/analysis/JavaControlFlowAnalyzer", "com/minos/program/analysis/JavaInterproceduralFlowResolver",
             "com/minos/program/analysis/JavaTaintAnalyzer", "com/minos/program/analysis/JavaProgramGraphAssembler",
             "com/minos/program/analysis/JavaProgramGraphEngine", "com/minos/program/analysis/FingerprintConstrainedJavaProgramGraphProvider",
-        ), "line": 0.45, "branch": 0.25,
+        ), "line": 0.65, "branch": 0.45,
     },
     "advanced-impact-security": {
         "prefixes": ("com/minos/program/analysis/AdvancedImpactService", "com/minos/program/analysis/SecurityAnalysisService"),
@@ -57,7 +57,7 @@ SCOPES = {
         "prefixes": (
             "com/minos/api/AdvancedCodeIntelligenceApi", "com/minos/api/LocalAdvancedCodeIntelligenceApi",
             "com/minos/api/SemanticCodeIntelligenceApi", "com/minos/api/LocalSemanticCodeIntelligenceApi",
-        ), "line": 0.45, "branch": 0.25,
+        ), "line": 0.65, "branch": 0.45,
     },
     "m19-m20-mcp-catalogue": {"prefixes": ("com/minos/mcp/MinosMcpTools",), "line": 0.50, "branch": 0.30},
     "m24-polyglot-provider-platform": {
@@ -90,6 +90,10 @@ SCOPES = {
         "branch": 0.50,
         "prefixMinimums": {
             "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
+            # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
+            # a per-class floor stops that specific coverage from being able to hide behind the
+            # rest of this scope's well-covered siblings while quietly regressing itself.
+            "com/minos/cli/LocalRemoteIndexOperations": {"line": 0.65, "branch": 0.35},
         },
     },
     "provider-execution-trust-boundary": {
@@ -107,6 +111,11 @@ SCOPES = {
             "com/minos/runtime/StrongProcessOwnershipIndexerExecutor": {"line": 0.35, "branch": 0.18},
             "com/minos/runtime/ProviderProcessEnvironment": {"line": 0.70, "branch": 0.20},
         },
+    },
+    "provider-write-quota-supervisor": {
+        "prefixes": ("com/minos/runtime/ProviderWriteQuotaSupervisor",),
+        "line": 0.55,
+        "branch": 0.35,
     },
     "provider-sandbox-linux": {
         "prefixes": (
@@ -151,7 +160,16 @@ SCOPES = {
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
-    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.18, "branch": 0.07},
+    "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.30, "branch": 0.12},
+    # The lifecycle orchestrator behind every indexing run (register -> execute providers -> stage
+    # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
+    # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,
+    # so nothing previously stopped that indirect coverage from silently eroding.
+    "critical-orchestration": {
+        "prefixes": ("com/minos/orchestration/IndexingRunExecutor",),
+        "line": 0.75,
+        "branch": 0.55,
+    },
 }
 
 

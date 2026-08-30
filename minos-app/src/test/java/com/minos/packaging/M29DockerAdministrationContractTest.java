@@ -112,7 +112,10 @@ class M29DockerAdministrationContractTest {
     @Test
     void packagedWorkflowBootstrapsAndProbesEveryAdvertisedProviderOffline() throws Exception {
         Path root = repoRoot();
-        String workflow = normalizedText(root.resolve("docker/scripts/prod-mcp-release.ps1"));
+        // The Install/Validate lifecycle logic this test verifies lives in mcp-lifecycle.ps1, the
+        // portable core prod-mcp-release.ps1 (the Windows product entry point) delegates every
+        // action to - see docker/scripts/mcp-lifecycle.ps1's own header comment.
+        String workflow = normalizedText(root.resolve("docker/scripts/mcp-lifecycle.ps1"));
         String dockerfile = normalizedText(root.resolve("docker/Dockerfile.mcp.release"));
         String javaPlan = normalizedText(root.resolve(
                 "minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ScipJavaProcessPlanFactory.java"));

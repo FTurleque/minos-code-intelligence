@@ -2,12 +2,17 @@ package com.minos.runtime;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,10 +22,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandLocatorTest {
 
+    private static boolean posix() {
+        return FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+    }
+
+    private static Path executableFile(Path path, String content) throws Exception {
+        Path written = Files.writeString(path, content);
+        if (posix()) {
+            Files.setPosixFilePermissions(written, PosixFilePermissions.fromString("rwx------"));
+        }
+        return written;
+    }
+
     @Test
     void pathResolutionIgnoresEmptyAndRelativeEntries(@TempDir Path temp) throws Exception {
         Path bin = Files.createDirectories(temp.resolve("trusted-bin")).toAbsolutePath().normalize();
-        Path tool = Files.writeString(bin.resolve("minos-path-probe"), "fixture");
+        Path tool = executableFile(bin.resolve("minos-path-probe"), "fixture");
         Path cwd = Path.of("").toAbsolutePath().normalize();
         Assumptions.assumeTrue(cwd.getRoot().equals(bin.getRoot()),
                 "relative-path fixture requires temp and working directory on the same volume");
@@ -34,6 +51,37 @@ class CommandLocatorTest {
         assertEquals(tool.toRealPath(), CommandLocator.findInPath(
                 tool.getFileName().toString(), relativeBin + separator + bin, false).orElseThrow(),
                 "the same executable must resolve once its directory is supplied as an absolute PATH entry");
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void pathResolutionSkipsANonExecutableCandidateAndContinuesToTheNextPathEntry(@TempDir Path temp) throws Exception {
+        Path bin1 = Files.createDirectories(temp.resolve("bin1")).toAbsolutePath().normalize();
+        Path bin2 = Files.createDirectories(temp.resolve("bin2")).toAbsolutePath().normalize();
+        Path nonExecutable = Files.writeString(bin1.resolve("minos-path-probe"), "not executable");
+        Files.setPosixFilePermissions(nonExecutable, PosixFilePermissions.fromString("rw-------"));
+        Path executable = executableFile(bin2.resolve("minos-path-probe"), "executable");
+
+        String pathValue = bin1 + java.io.File.pathSeparator + bin2;
+        Optional<Path> found = CommandLocator.findInPath("minos-path-probe", pathValue, false);
+
+        assertEquals(executable.toRealPath(), found.orElseThrow(),
+                "a non-executable file earlier in PATH must not shadow a real executable later in PATH");
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void pathResolutionReturnsEmptyWhenEveryCandidateIsNonExecutable(@TempDir Path temp) throws Exception {
+        Path bin1 = Files.createDirectories(temp.resolve("bin1")).toAbsolutePath().normalize();
+        Path bin2 = Files.createDirectories(temp.resolve("bin2")).toAbsolutePath().normalize();
+        Path first = Files.writeString(bin1.resolve("minos-path-probe"), "not executable");
+        Files.setPosixFilePermissions(first, PosixFilePermissions.fromString("rw-------"));
+        Path second = Files.writeString(bin2.resolve("minos-path-probe"), "also not executable");
+        Files.setPosixFilePermissions(second, PosixFilePermissions.fromString("rw-------"));
+
+        String pathValue = bin1 + java.io.File.pathSeparator + bin2;
+        assertTrue(CommandLocator.findInPath("minos-path-probe", pathValue, false).isEmpty(),
+                "a candidate that exists but is never executable must resolve to no command, not a false positive");
     }
 
     @Test

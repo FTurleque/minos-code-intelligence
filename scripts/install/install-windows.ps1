@@ -118,6 +118,7 @@ try {
         'docker\Dockerfile.mcp.release',
         'docker\compose.mcp.prod.yaml',
         'docker\scripts\prod-mcp-release.ps1',
+        'docker\scripts\mcp-lifecycle.ps1',
         'docker\scripts\configure-docker-mcp.ps1'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $Source $Required))) {

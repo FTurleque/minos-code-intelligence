@@ -53,6 +53,7 @@ function New-FixturePackage {
     "# compose $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.prod.yaml') -Encoding ascii
     "# compose-connected $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\compose.mcp.connected.yaml') -Encoding ascii
     "# prod-mcp-release $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\prod-mcp-release.ps1') -Encoding ascii
+    "# mcp-lifecycle $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\mcp-lifecycle.ps1') -Encoding ascii
     "# configure-docker-mcp $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-docker-mcp.ps1') -Encoding ascii
     "# configure-m30-docker-services $Version" | Set-Content -LiteralPath (Join-Path $Root 'docker\scripts\configure-m30-docker-services.ps1') -Encoding ascii
     '{"bomFormat":"CycloneDX"}' | Set-Content -LiteralPath (Join-Path $Root 'supply-chain\minos.cdx.json') -Encoding ascii

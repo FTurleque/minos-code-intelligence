@@ -21,6 +21,8 @@ import com.minos.domain.SymbolLocation;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.domain.SymbolReference;
 import com.minos.domain.UnresolvedSymbolReference;
+import com.minos.io.BoundedInputStream;
+import com.minos.io.BoundedOutputStream;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -32,6 +34,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -67,6 +70,8 @@ final class SnapshotBinaryCodecSupport {
     private static final int MAX_STRING_CHARS = 8 * 1024 * 1024;
     static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
     private static final HexFormat HEX = HexFormat.of();
+    private static final String SYMBOL_SNAPSHOT_LABEL = "symbol snapshot";
+    private static final String KNOWLEDGE_SNAPSHOT_LABEL = "knowledge snapshot";
 
     private SnapshotBinaryCodecSupport() {
     }
@@ -76,12 +81,13 @@ final class SnapshotBinaryCodecSupport {
         return Math.min(Math.max(0, declaredCount), 16_384);
     }
 
-
     static String writeSymbolSnapshotV1(Path file, SymbolSnapshot snapshot) throws IOException {
         MessageDigest digest = SnapshotIntegrityService.sha256Digest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
-             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
+             BoundedOutputStream boundedOutput = new BoundedOutputStream(
+                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
+             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             output.writeInt(SNAPSHOT_MAGIC);
             output.writeInt(FORMAT_VERSION_V1);
             output.writeLong(snapshot.projectId().getMostSignificantBits());
@@ -98,10 +104,12 @@ final class SnapshotBinaryCodecSupport {
 
     static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
         requireSnapshotFileSize(file);
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file)
-        ))) {
-            requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V1, "symbol snapshot");
+        try (BoundedInputStream boundedInput = new BoundedInputStream(
+                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     SYMBOL_SNAPSHOT_LABEL);
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
+            requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V1, SYMBOL_SNAPSHOT_LABEL);
             UUID projectId = new UUID(input.readLong(), input.readLong());
             String snapshotId = readRequiredString(input, "snapshotId");
             int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");
@@ -136,7 +144,9 @@ final class SnapshotBinaryCodecSupport {
         MessageDigest digest = SnapshotIntegrityService.sha256Digest();
         try (OutputStream fileOutput = Files.newOutputStream(file);
              DigestOutputStream digestOutput = new DigestOutputStream(fileOutput, digest);
-             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(digestOutput))) {
+             BoundedOutputStream boundedOutput = new BoundedOutputStream(
+                     digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
         requireSnapshotFileSize(file);
@@ -145,7 +155,9 @@ final class SnapshotBinaryCodecSupport {
 
     static byte[] writeKnowledgeSnapshotV2ToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(baos))) {
+        try (BoundedOutputStream boundedOutput = new BoundedOutputStream(
+                     baos, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
+             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
             writeKnowledgeSnapshotV2Body(output, snapshot);
         }
         byte[] payload = baos.toByteArray();
@@ -177,9 +189,11 @@ final class SnapshotBinaryCodecSupport {
 
     static CodeKnowledgeSnapshot readKnowledgeSnapshotV2(Path file) throws IOException {
         requireSnapshotFileSize(file);
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                Files.newInputStream(file)
-        ))) {
+        try (BoundedInputStream boundedInput = new BoundedInputStream(
+                     Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS),
+                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     KNOWLEDGE_SNAPSHOT_LABEL);
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotV2Body(input);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
@@ -190,9 +204,11 @@ final class SnapshotBinaryCodecSupport {
         if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
             throw new IOException("knowledge snapshot payload exceeds persisted byte limit: " + payload.length);
         }
-        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
-                new ByteArrayInputStream(payload)
-        ))) {
+        try (BoundedInputStream boundedInput = new BoundedInputStream(
+                     new ByteArrayInputStream(payload),
+                     MAX_PERSISTED_SNAPSHOT_BYTES,
+                     KNOWLEDGE_SNAPSHOT_LABEL);
+             DataInputStream input = new DataInputStream(new BufferedInputStream(boundedInput))) {
             return readKnowledgeSnapshotV2Body(input);
         } catch (EOFException exception) {
             throw new IOException("truncated knowledge snapshot", exception);
@@ -200,7 +216,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static CodeKnowledgeSnapshot readKnowledgeSnapshotV2Body(DataInputStream input) throws IOException {
-        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, "knowledge snapshot");
+        requireHeader(input, SNAPSHOT_MAGIC, FORMAT_VERSION_V2, KNOWLEDGE_SNAPSHOT_LABEL);
         UUID projectId = new UUID(input.readLong(), input.readLong());
         String snapshotId = readRequiredString(input, "snapshotId");
         int symbolCount = readCount(input, MAX_SYMBOLS, "symbol count");

@@ -1,0 +1,133 @@
+name: Release Promotion Gate
+
+# Gates a develop -> main promotion candidate on a real Docker A -> B upgrade qualification for the
+# exact candidate SHA. Only ever runs on PRs targeting main, so it is required only in a main-scoped
+# ruleset (never added to the shared main+develop ruleset) - a develop-targeting PR never sees this
+# workflow and must never be blocked waiting for a check that would never run.
+#
+# The qualification and its evidence check both run here, as two jobs in one workflow (job 2
+# `needs` job 1) rather than as two independently-triggered workflows: that keeps the dependency
+# one-directional (evidence consumes qualification's result; qualification knows nothing about the
+# gate) and avoids ever showing a red "no evidence yet" gate before the qualification it depends on
+# has even had a chance to finish.
+#
+# GitHub-hosted ubuntu-24.04 only: no privately-registered runner, no personal machine, no private
+# infrastructure repository. This repository is public; runs from forked PRs get the default
+# read-only GITHUB_TOKEN GitHub already grants for `pull_request` (not `pull_request_target`), no
+# secrets are used anywhere in this workflow, and permissions are the minimum each job needs.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-promotion-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-upgrade-qualification:
+    name: Docker A -> B upgrade qualification (GitHub-hosted)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert exact candidate HEAD
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Verify Docker Engine and Compose are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version --format '{{.Server.Version}}'
+          docker compose version
+
+      - name: Run real Docker A-to-B upgrade qualification
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          # For a develop -> main promotion, candidate A is real main - the last thing actually
+          # promoted - and candidate B is the exact SHA being promoted now. A manual
+          # workflow_dispatch run (no base SHA available) falls back to the script's own
+          # merge-base/first-parent resolution.
+          PREVIOUS_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: |
+          ./scripts/ci/qualify-docker-upgrade.ps1 `
+            -CandidateRef $env:EXPECTED_SHA `
+            -PreviousRef $env:PREVIOUS_REF
+
+      - name: Upload Docker upgrade qualification evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: docker-upgrade-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: target/qualification/docker-upgrade/**
+
+  docker-upgrade-evidence:
+    name: Docker upgrade evidence gate
+    needs: docker-upgrade-qualification
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Assert exact candidate HEAD
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Verify Docker A -> B upgrade evidence for this candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_PREVIOUS_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          args=(--candidate-sha "$EXPECTED_SHA" --repo "$TARGET_REPO")
+          if [ -n "$EXPECTED_PREVIOUS_SHA" ]; then
+            args+=(--expected-previous-sha "$EXPECTED_PREVIOUS_SHA")
+          fi
+          python scripts/release/check-docker-upgrade-evidence.py "${args[@]}"

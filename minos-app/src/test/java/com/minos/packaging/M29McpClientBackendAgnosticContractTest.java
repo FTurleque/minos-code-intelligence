@@ -69,7 +69,9 @@ class M29McpClientBackendAgnosticContractTest {
     void installerRepairsOwnedCodexBlocksAndReusesExactLocalDockerImages() throws Exception {
         Path root = repoRoot();
         String codex = text(root.resolve("scripts/install/configure-codex-mcp.ps1"));
-        String docker = text(root.resolve("docker/scripts/prod-mcp-release.ps1"));
+        // Test-ExactImage and the Install logic this test verifies live in mcp-lifecycle.ps1, the
+        // portable core prod-mcp-release.ps1 delegates every action to.
+        String docker = text(root.resolve("docker/scripts/mcp-lifecycle.ps1"));
         String localCandidate = text(root.resolve("scripts/release/build-local-windows-candidate.ps1"));
 
         assertTrue(codex.contains("The marker pair is the ownership boundary"));

@@ -8,6 +8,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
 import java.util.UUID;
@@ -44,10 +45,19 @@ public final class EnvironmentHostedTenantKeyProvider implements HostedTenantKey
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException("hosted tenant key is not valid base64: " + variable, exception);
         }
-        if (master.length != 32) throw new IllegalStateException("hosted tenant key must decode to exactly 32 bytes: " + variable);
-        byte[] derived = derive(master, tenantId, safeKeyId, purpose);
-        java.util.Arrays.fill(master, (byte) 0);
-        return new SecretKeySpec(derived, purpose == Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
+        byte[] derived = null;
+        try {
+            if (master.length != 32) {
+                throw new IllegalStateException("hosted tenant key must decode to exactly 32 bytes: " + variable);
+            }
+            derived = derive(master, tenantId, safeKeyId, purpose);
+            // SecretKeySpec defensively copies the supplied key material, so the temporary HKDF-like
+            // derivation buffer can be scrubbed immediately after the key object has been created.
+            return new SecretKeySpec(derived, purpose == Purpose.ENCRYPTION ? "AES" : "HmacSHA256");
+        } finally {
+            if (derived != null) Arrays.fill(derived, (byte) 0);
+            Arrays.fill(master, (byte) 0);
+        }
     }
 
     private static byte[] derive(byte[] master, UUID tenantId, String keyId, Purpose purpose) {

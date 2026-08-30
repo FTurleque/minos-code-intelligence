@@ -87,11 +87,17 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             throw new IllegalArgumentException("displayName must not be blank");
         }
         RemoteMaterialization source = materializer.materialize(request);
-        try (RemoteIndexLease ignored = RemoteIndexLease.acquire(application.home(), source.cacheKey())) {
-            return indexUnderSourceLease(source, displayName, providerOverride, workerId, workerNetworkPolicy);
-        }
+        return indexUnderSourceLease(source, displayName, providerOverride, workerId, workerNetworkPolicy);
     }
 
+    /**
+     * Owns the entire post-materialization lifecycle for {@code source}, including acquiring the
+     * cross-JVM {@link RemoteIndexLease}. This method is the single point of responsibility for
+     * releasing {@code source} back to {@link #materializer} -- every path out of the try block below
+     * (lease acquisition failure, registration failure, pin failure, worker/provider failure, artifact
+     * validation failure, commit/promotion failure, or success) runs through the shared cleanup below
+     * exactly once, so a successful {@code materialize()} can never leak.
+     */
     private RemoteIndexView indexUnderSourceLease(
             RemoteMaterialization source,
             String displayName,
@@ -105,8 +111,10 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         boolean pinned = false;
         boolean completed = false;
         RemoteIndexView result = null;
+        RemoteIndexLease lease = null;
         Exception primaryFailure = null;
         try {
+            lease = RemoteIndexLease.acquire(application.home(), source.cacheKey());
             ProjectRegistry.RegistrationResult registration = application.projectRegistry()
                     .registerProjectWithResult(source.projectRoot(), displayName);
             project = registration.project();
@@ -165,6 +173,13 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             materializer.release(source);
         } catch (Exception exception) {
             cleanupFailure = combine(cleanupFailure, exception);
+        }
+        if (lease != null) {
+            try {
+                lease.close();
+            } catch (Exception exception) {
+                cleanupFailure = combine(cleanupFailure, exception);
+            }
         }
 
         if (primaryFailure != null) {

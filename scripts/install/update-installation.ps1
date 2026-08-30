@@ -255,6 +255,7 @@ function Assert-Package {
         'docker\compose.mcp.prod.yaml',
         'docker\compose.mcp.connected.yaml',
         'docker\scripts\prod-mcp-release.ps1',
+        'docker\scripts\mcp-lifecycle.ps1',
         'docker\scripts\configure-docker-mcp.ps1',
         'docker\scripts\configure-m30-docker-services.ps1',
         'supply-chain\minos.cdx.json',

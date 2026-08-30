@@ -171,6 +171,21 @@ def check_authoritative_documentation() -> None:
         raise RuntimeError("README must expose #98 as closed/qualified")
 
 
+def check_architecture_doc_version(maven_version: str) -> None:
+    """The architecture README states its own version in prose; keep it from drifting behind the
+    Maven reactor version (the source of truth) the way it did until MINOS 1.1.0-SNAPSHOT."""
+    architecture_readme = read("docs/architecture/README.md")
+    declared = require(
+        r"Version : ([0-9]+\.[0-9]+\.[0-9]+(?:-SNAPSHOT)?)",
+        architecture_readme,
+        "docs/architecture/README.md declared version",
+    )
+    if declared != maven_version:
+        raise RuntimeError(
+            f"docs/architecture/README.md declares version {declared} but pom.xml <revision> is "
+            f"{maven_version} -- update the architecture README header")
+
+
 def render() -> str:
     pom = read("pom.xml")
     api = read("minos-api/src/main/java/com/minos/api/MinosApi.java")
@@ -227,7 +242,9 @@ def main() -> int:
     args = parser.parse_args()
     try:
         expected = render()
+        maven_version = require(r"<revision>([^<]+)</revision>", read("pom.xml"), "product version")
         check_authoritative_documentation()
+        check_architecture_doc_version(maven_version)
     except Exception as exception:
         print(f"PRODUCT FACTS ERROR: {exception}", file=sys.stderr)
         return 2

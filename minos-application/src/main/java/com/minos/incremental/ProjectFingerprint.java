@@ -1,5 +1,7 @@
 package com.minos.incremental;
 
+import com.minos.source.SourceBudgetPolicy;
+
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -17,7 +19,12 @@ public record ProjectFingerprint(
     public ProjectFingerprint {
         projectSha256 = FileFingerprint.requireSha256(projectSha256);
         buildSha256 = FileFingerprint.requireSha256(buildSha256);
-        files = List.copyOf(Objects.requireNonNull(files, "files"));
+        Objects.requireNonNull(files, "files");
+        if (files.size() > SourceBudgetPolicy.DEFAULT_MAX_FILES) {
+            throw new IllegalArgumentException(
+                    "files exceeds source budget: " + files.size() + "/" + SourceBudgetPolicy.DEFAULT_MAX_FILES);
+        }
+        files = List.copyOf(files);
 
         List<FileFingerprint> sorted = files.stream()
                 .sorted(Comparator.comparing(FileFingerprint::relativePath))

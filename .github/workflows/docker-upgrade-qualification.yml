@@ -1,0 +1,81 @@
+name: Docker A-to-B Upgrade Qualification
+
+# Manual/ad-hoc entry point for the real Docker A -> B upgrade qualification. The automatic path
+# used by the develop -> main promotion gate is embedded directly in release-promotion-gate.yml
+# (one workflow, sequential jobs) rather than triggered from here, so this workflow intentionally
+# has no pull_request trigger: it must never run twice for the same promotion candidate.
+#
+# Runs on a standard GitHub-hosted ubuntu-24.04 runner: no privately-registered runner, no personal
+# machine, no private infrastructure repository - this repository is public and qualification here
+# must not depend on infrastructure this project doesn't control or disclose.
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_ref:
+        description: 'Previous MINOS commit/ref to install as candidate A; blank uses the merge-base with origin/develop, then first-parent fallback.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-upgrade-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  real-docker-upgrade:
+    name: Real Docker A -> B upgrade (GitHub-hosted)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java 24
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+
+      - name: Assert exact candidate HEAD
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Verify Docker Engine and Compose are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version --format '{{.Server.Version}}'
+          docker compose version
+
+      - name: Run real Docker A-to-B upgrade qualification
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          PREVIOUS_REF: ${{ inputs.previous_ref }}
+        run: |
+          ./scripts/ci/qualify-docker-upgrade.ps1 `
+            -CandidateRef $env:EXPECTED_SHA `
+            -PreviousRef $env:PREVIOUS_REF
+
+      - name: Upload Docker upgrade qualification evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: docker-upgrade-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: target/qualification/docker-upgrade/**
