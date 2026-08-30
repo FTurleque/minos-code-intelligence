@@ -11,7 +11,7 @@ minos.cmd <commande>
 Checkout source sur la ligne de maintenance courante :
 
 ```powershell
-java -jar .\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar <commande>
+java -jar .\target\minos-code-intelligence-1.3.0-SNAPSHOT-all.jar <commande>
 ```
 
 `--help` reste la source de vérité exécutable. Les commandes d'aide n'ont pas besoin d'initialiser un projet MINOS pour afficher leur syntaxe.
@@ -27,7 +27,7 @@ Dans un artefact packagé, la version provient du manifest du JAR afin d'être i
 Version de développement courante :
 
 ```text
-1.2.0-SNAPSHOT
+1.3.0-SNAPSHOT
 ```
 
 ## Formats de sortie
