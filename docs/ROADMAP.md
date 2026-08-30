@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **28 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#260 intégré dans la ligne auditée ; 1.1.0-SNAPSHOT ouverte.**
+Statut au **30 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 et 1.1.0 publiées ; hardening #113–#260 et remédiation d'audit `develop` (PR #259, PR #272) intégrés dans `main` ; 1.2.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
@@ -37,7 +37,7 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 | #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
 | #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
 | #260 | confinement fingerprint/secrets, quotas/couverture ciblée, simplification Post-228 et durcissements restants | ✅ intégrée dans `develop` |
-| Réconciliation audit 28/08 | Docker A→B réel, I/O snapshot bornée, UTF-8 secrets strict, crypto hygiene, Gradle Dependabot, docs/topologie | 🔄 qualifiée par la PR qui contient ce document avant merge |
+| Réconciliation audit 28 août 2026 | Docker A→B réel, I/O snapshot bornée, UTF-8 secrets strict, crypto hygiene, Gradle Dependabot, docs/topologie | ✅ intégrée (PR #260) |
 
 ## Ligne de sécurité courante
 
