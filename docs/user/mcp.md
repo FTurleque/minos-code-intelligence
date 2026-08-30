@@ -419,12 +419,12 @@ Pour retirer les intégrations gérées par le setup, préférer le wrapper cano
 Version de développement courante :
 
 ```text
-1.1.0-SNAPSHOT
+1.2.0-SNAPSHOT
 ```
 
 ```powershell
 $env:MINOS_HOME = 'N:\minos-data'
-java -jar .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar mcp
+java -jar .\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar mcp
 ```
 
 Pour activer le sémantique local :
@@ -432,13 +432,13 @@ Pour activer le sémantique local :
 ```powershell
 $env:MINOS_SEMANTIC_PROVIDER = 'local-hash'
 minos.cmd index my-project
-java -jar .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar mcp
+java -jar .\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar mcp
 ```
 
 Le point d'entrée direct reste disponible :
 
 ```powershell
-java -cp .\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar `
+java -cp .\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar `
   com.minos.mcp.MinosMcpServer
 ```
 

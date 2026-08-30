@@ -1,7 +1,7 @@
 # Documentation d'architecture MINOS Code Intelligence
 
 > Structure arc42 v8 — diagrammes C4 (Mermaid) — ADR Markdown  
-> Version : 1.1.0-SNAPSHOT · Java 24 · Maven multi-module reactor  
+> Version : 1.2.0-SNAPSHOT · Java 24 · Maven multi-module reactor  
 > Dernière mise à jour : 2026-08-30
 
 ---

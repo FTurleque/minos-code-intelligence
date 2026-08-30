@@ -31,13 +31,13 @@ java -version
 La ligne de maintenance courante est :
 
 ```text
-1.1.0-SNAPSHOT
+1.2.0-SNAPSHOT
 ```
 
 Le shaded JAR de développement est donc notamment :
 
 ```text
-target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar
+target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar
 ```
 
 Les scripts de release remplacent la propriété Maven CI-friendly `revision` avec `-Drevision=<version>` ; ils ne nécessitent pas de modifier temporairement les POM.
@@ -46,7 +46,7 @@ Les scripts de release remplacent la propriété Maven CI-friendly `revision` av
 
 ```powershell
 $env:MINOS_HOME = 'C:\minos-data'
-$minos = '.\target\minos-code-intelligence-1.1.0-SNAPSHOT-all.jar'
+$minos = '.\target\minos-code-intelligence-1.2.0-SNAPSHOT-all.jar'
 
 java -jar $minos --help
 java -jar $minos doctor

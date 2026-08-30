@@ -1,6 +1,6 @@
 # Feuille de route — MINOS
 
-Statut au **28 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 publiée ; hardening #113–#260 intégré dans la ligne auditée ; 1.1.0-SNAPSHOT ouverte.**
+Statut au **30 août 2026** : **C0 → M30 terminés et intégrés ; MINOS 1.0.1 et 1.1.0 publiées ; hardening #113–#260 et remédiation d'audit `develop` (PR #259, PR #272) intégrés dans `main` ; 1.2.0-SNAPSHOT ouverte.**
 
 Les versions historiques détaillées restent archivées sous [`history/reconciliations/`](history/reconciliations/). L'état opérationnel courant est dans [`STATUS.md`](STATUS.md).
 
