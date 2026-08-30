@@ -29,6 +29,7 @@ public final class MinosCliClient {
     private static final long PROCESS_POLL_MILLIS = 200L;
     private static final String LIMIT_OPTION = "--limit";
     private static final String SYMBOL_ID_LABEL = "symbolId";
+    private static final String OS_NAME_PROPERTY = "os.name";
 
     private final Project project;
     private volatile String verifiedConfiguration;
@@ -138,7 +139,7 @@ public final class MinosCliClient {
 
     private ProcessResult run(List<String> arguments) throws MinosProtocolException {
         MinosSettingsState.Settings settings = MinosSettingsState.getInstance(project).value();
-        String osName = System.getProperty("os.name", "");
+        String osName = System.getProperty(OS_NAME_PROPERTY, "");
         try {
             Path resolvedExecutable = MinosExecutableResolver.resolve(settings.executable, osName);
             List<String> command = MinosCommandLine.build(resolvedExecutable.toString(), arguments, osName);
@@ -195,7 +196,7 @@ public final class MinosCliClient {
      */
     static String resolvedExecutableIdentity(String executable) {
         try {
-            Path resolved = MinosExecutableResolver.resolve(executable, System.getProperty("os.name", ""));
+            Path resolved = MinosExecutableResolver.resolve(executable, System.getProperty(OS_NAME_PROPERTY, ""));
             return MinosExecutableIdentity.describe(resolved);
         } catch (IOException | RuntimeException failure) {
             return "unresolved";
@@ -218,7 +219,7 @@ public final class MinosCliClient {
     }
 
     private static boolean pathsEqual(String left, String right) {
-        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        boolean windows = System.getProperty(OS_NAME_PROPERTY, "").toLowerCase(Locale.ROOT).contains("win");
         return windows ? left.equalsIgnoreCase(right) : left.equals(right);
     }
 
