@@ -4,6 +4,8 @@ Dernière réconciliation : **21 août 2026**. **PR #227 intégrée**, puis **PR
 
 Le réaudit complet de ce merge a ouvert une remédiation quota/readiness distincte, actuellement en qualification. La version historique détaillée du registre avant la campagne post-#226 est conservée intégralement dans [`../../history/reconciliations/risk-register-pre-post226-audit-20260821.md`](../../history/reconciliations/risk-register-pre-post226-audit-20260821.md).
 
+Réaudit complémentaire **30 août 2026** : les 17 issues Sonar signalées sur la PR #259 ont été corrigées (PR #262), la mise en cache du handshake `MinosCliClient` a été durcie contre un remplacement de binaire en place (PR #263), `docs/architecture/arc42/11-risques-dette.md` a été réconcilié avec cet état réel (PR #264), et un gate `Docker upgrade evidence gate` bloquant a été introduit pour empêcher une promotion `main` sans preuve d'upgrade A→B réelle pour le SHA candidat exact (PR #265, voir **R-25** ci-dessous — actuellement OPEN faute de runner self-hosted enregistré).
+
 ## Risques actifs / résiduels
 
 | Réf | Titre | P | I | Exposition | Statut | Mitigation durable |
@@ -17,6 +19,7 @@ Le réaudit complet de ce merge a ouvert une remédiation quota/readiness distin
 | R-20 | Fallback Windows de lecture confinée moins fort que `openat` | Faible | Moyen | Faible | Résiduel / capability-honest | `NOFOLLOW_LINKS`, revalidation et rejet `isOther()` ; seule `SecureDirectoryStream` revendique la preuve handle-relative. |
 | R-23 | Perte de visibilité du quota filesystem managed-local-provider | Moyenne avant remédiation | Élevé disponibilité | Moyenne | Remédiation en qualification | Perte réelle de visibilité => breach + kill du job ; disparition concurrente normale tolérée ; test adversarial avec FD déjà ouvert. |
 | R-24 | Stockage privé AppContainer hors budget / `READY` Windows trop optimiste | Moyenne avant remédiation | Élevé disponibilité / Moyen fonctionnel | Moyenne | Remédiation en qualification | Budget global partitionné roots explicites + stockage fichier privé ; registre privé non mutable ; superviseur armé avant `ResumeThread` ; probe réel AppContainer/Job Object requis avant qualification. |
+| R-25 | Aucun runner self-hosted `minos-docker` enregistré : la promotion `develop → main` ne peut produire de preuve Docker A→B réelle pour le candidat | Faible (infra opérateur) | Élevé pour une promotion sans preuve | Moyenne | **OPEN — bloque la promotion tant que non résolu** | `.github/workflows/release-promotion-gate.yml` + `scripts/release/check-docker-upgrade-evidence.py` rendent ce manque **bloquant et visible** plutôt que silencieux : le check `Docker upgrade evidence gate` est requis sur `main` (ruleset dédié, main uniquement) et échoue tant qu'aucune qualification A→B réussie n'existe pour le SHA candidat exact. Résolution : enregistrer le runner self-hosted `minos-docker` (Windows + Docker Desktop Linux containers) et déclencher `docker-upgrade-qualification.yml` pour le candidat avant de merger une promotion. |
 
 ## Risques résolus / reclassés récemment
 
