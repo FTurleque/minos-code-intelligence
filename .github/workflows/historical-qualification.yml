@@ -38,13 +38,13 @@ jobs:
       - name: Record qualified HEAD
         run: git rev-parse HEAD
       - name: Set up Java 24
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '24'
           cache: maven
       - name: Set up Python 3.13
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Install and authorize Linux worker sandbox runtime
@@ -64,7 +64,7 @@ jobs:
           bash scripts/remediation/run-final.sh "" 1000
       - name: Upload M28 Linux diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: m28-linux-replay-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -90,13 +90,13 @@ jobs:
         shell: powershell
         run: git rev-parse HEAD
       - name: Set up Java 24
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '24'
           cache: maven
       - name: Set up Python 3.13
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Run complete M28 Windows qualification
@@ -104,7 +104,7 @@ jobs:
         run: .\scripts\remediation\run-final.ps1 -ProgramGraphFiles 1000
       - name: Upload M28 Windows diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: m28-windows-replay-${{ github.run_attempt }}
           if-no-files-found: ignore
@@ -130,13 +130,13 @@ jobs:
         shell: powershell
         run: git rev-parse HEAD
       - name: Set up Java 24
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '24'
           cache: maven
       - name: Set up Python 3.13
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Run complete M15 qualification
@@ -144,7 +144,7 @@ jobs:
         run: .\scripts\m15\run-final.ps1
       - name: Upload M15 diagnostics
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: m15-replay-${{ github.run_attempt }}
           if-no-files-found: ignore
