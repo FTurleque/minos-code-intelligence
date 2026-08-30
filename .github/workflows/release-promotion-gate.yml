@@ -1,0 +1,55 @@
+name: Release Promotion Gate
+
+# Gates a develop -> main promotion candidate on real Docker A -> B upgrade qualification evidence
+# for the exact candidate SHA. Only ever runs on PRs targeting main, so it is required only in a
+# main-scoped ruleset (never added to the shared main+develop ruleset) - a develop-targeting PR
+# never sees this workflow and must never be blocked waiting for a check that would never run.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-promotion-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-upgrade-evidence:
+    name: Docker upgrade evidence gate
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Assert exact candidate HEAD
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Verify Docker A -> B upgrade evidence for this candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          python scripts/release/check-docker-upgrade-evidence.py \
+            --candidate-sha "$EXPECTED_SHA" \
+            --repo "$TARGET_REPO"
