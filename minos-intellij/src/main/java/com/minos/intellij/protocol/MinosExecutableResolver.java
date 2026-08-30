@@ -32,7 +32,7 @@ final class MinosExecutableResolver {
             throw new IOException("invalid MINOS executable path: " + value, invalid);
         }
         if (parsed.isAbsolute()) {
-            return requireRegularExecutable(parsed, value);
+            return requireRegularExecutable(parsed, value, windows);
         }
         if (containsDirectorySyntax(value, windows)) {
             throw new IOException(
@@ -66,7 +66,7 @@ final class MinosExecutableResolver {
             }
             for (String name : names) {
                 Path candidate = directory.resolve(name).normalize();
-                Path resolved = regularExecutableOrNull(candidate);
+                Path resolved = regularExecutableOrNull(candidate, windows);
                 if (resolved != null) return resolved;
             }
         }
@@ -124,18 +124,22 @@ final class MinosExecutableResolver {
         return value;
     }
 
-    private static Path requireRegularExecutable(Path candidate, String configured) throws IOException {
-        Path resolved = regularExecutableOrNull(candidate);
+    private static Path requireRegularExecutable(Path candidate, String configured, boolean windows) throws IOException {
+        Path resolved = regularExecutableOrNull(candidate, windows);
         if (resolved == null) {
-            throw new IOException("configured MINOS executable is not a regular file: " + configured);
+            throw new IOException("configured MINOS executable is not a regular, executable file: " + configured);
         }
         return resolved;
     }
 
-    private static Path regularExecutableOrNull(Path candidate) {
+    private static Path regularExecutableOrNull(Path candidate, boolean windows) {
         try {
             Path real = candidate.toRealPath();
             if (!Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)) return null;
+            // Windows has no POSIX executable bit; a non-executable POSIX regular file must not
+            // shadow a real executable located later in PATH (or masquerade as a directly
+            // configured absolute launcher that can never actually be launched).
+            if (!windows && !Files.isExecutable(real)) return null;
             return real.toAbsolutePath().normalize();
         } catch (IOException | SecurityException failure) {
             return null;

@@ -108,7 +108,10 @@ public final class CommandLocator {
                 Path executable = directory.resolve(candidate).normalize();
                 try {
                     Path real = executable.toRealPath();
-                    if (Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)) {
+                    // On POSIX, a regular file without the executable bit must not shadow a real
+                    // executable later in PATH -- keep searching instead of returning it.
+                    if (Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)
+                            && (windows || Files.isExecutable(real))) {
                         return Optional.of(real);
                     }
                 } catch (IOException | SecurityException unavailable) {

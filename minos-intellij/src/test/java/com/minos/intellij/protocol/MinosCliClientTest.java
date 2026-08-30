@@ -3,8 +3,10 @@ package com.minos.intellij.protocol;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -20,10 +22,19 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  */
 class MinosCliClientTest {
 
+    /** Resolution now requires the POSIX executable bit (MinosExecutableResolver); a plain
+     * {@code Files.writeString} fixture must be marked executable to keep resolving on Linux/macOS. */
+    private static void writeExecutable(Path path, String content) throws Exception {
+        Files.writeString(path, content);
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwx------"));
+        }
+    }
+
     @Test
     void secondHandshakeIsRequiredAfterTheExecutableIsReplacedAtTheSamePath(@TempDir Path temporary) throws Exception {
         Path executable = temporary.resolve("minos");
-        Files.writeString(executable, "handshake-1-binary");
+        writeExecutable(executable, "handshake-1-binary");
 
         // Command 1: handshake performed against the original binary at this path.
         String firstHandshakeIdentity = MinosCliClient.resolvedExecutableIdentity(executable.toString());
@@ -33,7 +44,7 @@ class MinosCliClientTest {
         assertEquals(firstHandshakeIdentity, sameBinaryIdentity);
 
         // The binary is replaced in place (upgrade) while the IDE keeps running; path is unchanged.
-        Files.writeString(executable, "handshake-2-binary-after-upgrade");
+        writeExecutable(executable, "handshake-2-binary-after-upgrade");
 
         // Command 2 at the same configured path must now observe a different identity, forcing
         // ensureHandshake() to treat the cache as stale and perform a new handshake.

@@ -90,6 +90,10 @@ SCOPES = {
         "branch": 0.50,
         "prefixMinimums": {
             "com/minos/git/JGitCloneDeadline": {"line": 0.48, "branch": 0.42},
+            # LocalRemoteIndexOperations owns the RemoteMaterialization release lifecycle (AUDIT-01):
+            # a per-class floor stops that specific coverage from being able to hide behind the
+            # rest of this scope's well-covered siblings while quietly regressing itself.
+            "com/minos/cli/LocalRemoteIndexOperations": {"line": 0.65, "branch": 0.35},
         },
     },
     "provider-execution-trust-boundary": {
@@ -157,6 +161,15 @@ SCOPES = {
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
     "nexus-export": {"prefixes": ("com/minos/integration/nexus/",), "line": 0.30, "branch": 0.12},
+    # The lifecycle orchestrator behind every indexing run (register -> execute providers -> stage
+    # -> promote -> persist, with commit-uncertain recovery and failure rollback). It is exercised
+    # almost entirely indirectly through IndexingLifecycleService's test suite rather than directly,
+    # so nothing previously stopped that indirect coverage from silently eroding.
+    "critical-orchestration": {
+        "prefixes": ("com/minos/orchestration/IndexingRunExecutor",),
+        "line": 0.75,
+        "branch": 0.55,
+    },
 }
 
 
