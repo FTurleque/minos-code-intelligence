@@ -93,11 +93,11 @@ Le plugin reste qualifié séparément sous **Java 21 / Gradle 9.6.1 / IntelliJ 
 
 La transition réelle d'une version Docker MCP à une autre possède maintenant une qualification dédiée :
 
-- workflow : `.github/workflows/docker-upgrade-qualification.yml` ;
-- runner requis : Windows x64 auto-hébergé + Docker Desktop Linux containers, label `minos-docker` ;
-- script : `scripts/ci/qualify-docker-upgrade.ps1` ;
-- candidat A et candidat B construits depuis **deux commits/JAR distincts** ;
-- vrai `prod-mcp-release.ps1`, vraies images provider-complete, vrai Compose et vrais providers ;
+- workflow manuel : `.github/workflows/docker-upgrade-qualification.yml` ; workflow automatique de promotion : `.github/workflows/release-promotion-gate.yml` (job `docker-upgrade-qualification`, puis `docker-upgrade-evidence` en dépendance) ;
+- runner : **GitHub-hosted `ubuntu-24.04`** — aucun runner auto-hébergé, aucune machine personnelle, aucun repository d'infrastructure privé requis (dépôt public) ;
+- script : `scripts/ci/qualify-docker-upgrade.ps1`, portable (pwsh), pilote `docker/scripts/mcp-lifecycle.ps1` (cœur portable extrait de `prod-mcp-release.ps1`, qui reste l'interface produit Windows) ;
+- candidat A et candidat B construits depuis **deux commits/JAR distincts**, chacun avec son propre Dockerfile/Compose (`-SourceRoot` par candidat) ;
+- vraies images provider-complete, vrai Compose et vrais providers ;
 - projet Maven fixture enregistré et indexé avant l'upgrade ;
 - handshake MCP avant et après ;
 - persistance du `MINOS_HOME`, du projet et de l'index vérifiée ;
