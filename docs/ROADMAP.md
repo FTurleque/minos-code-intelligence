@@ -37,7 +37,7 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 | #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
 | #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
 | #260 | confinement fingerprint/secrets, quotas/couverture ciblée, simplification Post-228 et durcissements restants | ✅ intégrée dans `develop` |
-| Réconciliation audit 28/08 | Docker A→B réel, I/O snapshot bornée, UTF-8 secrets strict, crypto hygiene, Gradle Dependabot, docs/topologie | 🔄 qualifiée par la PR qui contient ce document avant merge |
+| Réconciliation audit 28 août 2026 | Docker A→B réel, I/O snapshot bornée, UTF-8 secrets strict, crypto hygiene, Gradle Dependabot, docs/topologie | ✅ intégrée (PR #260) |
 
 ## Ligne de sécurité courante
 
