@@ -46,10 +46,11 @@ class NexusExportContractTest {
         );
         symbols.clear();
 
-        assertEquals(1, snapshot.symbols().size());
+        List<NexusExportContract.ExportSymbol> snapshotSymbols = snapshot.symbols();
+        assertEquals(1, snapshotSymbols.size());
         assertTrue(snapshot.relations().isEmpty());
         assertTrue(snapshot.limitations().isEmpty());
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.symbols().clear());
+        assertThrows(UnsupportedOperationException.class, () -> snapshotSymbols.clear());
     }
 
     @Test
@@ -89,22 +90,25 @@ class NexusExportContractTest {
 
     @Test
     void relationCopiesEvidenceAndRejectsInvalidConfidence() {
+        NexusExportContract.ExportOrigin origin = origin();
         NexusExportContract.ExportEvidence evidence = new NexusExportContract.ExportEvidence("FACT", "proof", 1.0);
         ArrayList<NexusExportContract.ExportEvidence> evidenceList = new ArrayList<>(List.of(evidence));
         NexusExportContract.ExportRelation relation = new NexusExportContract.ExportRelation(
                 "rel", "file.java", "CALLS", "source", "a.Source", "target", "a.Target",
-                "RESOLVED", "FACTUAL", 0.9, origin(), evidenceList
+                "RESOLVED", "FACTUAL", 0.9, origin, evidenceList
         );
         evidenceList.clear();
 
-        assertEquals(1, relation.evidence().size());
-        assertThrows(UnsupportedOperationException.class, () -> relation.evidence().clear());
+        List<NexusExportContract.ExportEvidence> relationEvidence = relation.evidence();
+        assertEquals(1, relationEvidence.size());
+        assertThrows(UnsupportedOperationException.class, () -> relationEvidence.clear());
+        List<NexusExportContract.ExportEvidence> emptyEvidence = List.of();
         assertThrows(IllegalArgumentException.class, () -> new NexusExportContract.ExportRelation(
                 "rel", "file.java", "CALLS", "source", "a.Source", "target", "a.Target",
-                "RESOLVED", "FACTUAL", Double.POSITIVE_INFINITY, origin(), List.of()));
+                "RESOLVED", "FACTUAL", Double.POSITIVE_INFINITY, origin, emptyEvidence));
         assertThrows(IllegalArgumentException.class, () -> new NexusExportContract.ExportRelation(
                 "", "file.java", "CALLS", "source", "a.Source", "target", "a.Target",
-                "RESOLVED", "FACTUAL", null, origin(), null));
+                "RESOLVED", "FACTUAL", null, origin, null));
     }
 
     private static NexusExportContract.ExportProject project() {
