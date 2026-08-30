@@ -35,8 +35,9 @@ class DomainSearchCriteriaTest {
                 () -> new SymbolSearchCriteria(" ", "", null, null, 1));
         assertThrows(IllegalArgumentException.class,
                 () -> SymbolSearchCriteria.lexical("needle", 0));
+        String oversizedText = "x".repeat(SymbolSearchCriteria.MAX_TEXT_UTF8_BYTES + 1);
         assertThrows(IllegalArgumentException.class,
-                () -> SymbolSearchCriteria.lexical("x".repeat(SymbolSearchCriteria.MAX_TEXT_UTF8_BYTES + 1), 1));
+                () -> SymbolSearchCriteria.lexical(oversizedText, 1));
     }
 
     @Test
@@ -51,8 +52,9 @@ class DomainSearchCriteriaTest {
         RelationshipSearchCriteria any = RelationshipSearchCriteria.any(anchor, Set.of(), 20);
 
         assertEquals(RelationshipDirection.OUTGOING, outgoing.direction());
-        assertEquals(Set.of(kind), outgoing.kinds());
-        assertThrows(UnsupportedOperationException.class, () -> outgoing.kinds().clear());
+        Set<RelationshipKind> outgoingKinds = outgoing.kinds();
+        assertEquals(Set.of(kind), outgoingKinds);
+        assertThrows(UnsupportedOperationException.class, () -> outgoingKinds.clear());
         assertEquals(RelationshipDirection.INCOMING, incoming.direction());
         assertTrue(incoming.kinds().isEmpty());
         assertEquals(RelationshipDirection.ANY, any.direction());
