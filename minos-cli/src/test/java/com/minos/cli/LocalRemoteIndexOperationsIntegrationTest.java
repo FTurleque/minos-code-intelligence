@@ -13,6 +13,7 @@ import com.minos.remote.DistributedIndexing.WorkerIsolation;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.DistributedIndexing.WorkerRequest;
 import com.minos.remote.DistributedIndexing.WorkerResponse;
+import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.DistributedArtifactBundleStore;
@@ -30,6 +31,7 @@ import org.scip_code.scip.SymbolInformation;
 import org.scip_code.scip.SymbolRole;
 
 import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -38,9 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LocalRemoteIndexOperationsIntegrationTest {
@@ -89,6 +93,67 @@ class LocalRemoteIndexOperationsIntegrationTest {
         assertTrue(snapshot.symbols().stream().anyMatch(symbol -> "RemoteType".equals(symbol.name())));
         assertEquals("fixture-provider", snapshot.symbols().getFirst().origin().providerId());
         assertEquals("1.2.3", snapshot.symbols().getFirst().origin().providerVersion());
+    }
+
+    @Test
+    void releasesMaterializationWhenRemoteIndexLeaseAcquisitionFails(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        Path repository = Files.createDirectories(temp.resolve("remote-repository"));
+        Path project = Files.createDirectories(repository.resolve("fixture"));
+        Files.writeString(project.resolve("pom.xml"), "<project/>");
+
+        IndexerDescriptor descriptor = descriptor();
+        ProviderRuntimeManager runtime = runtime(temp, descriptor);
+        MinosApplication application = MinosApplication.builder(home)
+                .indexerDescriptors(List.of(descriptor))
+                .providerRuntimeManager(runtime)
+                .build();
+
+        RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                "https://github.com/acme/remote-fixture", "main", "a".repeat(40), "fixture", null);
+        RemoteMaterialization materialization = new RemoteMaterialization(
+                request, repository, project, "c".repeat(64), false,
+                Instant.parse("2026-07-29T00:00:00Z"));
+
+        AtomicInteger releaseCount = new AtomicInteger();
+        AtomicInteger pinCount = new AtomicInteger();
+        RemoteRepositoryMaterializer materializer = new RemoteRepositoryMaterializer() {
+            @Override
+            public RemoteMaterialization materialize(RemoteRepositoryRequest ignored) {
+                return materialization;
+            }
+
+            @Override
+            public void pin(RemoteMaterialization ignored) {
+                pinCount.incrementAndGet();
+            }
+
+            @Override
+            public void release(RemoteMaterialization ignored) {
+                releaseCount.incrementAndGet();
+            }
+        };
+
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
+        LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+                application, materializer, store,
+                (workerId, delegate, artifactStore) -> {
+                    throw new AssertionError("worker must never be created when the lease is never acquired");
+                });
+
+        // Force RemoteIndexLease.acquire(...) to fail deterministically and without waiting on its
+        // real timeout: its lock directory cannot be created because a regular file already occupies
+        // that exact path.
+        Files.writeString(home.resolve("remote-index-leases"), "not a directory");
+
+        Exception failure = assertThrows(Exception.class, () -> operations.index(
+                request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW));
+
+        assertTrue(failure instanceof FileAlreadyExistsException,
+                "expected the lease directory creation failure to propagate unwrapped: " + failure);
+        assertEquals(1, releaseCount.get(),
+                "a successful materialize() must be released exactly once even when lease acquisition fails");
+        assertEquals(0, pinCount.get(), "pin must never run before the remote index lease is held");
     }
 
     /** Test-only worker: transport/staging is under test here; OS sandbox qualification is covered separately. */
