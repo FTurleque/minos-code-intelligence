@@ -134,8 +134,8 @@ def validate_release_documentation() -> None:
 def validate_security_and_storage() -> None:
     pom = read(POM)
     require_all(POM, pom, (
-        "<jackson2.version>2.22.1</jackson2.version>",
-        "<jackson3.version>3.1.5</jackson3.version>",
+        "<jackson2.version>2.22.2</jackson2.version>",
+        "<jackson3.version>3.2.2</jackson3.version>",
         "com.fasterxml.jackson", "tools.jackson", "jackson-bom",
     ))
     forbid(POM, pom, "<jackson2.version>2.22.0</jackson2.version>")
