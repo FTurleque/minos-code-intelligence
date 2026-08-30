@@ -17,8 +17,8 @@ class CoreDomainInvariantTest {
         CodeEntityType type = CodeEntityType.values()[0];
         assertThrows(NullPointerException.class, () -> new CodeEntityRef(null, "id"));
         assertThrows(IllegalArgumentException.class, () -> new CodeEntityRef(type, " "));
-        assertThrows(IllegalArgumentException.class,
-                () -> new CodeEntityRef(type, "x".repeat(CodeEntityRef.MAX_ID_UTF8_BYTES + 1)));
+        String oversizedId = "x".repeat(CodeEntityRef.MAX_ID_UTF8_BYTES + 1);
+        assertThrows(IllegalArgumentException.class, () -> new CodeEntityRef(type, oversizedId));
         assertEquals("id", new CodeEntityRef(type, "id").id());
     }
 
@@ -65,13 +65,15 @@ class CoreDomainInvariantTest {
         );
 
         assertTrue(symbol.providerReferences().isEmpty());
+        SymbolIdentityQuality identityQuality = SymbolIdentityQuality.values()[0];
+        SymbolKind symbolKind = SymbolKind.values()[0];
         assertThrows(IllegalArgumentException.class, () -> new Symbol(
-                " ", "symbol-key", SymbolIdentityQuality.values()[0], "project", null, "file", null,
-                SymbolKind.values()[0], "name", null, null, "java", null, ResolutionStatus.RESOLVED,
+                " ", "symbol-key", identityQuality, "project", null, "file", null,
+                symbolKind, "name", null, null, "java", null, ResolutionStatus.RESOLVED,
                 origin, false, false, null));
         assertThrows(NullPointerException.class, () -> new Symbol(
                 "id", "symbol-key", null, "project", null, "file", null,
-                SymbolKind.values()[0], "name", null, null, "java", null, ResolutionStatus.RESOLVED,
+                symbolKind, "name", null, null, "java", null, ResolutionStatus.RESOLVED,
                 origin, false, false, null));
     }
 
@@ -115,17 +117,21 @@ class CoreDomainInvariantTest {
         CodeEntityRef source = ref("source");
         CodeEntityRef target = ref("target");
         Evidence evidence = new Evidence(EvidenceType.values()[0], "derived evidence", source, target, null, 1.0);
+        RelationshipKind kind = RelationshipKind.values()[0];
+        Origin origin = origin();
+        List<Evidence> evidenceList = List.of(evidence);
 
         assertThrows(IllegalArgumentException.class, () -> new Relationship(
-                "missing-confidence", "project", source, target, null, RelationshipKind.values()[0], null,
-                ResolutionStatus.RESOLVED, nonFactual, null, origin(), List.of(evidence)));
+                "missing-confidence", "project", source, target, null, kind, null,
+                ResolutionStatus.RESOLVED, nonFactual, null, origin, evidenceList));
+        List<Evidence> noEvidence = List.of();
         assertThrows(IllegalArgumentException.class, () -> new Relationship(
-                "missing-evidence", "project", source, target, null, RelationshipKind.values()[0], null,
-                ResolutionStatus.RESOLVED, nonFactual, 0.8, origin(), List.of()));
+                "missing-evidence", "project", source, target, null, kind, null,
+                ResolutionStatus.RESOLVED, nonFactual, 0.8, origin, noEvidence));
 
         Relationship relationship = new Relationship(
-                "derived", "project", source, target, null, RelationshipKind.values()[0], null,
-                ResolutionStatus.RESOLVED, nonFactual, 0.8, origin(), List.of(evidence));
+                "derived", "project", source, target, null, kind, null,
+                ResolutionStatus.RESOLVED, nonFactual, 0.8, origin, evidenceList);
         assertEquals(0.8, relationship.confidence());
         assertNotNull(relationship.evidence().getFirst());
     }
