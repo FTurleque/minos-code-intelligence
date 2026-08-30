@@ -305,6 +305,10 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\compose.mcp.connected.yaml')
     -Destination (Join-Path $DockerDirectory 'compose.mcp.connected.yaml') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1') `
     -Destination (Join-Path $DockerScripts 'prod-mcp-release.ps1') -Force
+# prod-mcp-release.ps1 delegates every action to this portable core; both must ship together or an
+# installed distribution's Docker workflow fails looking for a sibling script that was never copied.
+Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\mcp-lifecycle.ps1') `
+    -Destination (Join-Path $DockerScripts 'mcp-lifecycle.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-docker-mcp.ps1') `
     -Destination (Join-Path $DockerScripts 'configure-docker-mcp.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'docker\scripts\configure-m30-docker-services.ps1') `

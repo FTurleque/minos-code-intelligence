@@ -202,7 +202,7 @@ $RequiredInstalledFiles = @(
     'integration\configure-codex-mcp.ps1','integration\detect-mcp-clients.ps1','integration\uninstall-mcp-clients.ps1',
     'integration\update-installation.ps1','integration\switch-mcp-backend.ps1','integration\probe-mcp-backend.ps1',
     'docker\Dockerfile.mcp.release','docker\compose.mcp.prod.yaml',
-    'docker\scripts\prod-mcp-release.ps1','docker\scripts\configure-docker-mcp.ps1'
+    'docker\scripts\prod-mcp-release.ps1','docker\scripts\mcp-lifecycle.ps1','docker\scripts\configure-docker-mcp.ps1'
 )
 
 $ZipHash = Verify-Sha256 $Zip $ZipChecksum

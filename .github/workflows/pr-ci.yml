@@ -164,6 +164,9 @@ jobs:
       - name: Product facts consistency
         run: python scripts/docs/product-facts.py --check
 
+      - name: Docker upgrade evidence checker unit tests
+        run: python scripts/release/test_check_docker_upgrade_evidence.py -v
+
       - name: Upload verification diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

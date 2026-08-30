@@ -8,9 +8,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if ($env:OS -ne 'Windows_NT') {
-    throw 'The real Docker A -> B upgrade qualification requires a Windows host with Docker Desktop Linux containers.'
-}
+# Portable: runs under pwsh (PowerShell 7+) on any host with git/docker/java/Maven available - a
+# GitHub-hosted ubuntu-24.04 runner (the default CI path, see .github/workflows/release-promotion-gate.yml)
+# or a Windows host with Docker Desktop Linux containers (for local/manual runs). Nothing below is
+# Windows-specific: the real product lifecycle logic lives in docker/scripts/mcp-lifecycle.ps1,
+# which this script calls directly with its own temporary install/data/projects roots.
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $EvidenceRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $EvidenceRoot))
@@ -48,7 +50,17 @@ function Resolve-Commit([string] $Ref) {
 function Build-ShadedJar([string] $Root) {
     Push-Location $Root
     try {
-        & '.\mvnw.cmd' -B -ntp -DskipTests -DskipITs clean package
+        # This function's result is captured by the caller ($JarA = Build-ShadedJar ...): any
+        # unredirected output a nested native command writes would otherwise be captured too and
+        # corrupt the returned path into an array of build-log lines. `| Out-Host` keeps Maven's
+        # build output visible live without letting it leak into the function's return value.
+        if ($env:OS -eq 'Windows_NT') {
+            & '.\mvnw.cmd' -B -ntp -DskipTests -DskipITs clean package | Out-Host
+        }
+        else {
+            & chmod +x './mvnw'
+            & './mvnw' -B -ntp -DskipTests -DskipITs clean package | Out-Host
+        }
         if ($LASTEXITCODE -ne 0) { throw "Maven packaging failed under $Root" }
     }
     finally { Pop-Location }
@@ -58,10 +70,27 @@ function Build-ShadedJar([string] $Root) {
     return $Jars[0].FullName
 }
 
+function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
+    # A dedicated, non-throwing capture path for admin commands we expect might fail, distinct from
+    # Invoke-DockerWorkflow's Compose call (which throws on nonzero exit and, empirically, never
+    # lets output already piped into `Set-Content` reach the file when that throw cuts the pipeline
+    # short - fine for calls that must succeed, useless for a call whose failure we need to inspect).
+    # Mirrors mcp-lifecycle.ps1's own Invoke-DockerAllowFailure: capture stdout+stderr from a single
+    # native invocation expression so the output survives regardless of exit code.
+    $RuntimeRootLocal = Join-Path $InstallRoot 'runtime'
+    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose.mcp.prod.yaml'
+    $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
+    $ComposeArguments = @(
+        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
+        '-f', $ComposeFileLocal, 'run', '--rm', '--no-deps', 'minos-admin') + $MinosArgumentsToCapture
+    $Output = (($null | & docker @ComposeArguments 2>&1) | Out-String).Trim()
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $Output }
+}
+
 function Invoke-DockerWorkflow {
     param(
-        [Parameter(Mandatory = $true)][string] $Script,
         [Parameter(Mandatory = $true)][string] $Action,
+        [string] $SourceRoot = '',
         [string] $Jar = '',
         [string] $Version = '',
         [string] $Commit = '',
@@ -77,12 +106,19 @@ function Invoke-DockerWorkflow {
         ContainerName = $ContainerName
         ComposeProject = $ComposeProject
     }
+    if (-not [string]::IsNullOrWhiteSpace($SourceRoot)) { $Arguments.SourceRoot = $SourceRoot }
     if (-not [string]::IsNullOrWhiteSpace($Jar)) { $Arguments.Jar = $Jar }
     if (-not [string]::IsNullOrWhiteSpace($Version)) { $Arguments.Version = $Version }
     if (-not [string]::IsNullOrWhiteSpace($Commit)) { $Arguments.Commit = $Commit }
     if (-not [string]::IsNullOrWhiteSpace($ImageTag)) { $Arguments.ImageTag = $ImageTag }
     if ($MinosArguments.Count -gt 0) { $Arguments.MinosArguments = $MinosArguments }
-    & $Script @Arguments
+    # Always run this repo's OWN, current, portable mcp-lifecycle.ps1 as the driver - never a
+    # candidate worktree's copy. An older candidate A predating this file's introduction has no
+    # copy of it at all, and even when it does, the orchestration logic is qualification tooling,
+    # not the product surface under test; -SourceRoot (set per candidate below) is what makes each
+    # install use that candidate's own Dockerfile/Compose recipe, matching a real upgrade.
+    $LifecycleScript = Join-Path $RepoRoot 'docker\scripts\mcp-lifecycle.ps1'
+    & $LifecycleScript @Arguments
 }
 
 function Invoke-McpSmoke([string] $SourceRoot, [string] $Label) {
@@ -118,12 +154,13 @@ function Assert-RunningCandidate([string] $ExpectedImage, [string] $ExpectedComm
     if ($Revision -ne $ExpectedCommit) { throw "Running image revision mismatch: $Revision != $ExpectedCommit" }
 }
 
-Remove-Item -LiteralPath $EvidenceRoot -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $EvidenceRoot, $TempRoot, $ProjectsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $TempRoot, $ProjectsRoot | Out-Null
 
 try {
     Invoke-NativeChecked -File 'docker' -Arguments @('version', '--format', '{{.Server.Version}}') `
-        -Failure 'Docker Desktop Linux engine is unavailable'
+        -Failure 'Docker Linux engine is unavailable'
+    Invoke-NativeChecked -File 'docker' -Arguments @('compose', 'version') `
+        -Failure 'Docker Compose is unavailable'
 
     $CandidateSha = Resolve-Commit $CandidateRef
     if ([string]::IsNullOrWhiteSpace($PreviousRef)) {
@@ -143,11 +180,22 @@ try {
     $WorktreeAdded = $true
 
     $JarA = Build-ShadedJar $PreviousWorktree
+    # $EvidenceRoot lives under $RepoRoot/target/... and `mvn clean` deletes $RepoRoot/target/
+    # wholesale (not just Maven's own outputs) before rebuilding it - creating the evidence
+    # directory before this second build would silently wipe it out from under the rest of the
+    # script. Create it only once both builds (and their `clean` phases) are behind us.
     $JarB = Build-ShadedJar $RepoRoot
-    $WorkflowA = Join-Path $PreviousWorktree 'docker\scripts\prod-mcp-release.ps1'
-    $WorkflowB = Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'
-    foreach ($Required in @($WorkflowA, $WorkflowB)) {
-        if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing real Docker workflow: $Required" }
+    Remove-Item -LiteralPath $EvidenceRoot -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $EvidenceRoot | Out-Null
+    # Each candidate installs itself with its OWN Dockerfile/Compose recipe (real upgrade fidelity),
+    # but both are driven by this repo's current mcp-lifecycle.ps1 - see Invoke-DockerWorkflow.
+    foreach ($Required in @(
+        (Join-Path $PreviousWorktree 'docker\Dockerfile.mcp.release'),
+        (Join-Path $PreviousWorktree 'docker\compose.mcp.prod.yaml'),
+        (Join-Path $RepoRoot 'docker\Dockerfile.mcp.release'),
+        (Join-Path $RepoRoot 'docker\compose.mcp.prod.yaml')
+    )) {
+        if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "Missing real Docker release recipe: $Required" }
     }
 
     $VersionA = "qualification-a-$($PreviousSha.Substring(0, 12))"
@@ -175,18 +223,32 @@ public final class UpgradeFixture {
 '@ | Set-Content -LiteralPath (Join-Path $FixtureRoot 'src\main\java\UpgradeFixture.java') -Encoding utf8
 
     # Candidate A: real provider-complete image, real Compose, real admin plane and real MCP handshake.
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Start
+    Invoke-DockerWorkflow -SourceRoot $PreviousWorktree -Action Install -Jar $JarA -Version $VersionA -Commit $PreviousSha -ImageTag $TagA
+    Invoke-DockerWorkflow -Action Start
     Assert-RunningCandidate -ExpectedImage $ImageA -ExpectedCommit $PreviousSha
     Invoke-McpSmoke -SourceRoot $PreviousWorktree -Label 'a'
 
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Admin -MinosArguments @(
+    Invoke-DockerWorkflow -Action Admin -MinosArguments @(
         'project', 'add', '/workspace/projects/upgrade-fixture', '--name', 'upgrade-fixture', '--format', 'json') `
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-add-a.log') -Encoding utf8
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Admin -MinosArguments @(
-        'index', 'upgrade-fixture', '--format', 'json') `
-        6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'index-a.log') -Encoding utf8
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Admin -MinosArguments @(
+
+    # docs/developer/remote-worker-sandbox-disposition.md: the Docker admin plane cannot nest a
+    # second OS sandbox inside its own already-hardened container, so a managed provider (scip-java,
+    # scip-typescript, ...) is reported UNSUPPORTED_BY_BACKEND - never READY - by design, and
+    # `index` (which must launch the provider) always refuses. This is documented, expected,
+    # capability-honest behavior, not a bug this qualification should paper over: assert the refusal
+    # happens, and that it happens for exactly this documented reason, rather than assuming
+    # execution succeeds or silently swallowing whatever `index` does.
+    $IndexAttempt = Invoke-AdminCommandCapture @('index', 'upgrade-fixture', '--format', 'json')
+    Set-Content -LiteralPath (Join-Path $EvidenceRoot 'index-attempt-a.log') -Value $IndexAttempt.Output -Encoding utf8
+    if ($IndexAttempt.ExitCode -eq 0) {
+        throw 'Expected the Docker admin plane to capability-honestly refuse managed-provider indexing (see docs/developer/remote-worker-sandbox-disposition.md), but the index command succeeded.'
+    }
+    if ($IndexAttempt.Output -notmatch 'UNSUPPORTED_BY_BACKEND|provider runtime is not ready') {
+        throw "Managed-provider indexing failed inside the Docker admin plane for an unexpected reason (expected the documented capability-honest UNSUPPORTED_BY_BACKEND refusal): $($IndexAttempt.Output)"
+    }
+
+    Invoke-DockerWorkflow -Action Admin -MinosArguments @(
         'index-status', 'upgrade-fixture', '--format', 'json') `
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'index-status-a.log') -Encoding utf8
 
@@ -198,12 +260,17 @@ public final class UpgradeFixture {
 
     # Stop only the persistent query plane. The next install must exercise the real Docker/Compose
     # upgrade path, including non-interactive provider-volume reconciliation fixed by #246.
-    Invoke-DockerWorkflow -Script $WorkflowA -Action Stop
+    Invoke-DockerWorkflow -Action Stop
+
+    # Candidate A's image is no longer needed once B is installed. Removing it now (rather than
+    # only in the final cleanup) keeps peak disk usage on a standard GitHub-hosted runner close to
+    # a single provider-complete image build instead of two simultaneous ones.
+    & docker image rm --force $ImageA *> $null
 
     # Candidate B: different Git commit and JAR, same durable MINOS data root.
-    Invoke-DockerWorkflow -Script $WorkflowB -Action Install -Jar $JarB -Version $VersionB -Commit $CandidateSha -ImageTag $TagB
-    Invoke-DockerWorkflow -Script $WorkflowB -Action Start
-    Invoke-DockerWorkflow -Script $WorkflowB -Action Validate
+    Invoke-DockerWorkflow -SourceRoot $RepoRoot -Action Install -Jar $JarB -Version $VersionB -Commit $CandidateSha -ImageTag $TagB
+    Invoke-DockerWorkflow -Action Start
+    Invoke-DockerWorkflow -Action Validate
     Assert-RunningCandidate -ExpectedImage $ImageB -ExpectedCommit $CandidateSha
     Invoke-McpSmoke -SourceRoot $RepoRoot -Label 'b'
 
@@ -214,12 +281,12 @@ public final class UpgradeFixture {
     $SentinelAfter = (Get-Content -Raw -LiteralPath (Join-Path $DataRoot 'upgrade-qualification.sentinel')).Trim()
     if ($SentinelAfter -ne $Sentinel) { throw 'Persistent MINOS data sentinel was not preserved across Docker upgrade.' }
 
-    Invoke-DockerWorkflow -Script $WorkflowB -Action Admin -MinosArguments @('project', 'list', '--format', 'json') `
+    Invoke-DockerWorkflow -Action Admin -MinosArguments @('project', 'list', '--format', 'json') `
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'project-list-b.log') -Encoding utf8
     if (-not (Select-String -LiteralPath (Join-Path $EvidenceRoot 'project-list-b.log') -SimpleMatch 'upgrade-fixture' -Quiet)) {
         throw 'Registered project did not survive Docker A -> B upgrade.'
     }
-    Invoke-DockerWorkflow -Script $WorkflowB -Action Admin -MinosArguments @(
+    Invoke-DockerWorkflow -Action Admin -MinosArguments @(
         'index-status', 'upgrade-fixture', '--format', 'json') `
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'index-status-b.log') -Encoding utf8
 
@@ -233,7 +300,7 @@ public final class UpgradeFixture {
     Set-Content -LiteralPath $BrokenJar -Value 'not-a-jar' -Encoding ascii
     $FailedAsExpected = $false
     try {
-        Invoke-DockerWorkflow -Script $WorkflowB -Action Install -Jar $BrokenJar `
+        Invoke-DockerWorkflow -SourceRoot $RepoRoot -Action Install -Jar $BrokenJar `
             -Version 'qualification-c-broken' -Commit 'ffffffffffffffffffffffffffffffffffffffff' -ImageTag "upgrade-c-broken-$Suffix"
     }
     catch {
@@ -266,8 +333,7 @@ public final class UpgradeFixture {
 finally {
     try {
         if (Test-Path -LiteralPath (Join-Path $InstallRoot 'runtime\installation.json')) {
-            $CurrentWorkflow = Join-Path $RepoRoot 'docker\scripts\prod-mcp-release.ps1'
-            try { Invoke-DockerWorkflow -Script $CurrentWorkflow -Action Uninstall } catch { Write-Warning $_ }
+            try { Invoke-DockerWorkflow -Action Uninstall } catch { Write-Warning $_ }
         }
     } catch { Write-Warning $_ }
     foreach ($Image in @($ImageA, $ImageB)) {

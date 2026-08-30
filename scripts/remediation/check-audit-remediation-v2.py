@@ -127,23 +127,45 @@ def main() -> int:
             "Arrays.fill(master, (byte) 0)",
         )
 
+        # The Docker A -> B upgrade qualification must never depend on a self-hosted runner again:
+        # this repository is public, and a self-hosted runner or private infrastructure repository
+        # is an unacceptable attack surface for it. GitHub-hosted ubuntu-24.04 is the only qualified
+        # host for both the manual entry point and the automatic promotion-gate path.
+        for workflow in (
+            ".github/workflows/docker-upgrade-qualification.yml",
+            ".github/workflows/release-promotion-gate.yml",
+        ):
+            forbid(workflow, "self-hosted", "minos-docker")
+            require(workflow, "runs-on: ubuntu-24.04")
         require(
             ".github/workflows/docker-upgrade-qualification.yml",
             "workflow_dispatch",
-            "self-hosted",
-            "minos-docker",
             "qualify-docker-upgrade.ps1",
+        )
+        require(
+            ".github/workflows/release-promotion-gate.yml",
+            "docker-upgrade-qualification",
+            "docker-upgrade-evidence",
+            "needs: docker-upgrade-qualification",
+            "qualify-docker-upgrade.ps1",
+            "check-docker-upgrade-evidence.py",
         )
         require(
             "scripts/ci/qualify-docker-upgrade.ps1",
             "Previous and candidate commits must differ",
-            "prod-mcp-release.ps1",
+            "mcp-lifecycle.ps1",
             "project', 'add'",
             "'index', 'upgrade-fixture'",
             "MinosDockerMcpSmoke.java",
             "Persistent MINOS data sentinel was not preserved",
             "Deliberately broken next Docker candidate unexpectedly installed",
             "failedNextCandidatePreservedB",
+        )
+        require(
+            "scripts/release/check-docker-upgrade-evidence.py",
+            "qualification.json",
+            "result",
+            "PASS",
         )
 
         print("MINOS AUDIT REMEDIATION V2 INVARIANTS SUCCESS")
