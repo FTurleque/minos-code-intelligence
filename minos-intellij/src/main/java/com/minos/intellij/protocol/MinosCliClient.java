@@ -185,7 +185,21 @@ public final class MinosCliClient {
 
     private String configurationKey() {
         MinosSettingsState.Settings settings = MinosSettingsState.getInstance(project).value();
-        return settings.executable + "\n" + settings.minosHome;
+        return settings.executable + "\n" + settings.minosHome + "\n" + resolvedExecutableIdentity(settings.executable);
+    }
+
+    /**
+     * Identifies the binary a configured executable path currently resolves to, so an in-place
+     * replacement of that binary (e.g. a MINOS upgrade) while the IDE stays open invalidates the
+     * cached handshake instead of being silently trusted.
+     */
+    static String resolvedExecutableIdentity(String executable) {
+        try {
+            Path resolved = MinosExecutableResolver.resolve(executable, System.getProperty("os.name", ""));
+            return MinosExecutableIdentity.describe(resolved);
+        } catch (IOException | RuntimeException failure) {
+            return "unresolved";
+        }
     }
 
     private static String nullableString(JsonObject object, String name) {
