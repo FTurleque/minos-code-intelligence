@@ -1,6 +1,6 @@
 # État courant — MINOS
 
-Dernière mise à jour : **28 août 2026**.
+Dernière mise à jour : **30 août 2026**.
 
 Ce fichier est la synthèse autoritative de l'état produit courant. Les réconciliations détaillées antérieures restent archivées sous [`history/reconciliations/`](history/reconciliations/). Une capacité présente sur une branche ou une PR n'est dite intégrée dans `develop` qu'après merge ; le présent document décrit néanmoins les garanties du HEAD qui le contient afin qu'il reste exact avant et après promotion.
 
@@ -13,8 +13,8 @@ Ce fichier est la synthèse autoritative de l'état produit courant. Les réconc
 - **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
-- **#258/#260** : audit 28 août — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
-- Ligne de développement : **1.1.0-SNAPSHOT**.
+- **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.
+- Ligne de développement : **1.2.0-SNAPSHOT**.
 
 ## Release 1.0.1
 
@@ -31,7 +31,22 @@ La release **v1.0.1 est PUBLIÉE et immuable**.
 - workflow de publication : `31288322126` ;
 - setup Windows, distribution et plugin IntelliJ restent soumis aux gates OSV, provenance et **Plugin Verifier** applicables.
 
-Aucune release 1.1.0 n'est publiée à ce jour.
+## Release 1.1.0
+
+La release **MINOS v1.1.0** a été publiée le **27 août 2026**.
+
+```text
+v1.1.0 → b2ba3ac9b9dbb852dab712ee33bc05e41e03e879
+```
+
+La release **v1.1.0 est PUBLIÉE et immuable**.
+
+- URL : https://github.com/FTurleque/minos-code-intelligence/releases/tag/v1.1.0
+- publication : **8 assets**, soit **4 paires** artefact/checksum ;
+- workflow de publication : `33116192634` ;
+- setup Windows, distribution et plugin IntelliJ restent soumis aux gates OSV, provenance et **Plugin Verifier** applicables.
+
+Aucune release 1.2.0 n'est publiée à ce jour ; la ligne `1.2.0-SNAPSHOT` couvre notamment la remédiation d'audit `develop` (fuite de `RemoteMaterialization` sur échec d'acquisition du lease de réindexation distante, résolution PATH POSIX acceptant un fichier non exécutable, gates JaCoCo d'orchestration critique) promue vers `main` par la PR #259.
 
 ## Répartition autoritative des gates CI
 
