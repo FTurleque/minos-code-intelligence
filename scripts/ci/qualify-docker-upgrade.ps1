@@ -87,6 +87,25 @@ function Invoke-AdminCommandCapture([string[]] $MinosArgumentsToCapture) {
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $Output }
 }
 
+function Invoke-AdminShellCommand([string] $ShellCommand) {
+    # minos-data-bootstrap chown's the MINOS data root to uid 10001 and chmod's it 0700 (see
+    # compose.mcp.prod.yaml) so nothing outside the container can read or write it - real,
+    # intentional hardening that a real Linux bind mount enforces on the HOST directory too (a
+    # Docker Desktop/WSL2 host, where this script was first validated, translates ownership
+    # differently and does not enforce this the same way - a real environment difference, not a
+    # flake). Persistence must therefore be proven by writing/reading through the admin plane,
+    # which mounts the data root writable, not by reaching into $DataRoot directly from the host.
+    $RuntimeRootLocal = Join-Path $InstallRoot 'runtime'
+    $ComposeFileLocal = Join-Path $RuntimeRootLocal 'compose.mcp.prod.yaml'
+    $EnvironmentFileLocal = Join-Path $RuntimeRootLocal '.env'
+    $ComposeArguments = @(
+        'compose', '--project-directory', $RuntimeRootLocal, '--env-file', $EnvironmentFileLocal,
+        '-f', $ComposeFileLocal, 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'minos-admin', '-c', $ShellCommand)
+    $Output = (($null | & docker @ComposeArguments 2>&1) | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Admin shell command failed: $ShellCommand -- $Output" }
+    return $Output
+}
+
 function Invoke-DockerWorkflow {
     param(
         [Parameter(Mandatory = $true)][string] $Action,
@@ -253,7 +272,7 @@ public final class UpgradeFixture {
         6>&1 | Set-Content -LiteralPath (Join-Path $EvidenceRoot 'index-status-a.log') -Encoding utf8
 
     $Sentinel = [Guid]::NewGuid().ToString('N')
-    Set-Content -LiteralPath (Join-Path $DataRoot 'upgrade-qualification.sentinel') -Value $Sentinel -Encoding ascii
+    Invoke-AdminShellCommand "printf '%s' '$Sentinel' > /var/lib/minos/upgrade-qualification.sentinel" | Out-Null
     Copy-Item -LiteralPath (Join-Path $InstallRoot 'runtime\installation.json') -Destination (Join-Path $EvidenceRoot 'installation-a.json')
     Copy-Item -LiteralPath (Join-Path $InstallRoot 'runtime\provider-inventory.json') -Destination (Join-Path $EvidenceRoot 'provider-inventory-a.json')
     Copy-Item -LiteralPath (Join-Path $InstallRoot 'runtime\provider-binary-sha256.txt') -Destination (Join-Path $EvidenceRoot 'provider-binary-sha256-a.txt')
@@ -278,7 +297,7 @@ public final class UpgradeFixture {
     if ([string]$MetadataB.version -ne $VersionB -or [string]$MetadataB.gitCommit -ne $CandidateSha) {
         throw 'Candidate B installation metadata does not identify the upgraded candidate.'
     }
-    $SentinelAfter = (Get-Content -Raw -LiteralPath (Join-Path $DataRoot 'upgrade-qualification.sentinel')).Trim()
+    $SentinelAfter = (Invoke-AdminShellCommand 'cat /var/lib/minos/upgrade-qualification.sentinel').Trim()
     if ($SentinelAfter -ne $Sentinel) { throw 'Persistent MINOS data sentinel was not preserved across Docker upgrade.' }
 
     Invoke-DockerWorkflow -Action Admin -MinosArguments @('project', 'list', '--format', 'json') `
