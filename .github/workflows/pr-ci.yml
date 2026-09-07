@@ -17,7 +17,7 @@ concurrency:
 jobs:
   vulnerability-scan:
     name: Dependency vulnerability gate
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@ffa0a5f39214d80778c9b494822d94d0d9668458 # v2.3.8
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
     with:
       scan-args: |-
         --recursive
