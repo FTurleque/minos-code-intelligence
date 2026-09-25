@@ -21,7 +21,7 @@ jobs:
     with:
       scan-args: |-
         --recursive
-        --exclude=fixtures/**
+        --experimental-exclude=g:**/fixtures/**
         ./
       fail-on-vuln: true
     permissions:

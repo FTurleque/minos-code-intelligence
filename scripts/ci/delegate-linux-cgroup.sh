@@ -89,10 +89,10 @@ verify_github_actions_sandbox_toolchain() {
 
   local expected package version actual
   for expected in \
-    'bubblewrap=0.9.0-1ubuntu0.1' \
-    'util-linux=2.39.3-9ubuntu6.5' \
-    'apparmor=4.0.1really4.0.1-0ubuntu0.24.04.7' \
-    'apparmor-profiles=4.0.1really4.0.1-0ubuntu0.24.04.7'; do
+    'bubblewrap=0.9.0-1ubuntu0.3' \
+    'util-linux=2.39.3-9ubuntu6.6' \
+    'apparmor=4.0.1really4.0.1-0ubuntu0.24.04.8' \
+    'apparmor-profiles=4.0.1really4.0.1-0ubuntu0.24.04.8'; do
     package="${expected%%=*}"
     version="${expected#*=}"
     actual="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
