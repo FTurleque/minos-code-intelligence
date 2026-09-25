@@ -64,83 +64,156 @@ final class TeamCommand {
             return FindSymbolCommand.SUCCESS;
         }
         if (arguments.length == 0) return usageError("team operation is required", error);
+        String rendered;
         try {
-            String operation = arguments[0];
-            Map<String, String> options = parseOptions(arguments);
-            String rendered = switch (operation) {
-                case "bootstrap" -> bootstrap(options);
-                case "tenant" -> noOptions(options, HostedControlPlaneRenderer.renderTenant(service.tenant(token())));
-                case "workspaces" -> noOptions(options, HostedControlPlaneRenderer.renderWorkspaces(service.listWorkspaces(token())));
-                case "workspace-show" -> HostedControlPlaneRenderer.renderWorkspace(
-                        service.workspace(token(), uuid(required(options, "workspace"), "workspace")));
-                case "workspace-create" -> HostedControlPlaneRenderer.renderWorkspace(
-                        service.createWorkspace(token(), requestId(options), required(options, "name")));
-                case "workspace-archive" -> HostedControlPlaneRenderer.renderWorkspace(service.archiveWorkspace(
-                        token(), requestId(options), uuid(required(options, "workspace"), "workspace")));
-                case "members" -> noOptions(options, HostedControlPlaneRenderer.renderMembers(service.listMembers(token())));
-                case "member-grant" -> HostedControlPlaneRenderer.renderMembers(java.util.List.of(service.grantMember(
-                        token(), requestId(options), required(options, "principal"), required(options, "display-name"),
-                        role(required(options, "role")))));
-                case "member-revoke" -> {
-                    service.revokeMember(token(), requestId(options), required(options, "principal"));
-                    yield "{\"status\":\"REVOKED\"}";
-                }
-                case "project-bind" -> {
-                    var binding = service.bindProject(token(), requestId(options),
-                            uuid(required(options, "workspace"), "workspace"),
-                            uuid(required(options, "project"), "project"), required(options, "snapshot"));
-                    yield "{\"projectId\":\"" + binding.projectId() + "\",\"snapshotId\":\""
-                            + jsonEscape(binding.snapshotId()) + "\",\"status\":\"BOUND\"}";
-                }
-                case "project-unbind" -> {
-                    service.unbindProject(token(), requestId(options),
-                            uuid(required(options, "workspace"), "workspace"),
-                            uuid(required(options, "project"), "project"));
-                    yield "{\"status\":\"UNBOUND\"}";
-                }
-                case "token-issue" -> HostedControlPlaneRenderer.renderToken(service.issueToken(
-                        token(), requestId(options), required(options, "principal"), tokenLifetime(options)));
-                case "key-rotate" -> HostedControlPlaneRenderer.renderRotation(service.rotateKey(
-                        token(), requestId(options), required(options, "key-id"), tokenLifetime(options)));
-                case "retention-plan" -> {
-                    rejectUnknown(options);
-                    String token = token();
-                    yield HostedControlPlaneRenderer.renderRetention(service.tenant(token).retentionPolicy(),
-                            service.retentionPlan(token));
-                }
-                case "retention-set" -> {
-                    HostedRetentionPolicy policy = new HostedRetentionPolicy(
-                            integer(required(options, "max-audit-events"), "max-audit-events"),
-                            integer(required(options, "audit-days"), "audit-days"),
-                            integer(required(options, "archived-workspace-days"), "archived-workspace-days"));
-                    String token = token();
-                    yield HostedControlPlaneRenderer.renderRetention(
-                            service.setRetention(token, requestId(options), policy), service.retentionPlan(token));
-                }
-                case "retention-apply" -> noOptions(options, HostedControlPlaneRenderer.renderRetentionApply(
-                        service.applyRetention(token(), requestId(options))));
-                case "audit" -> HostedControlPlaneRenderer.renderAudit(service.audit(
-                        token(), optionalInteger(options, "limit", 200)));
-                default -> throw new UsageException("unknown team operation: " + operation);
-            };
-            rejectUnknown(options);
-            output.append(rendered).append('\n');
-            return FindSymbolCommand.SUCCESS;
-        } catch (IllegalArgumentException exception) {
+            rendered = execute(arguments[0], parseOptions(arguments));
+        } catch (UsageException exception) {
             return usageError(safeMessage(exception), error);
-        } catch (SecurityException | IllegalStateException exception) {
+        } catch (IllegalArgumentException | SecurityException | IllegalStateException | IOException exception) {
             error.append("error: ").append(safeMessage(exception)).append('\n');
             return FindSymbolCommand.EXECUTION_ERROR;
         }
+        output.append(rendered).append('\n');
+        return FindSymbolCommand.SUCCESS;
     }
 
     static String usage() { return USAGE; }
 
+    /**
+     * Every option of the operation is consumed and validated (including the rejection of unknown
+     * options) before the first service call, so a usage error can never follow a mutation.
+     */
+    private String execute(String operation, Map<String, String> options) throws IOException {
+        return switch (operation) {
+            case "bootstrap" -> bootstrap(options);
+            case "tenant" -> {
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderTenant(service.tenant(token()));
+            }
+            case "workspaces" -> {
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderWorkspaces(service.listWorkspaces(token()));
+            }
+            case "workspace-show" -> {
+                UUID workspace = uuid(required(options, "workspace"), "workspace");
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderWorkspace(service.workspace(token(), workspace));
+            }
+            case "workspace-create" -> {
+                String requestId = requestId(options);
+                String name = required(options, "name");
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderWorkspace(service.createWorkspace(token(), requestId, name));
+            }
+            case "workspace-archive" -> {
+                String requestId = requestId(options);
+                UUID workspace = uuid(required(options, "workspace"), "workspace");
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderWorkspace(service.archiveWorkspace(token(), requestId, workspace));
+            }
+            case "members" -> {
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderMembers(service.listMembers(token()));
+            }
+            case "member-grant" -> {
+                String requestId = requestId(options);
+                String principal = required(options, "principal");
+                String displayName = required(options, "display-name");
+                HostedRole role = role(required(options, "role"));
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderMembers(java.util.List.of(
+                        service.grantMember(token(), requestId, principal, displayName, role)));
+            }
+            case "member-revoke" -> {
+                String requestId = requestId(options);
+                String principal = required(options, "principal");
+                rejectUnknown(options);
+                service.revokeMember(token(), requestId, principal);
+                yield "{\"status\":\"REVOKED\"}";
+            }
+            case "project-bind" -> {
+                String requestId = requestId(options);
+                UUID workspace = uuid(required(options, "workspace"), "workspace");
+                UUID project = uuid(required(options, "project"), "project");
+                String snapshot = required(options, "snapshot");
+                rejectUnknown(options);
+                var binding = service.bindProject(token(), requestId, workspace, project, snapshot);
+                yield "{\"projectId\":\"" + binding.projectId() + "\",\"snapshotId\":\""
+                        + jsonEscape(binding.snapshotId()) + "\",\"status\":\"BOUND\"}";
+            }
+            case "project-unbind" -> {
+                String requestId = requestId(options);
+                UUID workspace = uuid(required(options, "workspace"), "workspace");
+                UUID project = uuid(required(options, "project"), "project");
+                rejectUnknown(options);
+                service.unbindProject(token(), requestId, workspace, project);
+                yield "{\"status\":\"UNBOUND\"}";
+            }
+            case "token-issue" -> {
+                String requestId = requestId(options);
+                String principal = required(options, "principal");
+                Duration lifetime = tokenLifetime(options);
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderToken(service.issueToken(token(), requestId, principal, lifetime));
+            }
+            case "key-rotate" -> {
+                String requestId = requestId(options);
+                String keyId = required(options, "key-id");
+                Duration lifetime = tokenLifetime(options);
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderRotation(service.rotateKey(token(), requestId, keyId, lifetime));
+            }
+            case "retention-plan" -> {
+                rejectUnknown(options);
+                String token = token();
+                yield HostedControlPlaneRenderer.renderRetention(service.tenant(token).retentionPolicy(),
+                        service.retentionPlan(token));
+            }
+            case "retention-set" -> {
+                String requestId = requestId(options);
+                HostedRetentionPolicy policy = retentionPolicy(options);
+                rejectUnknown(options);
+                String token = token();
+                yield HostedControlPlaneRenderer.renderRetention(
+                        service.setRetention(token, requestId, policy), service.retentionPlan(token));
+            }
+            case "retention-apply" -> {
+                String requestId = requestId(options);
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderRetentionApply(service.applyRetention(token(), requestId));
+            }
+            case "audit" -> {
+                int limit = optionalInteger(options, "limit", 200);
+                rejectUnknown(options);
+                yield HostedControlPlaneRenderer.renderAudit(service.audit(token(), limit));
+            }
+            default -> throw new UsageException("unknown team operation: " + operation);
+        };
+    }
+
     private String bootstrap(Map<String, String> options) throws IOException {
-        var result = service.bootstrap(uuid(required(options, "tenant"), "tenant"), required(options, "name"),
-                required(options, "key-id"), required(options, "owner"), required(options, "owner-name"),
-                tokenLifetime(options), requestId(options));
+        UUID tenant = uuid(required(options, "tenant"), "tenant");
+        String name = required(options, "name");
+        String keyId = required(options, "key-id");
+        String owner = required(options, "owner");
+        String ownerName = required(options, "owner-name");
+        Duration lifetime = tokenLifetime(options);
+        String requestId = requestId(options);
+        rejectUnknown(options);
+        var result = service.bootstrap(tenant, name, keyId, owner, ownerName, lifetime, requestId);
         return HostedControlPlaneRenderer.renderBootstrap(result);
+    }
+
+    /** Invalid retention bounds are a usage error: they are rejected before any service call. */
+    private static HostedRetentionPolicy retentionPolicy(Map<String, String> options) {
+        int maxAuditEvents = integer(required(options, "max-audit-events"), "max-audit-events");
+        int auditDays = integer(required(options, "audit-days"), "audit-days");
+        int archivedWorkspaceDays = integer(required(options, "archived-workspace-days"), "archived-workspace-days");
+        try {
+            return new HostedRetentionPolicy(maxAuditEvents, auditDays, archivedWorkspaceDays);
+        } catch (IllegalArgumentException exception) {
+            throw new UsageException(exception.getMessage());
+        }
     }
 
     private String token() {
@@ -160,11 +233,6 @@ final class TeamCommand {
     private static String requestId(Map<String, String> options) {
         String value = options.remove("request-id");
         return value == null ? UUID.randomUUID().toString() : value;
-    }
-
-    private static String noOptions(Map<String, String> options, String result) {
-        rejectUnknown(options);
-        return result;
     }
 
     private static Map<String, String> parseOptions(String[] arguments) {
