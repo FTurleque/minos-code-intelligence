@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,6 +38,14 @@ class HostedModelTest {
         assertTrue(HostedRole.ADMIN.canGovern(HostedRole.AUDITOR));
         assertFalse(HostedRole.CONTRIBUTOR.canGovern(HostedRole.AUDITOR));
         assertFalse(HostedRole.AUDITOR.canGovern(HostedRole.CONTRIBUTOR));
+    }
+
+    @Test
+    void deniedAuditCapacityReservesATenthOfTheRetentionTargetBelowHardCapacity() {
+        assertEquals(90, new HostedRetentionPolicy(100, 1, 1).deniedAuditCapacity());
+        assertEquals(9_000, HostedRetentionPolicy.defaults().deniedAuditCapacity());
+        assertEquals(90_000,
+                new HostedRetentionPolicy(HostedRetentionPolicy.MAX_AUDIT_EVENTS, 1, 1).deniedAuditCapacity());
     }
 
     @Test

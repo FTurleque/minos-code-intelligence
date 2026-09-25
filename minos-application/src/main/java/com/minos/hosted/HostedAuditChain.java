@@ -36,17 +36,34 @@ final class HostedAuditChain {
         if (state.auditEvents().size() >= HostedRetentionPolicy.MAX_AUDIT_EVENTS) {
             throw new IllegalStateException("hosted audit hard capacity reached; apply retention explicitly");
         }
+        HostedAuditEvent event = event(state, principalId, action, resourceType, resourceId, outcome, requestId, keyId);
+        return new HostedTenantState(state.tenantId(), state.name(), keyId, targetVersion,
+                state.createdAt(), event.occurredAt(), state.retentionPolicy(), state.members(), state.workspaces(),
+                event.sequence(), state.auditAnchorHash(), appended(state.auditEvents(), event));
+    }
+
+    /**
+     * Builds the authenticated event that {@link #append} would chain next, without chaining it.
+     * Used to deliver a refusal to the audit sink when it is deliberately kept off the durable chain.
+     */
+    HostedAuditEvent event(
+            HostedTenantState state,
+            String principalId,
+            String action,
+            String resourceType,
+            String resourceId,
+            HostedAuditEvent.Outcome outcome,
+            String requestId,
+            String keyId
+    ) {
         long sequence = state.auditSequence() + 1;
         String previous = state.auditEvents().isEmpty()
                 ? state.auditAnchorHash() : state.auditEvents().getLast().hash();
         Instant occurredAt = clock.instant();
         String hash = hash(state.tenantId(), sequence, occurredAt, principalId, action, resourceType,
                 resourceId, outcome, requestId, keyId, previous);
-        HostedAuditEvent event = new HostedAuditEvent(sequence, state.tenantId(), occurredAt, principalId, action,
+        return new HostedAuditEvent(sequence, state.tenantId(), occurredAt, principalId, action,
                 resourceType, resourceId, outcome, requestId, keyId, previous, hash);
-        return new HostedTenantState(state.tenantId(), state.name(), keyId, targetVersion,
-                state.createdAt(), occurredAt, state.retentionPolicy(), state.members(), state.workspaces(),
-                sequence, state.auditAnchorHash(), appended(state.auditEvents(), event));
     }
 
     void verify(HostedTenantState state) {

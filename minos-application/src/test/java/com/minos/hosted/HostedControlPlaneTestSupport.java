@@ -68,14 +68,28 @@ final class HostedControlPlaneTestSupport {
             service.grantMember(granter, "grant-" + principalId, principalId, principalId, role);
             return service.issueToken(granter, "token-" + principalId, principalId, Duration.ofHours(1));
         }
+
+        /** A second service over the same store, keys, clock and sink: simulates another MINOS process. */
+        HostedControlPlaneService anotherProcess() {
+            return new HostedControlPlaneService(
+                    store, new HmacHostedIdentityProvider(keys), keys, (project, snapshot) -> { }, sink, clock);
+        }
     }
 
     static final class RecordingSink implements HostedAuditSink {
+        /** Events published after a durable commit (chained). */
         final List<HostedAuditEvent> events = new ArrayList<>();
+        /** Refusals delivered without being chained. */
+        final List<HostedAuditEvent> unchained = new ArrayList<>();
 
         @Override
         public void publish(HostedAuditEvent event) {
             events.add(event);
+        }
+
+        @Override
+        public void publishUnchained(HostedAuditEvent event) {
+            unchained.add(event);
         }
     }
 
