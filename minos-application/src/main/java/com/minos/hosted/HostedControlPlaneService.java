@@ -206,6 +206,11 @@ public final class HostedControlPlaneService {
             Objects.requireNonNull(state, "state");
             bearerToken = HostedPrincipal.text(bearerToken, "bearerToken", 8192);
         }
+
+        @Override
+        public String toString() {
+            return "BootstrapResult[state=" + state + ", bearerToken=***]";
+        }
     }
 
     public record RotateKeyResult(HostedTenantState state, String replacementBearerToken) {
@@ -213,6 +218,11 @@ public final class HostedControlPlaneService {
             Objects.requireNonNull(state, "state");
             replacementBearerToken = HostedPrincipal.text(
                     replacementBearerToken, "replacementBearerToken", 8192);
+        }
+
+        @Override
+        public String toString() {
+            return "RotateKeyResult[state=" + state + ", replacementBearerToken=***]";
         }
     }
 

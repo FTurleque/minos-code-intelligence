@@ -116,6 +116,19 @@ public record StorageBackendConfiguration(
         throw new IllegalArgumentException(label + " must be true or false");
     }
 
+    /** Never exposes the password or the raw JDBC URL: the record may end up in logs and exception messages. */
+    @Override
+    public String toString() {
+        return "StorageBackendConfiguration[backend=" + backend
+                + ", home=" + home
+                + ", postgresUrl=" + safePostgresUrl(postgresUrl)
+                + ", postgresUser=" + postgresUser
+                + ", postgresPassword=" + (postgresPassword == null ? "null" : "***")
+                + ", postgresSchema=" + postgresSchema
+                + ", postgresManaged=" + postgresManaged
+                + "]";
+    }
+
     /** Safe diagnostic string excludes passwords, URL user-info and every JDBC query parameter. */
     public String safeDescription() {
         if (!postgresql()) return "backend=local home=" + home;

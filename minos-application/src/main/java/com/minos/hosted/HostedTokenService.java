@@ -121,5 +121,10 @@ final class HostedTokenService {
             replacementBearerToken = HostedPrincipal.text(
                     replacementBearerToken, "replacementBearerToken", 8192);
         }
+
+        @Override
+        public String toString() {
+            return "Rotation[state=" + state + ", replacementBearerToken=***]";
+        }
     }
 }

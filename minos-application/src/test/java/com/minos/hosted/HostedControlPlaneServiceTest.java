@@ -178,6 +178,54 @@ class HostedControlPlaneServiceTest {
         assertEquals("RETENTION_APPLY", applied.state().auditEvents().getLast().action());
     }
 
+    @Test
+    void bootstrapResultToStringRedactsBearerToken() throws Exception {
+        Fixture fixture = fixture();
+        HostedControlPlaneService.BootstrapResult result = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
+                Duration.ofHours(1), "bootstrap-1");
+        assertFalse(result.toString().contains(result.bearerToken()),
+                "BootstrapResult.toString leaks the bearer token");
+        assertTrue(result.toString().contains(fixture.tenant.toString()));
+    }
+
+    @Test
+    void rotateKeyResultToStringRedactsReplacementBearerToken() throws Exception {
+        Fixture fixture = fixture();
+        String owner = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
+                Duration.ofHours(1), "bootstrap-1").bearerToken();
+        HostedControlPlaneService.RotateKeyResult result = fixture.service.rotateKey(
+                owner, "rotate-1", "secondary", Duration.ofHours(1));
+        assertFalse(result.toString().contains(result.replacementBearerToken()),
+                "RotateKeyResult.toString leaks the replacement bearer token");
+        assertTrue(result.toString().contains("secondary"));
+    }
+
+    @Test
+    void tenantServiceBootstrapToStringRedactsBearerToken() throws Exception {
+        Fixture fixture = fixture();
+        HostedTenantState state = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
+                Duration.ofHours(1), "bootstrap-1").state();
+        HostedTenantService.Bootstrap result = new HostedTenantService.Bootstrap(state, "mht1.secret-token");
+        assertFalse(result.toString().contains("mht1.secret-token"),
+                "HostedTenantService.Bootstrap.toString leaks the bearer token");
+        assertEquals("mht1.secret-token", result.bearerToken());
+    }
+
+    @Test
+    void tokenServiceRotationToStringRedactsReplacementBearerToken() throws Exception {
+        Fixture fixture = fixture();
+        HostedTenantState state = fixture.service.bootstrap(
+                fixture.tenant, "Team", "primary", "owner", "Owner",
+                Duration.ofHours(1), "bootstrap-1").state();
+        HostedTokenService.Rotation result = new HostedTokenService.Rotation(state, "mht1.secret-token");
+        assertFalse(result.toString().contains("mht1.secret-token"),
+                "HostedTokenService.Rotation.toString leaks the replacement bearer token");
+        assertEquals("mht1.secret-token", result.replacementBearerToken());
+    }
+
     private static Fixture fixture() {
         InMemoryStore store = new InMemoryStore();
         HostedTenantKeyProvider keys = (tenantId, keyId, purpose) -> {
