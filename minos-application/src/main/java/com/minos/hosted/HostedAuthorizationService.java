@@ -58,21 +58,49 @@ final class HostedAuthorizationService {
         boolean allowed = claims.keyId().equals(state.keyId()) && membership.isPresent()
                 && membership.orElseThrow().role().allows(permission);
         if (!allowed) {
-            HostedTenantState denied = auditChain.append(
-                    state,
-                    claims.principalId(),
-                    action,
-                    resourceType,
-                    resourceId,
-                    HostedAuditEvent.Outcome.DENIED,
-                    safeRequestId,
-                    state.keyId(),
-                    state.version() + 1);
-            HostedCommitRecovery.save(store, denied, state.version());
-            HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
+            recordDenial(state, claims.principalId(), action, resourceType, resourceId, safeRequestId);
             throw new SecurityException("hosted permission denied: " + permission);
         }
         return new MutationContext(claims, state, membership.orElseThrow(), safeRequestId);
+    }
+
+    /**
+     * Refuses a mutation whose coarse permission check already passed but whose business rule
+     * (for example role governance) forbids it. The refusal is audited, persisted and published
+     * exactly like a permission refusal; the returned exception carries only the action name.
+     */
+    SecurityException deny(
+            MutationContext context,
+            String action,
+            String resourceType,
+            String resourceId
+    ) throws IOException {
+        recordDenial(
+                context.state(), context.claims().principalId(), action, resourceType, resourceId,
+                context.requestId());
+        return new SecurityException("hosted permission denied: " + action);
+    }
+
+    private void recordDenial(
+            HostedTenantState state,
+            String principalId,
+            String action,
+            String resourceType,
+            String resourceId,
+            String requestId
+    ) throws IOException {
+        HostedTenantState denied = auditChain.append(
+                state,
+                principalId,
+                action,
+                resourceType,
+                resourceId,
+                HostedAuditEvent.Outcome.DENIED,
+                requestId,
+                state.keyId(),
+                state.version() + 1);
+        HostedCommitRecovery.save(store, denied, state.version());
+        HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
     }
 
     HostedTenantState loadVerified(UUID tenantId) throws IOException {

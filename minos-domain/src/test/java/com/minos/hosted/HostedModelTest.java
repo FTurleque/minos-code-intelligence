@@ -24,6 +24,22 @@ class HostedModelTest {
     }
 
     @Test
+    void roleGovernanceIsPermissionSubsetBasedAndReservesOwnerToOwner() {
+        for (HostedRole role : HostedRole.values()) {
+            assertTrue(HostedRole.OWNER.canGovern(role), "OWNER governs " + role);
+            assertTrue(role.canGovern(role), role + " governs itself");
+            assertTrue(role == HostedRole.OWNER || !role.canGovern(HostedRole.OWNER),
+                    role + " must not govern OWNER");
+        }
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.ADMIN));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.CONTRIBUTOR));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.VIEWER));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.AUDITOR));
+        assertFalse(HostedRole.CONTRIBUTOR.canGovern(HostedRole.AUDITOR));
+        assertFalse(HostedRole.AUDITOR.canGovern(HostedRole.CONTRIBUTOR));
+    }
+
+    @Test
     void tenantRejectsCrossTenantWorkspaceDuplicateMembersAndMissingOwner() {
         UUID tenant = UUID.randomUUID();
         HostedPrincipal owner = new HostedPrincipal("owner", "Owner", HostedRole.OWNER, NOW);

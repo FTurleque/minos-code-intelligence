@@ -41,8 +41,12 @@ final class HostedTokenService {
                 bearerToken, requestId, HostedPermission.TENANT_ADMIN,
                 "TOKEN_ISSUE", "PRINCIPAL", targetPrincipalId);
         String target = HostedPrincipal.safeId(targetPrincipalId, "targetPrincipalId");
-        if (context.state().members().stream().noneMatch(member -> member.principalId().equals(target))) {
-            throw new IllegalArgumentException("token target is not a tenant member");
+        HostedPrincipal targetMember = context.state().members().stream()
+                .filter(member -> member.principalId().equals(target))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("token target is not a tenant member"));
+        if (!context.principal().role().canGovern(targetMember.role())) {
+            throw authorization.deny(context, "TOKEN_ISSUE", "PRINCIPAL", target);
         }
 
         Duration safeLifetime = Objects.requireNonNull(lifetime, "lifetime");
