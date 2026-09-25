@@ -66,8 +66,8 @@ class StorageBackendConfigurationTest {
                 Path.of("target/test-minos-home"), Map.of(), properties);
 
         assertEquals("super-secret-value", value.postgresPassword());
-        assertFalse(value.toString().contains("super-secret-value"), "toString leaks the password: " + value);
-        assertFalse(value.toString().contains("url-secret"), "toString leaks the URL secret: " + value);
+        assertFalse(value.toString().contains("super-secret-value"), "toString leaks the password");
+        assertFalse(value.toString().contains("url-secret"), "toString leaks the URL secret");
         String exceptionMessage = new IllegalStateException("bad config: " + value).getMessage();
         assertFalse(exceptionMessage.contains("super-secret-value"));
         assertTrue(value.toString().contains("backend=postgresql"));
