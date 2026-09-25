@@ -84,6 +84,8 @@ CLI / IntelliJ / API Java / MCP / NEXUS
 
 Le `setup.exe` est le **canal recommandé** pour un poste Windows. Le ZIP reste disponible comme distribution **portable / automatisation / diagnostic**. Le plugin IntelliJ est, lui, distribué sous forme de ZIP installable depuis l'IDE.
 
+L'étape `minos tools install <provider>` reste nécessaire aujourd'hui : la distribution n'embarque aucun indexeur et cette commande télécharge le provider et ses dépendances (accès réseau requis). L'auto-portance est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md), non encore implémentée.
+
 L'utilisateur normal ne prépare plus `index.scip` manuellement. `minos index <project>` découvre le projet, sélectionne le provider qualifié, calcule la portée d'indexation, exécute le provider puis promeut le nouveau snapshot de manière atomique. Le plugin IntelliJ réutilise exactement ce lifecycle lorsqu'il déclenche une indexation ou un reindex.
 
 ---

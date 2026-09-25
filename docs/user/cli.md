@@ -98,6 +98,8 @@ minos.cmd tools install scip-typescript
 minos.cmd tools install scip-python
 ```
 
+`tools install` télécharge le provider et ses dépendances (Coursier/Maven pour `scip-java`, Node.js/npm pour `scip-typescript`, etc.) : il nécessite un accès réseau. La distribution actuelle n'embarque aucun indexeur ; l'auto-portance est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md), non encore implémentée.
+
 Les providers installables restent sous `MINOS_HOME\tools` lorsque le contrat du provider le prévoit.
 
 ### `providers`
@@ -332,6 +334,8 @@ backend natif/process-only → refusé dans les deux modes
 ```
 
 Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
+
+État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED`. `remote index` échoue aujourd'hui sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md).
 
 ## Runtime & Dynamic Intelligence
 

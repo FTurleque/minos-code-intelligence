@@ -10,7 +10,7 @@ Ce fichier est la synthèse autoritative de l'état produit courant. Les réconc
 - **M29 issue #107** : **CLOSED** ; **M29 PR #108** intégrée.
 - **M30 PR #110** et **M30 promotion PR #111** intégrées.
 - **hardening PR #113** intégré ; **M28 Windows CI PR #117** intégré.
-- **#98 sandbox OS réelle** : **IMPLÉMENTÉE + QUALIFIÉE** sur Linux et Windows dans la campagne de convergence.
+- **#98 sandbox OS réelle** : primitives **implémentées** sur Linux (bubblewrap/cgroup v2) et Windows (AppContainer/Job Object) ; qualification code non fiable **refusée** tant que le quota d'écriture n'est pas appliqué par l'OS, `remote index` fail-closed sur tous les OS (audit 2026-09, constat A1).
 - **PR #227** : provider egress, provenance `CommandLocator`, reparse private storage et contrat de fallback confinement **intégrés**.
 - **#224–#248** : campagne de confinement provider/filesystem, provenance, egress, installateur et Windows non-admin intégrée.
 - **#258/#260** : audit du 28 août 2026 — politique sécurité, Dependabot, CODEOWNERS futur, toolchain, couverture, confinement secrets/fingerprints, simplification des qualifications historiques et hardening exact-head intégrés dans la ligne `develop` auditée.

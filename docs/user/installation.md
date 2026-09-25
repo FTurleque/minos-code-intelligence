@@ -54,6 +54,8 @@ java -jar $minos doctor
 
 ## Parcours autonome
 
+La distribution actuelle n'embarque aucun indexeur : `tools install` télécharge le provider et ses dépendances (Coursier/Maven, Node.js/npm…) et nécessite un accès réseau. L'auto-portance (indexeurs embarqués, amorçage hors ligne) est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md) mais n'est pas encore implémentée.
+
 ```powershell
 java -jar $minos tools install scip-java
 java -jar $minos project add C:\workspace\my-project --name my-project

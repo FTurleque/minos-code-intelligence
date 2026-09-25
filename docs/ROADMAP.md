@@ -32,7 +32,7 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ M29 issue #107 CLOSED / M29 PR #108 intégrée |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ M30 PR #110 + M30 promotion PR #111 |
 | Hardening release/installer | supply-chain, Windows CI, sécurité release | ✅ #113 ; M28 Windows CI PR #117 |
-| #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ implémenté et qualifié |
+| #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ primitives implémentées ; qualification code non fiable refusée, `remote index` fail-closed (audit 2026-09, A1) |
 | PR #227 | provider egress, provenance CommandLocator, reparse private storage et fallback confinement | ✅ intégrée |
 | #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
 | #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
