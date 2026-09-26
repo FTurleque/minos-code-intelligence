@@ -33,14 +33,11 @@ class ResumeAfterHardKillIntegrationTest {
         Path fullHome = Files.createDirectories(temp.resolve("home-full"));
         Path crashHome = Files.createDirectories(temp.resolve("home-crash"));
 
-        assertEquals(0, runChild("full", fullHome, project).waitFor(), "reference run must succeed");
+        assertEquals(0, runToCompletion("full", fullHome, project), "reference run must succeed");
         byte[] fullIndex = Files.readAllBytes(fullHome.resolve("active.bin"));
         assertEquals(List.of("ui/app", "ui/lib", "ui/web"), Files.readAllLines(fullHome.resolve("executions.log")));
 
-        Process crashing = runChild("crash", crashHome, project);
-        awaitSentinel(crashHome.resolve("sentinel"), crashing);
-        crashing.destroyForcibly();
-        assertTrue(crashing.waitFor(CHILD_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the killed JVM must exit");
+        crashMidProvider(crashHome, project);
         assertEquals(List.of("ui/app", "ui/lib"), Files.readAllLines(crashHome.resolve("executions.log")),
                 "two providers completed before the kill");
 
@@ -61,7 +58,7 @@ class ResumeAfterHardKillIntegrationTest {
             }
         }
 
-        assertEquals(0, runChild("resume", crashHome, project).waitFor(), "resumed run must succeed");
+        assertEquals(0, runToCompletion("resume", crashHome, project), "resumed run must succeed");
 
         assertEquals(List.of("ui/app", "ui/lib", "ui/web"), Files.readAllLines(crashHome.resolve("executions.log")),
                 "only the missing provider ran in the new JVM");
@@ -84,14 +81,40 @@ class ResumeAfterHardKillIntegrationTest {
         Assumptions.assumeTrue(isWindows(), "this variant documents the Windows durability model");
         Path project = project(temp);
         Path home = Files.createDirectories(temp.resolve("home"));
-        Process crashing = runChild("crash", home, project);
-        awaitSentinel(home.resolve("sentinel"), crashing);
-        crashing.destroyForcibly();
-        assertTrue(crashing.waitFor(CHILD_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        crashMidProvider(home, project);
 
         // The reconciler (new JVM) must classify the killed run as INTERRUPTED from what reached disk.
-        assertEquals(0, runChild("resume", home, project).waitFor());
+        assertEquals(0, runToCompletion("resume", home, project));
         assertEquals(List.of("ui/app", "ui/lib", "ui/web"), Files.readAllLines(home.resolve("executions.log")));
+    }
+
+    /** Runs a child to completion; the child is destroyed whatever happens (V26), every wait is bounded. */
+    private static int runToCompletion(String mode, Path home, Path project) throws Exception {
+        Process child = runChild(mode, home, project);
+        try {
+            assertTrue(child.waitFor(CHILD_TIMEOUT_SECONDS, TimeUnit.SECONDS), "child " + mode + " must exit in time");
+            return child.exitValue();
+        } finally {
+            reap(child);
+        }
+    }
+
+    /** Starts the crashing child, waits for its sentinel and kills it; destroyed even when the wait fails. */
+    private static void crashMidProvider(Path home, Path project) throws Exception {
+        Process crashing = runChild("crash", home, project);
+        try {
+            awaitSentinel(home.resolve("sentinel"), crashing);
+        } finally {
+            reap(crashing);
+        }
+        assertFalse(crashing.isAlive(), "the killed JVM must be gone");
+    }
+
+    private static void reap(Process child) throws InterruptedException {
+        child.destroyForcibly();
+        if (!child.waitFor(CHILD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            throw new AssertionError("child JVM survived destroyForcibly()");
+        }
     }
 
     private static Path project(Path temp) throws IOException {
