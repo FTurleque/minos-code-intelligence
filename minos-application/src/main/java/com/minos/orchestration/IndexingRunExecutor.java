@@ -1,6 +1,7 @@
 package com.minos.orchestration;
 
 import com.minos.io.CommitUncertainException;
+import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
 import com.minos.orchestration.IndexingRun.Phase;
 import com.minos.orchestration.IndexingRun.Status;
@@ -35,7 +36,8 @@ final class IndexingRunExecutor {
         ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
         Instant createdAt = clock.instant();
         ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, createdAt);
-        RunContext context = new RunContext(UUID.randomUUID(), projectId, createdAt, previous, targets.size());
+        RunContext context = new RunContext(
+                UUID.randomUUID(), projectId, createdAt, previous, targets.size(), clock);
 
         try {
             publishInProgress(context, mode, stateStore);
@@ -140,6 +142,11 @@ final class IndexingRunExecutor {
         IndexerExecutor executor = requireExecutor(executors, indexerId);
         Path relative = target.projectRelativeRoot();
         Path executionRoot = requireExecutionRoot(root, relative);
+        List<String> scopedChangedFiles = scopedChangedFiles(mode, changedFiles, relative);
+        // The scope fingerprint is captured before the provider starts: a source that changes while
+        // the provider runs then differs from the recorded fingerprint, so a later resume can never
+        // reuse an artifact built from sources it did not fingerprint (fail-closed, ADR 0039 §3).
+        CheckpointMaterial material = captureScopeFingerprint(root.lexicalRoot(), relative);
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
@@ -148,11 +155,16 @@ final class IndexingRunExecutor {
                 relative,
                 selection,
                 mode,
-                scopedChangedFiles(mode, changedFiles, relative))), "indexer execution artifact");
+                scopedChangedFiles)), "indexer execution artifact");
         Path artifactPath = validateArtifact(selection, artifact, relative);
         context.artifacts.add(new IndexingArtifact(
                 artifact.language(), artifact.indexerId(), artifactPath, relative));
-        context.executions.add(new IndexerExecution(artifact.language(), artifact.indexerId(), artifactPath));
+        CheckpointOutcome checkpoint = checkpoint(
+                material, artifactPath, relative, selection.indexer().version(), mode, scopedChangedFiles,
+                context.clock.instant());
+        if (checkpoint.withheldReason().isPresent()) context.withheldCheckpoints++;
+        context.executions.add(new IndexerExecution(
+                artifact.language(), artifact.indexerId(), artifactPath, checkpoint.checkpoint()));
         stateStore.saveRun(running(
                 context.runId,
                 context.projectId,
@@ -162,7 +174,80 @@ final class IndexingRunExecutor {
                 context.staged,
                 context.previous.activeSnapshotId(),
                 Optional.of("provider artifacts completed: " + context.executions.size()
-                        + "/" + context.totalTargets + ", mode=" + mode + ", scope=" + portable(relative))));
+                        + "/" + context.totalTargets + ", mode=" + mode + ", scope=" + portable(relative)
+                        + checkpoint.withheldReason().map(reason -> ", checkpoint withheld: " + reason).orElse(""))));
+    }
+
+    private static CheckpointMaterial captureScopeFingerprint(Path projectRoot, Path relative) {
+        try {
+            return new CheckpointMaterial(Optional.of(ExecutionCheckpoints.scopeFingerprint(projectRoot, relative)),
+                    Optional.empty());
+        } catch (ExecutionCheckpoints.Unavailable unavailable) {
+            return new CheckpointMaterial(Optional.empty(), Optional.of(unavailable.getMessage()));
+        }
+    }
+
+    /**
+     * Builds the durable checkpoint of one completed target, or explains why none can be trusted.
+     * A withheld checkpoint never changes the outcome of the run: the target simply stays
+     * non-resumable.
+     */
+    private static CheckpointOutcome checkpoint(
+            CheckpointMaterial material,
+            Path artifactPath,
+            Path relative,
+            String providerVersion,
+            IndexingMode mode,
+            List<String> scopedChangedFiles,
+            Instant completedAt
+    ) {
+        if (material.scopeFingerprint().isEmpty()) {
+            return CheckpointOutcome.withheld(material.withheldReason().orElse("scope fingerprint unavailable"));
+        }
+        if (scopedChangedFiles.size() > ExecutionCheckpoint.MAX_CHANGED_FILES) {
+            return CheckpointOutcome.withheld("changed-file list exceeds checkpoint budget");
+        }
+        try {
+            ExecutionCheckpoints.ArtifactDigest digest = ExecutionCheckpoints.artifactDigest(artifactPath);
+            return CheckpointOutcome.recorded(new ExecutionCheckpoint(
+                    relative,
+                    providerVersion,
+                    digest.bytes(),
+                    digest.sha256(),
+                    material.scopeFingerprint().orElseThrow(),
+                    mode,
+                    scopedChangedFiles,
+                    completedAt));
+        } catch (ExecutionCheckpoints.Unavailable unavailable) {
+            return CheckpointOutcome.withheld(unavailable.getMessage());
+        } catch (IllegalArgumentException invalid) {
+            return CheckpointOutcome.withheld("checkpoint material rejected");
+        }
+    }
+
+    private record CheckpointMaterial(Optional<String> scopeFingerprint, Optional<String> withheldReason) {
+        private CheckpointMaterial {
+            Objects.requireNonNull(scopeFingerprint, "scopeFingerprint");
+            Objects.requireNonNull(withheldReason, "withheldReason");
+        }
+    }
+
+    private record CheckpointOutcome(Optional<ExecutionCheckpoint> checkpoint, Optional<String> withheldReason) {
+        private CheckpointOutcome {
+            Objects.requireNonNull(checkpoint, "checkpoint");
+            Objects.requireNonNull(withheldReason, "withheldReason");
+            if (checkpoint.isPresent() == withheldReason.isPresent()) {
+                throw new IllegalArgumentException("a checkpoint is either recorded or withheld with a reason");
+            }
+        }
+
+        private static CheckpointOutcome recorded(ExecutionCheckpoint checkpoint) {
+            return new CheckpointOutcome(Optional.of(checkpoint), Optional.empty());
+        }
+
+        private static CheckpointOutcome withheld(String reason) {
+            return new CheckpointOutcome(Optional.empty(), Optional.of(reason));
+        }
     }
 
     private static IndexerExecutor requireExecutor(Map<String, IndexerExecutor> executors, String indexerId) {
@@ -257,8 +342,12 @@ final class IndexingRunExecutor {
         String durabilitySuffix = context.durabilityAcknowledgementPending
                 ? "; authoritative snapshot confirmed after lost durability acknowledgement"
                 : "";
+        String checkpointSuffix = context.withheldCheckpoints == 0
+                ? ""
+                : "; checkpoint withheld for " + context.withheldCheckpoints + "/" + context.totalTargets
+                        + " target(s), not resumable";
         String successMessage = "indexing run completed and snapshot promoted: mode=" + mode
-                + ", scopes=" + context.totalTargets + durabilitySuffix;
+                + ", scopes=" + context.totalTargets + durabilitySuffix + checkpointSuffix;
         IndexingRun succeeded = new IndexingRun(
                 context.runId,
                 context.projectId,
@@ -270,7 +359,8 @@ final class IndexingRunExecutor {
                 context.staged,
                 context.previous.activeSnapshotId(),
                 Optional.of(stagedId),
-                Optional.of(successMessage));
+                Optional.of(successMessage),
+                IndexingRun.CURRENT_FORMAT_VERSION);
         stateStore.saveRun(succeeded);
         stateStore.saveProjectState(new ProjectIndexState(
                 context.projectId,
@@ -321,7 +411,8 @@ final class IndexingRunExecutor {
                 context.staged,
                 context.previous.activeSnapshotId(),
                 activeAfter,
-                Optional.of(context.committed ? committedPrefix + message : message));
+                Optional.of(context.committed ? committedPrefix + message : message),
+                IndexingRun.CURRENT_FORMAT_VERSION);
     }
 
     private static void persistCommittedFailure(
@@ -423,7 +514,7 @@ final class IndexingRunExecutor {
                                        List<IndexerExecution> executions, Optional<String> staged,
                                        Optional<String> before, Optional<String> message) {
         return new IndexingRun(runId, projectId, Status.RUNNING, phase, createdAt, Optional.empty(), executions,
-                staged, before, before, message);
+                staged, before, before, message, IndexingRun.CURRENT_FORMAT_VERSION);
     }
 
     private static void persist(Runnable action, Exception original) {
@@ -455,25 +546,29 @@ final class IndexingRunExecutor {
         private final Instant createdAt;
         private final ProjectIndexState previous;
         private final int totalTargets;
+        private final Clock clock;
         private final List<IndexingArtifact> artifacts = new ArrayList<>();
         private final List<IndexerExecution> executions = new ArrayList<>();
         private Optional<String> staged = Optional.empty();
         private Phase phase = Phase.PROVIDER_EXECUTION;
         private boolean committed;
         private boolean durabilityAcknowledgementPending;
+        private int withheldCheckpoints;
 
         private RunContext(
                 UUID runId,
                 UUID projectId,
                 Instant createdAt,
                 ProjectIndexState previous,
-                int totalTargets
+                int totalTargets,
+                Clock clock
         ) {
             this.runId = runId;
             this.projectId = projectId;
             this.createdAt = createdAt;
             this.previous = previous;
             this.totalTargets = totalTargets;
+            this.clock = clock;
         }
     }
 }

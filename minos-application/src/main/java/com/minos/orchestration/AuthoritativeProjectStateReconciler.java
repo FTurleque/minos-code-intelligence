@@ -230,7 +230,8 @@ final class AuthoritativeProjectStateReconciler {
                 run.stagedSnapshotId(),
                 run.activeSnapshotBefore(),
                 authoritativeSnapshot,
-                Optional.of(message));
+                Optional.of(message),
+                run.runFormatVersion());
     }
 
     private static ProjectIndexState recoveredProjectState(

@@ -11,6 +11,7 @@ import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -54,24 +55,48 @@ public final class ProjectFingerprintService {
     }
 
     public ProjectFingerprint capture(Path projectRoot) throws IOException {
+        return captureScope(projectRoot, Path.of(""));
+    }
+
+    /**
+     * Empreinte d'un scope d'exécution (ADR 0039 §1) : le sous-arbre {@code projectRelativeScope}
+     * plus, pour chaque répertoire ancêtre jusqu'à la racine, ses fichiers de contrôle racine et ses
+     * descripteurs de build. La politique d'ignore est celle de la racine projet, les chemins
+     * restent relatifs à cette racine : un scope vide est exactement {@link #capture(Path)}.
+     *
+     * <p>Limite assumée : comme l'empreinte projet, celle-ci ne couvre ni les répertoires
+     * hard-ignorés ({@code target/}, {@code node_modules/}...), ni les dépendances externes, ni les
+     * fichiers pointés par un lien symbolique (non suivis). Un artefact dont le contenu dépendrait
+     * d'un tel état ne doit pas être déclaré {@code RESUMABLE_ARTIFACT} par son provider.</p>
+     */
+    public ProjectFingerprint captureScope(Path projectRoot, Path projectRelativeScope) throws IOException {
         Objects.requireNonNull(projectRoot, "projectRoot");
+        Objects.requireNonNull(projectRelativeScope, "projectRelativeScope");
         Path root = projectRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("projectRoot must be an existing directory: " + projectRoot);
+        }
+        Path scope = projectRelativeScope.normalize();
+        if (scope.isAbsolute() || scope.startsWith("..")) {
+            throw new IllegalArgumentException("projectRelativeScope must stay inside the project");
+        }
+        Path scopeRoot = root.resolve(scope).normalize();
+        if (!scopeRoot.startsWith(root) || !Files.isDirectory(scopeRoot)) {
+            throw new IllegalArgumentException("projectRelativeScope must be an existing directory of the project");
         }
 
         ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
         SourceBudgetPolicy.Tracker budget = sourceBudgetPolicy.tracker("project fingerprint");
         List<FileFingerprint> files = new ArrayList<>();
 
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+        Files.walkFileTree(scopeRoot, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
                 budget.accountTraversalEntry();
-                if (!directory.equals(root) && !FileTreeOperations.isRecursableDirectory(attributes)) {
+                if (!directory.equals(scopeRoot) && !FileTreeOperations.isRecursableDirectory(attributes)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
-                if (!directory.equals(root)
+                if (!directory.equals(scopeRoot)
                         && ignorePolicy.isHardIgnored(root.relativize(directory))) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -91,15 +116,14 @@ public final class ProjectFingerprintService {
                 }
 
                 budget.accountFile();
-                HashedFile hashed = hashFile(root, relative, budget);
-                files.add(new FileFingerprint(
-                        portable(relative),
-                        hashed.sizeBytes(),
-                        hashed.sha256()
-                ));
+                files.add(fingerprint(root, relative, budget));
                 return FileVisitResult.CONTINUE;
             }
         });
+
+        if (!scopeRoot.equals(root)) {
+            files.addAll(ancestorDescriptors(root, scope, ignorePolicy, budget));
+        }
 
         files.sort(Comparator.comparing(FileFingerprint::relativePath));
         List<FileFingerprint> immutableFiles = List.copyOf(files);
@@ -165,6 +189,53 @@ public final class ProjectFingerprintService {
             }
         }
         return result;
+    }
+
+    /**
+     * Fichiers de contrôle racine et descripteurs de build situés directement dans chaque ancêtre du
+     * scope, de la racine (exclue du sous-arbre) jusqu'au parent du scope. Ils conditionnent ce que
+     * le provider a vu (réacteur Maven, workspace npm, lockfiles) sans appartenir au sous-arbre.
+     */
+    private List<FileFingerprint> ancestorDescriptors(
+            Path root,
+            Path scope,
+            ProjectIgnorePolicy ignorePolicy,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
+        List<FileFingerprint> descriptors = new ArrayList<>();
+        Path ancestor = Path.of("");
+        for (int depth = 0; depth < scope.getNameCount(); depth++) {
+            Path directory = root.resolve(ancestor);
+            try (var entries = Files.list(directory)) {
+                for (Path candidate : entries.sorted().toList()) {
+                    budget.accountTraversalEntry();
+                    Path relative = root.relativize(candidate);
+                    if (!isRootControlFile(relative) && !buildDescriptorPolicy.isBuildDescriptor(relative)) {
+                        continue;
+                    }
+                    if (Files.isSymbolicLink(candidate)
+                            || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                        continue;
+                    }
+                    if (!isRootControlFile(relative) && ignorePolicy.isIgnored(relative, false)) {
+                        continue;
+                    }
+                    budget.accountFile();
+                    descriptors.add(fingerprint(root, relative, budget));
+                }
+            }
+            ancestor = ancestor.resolve(scope.getName(depth));
+        }
+        return descriptors;
+    }
+
+    private static FileFingerprint fingerprint(
+            Path root,
+            Path relative,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
+        HashedFile hashed = hashFile(root, relative, budget);
+        return new FileFingerprint(portable(relative), hashed.sizeBytes(), hashed.sha256());
     }
 
     private static boolean isRootControlFile(Path relativePath) {

@@ -3,6 +3,7 @@ package com.minos.orchestration;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.io.BoundedProperties;
 import com.minos.io.DurableAtomicFile;
+import com.minos.orchestration.IndexingRun.ExecutionCheckpoint;
 import com.minos.orchestration.IndexingRun.IndexerExecution;
 
 import java.io.IOException;
@@ -40,6 +41,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final String RUN_LOCATOR_DIRECTORY = ".by-id";
     private static final String RUN_LOCATOR_READY = "v1.ready";
     private static final String PROJECT_ID_PROPERTY = "projectId";
+    private static final String RUN_FORMAT_VERSION_PROPERTY = "runFormatVersion";
 
     private final Path storageRoot;
     private final Path projectRoot;
@@ -261,6 +263,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         putOptional(properties, "activeSnapshotBefore", run.activeSnapshotBefore());
         putOptional(properties, "activeSnapshotAfter", run.activeSnapshotAfter());
         putOptional(properties, "message", run.message());
+        properties.setProperty(RUN_FORMAT_VERSION_PROPERTY, Integer.toString(run.runFormatVersion()));
         properties.setProperty("execution.count", Integer.toString(run.executions().size()));
         for (int index = 0; index < run.executions().size(); index++) {
             IndexerExecution execution = run.executions().get(index);
@@ -268,8 +271,64 @@ public final class FileIndexStateStore implements IndexStateStore {
             properties.setProperty(prefix + "language", execution.language().name());
             properties.setProperty(prefix + "indexerId", execution.indexerId());
             properties.setProperty(prefix + "artifact", execution.finalArtifact().toString());
+            execution.checkpoint().ifPresent(checkpoint -> putCheckpoint(properties, prefix, checkpoint));
         }
         return properties;
+    }
+
+    private static void putCheckpoint(Properties properties, String prefix, ExecutionCheckpoint checkpoint) {
+        properties.setProperty(prefix + "scope", IndexingRun.portable(checkpoint.projectRelativeRoot()));
+        properties.setProperty(prefix + "providerVersion", checkpoint.providerVersion());
+        properties.setProperty(prefix + "artifactBytes", Long.toString(checkpoint.artifactBytes()));
+        properties.setProperty(prefix + "artifactSha256", checkpoint.artifactSha256());
+        properties.setProperty(prefix + "scopeFingerprint", checkpoint.scopeFingerprint());
+        properties.setProperty(prefix + "mode", checkpoint.mode().name());
+        properties.setProperty(prefix + "completedAt", checkpoint.completedAt().toString());
+        properties.setProperty(prefix + "changedFiles.count", Integer.toString(checkpoint.changedFiles().size()));
+        for (int index = 0; index < checkpoint.changedFiles().size(); index++) {
+            properties.setProperty(prefix + "changedFiles." + index, checkpoint.changedFiles().get(index));
+        }
+    }
+
+    /**
+     * Reads one execution checkpoint. Every checkpoint key is optional so that a run written by the
+     * previous format stays readable; a checkpoint that is incomplete or carries invalid material is
+     * dropped rather than trusted, which keeps that target non-resumable without losing the run.
+     */
+    private static Optional<ExecutionCheckpoint> readCheckpoint(Properties properties, String prefix) {
+        Optional<String> providerVersion = optional(properties, prefix + "providerVersion");
+        if (providerVersion.isEmpty()) return Optional.empty();
+        try {
+            int changedCount = Integer.parseInt(optional(properties, prefix + "changedFiles.count").orElse("0"));
+            if (changedCount < 0 || changedCount > ExecutionCheckpoint.MAX_CHANGED_FILES) return Optional.empty();
+            List<String> changedFiles = new ArrayList<>(changedCount);
+            for (int index = 0; index < changedCount; index++) {
+                Optional<String> changed = optional(properties, prefix + "changedFiles." + index);
+                if (changed.isEmpty()) return Optional.empty();
+                changedFiles.add(changed.orElseThrow());
+            }
+            Optional<String> scope = Optional.ofNullable(properties.getProperty(prefix + "scope"));
+            Optional<String> bytes = optional(properties, prefix + "artifactBytes");
+            Optional<String> sha = optional(properties, prefix + "artifactSha256");
+            Optional<String> fingerprint = optional(properties, prefix + "scopeFingerprint");
+            Optional<String> mode = optional(properties, prefix + "mode");
+            Optional<String> completedAt = optional(properties, prefix + "completedAt");
+            if (scope.isEmpty() || bytes.isEmpty() || sha.isEmpty() || fingerprint.isEmpty()
+                    || mode.isEmpty() || completedAt.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new ExecutionCheckpoint(
+                    Path.of(scope.orElseThrow()),
+                    providerVersion.orElseThrow(),
+                    Long.parseLong(bytes.orElseThrow()),
+                    sha.orElseThrow(),
+                    fingerprint.orElseThrow(),
+                    IndexingMode.valueOf(mode.orElseThrow()),
+                    changedFiles,
+                    Instant.parse(completedAt.orElseThrow())));
+        } catch (IllegalArgumentException | java.time.format.DateTimeParseException invalid) {
+            return Optional.empty();
+        }
     }
 
     private IndexingRun readRun(Path file, UUID expectedRunId) {
@@ -291,7 +350,8 @@ public final class FileIndexStateStore implements IndexStateStore {
             executions.add(new IndexerExecution(
                     Language.valueOf(required(properties, prefix + "language", file)),
                     required(properties, prefix + "indexerId", file),
-                    Path.of(required(properties, prefix + "artifact", file))
+                    Path.of(required(properties, prefix + "artifact", file)),
+                    readCheckpoint(properties, prefix)
             ));
         }
         return new IndexingRun(
@@ -305,8 +365,24 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "stagedSnapshotId"),
                 optional(properties, "activeSnapshotBefore"),
                 optional(properties, "activeSnapshotAfter"),
-                optional(properties, "message")
+                optional(properties, "message"),
+                readRunFormatVersion(properties, file)
         );
+    }
+
+    /** A run file without a format version was written before ADR 0039: legacy, never resumable. */
+    private static int readRunFormatVersion(Properties properties, Path file) {
+        Optional<String> version = optional(properties, RUN_FORMAT_VERSION_PROPERTY);
+        if (version.isEmpty()) return IndexingRun.LEGACY_FORMAT_VERSION;
+        try {
+            int parsed = Integer.parseInt(version.orElseThrow());
+            if (parsed < IndexingRun.LEGACY_FORMAT_VERSION) {
+                throw new IllegalStateException("invalid run format version in " + file.getFileName());
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException("invalid run format version in " + file.getFileName(), exception);
+        }
     }
 
     private void migrateLegacyRuns() throws IOException {
