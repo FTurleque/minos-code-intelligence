@@ -91,6 +91,43 @@ class LocalIsolatedIndexWorkerTest {
         assertTrue(executor.verifiedArtifact().isEmpty());
     }
 
+    /** A1 / ADR 0041: the refusal is diagnosable and happens before any provider or workspace. */
+    @Test
+    void refusalNamesTheRejectedOsBackendAndItsMissingDimensionsBeforeAnyProvider(@TempDir Path temp)
+            throws Exception {
+        String bytesUnmet = "FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
+        String entriesUnmet = "FILESYSTEM_WRITE_ENTRIES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
+        Fixture fixture = fixture(temp);
+        Path home = temp.resolve("home");
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        WorkerSandboxSelection selection = new WorkerSandboxSelection(
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                java.util.Optional.of("linux-bubblewrap-cgroup2-v5"),
+                List.of(bytesUnmet, entriesUnmet));
+        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+                "worker-one", home, delegate(temp, delegateRoot), store, selection,
+                100_000, 2L * 1024L * 1024L * 1024L, Clock.systemUTC());
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(fixture.execution()));
+
+        String message = failure.getMessage();
+        assertTrue(message.contains("not qualified for untrusted remote code"), message);
+        assertTrue(message.contains("ADR 0041"), message);
+        assertTrue(message.contains("linux-bubblewrap-cgroup2-v5"), message);
+        assertTrue(message.contains(bytesUnmet), message);
+        assertTrue(message.contains(entriesUnmet), message);
+        assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
+        assertEquals(null, delegateRoot.get(), "no provider may run");
+        assertFalse(Files.exists(home.resolve("distributed-workers")), "no workspace may be created");
+        assertTrue(executor.verifiedArtifact().isEmpty());
+    }
+
     @Test
     void nativeWorkerAlsoFailsClosedWhenNetworkIsAllowed(@TempDir Path temp) throws Exception {
         Fixture fixture = fixture(temp);

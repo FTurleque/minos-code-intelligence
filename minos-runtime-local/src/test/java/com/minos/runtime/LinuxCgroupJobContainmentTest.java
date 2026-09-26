@@ -167,6 +167,7 @@ class LinuxCgroupJobContainmentTest {
         assertEquals(
                 WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
                 qualification.trustDisposition());
+        assertTrue(qualification.limitations().contains("WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"));
         assertTrue(qualification.limitations()
                 .contains("LINUX_CGROUP_V2_AGGREGATE_MEMORY_PIDS_CPU_JOB_BOUNDARY"));
         assertTrue(qualification.limitations()

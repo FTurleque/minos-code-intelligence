@@ -19,6 +19,14 @@ public record WorkerSandboxQualification(
         Map<Platform, PlatformDisposition> platforms,
         List<String> limitations
 ) {
+    /**
+     * Limitation carried by every backend whose untrusted-code claim is refused because its write
+     * quota is supervised rather than OS-enforced. The refusal is a decision (ADR 0041), not a
+     * pending feature, and this marker says so in a machine-readable way.
+     */
+    public static final String CLOSED_BY_DECISION_LIMITATION =
+            "WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041";
+
     public WorkerSandboxQualification {
         if (backendId == null || backendId.isBlank()) {
             throw new IllegalArgumentException("backendId must not be blank");
@@ -46,6 +54,7 @@ public record WorkerSandboxQualification(
             trustDisposition = TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED;
             List<String> downgraded = new ArrayList<>(limitations);
             downgraded.add("WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT");
+            downgraded.add(CLOSED_BY_DECISION_LIMITATION);
             downgraded.addAll(containment.unmetRequirements());
             limitations = List.copyOf(downgraded);
         }
