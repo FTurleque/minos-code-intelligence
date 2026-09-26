@@ -1,0 +1,166 @@
+package com.minos.cli;
+
+import com.minos.application.MinosApplication;
+import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
+import com.minos.remote.RemoteRepositoryMaterializer;
+import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
+import com.minos.remote.RemoteRepositoryRequest;
+import com.minos.runtime.DistributedArtifactBundleStore;
+import com.minos.runtime.WorkerSandboxBackend;
+import com.minos.runtime.WorkerSandboxSelection;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * A1 / ADR 0041: {@code remote index} refuses <em>before</em> materializing the revision, taking
+ * the lease, registering the project or pinning the source, and the refusal is diagnosable.
+ */
+class LocalRemoteIndexOperationsRefusalTest {
+
+    private static final String BYTES_UNMET =
+            "FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
+    private static final String ENTRIES_UNMET =
+            "FILESYSTEM_WRITE_ENTRIES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
+
+    @Test
+    void refusesBeforeAnyMaterializationWhenNoSandboxIsQualifiedForUntrustedCode(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RemoteRepositoryMaterializer materializer = new RemoteRepositoryMaterializer() {
+            @Override
+            public RemoteMaterialization materialize(RemoteRepositoryRequest ignored) {
+                materializeCalls.incrementAndGet();
+                throw new AssertionError("the revision must never be materialized when remote indexing is refused");
+            }
+
+            @Override
+            public void pin(RemoteMaterialization ignored) {
+                throw new AssertionError("nothing may be pinned when remote indexing is refused");
+            }
+
+            @Override
+            public void release(RemoteMaterialization ignored) {
+                throw new AssertionError("nothing was materialized, so nothing may be released");
+            }
+        };
+        WorkerSandboxSelection rejected = new WorkerSandboxSelection(
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                WorkerSandboxSelection.Cause.REJECTED_BY_DECISION,
+                Optional.of("windows-appcontainer-job-v3"),
+                List.of(BYTES_UNMET, ENTRIES_UNMET));
+        try (MinosApplication application = MinosApplication.builder(home).build()) {
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+                    application, materializer, new DistributedArtifactBundleStore(home),
+                    (workerId, delegate, store) -> {
+                        throw new AssertionError("no worker may be created when remote indexing is refused");
+                    },
+                    () -> rejected);
+            RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                    "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.index(
+                    request, "remote-fixture", null, "worker-one", WorkerNetworkPolicy.ALLOW));
+
+            String message = failure.getMessage();
+            assertTrue(message.contains("remote index is refused before any materialization"), message);
+            assertTrue(message.contains("native-process-ephemeral-workspace-v1"), message);
+            assertTrue(message.contains("ADR 0041"), message);
+            assertTrue(message.contains("windows-appcontainer-job-v3"), message);
+            assertTrue(message.contains(BYTES_UNMET), message);
+            assertTrue(message.contains(ENTRIES_UNMET), message);
+            assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
+            assertEquals(0, materializeCalls.get());
+            assertFalse(Files.exists(home.resolve("remote-index-leases")), "no lease may be taken");
+            assertFalse(Files.exists(home.resolve("remote-cache")), "no remote cache may be created");
+            assertTrue(application.projectRegistry().listProjects().isEmpty(), "no project may be registered");
+        }
+    }
+
+    @Test
+    void aQualifiedSelectionLetsTheRequestReachTheMaterializer(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RemoteRepositoryMaterializer materializer = new RemoteRepositoryMaterializer() {
+            @Override
+            public RemoteMaterialization materialize(RemoteRepositoryRequest ignored) {
+                materializeCalls.incrementAndGet();
+                throw new IllegalStateException("materializer reached");
+            }
+
+            @Override public void pin(RemoteMaterialization ignored) { }
+            @Override public void release(RemoteMaterialization ignored) { }
+        };
+        try (MinosApplication application = MinosApplication.builder(home).build()) {
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+                    application, materializer, new DistributedArtifactBundleStore(home),
+                    (workerId, delegate, store) -> {
+                        throw new AssertionError("not reached in this test");
+                    },
+                    () -> WorkerSandboxSelection.of(qualifiedFake()));
+            RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                    "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.index(
+                    request, "remote-fixture", null, "worker-one", WorkerNetworkPolicy.ALLOW));
+
+            assertEquals("materializer reached", failure.getMessage());
+            assertEquals(1, materializeCalls.get());
+        }
+    }
+
+    /** A backend whose qualification is fully OS-enforced, so the strict claim is permitted. */
+    private static WorkerSandboxBackend qualifiedFake() {
+        return new WorkerSandboxBackend() {
+            @Override public String id() { return "fake-hard-backend"; }
+
+            @Override
+            public com.minos.remote.DistributedIndexing.WorkerIsolation isolation() {
+                return com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
+            }
+
+            @Override public NetworkGuarantee networkGuarantee() { return NetworkGuarantee.OS_ENFORCED; }
+
+            @Override
+            public com.minos.runtime.WorkerSandboxQualification qualification() {
+                com.minos.runtime.WorkerResourceContainment hard = new com.minos.runtime.WorkerResourceContainment(
+                        "fake-hard",
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
+                        com.minos.runtime.WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
+                        List.of("FAKE_KERNEL_QUOTA"));
+                return new com.minos.runtime.WorkerSandboxQualification(
+                        id(), isolation(), networkGuarantee(),
+                        com.minos.runtime.WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                        com.minos.runtime.WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                        hard,
+                        java.util.Map.of(com.minos.runtime.WorkerSandboxQualification.currentPlatform(),
+                                com.minos.runtime.WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                        List.of());
+            }
+
+            @Override
+            public com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact execute(
+                    com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor delegate,
+                    com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest request,
+                    WorkerNetworkPolicy policy) {
+                throw new UnsupportedOperationException("not reached in this test");
+            }
+        };
+    }
+}
