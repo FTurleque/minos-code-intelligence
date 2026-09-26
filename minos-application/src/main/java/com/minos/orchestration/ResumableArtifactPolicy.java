@@ -1,40 +1,26 @@
 package com.minos.orchestration;
 
 import java.util.Objects;
-import java.util.Set;
 
 /**
- * Indexeurs dont l'artefact peut être réutilisé par une reprise (ADR 0039, risque « provider non
- * déterministe »). Tient lieu de {@code IndexerCapability.RESUMABLE_ARTIFACT} tant que ce
- * capability n'existe pas dans le catalogue : la qualification est explicite, par identifiant,
- * jamais implicite.
- *
- * <p>Qualifié par défaut : {@code scip-java}. Son artefact ne dépend que des sources et des
- * descripteurs de build du scope (couverts par l'empreinte de scope) et des dépendances résolues
- * par ces descripteurs ; le résidu non couvert (un SNAPSHOT de dépendance remplacé à coordonnées
- * identiques dans le dépôt local) produit au pire un index dont les signatures externes datent de
- * l'exécution interrompue, jamais un index partiel. Les autres indexeurs SCIP (TypeScript, Go,
- * Rust, .NET, clang) lisent des états externes non fingerprintés (node_modules, caches de
- * toolchain, compile_commands) et ne sont pas qualifiés tant qu'un test de reproductibilité ne
- * l'a pas établi.</p>
+ * Décide si l'artefact d'un indexeur peut être réutilisé par une reprise (ADR 0039, risque
+ * « provider non déterministe »). La décision dérive de la capacité déclarée
+ * {@link IndexerCapability#RESUMABLE_ARTIFACT} du descripteur : elle est explicite, par provider,
+ * jamais implicite. {@code scip-java} la déclare dans le catalogue SCIP ; les autres indexeurs SCIP
+ * lisent des états externes non couverts par l'empreinte de scope et ne la déclarent pas.
  */
-public record ResumableArtifactPolicy(Set<String> qualifiedIndexerIds) {
+public record ResumableArtifactPolicy(boolean honoursDeclaredCapability) {
 
-    public static final ResumableArtifactPolicy DEFAULT = new ResumableArtifactPolicy(Set.of("scip-java"));
+    /** Réutilise les artefacts des seuls indexeurs déclarant {@code RESUMABLE_ARTIFACT}. */
+    public static final ResumableArtifactPolicy DEFAULT = new ResumableArtifactPolicy(true);
 
-    public ResumableArtifactPolicy {
-        qualifiedIndexerIds = Set.copyOf(Objects.requireNonNull(qualifiedIndexerIds, "qualifiedIndexerIds"));
-        if (qualifiedIndexerIds.stream().anyMatch(id -> id == null || id.isBlank())) {
-            throw new IllegalArgumentException("qualified indexer ids must not be blank");
-        }
-    }
-
-    /** Aucun indexeur qualifié : une reprise ne réutilise jamais d'artefact. */
+    /** Aucun artefact n'est jamais réutilisé, quelle que soit la capacité déclarée. */
     public static ResumableArtifactPolicy none() {
-        return new ResumableArtifactPolicy(Set.of());
+        return new ResumableArtifactPolicy(false);
     }
 
     public boolean qualifies(IndexerDescriptor indexer) {
-        return qualifiedIndexerIds.contains(Objects.requireNonNull(indexer, "indexer").id());
+        return honoursDeclaredCapability
+                && Objects.requireNonNull(indexer, "indexer").capabilities().contains(IndexerCapability.RESUMABLE_ARTIFACT);
     }
 }

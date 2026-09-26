@@ -120,7 +120,7 @@ class IndexingResumePlannerTest {
         setup.store.saveProjectState(setup.stateOffering(run.id()));
 
         Outcome outcome = IndexingResumePlanner.plan(setup.store, ResumableRunMarkers.none(),
-                new ResumableArtifactPolicy(Set.of(PROVIDER)), setup.request());
+                ResumableArtifactPolicy.DEFAULT, setup.request());
 
         assertInstanceOf(Outcome.Refused.class, outcome);
         assertTrue(((Outcome.Refused) outcome).reason().contains("run directory"));
@@ -191,7 +191,8 @@ class IndexingResumePlannerTest {
 
         IndexingResumePlanner.Request request() {
             IndexerDescriptor descriptor = new IndexerDescriptor(PROVIDER, VERSION, PROVIDER, Set.of(Language.JAVA),
-                    Set.of(), EnumSet.of(IndexerCapability.SYMBOLS), IndexerQualification.QUALIFIED, 100, List.of());
+                    Set.of(), EnumSet.of(IndexerCapability.SYMBOLS, IndexerCapability.RESUMABLE_ARTIFACT),
+                    IndexerQualification.QUALIFIED, 100, List.of());
             IndexingExecutionTarget target = new IndexingExecutionTarget(
                     new IndexerSelection(Language.JAVA, descriptor), Path.of(""));
             return new IndexingResumePlanner.Request(store.findProjectState(projectId).orElseThrow(), root,
@@ -199,7 +200,7 @@ class IndexingResumePlannerTest {
         }
 
         Outcome plan() {
-            return IndexingResumePlanner.plan(store, port, new ResumableArtifactPolicy(Set.of(PROVIDER)), request());
+            return IndexingResumePlanner.plan(store, port, ResumableArtifactPolicy.DEFAULT, request());
         }
     }
 

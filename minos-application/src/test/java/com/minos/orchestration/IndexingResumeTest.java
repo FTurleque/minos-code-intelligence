@@ -193,11 +193,10 @@ class IndexingResumeTest {
         Fixture fixture = new Fixture(temp);
         IndexingRun interrupted = fixture.interruptAfter(2, T0);
         Fixture.Executor executor = new Fixture.Executor(fixture, 99);
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(List.of(executor), fixture.stager,
-                fixture.promoter, fixture.store, fixture.markers, new ResumableArtifactPolicy(Set.of("other-indexer")),
-                Clock.fixed(T0.plusSeconds(10), ZoneOffset.UTC));
 
-        IndexingRun run = lifecycle.execute(fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+        // The double now negotiates without RESUMABLE_ARTIFACT: the checkpoints exist but are never reused.
+        IndexingRun run = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation(VERSION, PROVIDER, false));
 
         assertNotEquals(interrupted.id(), run.id());
         assertEquals(SCOPES, executor.executed);
@@ -270,9 +269,14 @@ class IndexingResumeTest {
     }
 
     static IndexerNegotiationResult negotiation(String version, String id) {
+        return negotiation(version, id, true);
+    }
+
+    static IndexerNegotiationResult negotiation(String version, String id, boolean resumableArtifact) {
+        EnumSet<IndexerCapability> capabilities = EnumSet.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES);
+        if (resumableArtifact) capabilities.add(IndexerCapability.RESUMABLE_ARTIFACT);
         IndexerDescriptor descriptor = new IndexerDescriptor(id, version, id, Set.of(Language.TYPESCRIPT), Set.of(),
-                EnumSet.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES),
-                IndexerQualification.QUALIFIED, 100, List.of());
+                capabilities, IndexerQualification.QUALIFIED, 100, List.of());
         return new IndexerNegotiationResult(List.of(new IndexerSelection(Language.TYPESCRIPT, descriptor)),
                 Set.of(), List.of());
     }
@@ -314,7 +318,7 @@ class IndexingResumeTest {
 
         IndexingLifecycleService lifecycle(IndexerExecutor executor, Instant now) {
             return new IndexingLifecycleService(List.of(executor), stager, promoter, store, markers,
-                    new ResumableArtifactPolicy(Set.of(PROVIDER)), Clock.fixed(now, ZoneOffset.UTC));
+                    ResumableArtifactPolicy.DEFAULT, Clock.fixed(now, ZoneOffset.UTC));
         }
 
         ProjectDiscovery discovery() {
