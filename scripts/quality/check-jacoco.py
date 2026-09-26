@@ -170,6 +170,19 @@ SCOPES = {
         "line": 0.75,
         "branch": 0.55,
     },
+    # R1 (ADR 0039): resuming an interrupted indexing run. The planner decides which artifacts are
+    # reused (fail-closed on every discrepancy), the reconciler turns abandoned runs into
+    # INTERRUPTED and the executor re-verifies reused artifacts before staging. A silent coverage
+    # erosion here would let a stale artifact be published as a complete index.
+    "resume-orchestration": {
+        "prefixes": (
+            "com/minos/orchestration/IndexingResumePlanner",
+            "com/minos/orchestration/AuthoritativeProjectStateReconciler",
+            "com/minos/orchestration/IndexingRunExecutor",
+        ),
+        "line": 0.75,
+        "branch": 0.55,
+    },
 }
 
 

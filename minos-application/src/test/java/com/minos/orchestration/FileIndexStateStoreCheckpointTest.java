@@ -165,6 +165,39 @@ class FileIndexStateStoreCheckpointTest {
     }
 
     @Test
+    void checkpointsBeyondTheWriteCapAreDroppedWhileLargeLegacyRunsStayReadable() throws Exception {
+        // V5: the run file stays below the property budget by dropping checkpoints past the cap, and
+        // a historical run of up to 10 000 checkpoint-less executions is still read (not resumable).
+        Path stateRoot = root.resolve("cap");
+        UUID projectId = UUID.randomUUID();
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        ExecutionCheckpoint checkpoint = new ExecutionCheckpoint(Path.of(""), "1", 1L, SHA_A, SHA_B,
+                IndexingMode.FULL, List.of(), COMPLETED);
+        List<IndexerExecution> checkpointed = new java.util.ArrayList<>();
+        for (int index = 0; index <= FileIndexStateStore.MAX_CHECKPOINTED_EXECUTIONS; index++) {
+            checkpointed.add(new IndexerExecution(Language.JAVA, "scip-java", Path.of("a" + index), Optional.of(checkpoint)));
+        }
+        UUID cappedId = UUID.randomUUID();
+        store.saveRun(new IndexingRun(cappedId, projectId, IndexingRun.Status.RUNNING,
+                IndexingRun.Phase.PROVIDER_EXECUTION, CREATED, Optional.empty(), checkpointed, Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), IndexingRun.CURRENT_FORMAT_VERSION));
+        IndexingRun capped = store.findRun(cappedId).orElseThrow();
+        assertEquals(checkpointed.size(), capped.executions().size(), "every execution is written");
+        assertTrue(capped.executions().get(FileIndexStateStore.MAX_CHECKPOINTED_EXECUTIONS - 1).checkpoint().isPresent());
+        assertTrue(capped.executions().getLast().checkpoint().isEmpty(), "the execution past the cap has no checkpoint");
+
+        List<IndexerExecution> plain = new java.util.ArrayList<>();
+        for (int index = 0; index < FileIndexStateStore.MAX_READABLE_EXECUTIONS; index++) {
+            plain.add(new IndexerExecution(Language.JAVA, "scip-java", Path.of("b" + index)));
+        }
+        UUID largeId = UUID.randomUUID();
+        store.saveRun(new IndexingRun(largeId, projectId, IndexingRun.Status.FAILED, IndexingRun.Phase.PROVIDER_EXECUTION,
+                CREATED, Optional.of(COMPLETED), plain, Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of("old"), IndexingRun.LEGACY_FORMAT_VERSION));
+        assertEquals(plain.size(), store.findRun(largeId).orElseThrow().executions().size());
+    }
+
+    @Test
     void inMemoryStoreKeepsCheckpointsVerbatim() {
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         UUID runId = UUID.randomUUID();

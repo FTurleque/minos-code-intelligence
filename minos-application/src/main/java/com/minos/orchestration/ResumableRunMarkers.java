@@ -1,6 +1,9 @@
 package com.minos.orchestration;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -18,6 +21,16 @@ public interface ResumableRunMarkers {
 
     /** Retire le marqueur ; l'absence de marqueur ou du répertoire de run n'est pas une erreur. */
     void unmark(UUID runId) throws IOException;
+
+    /**
+     * Répertoire {@code runs/<runId>} sous lequel les artefacts réutilisables doivent rester
+     * canoniquement confinés (ADR 0039 §7). Vide quand le runtime n'a pas de répertoire de run :
+     * aucune reprise n'est alors possible (fail-closed).
+     */
+    default Optional<Path> runDirectory(UUID runId) {
+        Objects.requireNonNull(runId, "runId");
+        return Optional.empty();
+    }
 
     /** Adaptateur inerte : aucun marqueur n'est jamais posé (stores sans répertoire de run). */
     static ResumableRunMarkers none() {

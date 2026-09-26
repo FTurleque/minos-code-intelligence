@@ -168,6 +168,129 @@ class InterruptedRunRecoveryTest {
         assertEquals(IndexingRun.Status.FAILED, run.status());
         assertTrue(run.message().orElseThrow().contains("resumable marker"), run.message().orElse(""));
         assertEquals(Optional.empty(), recovered.resumableRunId());
+        assertTrue(events.contains("unmark:" + runId), "V13: a marker that could not be written is removed best-effort");
+    }
+
+    @Test
+    void missingPersistedReferenceIsDerivedFromTheNewestInterruptedRun() {
+        // V11: crash between saveRun(INTERRUPTED) and saveProjectState leaves the project in progress
+        // without a reference; the marked run must be offered, never left as an orphan.
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        store.saveRun(new IndexingRun(runId, projectId, IndexingRun.Status.INTERRUPTED,
+                IndexingRun.Phase.PROVIDER_EXECUTION, CREATED, Optional.of(CHECKPOINT), List.of(checkpointed("")),
+                Optional.empty(), Optional.of("snapshot-old"), Optional.of("snapshot-old"), Optional.of("interrupted"),
+                IndexingRun.CURRENT_FORMAT_VERSION));
+        store.saveProjectState(refreshing(projectId, runId, "snapshot-old"));
+
+        ProjectIndexState recovered = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
+                projectId, promoter(new AtomicReference<>("snapshot-old")), store,
+                new RecordingMarkers(events, false), RECOVERED, "restart");
+
+        assertEquals(ProjectIndexState.Availability.STALE, recovered.availability());
+        assertEquals(Optional.of(runId), recovered.resumableRunId());
+        assertEquals(IndexingRun.Status.INTERRUPTED, store.findRun(runId).orElseThrow().status());
+    }
+
+    @Test
+    void currentProjectSupersedesAnOfferedRunInsteadOfLeavingItMarked() {
+        // V12: two abandoned runs, the newer one already promoted; the older interrupted run is
+        // finalized and unmarked because a READY project has nothing to resume.
+        UUID projectId = UUID.randomUUID();
+        UUID olderId = UUID.randomUUID();
+        UUID promotedId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        store.saveRun(running(olderId, projectId, IndexingRun.Phase.PROVIDER_EXECUTION,
+                List.of(checkpointed("ui/app")), Optional.empty(), Optional.of("snapshot-old"),
+                IndexingRun.CURRENT_FORMAT_VERSION));
+        store.saveRun(new IndexingRun(promotedId, projectId, IndexingRun.Status.RUNNING, IndexingRun.Phase.PROMOTION,
+                CREATED.plusSeconds(60), Optional.empty(), List.of(checkpointed("")), Optional.of("snapshot-new"),
+                Optional.of("snapshot-old"), Optional.of("snapshot-old"), Optional.of("promoting"),
+                IndexingRun.CURRENT_FORMAT_VERSION));
+        store.saveProjectState(refreshing(projectId, promotedId, "snapshot-old"));
+
+        ProjectIndexState recovered = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
+                projectId, promoter(new AtomicReference<>("snapshot-new")), store,
+                new RecordingMarkers(events, false), RECOVERED, "restart");
+
+        assertEquals(ProjectIndexState.Availability.READY, recovered.availability());
+        assertEquals(Optional.empty(), recovered.resumableRunId());
+        assertEquals(IndexingRun.Status.SUCCEEDED, store.findRun(promotedId).orElseThrow().status());
+        IndexingRun older = store.findRun(olderId).orElseThrow();
+        assertEquals(IndexingRun.Status.FAILED, older.status());
+        assertTrue(older.message().orElseThrow().contains("superseded"), older.message().orElse(""));
+        assertTrue(events.contains("unmark:" + olderId));
+    }
+
+    @Test
+    void threadInterruptionDuringAProviderLeavesAnInterruptedRunAndRestoresTheFlag(@TempDir Path root)
+            throws Exception {
+        // R1-11: an InterruptedException is not an explicit failure; with a checkpoint already
+        // persisted the run is offered for resume and the interrupt flag is replayed.
+        UUID projectId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        RecordingMarkers markers = new RecordingMarkers(events, false);
+        store.saveProjectState(new ProjectIndexState(projectId, ProjectIndexState.Availability.READY,
+                Optional.of("snapshot-old"), Optional.empty(), CREATED, Optional.of("baseline")));
+        Path artifact = Files.writeString(root.resolve("index.scip"), "index");
+        IndexerExecutor interrupting = new IndexerExecutor() {
+            @Override public String indexerId() { return "scip-go"; }
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                throw new InterruptedException("simulated shutdown signal");
+            }
+        };
+        IndexingLifecycleService service = new IndexingLifecycleService(
+                List.of(executor(artifact), interrupting), request -> "snapshot-next",
+                promoter(new AtomicReference<>("snapshot-old")), store, markers, CLOCK);
+        IndexerNegotiationResult negotiation = new IndexerNegotiationResult(List.of(selection(),
+                new IndexerSelection(Language.GO, new IndexerDescriptor("scip-go", "0.1.0", "scip-go",
+                        Set.of(Language.GO), Set.of(), EnumSet.of(IndexerCapability.SYMBOLS),
+                        IndexerQualification.QUALIFIED, 100, List.of()))), Set.of(), List.of());
+
+        IndexingRun run;
+        try {
+            run = service.execute(projectId, root, negotiation);
+        } finally {
+            assertTrue(Thread.interrupted(), "the interrupt flag must be replayed to the caller");
+        }
+
+        assertEquals(IndexingRun.Status.INTERRUPTED, run.status());
+        assertEquals(1, run.executions().size());
+        assertTrue(events.contains("mark:" + run.id()));
+        ProjectIndexState state = store.findProjectState(projectId).orElseThrow();
+        assertEquals(ProjectIndexState.Availability.STALE, state.availability());
+        assertEquals(Optional.of(run.id()), state.resumableRunId());
+    }
+
+    @Test
+    void threadInterruptionWithoutAnyCheckpointStillFails(@TempDir Path root) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        List<String> events = new ArrayList<>();
+        RecordingStore store = new RecordingStore(events);
+        IndexerExecutor interrupting = new IndexerExecutor() {
+            @Override public String indexerId() { return "scip-typescript"; }
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                throw new InterruptedException("simulated shutdown signal");
+            }
+        };
+        IndexingLifecycleService service = new IndexingLifecycleService(List.of(interrupting),
+                request -> "snapshot-next", promoter(new AtomicReference<>()), store,
+                new RecordingMarkers(events, false), CLOCK);
+
+        IndexingRun run;
+        try {
+            run = service.execute(projectId, root, new IndexerNegotiationResult(List.of(selection()), Set.of(), List.of()));
+        } finally {
+            assertTrue(Thread.interrupted());
+        }
+
+        assertEquals(IndexingRun.Status.FAILED, run.status());
+        assertTrue(events.stream().noneMatch(event -> event.startsWith("mark:")));
+        assertEquals(Optional.empty(), store.findProjectState(projectId).orElseThrow().resumableRunId());
     }
 
     @Test

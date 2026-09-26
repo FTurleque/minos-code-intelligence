@@ -406,6 +406,11 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             throw new IllegalStateException("provider scope directory escapes provider run root");
         }
         Files.createDirectories(runDirectory);
+        // A resumed run (ADR 0039 §3) re-executes this target inside the same run directory: the
+        // temporary left by the provider that was interrupted mid-promotion must never be mistaken
+        // for, or merged into, the artifact this execution is about to produce.
+        Path stalePartial = runDirectory.resolve("index.partial.scip");
+        if (regularFileNoFollow(stalePartial)) Files.delete(stalePartial);
         return runDirectory;
     }
 

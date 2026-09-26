@@ -6,6 +6,7 @@ import com.minos.runtime.FileResumableRunMarkers;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,5 +29,10 @@ final class RunDirectoryResumableRunMarkers implements ResumableRunMarkers {
     @Override
     public void unmark(UUID runId) throws IOException {
         markers.unmark(runId);
+    }
+
+    @Override
+    public Optional<Path> runDirectory(UUID runId) {
+        return Optional.of(markers.runDirectory(runId));
     }
 }

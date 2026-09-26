@@ -47,13 +47,16 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final int RUN_HEADER_PROPERTIES = 16;
     private static final int PROPERTIES_PER_EXECUTION = 11;
     /**
-     * Executions a run file can hold and still stay below {@link #MAX_PROPERTIES_ENTRIES}; the
-     * changed-file list of an incremental run (single scope, at most
-     * {@link ExecutionCheckpoint#MAX_CHANGED_FILES} entries) fits in the remaining headroom.
+     * Executions whose checkpoint is persisted so that the run file stays below
+     * {@link #MAX_PROPERTIES_ENTRIES}; the changed-file list of an incremental run (single scope, at
+     * most {@link ExecutionCheckpoint#MAX_CHANGED_FILES} entries) fits in the remaining headroom.
+     * Executions beyond this cap are written without checkpoint (V5).
      */
-    static final int MAX_RUN_EXECUTIONS =
+    static final int MAX_CHECKPOINTED_EXECUTIONS =
             (MAX_PROPERTIES_ENTRIES - RUN_HEADER_PROPERTIES - ExecutionCheckpoint.MAX_CHANGED_FILES)
                     / PROPERTIES_PER_EXECUTION;
+    /** Historical read tolerance: a run of up to 10 000 checkpoint-less executions stays readable. */
+    static final int MAX_READABLE_EXECUTIONS = 10_000;
 
     private final Path storageRoot;
     private final Path projectRoot;
@@ -287,6 +290,12 @@ public final class FileIndexStateStore implements IndexStateStore {
         putOptional(properties, "activeSnapshotAfter", run.activeSnapshotAfter());
         putOptional(properties, "message", run.message());
         properties.setProperty(RUN_FORMAT_VERSION_PROPERTY, Integer.toString(run.runFormatVersion()));
+        run.resume().ifPresent(trace -> {
+            properties.setProperty("resume.attempt", Integer.toString(trace.attempt()));
+            properties.setProperty("resume.reusedTargets", Integer.toString(trace.reusedTargets()));
+            properties.setProperty("resume.reexecutedTargets", Integer.toString(trace.reexecutedTargets()));
+            putOptional(properties, "resume.refusalReason", trace.refusalReason());
+        });
         properties.setProperty("execution.count", Integer.toString(run.executions().size()));
         for (int index = 0; index < run.executions().size(); index++) {
             IndexerExecution execution = run.executions().get(index);
@@ -294,9 +303,27 @@ public final class FileIndexStateStore implements IndexStateStore {
             properties.setProperty(prefix + "language", execution.language().name());
             properties.setProperty(prefix + "indexerId", execution.indexerId());
             properties.setProperty(prefix + "artifact", execution.finalArtifact().toString());
-            execution.checkpoint().ifPresent(checkpoint -> putCheckpoint(properties, prefix, checkpoint));
+            // V5: beyond the checkpoint write cap the run stays complete and readable, but the
+            // remaining executions are persisted without checkpoint (never resumable).
+            if (index < MAX_CHECKPOINTED_EXECUTIONS) {
+                execution.checkpoint().ifPresent(checkpoint -> putCheckpoint(properties, prefix, checkpoint));
+            }
         }
         return properties;
+    }
+
+    private static Optional<IndexingRun.ResumeTrace> readResumeTrace(Properties properties) {
+        Optional<String> attempt = optional(properties, "resume.attempt");
+        if (attempt.isEmpty()) return Optional.empty();
+        try {
+            return Optional.of(new IndexingRun.ResumeTrace(
+                    Integer.parseInt(attempt.orElseThrow()),
+                    Integer.parseInt(optional(properties, "resume.reusedTargets").orElse("0")),
+                    Integer.parseInt(optional(properties, "resume.reexecutedTargets").orElse("0")),
+                    optional(properties, "resume.refusalReason")));
+        } catch (IllegalArgumentException invalid) {
+            return Optional.empty();
+        }
     }
 
     private static void putCheckpoint(Properties properties, String prefix, ExecutionCheckpoint checkpoint) {
@@ -364,7 +391,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         } catch (NumberFormatException exception) {
             throw new IllegalStateException("invalid execution count in " + file, exception);
         }
-        if (executionCount < 0 || executionCount > MAX_RUN_EXECUTIONS) {
+        if (executionCount < 0 || executionCount > MAX_READABLE_EXECUTIONS) {
             throw new IllegalStateException("unsafe execution count in " + file + ": " + executionCount);
         }
         List<IndexerExecution> executions = new ArrayList<>(executionCount);
@@ -389,7 +416,8 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "activeSnapshotBefore"),
                 optional(properties, "activeSnapshotAfter"),
                 optional(properties, "message"),
-                readRunFormatVersion(properties)
+                readRunFormatVersion(properties),
+                readResumeTrace(properties)
         );
     }
 

@@ -20,6 +20,7 @@ import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingLifecycleService;
 import com.minos.orchestration.IndexingMode;
 import com.minos.orchestration.IndexingRequirements;
+import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.orchestration.IndexingRun;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -118,16 +119,24 @@ public final class LocalAutonomousIndexOperations
 
     @Override
     public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull) throws Exception {
+        return execute(projectIdentifier, providerOverride, forceFull, IndexingResumePolicy.RESUME);
+    }
+
+    @Override
+    public IndexExecutionView execute(String projectIdentifier, String providerOverride, boolean forceFull,
+                                      IndexingResumePolicy resumePolicy) throws Exception {
+        Objects.requireNonNull(resumePolicy, "resumePolicy");
         RegisteredProject project = projectResolver.resolve(projectIdentifier);
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(project.id())) {
-            return executeLocked(projectIdentifier, providerOverride, forceFull);
+            return executeLocked(projectIdentifier, providerOverride, forceFull, resumePolicy);
         }
     }
 
     private IndexExecutionView executeLocked(
             String projectIdentifier,
             String providerOverride,
-            boolean forceFull
+            boolean forceFull,
+            IndexingResumePolicy resumePolicy
     ) throws Exception {
         Prepared prepared = prepare(projectIdentifier, providerOverride, forceFull);
         for (ProviderView runtime : prepared.view().providerRuntimes()) {
@@ -137,6 +146,9 @@ public final class LocalAutonomousIndexOperations
             }
         }
         if (prepared.view().mode() == IndexingMode.NONE && !forceFull) {
+            if (resumePolicy == IndexingResumePolicy.RESUME_ONLY) {
+                throw new IllegalStateException("resume-only indexing refused: no changes to index");
+            }
             String semanticDiagnostic = synchronizeSemanticIfConfigured(prepared.project().id());
             application.retentionService().compact(prepared.project().id());
             return new IndexExecutionView(prepared.view(), null, "NO_CHANGES",
@@ -154,14 +166,16 @@ public final class LocalAutonomousIndexOperations
                         prepared.project().id(),
                         prepared.project().rootPath(),
                         prepared.discovery(),
-                        prepared.negotiation()
+                        prepared.negotiation(),
+                        resumePolicy
                 )
                 : lifecycle.executePlanned(
                                 prepared.project().id(),
                                 prepared.project().rootPath(),
                                 prepared.discovery(),
                                 prepared.negotiation(),
-                                prepared.plan()
+                                prepared.plan(),
+                                resumePolicy
                         )
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         run = recoverPromotedRunIfNeeded(run);
@@ -203,7 +217,14 @@ public final class LocalAutonomousIndexOperations
         diagnostic = combineDiagnostics(diagnostic, synchronizeSemanticIfConfigured(prepared.project().id()));
         application.retentionService().compact(prepared.project().id());
         return new IndexExecutionView(prepared.view(), run.id().toString(), run.status().name(),
-                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic);
+                run.activeSnapshotAfter().orElse(null), fingerprintPromoted, diagnostic, resumeView(run));
+    }
+
+    private static ResumeView resumeView(IndexingRun run) {
+        return run.resume()
+                .map(trace -> new ResumeView(trace.attempt(), trace.reusedTargets(), trace.reexecutedTargets(),
+                        trace.refusalReason().orElse(null)))
+                .orElse(null);
     }
 
     private IndexingRun recoverPromotedRunIfNeeded(IndexingRun run) throws IOException {

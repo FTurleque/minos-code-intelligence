@@ -15,6 +15,8 @@ import java.util.UUID;
 
 /** Stable reconciliation of project metadata against an authoritative snapshot promoter. */
 final class AuthoritativeProjectStateReconciler {
+    private static final System.Logger LOGGER =
+            System.getLogger(AuthoritativeProjectStateReconciler.class.getName());
     private static final int MAX_ATTEMPTS = 8;
     private static final Comparator<IndexingRun> RUN_ORDER =
             Comparator.comparing(IndexingRun::createdAt).thenComparing(IndexingRun::id);
@@ -146,7 +148,7 @@ final class AuthoritativeProjectStateReconciler {
         if (recovery.recoveredCount() == 0 && !inProgress(current)) return Optional.empty();
 
         ProjectIndexState recovered = recoveredProjectState(
-                projectId, active, current, recovery, stateStore, observedAt, detail);
+                projectId, active, current, recovery, stateStore, markers, observedAt, detail);
         stateStore.saveProjectState(recovered);
         ProjectIndexState verified = stateStore.findProjectState(projectId)
                 .orElseThrow(() -> new IllegalStateException("recovered project state was not persisted"));
@@ -281,18 +283,22 @@ final class AuthoritativeProjectStateReconciler {
         return (int) run.executions().stream().filter(execution -> execution.checkpoint().isPresent()).count();
     }
 
-    /** Empty when marked; otherwise the public reason the resume is refused (fail-closed). */
+    /**
+     * Empty when marked; otherwise the public reason the resume is refused (fail-closed). A marker
+     * that could not be written is removed best-effort (V13) so that no half-written marker survives.
+     */
     private static Optional<String> markResumable(ResumableRunMarkers markers, UUID runId) {
         try {
             markers.mark(runId);
             return Optional.empty();
         } catch (IOException | RuntimeException failure) {
+            unmarkQuietly(markers, runId);
             return Optional.of("; resumable marker could not be written ("
                     + failure.getClass().getSimpleName() + "), resume not offered");
         }
     }
 
-    /** An older interrupted run loses its resume offer to a newer one and becomes terminal. */
+    /** An older interrupted run loses its resume offer to a newer run and becomes terminal. */
     static void supersede(
             IndexStateStore stateStore,
             ResumableRunMarkers markers,
@@ -300,16 +306,34 @@ final class AuthoritativeProjectStateReconciler {
             UUID successorRunId,
             Instant observedAt
     ) {
+        supersede(stateStore, markers, supersededRunId,
+                "interrupted indexing run superseded by indexing run " + successorRunId, observedAt);
+    }
+
+    /** Finalizes an INTERRUPTED run as FAILED with a public reason and removes its marker (V12, V13). */
+    static void supersede(
+            IndexStateStore stateStore,
+            ResumableRunMarkers markers,
+            UUID supersededRunId,
+            String reason,
+            Instant observedAt
+    ) {
         Optional<IndexingRun> superseded = stateStore.findRun(supersededRunId)
                 .filter(run -> run.status() == Status.INTERRUPTED);
         if (superseded.isEmpty()) return;
         IndexingRun run = superseded.orElseThrow();
-        stateStore.saveRun(terminalRecovery(run, run.activeSnapshotAfter(), observedAt, Status.FAILED,
-                "interrupted indexing run superseded by indexing run " + successorRunId));
+        stateStore.saveRun(terminalRecovery(run, run.activeSnapshotAfter(), observedAt, Status.FAILED, reason));
+        unmarkQuietly(markers, run.id());
+    }
+
+    /** The marker only protects retention: a failure to remove it is reported, never propagated. */
+    static void unmarkQuietly(ResumableRunMarkers markers, UUID runId) {
         try {
-            markers.unmark(run.id());
+            markers.unmark(runId);
         } catch (IOException | RuntimeException failure) {
-            // The marker only protects retention; a leftover marker is bounded by the resume TTL.
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not remove the resumable marker of indexing run " + runId
+                            + "; run retention bounds the leftover: " + failure.getClass().getSimpleName());
         }
     }
 
@@ -332,7 +356,8 @@ final class AuthoritativeProjectStateReconciler {
                 run.activeSnapshotBefore(),
                 authoritativeSnapshot,
                 Optional.of(message),
-                run.runFormatVersion());
+                run.runFormatVersion(),
+                run.resume());
     }
 
     private static ProjectIndexState recoveredProjectState(
@@ -341,6 +366,7 @@ final class AuthoritativeProjectStateReconciler {
             ProjectIndexState persisted,
             Recovery recovery,
             IndexStateStore stateStore,
+            ResumableRunMarkers markers,
             Instant observedAt,
             String detail
     ) {
@@ -348,10 +374,16 @@ final class AuthoritativeProjectStateReconciler {
                 .or(() -> persisted.latestRunId().flatMap(stateStore::findRun));
         Optional<UUID> latestRunId = latest.map(IndexingRun::id).or(() -> persisted.latestRunId());
         // The newest interruption wins; a previously offered run that is still INTERRUPTED is kept
-        // only when nothing newer was interrupted now.
+        // only when nothing newer was interrupted now. When the persisted reference is missing (V11:
+        // crash between saveRun(INTERRUPTED) and saveProjectState), the newest INTERRUPTED run of the
+        // history is offered so that its marker never becomes an orphan.
         Optional<UUID> resumableRunId = recovery.resumableRunId()
                 .or(() -> persisted.resumableRunId()
-                        .filter(id -> stateStore.findRun(id).filter(run -> run.status() == Status.INTERRUPTED).isPresent()));
+                        .filter(id -> stateStore.findRun(id).filter(run -> run.status() == Status.INTERRUPTED).isPresent()))
+                .or(() -> stateStore.listRuns(projectId).stream()
+                        .filter(run -> run.status() == Status.INTERRUPTED)
+                        .max(RUN_ORDER)
+                        .map(IndexingRun::id));
         String recoveryDetail = detail + "; recovered abandoned indexing lifecycle"
                 + (recovery.recoveredCount() == 0 ? " metadata" : " runs=" + recovery.recoveredCount())
                 + resumableRunId.map(id -> "; resumable run offered").orElse("");
@@ -376,6 +408,12 @@ final class AuthoritativeProjectStateReconciler {
         ProjectIndexState.Availability availability = latestSucceededForAuthority
                 ? ProjectIndexState.Availability.READY
                 : ProjectIndexState.Availability.STALE;
+        if (availability == ProjectIndexState.Availability.READY) {
+            // V12: a current project has nothing to resume; the offered run is finalized and its
+            // marker removed instead of being abandoned INTERRUPTED and marked.
+            resumableRunId.ifPresent(id -> supersede(stateStore, markers, id,
+                    "interrupted indexing run superseded: project already holds a current snapshot", observedAt));
+        }
         return new ProjectIndexState(
                 projectId,
                 availability,

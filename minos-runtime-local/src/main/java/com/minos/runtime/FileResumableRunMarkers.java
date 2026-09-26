@@ -55,11 +55,19 @@ public final class FileResumableRunMarkers {
 
     /** Emplacement du marqueur d'un run ; le runId est un UUID, le chemin reste confiné sous runs/. */
     public Path markerPath(UUID runId) {
-        Path marker = runsRoot.resolve(Objects.requireNonNull(runId, "runId").toString()).resolve(MARKER_FILE_NAME)
-                .normalize();
+        Path marker = runDirectory(runId).resolve(MARKER_FILE_NAME).normalize();
         if (!marker.startsWith(runsRoot)) {
             throw new IllegalStateException("resumable run marker escapes the MINOS runs root");
         }
         return marker;
+    }
+
+    /** Répertoire {@code runs/<runId>} dont les artefacts réutilisables doivent rester confinés (ADR 0039 §7). */
+    public Path runDirectory(UUID runId) {
+        Path directory = runsRoot.resolve(Objects.requireNonNull(runId, "runId").toString()).normalize();
+        if (!directory.startsWith(runsRoot) || directory.equals(runsRoot)) {
+            throw new IllegalStateException("run directory escapes the MINOS runs root");
+        }
+        return directory;
     }
 }

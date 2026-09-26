@@ -33,7 +33,8 @@ public record IndexingRun(
         Optional<String> activeSnapshotBefore,
         Optional<String> activeSnapshotAfter,
         Optional<String> message,
-        int runFormatVersion
+        int runFormatVersion,
+        Optional<ResumeTrace> resume
 ) {
 
     /** Format écrit avant l'ADR 0039 : aucun point de contrôle, aucune reprise possible. */
@@ -43,6 +44,7 @@ public record IndexingRun(
     public static final int CURRENT_FORMAT_VERSION = 2;
 
     public IndexingRun {
+        resume = Objects.requireNonNull(resume, "resume");
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(projectId, "projectId");
         Objects.requireNonNull(status, "status");
@@ -95,6 +97,39 @@ public record IndexingRun(
     ) {
         this(id, projectId, status, phase, createdAt, completedAt, executions, stagedSnapshotId,
                 activeSnapshotBefore, activeSnapshotAfter, message, LEGACY_FORMAT_VERSION);
+    }
+
+    /** Run sans trace de reprise (aucune reprise considérée). */
+    public IndexingRun(
+            UUID id,
+            UUID projectId,
+            Status status,
+            Phase phase,
+            Instant createdAt,
+            Optional<Instant> completedAt,
+            List<IndexerExecution> executions,
+            Optional<String> stagedSnapshotId,
+            Optional<String> activeSnapshotBefore,
+            Optional<String> activeSnapshotAfter,
+            Optional<String> message,
+            int runFormatVersion
+    ) {
+        this(id, projectId, status, phase, createdAt, completedAt, executions, stagedSnapshotId,
+                activeSnapshotBefore, activeSnapshotAfter, message, runFormatVersion, Optional.empty());
+    }
+
+    /**
+     * Trace de reprise (ADR 0039 §6) : numéro de tentative, cibles réutilisées et réexécutées, et la
+     * raison publique quand une reprise a été considérée puis refusée.
+     */
+    public record ResumeTrace(int attempt, int reusedTargets, int reexecutedTargets, Optional<String> refusalReason) {
+        public ResumeTrace {
+            if (attempt < 1) throw new IllegalArgumentException("attempt must be positive");
+            if (reusedTargets < 0 || reexecutedTargets < 0) {
+                throw new IllegalArgumentException("target counts must not be negative");
+            }
+            refusalReason = normalizeText(refusalReason, "refusalReason");
+        }
     }
 
     /**

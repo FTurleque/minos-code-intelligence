@@ -1,5 +1,6 @@
 package com.minos.cli;
 
+import com.minos.orchestration.IndexingResumePolicy;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -17,7 +18,7 @@ public final class IndexCommand {
 
     public static final String NAME = "index";
     private static final Set<String> SUPPORTED_OPTIONS = Set.of(
-            "--provider", "--force-full", "--dry-run", "--format",
+            "--provider", "--force-full", "--dry-run", "--format", "--no-resume", "--resume-only",
             "--scip", "--provider-version", "--module", "--snapshot");
     private static final String USAGE = """
             Usage: minos index <project> [options]
@@ -26,6 +27,8 @@ public final class IndexCommand {
               --provider <id>               Override provider negotiation
               --force-full                  Force a complete provider execution
               --dry-run                     Show discovery/runtime/plan without executing
+              --no-resume                   Never reopen an interrupted run; supersede it and run fully
+              --resume-only                 Fail without creating a run unless an interrupted run can be resumed
               --format <text|json>          Output format (default: text)
 
             Deprecated compatibility import:
@@ -74,7 +77,8 @@ public final class IndexCommand {
                         options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
             } else {
                 output.append(renderExecution(autonomousOperations.execute(
-                        options.project(), options.providerId(), options.forceFull()), options.format())).append('\n');
+                        options.project(), options.providerId(), options.forceFull(), options.resumePolicy()),
+                        options.format())).append('\n');
             }
             return FindSymbolCommand.SUCCESS;
         });
@@ -119,6 +123,7 @@ public final class IndexCommand {
         map.put("activeSnapshotId", execution.activeSnapshotId());
         map.put("fingerprintPromoted", execution.fingerprintPromoted());
         map.put("diagnostic", diagnostic);
+        map.put("resumed", resumedMap(execution.resumed()));
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(map);
         }
@@ -127,7 +132,28 @@ public final class IndexCommand {
                 + "status: " + execution.status() + "\n"
                 + "activeSnapshotId: " + nullable(execution.activeSnapshotId()) + "\n"
                 + "fingerprintPromoted: " + execution.fingerprintPromoted() + "\n"
-                + "diagnostic: " + nullable(diagnostic);
+                + "diagnostic: " + nullable(diagnostic) + "\n"
+                + "resumed: " + resumedText(execution.resumed());
+    }
+
+    private static Map<String, Object> resumedMap(AutonomousIndexOperations.ResumeView resumed) {
+        if (resumed == null) return null;
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("attempt", resumed.attempt());
+        map.put("reusedTargets", resumed.reusedTargets());
+        map.put("reexecutedTargets", resumed.reexecutedTargets());
+        map.put("refusalReason", resumed.refusalReason());
+        return map;
+    }
+
+    private static String resumedText(AutonomousIndexOperations.ResumeView resumed) {
+        if (resumed == null) return "none";
+        if (resumed.refusalReason() != null) {
+            return "refused (" + resumed.refusalReason() + "), " + resumed.reexecutedTargets() + " re-executed";
+        }
+        int total = resumed.reusedTargets() + resumed.reexecutedTargets();
+        return "attempt " + resumed.attempt() + ", " + resumed.reusedTargets() + "/" + total + " targets reused, "
+                + resumed.reexecutedTargets() + " re-executed";
     }
 
     private static Map<String, Object> planMap(AutonomousIndexOperations.IndexPlanView plan) {
@@ -207,7 +233,8 @@ public final class IndexCommand {
             Path scipFile,
             String providerVersion,
             String moduleId,
-            String snapshotId
+            String snapshotId,
+            IndexingResumePolicy resumePolicy
     ) {
         private static Options parse(String[] arguments) {
             if (arguments.length < 1) {
@@ -217,6 +244,8 @@ public final class IndexCommand {
             String provider = null;
             boolean forceFull = false;
             boolean dryRun = false;
+            boolean noResume = false;
+            boolean resumeOnly = false;
             SymbolOutputFormat format = SymbolOutputFormat.TEXT;
             Path scip = null;
             String providerVersion = null;
@@ -239,6 +268,14 @@ public final class IndexCommand {
                     dryRun = true;
                     continue;
                 }
+                if ("--no-resume".equals(option)) {
+                    noResume = true;
+                    continue;
+                }
+                if ("--resume-only".equals(option)) {
+                    resumeOnly = true;
+                    continue;
+                }
                 if (++index >= arguments.length || arguments[index] == null || arguments[index].isBlank()
                         || arguments[index].startsWith("--")) {
                     throw new IllegalArgumentException("missing value for " + option);
@@ -254,17 +291,24 @@ public final class IndexCommand {
                     default -> throw new IllegalStateException("unhandled option: " + option);
                 }
             }
+            if (noResume && resumeOnly) {
+                throw new IllegalArgumentException("--no-resume and --resume-only are mutually exclusive");
+            }
             if (scip != null) {
                 if (provider == null || provider.isBlank()) {
                     throw new IllegalArgumentException("--provider is required with --scip");
                 }
-                if (forceFull || dryRun) {
-                    throw new IllegalArgumentException("--force-full/--dry-run cannot be combined with --scip");
+                if (forceFull || dryRun || noResume || resumeOnly) {
+                    throw new IllegalArgumentException(
+                            "--force-full/--dry-run/--no-resume/--resume-only cannot be combined with --scip");
                 }
             } else if (providerVersion != null || module != null || snapshot != null) {
                 throw new IllegalArgumentException("--provider-version/--module/--snapshot require --scip");
             }
-            return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot);
+            IndexingResumePolicy resumePolicy = noResume ? IndexingResumePolicy.NO_RESUME
+                    : resumeOnly ? IndexingResumePolicy.RESUME_ONLY : IndexingResumePolicy.RESUME;
+            return new Options(project, provider, forceFull, dryRun, format, scip, providerVersion, module, snapshot,
+                    resumePolicy);
         }
     }
 }

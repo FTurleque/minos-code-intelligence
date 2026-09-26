@@ -25,9 +25,17 @@ public final class IndexingLifecycleService {
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
     private final ResumableRunMarkers markers;
+    private final ResumableArtifactPolicy artifactPolicy;
     private final Clock clock;
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
+    /**
+     * Cycle de vie sans port de marqueurs ni répertoire de run : réservé aux tests et aux stores
+     * en mémoire. Un run interrompu y est finalisé sans marqueur et aucune reprise n'est jamais
+     * possible (le port inerte ne connaît aucun répertoire de run). La racine de composition
+     * doit utiliser {@link #IndexingLifecycleService(Collection, SnapshotStager, SnapshotPromoter,
+     * IndexStateStore, ResumableRunMarkers)}.
+     */
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore) {
         this(executors, stager, promoter, stateStore, ResumableRunMarkers.none(), Clock.systemUTC());
@@ -37,7 +45,14 @@ public final class IndexingLifecycleService {
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore,
                                     ResumableRunMarkers markers) {
-        this(executors, stager, promoter, stateStore, markers, Clock.systemUTC());
+        this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, Clock.systemUTC());
+    }
+
+    /** Câblage complet avec une politique explicite des indexeurs dont l'artefact est réutilisable. */
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore,
+                                    ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy) {
+        this(executors, stager, promoter, stateStore, markers, artifactPolicy, Clock.systemUTC());
     }
 
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
@@ -48,10 +63,17 @@ public final class IndexingLifecycleService {
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore,
                              ResumableRunMarkers markers, Clock clock) {
+        this(executors, stager, promoter, stateStore, markers, ResumableArtifactPolicy.DEFAULT, clock);
+    }
+
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore,
+                             ResumableRunMarkers markers, ResumableArtifactPolicy artifactPolicy, Clock clock) {
         this.stager = Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
         this.markers = Objects.requireNonNull(markers, "markers");
+        this.artifactPolicy = Objects.requireNonNull(artifactPolicy, "artifactPolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
         for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
@@ -76,30 +98,53 @@ public final class IndexingLifecycleService {
     }
 
     public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation) {
+        return execute(id, root, negotiation, IndexingResumePolicy.RESUME);
+    }
+
+    /** Run complet sur les cibles racine ; reprise selon {@code policy} (ADR 0039 §6, reprise par défaut). */
+    public IndexingRun execute(UUID id, Path root, IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null);
+        return run(id, root, plans.rootTargets(negotiation), IndexingMode.FULL, List.of(), null, policy);
     }
 
     public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
                                IndexerNegotiationResult negotiation) {
+        return execute(id, root, discovery, negotiation, IndexingResumePolicy.RESUME);
+    }
+
+    public IndexingRun execute(UUID id, Path root, ProjectDiscovery discovery,
+                               IndexerNegotiationResult negotiation, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(), null);
+        return run(id, root, plans.scopedTargets(root, discovery, negotiation), IndexingMode.FULL, List.of(),
+                null, policy);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
                                                 IncrementalIndexingPlan plan) {
+        return executePlanned(id, root, negotiation, plan, IndexingResumePolicy.RESUME);
+    }
+
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, IndexerNegotiationResult negotiation,
+                                                IncrementalIndexingPlan plan, IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan);
+        return planned(id, root, negotiation, plans.rootTargets(negotiation), plan, policy);
     }
 
     public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
                                                 IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan) {
+        return executePlanned(id, root, discovery, negotiation, plan, IndexingResumePolicy.RESUME);
+    }
+
+    public Optional<IndexingRun> executePlanned(UUID id, Path root, ProjectDiscovery discovery,
+                                                IndexerNegotiationResult negotiation, IncrementalIndexingPlan plan,
+                                                IndexingResumePolicy policy) {
         plans.validate(id, root, negotiation);
-        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan);
+        return planned(id, root, negotiation, plans.scopedTargets(root, discovery, negotiation), plan, policy);
     }
 
     private Optional<IndexingRun> planned(UUID id, Path root, IndexerNegotiationResult negotiation,
-                                          List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan) {
+                                          List<IndexingExecutionTarget> targets, IncrementalIndexingPlan plan,
+                                          IndexingResumePolicy policy) {
         Objects.requireNonNull(plan, "plan");
         if (!id.equals(plan.projectId())) throw new IllegalArgumentException("plan belongs to another project");
         plans.validatePlan(plan, negotiation);
@@ -110,16 +155,18 @@ public final class IndexingLifecycleService {
             }
         }
         return Optional.of(run(id, root, targets, plan.mode(),
-                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan));
+                plan.mode() == IndexingMode.INCREMENTAL ? plan.changedFiles() : List.of(), plan, policy));
     }
 
     private IndexingRun run(UUID id, Path root, List<IndexingExecutionTarget> targets,
-                            IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan) {
+                            IndexingMode mode, List<String> changedFiles, IncrementalIndexingPlan plan,
+                            IndexingResumePolicy policy) {
         if (targets.isEmpty()) throw new IllegalArgumentException("indexing execution must contain at least one provider scope");
+        Objects.requireNonNull(policy, "policy");
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, markers, clock);
+                    executors, stager, promoter, stateStore, markers, artifactPolicy, policy, clock);
         }
     }
 
