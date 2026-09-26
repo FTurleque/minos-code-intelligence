@@ -161,6 +161,43 @@ class IndexingRunExecutorCheckpointTest {
         assertTrue(run.message().orElseThrow().contains("checkpoint"), run.message().orElse(""));
     }
 
+    @Test
+    void scopeFingerprintIsCapturedOncePerScopeBeforeItsFirstProvider(@TempDir Path temp) throws Exception {
+        // V3: two providers on the same scope share one fingerprint capture, taken before the first
+        // provider; a source edited between the two providers therefore does not move the second
+        // checkpoint's fingerprint (and will invalidate both at resume time, fail-closed).
+        Path root = project(temp);
+        Path artifactA = Files.writeString(temp.resolve("a.scip"), "a");
+        Path artifactB = Files.writeString(temp.resolve("b.scip"), "b");
+        String before = new ProjectFingerprintService().capture(root).projectSha256();
+        IndexerExecutor first = new IndexerExecutor() {
+            @Override public String indexerId() { return "provider-a"; }
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                Files.writeString(root.resolve("ui/app/src/index.ts"), "export const edited = true;");
+                return new IndexingArtifact(Language.TYPESCRIPT, "provider-a", artifactA);
+            }
+        };
+        IndexerExecutor second = new IndexerExecutor() {
+            @Override public String indexerId() { return "provider-b"; }
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) {
+                return new IndexingArtifact(Language.GO, "provider-b", artifactB);
+            }
+        };
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(List.of(first, second),
+                request -> "snapshot-" + request.runId(), (projectId, runId, snapshotId) -> { },
+                new InMemoryIndexStateStore(), CLOCK);
+        IndexerNegotiationResult negotiation = new IndexerNegotiationResult(List.of(
+                new IndexerSelection(Language.TYPESCRIPT, descriptor("provider-a", Language.TYPESCRIPT, false)),
+                new IndexerSelection(Language.GO, descriptor("provider-b", Language.GO, false))), Set.of(), List.of());
+
+        IndexingRun run = lifecycle.execute(UUID.randomUUID(), root, negotiation);
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertEquals(before, checkpoint(run, 0).scopeFingerprint());
+        assertEquals(before, checkpoint(run, 1).scopeFingerprint(),
+                "the second provider of the same scope must reuse the fingerprint captured before the first");
+    }
+
     private static ExecutionCheckpoint checkpoint(IndexingRun run, int index) {
         IndexerExecution execution = run.executions().get(index);
         return execution.checkpoint().orElseThrow(() -> new AssertionError("missing checkpoint for " + execution));
@@ -212,12 +249,15 @@ class IndexingRunExecutorCheckpointTest {
     }
 
     private static IndexerNegotiationResult negotiation(boolean incremental) {
+        return new IndexerNegotiationResult(List.of(new IndexerSelection(Language.TYPESCRIPT,
+                descriptor(PROVIDER, Language.TYPESCRIPT, incremental))), Set.of(), List.of());
+    }
+
+    private static IndexerDescriptor descriptor(String id, Language language, boolean incremental) {
         EnumSet<IndexerCapability> capabilities = EnumSet.of(IndexerCapability.SYMBOLS, IndexerCapability.REFERENCES);
         if (incremental) capabilities.add(IndexerCapability.INCREMENTAL_INDEXING);
-        IndexerDescriptor descriptor = new IndexerDescriptor(PROVIDER, PROVIDER_VERSION, PROVIDER,
-                Set.of(Language.TYPESCRIPT), Set.of(), capabilities, IndexerQualification.QUALIFIED, 100, List.of());
-        return new IndexerNegotiationResult(List.of(new IndexerSelection(Language.TYPESCRIPT, descriptor)),
-                Set.of(), List.of());
+        return new IndexerDescriptor(id, PROVIDER_VERSION, id, Set.of(language), Set.of(), capabilities,
+                IndexerQualification.QUALIFIED, 100, List.of());
     }
 
     private static ProjectInvalidationAssessment partial(UUID projectId) {

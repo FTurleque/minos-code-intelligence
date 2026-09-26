@@ -211,7 +211,8 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 run.stagedSnapshotId(),
                 run.activeSnapshotBefore(),
                 Optional.of(activeSnapshotId),
-                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"));
+                Optional.of("run recovered from authoritative snapshot after post-promotion state persistence failure"),
+                run.runFormatVersion());
         stateStore.saveRun(recovered);
         stateStore.saveProjectState(new ProjectIndexState(
                 run.projectId(),

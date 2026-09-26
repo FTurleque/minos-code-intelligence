@@ -34,6 +34,9 @@ public final class ProjectFingerprintService {
             ".gitignore",
             ".minosignore"
     );
+    /** Descripteurs d'outillage d'un ancêtre pris en compte par l'empreinte de scope (V8). */
+    private static final Set<String> TOOLING_DESCRIPTOR_FILES = Set.of(".npmrc");
+    private static final Set<String> TOOLING_DESCRIPTOR_DIRECTORIES = Set.of(".mvn");
 
     private final BuildDescriptorPolicy buildDescriptorPolicy;
     private final SourceBudgetPolicy sourceBudgetPolicy;
@@ -83,6 +86,15 @@ public final class ProjectFingerprintService {
         Path scopeRoot = root.resolve(scope).normalize();
         if (!scopeRoot.startsWith(root) || !Files.isDirectory(scopeRoot)) {
             throw new IllegalArgumentException("projectRelativeScope must be an existing directory of the project");
+        }
+        // V7: a scope reached through a symbolic link is never walked (links are not recursable), so
+        // its fingerprint would be blind to the real sources. Every component of the scope is checked.
+        Path cursor = root;
+        for (Path component : scope) {
+            cursor = cursor.resolve(component);
+            if (Files.isSymbolicLink(cursor)) {
+                throw new IllegalArgumentException("projectRelativeScope must not traverse a symbolic link");
+            }
         }
 
         ProjectIgnorePolicy ignorePolicy = ProjectIgnorePolicy.load(root);
@@ -192,9 +204,14 @@ public final class ProjectFingerprintService {
     }
 
     /**
-     * Fichiers de contrôle racine et descripteurs de build situés directement dans chaque ancêtre du
-     * scope, de la racine (exclue du sous-arbre) jusqu'au parent du scope. Ils conditionnent ce que
-     * le provider a vu (réacteur Maven, workspace npm, lockfiles) sans appartenir au sous-arbre.
+     * Fichiers de contrôle racine, descripteurs de build et descripteurs d'outillage situés
+     * directement dans chaque ancêtre du scope, de la racine (exclue du sous-arbre) jusqu'au parent
+     * du scope. Ils conditionnent ce que le provider a vu (réacteur Maven, workspace npm, lockfiles,
+     * {@code tsconfig*.json}, {@code .npmrc}, {@code .mvn/**}) sans appartenir au sous-arbre.
+     *
+     * <p>Les descripteurs d'outillage (V8) ne sont pris en compte que par l'empreinte de scope : les
+     * ajouter à {@link BuildDescriptorPolicy} changerait l'empreinte de build de tous les projets et
+     * forcerait une réindexation complète unique, hors du périmètre de la reprise.</p>
      */
     private List<FileFingerprint> ancestorDescriptors(
             Path root,
@@ -210,16 +227,15 @@ public final class ProjectFingerprintService {
                 for (Path candidate : entries.sorted().toList()) {
                     budget.accountTraversalEntry();
                     Path relative = root.relativize(candidate);
-                    if (!isRootControlFile(relative) && !buildDescriptorPolicy.isBuildDescriptor(relative)) {
+                    if (Files.isSymbolicLink(candidate)) continue;
+                    if (TOOLING_DESCRIPTOR_DIRECTORIES.contains(candidate.getFileName().toString())
+                            && Files.isDirectory(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                        descriptors.addAll(toolingDirectory(root, candidate, ignorePolicy, budget));
                         continue;
                     }
-                    if (Files.isSymbolicLink(candidate)
-                            || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
-                        continue;
-                    }
-                    if (!isRootControlFile(relative) && ignorePolicy.isIgnored(relative, false)) {
-                        continue;
-                    }
+                    if (!isAncestorDescriptor(relative)) continue;
+                    if (!Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) continue;
+                    if (!isRootControlFile(relative) && ignorePolicy.isIgnored(relative, false)) continue;
                     budget.accountFile();
                     descriptors.add(fingerprint(root, relative, budget));
                 }
@@ -227,6 +243,43 @@ public final class ProjectFingerprintService {
             ancestor = ancestor.resolve(scope.getName(depth));
         }
         return descriptors;
+    }
+
+    private boolean isAncestorDescriptor(Path relative) {
+        if (isRootControlFile(relative) || buildDescriptorPolicy.isBuildDescriptor(relative)) return true;
+        String name = relative.getFileName().toString();
+        return TOOLING_DESCRIPTOR_FILES.contains(name)
+                || (name.startsWith("tsconfig") && name.endsWith(".json"));
+    }
+
+    /** Every regular file below a tooling directory such as {@code .mvn/}, links never followed. */
+    private static List<FileFingerprint> toolingDirectory(
+            Path root,
+            Path directory,
+            ProjectIgnorePolicy ignorePolicy,
+            SourceBudgetPolicy.Tracker budget
+    ) throws IOException {
+        List<FileFingerprint> files = new ArrayList<>();
+        Files.walkFileTree(directory, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path child, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                return child.equals(directory) || FileTreeOperations.isRecursableDirectory(attributes)
+                        ? FileVisitResult.CONTINUE : FileVisitResult.SKIP_SUBTREE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                budget.accountTraversalEntry();
+                if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
+                Path relative = root.relativize(file);
+                if (ignorePolicy.isIgnored(relative, false)) return FileVisitResult.CONTINUE;
+                budget.accountFile();
+                files.add(fingerprint(root, relative, budget));
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return files;
     }
 
     private static FileFingerprint fingerprint(

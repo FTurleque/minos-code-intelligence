@@ -144,6 +144,27 @@ class FileIndexStateStoreCheckpointTest {
     }
 
     @Test
+    void unparseableRunFormatVersionDegradesToLegacyInsteadOfBlockingTheRunListing() throws Exception {
+        // V4: a corrupt version must never make listRuns throw, which would block every new run.
+        Path stateRoot = root.resolve("bad-version");
+        UUID projectId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        FileIndexStateStore store = new FileIndexStateStore(stateRoot);
+        store.saveRun(new IndexingRun(
+                runId, projectId, IndexingRun.Status.RUNNING, IndexingRun.Phase.PROVIDER_EXECUTION, CREATED,
+                Optional.empty(), List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                IndexingRun.CURRENT_FORMAT_VERSION));
+        Path file = stateRoot.resolve("runs").resolve(projectId.toString()).resolve(runId + ".properties");
+        String content = Files.readString(file);
+
+        Files.writeString(file, content.replace("runFormatVersion=2", "runFormatVersion=abc"));
+        assertEquals(IndexingRun.LEGACY_FORMAT_VERSION, store.findRun(runId).orElseThrow().runFormatVersion());
+        Files.writeString(file, content.replace("runFormatVersion=2", "runFormatVersion=0"));
+        assertEquals(IndexingRun.LEGACY_FORMAT_VERSION, store.findRun(runId).orElseThrow().runFormatVersion());
+        assertEquals(List.of(runId), store.listRuns(projectId).stream().map(IndexingRun::id).toList());
+    }
+
+    @Test
     void inMemoryStoreKeepsCheckpointsVerbatim() {
         InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         UUID runId = UUID.randomUUID();

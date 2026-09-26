@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
 public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
+    private static final System.Logger LOGGER = System.getLogger(ProcessIndexerExecutor.class.getName());
     private static final Duration GRACEFUL_TERMINATION_WAIT = Duration.ofMillis(500);
     private static final Duration FORCED_TERMINATION_WAIT = Duration.ofSeconds(10);
 
@@ -341,16 +342,31 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
      * Records the SHA-256 of the promoted artifact next to it (ADR 0039 §1) so that a resume can
      * verify the bytes it would reuse. The digest is computed on the promoted file itself, never on
      * the provider-side copy, and published through the same durable primitive as the artifact.
+     *
+     * <p>The digest only serves resumption: a failure to record it (disk full after a 512 MiB move,
+     * unwritable pathname) never fails an execution whose artifact is already valid and promoted.
+     * The orchestrator recomputes the digest itself and simply finds no sidecar to cross-check.</p>
      */
-    private static void writeArtifactDigest(Path finalArtifact) throws IOException {
-        String digest = sha256Bounded(finalArtifact);
+    private static void writeArtifactDigest(Path finalArtifact) {
         Path sidecar = artifactDigestSidecar(finalArtifact);
-        Path temporary = Files.createTempFile(sidecar.getParent(), ".digest-", ".tmp");
+        Path temporary = null;
         try {
+            String digest = sha256Bounded(finalArtifact);
+            temporary = Files.createTempFile(sidecar.getParent(), ".digest-", ".tmp");
             Files.writeString(temporary, digest + "  " + finalArtifact.getFileName() + "\n", StandardCharsets.UTF_8);
             DurableAtomicFile.replace(temporary, sidecar, "provider artifact digest replacement");
+        } catch (IOException | RuntimeException failure) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not record the artifact digest sidecar; the artifact stays valid but this target"
+                            + " will not be resumable: " + failure.getClass().getSimpleName());
         } finally {
-            Files.deleteIfExists(temporary);
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // Residue reclamation and run retention bound any leftover temporary file.
+                }
+            }
         }
     }
 

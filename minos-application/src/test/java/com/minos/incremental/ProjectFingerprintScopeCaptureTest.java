@@ -71,6 +71,41 @@ class ProjectFingerprintScopeCaptureTest {
     }
 
     @Test
+    void ancestorToolingDescriptorsBeyondTheBuildPolicyAreCovered(@TempDir Path root) throws Exception {
+        // V8: tsconfig*.json, .npmrc and .mvn/** of an ancestor shape what a provider sees.
+        Files.createDirectories(root.resolve("packages/app/src"));
+        Files.createDirectories(root.resolve(".mvn/wrapper"));
+        Files.writeString(root.resolve("packages/app/src/index.ts"), "export const a = 1;");
+        Files.writeString(root.resolve("tsconfig.base.json"), "{}");
+        Files.writeString(root.resolve(".npmrc"), "strict-peer-dependencies=true");
+        Files.writeString(root.resolve(".mvn/jvm.config"), "-Xmx2g");
+        Files.writeString(root.resolve(".mvn/wrapper/maven-wrapper.properties"), "distributionUrl=x");
+        Files.writeString(root.resolve("notes.txt"), "irrelevant");
+
+        ProjectFingerprint scoped = service.captureScope(root, Path.of("packages/app"));
+
+        assertEquals(List.of(".mvn/jvm.config", ".mvn/wrapper/maven-wrapper.properties", ".npmrc",
+                        "packages/app/src/index.ts", "tsconfig.base.json"),
+                scoped.files().stream().map(FileFingerprint::relativePath).toList());
+    }
+
+    @Test
+    void symbolicLinkScopeIsRejectedSoTheFingerprintStaysBoundToRealSources(@TempDir Path root) throws Exception {
+        // V7: a scope that is itself a link would otherwise fingerprint an empty subtree.
+        Files.createDirectories(root.resolve("real/src"));
+        Files.writeString(root.resolve("real/src/A.java"), "class A {}");
+        Path link = root.resolve("linked");
+        try {
+            Files.createSymbolicLink(link, root.resolve("real"));
+        } catch (java.io.IOException | UnsupportedOperationException | SecurityException unsupported) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "symbolic links are not creatable on this host");
+        }
+
+        assertThrows(IllegalArgumentException.class, () -> service.captureScope(root, Path.of("linked")));
+        assertThrows(IllegalArgumentException.class, () -> service.captureScope(root, Path.of("linked/src")));
+    }
+
+    @Test
     void scopeOutsideTheProjectOrMissingIsRejected(@TempDir Path root) throws Exception {
         Files.writeString(root.resolve("pom.xml"), "<project/>");
 

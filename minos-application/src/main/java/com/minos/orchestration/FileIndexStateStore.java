@@ -42,6 +42,17 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final String RUN_LOCATOR_READY = "v1.ready";
     private static final String PROJECT_ID_PROPERTY = "projectId";
     private static final String RUN_FORMAT_VERSION_PROPERTY = "runFormatVersion";
+    /** Run-level keys plus, per execution, 3 base keys and up to 8 checkpoint keys (V5). */
+    private static final int RUN_HEADER_PROPERTIES = 16;
+    private static final int PROPERTIES_PER_EXECUTION = 11;
+    /**
+     * Executions a run file can hold and still stay below {@link #MAX_PROPERTIES_ENTRIES}; the
+     * changed-file list of an incremental run (single scope, at most
+     * {@link ExecutionCheckpoint#MAX_CHANGED_FILES} entries) fits in the remaining headroom.
+     */
+    static final int MAX_RUN_EXECUTIONS =
+            (MAX_PROPERTIES_ENTRIES - RUN_HEADER_PROPERTIES - ExecutionCheckpoint.MAX_CHANGED_FILES)
+                    / PROPERTIES_PER_EXECUTION;
 
     private final Path storageRoot;
     private final Path projectRoot;
@@ -341,7 +352,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         } catch (NumberFormatException exception) {
             throw new IllegalStateException("invalid execution count in " + file, exception);
         }
-        if (executionCount < 0 || executionCount > 10_000) {
+        if (executionCount < 0 || executionCount > MAX_RUN_EXECUTIONS) {
             throw new IllegalStateException("unsafe execution count in " + file + ": " + executionCount);
         }
         List<IndexerExecution> executions = new ArrayList<>(executionCount);
@@ -366,22 +377,24 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "activeSnapshotBefore"),
                 optional(properties, "activeSnapshotAfter"),
                 optional(properties, "message"),
-                readRunFormatVersion(properties, file)
+                readRunFormatVersion(properties)
         );
     }
 
-    /** A run file without a format version was written before ADR 0039: legacy, never resumable. */
-    private static int readRunFormatVersion(Properties properties, Path file) {
+    /**
+     * A run file without a format version was written before ADR 0039: legacy, never resumable. An
+     * unparseable version degrades the same way (V4) instead of throwing: a corrupt value must never
+     * make {@code listRuns} fail, which would block every new run of the project. Any parsed value is
+     * returned as is; the resume planner is the one that requires {@code CURRENT_FORMAT_VERSION}.
+     */
+    private static int readRunFormatVersion(Properties properties) {
         Optional<String> version = optional(properties, RUN_FORMAT_VERSION_PROPERTY);
         if (version.isEmpty()) return IndexingRun.LEGACY_FORMAT_VERSION;
         try {
             int parsed = Integer.parseInt(version.orElseThrow());
-            if (parsed < IndexingRun.LEGACY_FORMAT_VERSION) {
-                throw new IllegalStateException("invalid run format version in " + file.getFileName());
-            }
-            return parsed;
+            return parsed < IndexingRun.LEGACY_FORMAT_VERSION ? IndexingRun.LEGACY_FORMAT_VERSION : parsed;
         } catch (NumberFormatException exception) {
-            throw new IllegalStateException("invalid run format version in " + file.getFileName(), exception);
+            return IndexingRun.LEGACY_FORMAT_VERSION;
         }
     }
 

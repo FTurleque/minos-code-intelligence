@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -143,10 +144,13 @@ final class IndexingRunExecutor {
         Path relative = target.projectRelativeRoot();
         Path executionRoot = requireExecutionRoot(root, relative);
         List<String> scopedChangedFiles = scopedChangedFiles(mode, changedFiles, relative);
-        // The scope fingerprint is captured before the provider starts: a source that changes while
-        // the provider runs then differs from the recorded fingerprint, so a later resume can never
-        // reuse an artifact built from sources it did not fingerprint (fail-closed, ADR 0039 §3).
-        CheckpointMaterial material = captureScopeFingerprint(root.lexicalRoot(), relative);
+        // The scope fingerprint is captured once per scope, before the first provider of that scope
+        // starts (V3: N root providers cost one project hash, not N). A source that changes after the
+        // capture differs from the recorded fingerprint, so a later resume can never reuse an artifact
+        // built from sources it did not fingerprint (fail-closed, ADR 0039 §3). Beyond the source
+        // budget (100 000 files / 2 GiB) the capture fails and no checkpoint is persisted.
+        CheckpointMaterial material = context.scopeFingerprints.computeIfAbsent(
+                relative.normalize(), scope -> captureScopeFingerprint(root.lexicalRoot(), scope));
         IndexingArtifact artifact = Objects.requireNonNull(executor.execute(new IndexingExecutionRequest(
                 context.runId,
                 context.projectId,
@@ -549,6 +553,7 @@ final class IndexingRunExecutor {
         private final Clock clock;
         private final List<IndexingArtifact> artifacts = new ArrayList<>();
         private final List<IndexerExecution> executions = new ArrayList<>();
+        private final Map<Path, CheckpointMaterial> scopeFingerprints = new HashMap<>();
         private Optional<String> staged = Optional.empty();
         private Phase phase = Phase.PROVIDER_EXECUTION;
         private boolean committed;
