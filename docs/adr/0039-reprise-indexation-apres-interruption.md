@@ -1,6 +1,6 @@
 # 0039 — Reprendre une indexation interrompue au lieu de tout réindexer
 
-Status: Accepted — implémenté au sprint 2 (2026-09-26), lots 1 à 5 (commits `98201341`, `1abf15d2`, `f0bfd340`, `1e0e76ab`, `2381a88c`, `5d03ab1a`, `f87c9dec`).
+Status: Accepted — implémenté au sprint 2 (2026-09-26), lots 1 à 5 et corrections de revue (commits fusionnés `bc78af20`, `be4cacda`, `dd48ee64`, `90ab9197`, `6ce0f128`, `536700d0`, `e7bfbeba`, `d98aa913`, `58253065`, `8b5bfae0` ; faits produit régénérés : `1919d136`).
 
 Complète [0006](0006-promouvoir-les-index-de-maniere-atomique.md) (promotion atomique), [0014](0014-safe-incremental-indexing.md) (indexation incrémentale sûre), [0021](0021-native-runtime-autonomous-indexing.md) et [0038](0038-aggregate-worker-resource-containment.md) (rétention des répertoires de run).
 
