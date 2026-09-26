@@ -12,6 +12,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -142,6 +143,71 @@ class RunDirectoryRetentionTest {
         assertFalse(Files.exists(hostileRun));
         assertFalse(Files.exists(junction, LinkOption.NOFOLLOW_LINKS), "the junction entry itself must be removed");
         assertTrue(Files.isRegularFile(evidence), "reclaiming a hostile run must never delete anything at a junction's target");
+    }
+
+    @Test
+    void resumableRunIsReclaimedLastAndOnlyWhenTheBudgetStillRequiresIt(@TempDir Path home) throws Exception {
+        // ADR 0039 §5 / R1-7: 17 runs, the oldest one marked .resumable; the count budget (16) is
+        // satisfied by reclaiming the oldest UNMARKED run, so the marked run survives even though it
+        // is the oldest by mtime.
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Path marked = run(runs, "marked", 8);
+        Path marker = Files.writeString(marked.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=marked\n");
+        Files.setLastModifiedTime(marker, FileTime.from(now.minus(Duration.ofHours(2))));
+        Files.setLastModifiedTime(marked, FileTime.from(now.minus(Duration.ofHours(6))));
+        Path oldestUnmarked = run(runs, "oldest-unmarked", 8);
+        Files.setLastModifiedTime(oldestUnmarked, FileTime.from(now.minus(Duration.ofHours(5))));
+        for (int index = 0; index < 15; index++) {
+            Path other = run(runs, "run-" + index, 8);
+            Files.setLastModifiedTime(other, FileTime.from(now.minus(Duration.ofMinutes(60 - index))));
+        }
+
+        RunDirectoryRetention.prune(runs, null,
+                new RunDirectoryRetention.Policy(16, 1024L * 1024L, Duration.ofDays(7), Duration.ofHours(24)), now);
+
+        assertFalse(Files.exists(oldestUnmarked), "the budget is met by the oldest unmarked run");
+        assertTrue(Files.exists(marked), "a resumable run is reclaimed last");
+        for (int index = 0; index < 15; index++) assertTrue(Files.exists(runs.resolve("run-" + index)));
+    }
+
+    @Test
+    void resumableRunIsReclaimedWhenTheBudgetStillRequiresItAfterEveryUnmarkedRun(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Path marked = run(runs, "marked", 8);
+        Files.writeString(marked.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=marked\n");
+        Path fresh = run(runs, "fresh", 8);
+        Files.setLastModifiedTime(marked, FileTime.from(now.minus(Duration.ofHours(1))));
+        Files.setLastModifiedTime(fresh, FileTime.from(now));
+
+        RunDirectoryRetention.prune(runs, fresh,
+                new RunDirectoryRetention.Policy(1, 4L, Duration.ofDays(7), Duration.ofHours(24)), now);
+
+        assertFalse(Files.exists(marked), "over the byte budget with nothing else to reclaim, the marked run goes");
+        assertTrue(Files.exists(fresh), "the current run stays protected");
+    }
+
+    @Test
+    void resumableRunOlderThanTheResumeTtlIsReclaimedEvenUnderBudget(@TempDir Path home) throws Exception {
+        Path runs = home.resolve("runs");
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        Path expired = run(runs, "expired", 8);
+        Path expiredMarker = Files.writeString(expired.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=expired\n");
+        Files.setLastModifiedTime(expiredMarker, FileTime.from(now.minus(Duration.ofHours(25))));
+        // The sidecar/marker writes bumped the directory mtime recently (R1-7): the marker's age rules.
+        Files.setLastModifiedTime(expired, FileTime.from(now));
+        Path live = run(runs, "live", 8);
+        Path liveMarker = Files.writeString(live.resolve(FileResumableRunMarkers.MARKER_FILE_NAME), "runId=live\n");
+        Files.setLastModifiedTime(liveMarker, FileTime.from(now.minus(Duration.ofHours(23))));
+        Files.setLastModifiedTime(live, FileTime.from(now.minus(Duration.ofDays(8))));
+
+        RunDirectoryRetention.prune(runs, null,
+                new RunDirectoryRetention.Policy(16, 1024L * 1024L, Duration.ofDays(7), Duration.ofHours(24)), now);
+
+        assertFalse(Files.exists(expired), "a marker older than the resume TTL no longer protects the run");
+        assertTrue(Files.exists(live), "a live marker protects the run even past the general max age");
+        assertEquals(Duration.ofHours(24), RunDirectoryRetention.DEFAULT.resumeTtl());
     }
 
     private static void createJunction(Path link, Path target) throws IOException, InterruptedException {

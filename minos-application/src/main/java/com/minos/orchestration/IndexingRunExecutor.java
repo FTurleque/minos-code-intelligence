@@ -121,13 +121,24 @@ final class IndexingRunExecutor {
             context.record(reused.target(), new IndexingArtifact(execution.language(), execution.indexerId(),
                     execution.finalArtifact(), reused.target().projectRelativeRoot()), execution);
         }
+        // ADR 0039 §4: interrupted in PROMOTION with every artifact still valid, the known staged
+        // snapshot is promoted directly, without relaunching providers or staging. Interrupted in
+        // STAGING (no staged id yet), everything is reused and the snapshot is staged again.
+        boolean promoteOnly = resume.remaining().isEmpty()
+                && run.phase() == Phase.PROMOTION
+                && run.stagedSnapshotId().isPresent();
         try {
             publishInProgress(context, mode, "indexing run resumed: attempt=" + resume.attempt()
-                    + ", mode=" + mode + ", " + resume.reused().size() + "/" + targets.size() + " targets reused");
+                    + ", mode=" + mode + ", " + resume.reused().size() + "/" + targets.size() + " targets reused"
+                    + (promoteOnly ? ", promoting the staged snapshot directly" : ""));
             executeProviders(context, root, resume.remaining(), mode, changedFiles);
-            reverifyReusedArtifacts(resume.reused());
-            stageSnapshot(context, mode);
-            promoteSnapshot(context);
+            reverifyReusedArtifacts(context, resume.reused());
+            if (promoteOnly) {
+                resumeStagedPromotion(context, run.stagedSnapshotId().orElseThrow(), mode);
+            } else {
+                stageSnapshot(context, mode);
+                promoteSnapshot(context);
+            }
             return ResumedAttempt.completed(persistSuccess(context, mode, ports.clock().instant()));
         } catch (ResumeAborted aborted) {
             persistTerminalFailure(context, aborted, ports.clock().instant());
@@ -144,19 +155,63 @@ final class IndexingRunExecutor {
      * re-checks its size, so only a size-preserving replacement during that copy could escape, and
      * it would still have to defeat the digest recorded here a moment earlier.
      */
-    private static void reverifyReusedArtifacts(List<ReusedTarget> reused) throws ResumeAborted {
+    private static void reverifyReusedArtifacts(RunContext context, List<ReusedTarget> reused) throws ResumeAborted {
+        if (reused.isEmpty()) return;
+        Path runDirectory = canonicalRunDirectory(context);
         for (ReusedTarget target : reused) {
             ExecutionCheckpoint checkpoint = target.execution().checkpoint().orElseThrow();
             String scope = portable(target.target().projectRelativeRoot());
+            Path artifact = target.execution().finalArtifact();
+            // V16: containment is re-decided on the canonical path before a single byte is re-read.
+            if (Files.isSymbolicLink(artifact)) {
+                throw new ResumeAborted("resume aborted: artifact became a symbolic link (scope " + scope + ")");
+            }
+            try {
+                if (!artifact.toRealPath().startsWith(runDirectory)) {
+                    throw new ResumeAborted("resume aborted: artifact left the run directory (scope " + scope + ")");
+                }
+            } catch (IOException failure) {
+                throw new ResumeAborted("resume aborted: artifact cannot be resolved before staging (scope " + scope + ")");
+            }
             ExecutionCheckpoints.ArtifactDigest digest;
             try {
-                digest = ExecutionCheckpoints.artifactDigest(target.execution().finalArtifact());
+                digest = ExecutionCheckpoints.artifactDigest(artifact);
             } catch (ExecutionCheckpoints.Unavailable unavailable) {
                 throw new ResumeAborted("resume aborted: " + unavailable.getMessage() + " (scope " + scope + ")");
             }
             if (digest.bytes() != checkpoint.artifactBytes() || !digest.sha256().equals(checkpoint.artifactSha256())) {
                 throw new ResumeAborted("resume aborted: artifact changed before staging (scope " + scope + ")");
             }
+        }
+    }
+
+    private static Path canonicalRunDirectory(RunContext context) throws ResumeAborted {
+        Path runDirectory = context.ports.markers().runDirectory(context.runId)
+                .orElseThrow(() -> new ResumeAborted("resume aborted: run directory is unknown to this runtime"));
+        try {
+            return runDirectory.toRealPath();
+        } catch (IOException failure) {
+            throw new ResumeAborted("resume aborted: run directory disappeared before staging");
+        }
+    }
+
+    /**
+     * Promotes the snapshot staged by the interrupted attempt. Anything but a commit-uncertain
+     * outcome (handled by the regular promotion path) aborts the resume: the staged snapshot may
+     * have been reclaimed, and a full run is the safe fallback.
+     */
+    private static void resumeStagedPromotion(RunContext context, String stagedId, IndexingMode mode)
+            throws Exception {
+        context.staged = Optional.of(stagedId);
+        context.phase = Phase.PROMOTION;
+        context.ports.stateStore().saveRun(running(context, "promoting staged snapshot of the interrupted attempt: mode=" + mode));
+        try {
+            promoteSnapshot(context);
+        } catch (CommitUncertainException uncertain) {
+            throw uncertain;
+        } catch (Exception failure) {
+            throw new ResumeAborted("resume aborted: staged snapshot could not be promoted ("
+                    + failure.getClass().getSimpleName() + ")");
         }
     }
 

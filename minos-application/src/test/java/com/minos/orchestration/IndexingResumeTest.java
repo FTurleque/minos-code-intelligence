@@ -264,6 +264,150 @@ class IndexingResumeTest {
         assertEquals(List.of(Path.of("ui/web")), executor.executed);
     }
 
+    @Test
+    void interruptionDuringStagingRelaunchesNoProviderAndRestagesTheSameBytes(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        IndexingRun full = fixture.lifecycle(new Fixture.Executor(fixture, 99), T0).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+        List<String> fullBytes = fixture.stager.lastArtifacts();
+        fixture.resetProjectState();
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.STAGING, Optional.empty(), T0.plusSeconds(60));
+        Fixture.Executor executor = new Fixture.Executor(fixture, 0);
+        int stagedBefore = fixture.stager.requests.size();
+
+        IndexingRun resumed = fixture.lifecycle(executor, T0.plusSeconds(600)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, resumed.status());
+        assertEquals(interrupted.id(), resumed.id());
+        assertTrue(executor.executed.isEmpty(), "no provider is relaunched after a staging interruption");
+        assertEquals(stagedBefore + 1, fixture.stager.requests.size(), "the snapshot is staged again");
+        assertEquals(fullBytes, fixture.stager.lastArtifacts());
+        assertEquals(3, resumed.resume().orElseThrow().reusedTargets());
+        assertEquals(0, resumed.resume().orElseThrow().reexecutedTargets());
+        assertNotEquals(full.id(), resumed.id());
+    }
+
+    @Test
+    void interruptionDuringStagingStillReverifiesEveryReusedArtifact(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.STAGING, Optional.empty(), T0);
+        Path reused = interrupted.executions().get(1).finalArtifact();
+        Fixture.Executor executor = new Fixture.Executor(fixture, 99);
+        // Same size, different bytes, written after the planner would have verified it: the planner
+        // and the pre-staging check run in the same call, so the tampering happens before both and
+        // the planner refuses; a tampering between them is covered by the swap-for-a-link test below.
+        // Here the resume is aborted before staging because no provider runs in between.
+        Files.writeString(reused, "T".repeat((int) Files.size(reused)));
+
+        IndexingRun run = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertNotEquals(interrupted.id(), run.id());
+        assertEquals(SCOPES, executor.executed, "the full run re-executes everything");
+        assertTrue(run.resume().orElseThrow().refusalReason().orElseThrow().contains("digest"));
+    }
+
+    @Test
+    void reusedArtifactSwappedForALinkOutsideTheRunDirectoryAbortsTheResume(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        IndexingRun interrupted = fixture.interruptAfter(2, T0);
+        Path reused = interrupted.executions().getFirst().finalArtifact();
+        Path outside = Files.copy(reused, temp.resolve("outside-copy.scip"));
+        Fixture.Executor executor = new Fixture.Executor(fixture, 99) {
+            @Override public IndexingArtifact execute(IndexingExecutionRequest request) throws Exception {
+                if (executed.isEmpty()) {
+                    // V16: identical bytes, but the pathname now leaves runs/<runId>/ through a link.
+                    Files.delete(reused);
+                    try {
+                        Files.createSymbolicLink(reused, outside);
+                    } catch (IOException | UnsupportedOperationException | SecurityException unsupported) {
+                        Files.copy(outside, reused);
+                        throw new org.opentest4j.TestAbortedException("symbolic links are not creatable on this host");
+                    }
+                }
+                return super.execute(request);
+            }
+        };
+
+        IndexingRun run;
+        try {
+            run = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                    fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+        } catch (org.opentest4j.TestAbortedException aborted) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, aborted.getMessage());
+            return;
+        }
+
+        assertNotEquals(interrupted.id(), run.id());
+        IndexingRun aborted = fixture.store.findRun(interrupted.id()).orElseThrow();
+        assertEquals(IndexingRun.Status.FAILED, aborted.status());
+        assertTrue(aborted.message().orElseThrow().contains("resume aborted"), aborted.message().orElse(""));
+    }
+
+    @Test
+    void interruptionBetweenStageAndPromotePromotesTheKnownStagedSnapshotDirectly(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        fixture.active.set("snapshot-old");
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.PROMOTION, Optional.of("snapshot-staged"), T0);
+        Fixture.Executor executor = new Fixture.Executor(fixture, 0);
+        int stagedBefore = fixture.stager.requests.size();
+
+        IndexingRun resumed = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, resumed.status());
+        assertEquals(interrupted.id(), resumed.id());
+        assertTrue(executor.executed.isEmpty(), "no provider is relaunched");
+        assertEquals(stagedBefore, fixture.stager.requests.size(), "no staging is redone");
+        assertEquals(List.of("snapshot-staged"), fixture.promoted, "the known staged snapshot is promoted directly");
+        assertEquals(Optional.of("snapshot-staged"), resumed.activeSnapshotAfter());
+        assertEquals(Optional.of("snapshot-staged"),
+                fixture.store.findProjectState(fixture.projectId).orElseThrow().activeSnapshotId());
+    }
+
+    @Test
+    void interruptionAfterPromoteIsRecoveredAsSuccessAndOffersNothingToResume(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        fixture.active.set("snapshot-staged");
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.PROMOTION, Optional.of("snapshot-staged"), T0);
+        Fixture.Executor executor = new Fixture.Executor(fixture, 0);
+        IndexingLifecycleService lifecycle = fixture.lifecycle(executor, T0.plusSeconds(10));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> lifecycle.execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation(), IndexingResumePolicy.RESUME_ONLY));
+
+        assertTrue(refused.getMessage().contains("no interrupted run"), refused.getMessage());
+        IndexingRun recovered = fixture.store.findRun(interrupted.id()).orElseThrow();
+        assertEquals(IndexingRun.Status.SUCCEEDED, recovered.status());
+        assertEquals(Optional.of("snapshot-staged"), recovered.activeSnapshotAfter());
+        assertTrue(executor.executed.isEmpty());
+        assertTrue(fixture.promoted.isEmpty(), "an already authoritative snapshot is not promoted again");
+        assertEquals(ProjectIndexState.Availability.READY,
+                fixture.store.findProjectState(fixture.projectId).orElseThrow().availability());
+    }
+
+    @Test
+    void stagedSnapshotThatCanNoLongerBePromotedAbortsTheResumeAndRunsFully(@TempDir Path temp) throws Exception {
+        Fixture fixture = new Fixture(temp);
+        fixture.active.set("snapshot-old");
+        fixture.rejectPromotionOf = "snapshot-gone";
+        IndexingRun interrupted = fixture.interruptInPhase(IndexingRun.Phase.PROMOTION, Optional.of("snapshot-gone"), T0);
+        Fixture.Executor executor = new Fixture.Executor(fixture, 99);
+
+        IndexingRun run = fixture.lifecycle(executor, T0.plusSeconds(10)).execute(
+                fixture.projectId, fixture.root, fixture.discovery(), negotiation());
+
+        assertEquals(IndexingRun.Status.SUCCEEDED, run.status());
+        assertNotEquals(interrupted.id(), run.id());
+        assertEquals(SCOPES, executor.executed, "the fallback is a full run");
+        IndexingRun aborted = fixture.store.findRun(interrupted.id()).orElseThrow();
+        assertEquals(IndexingRun.Status.FAILED, aborted.status());
+        assertTrue(aborted.message().orElseThrow().contains("resume aborted"), aborted.message().orElse(""));
+        assertTrue(run.resume().orElseThrow().refusalReason().orElseThrow().contains("promoted"));
+    }
+
     static IndexerNegotiationResult negotiation() {
         return negotiation(VERSION, PROVIDER);
     }
@@ -296,8 +440,14 @@ class IndexingResumeTest {
         final InMemoryIndexStateStore store = new InMemoryIndexStateStore();
         final RecordingStager stager = new RecordingStager();
         final AtomicReference<String> active = new AtomicReference<>();
+        final List<String> promoted = new ArrayList<>();
+        String rejectPromotionOf;
         final SnapshotPromoter promoter = new SnapshotPromoter() {
-            @Override public void promote(UUID id, UUID runId, String staged) { active.set(staged); }
+            @Override public void promote(UUID id, UUID runId, String staged) throws IOException {
+                if (staged.equals(rejectPromotionOf)) throw new IOException("staged snapshot is missing");
+                promoted.add(staged);
+                active.set(staged);
+            }
             @Override public ActiveSnapshotObservation observeActiveSnapshot(UUID id) {
                 return active.get() == null
                         ? ActiveSnapshotObservation.noActiveSnapshot() : ActiveSnapshotObservation.active(active.get());
@@ -337,6 +487,27 @@ class IndexingResumeTest {
             assertEquals(IndexingRun.Status.FAILED, failed.status());
             assertEquals(completed, failed.executions().size());
             return reopenAsRunning(failed);
+        }
+
+        /** A full provider phase, then a crash in {@code phase} (STAGING or PROMOTION) with every checkpoint. */
+        IndexingRun interruptInPhase(IndexingRun.Phase phase, Optional<String> staged, Instant now) {
+            String activeBefore = active.get();
+            IndexingRun completed = lifecycle(new Executor(this, 99), now).execute(
+                    projectId, root, discovery(), negotiation());
+            assertEquals(IndexingRun.Status.SUCCEEDED, completed.status());
+            active.set(activeBefore);
+            promoted.clear();
+            IndexingRun running = new IndexingRun(completed.id(), projectId, IndexingRun.Status.RUNNING, phase,
+                    completed.createdAt(), Optional.empty(), completed.executions(), staged,
+                    Optional.ofNullable(activeBefore), Optional.ofNullable(activeBefore),
+                    Optional.of("in progress"), completed.runFormatVersion(), completed.resume());
+            store.saveRun(running);
+            store.saveProjectState(new ProjectIndexState(projectId,
+                    activeBefore != null ? ProjectIndexState.Availability.REFRESHING
+                            : ProjectIndexState.Availability.INDEXING,
+                    Optional.ofNullable(activeBefore), Optional.of(completed.id()), completed.createdAt(),
+                    Optional.of("indexing run in progress")));
+            return running;
         }
 
         /** A crash leaves the run RUNNING with its persisted checkpoints and the project in progress. */

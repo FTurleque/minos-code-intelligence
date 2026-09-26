@@ -31,6 +31,10 @@ public final class IndexCommand {
               --resume-only                 Fail without creating a run unless an interrupted run can be resumed
               --format <text|json>          Output format (default: text)
 
+            An interrupted run (crash, kill, reboot) is reopened by default and only the providers
+            without a valid checkpoint are re-executed. A provider that fails explicitly during the
+            reopened attempt consumes the run's checkpoints: the next `minos index` starts from scratch.
+
             Deprecated compatibility import:
               --scip <index.scip>           Import an already generated SCIP artifact
               --provider <id>               Required with --scip

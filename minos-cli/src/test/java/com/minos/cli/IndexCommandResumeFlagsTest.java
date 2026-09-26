@@ -58,6 +58,15 @@ class IndexCommandResumeFlagsTest {
     }
 
     @Test
+    void usageDocumentsThatAFailureDuringAReopenedAttemptConsumesTheCheckpoints() {
+        // V18: user-facing statement of the ADR 0039 rule "explicit provider failure = FAILED".
+        String usage = IndexCommand.usage();
+        assertTrue(usage.contains("--no-resume"), usage);
+        assertTrue(usage.contains("--resume-only"), usage);
+        assertTrue(usage.contains("consumes"), usage);
+    }
+
+    @Test
     void resumeOnlyFailureIsReportedAsAnExecutionError() throws Exception {
         StubAutonomous autonomous = new StubAutonomous();
         autonomous.failResumeOnly = true;
