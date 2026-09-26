@@ -75,11 +75,13 @@ class WorkerSandboxBackendsTest {
         AtomicReference<WorkerSandboxSelection> selection = new AtomicReference<>();
 
         List<LogRecord> records = capture(() ->
-                selection.set(WorkerSandboxBackends.selectForUntrustedCode(Optional.of(supervised))));
+                selection.set(WorkerSandboxBackends.selectForUntrustedCode(Optional.of(supervised), List.of())));
 
         WorkerSandboxSelection result = selection.get();
         assertEquals("native-process-ephemeral-workspace-v1", result.backend().id());
         assertFalse(result.supportsUntrustedCode());
+        assertEquals(WorkerSandboxSelection.Cause.REJECTED_BY_DECISION, result.cause());
+        assertTrue(result.closedByDecision());
         assertEquals(Optional.of("fake-os-backend"), result.rejectedBackendId());
         assertEquals(List.of(BYTES_UNMET, ENTRIES_UNMET), result.rejectionReasons());
         assertTrue(result.refusalReport().contains("fake-os-backend"));
@@ -105,31 +107,72 @@ class WorkerSandboxBackendsTest {
         AtomicReference<WorkerSandboxSelection> selection = new AtomicReference<>();
 
         List<LogRecord> records = capture(() ->
-                selection.set(WorkerSandboxBackends.selectForUntrustedCode(Optional.of(hard))));
+                selection.set(WorkerSandboxBackends.selectForUntrustedCode(Optional.of(hard), List.of())));
 
         WorkerSandboxSelection result = selection.get();
         assertEquals("fake-hard-backend", result.backend().id());
         assertTrue(result.supportsUntrustedCode());
+        assertEquals(WorkerSandboxSelection.Cause.QUALIFIED, result.cause());
+        assertEquals("", result.refusalReport());
         assertTrue(result.rejectedBackendId().isEmpty());
         assertTrue(result.rejectionReasons().isEmpty());
         assertTrue(records.stream().noneMatch(record -> record.getLevel() == Level.WARNING));
     }
 
+    /** V24: a missing operator prerequisite is never presented as the ADR 0041 decision. */
     @Test
-    void anAbsentOsBackendIsReportedWithoutClaimingARejection() {
+    void anAbsentOsBackendIsReportedAsAMissingPrerequisiteNotAsADecision() {
         AtomicReference<WorkerSandboxSelection> selection = new AtomicReference<>();
 
         List<LogRecord> records = capture(() ->
-                selection.set(WorkerSandboxBackends.selectForUntrustedCode(Optional.empty())));
+                selection.set(WorkerSandboxBackends.selectForUntrustedCode(
+                        Optional.empty(), List.of("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"))));
 
         WorkerSandboxSelection result = selection.get();
         assertEquals("native-process-ephemeral-workspace-v1", result.backend().id());
+        assertEquals(WorkerSandboxSelection.Cause.NO_OS_BACKEND_AVAILABLE, result.cause());
+        assertFalse(result.closedByDecision());
         assertTrue(result.rejectedBackendId().isEmpty());
-        assertTrue(result.rejectionReasons().stream()
-                .anyMatch(reason -> reason.startsWith("NO_OS_SANDBOX_BACKEND_DISCOVERED")));
-        assertTrue(result.refusalReport().contains("ADR 0041"));
+        assertEquals(List.of("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"), result.rejectionReasons());
+        assertTrue(result.refusalReport().contains("missing prerequisite: LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"),
+                result.refusalReport());
+        assertFalse(result.refusalReport().contains("ADR 0041"),
+                "a missing prerequisite is an operator action, not the decision: " + result.refusalReport());
         // discover() already logged why nothing was found; the selection must not log it twice.
         assertTrue(records.stream().noneMatch(record -> record.getLevel() == Level.WARNING));
+        assertPathFree(result.refusalReport());
+    }
+
+    @Test
+    void missingPrerequisitesAreNamedInDiscoveryOrderAndProbeFailureOnlyWhenAllArePresent() {
+        assertEquals(
+                List.of("LINUX_BUBBLEWRAP_NOT_FOUND", "LINUX_PRLIMIT_NOT_FOUND", "LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"),
+                WorkerSandboxBackends.missingLinuxPrerequisites(false, false, false));
+        assertEquals(
+                List.of("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"),
+                WorkerSandboxBackends.missingLinuxPrerequisites(true, true, false));
+        assertEquals(
+                List.of("LINUX_SANDBOX_CAPABILITY_PROBE_FAILED"),
+                WorkerSandboxBackends.missingLinuxPrerequisites(true, true, true));
+        assertEquals(
+                List.of("WINDOWS_POWERSHELL_NOT_FOUND"),
+                WorkerSandboxBackends.missingWindowsPrerequisites(false));
+        assertEquals(
+                List.of("WINDOWS_APPCONTAINER_CAPABILITY_PROBE_OR_LAUNCHER_FAILED"),
+                WorkerSandboxBackends.missingWindowsPrerequisites(true));
+    }
+
+    @Test
+    void anExecutorWithoutSandboxCapabilityIsItsOwnCause() {
+        WorkerSandboxSelection result = WorkerSandboxSelection.executorNotSandboxCapable();
+
+        assertEquals("native-process-ephemeral-workspace-v1", result.backend().id());
+        assertEquals(WorkerSandboxSelection.Cause.EXECUTOR_NOT_SANDBOX_CAPABLE, result.cause());
+        assertFalse(result.supportsUntrustedCode());
+        assertFalse(result.closedByDecision());
+        assertEquals(List.of(WorkerSandboxSelection.EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE), result.rejectionReasons());
+        assertTrue(result.refusalReport().contains(WorkerSandboxSelection.EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE));
+        assertFalse(result.refusalReport().contains("ADR 0041"), result.refusalReport());
         assertPathFree(result.refusalReport());
     }
 

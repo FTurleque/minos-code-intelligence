@@ -22,9 +22,13 @@ import java.util.function.Function;
  *
  * <p>The {@code workerSandbox} section says which sandbox backend managed local providers run
  * under, whether remote indexing of untrusted code is available on this host and, when it is not,
- * exactly why: the rejected OS backend and the dimension codes it does not enforce. That path is
- * closed by decision (ADR 0041), so its unavailability never turns the verdict into
- * {@code ACTION_REQUIRED}. The section carries identifiers and codes only, never a path.</p>
+ * exactly why — distinguishing a <em>missing operator prerequisite</em> (no OS backend could be
+ * discovered: which one) from the <em>ADR 0041 decision</em> (an OS backend exists but its write
+ * quota is supervised, not OS-enforced: which dimensions). Only the latter carries the
+ * {@code decision} marker. Neither turns the verdict into {@code ACTION_REQUIRED}: the decision is
+ * final, and a missing sandbox prerequisite does not block local indexing of managed providers.
+ * The executor-capability cause is per provider and belongs to the worker's own refusal, not to
+ * this host-level report. The section carries identifiers and codes only, never a path.</p>
  */
 public final class DoctorCommand {
     public static final String NAME = "doctor";
@@ -53,8 +57,9 @@ public final class DoctorCommand {
      * @param managedLocalAvailable whether that backend honours the managed-local contract here
      * @param untrustedCodeBackend  backend the strict (remote) selector ends on
      * @param remoteIndexingAvailable whether untrusted remote execution is qualified here
+     * @param cause                 {@link WorkerSandboxSelection.Cause} name: why it is (un)available
      * @param rejectedBackend       OS backend discovered but rejected for untrusted code, if any
-     * @param reasons               exact unmet dimension codes behind that rejection
+     * @param reasons               exact unmet dimension codes (decision) or missing prerequisite codes
      * @param reason                single-line, path-free explanation of the refusal ("" when available)
      */
     record WorkerSandboxReport(
@@ -62,6 +67,7 @@ public final class DoctorCommand {
             boolean managedLocalAvailable,
             String untrustedCodeBackend,
             boolean remoteIndexingAvailable,
+            String cause,
             Optional<String> rejectedBackend,
             List<String> reasons,
             String reason
@@ -69,9 +75,14 @@ public final class DoctorCommand {
         WorkerSandboxReport {
             Objects.requireNonNull(managedLocalBackend, "managedLocalBackend");
             Objects.requireNonNull(untrustedCodeBackend, "untrustedCodeBackend");
+            Objects.requireNonNull(cause, "cause");
             rejectedBackend = rejectedBackend == null ? Optional.empty() : rejectedBackend;
             reasons = reasons == null ? List.of() : List.copyOf(reasons);
             reason = reason == null ? "" : reason;
+        }
+
+        boolean closedByDecision() {
+            return WorkerSandboxSelection.Cause.REJECTED_BY_DECISION.name().equals(cause);
         }
     }
 
@@ -84,6 +95,7 @@ public final class DoctorCommand {
                 managedLocal.supportsManagedLocalProvider(),
                 untrusted.backend().id(),
                 available,
+                untrusted.cause().name(),
                 untrusted.rejectedBackendId(),
                 untrusted.rejectionReasons(),
                 available ? "" : untrusted.refusalReport());
@@ -159,10 +171,12 @@ public final class DoctorCommand {
         map.put("managedLocalProvider", managedLocal);
         map.put("untrustedCode", untrusted);
         map.put("remoteIndexing", availability(sandbox.remoteIndexingAvailable()));
+        map.put("cause", sandbox.cause());
         map.put("rejectedBackend", sandbox.rejectedBackend().orElse(null));
         map.put("reasons", sandbox.reasons());
         map.put("reason", sandbox.reason());
-        map.put("decision", DECISION);
+        // Only a rejection by decision is governed by the ADR; a missing prerequisite is an operator action.
+        map.put("decision", sandbox.closedByDecision() ? DECISION : null);
         return map;
     }
 
@@ -195,8 +209,9 @@ public final class DoctorCommand {
         output.append("workerSandbox[untrustedCode]: ").append(sandbox.untrustedCodeBackend())
                 .append(' ').append(availability(sandbox.remoteIndexingAvailable())).append('\n');
         output.append("workerSandbox[remoteIndexing]: ").append(availability(sandbox.remoteIndexingAvailable()))
-                .append(" (decision: ").append(DECISION).append(")\n");
+                .append(sandbox.closedByDecision() ? " (decision: " + DECISION + ")" : "").append('\n');
         if (!sandbox.remoteIndexingAvailable()) {
+            output.append("workerSandbox[cause]: ").append(sandbox.cause()).append('\n');
             output.append("workerSandbox[reason]: ").append(sandbox.reason()).append('\n');
         }
         output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');

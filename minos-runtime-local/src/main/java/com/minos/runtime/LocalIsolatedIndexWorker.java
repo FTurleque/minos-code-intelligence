@@ -241,7 +241,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
         Objects.requireNonNull(delegate, "delegate");
         return delegate instanceof ProcessSandboxCapableIndexerExecutor
                 ? WorkerSandboxBackends.selectForUntrustedCode(minosHome)
-                : WorkerSandboxSelection.of(WorkerSandboxBackend.nativeEphemeralWorkspace());
+                : WorkerSandboxSelection.executorNotSandboxCapable();
     }
 
     private static String portableScope(Path projectRelativeRoot) {

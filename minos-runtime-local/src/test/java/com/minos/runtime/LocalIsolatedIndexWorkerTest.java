@@ -103,6 +103,7 @@ class LocalIsolatedIndexWorkerTest {
         AtomicReference<Path> delegateRoot = new AtomicReference<>();
         WorkerSandboxSelection selection = new WorkerSandboxSelection(
                 WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                WorkerSandboxSelection.Cause.REJECTED_BY_DECISION,
                 java.util.Optional.of("linux-bubblewrap-cgroup2-v5"),
                 List.of(bytesUnmet, entriesUnmet));
         LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
@@ -126,6 +127,34 @@ class LocalIsolatedIndexWorkerTest {
         assertEquals(null, delegateRoot.get(), "no provider may run");
         assertFalse(Files.exists(home.resolve("distributed-workers")), "no workspace may be created");
         assertTrue(executor.verifiedArtifact().isEmpty());
+    }
+
+    /** V24, case (3): an executor without process-sandbox capability is refused for that reason, not by "decision". */
+    @Test
+    void anExecutorWithoutSandboxCapabilityIsRefusedForThatReasonBeforeAnyProvider(@TempDir Path temp)
+            throws Exception {
+        Fixture fixture = fixture(temp);
+        Path home = temp.resolve("home");
+        DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
+        AtomicReference<Path> delegateRoot = new AtomicReference<>();
+        // The public constructor selects the sandbox itself; delegate(...) is a plain IndexerExecutor.
+        LocalIsolatedIndexWorker worker = new LocalIsolatedIndexWorker(
+                "worker-one", home, delegate(temp, delegateRoot), store);
+        DistributedIndexerExecutor executor = new DistributedIndexerExecutor(
+                "fixture-provider", "1.2.3", fixture.materialization(),
+                WorkerNetworkPolicy.ALLOW, worker, store);
+
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> executor.execute(fixture.execution()));
+
+        String message = failure.getMessage();
+        assertTrue(message.contains("not qualified for untrusted remote code"), message);
+        assertTrue(message.contains("EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE"), message);
+        assertFalse(message.contains("ADR 0041"), "no OS backend was consulted, so no decision applies: " + message);
+        assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
+        assertEquals(null, delegateRoot.get(), "no provider may run");
+        assertFalse(Files.exists(home.resolve("distributed-workers")), "no workspace may be created");
     }
 
     @Test

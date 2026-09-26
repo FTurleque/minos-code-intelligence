@@ -30,9 +30,9 @@ class DoctorCommandTest {
         assertEquals(FindSymbolCommand.SUCCESS, exit, "a closed-by-decision remote path is not an ACTION_REQUIRED");
         assertTrue(text.contains("workerSandbox[managedLocalProvider]: linux-bubblewrap-cgroup2-v5 AVAILABLE"), text);
         assertTrue(text.contains("workerSandbox[untrustedCode]: native-process-ephemeral-workspace-v1 UNAVAILABLE"), text);
-        assertTrue(text.contains("workerSandbox[remoteIndexing]: UNAVAILABLE"), text);
+        assertTrue(text.contains("workerSandbox[remoteIndexing]: UNAVAILABLE (decision: ADR 0041)"), text);
+        assertTrue(text.contains("workerSandbox[cause]: REJECTED_BY_DECISION"), text);
         assertTrue(text.contains("workerSandbox[reason]: "), text);
-        assertTrue(text.contains("ADR 0041"), text);
         assertTrue(text.contains("linux-bubblewrap-cgroup2-v5 was rejected"), text);
         assertTrue(text.contains(BYTES_UNMET), text);
         assertTrue(text.contains(ENTRIES_UNMET), text);
@@ -58,6 +58,7 @@ class DoctorCommandTest {
         assertTrue(json.contains("\"managedLocalProvider\":{\"backend\":\"linux-bubblewrap-cgroup2-v5\",\"available\":true}"), json);
         assertTrue(json.contains("\"untrustedCode\":{\"backend\":\"native-process-ephemeral-workspace-v1\",\"available\":false}"), json);
         assertTrue(json.contains("\"remoteIndexing\":\"UNAVAILABLE\""), json);
+        assertTrue(json.contains("\"cause\":\"REJECTED_BY_DECISION\""), json);
         assertTrue(json.contains("\"rejectedBackend\":\"linux-bubblewrap-cgroup2-v5\""), json);
         assertTrue(json.contains("\"reasons\":[\"" + BYTES_UNMET + "\",\"" + ENTRIES_UNMET + "\"]"), json);
         assertTrue(json.contains("\"decision\":\"ADR 0041\""), json);
@@ -67,7 +68,7 @@ class DoctorCommandTest {
     @Test
     void anAvailableSandboxIsReportedWithoutRejection(@TempDir Path home) throws Exception {
         DoctorCommand.WorkerSandboxReport available = new DoctorCommand.WorkerSandboxReport(
-                "fake-hard-backend", true, "fake-hard-backend", true, Optional.empty(), List.of(), "");
+                "fake-hard-backend", true, "fake-hard-backend", true, "QUALIFIED", Optional.empty(), List.of(), "");
         DoctorCommand doctor = new DoctorCommand(home, operations(), ignored -> available);
         StringBuilder output = new StringBuilder();
 
@@ -75,8 +76,38 @@ class DoctorCommandTest {
 
         String json = output.toString();
         assertTrue(json.contains("\"remoteIndexing\":\"AVAILABLE\""), json);
+        assertTrue(json.contains("\"cause\":\"QUALIFIED\""), json);
         assertTrue(json.contains("\"rejectedBackend\":null"), json);
         assertTrue(json.contains("\"reasons\":[]"), json);
+        assertTrue(json.contains("\"decision\":null"), json);
+    }
+
+    /** V24, case (1): a missing operator prerequisite is reported as such, never as the ADR 0041 decision. */
+    @Test
+    void aMissingPrerequisiteIsReportedAsAnOperatorActionNotAsADecision(@TempDir Path home) throws Exception {
+        DoctorCommand.WorkerSandboxReport missing = new DoctorCommand.WorkerSandboxReport(
+                "native-process-ephemeral-workspace-v1", false,
+                "native-process-ephemeral-workspace-v1", false,
+                "NO_OS_BACKEND_AVAILABLE", Optional.empty(),
+                List.of("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"),
+                "no OS sandbox backend is available on this host (missing prerequisite: "
+                        + "LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING); untrusted remote execution stays fail-closed "
+                        + "until it is installed");
+        DoctorCommand doctor = new DoctorCommand(home, operations(), ignored -> missing);
+        StringBuilder text = new StringBuilder();
+        StringBuilder json = new StringBuilder();
+
+        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[0], text, new StringBuilder()));
+        assertEquals(FindSymbolCommand.SUCCESS, doctor.run(new String[]{"--format", "json"}, json, new StringBuilder()));
+
+        assertTrue(text.toString().contains("workerSandbox[managedLocalProvider]: native-process-ephemeral-workspace-v1 UNAVAILABLE"), text.toString());
+        assertTrue(text.toString().contains("workerSandbox[remoteIndexing]: UNAVAILABLE\n"), text.toString());
+        assertTrue(text.toString().contains("workerSandbox[cause]: NO_OS_BACKEND_AVAILABLE"), text.toString());
+        assertTrue(text.toString().contains("missing prerequisite: LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"), text.toString());
+        assertFalse(text.toString().contains("ADR 0041"), "a missing prerequisite is not the decision: " + text);
+        assertTrue(json.toString().contains("\"cause\":\"NO_OS_BACKEND_AVAILABLE\""), json.toString());
+        assertTrue(json.toString().contains("\"reasons\":[\"LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING\"]"), json.toString());
+        assertTrue(json.toString().contains("\"decision\":null"), json.toString());
     }
 
     /** On every OS the integrated backends support today, the real probe must say UNAVAILABLE and cite ADR 0041. */
@@ -90,7 +121,13 @@ class DoctorCommandTest {
         String text = output.toString();
         assertEquals(FindSymbolCommand.SUCCESS, exit, text);
         assertTrue(text.contains("workerSandbox[remoteIndexing]: UNAVAILABLE"), text);
-        assertTrue(text.contains("ADR 0041"), text);
+        // Either an OS backend exists here and is rejected by decision, or a prerequisite is missing:
+        // the report must say which, and only the former cites the ADR.
+        boolean byDecision = text.contains("workerSandbox[cause]: REJECTED_BY_DECISION");
+        boolean prerequisite = text.contains("workerSandbox[cause]: NO_OS_BACKEND_AVAILABLE");
+        assertTrue(byDecision ^ prerequisite, text);
+        assertEquals(byDecision, text.contains("ADR 0041"), text);
+        assertEquals(prerequisite, text.contains("missing prerequisite: "), text);
         String sandboxLines = text.lines().filter(line -> line.startsWith("workerSandbox[")).reduce("", (a, b) -> a + b + "\n");
         assertFalse(sandboxLines.contains(home.toString()), "no MINOS_HOME in the sandbox section: " + sandboxLines);
         assertFalse(sandboxLines.contains("/") || sandboxLines.contains("\\"),
@@ -101,6 +138,7 @@ class DoctorCommandTest {
         return new DoctorCommand.WorkerSandboxReport(
                 "linux-bubblewrap-cgroup2-v5", true,
                 "native-process-ephemeral-workspace-v1", false,
+                "REJECTED_BY_DECISION",
                 Optional.of("linux-bubblewrap-cgroup2-v5"),
                 List.of(BYTES_UNMET, ENTRIES_UNMET),
                 "untrusted remote execution is fail-closed by decision (ADR 0041); OS sandbox backend "
