@@ -70,6 +70,9 @@ public record IndexingRun(
         if (status == Status.SUCCEEDED && activeSnapshotAfter.isEmpty()) {
             throw new IllegalArgumentException("a successful run requires an active snapshot");
         }
+        if (status == Status.INTERRUPTED && phase == Phase.COMPLETED) {
+            throw new IllegalArgumentException("an interrupted run keeps the phase it was interrupted in");
+        }
     }
 
     /**
@@ -140,10 +143,16 @@ public record IndexingRun(
         }
     }
 
+    /**
+     * {@code INTERRUPTED} (ADR 0039 §2) : le processus est mort alors que le run possédait au moins
+     * un point de contrôle valide ou un snapshot préparé. Terminal pour la disponibilité — il ne
+     * bloque jamais un nouveau run — il ne fait qu'offrir une reprise sur le même identifiant.
+     */
     public enum Status {
         RUNNING,
         SUCCEEDED,
-        FAILED
+        FAILED,
+        INTERRUPTED
     }
 
     public enum Phase {

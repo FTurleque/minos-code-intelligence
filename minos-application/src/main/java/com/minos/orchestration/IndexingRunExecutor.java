@@ -33,14 +33,19 @@ final class IndexingRunExecutor {
     static IndexingRun execute(UUID projectId, Path projectRoot, List<IndexingExecutionTarget> targets,
                                IndexingMode mode, List<String> changedFiles,
                                Map<String, IndexerExecutor> executors, SnapshotStager stager,
-                               SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
+                               SnapshotPromoter promoter, IndexStateStore stateStore,
+                               ResumableRunMarkers markers, Clock clock) {
         ValidatedProjectRoot root = validateExecutionRoot(projectRoot, targets, mode);
         Instant createdAt = clock.instant();
-        ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, createdAt);
+        ProjectIndexState previous = reconcilePreviousState(projectId, promoter, stateStore, markers, createdAt);
         RunContext context = new RunContext(
                 UUID.randomUUID(), projectId, createdAt, previous, targets.size(), clock);
 
         try {
+            // ADR 0039 §2: an INTERRUPTED run never blocks a new run. Until the resume planner (lot 3)
+            // reopens it, a new run supersedes the offered resume so the project offers at most one.
+            previous.resumableRunId().ifPresent(resumable -> AuthoritativeProjectStateReconciler.supersede(
+                    stateStore, markers, resumable, context.runId, createdAt));
             publishInProgress(context, mode, stateStore);
             executeProviders(context, root, targets, mode, changedFiles, executors, stateStore);
             stageSnapshot(context, mode, stager, stateStore);
@@ -77,12 +82,14 @@ final class IndexingRunExecutor {
             UUID projectId,
             SnapshotPromoter promoter,
             IndexStateStore stateStore,
+            ResumableRunMarkers markers,
             Instant createdAt
     ) {
         ProjectIndexState previous = AuthoritativeProjectStateReconciler.reconcileUnderExclusiveLease(
                 projectId,
                 promoter,
                 stateStore,
+                markers,
                 createdAt,
                 "reconciled from authoritative active snapshot before new indexing run");
         if (previous.availability() == Availability.INDEXING

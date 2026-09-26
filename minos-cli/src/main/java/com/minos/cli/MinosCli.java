@@ -202,6 +202,27 @@ public final class MinosCli {
             RuntimeIntelligenceService runtimeIntelligenceService,
             HostedControlPlaneService hostedControlPlaneService
     ) {
+        this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
+                autonomousOperations, home, providerPlatformService, gitIntelligenceService,
+                remoteIndexOperations, runtimeIntelligenceService, hostedControlPlaneService, null);
+    }
+
+    /** Full wiring; {@code resumeStatus} feeds `index-status` with the run offered for resume (ADR 0039 §6). */
+    MinosCli(
+            ProjectSymbolQuery symbolQuery,
+            ProjectOperations projectOperations,
+            ProjectArchitectureQuery architectureQuery,
+            ProjectImpactQuery impactQuery,
+            NexusExportCommand nexusExportCommand,
+            AutonomousIndexOperations autonomousOperations,
+            Path home,
+            ProviderPlatformService providerPlatformService,
+            GitIntelligenceService gitIntelligenceService,
+            RemoteIndexOperations remoteIndexOperations,
+            RuntimeIntelligenceService runtimeIntelligenceService,
+            HostedControlPlaneService hostedControlPlaneService,
+            IndexResumeStatusSource resumeStatus
+    ) {
         Objects.requireNonNull(symbolQuery, "symbolQuery");
         this.findSymbolCommand = new FindSymbolCommand(symbolQuery);
         this.searchCodeCommand = new SearchCodeCommand(symbolQuery);
@@ -212,7 +233,8 @@ public final class MinosCli {
             commands.put(operation.commandName(), new RelationshipCommand(operation, symbolQuery));
         }
         this.relationshipCommands = java.util.Map.copyOf(commands);
-        this.projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations);
+        this.projectCommand = projectOperations == null ? null : new ProjectCommand(projectOperations,
+                resumeStatus == null ? projectId -> java.util.Optional.empty() : resumeStatus);
         this.indexCommand = projectOperations == null ? null : new IndexCommand(projectOperations, autonomousOperations);
         this.importScipCommand = projectOperations == null ? null : new ImportScipCommand(projectOperations);
         this.toolsCommand = autonomousOperations == null ? null : new ToolsCommand(autonomousOperations);

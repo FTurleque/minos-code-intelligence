@@ -1,15 +1,18 @@
 package com.minos.cli;
 
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /** Commandes stables d'administration du registre projet. */
@@ -36,9 +39,16 @@ public final class ProjectCommand {
             """.stripTrailing();
 
     private final ProjectOperations operations;
+    private final IndexResumeStatusSource resumeStatus;
 
     public ProjectCommand(ProjectOperations operations) {
+        this(operations, projectId -> Optional.empty());
+    }
+
+    /** R1 (ADR 0039 §6) : `index-status` expose le run reprenable fourni par {@code resumeStatus}. */
+    public ProjectCommand(ProjectOperations operations, IndexResumeStatusSource resumeStatus) {
         this.operations = Objects.requireNonNull(operations, "operations");
+        this.resumeStatus = Objects.requireNonNull(resumeStatus, "resumeStatus");
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -178,7 +188,9 @@ public final class ProjectCommand {
         );
     }
 
-    private static String renderIndexStatus(ProjectOperations.ProjectView project, SymbolOutputFormat format) {
+    private String renderIndexStatus(ProjectOperations.ProjectView project, SymbolOutputFormat format) {
+        Optional<ResumableRunSummary> resumable = resumeStatus.resumableRun(project.id());
+        Instant now = Instant.now();
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("projectId", project.id());
         status.put("projectName", project.name());
@@ -187,6 +199,11 @@ public final class ProjectCommand {
         status.put("lastSuccessfulIndexAt", project.lastSuccessfulIndexAt());
         status.put("providerId", project.providerId());
         status.put("providerVersion", project.providerVersion());
+        status.put("resumableRunId", resumable.map(summary -> summary.runId().toString()).orElse(null));
+        status.put("resumableRunPhase", resumable.map(summary -> summary.phase().name()).orElse(null));
+        status.put("resumableCheckpointAgeSeconds",
+                resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null));
+        status.put("resumableTargets", resumable.map(ResumableRunSummary::resumableTargets).orElse(null));
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(status);
         }
@@ -197,7 +214,14 @@ public final class ProjectCommand {
                 "activeSnapshotId: " + nullable(project.activeSnapshotId()),
                 "lastSuccessfulIndexAt: " + nullable(project.lastSuccessfulIndexAt()),
                 "providerId: " + nullable(project.providerId()),
-                "providerVersion: " + nullable(project.providerVersion())
+                "providerVersion: " + nullable(project.providerVersion()),
+                "resumableRunId: " + resumable.map(summary -> summary.runId().toString()).orElse("none"),
+                "resumableRunPhase: " + resumable.map(summary -> summary.phase().name()).orElse("none"),
+                "resumableCheckpointAgeSeconds: "
+                        + resumable.map(summary -> Long.toString(summary.checkpointAgeSeconds(now))).orElse("none"),
+                "resumableTargets: " + resumable
+                        .map(summary -> summary.resumableTargets() + "/" + summary.completedExecutions())
+                        .orElse("none")
         );
     }
 

@@ -26,8 +26,10 @@ public final class IndexRunRetentionService {
         Objects.requireNonNull(policy, "policy");
 
         List<IndexingRun> runs = stateStore.listRuns(projectId);
-        Optional<UUID> latestRunId = stateStore.findProjectState(projectId)
-                .flatMap(ProjectIndexState::latestRunId);
+        Optional<ProjectIndexState> state = stateStore.findProjectState(projectId);
+        Optional<UUID> latestRunId = state.flatMap(ProjectIndexState::latestRunId);
+        // ADR 0039: the run offered for resume is protected exactly like the latest run.
+        Optional<UUID> resumableRunId = state.flatMap(ProjectIndexState::resumableRunId);
 
         List<IndexingRun> succeeded = runs.stream()
                 .filter(run -> run.status() == IndexingRun.Status.SUCCEEDED)
@@ -42,6 +44,7 @@ public final class IndexRunRetentionService {
         keep(retained, succeeded, policy.maxSucceededRuns());
         keep(retained, nonSucceeded, policy.maxNonSucceededRuns());
         latestRunId.ifPresent(retained::add);
+        resumableRunId.ifPresent(retained::add);
 
         List<UUID> deleted = new ArrayList<>();
         for (IndexingRun run : runs) {

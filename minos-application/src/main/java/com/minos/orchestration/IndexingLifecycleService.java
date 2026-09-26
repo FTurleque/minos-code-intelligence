@@ -24,19 +24,34 @@ public final class IndexingLifecycleService {
     private final SnapshotStager stager;
     private final SnapshotPromoter promoter;
     private final IndexStateStore stateStore;
+    private final ResumableRunMarkers markers;
     private final Clock clock;
     private final IndexingLifecyclePlanSupport plans = new IndexingLifecyclePlanSupport();
 
     public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                                     SnapshotPromoter promoter, IndexStateStore stateStore) {
-        this(executors, stager, promoter, stateStore, Clock.systemUTC());
+        this(executors, stager, promoter, stateStore, ResumableRunMarkers.none(), Clock.systemUTC());
+    }
+
+    /** Câblage complet : le port des marqueurs protège les runs interrompus de la rétention (ADR 0039 §5). */
+    public IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                                    SnapshotPromoter promoter, IndexStateStore stateStore,
+                                    ResumableRunMarkers markers) {
+        this(executors, stager, promoter, stateStore, markers, Clock.systemUTC());
     }
 
     IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
                              SnapshotPromoter promoter, IndexStateStore stateStore, Clock clock) {
+        this(executors, stager, promoter, stateStore, ResumableRunMarkers.none(), clock);
+    }
+
+    IndexingLifecycleService(Collection<IndexerExecutor> executors, SnapshotStager stager,
+                             SnapshotPromoter promoter, IndexStateStore stateStore,
+                             ResumableRunMarkers markers, Clock clock) {
         this.stager = Objects.requireNonNull(stager, "stager");
         this.promoter = Objects.requireNonNull(promoter, "promoter");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore");
+        this.markers = Objects.requireNonNull(markers, "markers");
         this.clock = Objects.requireNonNull(clock, "clock");
         Map<String, IndexerExecutor> byId = new LinkedHashMap<>();
         for (IndexerExecutor executor : Objects.requireNonNull(executors, "executors")) {
@@ -104,7 +119,7 @@ public final class IndexingLifecycleService {
         try (IndexStateStore.ProjectLease ignored = stateStore.acquireProjectLease(id)) {
             if (plan != null) validatePlanStillCurrent(id, plan);
             return IndexingRunExecutor.execute(id, root, targets, mode, changedFiles,
-                    executors, stager, promoter, stateStore, clock);
+                    executors, stager, promoter, stateStore, markers, clock);
         }
     }
 
@@ -115,6 +130,7 @@ public final class IndexingLifecycleService {
                 projectId,
                 promoter,
                 stateStore,
+                markers,
                 clock.instant(),
                 "reconciled from authoritative active snapshot before validating indexing plan");
         Optional<String> plannedAgainst = plan.invalidation().activeIndexSnapshotId();
@@ -136,6 +152,7 @@ public final class IndexingLifecycleService {
                     projectId,
                     promoter,
                     stateStore,
+                    markers,
                     clock.instant(),
                     "reconciled abandoned lifecycle state during project-state read");
         }

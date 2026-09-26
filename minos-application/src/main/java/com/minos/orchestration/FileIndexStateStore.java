@@ -42,6 +42,7 @@ public final class FileIndexStateStore implements IndexStateStore {
     private static final String RUN_LOCATOR_READY = "v1.ready";
     private static final String PROJECT_ID_PROPERTY = "projectId";
     private static final String RUN_FORMAT_VERSION_PROPERTY = "runFormatVersion";
+    private static final String RESUMABLE_RUN_ID_PROPERTY = "resumableRunId";
     /** Run-level keys plus, per execution, 3 base keys and up to 8 checkpoint keys (V5). */
     private static final int RUN_HEADER_PROPERTIES = 16;
     private static final int PROPERTIES_PER_EXECUTION = 11;
@@ -168,8 +169,18 @@ public final class FileIndexStateStore implements IndexStateStore {
                 optional(properties, "activeSnapshotId"),
                 optional(properties, "latestRunId").map(UUID::fromString),
                 Instant.parse(required(properties, "updatedAt", file)),
-                optional(properties, "detail")
+                optional(properties, "detail"),
+                optional(properties, RESUMABLE_RUN_ID_PROPERTY).flatMap(FileIndexStateStore::parseUuid)
         ));
+    }
+
+    /** An absent (previous format) or invalid resumable reference means: nothing to resume. */
+    private static Optional<UUID> parseUuid(String value) {
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException invalid) {
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -233,6 +244,7 @@ public final class FileIndexStateStore implements IndexStateStore {
         putOptional(properties, "latestRunId", state.latestRunId().map(UUID::toString));
         properties.setProperty("updatedAt", state.updatedAt().toString());
         putOptional(properties, "detail", state.detail());
+        putOptional(properties, RESUMABLE_RUN_ID_PROPERTY, state.resumableRunId().map(UUID::toString));
         store(projectRoot.resolve(state.projectId() + ".properties"), properties, "MINOS project index state");
     }
 

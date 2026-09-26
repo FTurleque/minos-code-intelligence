@@ -13,6 +13,7 @@ import com.minos.domain.RelationshipSearchCriteria;
 import com.minos.domain.SymbolKind;
 import com.minos.domain.SymbolSearchCriteria;
 import com.minos.impact.ImpactAnalysisRequest;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.output.AdvancedAnalysisResultRenderer;
 import com.minos.output.ArchitectureResultRenderer;
 import com.minos.output.CodeIntelligenceResultRenderer;
@@ -29,10 +30,12 @@ import com.minos.semantic.HybridContextBuilder;
 import com.minos.semantic.HybridSearchService;
 import com.minos.semantic.SemanticSearchService;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -109,6 +112,15 @@ final class MinosApplicationMcpBackend implements MinosMcpBackend {
         map.put("lastSuccessfulIndexAt", view.lastSuccessfulIndexAt());
         map.put("providerId", view.providerId());
         map.put("providerVersion", view.providerVersion());
+        // ADR 0039 §6: the run offered for resume, without any artifact location.
+        Optional<ResumableRunSummary> resumable = ResumableRunSummary.of(
+                application.indexStateStore(), UUID.fromString(view.id()));
+        Instant now = Instant.now();
+        map.put("resumableRunId", resumable.map(summary -> summary.runId().toString()).orElse(null));
+        map.put("resumableRunPhase", resumable.map(summary -> summary.phase().name()).orElse(null));
+        map.put("resumableCheckpointAgeSeconds",
+                resumable.map(summary -> summary.checkpointAgeSeconds(now)).orElse(null));
+        map.put("resumableTargets", resumable.map(ResumableRunSummary::resumableTargets).orElse(null));
         map.put("providerProfiles", providerProfiles());
         return DeterministicJson.render(map);
     }

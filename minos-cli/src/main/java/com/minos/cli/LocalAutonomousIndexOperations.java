@@ -25,6 +25,8 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.orchestration.ProjectIndexState;
+import com.minos.orchestration.ResumableRunMarkers;
+import com.minos.orchestration.ResumableRunSummary;
 import com.minos.registry.RegisteredProject;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeStatus;
@@ -42,7 +44,8 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Autonomous indexing adapter over the selected MINOS storage backend. */
-public final class LocalAutonomousIndexOperations implements AutonomousIndexOperations, AutoCloseable {
+public final class LocalAutonomousIndexOperations
+        implements AutonomousIndexOperations, IndexResumeStatusSource, AutoCloseable {
     private final MinosApplication application;
     private final MinosApplication ownedApplication;
     private final ProjectResolver projectResolver;
@@ -57,6 +60,7 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
     private final ProjectInvalidationService invalidationService;
     private final IncrementalIndexingPlanner planner;
     private final UnaryOperator<IndexerExecutor> executorDecorator;
+    private final ResumableRunMarkers resumableRunMarkers;
 
     public LocalAutonomousIndexOperations(Path minosHome) throws IOException {
         this(MinosApplication.open(minosHome), UnaryOperator.identity(), true);
@@ -92,6 +96,16 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
         this.invalidationService = application.invalidationService();
         this.planner = application.incrementalIndexingPlanner();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
+        this.resumableRunMarkers = new RunDirectoryResumableRunMarkers(application.home());
+    }
+
+    @Override
+    public Optional<ResumableRunSummary> resumableRun(String projectId) {
+        try {
+            return ResumableRunSummary.of(stateStore, UUID.fromString(projectId));
+        } catch (IllegalArgumentException notAProjectId) {
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -133,7 +147,8 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                 .map(executorDecorator)
                 .map(executor -> Objects.requireNonNull(executor, "decorated executor"))
                 .toList();
-        IndexingLifecycleService lifecycle = new IndexingLifecycleService(executors, snapshotStager, snapshotPromoter, stateStore);
+        IndexingLifecycleService lifecycle = new IndexingLifecycleService(
+                executors, snapshotStager, snapshotPromoter, stateStore, resumableRunMarkers);
         IndexingRun run = forceFull
                 ? lifecycle.execute(
                         prepared.project().id(),
@@ -151,8 +166,11 @@ public final class LocalAutonomousIndexOperations implements AutonomousIndexOper
                         .orElseThrow(() -> new IllegalStateException("planned execution unexpectedly produced no run"));
         run = recoverPromotedRunIfNeeded(run);
         if (run.status() != IndexingRun.Status.SUCCEEDED) {
+            String outcome = run.status() == IndexingRun.Status.INTERRUPTED
+                    ? " was interrupted and can be resumed: "
+                    : " failed: ";
             IllegalStateException failure = new IllegalStateException(
-                    "indexing run " + run.id() + " failed: "
+                    "indexing run " + run.id() + outcome
                             + run.message().orElse("provider/staging/promotion failure"));
             try {
                 application.retentionService().compact(prepared.project().id());
