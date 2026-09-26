@@ -123,8 +123,13 @@ def check_authoritative_documentation() -> None:
         status,
         "v1.0.1 immutable tag SHA from STATUS",
     )
-    if "#98 sandbox OS réelle" not in status or "IMPLÉMENTÉE + QUALIFIÉE" not in status:
+    # Audit 2026-09, constat A1 : les primitives #98 existent mais la qualification « code non
+    # fiable » est refusée (fail-closed) tant que le quota d'écriture n'est pas appliqué par l'OS.
+    # STATUS doit exposer ce fait exact, et l'ancienne revendication « QUALIFIÉE » est obsolète.
+    if "#98 sandbox OS réelle" not in status or "primitives **implémentées**" not in status             or "qualification code non fiable **refusée**" not in status:
         raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
+    if "IMPLÉMENTÉE + QUALIFIÉE" in status:
+        raise RuntimeError("stale #98 qualification claim in docs/STATUS.md (audit 2026-09, A1)")
 
     current_docs = {
         "docs/STATUS.md": status,

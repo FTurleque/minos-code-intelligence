@@ -79,6 +79,7 @@ ed.log`) | Windows : 12/7 verts, Linux skippés ; WSL cgroup v2 réel : `LinuxCg
 - 2026-09-26 — verif-qualite : relecture de fusion (V18) conforme — périmètre, `patch-id` identiques pour les 8 commits rebasés, aucun secret ni chemin absolu ajouté. Fin de mission, V1–V18 clos.
 - 2026-09-26 — verif-build : build fusionné `d6661b1e` (`-pl minos-application,minos-api,minos-cli -am test`) VERT : 985 tests, 0 échec, 0 erreur, 42 skips (Linux-only) ; deltas vs baseline : domain +2, runtime-local +18 (+3 skips), application +24, api +3, cli +4 ; 0 test instable sur 7 builds. Logs sous `minos-wt-sprint1/verif-build/target/build-*.log`.
 - 2026-09-26 — sprint clos côté agents. Reste : `clean verify` complet sur autorisation explicite de l'utilisateur. Rien poussé, aucune CI déclenchée.
+- 2026-09-26 — PR #296 ouverte vers `develop` (sur demande). CI : 3 checks rouges, une seule cause : le gate `scripts/docs/product-facts.py:126` exigeait la phrase littérale « IMPLÉMENTÉE + QUALIFIÉE » de l'ancienne revendication #98 corrigée par G2. Gate aligné sur le fait exact (primitives implémentées, qualification code non fiable refusée) et l'ancienne formulation rejetée comme obsolète.
 
 ## 5. Bilan
 
