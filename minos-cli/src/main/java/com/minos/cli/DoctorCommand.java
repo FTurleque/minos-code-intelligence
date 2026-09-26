@@ -3,6 +3,9 @@ package com.minos.cli;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.output.SymbolOutputFormat;
 import com.minos.runtime.CommandLocator;
+import com.minos.runtime.WorkerSandboxBackend;
+import com.minos.runtime.WorkerSandboxBackends;
+import com.minos.runtime.WorkerSandboxSelection;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -11,16 +14,79 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
 
-/** Installation and provider-runtime diagnostics. */
+/**
+ * Installation and provider-runtime diagnostics.
+ *
+ * <p>The {@code workerSandbox} section says which sandbox backend managed local providers run
+ * under, whether remote indexing of untrusted code is available on this host and, when it is not,
+ * exactly why: the rejected OS backend and the dimension codes it does not enforce. That path is
+ * closed by decision (ADR 0041), so its unavailability never turns the verdict into
+ * {@code ACTION_REQUIRED}. The section carries identifiers and codes only, never a path.</p>
+ */
 public final class DoctorCommand {
     public static final String NAME = "doctor";
+    private static final String DECISION = "ADR 0041";
+
     private final Path home;
     private final AutonomousIndexOperations operations;
+    private final Function<Path, WorkerSandboxReport> sandboxProbe;
 
     public DoctorCommand(Path home, AutonomousIndexOperations operations) {
+        this(home, operations, DoctorCommand::probeWorkerSandbox);
+    }
+
+    /** Package-private seam: the sandbox probe is injectable so the report can be tested without an OS probe. */
+    DoctorCommand(Path home, AutonomousIndexOperations operations, Function<Path, WorkerSandboxReport> sandboxProbe) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.operations = Objects.requireNonNull(operations, "operations");
+        this.sandboxProbe = Objects.requireNonNull(sandboxProbe, "sandboxProbe");
+    }
+
+    /**
+     * What {@code doctor} reports about worker sandboxes. Backend identifiers and machine-readable
+     * reason codes only: no filesystem path, user name or cgroup name ever enters this record.
+     *
+     * @param managedLocalBackend   backend selected for managed local providers
+     * @param managedLocalAvailable whether that backend honours the managed-local contract here
+     * @param untrustedCodeBackend  backend the strict (remote) selector ends on
+     * @param remoteIndexingAvailable whether untrusted remote execution is qualified here
+     * @param rejectedBackend       OS backend discovered but rejected for untrusted code, if any
+     * @param reasons               exact unmet dimension codes behind that rejection
+     * @param reason                single-line, path-free explanation of the refusal ("" when available)
+     */
+    record WorkerSandboxReport(
+            String managedLocalBackend,
+            boolean managedLocalAvailable,
+            String untrustedCodeBackend,
+            boolean remoteIndexingAvailable,
+            Optional<String> rejectedBackend,
+            List<String> reasons,
+            String reason
+    ) {
+        WorkerSandboxReport {
+            Objects.requireNonNull(managedLocalBackend, "managedLocalBackend");
+            Objects.requireNonNull(untrustedCodeBackend, "untrustedCodeBackend");
+            rejectedBackend = rejectedBackend == null ? Optional.empty() : rejectedBackend;
+            reasons = reasons == null ? List.of() : List.copyOf(reasons);
+            reason = reason == null ? "" : reason;
+        }
+    }
+
+    private static WorkerSandboxReport probeWorkerSandbox(Path home) {
+        WorkerSandboxBackend managedLocal = WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+        WorkerSandboxSelection untrusted = WorkerSandboxBackends.selectForUntrustedCode(home);
+        boolean available = untrusted.supportsUntrustedCode();
+        return new WorkerSandboxReport(
+                managedLocal.id(),
+                managedLocal.supportsManagedLocalProvider(),
+                untrusted.backend().id(),
+                available,
+                untrusted.rejectedBackendId(),
+                untrusted.rejectionReasons(),
+                available ? "" : untrusted.refusalReport());
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -38,13 +104,15 @@ public final class DoctorCommand {
             commands.put(command, CommandLocator.find(command).map(Path::toString).orElse(null));
         }
         Map<String, String> privateStorage = privateStorageDiagnostics();
+        WorkerSandboxReport sandbox = Objects.requireNonNull(sandboxProbe.apply(home), "worker sandbox report");
+        // Remote indexing being closed by decision (ADR 0041) is a fact to expose, not an action to require.
         boolean ready = providers.stream()
                 .filter(AutonomousIndexOperations.ProviderView::requiredByDefault)
                 .allMatch(provider -> "READY".equals(provider.state()));
         if (format == SymbolOutputFormat.JSON) {
-            renderJson(output, providers, commands, privateStorage, ready);
+            renderJson(output, providers, commands, privateStorage, sandbox, ready);
         } else {
-            renderText(output, providers, commands, privateStorage, ready);
+            renderText(output, providers, commands, privateStorage, sandbox, ready);
         }
         return ready ? FindSymbolCommand.SUCCESS : FindSymbolCommand.EXECUTION_ERROR;
     }
@@ -54,6 +122,7 @@ public final class DoctorCommand {
             List<AutonomousIndexOperations.ProviderView> providers,
             Map<String, String> commands,
             Map<String, String> privateStorage,
+            WorkerSandboxReport sandbox,
             boolean ready
     ) throws IOException {
         Map<String, Object> map = new LinkedHashMap<>();
@@ -74,8 +143,31 @@ public final class DoctorCommand {
         }
         map.put("providers", values);
         map.put("privateStoragePermissions", privateStorage);
+        map.put("workerSandbox", sandboxJson(sandbox));
         map.put("ready", ready);
         output.append(CliJson.render(map)).append('\n');
+    }
+
+    private static Map<String, Object> sandboxJson(WorkerSandboxReport sandbox) {
+        Map<String, Object> managedLocal = new LinkedHashMap<>();
+        managedLocal.put("backend", sandbox.managedLocalBackend());
+        managedLocal.put("available", sandbox.managedLocalAvailable());
+        Map<String, Object> untrusted = new LinkedHashMap<>();
+        untrusted.put("backend", sandbox.untrustedCodeBackend());
+        untrusted.put("available", sandbox.remoteIndexingAvailable());
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("managedLocalProvider", managedLocal);
+        map.put("untrustedCode", untrusted);
+        map.put("remoteIndexing", availability(sandbox.remoteIndexingAvailable()));
+        map.put("rejectedBackend", sandbox.rejectedBackend().orElse(null));
+        map.put("reasons", sandbox.reasons());
+        map.put("reason", sandbox.reason());
+        map.put("decision", DECISION);
+        return map;
+    }
+
+    private static String availability(boolean available) {
+        return available ? "AVAILABLE" : "UNAVAILABLE";
     }
 
     private void renderText(
@@ -83,6 +175,7 @@ public final class DoctorCommand {
             List<AutonomousIndexOperations.ProviderView> providers,
             Map<String, String> commands,
             Map<String, String> privateStorage,
+            WorkerSandboxReport sandbox,
             boolean ready
     ) throws IOException {
         output.append("MINOS_HOME: ").append(home.toString()).append('\n');
@@ -96,6 +189,15 @@ public final class DoctorCommand {
         for (Map.Entry<String, String> entry : privateStorage.entrySet()) {
             output.append("privateStorage[").append(entry.getKey()).append("]: ")
                     .append(entry.getValue()).append('\n');
+        }
+        output.append("workerSandbox[managedLocalProvider]: ").append(sandbox.managedLocalBackend())
+                .append(' ').append(availability(sandbox.managedLocalAvailable())).append('\n');
+        output.append("workerSandbox[untrustedCode]: ").append(sandbox.untrustedCodeBackend())
+                .append(' ').append(availability(sandbox.remoteIndexingAvailable())).append('\n');
+        output.append("workerSandbox[remoteIndexing]: ").append(availability(sandbox.remoteIndexingAvailable()))
+                .append(" (decision: ").append(DECISION).append(")\n");
+        if (!sandbox.remoteIndexingAvailable()) {
+            output.append("workerSandbox[reason]: ").append(sandbox.reason()).append('\n');
         }
         output.append("verdict: ").append(ready ? "READY" : "ACTION_REQUIRED").append('\n');
     }
