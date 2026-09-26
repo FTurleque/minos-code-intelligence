@@ -32,9 +32,15 @@ MINOS ne persiste ni le token ni le nom de sa variable. Utilisez un token read-o
 
 ## État de `remote index`
 
-`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; les backends intégrés actuels n’atteignent pas encore cette qualification complète.
+`remote materialize` est utilisable indépendamment de la sandbox provider. En revanche, `remote index` n’exécute du code distant que si **toutes** les dimensions de confinement exigées sont qualifiées au niveau OS. Une **sandbox OS qualifiée** désigne ici une frontière qui satisfait réellement toutes ces exigences ; **aucun backend intégré ne l’est, par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md), 2026-09-26).
 
-Les backends locaux intégrés bornent aujourd’hui la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste supervisé par MINOS et n’est pas encore un quota stockage `OS_ENFORCED`. La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés actuels restent **fail-closed pour `remote index`**. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
+Les backends locaux intégrés bornent la mémoire, les processus, la CPU et la durée via les primitives OS prévues (cgroup v2/bubblewrap sous Linux, AppContainer/Job Object sous Windows). Le quota d’écriture bytes/entrées reste **supervisé par MINOS** (`SUPERVISED_HARD_KILL`), pas un quota stockage `OS_ENFORCED` : l’ADR 0041 explique pourquoi cette limite est assumée plutôt que comblée (aucune primitive non privilégiée sous Windows ; quota de projet XFS/ext4 sous Linux seulement, chiffré et reporté). La qualification `UNTRUSTED_CODE_SUPPORTED` exigeant un quota stockage OS-enforced, les backends intégrés restent **fail-closed pour `remote index`**, sur tous les OS. Il n’existe pas d’option unsafe permettant de contourner cette exigence.
+
+Le refus est explicite et diagnosticable :
+
+- `remote index` refuse **avant** toute matérialisation, prise de bail, enregistrement de projet ou épinglage, avec un message qui cite le backend écarté et les codes exacts des dimensions non OS-enforced (`FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL`, `FILESYSTEM_WRITE_ENTRIES_…`), sans chemin ;
+- le sélecteur journalise en WARNING chaque backend OS écarté avec ces mêmes codes ;
+- `minos doctor` (section `workerSandbox`) dit si l’indexation distante est disponible et, sinon, distingue un **prérequis manquant** (aucun backend OS découvert : `LINUX_BUBBLEWRAP_NOT_FOUND`, `LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) de la **décision** (`REJECTED_BY_DECISION`, marqueur `ADR 0041`).
 
 La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions :
 

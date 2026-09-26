@@ -84,7 +84,8 @@ Il distingue notamment :
 - les toolchains du projet analysé ;
 - les providers gérés ;
 - Docker, qui reste optionnel ;
-- les actions nécessaires pour rendre un provider utilisable.
+- les actions nécessaires pour rendre un provider utilisable ;
+- la sandbox worker (section `workerSandbox`, texte et JSON) : backend retenu pour les providers locaux gérés, disponibilité de l'indexation distante de code non fiable (`remoteIndexing: AVAILABLE|UNAVAILABLE`) et, si elle est indisponible, la **cause** — `NO_OS_BACKEND_AVAILABLE` (prérequis opérateur manquant, nommé par code) ou `REJECTED_BY_DECISION` (backend OS écarté, dimensions non OS-enforced, décision `ADR 0041`). Cette section ne contient jamais de chemin. Une indexation distante indisponible ne change pas le verdict `READY` : ce n'est pas une action requise.
 
 Depuis la maintenance 1.0.1, le runtime Windows packagé est également contrôlé lors de la construction par `jdeps`, `java --list-modules` et un vrai handshake MCP. Le fait que `doctor` ou `--version` fonctionne ne remplace donc pas les gates spécifiques du binaire de release.
 
@@ -335,7 +336,7 @@ backend natif/process-only → refusé dans les deux modes
 
 Linux utilise bubblewrap/namespaces et une frontière de job cgroup v2 (`memory.max`, `pids.max`, `cpu.max`, `cgroup.kill`); Windows utilise AppContainer + Job Object. L’absence de primitive qualifiée provoque un échec avant l’exécution du provider distant.
 
-État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED`. `remote index` échoue aujourd'hui sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md).
+État actuel : ces deux backends déclarent leur quota d'écriture disque `SUPERVISED_HARD_KILL` (supervisé par MINOS, non appliqué par l'OS) et sont donc rétrogradés en `UNTRUSTED_CODE_UNSUPPORTED` — **par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)), pas comme un défaut en attente. `remote index` échoue sur tous les OS, en `ALLOW` comme en `DENY`, sans contournement ; il refuse avant toute matérialisation avec un message `remote index failed: …` (exit 1) qui cite le backend écarté et les dimensions manquantes, et `doctor` expose la même cause. Le bloc ci-dessus décrit le contrat cible. Voir [`remote-indexing.md`](remote-indexing.md) et le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md).
 
 ## Runtime & Dynamic Intelligence
 

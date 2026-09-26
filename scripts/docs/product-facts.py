@@ -124,12 +124,17 @@ def check_authoritative_documentation() -> None:
         "v1.0.1 immutable tag SHA from STATUS",
     )
     # Audit 2026-09, constat A1 : les primitives #98 existent mais la qualification « code non
-    # fiable » est refusée (fail-closed) tant que le quota d'écriture n'est pas appliqué par l'OS.
-    # STATUS doit exposer ce fait exact, et l'ancienne revendication « QUALIFIÉE » est obsolète.
-    if "#98 sandbox OS réelle" not in status or "primitives **implémentées**" not in status             or "qualification code non fiable **refusée**" not in status:
+    # fiable » est refusée, et depuis l'ADR 0041 (2026-09-26) elle l'est PAR DÉCISION : le quota
+    # d'écriture reste supervisé, jamais présenté comme OS_ENFORCED. STATUS doit exposer ce fait
+    # exact et citer la décision ; l'ancienne revendication « QUALIFIÉE » est obsolète.
+    if ("#98 sandbox OS réelle" not in status or "primitives **implémentées**" not in status
+            or "qualification code non fiable **refusée**" not in status):
         raise RuntimeError("STATUS no longer exposes the authoritative #98 sandbox qualification fact")
     if "IMPLÉMENTÉE + QUALIFIÉE" in status:
         raise RuntimeError("stale #98 qualification claim in docs/STATUS.md (audit 2026-09, A1)")
+    if "ADR 0041" not in status:
+        raise RuntimeError("STATUS must cite ADR 0041: the #98 refusal is a decision, not a pending defect")
+    check_sandbox_claims_match_the_code()
 
     current_docs = {
         "docs/STATUS.md": status,
@@ -152,6 +157,8 @@ def check_authoritative_documentation() -> None:
         "README.md": [
             "#98 sandbox OS worker réelle     🚧 OPEN",
             "L'issue **#98** reste ouverte",
+            "qualifiée Linux + Windows",
+            "currentOsBackendsFailClosedUntilStorageIsOsEnforced",
         ],
         "docs/user/production-installation.md": [
             "1.0.1` reste **NON PUBLIÉE**",
@@ -172,8 +179,51 @@ def check_authoritative_documentation() -> None:
             f"README and production guide must both expose v1.0.1 publication date {release_date}")
     if release_sha not in readme or release_sha not in production:
         raise RuntimeError("README and production guide must both expose the immutable v1.0.1 tag SHA")
-    if not re.search(r"#98[^\n]*(?:CLOSED|fermée|completed|qualifiée)", readme, re.I):
-        raise RuntimeError("README must expose #98 as closed/qualified")
+    # « qualifiée » n'est plus une formulation acceptée pour #98 : l'issue est fermée sur les
+    # primitives, la qualification code non fiable est refusée par décision (ADR 0041).
+    if not re.search(r"#98[^\n]*(?:CLOSED|fermée|completed)", readme, re.I):
+        raise RuntimeError("README must expose #98 as closed on its primitives")
+    if re.search(r"#98[^\n]*qualifiée", readme, re.I):
+        raise RuntimeError("README must not present #98 as qualified for untrusted code (ADR 0041, A1)")
+    if "ADR 0041" not in readme:
+        raise RuntimeError("README sandbox section must cite ADR 0041 (closed by decision)")
+
+
+def check_sandbox_claims_match_the_code() -> None:
+    """The documented untrusted-code requirement must be exactly what the code enforces.
+
+    `WorkerResourceContainment.unmetRequirements()` requires OS_ENFORCED on the write quota
+    (bytes and entries); the developer page once said "at least SUPERVISED_HARD_KILL", which was
+    false. Both the code and the pages are checked, so neither can drift alone.
+    """
+    containment = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerResourceContainment.java")
+    unmet = require(
+        r"public List<String> unmetRequirements\(\) \{(.*?)\n    \}", containment, "unmetRequirements body", re.S)
+    for dimension in ("FILESYSTEM_WRITE_BYTES", "FILESYSTEM_WRITE_ENTRIES"):
+        if f'requireOsEnforced(unmet, "{dimension}"' not in unmet:
+            raise RuntimeError(f"untrusted-code qualification no longer requires OS_ENFORCED on {dimension}")
+    qualification = read("minos-runtime-local/src/main/java/com/minos/runtime/WorkerSandboxQualification.java")
+    if '"WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"' not in qualification:
+        raise RuntimeError("WorkerSandboxQualification must carry the ADR 0041 decision limitation")
+
+    disposition = read("docs/developer/remote-worker-sandbox-disposition.md")
+    if "au minimum `SUPERVISED_HARD_KILL` sur le wall-clock, le quota d’écriture" in disposition:
+        raise RuntimeError(
+            "docs/developer/remote-worker-sandbox-disposition.md presents a supervised write quota as "
+            "sufficient for untrusted code; the code requires OS_ENFORCED (A1, ADR 0041)")
+    if "`OS_ENFORCED` sur le quota d’écriture (octets **et** nombre d’entrées)" not in disposition:
+        raise RuntimeError("remote-worker-sandbox-disposition.md must state the OS_ENFORCED write-quota requirement")
+    if "## Backends qualifiés" in disposition:
+        raise RuntimeError("remote-worker-sandbox-disposition.md must not title the integrated backends as qualified")
+    if "ADR 0041" not in disposition:
+        raise RuntimeError("remote-worker-sandbox-disposition.md must cite ADR 0041")
+
+    remote_indexing = read("docs/user/remote-indexing.md")
+    for stale in ("n’atteignent pas encore cette qualification", "n’est pas encore un quota stockage"):
+        if stale in remote_indexing:
+            raise RuntimeError(f"docs/user/remote-indexing.md presents the refusal as pending, not decided: {stale}")
+    if "ADR 0041" not in remote_indexing:
+        raise RuntimeError("docs/user/remote-indexing.md must cite ADR 0041")
 
 
 def check_architecture_doc_version(maven_version: str) -> None:

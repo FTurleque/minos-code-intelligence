@@ -13,7 +13,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Opt-in CLI surface for immutable remote materialization and worker-backed indexing. */
+/**
+ * Opt-in CLI surface for immutable remote materialization and worker-backed indexing.
+ *
+ * <p>{@code remote materialize} is fully available. {@code remote index} is <strong>closed by
+ * decision (ADR 0041)</strong>: it refuses before any side effect, with the rejected sandbox
+ * backend and its unmet dimension codes in the {@code remote index failed: …} line, and
+ * {@code minos doctor} reports the same cause. The command stays in place as the contract a future
+ * qualified backend must honour.</p>
+ */
 public final class RemoteIndexCommand {
 
     public static final String NAME = "remote";

@@ -1,6 +1,6 @@
 # Remote worker — disposition d’isolation et de confinement
 
-L’indexation distante traite le provider et le dépôt matérialisé comme du code non fiable. Une copie dans une workspace éphémère et un processus distinct ne suffisent donc jamais : le provider doit être lancé par un backend OS dont la qualification annonce `UNTRUSTED_CODE_SUPPORTED` sur la plateforme courante.
+L’indexation distante traite le provider et le dépôt matérialisé comme du code non fiable. Une copie dans une workspace éphémère et un processus distinct ne suffisent donc jamais : le provider doit être lancé par un backend OS dont la qualification annonce `UNTRUSTED_CODE_SUPPORTED` sur la plateforme courante. **Aucun backend intégré ne l’annonce aujourd’hui, par décision** ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) : voir « Backends intégrés » ci-dessous.
 
 ## Contrat fail-closed
 
@@ -51,12 +51,15 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 
 Une limite **par processus** (`RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_CPU`) est multipliée par chaque `fork` : elle reste une défense en profondeur et n’est jamais déclarée `OS_ENFORCED` sur une dimension agrégée.
 
-`UNTRUSTED_CODE_SUPPORTED` exige :
+`UNTRUSTED_CODE_SUPPORTED` exige (`WorkerResourceContainment.unmetRequirements()`) :
 
 - `OS_ENFORCED` sur le nombre de processus agrégé, la mémoire agrégée, la CPU agrégée et la terminaison des descendants ;
-- au minimum `SUPERVISED_HARD_KILL` sur le wall-clock, le quota d’écriture (octets **et** nombre d’entrées) et la récupération du scratch.
+- `OS_ENFORCED` sur le quota d’écriture (octets **et** nombre d’entrées) ;
+- au minimum `SUPERVISED_HARD_KILL` sur le wall-clock et la récupération du scratch.
 
-Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison : la revendication ne peut pas diverger du confinement réel.
+Le contrat plus étroit des providers **locaux gérés** (`managedLocalProviderUnmetRequirements()`) accepte un quota d’écriture `SUPERVISED_HARD_KILL` ; c’est lui que l’indexation locale utilise.
+
+Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison : la revendication ne peut pas diverger du confinement réel. Un backend qui déclare `UNTRUSTED_CODE_SUPPORTED` avec un quota d’écriture seulement supervisé est **rétrogradé** en `UNTRUSTED_CODE_UNSUPPORTED`, avec les limitations `WORKER_UNTRUSTED_CODE_FAIL_CLOSED_INCOMPLETE_HARD_CONTAINMENT`, `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` et les codes exacts des dimensions manquantes. C’est le cas des deux backends intégrés.
 
 | Dimension | Linux | Windows |
 |---|---|---|
@@ -68,7 +71,9 @@ Le constructeur de `WorkerSandboxQualification` refuse toute autre combinaison :
 | Quota d’écriture (octets/entrées) | `SUPERVISED_HARD_KILL` | `SUPERVISED_HARD_KILL` |
 | Récupération du scratch | `SUPERVISED_HARD_KILL` | `SUPERVISED_HARD_KILL` |
 
-## Backends qualifiés
+## Backends intégrés (rétrogradés pour le code non fiable, ADR 0041)
+
+Les deux backends ci-dessous sont **qualifiés pour les providers locaux gérés** et **rétrogradés `UNTRUSTED_CODE_UNSUPPORTED`** pour l’indexation distante : leur quota d’écriture est `SUPERVISED_HARD_KILL`. `WorkerSandboxBackends.selectForUntrustedCode` les écarte en le journalisant (WARNING, codes de dimension, sans chemin) et `WorkerSandboxSelection` distingue trois causes de refus : `NO_OS_BACKEND_AVAILABLE` (prérequis manquant), `REJECTED_BY_DECISION` (ce cas), `EXECUTOR_NOT_SANDBOX_CAPABLE` (exécuteur sans capacité sandbox).
 
 | Plateforme | Backend | Frontière de job | `ALLOW` | `DENY` |
 |---|---|---|---|---|
