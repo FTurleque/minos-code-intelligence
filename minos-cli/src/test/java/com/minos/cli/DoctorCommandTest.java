@@ -91,8 +91,9 @@ class DoctorCommandTest {
                 "NO_OS_BACKEND_AVAILABLE", Optional.empty(),
                 List.of("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"),
                 "no OS sandbox backend is available on this host (missing prerequisite: "
-                        + "LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING); untrusted remote execution stays fail-closed "
-                        + "until it is installed");
+                        + "LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING); untrusted remote execution stays fail-closed: "
+                        + "providing it makes the OS backend available to managed local providers only, "
+                        + "not to untrusted code");
         DoctorCommand doctor = new DoctorCommand(home, operations(), ignored -> missing);
         StringBuilder text = new StringBuilder();
         StringBuilder json = new StringBuilder();
@@ -127,7 +128,9 @@ class DoctorCommandTest {
         boolean prerequisite = text.contains("workerSandbox[cause]: NO_OS_BACKEND_AVAILABLE");
         assertTrue(byDecision ^ prerequisite, text);
         assertEquals(byDecision, text.contains("ADR 0041"), text);
-        assertEquals(prerequisite, text.contains("missing prerequisite: "), text);
+        // A missing prerequisite names its code; a platform without any integrated backend says so.
+        assertEquals(prerequisite, text.contains("missing prerequisite: ")
+                || text.contains("no OS sandbox backend exists for this platform"), text);
         String sandboxLines = text.lines().filter(line -> line.startsWith("workerSandbox[")).reduce("", (a, b) -> a + b + "\n");
         assertFalse(sandboxLines.contains(home.toString()), "no MINOS_HOME in the sandbox section: " + sandboxLines);
         assertFalse(sandboxLines.contains("/") || sandboxLines.contains("\\"),

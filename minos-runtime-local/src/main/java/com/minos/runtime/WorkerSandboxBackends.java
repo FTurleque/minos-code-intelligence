@@ -13,7 +13,8 @@ import java.util.Optional;
  * backends keep a supervised write quota, so none of them is qualified for hostile code and the
  * strict selector always ends on the native fallback, which then refuses to run anything. That
  * rejection is reported ({@link WorkerSandboxSelection}) and logged as a WARNING with the exact
- * unmet dimension codes, never silently.</p>
+ * unmet dimension codes, never silently; so is the absence of any OS backend, with the missing
+ * prerequisite or unsupported-platform codes.</p>
  */
 public final class WorkerSandboxBackends {
 
@@ -50,8 +51,10 @@ public final class WorkerSandboxBackends {
     }
 
     /**
-     * Names the operator prerequisite that discovery did not find, as codes only. Discovery itself
-     * already logged the details; this list is what the selection report and {@code doctor} show.
+     * Names the operator prerequisite that discovery did not find, or the platform without any
+     * integrated backend, as codes only. Discovery logs details for some causes but not all (a
+     * missing bwrap, prlimit or PowerShell, or an unsupported platform, is not logged there): the
+     * selection logs these codes itself, and they are what the report and {@code doctor} show.
      */
     private static List<String> missingPrerequisites(WorkerSandboxQualification.Platform platform) {
         return switch (platform) {
@@ -60,7 +63,7 @@ public final class WorkerSandboxBackends {
                     CommandLocator.find("prlimit").isPresent(),
                     LinuxCgroupJob.delegatedRoot().isPresent());
             case WINDOWS -> missingWindowsPrerequisites(CommandLocator.windowsPowerShell().isPresent());
-            case OTHER -> List.of("PLATFORM_" + platform.name() + "_HAS_NO_OS_SANDBOX_BACKEND");
+            case OTHER -> List.of("PLATFORM_" + platform.name() + WorkerSandboxSelection.UNSUPPORTED_PLATFORM_SUFFIX);
         };
     }
 
@@ -93,10 +96,15 @@ public final class WorkerSandboxBackends {
         Objects.requireNonNull(missingPrerequisites, "missingPrerequisites");
         WorkerSandboxBackend fallback = WorkerSandboxBackend.nativeEphemeralWorkspace();
         if (discovered.isEmpty()) {
-            // discover() already logged why no OS backend exists here; do not log it twice.
-            return new WorkerSandboxSelection(
+            WorkerSandboxSelection absent = new WorkerSandboxSelection(
                     fallback, WorkerSandboxSelection.Cause.NO_OS_BACKEND_AVAILABLE,
                     Optional.empty(), missingPrerequisites);
+            // discover() does not log every cause (missing bwrap/prlimit/PowerShell, unsupported
+            // platform), so the fallback is always logged here, with codes only: never a path.
+            // A second line next to discover()'s own WARNING (cgroup root, probe) is accepted.
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS found no OS sandbox backend for untrusted remote code; " + absent.refusalReport());
+            return absent;
         }
         WorkerSandboxBackend candidate = discovered.get();
         if (candidate.supportsUntrustedCode()) {

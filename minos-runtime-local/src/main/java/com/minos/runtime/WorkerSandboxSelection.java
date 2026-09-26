@@ -12,9 +12,11 @@ import java.util.Optional;
  * confuse:</p>
  *
  * <ul>
- *   <li>{@link Cause#NO_OS_BACKEND_AVAILABLE} — no OS sandbox backend could be discovered here: a
- *       prerequisite is missing (bubblewrap, prlimit, delegated cgroup v2 root, PowerShell, or the
- *       capability probe failed). Installing it is an operator action;</li>
+ *   <li>{@link Cause#NO_OS_BACKEND_AVAILABLE} — no OS sandbox backend could be discovered here:
+ *       either a prerequisite is missing (bubblewrap, prlimit, delegated cgroup v2 root, PowerShell,
+ *       or the capability probe failed), which is an operator action that makes the backend
+ *       available to managed local providers only, or the platform has no integrated backend at all
+ *       (nothing to install);</li>
  *   <li>{@link Cause#REJECTED_BY_DECISION} — an OS backend exists and is qualified for managed local
  *       providers, but its write quota is supervised rather than OS-enforced; it is rejected for
  *       untrusted code <strong>by decision</strong> (ADR 0041). No operator action reopens it;</li>
@@ -36,6 +38,12 @@ public record WorkerSandboxSelection(
 
     /** Machine-readable code carried by {@link Cause#EXECUTOR_NOT_SANDBOX_CAPABLE} selections. */
     public static final String EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE = "EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE";
+
+    /**
+     * Suffix of the {@link Cause#NO_OS_BACKEND_AVAILABLE} code naming a platform without any
+     * integrated OS backend ({@code PLATFORM_<name>_HAS_NO_OS_SANDBOX_BACKEND}): nothing to install.
+     */
+    public static final String UNSUPPORTED_PLATFORM_SUFFIX = "_HAS_NO_OS_SANDBOX_BACKEND";
 
     public WorkerSandboxSelection {
         Objects.requireNonNull(backend, "backend");
@@ -91,9 +99,13 @@ public record WorkerSandboxSelection(
         String reasons = String.join(", ", rejectionReasons);
         return switch (cause) {
             case QUALIFIED -> "";
-            case NO_OS_BACKEND_AVAILABLE -> "no OS sandbox backend is available on this host"
-                    + (reasons.isEmpty() ? "" : " (missing prerequisite: " + reasons + ")")
-                    + "; untrusted remote execution stays fail-closed until it is installed";
+            case NO_OS_BACKEND_AVAILABLE -> unsupportedPlatform()
+                    ? "no OS sandbox backend exists for this platform (" + reasons + ")"
+                            + "; untrusted remote execution stays fail-closed and there is nothing to install"
+                    : "no OS sandbox backend is available on this host"
+                            + (reasons.isEmpty() ? "" : " (missing prerequisite: " + reasons + ")")
+                            + "; untrusted remote execution stays fail-closed: providing it makes the OS backend"
+                            + " available to managed local providers only, not to untrusted code";
             case REJECTED_BY_DECISION -> "untrusted remote execution is fail-closed by decision (ADR 0041)"
                     + "; OS sandbox backend " + rejectedBackendId.orElseThrow()
                     + " was rejected for untrusted code: " + reasons;
@@ -105,10 +117,14 @@ public record WorkerSandboxSelection(
         };
     }
 
+    private boolean unsupportedPlatform() {
+        return rejectionReasons.stream().anyMatch(reason -> reason.endsWith(UNSUPPORTED_PLATFORM_SUFFIX));
+    }
+
     public enum Cause {
         /** The retained backend is qualified for untrusted code on this host. */
         QUALIFIED,
-        /** No OS backend could be discovered: an operator prerequisite is missing. */
+        /** No OS backend could be discovered: an operator prerequisite is missing, or the platform has none. */
         NO_OS_BACKEND_AVAILABLE,
         /** An OS backend exists but is rejected for untrusted code by decision (ADR 0041). */
         REJECTED_BY_DECISION,

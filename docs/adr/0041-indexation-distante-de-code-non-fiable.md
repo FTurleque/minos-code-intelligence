@@ -159,6 +159,15 @@ Durcissement gratuit à garder en réserve quelle que soit l'option (« à trait
 
 **Acceptez-vous que l'indexation distante de code non fiable reste fermée par décision sur tous les OS (option b, ≈ 4–5 j-p, refus journalisé et diagnosticable, documents alignés), l'ouverture Linux par quota de projet (option a, ≈ 9–11 j-p, Linux seulement, prérequis root à l'installation, Windows restant fermé) étant reportée à un ADR ultérieur si un besoin `remote index` est confirmé ?**
 
+## Écarts d'implémentation
+
+Consignés à la livraison (sprint 2, revue `verif-qualite` V24, V29, V31, V33). La décision ci-dessus reste la référence ; ces points précisent comment elle est réalisée.
+
+- **(a) Limitation centralisée (b2).** La limitation `WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041` n'est pas ajoutée par les deux backends mais par `WorkerSandboxQualification`, dans son unique branche de rétrogradation : un seul point, qui couvre aussi tout backend futur. `LinuxBubblewrapWorkerSandboxBackend`, `WindowsAppContainerWorkerSandboxBackend` et leurs dispositions restent inchangés.
+- **(b) Trois causes de refus (b1, b3).** `WorkerSandboxSelection` ne rapporte pas seulement le backend écarté : il distingue `REJECTED_BY_DECISION` (seule cause qui cite cet ADR), `NO_OS_BACKEND_AVAILABLE` (prérequis manquant, ou plateforme sans backend intégré) et `EXECUTOR_NOT_SANDBOX_CAPABLE` (refus du worker en profondeur).
+- **(c) L'absence de backend est aussi journalisée (b1).** `discover()` ne journalise pas toutes les causes (`bwrap`, `prlimit` ou PowerShell absent, plateforme sans backend) : la sélection émet elle-même un WARNING portant les codes, sans chemin. Le libellé distingue un prérequis à fournir, qui ne rend le backend disponible que pour les providers locaux gérés, d'une plateforme sans backend, où il n'y a rien à installer.
+- **(d) Refus précoce sans échappatoire (b4).** Le fournisseur de sélection de `LocalRemoteIndexOperations` est obligatoire : aucune valeur ne désactive le contrôle. Les tests du transport injectent explicitement une sélection qualifiée factice, réservée aux tests.
+
 ## Sources externes consultées
 
 - [S1] Page de manuel `bwrap(1)`, Debian 12 (bubblewrap 0.8.0) : « `--size` modifies the size of the created mount when preceding a `--tmpfs` action ; `--perms` and `--size` can be combined » — https://manpages.debian.org/bookworm/bubblewrap/bwrap.1.en.html

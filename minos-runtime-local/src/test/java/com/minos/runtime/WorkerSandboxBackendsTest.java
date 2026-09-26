@@ -138,9 +138,51 @@ class WorkerSandboxBackendsTest {
                 result.refusalReport());
         assertFalse(result.refusalReport().contains("ADR 0041"),
                 "a missing prerequisite is an operator action, not the decision: " + result.refusalReport());
-        // discover() already logged why nothing was found; the selection must not log it twice.
-        assertTrue(records.stream().noneMatch(record -> record.getLevel() == Level.WARNING));
+        // V33: providing the prerequisite does not reopen untrusted execution, so the report must not
+        // promise it ("until it is installed" was wrong).
+        assertTrue(result.refusalReport().contains("managed local providers only"), result.refusalReport());
+        assertFalse(result.refusalReport().contains("until it is installed"), result.refusalReport());
         assertPathFree(result.refusalReport());
+        // V33: discover() does not log every missing prerequisite (bwrap, prlimit, PowerShell), so the
+        // selection itself logs the codes as a WARNING, never silently.
+        String warning = singleWarning(records);
+        assertTrue(warning.contains("LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING"), warning);
+        assertTrue(warning.contains("missing prerequisite"), warning);
+        assertFalse(warning.contains("ADR 0041"), warning);
+        assertPathFree(warning);
+    }
+
+    /** V33: an OS without any integrated backend has nothing to install, and says so. */
+    @Test
+    void anUnsupportedPlatformIsReportedAsSuchNotAsAnInstallablePrerequisite() {
+        AtomicReference<WorkerSandboxSelection> selection = new AtomicReference<>();
+
+        List<LogRecord> records = capture(() ->
+                selection.set(WorkerSandboxBackends.selectForUntrustedCode(
+                        Optional.empty(), List.of("PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND"))));
+
+        WorkerSandboxSelection result = selection.get();
+        assertEquals(WorkerSandboxSelection.Cause.NO_OS_BACKEND_AVAILABLE, result.cause());
+        assertFalse(result.closedByDecision());
+        String report = result.refusalReport();
+        assertTrue(report.contains("no OS sandbox backend exists for this platform"), report);
+        assertTrue(report.contains("PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND"), report);
+        assertTrue(report.contains("nothing to install"), report);
+        assertFalse(report.contains("missing prerequisite"), report);
+        assertFalse(report.contains("installed"), report);
+        assertFalse(report.contains("ADR 0041"), report);
+        assertPathFree(report);
+        String warning = singleWarning(records);
+        assertTrue(warning.contains("PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND"), warning);
+        assertPathFree(warning);
+    }
+
+    private static String singleWarning(List<LogRecord> records) {
+        List<LogRecord> warnings = records.stream()
+                .filter(record -> record.getLevel() == Level.WARNING)
+                .toList();
+        assertEquals(1, warnings.size(), "exactly one WARNING reports the absent OS backend");
+        return warnings.get(0).getMessage();
     }
 
     @Test

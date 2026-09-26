@@ -42,7 +42,7 @@ Le refus est explicite et diagnosticable :
   - `REJECTED_BY_DECISION` — un backend OS a été découvert mais est écarté par décision (ADR 0041) : le message cite ce backend et les codes exacts des dimensions non OS-enforced (`FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL`, `FILESYSTEM_WRITE_ENTRIES_…`) ;
   - `NO_OS_BACKEND_AVAILABLE` — aucun backend OS n'a été découvert : le message cite le prérequis manquant (`LINUX_BUBBLEWRAP_NOT_FOUND`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) ou la plateforme sans backend (`PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND`) ;
   - `EXECUTOR_NOT_SANDBOX_CAPABLE` — l'exécuteur du provider n'expose aucune capacité sandbox (`EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE`) : ce refus est opposé en profondeur par le worker (`LocalIsolatedIndexWorker`), pas par le contrôle précoce ;
-- le sélecteur journalise en WARNING chaque backend OS écarté avec ces mêmes codes ;
+- le sélecteur journalise en WARNING, sans chemin, chaque backend OS écarté avec ses codes de dimension, et l'absence de tout backend OS avec les codes du prérequis manquant ou de la plateforme sans backend ;
 - `minos doctor` (section `workerSandbox`) dit si l’indexation distante est disponible et, sinon, distingue un **prérequis manquant** (aucun backend OS découvert : `LINUX_BUBBLEWRAP_NOT_FOUND`, `LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) de la **décision** (`REJECTED_BY_DECISION`, marqueur `ADR 0041`).
 
 La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions (nouvel ADR requis) :
