@@ -105,5 +105,10 @@ final class HostedTenantService {
             Objects.requireNonNull(state, "state");
             bearerToken = HostedPrincipal.text(bearerToken, "bearerToken", 8192);
         }
+
+        @Override
+        public String toString() {
+            return "Bootstrap[state=" + state + ", bearerToken=***]";
+        }
     }
 }

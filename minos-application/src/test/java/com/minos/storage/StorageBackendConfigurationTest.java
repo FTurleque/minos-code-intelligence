@@ -51,6 +51,34 @@ class StorageBackendConfigurationTest {
     }
 
     @Test
+    void toStringNeverExposesPostgresPassword() throws IOException {
+        Properties properties = new Properties();
+        properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_URL_PROPERTY,
+                "jdbc:postgresql://localhost:5432/minos?sslmode=verify-full&token=url-secret");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_USER_PROPERTY, "minos_user");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_PASSWORD_PROPERTY, "super-secret-value");
+        properties.setProperty(StorageBackendConfiguration.POSTGRES_SCHEMA_PROPERTY, "minos_ci");
+
+        StorageBackendConfiguration value = StorageBackendConfiguration.resolve(
+                Path.of("target/test-minos-home"), Map.of(), properties);
+        StorageBackendConfiguration same = StorageBackendConfiguration.resolve(
+                Path.of("target/test-minos-home"), Map.of(), properties);
+
+        assertEquals("super-secret-value", value.postgresPassword());
+        assertFalse(value.toString().contains("super-secret-value"), "toString leaks the password");
+        assertFalse(value.toString().contains("url-secret"), "toString leaks the URL secret");
+        String exceptionMessage = new IllegalStateException("bad config: " + value).getMessage();
+        assertFalse(exceptionMessage.contains("super-secret-value"));
+        assertTrue(value.toString().contains("backend=postgresql"));
+        assertEquals(
+                "backend=postgresql url=jdbc:postgresql://localhost:5432/minos user=minos_user schema=minos_ci managed=false",
+                value.safeDescription());
+        assertEquals(value, same);
+        assertEquals(value.hashCode(), same.hashCode());
+    }
+
+    @Test
     void resolvesManagedPostgresqlFlagStrictly() throws IOException {
         Properties properties = new Properties();
         properties.setProperty(StorageBackendConfiguration.BACKEND_PROPERTY, "postgresql");

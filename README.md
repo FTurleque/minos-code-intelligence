@@ -15,7 +15,7 @@ M30                              ✅ PR #110 + promotion #111 merged
 hardening #113/#117              ✅ merged
 readiness 1.0.1 #118/#119        ✅ merged / qualifiée
 correctifs installateur #122–127 ✅ merged / qualifiés
-#98 sandbox OS worker réelle     ✅ CLOSED / qualifiée Linux + Windows
+#98 sandbox OS worker réelle     ✅ CLOSED / primitives Linux + Windows ; code non fiable refusé (fail-closed)
 ```
 
 La release **1.0.1** corrige le runtime Windows 1.0.0, intègre le backend Docker autonome M29, l'installateur avancé M30, PostgreSQL/pgvector et Ollama, puis applique le hardening sécurité/CI/release issu de l'audit complet.
@@ -189,7 +189,7 @@ La qualification Linux exige en plus un Docker utilisable pour les tests Postgre
 
 ## Sandbox worker OS
 
-L'issue **#98** est **fermée / completed** depuis le **9 août 2026**. La sandbox worker réelle est qualifiée sur Linux (`bubblewrap`/namespaces/`prlimit`) et Windows (AppContainer + Job Object). L’indexation distante refuse `ALLOW` comme `DENY` lorsqu’une primitive OS qualifiée n’est pas disponible.
+L'issue **#98** est **fermée / completed** depuis le **9 août 2026** sur le plan des **primitives** : les backends `LinuxBubblewrapWorkerSandboxBackend` (`bubblewrap`/namespaces, job cgroup v2) et `WindowsAppContainerWorkerSandboxBackend` (AppContainer + Job Object) existent et sont testés. En revanche, la **qualification pour du code non fiable est explicitement refusée** : le quota d'écriture disque (octets/entrées) reste supervisé par MINOS (`SUPERVISED_HARD_KILL`), pas appliqué par l'OS, et `WorkerSandboxQualification` rétrograde donc les deux backends en `UNTRUSTED_CODE_UNSUPPORTED` (verrouillé par le test `currentOsBackendsFailClosedUntilStorageIsOsEnforced`). Conséquence : `remote index` n'exécute aucun provider distant aujourd'hui, sur tous les OS, en `ALLOW` comme en `DENY` (fail-closed, sans option de contournement) ; seule l'indexation **locale** des providers gérés utilise ces sandbox, sous le contrat plus étroit `supportsManagedLocalProvider`. Voir le constat A1 de [`docs/audit/AUDIT-2026-09.md`](docs/audit/AUDIT-2026-09.md) et [`docs/user/remote-indexing.md`](docs/user/remote-indexing.md).
 
 ## Licence
 

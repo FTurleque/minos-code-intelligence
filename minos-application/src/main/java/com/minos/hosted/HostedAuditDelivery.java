@@ -32,4 +32,30 @@ final class HostedAuditDelivery {
                     exception);
         }
     }
+
+    /**
+     * Journals then delivers a refusal kept off the durable chain; the refusal itself is already
+     * enforced. The journal entry is the only guaranteed trace of such a refusal (the embedded sink
+     * exports nothing), so it is written before any sink involvement and never carries a token.
+     */
+    static void publishUnchained(HostedAuditSink sink, HostedAuditEvent event) {
+        Objects.requireNonNull(sink, "sink");
+        Objects.requireNonNull(event, "event");
+        LOGGER.log(
+                System.Logger.Level.WARNING,
+                "Hosted mutation refused without audit chaining (refusal budget or denied capacity reached)"
+                        + " (tenant=" + event.tenantId() + ", principal=" + event.principalId()
+                        + ", action=" + event.action() + ", resourceType=" + event.resourceType()
+                        + ", requestId=" + event.requestId() + ")");
+        try {
+            sink.publishUnchained(event);
+        } catch (IOException exception) {
+            LOGGER.log(
+                    System.Logger.Level.WARNING,
+                    "Hosted audit export of an unchained refusal failed; the refusal was enforced but is not"
+                            + " replayable (tenant=" + event.tenantId() + ", principal=" + event.principalId()
+                            + ", action=" + event.action() + ")",
+                    exception);
+        }
+    }
 }

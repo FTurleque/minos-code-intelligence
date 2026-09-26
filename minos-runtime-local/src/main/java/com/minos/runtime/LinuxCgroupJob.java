@@ -172,23 +172,48 @@ final class LinuxCgroupJob implements AutoCloseable {
      * Kills and removes cgroups left behind by a MINOS process that was itself killed.
      * The delegated root must never accumulate residue a provider could rely on.
      *
-     * <p>A stale boundary that still contains processes, or whose membership cannot be read, is a
-     * containment failure and rejects the delegated root. Only deletion of an already empty cgroup
-     * remains best-effort because it cannot hide surviving provider processes.</p>
+     * <p>Several MINOS processes (CLI, MCP server, IDE plugin) share one delegated root, so a
+     * discovered cgroup is only reclaimed when {@link CgroupJobOwnership} proves its owner is dead:
+     * the owner PID carried in the cgroup name is gone or was reused by another process. Cgroups of
+     * a live MINOS process, of this process, or unmarked cgroups that still hold processes are left
+     * intact. An orphaned boundary that still contains processes but cannot be killed, or whose
+     * membership cannot be read, is a containment failure and rejects the delegated root. Only
+     * deletion of an already empty cgroup remains best-effort because it cannot hide surviving
+     * provider processes.</p>
      */
-    static void reclaimStaleJobs(Path root) throws IOException {
+    static StaleSweep reclaimStaleJobs(Path root) throws IOException {
+        List<String> reclaimed = new ArrayList<>();
+        List<String> leftIntact = new ArrayList<>();
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
             for (Path child : children.limit(MAX_STALE_JOB_SWEEP).toList()) {
                 if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
-                if (!String.valueOf(child.getFileName()).startsWith("minos-")) continue;
-                if (CONTROLLER_DIRECTORY.equals(String.valueOf(child.getFileName()))) continue;
-                reclaimStaleJob(child);
+                String name = String.valueOf(child.getFileName());
+                if (!name.startsWith("minos-")) continue;
+                if (CONTROLLER_DIRECTORY.equals(name)) continue;
+                if (reclaimStaleJob(child, name)) reclaimed.add(name);
+                else leftIntact.add(name);
             }
         }
+        return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact));
     }
 
-    private static void reclaimStaleJob(Path child) {
+    /**
+     * Returns {@code true} when the cgroup was reclaimed (or its reclamation attempted), {@code false}
+     * when the ownership decision left it intact.
+     */
+    private static boolean reclaimStaleJob(Path child, String name) {
         LinuxCgroupJob stale = new LinuxCgroupJob(child);
+        Optional<CgroupJobOwnership.Mark> mark = CgroupJobOwnership.Mark.parse(name);
+        CgroupJobOwnership.Verdict verdict = CgroupJobOwnership.decide(
+                mark, CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup.SYSTEM, stale::aliveProcesses);
+        if (!verdict.reclaim()) {
+            // Unmarked residue with live processes is unexplained and deserves attention; a job of
+            // another live MINOS instance is ordinary coexistence.
+            LOGGER.log(mark.isEmpty() ? System.Logger.Level.WARNING : System.Logger.Level.DEBUG,
+                    "MINOS leaves cgroup " + name + " intact: " + verdict.reason());
+            return false;
+        }
+        LOGGER.log(System.Logger.Level.DEBUG, "MINOS reclaims stale cgroup " + name + ": " + verdict.reason());
         if (stale.aliveProcesses() > 0L) {
             stale.kill();
         }
@@ -198,10 +223,19 @@ final class LinuxCgroupJob implements AutoCloseable {
             LOGGER.log(System.Logger.Level.WARNING,
                     "MINOS could not remove already-empty stale cgroup " + child, exception);
         }
+        return true;
+    }
+
+    /** Outcome of one stale sweep, by cgroup name (never a path), for diagnostics and tests. */
+    record StaleSweep(List<String> reclaimed, List<String> leftIntact) {
+        StaleSweep {
+            reclaimed = List.copyOf(reclaimed);
+            leftIntact = List.copyOf(leftIntact);
+        }
     }
 
     private static boolean probe(Path root) {
-        Path probe = root.resolve("minos-probe-" + UUID.randomUUID());
+        Path probe = root.resolve(CgroupJobOwnership.CURRENT.markedName("minos-probe-" + UUID.randomUUID()));
         try {
             LinuxCgroupJob job = configure(probe, Limits.DEFAULT);
             job.close();
@@ -250,12 +284,24 @@ final class LinuxCgroupJob implements AutoCloseable {
         }
     }
 
-    private static Path jobDirectory(Path root, String name) throws IOException {
-        Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
+    /**
+     * Validates a caller-provided job name and stamps it with the ownership mark of this process.
+     *
+     * <p>The safety bound applies to the caller's name (at most 96 characters); the mark adds at most
+     * {@link CgroupJobOwnership#MAX_SUFFIX_LENGTH} characters, keeping the directory name well below
+     * the 255-byte filesystem limit.</p>
+     */
+    static String markedJobName(String name) throws IOException {
         String safe = Objects.requireNonNull(name, "name");
         if (!SAFE_JOB_NAME.matcher(safe).matches()) {
             throw new IOException("cgroup job name is not a safe single path segment: " + name);
         }
+        return CgroupJobOwnership.CURRENT.markedName(safe);
+    }
+
+    private static Path jobDirectory(Path root, String name) throws IOException {
+        Path normalizedRoot = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
+        String safe = markedJobName(name);
         Path directory = normalizedRoot.resolve(safe).toAbsolutePath().normalize();
         if (!directory.startsWith(normalizedRoot)
                 || directory.equals(normalizedRoot)

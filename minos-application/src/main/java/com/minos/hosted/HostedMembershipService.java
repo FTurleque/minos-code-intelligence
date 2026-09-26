@@ -47,6 +47,10 @@ final class HostedMembershipService {
                 safePrincipal, displayName, Objects.requireNonNull(role, "role"), clock.instant());
         List<HostedPrincipal> members = new ArrayList<>(context.state().members());
         int existing = indexOf(members, safePrincipal);
+        if (!context.principal().role().canGovern(role)
+                || (existing >= 0 && !context.principal().role().canGovern(members.get(existing).role()))) {
+            throw authorization.deny(context, "MEMBER_GRANT", "PRINCIPAL", safePrincipal);
+        }
         if (existing >= 0) {
             members.set(existing, membership);
         } else {
@@ -74,12 +78,16 @@ final class HostedMembershipService {
                 bearerToken, requestId, HostedPermission.MEMBER_WRITE,
                 "MEMBER_REVOKE", "PRINCIPAL", principalId);
         String safePrincipal = HostedPrincipal.safeId(principalId, "principalId");
+        int existing = indexOf(context.state().members(), safePrincipal);
+        if (existing < 0) {
+            throw new IllegalArgumentException("tenant member not found");
+        }
+        if (!context.principal().role().canGovern(context.state().members().get(existing).role())) {
+            throw authorization.deny(context, "MEMBER_REVOKE", "PRINCIPAL", safePrincipal);
+        }
         List<HostedPrincipal> members = context.state().members().stream()
                 .filter(value -> !value.principalId().equals(safePrincipal))
                 .toList();
-        if (members.size() == context.state().members().size()) {
-            throw new IllegalArgumentException("tenant member not found");
-        }
         requireOwner(members);
         writer.saveAllowed(
                 context,

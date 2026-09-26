@@ -32,7 +32,7 @@ Les versions historiques détaillées restent archivées sous [`history/reconcil
 | M29 | Autonomous Docker Runtime & Native Parity | ✅ M29 issue #107 CLOSED / M29 PR #108 intégrée |
 | M30 | Advanced Installer, Ollama Docker & PostgreSQL/pgvector | ✅ M30 PR #110 + M30 promotion PR #111 |
 | Hardening release/installer | supply-chain, Windows CI, sécurité release | ✅ #113 ; M28 Windows CI PR #117 |
-| #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ implémenté et qualifié |
+| #98 Real OS worker sandbox | bubblewrap/cgroup + AppContainer/Job Object | ✅ primitives implémentées ; qualification code non fiable refusée, `remote index` fail-closed (audit 2026-09, A1) |
 | PR #227 | provider egress, provenance CommandLocator, reparse private storage et fallback confinement | ✅ intégrée |
 | #224–#248 | confinement provider/filesystem, provenance, egress, installateur, Windows non-admin | ✅ intégrés |
 | #258 | politique sécurité, maintenance dépendances, CODEOWNERS futur, toolchain, couverture, séparation CI historique | ✅ intégrée dans `develop` |
@@ -127,5 +127,12 @@ La **Release 1.0.1 est publiée** et reste immuable :
 La ligne de développement courante est **1.1.0-SNAPSHOT**. Aucune release 1.1.0 n'est publiée à ce jour.
 
 ## Suite
+
+### Travaux ouverts en conception
+
+| Sujet | Décision | État |
+|---|---|---|
+| Reprise d'une indexation interrompue (crash, reboot, terminal fermé) sans tout réindexer | [ADR 0039](adr/0039-reprise-indexation-apres-interruption.md) | conception proposée |
+| Distribution auto-portante : les indexeurs sont livrés dans le paquet, plus aucune étape `tools install` à la charge de l'utilisateur | [ADR 0040](adr/0040-distribution-auto-portante-indexeurs-embarques.md) | conception proposée |
 
 Aucun nouveau jalon fonctionnel n'est ouvert. La dette durable de sécurité reste le hard filesystem quota pour une exécution réellement hostile : une primitive qui refuse l'écriture avant dépassement reste nécessaire avant de pouvoir renforcer cette claim. Les autres travaux doivent préserver les gates exact-head et la topologie `main ⊆ develop`.

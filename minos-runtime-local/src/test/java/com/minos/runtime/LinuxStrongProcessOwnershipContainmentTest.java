@@ -76,7 +76,7 @@ class LinuxStrongProcessOwnershipContainmentTest {
         assumeTrue(executor.capability().strong(), () -> String.join("; ", executor.capability().diagnostics()));
         IndexingExecutionRequest request = request(project);
         Path jobDirectory = LinuxCgroupJob.delegatedRoot().orElseThrow()
-                .resolve("minos-provider-" + request.runId());
+                .resolve(CgroupJobOwnership.CURRENT.markedName("minos-provider-" + request.runId()));
 
         var artifact = executor.execute(request);
         long detachedPid = Long.parseLong(Files.readString(pidFile).trim());

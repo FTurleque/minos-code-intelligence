@@ -14,6 +14,7 @@ final class HostedAuthorizationService {
     private final HostedAuditChain auditChain;
     private final HostedAuditSink auditSink;
     private final Clock clock;
+    private final HostedDenialThrottle denialThrottle = new HostedDenialThrottle();
 
     HostedAuthorizationService(
             HostedControlPlaneStore store,
@@ -58,21 +59,65 @@ final class HostedAuthorizationService {
         boolean allowed = claims.keyId().equals(state.keyId()) && membership.isPresent()
                 && membership.orElseThrow().role().allows(permission);
         if (!allowed) {
-            HostedTenantState denied = auditChain.append(
-                    state,
-                    claims.principalId(),
-                    action,
-                    resourceType,
-                    resourceId,
-                    HostedAuditEvent.Outcome.DENIED,
-                    safeRequestId,
-                    state.keyId(),
-                    state.version() + 1);
-            HostedCommitRecovery.save(store, denied, state.version());
-            HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
+            recordDenial(state, claims.principalId(), action, resourceType, resourceId, safeRequestId);
             throw new SecurityException("hosted permission denied: " + permission);
         }
         return new MutationContext(claims, state, membership.orElseThrow(), safeRequestId);
+    }
+
+    /**
+     * Refuses a mutation whose coarse permission check already passed but whose business rule
+     * (for example role governance) forbids it. The refusal is audited, persisted and published
+     * exactly like a permission refusal; the returned exception carries only the action name.
+     */
+    SecurityException deny(
+            MutationContext context,
+            String action,
+            String resourceType,
+            String resourceId
+    ) throws IOException {
+        recordDenial(
+                context.state(), context.claims().principalId(), action, resourceType, resourceId,
+                context.requestId());
+        return new SecurityException("hosted permission denied: " + action);
+    }
+
+    /**
+     * Records a refusal on both refusal paths (permission and post-authorization rule). A refusal
+     * is chained, persisted (version + 1) and published only while the chain is below the policy's
+     * denied capacity and the (tenant, principal) refusal budget of this process is not exhausted;
+     * otherwise it is delivered to the sink as an unchained event and the tenant state is untouched,
+     * so looping refusals can neither exhaust the audit capacity nor churn the tenant version.
+     */
+    private void recordDenial(
+            HostedTenantState state,
+            String principalId,
+            String action,
+            String resourceType,
+            String resourceId,
+            String requestId
+    ) throws IOException {
+        boolean chained = state.auditEvents().size() < state.retentionPolicy().deniedAuditCapacity()
+                && denialThrottle.tryAcquire(state.tenantId(), principalId, clock.instant());
+        if (!chained) {
+            HostedAuditEvent unchained = auditChain.event(
+                    state, principalId, action, resourceType, resourceId,
+                    HostedAuditEvent.Outcome.DENIED, requestId, state.keyId());
+            HostedAuditDelivery.publishUnchained(auditSink, unchained);
+            return;
+        }
+        HostedTenantState denied = auditChain.append(
+                state,
+                principalId,
+                action,
+                resourceType,
+                resourceId,
+                HostedAuditEvent.Outcome.DENIED,
+                requestId,
+                state.keyId(),
+                state.version() + 1);
+        HostedCommitRecovery.save(store, denied, state.version());
+        HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
     }
 
     HostedTenantState loadVerified(UUID tenantId) throws IOException {

@@ -2,9 +2,9 @@
 
 Ce guide décrit le parcours utilisateur de MINOS sous Windows.
 
-Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java. Les toolchains d'un projet analysé peuvent en revanche rester nécessaires à ses providers.
+Le parcours normal ne nécessite **ni clone Git, ni Maven, ni JDK pour exécuter MINOS** : la distribution Windows contient son propre runtime Java. Les toolchains d'un projet analysé peuvent en revanche rester nécessaires à ses providers. Les indexeurs (providers SCIP) ne sont pas non plus embarqués dans la distribution actuelle : ils s'installent après coup avec `minos.cmd tools install <provider>`, ce qui télécharge le provider et ses dépendances et nécessite donc un accès réseau. La distribution auto-portante (indexeurs embarqués, amorçage hors ligne) est décidée par l'[ADR 0040](../adr/0040-distribution-auto-portante-indexeurs-embarques.md) mais n'est pas encore implémentée.
 
-> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 de sandbox worker OS réelle est fermée/completed et qualifiée Linux + Windows.
+> État au **10 août 2026** : `v1.0.0` et `v1.0.1` sont **publiées et immuables**. `v1.0.1` a été publiée le **9 août 2026** après qualification Windows/Linux, PostgreSQL/pgvector, MCP, IntelliJ, installateur et supply-chain. L'issue #98 (sandbox worker OS réelle) est fermée sur le plan des primitives Linux/Windows, mais la qualification pour du code non fiable reste refusée : `remote index` est fail-closed sur tous les OS (voir le constat A1 de [`../audit/AUDIT-2026-09.md`](../audit/AUDIT-2026-09.md)).
 
 ## 1. Parcours recommandé
 

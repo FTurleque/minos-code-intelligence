@@ -49,6 +49,27 @@ class LocalMinosTeamApiTest {
         assertNull(failure.getCause());
     }
 
+    @Test
+    void bootstrapDtoToStringRedactsBearerToken() {
+        var dto = new MinosTeamApi.BootstrapDto(null, "mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "BootstrapDto.toString leaks the bearer token");
+        assertEquals("mht1.secret-token", dto.bearerToken());
+    }
+
+    @Test
+    void tokenDtoToStringRedactsBearerToken() {
+        var dto = new MinosTeamApi.TokenDto("mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "TokenDto.toString leaks the bearer token");
+        assertEquals("mht1.secret-token", dto.bearerToken());
+    }
+
+    @Test
+    void rotationDtoToStringRedactsReplacementBearerToken() {
+        var dto = new MinosTeamApi.RotationDto(null, "mht1.secret-token", "SECRET_OUTPUT_ONCE_DO_NOT_LOG");
+        assertFalse(dto.toString().contains("mht1.secret-token"), "RotationDto.toString leaks the replacement bearer token");
+        assertEquals("mht1.secret-token", dto.replacementBearerToken());
+    }
+
     private static HostedTenantKeyProvider keys() {
         return (tenantId, keyId, purpose) -> {
             byte[] bytes = new byte[32];

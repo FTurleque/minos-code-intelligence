@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,6 +22,30 @@ class HostedModelTest {
         assertFalse(HostedRole.CONTRIBUTOR.allows(HostedPermission.MEMBER_WRITE));
         assertTrue(HostedRole.AUDITOR.allows(HostedPermission.AUDIT_READ));
         assertFalse(HostedRole.VIEWER.allows(HostedPermission.AUDIT_READ));
+    }
+
+    @Test
+    void roleGovernanceIsPermissionSubsetBasedAndReservesOwnerToOwner() {
+        for (HostedRole role : HostedRole.values()) {
+            assertTrue(HostedRole.OWNER.canGovern(role), "OWNER governs " + role);
+            assertTrue(role.canGovern(role), role + " governs itself");
+            assertTrue(role == HostedRole.OWNER || !role.canGovern(HostedRole.OWNER),
+                    role + " must not govern OWNER");
+        }
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.ADMIN));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.CONTRIBUTOR));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.VIEWER));
+        assertTrue(HostedRole.ADMIN.canGovern(HostedRole.AUDITOR));
+        assertFalse(HostedRole.CONTRIBUTOR.canGovern(HostedRole.AUDITOR));
+        assertFalse(HostedRole.AUDITOR.canGovern(HostedRole.CONTRIBUTOR));
+    }
+
+    @Test
+    void deniedAuditCapacityReservesATenthOfTheRetentionTargetBelowHardCapacity() {
+        assertEquals(90, new HostedRetentionPolicy(100, 1, 1).deniedAuditCapacity());
+        assertEquals(9_000, HostedRetentionPolicy.defaults().deniedAuditCapacity());
+        assertEquals(90_000,
+                new HostedRetentionPolicy(HostedRetentionPolicy.MAX_AUDIT_EVENTS, 1, 1).deniedAuditCapacity());
     }
 
     @Test

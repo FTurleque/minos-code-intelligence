@@ -24,4 +24,14 @@ public record HostedRetentionPolicy(
     public static HostedRetentionPolicy defaults() {
         return new HostedRetentionPolicy(10_000, 365, 90);
     }
+
+    /**
+     * Audit size from which refused mutations are no longer appended to the durable chain: one
+     * tenth of the retention target is reserved so that refusals, whatever their number and
+     * whichever process emits them, can never bring the chain to its hard capacity and starve
+     * authorized mutations. Authorized mutations are only bounded by {@link #MAX_AUDIT_EVENTS}.
+     */
+    public int deniedAuditCapacity() {
+        return maxAuditEvents - maxAuditEvents / 10;
+    }
 }
