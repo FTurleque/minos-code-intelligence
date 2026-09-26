@@ -217,6 +217,11 @@ def check_sandbox_claims_match_the_code() -> None:
         raise RuntimeError("remote-worker-sandbox-disposition.md must not title the integrated backends as qualified")
     if "ADR 0041" not in disposition:
         raise RuntimeError("remote-worker-sandbox-disposition.md must cite ADR 0041")
+    # V30 : les backends intégrés ne sont pas « la » sandbox qualifiée du plan remote worker.
+    if "exige une sandbox OS explicitement qualifiée (Bubblewrap+cgroup v2 délégué, ou AppContainer)" in disposition:
+        raise RuntimeError(
+            "remote-worker-sandbox-disposition.md presents Bubblewrap/AppContainer as the qualified "
+            "remote-worker sandbox; both are rejected for untrusted code by decision (ADR 0041, V30)")
 
     remote_indexing = read("docs/user/remote-indexing.md")
     for stale in ("n’atteignent pas encore cette qualification", "n’est pas encore un quota stockage"):
@@ -224,6 +229,19 @@ def check_sandbox_claims_match_the_code() -> None:
             raise RuntimeError(f"docs/user/remote-indexing.md presents the refusal as pending, not decided: {stale}")
     if "ADR 0041" not in remote_indexing:
         raise RuntimeError("docs/user/remote-indexing.md must cite ADR 0041")
+    # V30 : les prérequis Linux servent l'indexation locale gérée et ne rouvrent pas remote index ;
+    # le message de refus dépend de la cause, il ne cite un backend écarté que par décision.
+    for stale in ("Sans elles, MINOS reste fail-closed sur `remote index`",
+                  "avec un message qui cite le backend écarté et les codes exacts des dimensions non OS-enforced"):
+        if stale in remote_indexing:
+            raise RuntimeError(f"docs/user/remote-indexing.md claims more than the refusal causes allow: {stale}")
+    if "ne rouvrent pas `remote index`" not in remote_indexing:
+        raise RuntimeError(
+            "docs/user/remote-indexing.md must say that the Linux operator prerequisites do not reopen "
+            "remote index (closed by decision, ADR 0041)")
+    cli_doc = read("docs/user/cli.md")
+    if "qui cite le backend écarté et les dimensions manquantes, et" in cli_doc:
+        raise RuntimeError("docs/user/cli.md presents the decision-only refusal message as the only one (V30)")
 
 
 def check_architecture_doc_version(maven_version: str) -> None:

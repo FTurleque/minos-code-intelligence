@@ -23,7 +23,7 @@ Le backend Docker MCP recouvre trois plans qui ne partagent ni le même modèle 
 |---|---|---|
 | **Docker MCP query** (`minos-mcp`) | sert l'index déjà construit aux clients MCP | conteneur `read_only`, `network_mode: none`, non-root |
 | **Docker MCP admin/indexing** (`minos-admin`) | exécute les providers gérés (scip-java, scip-typescript, …) sur du code **local et déjà indexé/confié** | conteneur durci (`cap_drop: [ALL]`, non-root, `no-new-privileges`) — le conteneur lui-même est la frontière ; il n'imbrique pas une seconde sandbox OS |
-| **Remote worker** (`LocalIsolatedIndexWorker`) | exécute un provider sur du dépôt/code **non fiable** | exige une sandbox OS explicitement qualifiée (Bubblewrap+cgroup v2 délégué, ou AppContainer) ; refuse fail-closed sinon |
+| **Remote worker** (`LocalIsolatedIndexWorker`) | exécute un provider sur du dépôt/code **non fiable** | exigerait une sandbox OS qualifiée pour le code non fiable (`UNTRUSTED_CODE_SUPPORTED`) ; **aucun backend intégré ne l’est** — Bubblewrap+cgroup v2 et AppContainer sont écartés par décision ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) — donc refuse fail-closed |
 
 Le plan admin/indexing Docker n'est **pas** le sandbox remote-worker qualifié : à l'intérieur d'un conteneur déjà durci, MINOS ne peut structurellement pas construire une seconde sandbox Bubblewrap/cgroup2 imbriquée. C'est attendu, pas une panne — mais cela ne doit jamais être confondu avec une qualification remote-worker, ni la remplacer silencieusement.
 
@@ -36,7 +36,7 @@ Concrètement (`ProviderRuntimeStatus.State`, `com.minos.runtime`) :
 - un provider dont la sandbox « managed local provider » (`WorkerSandboxBackend.supportsManagedLocalProvider()`) n'est pas fournie par le backend Docker est rapporté `UNSUPPORTED_BY_BACKEND` — jamais `READY` (la capability plus forte reste réellement absente) et jamais `BLOCKED` (ce n'est pas une panne : le conteneur est déjà la frontière pour ce plan) ;
 - sur un hôte natif, la même absence de sandbox qualifiée reste `BLOCKED` — là, la sandbox aurait dû être qualifiable, et son absence est une vraie panne bloquante ;
 - `ToolsCommand`'s `tools verify`/`tools verify --all` exclut explicitement `UNSUPPORTED_BY_BACKEND` du calcul « notReady », mais bloque toujours sur tout autre état non-`READY` — un provider réellement requis et cassé continue de faire échouer la porte d'installation, `--all` ou non ;
-- ce mécanisme ne touche ni aux critères de qualification de `supportsUntrustedCode()`, ni au sélecteur `WorkerSandboxBackends.strongestAvailable()` utilisé par `LocalIsolatedIndexWorker` : le contrat remote-worker ci-dessus reste inchangé et fail-closed dans tous les cas.
+- ce mécanisme ne touche ni aux critères de qualification de `supportsUntrustedCode()`, ni au sélecteur strict `WorkerSandboxBackends.selectForUntrustedCode()` utilisé par `LocalIsolatedIndexWorker` et par le refus précoce de `remote index` (`strongestAvailable()` en rend le même backend) : le contrat remote-worker ci-dessus reste inchangé et fail-closed dans tous les cas.
 
 ## Confinement agrégé des ressources
 

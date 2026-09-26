@@ -38,11 +38,14 @@ Les backends locaux intégrés bornent la mémoire, les processus, la CPU et la 
 
 Le refus est explicite et diagnosticable :
 
-- `remote index` refuse **avant** toute matérialisation, prise de bail, enregistrement de projet ou épinglage, avec un message qui cite le backend écarté et les codes exacts des dimensions non OS-enforced (`FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL`, `FILESYSTEM_WRITE_ENTRIES_…`), sans chemin ;
+- `remote index` refuse **avant** toute matérialisation, prise de bail, enregistrement de projet ou épinglage, avec un message sans chemin dont le contenu dépend de la cause (`WorkerSandboxSelection`) :
+  - `REJECTED_BY_DECISION` — un backend OS a été découvert mais est écarté par décision (ADR 0041) : le message cite ce backend et les codes exacts des dimensions non OS-enforced (`FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL`, `FILESYSTEM_WRITE_ENTRIES_…`) ;
+  - `NO_OS_BACKEND_AVAILABLE` — aucun backend OS n'a été découvert : le message cite le prérequis manquant (`LINUX_BUBBLEWRAP_NOT_FOUND`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) ou la plateforme sans backend (`PLATFORM_OTHER_HAS_NO_OS_SANDBOX_BACKEND`) ;
+  - `EXECUTOR_NOT_SANDBOX_CAPABLE` — l'exécuteur du provider n'expose aucune capacité sandbox (`EXECUTOR_NOT_PROCESS_SANDBOX_CAPABLE`) : ce refus est opposé en profondeur par le worker (`LocalIsolatedIndexWorker`), pas par le contrôle précoce ;
 - le sélecteur journalise en WARNING chaque backend OS écarté avec ces mêmes codes ;
 - `minos doctor` (section `workerSandbox`) dit si l’indexation distante est disponible et, sinon, distingue un **prérequis manquant** (aucun backend OS découvert : `LINUX_BUBBLEWRAP_NOT_FOUND`, `LINUX_DELEGATED_CGROUP_V2_ROOT_MISSING`, `WINDOWS_POWERSHELL_NOT_FOUND`, …) de la **décision** (`REJECTED_BY_DECISION`, marqueur `ADR 0041`).
 
-La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions :
+La commande suivante décrit donc le contrat cible et ne réussira que sur un backend futur réellement qualifié pour toutes les dimensions (nouvel ADR requis) :
 
 ```powershell
 minos.cmd remote index https://github.com/acme/project `
@@ -62,9 +65,11 @@ minos.cmd remote index https://github.com/acme/project `
 
 Sous Linux, la qualification CPU/mémoire/processus exige notamment une racine cgroup v2 déléguée : soit le cgroup du processus MINOS lui-même (unité systemd avec `Delegate=yes`), soit un sous-arbre explicitement désigné par `MINOS_SANDBOX_CGROUP_ROOT`. Cette condition ne remplace pas l’exigence distincte de quota stockage OS-enforced.
 
-### Prérequis opérateur — sandbox Linux
+### Prérequis opérateur — sandbox Linux (indexation locale gérée)
 
-La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, MINOS reste fail-closed sur `remote index` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
+Ces prérequis servent l'**indexation locale gérée** (providers gérés lancés sous sandbox OS). Ils **ne rouvrent pas `remote index`**, fermé par décision ([ADR 0041](../adr/0041-indexation-distante-de-code-non-fiable.md)) : une fois réunis, `minos doctor` passe seulement de la cause `NO_OS_BACKEND_AVAILABLE` (prérequis manquant) à `REJECTED_BY_DECISION`, et `remote index` refuse toujours.
+
+La qualification `linux-bubblewrap-cgroup2-v5` (voir [`remote-worker-sandbox-disposition.md`](../developer/remote-worker-sandbox-disposition.md)) sonde réellement les primitives disponibles sur l'hôte avant toute revendication. Sans elles, aucun backend OS Linux n'est découvert : les providers locaux gérés n'ont pas de sandbox OS et `remote index` refuse avec la cause `NO_OS_BACKEND_AVAILABLE` — il n'existe aucun contournement. Sur un hôte opérateur (hors CI, où `pr-ci.yml`/`scripts/ci/delegate-linux-cgroup.sh` provisionnent déjà tout ceci), il faut réunir explicitement :
 
 1. **`bwrap` et `prlimit`** — installez `bubblewrap` et `util-linux` avec le gestionnaire de paquets de la distribution, par exemple :
 
@@ -109,7 +114,7 @@ cgroup v2 n'autorise un délégataire non privilégié à migrer un processus qu
 
 L'unique migration nécessaire est effectuée par le script pendant sa phase privilégiée (`--attach-pid`). MINOS se retrouve déjà dans le cgroup contrôleur, n'a aucune migration à faire, et n'écrit que dans le sous-arbre qu'il possède réellement. C'est exactement la forme que produit nativement `Delegate=yes`.
 
-Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et `remote index` échoue avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
+Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et les providers locaux gérés n'ont pas de sandbox OS ; `remote index` échoue (ici avec la cause `NO_OS_BACKEND_AVAILABLE`, et par décision une fois la racine déléguée) avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
 
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
