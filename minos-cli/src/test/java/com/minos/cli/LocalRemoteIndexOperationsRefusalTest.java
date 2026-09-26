@@ -7,6 +7,7 @@ import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.DistributedArtifactBundleStore;
 import com.minos.runtime.WorkerSandboxBackend;
+import com.minos.runtime.WorkerSandboxBackends;
 import com.minos.runtime.WorkerSandboxSelection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -87,6 +88,60 @@ class LocalRemoteIndexOperationsRefusalTest {
         }
     }
 
+    /**
+     * V31: the production wiring itself refuses early. {@code MinosCliRunner} builds
+     * {@code new LocalRemoteIndexOperations(app)}, which only substitutes the JGit materializer and
+     * the artifact store into the three-argument constructor exercised here; that constructor is the
+     * one that wires the real host selection. No selection is injected: the refusal must come from
+     * {@link WorkerSandboxBackends#selectForUntrustedCode} on the current host, whatever its OS.
+     */
+    @Test
+    void productionWiringRefusesBeforeAnyMaterializationOnTheCurrentHost(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RemoteRepositoryMaterializer materializer = refusingMaterializer(materializeCalls);
+        try (MinosApplication application = MinosApplication.builder(home).build()) {
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
+                    application, materializer, new DistributedArtifactBundleStore(home));
+            RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                    "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.index(
+                    request, "remote-fixture", null, "worker-one", WorkerNetworkPolicy.ALLOW));
+
+            // ADR 0041: no integrated backend is qualified for untrusted code on any OS today, so the
+            // host selection is a refusal (by decision, or for a missing prerequisite).
+            WorkerSandboxSelection host = WorkerSandboxBackends.selectForUntrustedCode(home);
+            assertFalse(host.supportsUntrustedCode(), "ADR 0041 keeps untrusted remote code closed: " + host);
+            String message = failure.getMessage();
+            assertTrue(message.startsWith("remote index is refused before any materialization"), message);
+            assertTrue(message.contains(host.refusalReport()), message);
+            assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
+            assertEquals(0, materializeCalls.get(), "the revision must never be materialized");
+            assertFalse(Files.exists(home.resolve("remote-index-leases")), "no lease may be taken");
+            assertFalse(Files.exists(home.resolve("remote-cache")), "no remote cache may be created");
+            assertTrue(application.projectRegistry().listProjects().isEmpty(), "no project may be registered");
+        }
+    }
+
+    /**
+     * V31: there is no "no selection" value that silently skips the early refusal. A composition that
+     * wants the transport to reach its worker must inject a qualified selection explicitly.
+     */
+    @Test
+    void aMissingSandboxSelectionIsRejectedInsteadOfDisablingTheEarlyRefusal(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        try (MinosApplication application = MinosApplication.builder(home).build()) {
+            NullPointerException failure = assertThrows(NullPointerException.class, () -> new LocalRemoteIndexOperations(
+                    application, refusingMaterializer(new AtomicInteger()), new DistributedArtifactBundleStore(home),
+                    (workerId, delegate, store) -> {
+                        throw new AssertionError("no worker may be created");
+                    },
+                    null));
+            assertEquals("untrustedCodeSandbox", failure.getMessage());
+        }
+    }
+
     @Test
     void aQualifiedSelectionLetsTheRequestReachTheMaterializer(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
@@ -107,7 +162,7 @@ class LocalRemoteIndexOperationsRefusalTest {
                     (workerId, delegate, store) -> {
                         throw new AssertionError("not reached in this test");
                     },
-                    () -> WorkerSandboxSelection.of(qualifiedFake()));
+                    QualifiedSandboxForTests.selection());
             RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
 
@@ -119,47 +174,23 @@ class LocalRemoteIndexOperationsRefusalTest {
         }
     }
 
-    /** A backend whose qualification is fully OS-enforced, so the strict claim is permitted. */
-    private static WorkerSandboxBackend qualifiedFake() {
-        return new WorkerSandboxBackend() {
-            @Override public String id() { return "fake-hard-backend"; }
-
+    /** Counts calls, then fails the test: under a refusal nothing may be materialized, pinned or released. */
+    private static RemoteRepositoryMaterializer refusingMaterializer(AtomicInteger materializeCalls) {
+        return new RemoteRepositoryMaterializer() {
             @Override
-            public com.minos.remote.DistributedIndexing.WorkerIsolation isolation() {
-                return com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE;
-            }
-
-            @Override public NetworkGuarantee networkGuarantee() { return NetworkGuarantee.OS_ENFORCED; }
-
-            @Override
-            public com.minos.runtime.WorkerSandboxQualification qualification() {
-                com.minos.runtime.WorkerResourceContainment hard = new com.minos.runtime.WorkerResourceContainment(
-                        "fake-hard",
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.OS_ENFORCED,
-                        com.minos.runtime.WorkerResourceContainment.Disposition.SUPERVISED_HARD_KILL,
-                        List.of("FAKE_KERNEL_QUOTA"));
-                return new com.minos.runtime.WorkerSandboxQualification(
-                        id(), isolation(), networkGuarantee(),
-                        com.minos.runtime.WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
-                        com.minos.runtime.WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
-                        hard,
-                        java.util.Map.of(com.minos.runtime.WorkerSandboxQualification.currentPlatform(),
-                                com.minos.runtime.WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
-                        List.of());
+            public RemoteMaterialization materialize(RemoteRepositoryRequest ignored) {
+                materializeCalls.incrementAndGet();
+                throw new AssertionError("the revision must never be materialized when remote indexing is refused");
             }
 
             @Override
-            public com.minos.orchestration.IndexingRuntimePorts.IndexingArtifact execute(
-                    com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor delegate,
-                    com.minos.orchestration.IndexingRuntimePorts.IndexingExecutionRequest request,
-                    WorkerNetworkPolicy policy) {
-                throw new UnsupportedOperationException("not reached in this test");
+            public void pin(RemoteMaterialization ignored) {
+                throw new AssertionError("nothing may be pinned when remote indexing is refused");
+            }
+
+            @Override
+            public void release(RemoteMaterialization ignored) {
+                throw new AssertionError("nothing was materialized, so nothing may be released");
             }
         };
     }

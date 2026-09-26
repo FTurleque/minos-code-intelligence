@@ -34,8 +34,9 @@ import java.util.stream.Collectors;
  *
  * <p><strong>Closed by decision (ADR 0041).</strong> No integrated sandbox backend is qualified
  * for untrusted remote code on any OS, so {@link #index} refuses <em>before</em> materializing the
- * revision, taking the lease, registering the project or pinning the source — with the rejected
- * backend and its exact unmet dimension codes in the message. {@code remote materialize} is
+ * revision, taking the lease, registering the project or pinning the source — with the per-cause
+ * refusal report in the message (the rejected backend and its unmet dimension codes, or the missing
+ * prerequisite codes, or the executor without sandbox capability). {@code remote materialize} is
  * unaffected. The transport below stays in place as the contract a future qualified backend must
  * honour; test-only worker factories keep exercising it.</p>
  */
@@ -45,7 +46,11 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
     private final RemoteRepositoryMaterializer materializer;
     private final DistributedArtifactBundleStore artifactStore;
     private final WorkerFactory workerFactory;
-    /** Null only for test-only worker factories, which own their own trust decision. */
+    /**
+     * Never null: every composition goes through the early refusal. Production wires the real host
+     * selection; a test that wants the transport to reach its worker injects a qualified selection
+     * explicitly, there is no value that skips the check.
+     */
     private final Supplier<WorkerSandboxSelection> untrustedCodeSandbox;
     private final Map<String, IndexerDescriptor> descriptors;
 
@@ -65,16 +70,6 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 () -> WorkerSandboxBackends.selectForUntrustedCode(application.home()));
     }
 
-    /** Test-only transport composition: the injected worker owns the trust decision. */
-    LocalRemoteIndexOperations(
-            MinosApplication application,
-            RemoteRepositoryMaterializer materializer,
-            DistributedArtifactBundleStore artifactStore,
-            WorkerFactory workerFactory
-    ) {
-        this(application, materializer, artifactStore, workerFactory, null);
-    }
-
     LocalRemoteIndexOperations(
             MinosApplication application,
             RemoteRepositoryMaterializer materializer,
@@ -87,7 +82,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 Objects.requireNonNull(materializer, "materializer"));
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
         this.workerFactory = Objects.requireNonNull(workerFactory, "workerFactory");
-        this.untrustedCodeSandbox = untrustedCodeSandbox;
+        this.untrustedCodeSandbox = Objects.requireNonNull(untrustedCodeSandbox, "untrustedCodeSandbox");
         this.descriptors = application.indexerDescriptors().stream().collect(Collectors.toUnmodifiableMap(
                 IndexerDescriptor::id, descriptor -> descriptor));
     }
@@ -123,7 +118,6 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
      * remote code. The message carries backend identifiers and dimension codes only, never a path.
      */
     private void refuseUnlessUntrustedCodeSandboxIsQualified() {
-        if (untrustedCodeSandbox == null) return;
         WorkerSandboxSelection selection = Objects.requireNonNull(
                 untrustedCodeSandbox.get(), "untrusted-code sandbox selection");
         if (selection.supportsUntrustedCode()) return;
