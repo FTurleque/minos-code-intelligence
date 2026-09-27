@@ -27,6 +27,8 @@ The store holds an inter-process file lock and requires the expected tenant vers
 
 Audit links are verified on every authenticated load. RBAC denials after successful token authentication are appended as `DENIED`; successful mutations append `ALLOWED`. Malformed/unauthenticated requests cannot safely name a tenant and are not persisted as tenant audit events.
 
+Refusals are bounded so that they can never starve authorized mutations. A refusal is chained only while the refusals already held by the retained chain (`DENIED` events) stay below `HostedRetentionPolicy.deniedAuditCapacity()` (nine tenths of `maxAuditEvents`), the chain stays below `MAX_AUDIT_EVENTS - authorizedAuditHeadroom()` (one tenth of `maxAuditEvents` is left to authorized mutations below the hard capacity) and the per-principal refusal budget of the process is not exhausted. Authorized events never consume the refusal reserve: a tenant holding many legitimate events awaiting an explicit retention still chains the first refusal of an attack. The count is derived from the retained chain on each refusal, so an explicit retention releases the reserve without any persisted counter. A refusal that is not chained is still enforced, journaled as a WARNING and delivered to `HostedAuditSink.publishUnchained`.
+
 Retention first returns a deterministic plan. Only `retention-apply` removes eligible archived workspaces or old audit events, updates the audit anchor and appends its own event.
 
 ## Qualification

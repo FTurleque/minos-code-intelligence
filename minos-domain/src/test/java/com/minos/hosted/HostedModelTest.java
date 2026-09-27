@@ -49,6 +49,21 @@ class HostedModelTest {
     }
 
     @Test
+    void chainedDenialAdmissionCountsRefusalsAndKeepsAuthorizedHeadroom() {
+        HostedRetentionPolicy policy = new HostedRetentionPolicy(100, 1, 1);
+        assertTrue(policy.admitsChainedDenial(0, 5_000), "authorized events never consume the refusal reserve");
+        assertTrue(policy.admitsChainedDenial(89, 89));
+        assertFalse(policy.admitsChainedDenial(90, 90));
+        assertEquals(10, policy.authorizedAuditHeadroom());
+        assertTrue(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS - 11));
+        assertFalse(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS - 10));
+        assertFalse(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS));
+        HostedRetentionPolicy largest = new HostedRetentionPolicy(HostedRetentionPolicy.MAX_AUDIT_EVENTS, 1, 1);
+        assertFalse(largest.admitsChainedDenial(0, 90_000),
+                "refusals alone can never bring the chain within a tenth of the hard capacity");
+    }
+
+    @Test
     void tenantRejectsCrossTenantWorkspaceDuplicateMembersAndMissingOwner() {
         UUID tenant = UUID.randomUUID();
         HostedPrincipal owner = new HostedPrincipal("owner", "Owner", HostedRole.OWNER, NOW);

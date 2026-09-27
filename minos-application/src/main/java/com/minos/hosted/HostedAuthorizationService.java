@@ -84,10 +84,12 @@ final class HostedAuthorizationService {
 
     /**
      * Records a refusal on both refusal paths (permission and post-authorization rule). A refusal
-     * is chained, persisted (version + 1) and published only while the chain is below the policy's
-     * denied capacity and the (tenant, principal) refusal budget of this process is not exhausted;
-     * otherwise it is delivered to the sink as an unchained event and the tenant state is untouched,
-     * so looping refusals can neither exhaust the audit capacity nor churn the tenant version.
+     * is chained, persisted (version + 1) and published only while the refusals already chained
+     * stay below the policy's denied capacity (authorized events are not counted), the authorized
+     * headroom below the hard capacity is untouched and the (tenant, principal) refusal budget of
+     * this process is not exhausted; otherwise it is delivered to the sink as an unchained event and
+     * the tenant state is untouched, so looping refusals can neither exhaust the audit capacity nor
+     * churn the tenant version.
      */
     private void recordDenial(
             HostedTenantState state,
@@ -97,7 +99,8 @@ final class HostedAuthorizationService {
             String resourceId,
             String requestId
     ) throws IOException {
-        boolean chained = state.auditEvents().size() < state.retentionPolicy().deniedAuditCapacity()
+        boolean chained = state.retentionPolicy().admitsChainedDenial(
+                        chainedDenials(state), state.auditEvents().size())
                 && denialThrottle.tryAcquire(state.tenantId(), principalId, clock.instant());
         if (!chained) {
             HostedAuditEvent unchained = auditChain.event(
@@ -118,6 +121,23 @@ final class HostedAuthorizationService {
                 state.version() + 1);
         HostedCommitRecovery.save(store, denied, state.version());
         HostedAuditDelivery.publishAfterCommit(auditSink, denied.auditEvents().getLast());
+    }
+
+    /**
+     * Refusals currently held by the retained chain. Derived from the chain itself, the count is
+     * coherent with any explicit retention by construction (no counter to persist or resynchronize).
+     * The scan is bounded by {@link HostedRetentionPolicy#MAX_AUDIT_EVENTS}, runs only on a refusal,
+     * and is dominated by the HMAC verification of the same chain that {@link #loadVerified} has
+     * just performed on the same path.
+     */
+    private static long chainedDenials(HostedTenantState state) {
+        long denied = 0;
+        for (HostedAuditEvent event : state.auditEvents()) {
+            if (event.outcome() == HostedAuditEvent.Outcome.DENIED) {
+                denied++;
+            }
+        }
+        return denied;
     }
 
     HostedTenantState loadVerified(UUID tenantId) throws IOException {
