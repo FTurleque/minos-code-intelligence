@@ -154,7 +154,7 @@ def main() -> int:
             "FingerprintConstrainedJavaProgramGraphProvider.java"
         )
         application_test = read(
-            "minos-application/src/test/java/com/minos/application/MinosApplicationTest.java"
+            "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java"
         )
         api_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"
@@ -284,8 +284,14 @@ def main() -> int:
         # Current complete-audit P2 regression barriers.
         forbid_production_sonar_suppressions()
         forbid_postgres_connection_escape()
-        require("DockerMcpTransport.java", docker_transport, "CommandLocator.find(\"docker\")")
-        require("DockerMcpTransport.java", docker_transport, "CommandLocator.invocation")
+        # A2 / ADR 0042: the Docker transport reaches the host command locator through its port; the
+        # production implementation, wired by minos-bootstrap, is still CommandLocator itself.
+        require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().find(\"docker\")")
+        require("DockerMcpTransport.java", docker_transport, "hostCommandLocator().invocation(")
+        forbid("DockerMcpTransport.java", docker_transport, "import com.minos.runtime.CommandLocator;")
+        host_commands = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalHostCommandLocator.java")
+        require("LocalHostCommandLocator.java", host_commands, "CommandLocator.find(command)")
+        require("LocalHostCommandLocator.java", host_commands, "CommandLocator.invocation(executable, arguments)")
         require("DockerMcpTransport.java", docker_transport, "MAX_PROBE_OUTPUT_BYTES")
         require("PostgresConnectionFactory.java", pg_connections,
                 'properties.setProperty("currentSchema", schema + ",public")')

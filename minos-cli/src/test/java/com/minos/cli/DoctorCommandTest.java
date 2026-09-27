@@ -20,6 +20,33 @@ class DoctorCommandTest {
     private static final String ENTRIES_UNMET =
             "FILESYSTEM_WRITE_ENTRIES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
 
+    /**
+     * A2 / ADR 0042 — the production constructor probes the real host: its sandbox section and its
+     * command lookup are exactly what the runtime backends and the command locator report here, not a
+     * double. The composition root is the only production path to the probe.
+     */
+    @Test
+    void productionWiringProbesTheRealHost(@TempDir Path home) throws Exception {
+        DoctorCommand doctor = new DoctorCommand(home, operations());
+        StringBuilder output = new StringBuilder();
+
+        doctor.run(new String[]{"--format", "json"}, output, new StringBuilder());
+
+        String json = output.toString();
+        com.minos.runtime.WorkerSandboxBackend managedLocal =
+                com.minos.runtime.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+        com.minos.runtime.WorkerSandboxSelection untrusted =
+                com.minos.runtime.WorkerSandboxBackends.selectForUntrustedCode(home);
+        assertTrue(json.contains("\"managedLocalProvider\":{\"backend\":\"" + managedLocal.id()
+                + "\",\"available\":" + managedLocal.supportsManagedLocalProvider() + "}"), json);
+        assertTrue(json.contains("\"untrustedCode\":{\"backend\":\"" + untrusted.backend().id()
+                + "\",\"available\":" + untrusted.supportsUntrustedCode() + "}"), json);
+        assertTrue(json.contains("\"cause\":\"" + untrusted.cause().name() + "\""), json);
+        String java = com.minos.runtime.CommandLocator.find("java").map(Path::toString).orElse(null);
+        String expectedJava = java == null ? "\"java\":null" : "\"java\":" + CliJson.render(java);
+        assertTrue(json.contains(expectedJava), json);
+    }
+
     @Test
     void textReportSaysRemoteIndexingIsUnavailableAndWhyWithoutAnyPath(@TempDir Path home) throws Exception {
         DoctorCommand doctor = new DoctorCommand(home, operations(), ignored -> rejectedReport());

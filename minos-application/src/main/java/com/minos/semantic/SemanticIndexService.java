@@ -212,11 +212,7 @@ public final class SemanticIndexService {
     }
 
     private static List<String> providerLimitations(EmbeddingProvider provider) {
-        if (provider instanceof LocalHashEmbeddingProvider) return List.of("LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL");
-        if (provider instanceof OllamaEmbeddingProvider) {
-            return List.of("LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC", "SEMANTIC_RESULTS_REMAIN_HEURISTIC");
-        }
-        return List.of();
+        return List.copyOf(Objects.requireNonNull(provider.limitations(), "embedding provider limitations"));
     }
 
     private static void validateProvider(EmbeddingProvider provider) {

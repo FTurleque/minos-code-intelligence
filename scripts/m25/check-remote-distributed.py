@@ -60,6 +60,9 @@ def main() -> int:
         coordinator = read("minos-runtime-local/src/main/java/com/minos/runtime/DistributedIndexerExecutor.java")
         autonomous = read("minos-cli/src/main/java/com/minos/cli/LocalAutonomousIndexOperations.java")
         remote_operations = read("minos-cli/src/main/java/com/minos/cli/LocalRemoteIndexOperations.java")
+        # A2 / ADR 0042: the concrete M25 wiring moved verbatim to the composition root (minos-bootstrap).
+        remote_runtime = read("minos-bootstrap/src/main/java/com/minos/bootstrap/LocalRemoteIndexingRuntime.java")
+        composition_root = read("minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
         remote_command = read("minos-cli/src/main/java/com/minos/cli/RemoteIndexCommand.java")
         cli = read("minos-cli/src/main/java/com/minos/cli/MinosCli.java")
         e2e = read("scripts/m25/run-remote-e2e.py")
@@ -126,8 +129,18 @@ def main() -> int:
 
         require_facts("LocalAutonomousIndexOperations.java", autonomous, "executorDecorator", "UnaryOperator<IndexerExecutor>")
         require_facts("LocalRemoteIndexOperations.java", remote_operations,
-                      "JGitRemoteRepositoryMaterializer", "DistributedArtifactBundleStore",
-                      "DistributedIndexerExecutor", "force", "verified artifact evidence")
+                      "RemoteIndexingRuntime", "compositionRoot.remoteRepositoryMaterializer(",
+                      "compositionRoot.remoteIndexingRuntime(", "force", "verified artifact evidence")
+        forbid("LocalRemoteIndexOperations.java", remote_operations,
+               "import com.minos.runtime.DistributedArtifactBundleStore",
+               "import com.minos.runtime.DistributedIndexerExecutor",
+               "import com.minos.git.JGitRemoteRepositoryMaterializer")
+        require_facts("LocalRemoteIndexingRuntime.java", remote_runtime,
+                      "new DistributedArtifactBundleStore(home)", "new DistributedIndexerExecutor(",
+                      "new LocalIsolatedIndexWorker(", "WorkerSandboxBackends.selectForUntrustedCode(home)",
+                      "\"untrustedCodeSandbox\"")
+        require_facts("DefaultMinosApplicationComposer.java", composition_root,
+                      "new JGitRemoteRepositoryMaterializer(home)", "LocalRemoteIndexingRuntime.production(home)")
         require_facts("RemoteIndexCommand.java", remote_command,
                       "remote materialize", "remote index", "--ref", "--commit", "--subdir",
                       "--credential-env", "--worker-network", "--provider", "--format")

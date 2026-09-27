@@ -29,6 +29,7 @@
         <module>minos-integration-git</module>
         <module>minos-application</module>
         <module>minos-storage-postgresql</module>
+        <module>minos-bootstrap</module>
         <module>minos-nexus</module>
         <module>minos-cli</module>
         <module>minos-api</module>

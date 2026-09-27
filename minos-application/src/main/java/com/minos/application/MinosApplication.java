@@ -5,7 +5,7 @@ import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeIntelligenceService;
 import com.minos.dynamic.RuntimeObservationStore;
-import com.minos.git.GitIntelligenceService;
+import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.impact.LocalProjectImpactQuery;
@@ -17,6 +17,8 @@ import com.minos.incremental.ProjectInvalidationService;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexerProviderCatalog;
+import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -35,7 +37,6 @@ import com.minos.semantic.SemanticVectorStore;
 import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
-import com.minos.storage.StorageBackends;
 import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
@@ -81,9 +82,11 @@ public final class MinosApplication implements AutoCloseable {
     private final IncrementalIndexingPlanner incrementalIndexingPlanner;
     private final ProviderRuntimeManager providerRuntimeManager;
     private final List<IndexerDescriptor> indexerDescriptors;
+    private final IndexerProviderCatalog providerCatalog;
+    private final ScipArtifactImporter scipArtifactImporter;
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
-    private final GitIntelligenceService gitIntelligence;
+    private final GitIntelligence gitIntelligence;
     private final ProjectInspectionService projectInspectionService;
     private final ProjectQueryService projectQueryService;
     private final ProjectArchitectureQuery architectureQuery;
@@ -98,6 +101,7 @@ public final class MinosApplication implements AutoCloseable {
     private final WorkspaceIntelligenceService workspaceIntelligence;
     private final RuntimeIntelligenceService runtimeIntelligenceService;
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
+    private final MinosApplicationComposer compositionRoot;
 
     MinosApplication(
             Path home,
@@ -115,12 +119,15 @@ public final class MinosApplication implements AutoCloseable {
             IncrementalIndexingPlanner incrementalIndexingPlanner,
             ProviderRuntimeManager providerRuntimeManager,
             List<IndexerDescriptor> indexerDescriptors,
+            IndexerProviderCatalog providerCatalog,
+            ScipArtifactImporter scipArtifactImporter,
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
-            GitIntelligenceService gitIntelligence,
+            GitIntelligence gitIntelligence,
             List<ProgramGraphProvider> programGraphProviders,
             Optional<EmbeddingProvider> embeddingProvider,
-            Optional<HostedControlPlaneService> hostedControlPlaneService
+            Optional<HostedControlPlaneService> hostedControlPlaneService,
+            MinosApplicationComposer compositionRoot
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.storageBackend = Objects.requireNonNull(storageBackend, "storageBackend");
@@ -138,6 +145,8 @@ public final class MinosApplication implements AutoCloseable {
         this.incrementalIndexingPlanner = Objects.requireNonNull(incrementalIndexingPlanner, "incrementalIndexingPlanner");
         this.providerRuntimeManager = Objects.requireNonNull(providerRuntimeManager, "providerRuntimeManager");
         this.indexerDescriptors = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors"));
+        this.providerCatalog = Objects.requireNonNull(providerCatalog, "providerCatalog");
+        this.scipArtifactImporter = Objects.requireNonNull(scipArtifactImporter, "scipArtifactImporter");
         this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
@@ -166,6 +175,7 @@ public final class MinosApplication implements AutoCloseable {
                 projectRegistry, snapshotStore, runtimeObservationStore);
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
+        this.compositionRoot = Objects.requireNonNull(compositionRoot, "compositionRoot");
     }
 
     /**
@@ -177,12 +187,16 @@ public final class MinosApplication implements AutoCloseable {
      * MINOS has not yet confirmed it can protect.</p>
      */
     public static MinosApplication open(Path home) throws IOException {
+        // ADR 0042 : la racine de composition est résolue d'abord, sans effet de bord ; absente ou
+        // ambiguë, l'ouverture échoue avant de toucher au MINOS_HOME.
+        MinosApplicationComposer composer = MinosApplicationComposers.resolve();
         Path validatedHome = PrivateLocalStorage.ensurePrivateDirectory(home);
         MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
-        StorageBackend backend = StorageBackends.open(StorageBackendConfiguration.resolve(settings));
+        StorageBackend backend = composer.openStorageBackend(StorageBackendConfiguration.resolve(settings));
         boolean buildInvoked = false;
         try {
             Builder builder = builder(validatedHome).storageBackend(backend);
+            builder.composer = composer;
             MinosApplicationRuntimeConfiguration.apply(settings, builder);
             buildInvoked = true;
             return builder.build();
@@ -220,9 +234,13 @@ public final class MinosApplication implements AutoCloseable {
     public IncrementalIndexingPlanner incrementalIndexingPlanner() { return incrementalIndexingPlanner; }
     public ProviderRuntimeManager providerRuntimeManager() { return providerRuntimeManager; }
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
+    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
+    public IndexerProviderCatalog providerCatalog() { return providerCatalog; }
+    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
+    public ScipArtifactImporter scipArtifactImporter() { return scipArtifactImporter; }
     public SnapshotStager snapshotStager() { return snapshotStager; }
     public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
-    public GitIntelligenceService gitIntelligence() { return gitIntelligence; }
+    public GitIntelligence gitIntelligence() { return gitIntelligence; }
     public ProjectInspectionService projectInspectionService() { return projectInspectionService; }
     public ProjectQueryService projectQueryService() { return projectQueryService; }
     public ProjectArchitectureQuery architectureQuery() { return architectureQuery; }
@@ -237,6 +255,12 @@ public final class MinosApplication implements AutoCloseable {
     public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
     public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
     public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+
+    /**
+     * Racine de composition qui a construit cette application (ADR 0042) : les surfaces lui demandent
+     * les adaptateurs qu'elles créent elles-mêmes, au moment où elles les créaient.
+     */
+    public MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
     @Override
     public void close() throws IOException {
@@ -290,13 +314,17 @@ public final class MinosApplication implements AutoCloseable {
         IncrementalIndexingPlanner incrementalIndexingPlanner;
         ProviderRuntimeManager providerRuntimeManager;
         List<IndexerDescriptor> indexerDescriptors;
+        IndexerProviderCatalog providerCatalog;
+        ScipArtifactImporter scipArtifactImporter;
         SnapshotStager snapshotStager;
         SnapshotPromoter snapshotPromoter;
-        GitIntelligenceService gitIntelligence;
+        GitIntelligence gitIntelligence;
         List<ProgramGraphProvider> programGraphProviders;
         EmbeddingProvider embeddingProvider;
         HostedTenantKeyProvider hostedTenantKeyProvider;
         Clock hostedClock = Clock.systemUTC();
+        /** Racine de composition résolue une fois par construction (ADR 0042). */
+        MinosApplicationComposer composer;
 
         private Builder(Path home) {
             this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
@@ -387,13 +415,23 @@ public final class MinosApplication implements AutoCloseable {
             return this;
         }
 
+        public Builder providerCatalog(IndexerProviderCatalog value) {
+            this.providerCatalog = Objects.requireNonNull(value);
+            return this;
+        }
+
+        public Builder scipArtifactImporter(ScipArtifactImporter value) {
+            this.scipArtifactImporter = Objects.requireNonNull(value);
+            return this;
+        }
+
         public Builder snapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {
             this.snapshotStager = Objects.requireNonNull(stager);
             this.snapshotPromoter = Objects.requireNonNull(promoter);
             return this;
         }
 
-        public Builder gitIntelligence(GitIntelligenceService value) {
+        public Builder gitIntelligence(GitIntelligence value) {
             this.gitIntelligence = Objects.requireNonNull(value);
             return this;
         }
@@ -408,6 +446,11 @@ public final class MinosApplication implements AutoCloseable {
 
         public MinosApplication build() throws IOException {
             return MinosApplicationAssembler.build(this);
+        }
+
+        MinosApplicationComposer resolvedComposer() {
+            if (composer == null) composer = MinosApplicationComposers.resolve();
+            return composer;
         }
     }
 }

@@ -97,7 +97,8 @@ public final class LocalAutonomousIndexOperations
         this.invalidationService = application.invalidationService();
         this.planner = application.incrementalIndexingPlanner();
         this.executorDecorator = Objects.requireNonNull(executorDecorator, "executorDecorator");
-        this.resumableRunMarkers = new RunDirectoryResumableRunMarkers(application.home());
+        // ADR 0042 : marqueurs de run créés au même moment qu'avant, par la racine de composition.
+        this.resumableRunMarkers = application.compositionRoot().resumableRunMarkers(application.home());
     }
 
     @Override

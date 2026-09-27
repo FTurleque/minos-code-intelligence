@@ -1,6 +1,7 @@
 package com.minos.semantic;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -23,6 +24,11 @@ public final class LocalHashEmbeddingProvider implements EmbeddingProvider {
             throw new IllegalArgumentException("dimensions must be between 32 and 4096");
         }
         this.dimensions = dimensions;
+    }
+
+    @Override
+    public List<String> limitations() {
+        return List.of("LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL");
     }
 
     @Override

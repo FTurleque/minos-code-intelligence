@@ -1,6 +1,5 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.orchestration.IndexerProvider;
 import com.minos.orchestration.ProviderConformanceKit;
@@ -29,7 +28,7 @@ public final class ProviderPlatformService {
     /** Default provider platform bound to one already-composed application. */
     public static ProviderPlatformService defaults(MinosApplication application) {
         MinosApplication app = Objects.requireNonNull(application, "application");
-        return new ProviderPlatformService(ScipIndexerCatalog.qualifiedM24Providers(), app.providerRuntimeManager());
+        return new ProviderPlatformService(app.providerCatalog().providers(), app.providerRuntimeManager());
     }
 
     public List<ProviderView> listProviders() {

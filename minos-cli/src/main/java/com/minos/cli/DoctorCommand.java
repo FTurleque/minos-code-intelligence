@@ -2,10 +2,8 @@ package com.minos.cli;
 
 import com.minos.io.PrivateLocalStorage;
 import com.minos.output.SymbolOutputFormat;
-import com.minos.runtime.CommandLocator;
-import com.minos.runtime.WorkerSandboxBackend;
-import com.minos.runtime.WorkerSandboxBackends;
-import com.minos.runtime.WorkerSandboxSelection;
+import com.minos.application.MinosApplicationComposers;
+import com.minos.runtime.WorkerSandboxProbe;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -37,7 +35,12 @@ public final class DoctorCommand {
     private final Path home;
     private final AutonomousIndexOperations operations;
     private final Function<Path, WorkerSandboxReport> sandboxProbe;
+    private final Function<String, Optional<Path>> commandLocator;
 
+    /**
+     * Production wiring: the sandbox probe and the command lookup are the real host ones supplied by
+     * the composition root (ADR 0042) — there is no production path that injects another probe.
+     */
     public DoctorCommand(Path home, AutonomousIndexOperations operations) {
         this(home, operations, DoctorCommand::probeWorkerSandbox);
     }
@@ -47,6 +50,7 @@ public final class DoctorCommand {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.operations = Objects.requireNonNull(operations, "operations");
         this.sandboxProbe = Objects.requireNonNull(sandboxProbe, "sandboxProbe");
+        this.commandLocator = DoctorCommand::locateCommand;
     }
 
     /**
@@ -57,7 +61,7 @@ public final class DoctorCommand {
      * @param managedLocalAvailable whether that backend honours the managed-local contract here
      * @param untrustedCodeBackend  backend the strict (remote) selector ends on
      * @param remoteIndexingAvailable whether untrusted remote execution is qualified here
-     * @param cause                 {@link WorkerSandboxSelection.Cause} name: why it is (un)available
+     * @param cause                 selection cause name ({@link WorkerSandboxProbe.UntrustedCodeSandbox#cause()}): why it is (un)available
      * @param rejectedBackend       OS backend discovered but rejected for untrusted code, if any
      * @param reasons               exact unmet dimension codes (decision) or missing prerequisite codes
      * @param reason                single-line, path-free explanation of the refusal ("" when available)
@@ -82,23 +86,28 @@ public final class DoctorCommand {
         }
 
         boolean closedByDecision() {
-            return WorkerSandboxSelection.Cause.REJECTED_BY_DECISION.name().equals(cause);
+            return WorkerSandboxProbe.CAUSE_REJECTED_BY_DECISION.equals(cause);
         }
     }
 
-    private static WorkerSandboxReport probeWorkerSandbox(Path home) {
-        WorkerSandboxBackend managedLocal = WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
-        WorkerSandboxSelection untrusted = WorkerSandboxBackends.selectForUntrustedCode(home);
-        boolean available = untrusted.supportsUntrustedCode();
+    /** Real host probe (managed-local first, then untrusted code), through the composition root. */
+    static WorkerSandboxReport probeWorkerSandbox(Path home) {
+        WorkerSandboxProbe probe = MinosApplicationComposers.resolve().workerSandboxProbe();
+        WorkerSandboxProbe.ManagedLocalSandbox managedLocal = probe.managedLocalProvider(home);
+        WorkerSandboxProbe.UntrustedCodeSandbox untrusted = probe.untrustedCode(home);
         return new WorkerSandboxReport(
-                managedLocal.id(),
-                managedLocal.supportsManagedLocalProvider(),
-                untrusted.backend().id(),
-                available,
-                untrusted.cause().name(),
+                managedLocal.backendId(),
+                managedLocal.available(),
+                untrusted.backendId(),
+                untrusted.supportsUntrustedCode(),
+                untrusted.cause(),
                 untrusted.rejectedBackendId(),
                 untrusted.rejectionReasons(),
-                available ? "" : untrusted.refusalReport());
+                untrusted.refusalReport());
+    }
+
+    private static Optional<Path> locateCommand(String command) {
+        return MinosApplicationComposers.resolve().hostCommandLocator().find(command);
     }
 
     public int run(String[] arguments, Appendable output, Appendable error) throws IOException {
@@ -113,7 +122,7 @@ public final class DoctorCommand {
         List<AutonomousIndexOperations.ProviderView> providers = operations.providers();
         Map<String, String> commands = new LinkedHashMap<>();
         for (String command : List.of("java", "javac", "mvn", "node", "npm", "python", "docker")) {
-            commands.put(command, CommandLocator.find(command).map(Path::toString).orElse(null));
+            commands.put(command, commandLocator.apply(command).map(Path::toString).orElse(null));
         }
         Map<String, String> privateStorage = privateStorageDiagnostics();
         WorkerSandboxReport sandbox = Objects.requireNonNull(sandboxProbe.apply(home), "worker sandbox report");

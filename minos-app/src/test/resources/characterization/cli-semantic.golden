@@ -1,0 +1,101 @@
+$ minos project add <FIXTURE> --name a2-char --format json
+exit: 0
+--- stdout
+{"id":"<uuid-1>","name":"a2-char","rootPath":"<REPO>/fixtures/typescript/typescript-modules","rootAvailable":true,"languages":["TYPESCRIPT"],"buildSystems":["NPM"],"moduleCount":3,"indexState":"NEVER_INDEXED","activeSnapshotId":null,"lastSuccessfulIndexAt":null,"providerId":null,"providerVersion":null}
+
+--- stderr
+
+$ minos semantic status a2-char --format json
+exit: 0
+--- stdout
+{"mode":"semantic","projectId":"<uuid-2>","projectName":"a2-char","state":"NO_ACTIVE_SNAPSHOT","activeSnapshotId":null,"semanticState":"NO_ACTIVE_SNAPSHOT","semanticAvailable":false,"providerId":"minos-local-hash","modelId":"signed-token-chargram-v1-384","dimensions":384,"documentCount":0,"indexSizeBytes":0,"limitations":["ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE","LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL"]}
+
+--- stderr
+
+$ minos index a2-char --scip <SCIP> --provider scip-typescript --provider-version 0.4.0 --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","snapshotId":"scip-7f41649a3cdad442a3235c0a","providerId":"scip-typescript","providerVersion":"0.4.0","normalizedSymbolCount":19,"occurrenceCount":67,"relationshipCount":6,"relatedTestRelationshipCount":4,"unresolvedOccurrenceCount":23,"unresolvedRelationshipCount":0,"completedAt":"<instant>","commitStatus":"COMMITTED","diagnostic":null}
+
+--- stderr
+warning: `minos index --scip` is deprecated; use `minos import-scip`
+
+$ minos semantic status a2-char --format json
+exit: 0
+--- stdout
+{"mode":"semantic","projectId":"<uuid-2>","projectName":"a2-char","state":"MISSING","activeSnapshotId":"scip-7f41649a3cdad442a3235c0a","semanticState":"MISSING","semanticAvailable":false,"providerId":"minos-local-hash","modelId":"signed-token-chargram-v1-384","dimensions":384,"documentCount":0,"indexSizeBytes":0,"limitations":["SEMANTIC_INDEX_MISSING","LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL"]}
+
+--- stderr
+
+$ minos semantic status a2-char --format text
+exit: 0
+--- stdout
+mode: semantic
+projectId: <uuid-2>
+projectName: a2-char
+state: MISSING
+activeSnapshotId: scip-7f41649a3cdad442a3235c0a
+semanticState: MISSING
+semanticAvailable: false
+providerId: minos-local-hash
+modelId: signed-token-chargram-v1-384
+dimensions: 384
+documentCount: 0
+indexSizeBytes: 0
+limitations: [SEMANTIC_INDEX_MISSING, LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL]
+
+--- stderr
+
+$ minos hybrid status a2-char --format json
+exit: 0
+--- stdout
+{"mode":"hybrid","projectId":"<uuid-2>","projectName":"a2-char","state":"READY_STRUCTURED_FALLBACK","activeSnapshotId":"scip-7f41649a3cdad442a3235c0a","semanticState":"MISSING","semanticAvailable":false,"providerId":"minos-local-hash","modelId":"signed-token-chargram-v1-384","dimensions":384,"documentCount":0,"indexSizeBytes":0,"limitations":["SEMANTIC_INDEX_MISSING","LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL","HYBRID_RANKING_IS_DERIVED_SELECTION_NOT_CODE_FACT","SEMANTIC_SIGNAL_UNAVAILABLE_STRUCTURED_FALLBACK_USED"]}
+
+--- stderr
+
+$ minos project add <FIXTURE> --name a2-char --format json
+exit: 0
+--- stdout
+{"id":"<uuid-3>","name":"a2-char","rootPath":"<REPO>/fixtures/typescript/typescript-modules","rootAvailable":true,"languages":["TYPESCRIPT"],"buildSystems":["NPM"],"moduleCount":3,"indexState":"NEVER_INDEXED","activeSnapshotId":null,"lastSuccessfulIndexAt":null,"providerId":null,"providerVersion":null}
+
+--- stderr
+
+$ minos semantic status a2-char --format json
+exit: 0
+--- stdout
+{"mode":"semantic","projectId":"<uuid-2>","projectName":"a2-char","state":"NO_ACTIVE_SNAPSHOT","activeSnapshotId":null,"semanticState":"NO_ACTIVE_SNAPSHOT","semanticAvailable":false,"providerId":"minos-local-ollama","modelId":"a2-characterization-model","dimensions":32,"documentCount":0,"indexSizeBytes":0,"limitations":["ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE","LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC","SEMANTIC_RESULTS_REMAIN_HEURISTIC"]}
+
+--- stderr
+
+$ minos semantic status a2-char --format text
+exit: 0
+--- stdout
+mode: semantic
+projectId: <uuid-2>
+projectName: a2-char
+state: NO_ACTIVE_SNAPSHOT
+activeSnapshotId: null
+semanticState: NO_ACTIVE_SNAPSHOT
+semanticAvailable: false
+providerId: minos-local-ollama
+modelId: a2-characterization-model
+dimensions: 32
+documentCount: 0
+indexSizeBytes: 0
+limitations: [ACTIVE_KNOWLEDGE_SNAPSHOT_UNAVAILABLE, LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC, SEMANTIC_RESULTS_REMAIN_HEURISTIC]
+
+--- stderr
+
+$ minos project list --format json
+exit: 0
+--- stdout
+{"count":0,"projects":[]}
+
+--- stderr
+
+$ minos project list --format json
+exit: thrown java.lang.IllegalArgumentException: dimensions must be between 32 and 16384
+--- stdout
+
+--- stderr
+

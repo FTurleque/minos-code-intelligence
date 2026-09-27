@@ -47,7 +47,7 @@ def main() -> int:
         runtime_codec = read("minos-application/src/main/java/com/minos/dynamic/RuntimeObservationEnvelopeCodec.java")
         graph_sidecar = read("minos-application/src/main/java/com/minos/program/analysis/FileProgramGraphProvider.java")
         hosted = read("minos-storage-local/src/main/java/com/minos/store/FileHostedControlPlaneStore.java")
-        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
         semantic_budget = read("minos-application/src/main/java/com/minos/semantic/SemanticIndexBudget.java")
         postgres = read("minos-storage-postgresql/src/main/java/com/minos/storage/postgresql/PostgresCodeKnowledgeSnapshotStore.java")
         graph_service = read("minos-application/src/main/java/com/minos/program/analysis/ProgramGraphService.java")
@@ -56,7 +56,7 @@ def main() -> int:
         polyglot = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedPolyglotScipRuntimeManager.java")
         discovery = read("minos-application/src/main/java/com/minos/discovery/ProjectIgnorePolicy.java")
         plugins = read("minos-application/src/main/java/com/minos/discovery/DefaultDiscoveryPlugins.java")
-        registry = read("minos-application/src/main/java/com/minos/registry/InterProcessLocalProjectRegistry.java")
+        registry = read("minos-storage-local/src/main/java/com/minos/registry/InterProcessLocalProjectRegistry.java")
         coursier = read("minos-provider-scip/src/main/java/com/minos/adapter/scip/runtime/ManagedScipProviderRuntimeManager.java")
         mcp_server = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpServer.java")
 

@@ -45,11 +45,7 @@ import java.util.TreeSet;
  * <p>The service reads Git data with JGit and deliberately reports activity facts only.
  * Commit frequency is never promoted to architectural or business importance.</p>
  */
-public final class GitIntelligenceService {
-
-    private static final int MAX_COMMITS = 10_000;
-    private static final int MAX_FILES = 10_000;
-    private static final int MAX_ZONE_DEPTH = 8;
+public final class GitIntelligenceService implements GitIntelligence {
 
     private final ActivityBudget budget;
 
@@ -67,12 +63,14 @@ public final class GitIntelligenceService {
         return budget;
     }
 
+    @Override
     public RepositoryView inspect(Path projectRoot) throws IOException, GitAPIException {
         try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
             return repositoryView(repository, git);
         }
     }
 
+    @Override
     public ActivityReport analyze(Path projectRoot, ActivityQuery query) throws IOException, GitAPIException {
         Objects.requireNonNull(query, "query");
         try (Repository repository = open(projectRoot); Git git = new Git(repository)) {
@@ -454,86 +452,6 @@ public final class GitIntelligenceService {
             if (value < 1) {
                 throw new IllegalArgumentException(field + " must be greater than zero");
             }
-        }
-    }
-
-    public record ActivityQuery(Instant since, int maxCommits, int maxFiles, int zoneDepth) {
-        public ActivityQuery {
-            Objects.requireNonNull(since, "since");
-            if (maxCommits < 1 || maxCommits > MAX_COMMITS) {
-                throw new IllegalArgumentException("maxCommits must be between 1 and " + MAX_COMMITS);
-            }
-            if (maxFiles < 1 || maxFiles > MAX_FILES) {
-                throw new IllegalArgumentException("maxFiles must be between 1 and " + MAX_FILES);
-            }
-            if (zoneDepth < 1 || zoneDepth > MAX_ZONE_DEPTH) {
-                throw new IllegalArgumentException("zoneDepth must be between 1 and " + MAX_ZONE_DEPTH);
-            }
-        }
-    }
-
-    public record RepositoryView(
-            String repositoryId,
-            String workTree,
-            String originRemote,
-            String branch,
-            String headCommit,
-            boolean detachedHead,
-            boolean shallow,
-            boolean clean,
-            List<String> limitations
-    ) {
-        public RepositoryView {
-            limitations = limitations == null ? List.of() : List.copyOf(limitations);
-        }
-    }
-
-    public record CommitActivity(
-            String commitId,
-            Instant committedAt,
-            String authorName,
-            String authorEmail,
-            String message,
-            List<String> changedPaths
-    ) {
-        public CommitActivity {
-            changedPaths = changedPaths == null ? List.of() : List.copyOf(changedPaths);
-        }
-    }
-
-    public record FileActivity(
-            String path,
-            int commitCount,
-            int uniqueAuthorCount,
-            Instant lastChangedAt,
-            String lastCommitId
-    ) {
-    }
-
-    public record ZoneActivity(
-            String zone,
-            int commitTouches,
-            int distinctFileCount,
-            Instant lastChangedAt
-    ) {
-    }
-
-    public record ActivityReport(
-            RepositoryView repository,
-            ActivityQuery query,
-            int scannedCommitCount,
-            boolean historyTruncated,
-            boolean filesTruncated,
-            List<CommitActivity> recentCommits,
-            List<FileActivity> files,
-            List<ZoneActivity> zones,
-            List<String> limitations
-    ) {
-        public ActivityReport {
-            recentCommits = recentCommits == null ? List.of() : List.copyOf(recentCommits);
-            files = files == null ? List.of() : List.copyOf(files);
-            zones = zones == null ? List.of() : List.copyOf(zones);
-            limitations = limitations == null ? List.of() : List.copyOf(limitations);
         }
     }
 

@@ -34,6 +34,27 @@ System.out.println(minos.contractVersion());
 
 Le `Path` fourni est le home MINOS, pas la racine du projet analysé.
 
+### Classpath requis : `minos-bootstrap`
+
+Les constructeurs qui ouvrent un home (`new LocalMinosApi(Path)`, `new LocalMinosMultiRepositoryApi(Path)`,
+`new LocalProviderPlatformApi(Path)`) passent par `MinosApplication.open(home)`, qui découvre la racine de
+composition de MINOS par `ServiceLoader` ([ADR 0042](../adr/0042-racine-de-composition.md)). Le module
+**`com.minos:minos-bootstrap` doit donc être présent au classpath d'exécution** :
+
+- le JAR distribué `minos-code-intelligence-*-all.jar` le contient déjà ;
+- une dépendance Maven sur `com.minos:minos-api` l'apporte en portée `runtime` ;
+- si vous assemblez vous-même le classpath, ajoutez `minos-bootstrap` et ses dépendances.
+
+Il doit y en avoir **exactement un** : sans racine de composition, l'ouverture échoue immédiatement avec
+`MINOS composition root is missing: the minos-bootstrap module must be on the classpath ...`, avant de créer
+le home ; avec plusieurs, elle refuse de choisir (`MINOS refuses to choose a composition root ...`).
+
+La règle vaut aussi pour `MinosApplication.builder(home)...build()`, **même quand le `Builder` surcharge
+tous les défauts** (backend, magasins, runtimes, Git, cycle de vie des snapshots…) : la racine de
+composition est résolue avant tout le reste, sans effet de bord. Elle est cherchée dans le chargeur de
+classes de MINOS, jamais dans le chargeur de contexte du thread : un hôte qui positionne un autre chargeur
+de contexte ne peut ni la masquer ni en substituer une autre.
+
 ## Enregistrer un projet
 
 ```java

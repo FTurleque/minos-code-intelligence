@@ -3,7 +3,7 @@ package com.minos.cli;
 import com.minos.application.ProviderPlatformService;
 import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.dynamic.RuntimeIntelligenceService;
-import com.minos.git.GitIntelligenceService;
+import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.impact.ProjectImpactQuery;
 
@@ -147,7 +147,7 @@ public final class MinosCli {
             AutonomousIndexOperations autonomousOperations,
             Path home,
             ProviderPlatformService providerPlatformService,
-            GitIntelligenceService gitIntelligenceService
+            GitIntelligence gitIntelligenceService
     ) {
         this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
                 autonomousOperations, home, providerPlatformService, gitIntelligenceService, null);
@@ -162,7 +162,7 @@ public final class MinosCli {
             AutonomousIndexOperations autonomousOperations,
             Path home,
             ProviderPlatformService providerPlatformService,
-            GitIntelligenceService gitIntelligenceService,
+            GitIntelligence gitIntelligenceService,
             RemoteIndexOperations remoteIndexOperations
     ) {
         this(symbolQuery, projectOperations, architectureQuery, impactQuery, nexusExportCommand,
@@ -179,7 +179,7 @@ public final class MinosCli {
             AutonomousIndexOperations autonomousOperations,
             Path home,
             ProviderPlatformService providerPlatformService,
-            GitIntelligenceService gitIntelligenceService,
+            GitIntelligence gitIntelligenceService,
             RemoteIndexOperations remoteIndexOperations,
             RuntimeIntelligenceService runtimeIntelligenceService
     ) {
@@ -197,7 +197,7 @@ public final class MinosCli {
             AutonomousIndexOperations autonomousOperations,
             Path home,
             ProviderPlatformService providerPlatformService,
-            GitIntelligenceService gitIntelligenceService,
+            GitIntelligence gitIntelligenceService,
             RemoteIndexOperations remoteIndexOperations,
             RuntimeIntelligenceService runtimeIntelligenceService,
             HostedControlPlaneService hostedControlPlaneService
@@ -217,7 +217,7 @@ public final class MinosCli {
             AutonomousIndexOperations autonomousOperations,
             Path home,
             ProviderPlatformService providerPlatformService,
-            GitIntelligenceService gitIntelligenceService,
+            GitIntelligence gitIntelligenceService,
             RemoteIndexOperations remoteIndexOperations,
             RuntimeIntelligenceService runtimeIntelligenceService,
             HostedControlPlaneService hostedControlPlaneService,

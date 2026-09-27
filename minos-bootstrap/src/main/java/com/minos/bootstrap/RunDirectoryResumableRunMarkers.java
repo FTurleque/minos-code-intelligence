@@ -1,4 +1,4 @@
-package com.minos.cli;
+package com.minos.bootstrap;
 
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.runtime.FileResumableRunMarkers;

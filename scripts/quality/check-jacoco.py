@@ -84,6 +84,8 @@ SCOPES = {
             "com/minos/runtime/DistributedArtifactCachePolicy", "com/minos/runtime/DistributedIndexerExecutor",
             "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
             "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
+            # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
+            "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/RemoteIndexCommand",
         ),
         "line": 0.70,
@@ -157,6 +159,8 @@ SCOPES = {
         "prefixes": (
             "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
             "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
+            # A2 / ADR 0042: the selection logic moved verbatim from StorageBackends to the composition root.
+            "com/minos/bootstrap/StorageBackendSelection",
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},

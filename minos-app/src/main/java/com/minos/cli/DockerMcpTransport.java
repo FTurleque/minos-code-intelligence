@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.runtime.CommandLocator;
+import com.minos.application.MinosApplicationComposers;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -82,12 +82,13 @@ final class DockerMcpTransport {
         return exitCode == 130 ? FindSymbolCommand.SUCCESS : exitCode;
     }
 
+    /** ADR 0042: host command lookup and invocation through the composition root (real host). */
     private static List<String> dockerCommand(Path executable, String... arguments) {
-        return CommandLocator.invocation(executable, arguments);
+        return MinosApplicationComposers.resolve().hostCommandLocator().invocation(executable, arguments);
     }
 
     private static Path resolveDockerExecutable() throws IOException {
-        return CommandLocator.find("docker")
+        return MinosApplicationComposers.resolve().hostCommandLocator().find("docker")
                 .orElseThrow(() -> new IOException("Docker backend selected but Docker executable is unavailable"));
     }
 

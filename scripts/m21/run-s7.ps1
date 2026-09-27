@@ -41,7 +41,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "M21 advanced provider consistency failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[3/5] Replaying focused sidecar provider ground-truth tests...'
-    & '.\mvnw.cmd' '-pl' 'minos-application' '-am' `
+    & '.\mvnw.cmd' '-pl' 'minos-bootstrap' '-am' `
         '-Dtest=FileProgramGraphProviderTest,AdvancedProgramSidecarFixtureTest' `
         '-Dsurefire.failIfNoSpecifiedTests=false' 'test'
     if ($LASTEXITCODE -ne 0) { throw "M21 advanced provider focused tests failed (exit=$LASTEXITCODE)" }

@@ -1,6 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;
@@ -74,9 +75,10 @@ class LocalRemoteIndexOperationsIntegrationTest {
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
                 application,
                 ignored -> materialization,
-                store,
-                (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
-                QualifiedSandboxForTests.selection());
+                LocalRemoteIndexingRuntimeFixtures.withSelection(
+                        store,
+                        (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
+                        QualifiedSandboxForTests.selection()));
 
         RemoteIndexOperations.RemoteIndexView result = operations.index(
                 request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW);
@@ -137,11 +139,11 @@ class LocalRemoteIndexOperationsIntegrationTest {
 
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                application, materializer, store,
-                (workerId, delegate, artifactStore) -> {
-                    throw new AssertionError("worker must never be created when the lease is never acquired");
-                },
-                QualifiedSandboxForTests.selection());
+                application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(store,
+                        (workerId, delegate, artifactStore) -> {
+                            throw new AssertionError("worker must never be created when the lease is never acquired");
+                        },
+                        QualifiedSandboxForTests.selection()));
 
         // Force RemoteIndexLease.acquire(...) to fail deterministically and without waiting on its
         // real timeout: its lock directory cannot be created because a regular file already occupies

@@ -1,0 +1,140 @@
+$ minos project add <FIXTURE> --name a2-char --format json
+exit: 0
+--- stdout
+{"id":"<uuid-1>","name":"a2-char","rootPath":"<REPO>/fixtures/typescript/typescript-modules","rootAvailable":true,"languages":["TYPESCRIPT"],"buildSystems":["NPM"],"moduleCount":3,"indexState":"NEVER_INDEXED","activeSnapshotId":null,"lastSuccessfulIndexAt":null,"providerId":null,"providerVersion":null}
+
+--- stderr
+
+$ minos index a2-char --scip <SCIP> --provider scip-typescript --provider-version 0.4.0 --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","snapshotId":"scip-7f41649a3cdad442a3235c0a","providerId":"scip-typescript","providerVersion":"0.4.0","normalizedSymbolCount":19,"occurrenceCount":67,"relationshipCount":6,"relatedTestRelationshipCount":4,"unresolvedOccurrenceCount":23,"unresolvedRelationshipCount":0,"completedAt":"<instant>","commitStatus":"COMMITTED","diagnostic":null}
+
+--- stderr
+warning: `minos index --scip` is deprecated; use `minos import-scip`
+
+$ minos runtime import a2-char --file <TEMP>/a2-runtime.tsv --format text
+exit: 0
+--- stdout
+nature: OBSERVED_PARTIAL
+exhaustive: false
+projectId: <uuid-2>
+snapshotId: scip-7f41649a3cdad442a3235c0a
+sessionId: a2-session
+sourceSha256: ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700
+observations: 5
+resolvedReferences: 5
+unresolvedReferences: 1
+ambiguousReferences: 0
+alreadyPresent: false
+note: absence of an observation never proves non-execution
+
+--- stderr
+
+$ minos runtime sessions a2-char --format text
+exit: 0
+--- stdout
+nature: OBSERVED_PARTIAL
+exhaustive: false
+sessions: 1
+session	a2-session	scip-7f41649a3cdad442a3235c0a	<instant>	<instant>	5	aligned=true
+note: absence of a session or observation never proves non-execution
+
+--- stderr
+
+$ minos runtime report a2-char --format text
+exit: 0
+--- stdout
+nature: OBSERVED_PARTIAL
+exhaustive: false
+snapshotId: scip-7f41649a3cdad442a3235c0a
+sessions: 1
+staticSymbols: 19
+observedSymbols: 3
+observedSymbolRatio: 0.15789473684210525
+coveredLines: 1
+totalHits: 16
+totalDurationNanos: 1000
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:GreetingPort	5	500
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:DefaultGreetingPort.greet	3	300
+hot	CALL	CALL:DefaultGreetingPort.greet->GreetingPort	3	200
+hot	LINE_COVERAGE	LINE_COVERAGE:packages/app/src/greeting-service.ts:7	4	0
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:a2.Missing	1	0
+note: observedSymbolRatio is not exhaustive code coverage; absence never proves non-execution
+
+--- stderr
+
+$ minos runtime report a2-char --session a2-session --format text
+exit: 0
+--- stdout
+nature: OBSERVED_PARTIAL
+exhaustive: false
+snapshotId: scip-7f41649a3cdad442a3235c0a
+sessions: 1
+staticSymbols: 19
+observedSymbols: 3
+observedSymbolRatio: 0.15789473684210525
+coveredLines: 1
+totalHits: 16
+totalDurationNanos: 1000
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:GreetingPort	5	500
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:DefaultGreetingPort.greet	3	300
+hot	CALL	CALL:DefaultGreetingPort.greet->GreetingPort	3	200
+hot	LINE_COVERAGE	LINE_COVERAGE:packages/app/src/greeting-service.ts:7	4	0
+hot	SYMBOL_EXECUTION	SYMBOL_EXECUTION:a2.Missing	1	0
+note: observedSymbolRatio is not exhaustive code coverage; absence never proves non-execution
+
+--- stderr
+
+$ minos runtime symbol a2-char --symbol sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913 --format text
+exit: 0
+--- stdout
+nature: OBSERVED_PARTIAL
+exhaustive: false
+snapshotId: scip-7f41649a3cdad442a3235c0a
+symbolId: sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913
+symbolKey: minos:structural:e6e53c43d119962a091b761282ba5ea6f2cbce14df2f5f7f11712d0b083a8b10
+observedInSelectedSessions: true
+executionHits: 5
+coveredLineHits: 0
+incomingCalls: 1
+outgoingCalls: 0
+absenceMeaning: NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS
+
+--- stderr
+
+$ minos runtime import a2-char --file <TEMP>/a2-runtime.tsv --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","projectName":"a2-char","snapshotId":"scip-7f41649a3cdad442a3235c0a","nature":"OBSERVED_PARTIAL","exhaustive":false,"limitations":["OBSERVED_PARTIAL: imported sessions describe only their declared time windows and collectors","absence of an observation never proves that a symbol, line or call was not executed","runtime observations do not add static provider capabilities or mutate the authoritative snapshot","observedSymbolRatio is a correlation ratio over the active static symbol set, not exhaustive code coverage"],"sessionId":"a2-session","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","sourceBytes":611,"observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"alreadyPresent":true,"importedAt":"<instant>"}
+
+--- stderr
+
+$ minos runtime sessions a2-char --format json
+exit: 0
+--- stdout
+{"exhaustive":false,"limitations":["absence of a session or observation is never proof of non-execution"],"nature":"OBSERVED_PARTIAL","sessions":[{"sessionId":"a2-session","snapshotId":"scip-7f41649a3cdad442a3235c0a","startedAt":"<instant>","endedAt":"<instant>","collectorId":"a2-fixture","collectorVersion":"1.0.0","environment":"test","completeness":"PARTIAL","observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"importedAt":"<instant>","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","activeSnapshotAligned":true}]}
+
+--- stderr
+
+$ minos runtime report a2-char --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","projectName":"a2-char","snapshotId":"scip-7f41649a3cdad442a3235c0a","nature":"OBSERVED_PARTIAL","exhaustive":false,"limitations":["OBSERVED_PARTIAL: imported sessions describe only their declared time windows and collectors","absence of an observation never proves that a symbol, line or call was not executed","runtime observations do not add static provider capabilities or mutate the authoritative snapshot","observedSymbolRatio is a correlation ratio over the active static symbol set, not exhaustive code coverage"],"sessions":[{"sessionId":"a2-session","snapshotId":"scip-7f41649a3cdad442a3235c0a","startedAt":"<instant>","endedAt":"<instant>","collectorId":"a2-fixture","collectorVersion":"1.0.0","environment":"test","completeness":"PARTIAL","observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"importedAt":"<instant>","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","activeSnapshotAligned":true}],"staticSymbolCount":19,"observedSymbolCount":3,"observedSymbolRatio":0.15789473684210525,"coveredLineCount":1,"totalHits":16,"totalDurationNanos":1000,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"hotPaths":[{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","targetResolution":null,"targetSymbolId":null,"hits":5,"totalDurationNanos":500},{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:DefaultGreetingPort.greet","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":null,"targetSymbolId":null,"hits":3,"totalDurationNanos":300},{"type":"CALL","key":"CALL:DefaultGreetingPort.greet->GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":"RESOLVED","targetSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","hits":3,"totalDurationNanos":200},{"type":"LINE_COVERAGE","key":"LINE_COVERAGE:packages/app/src/greeting-service.ts:7","sourceResolution":"RESOLVED","sourceSymbolId":"sym:d5d844bbf735c0f3be3c532923f81ed36f5c60eee5dbf84c2df9b0eb39c1d51f","targetResolution":null,"targetSymbolId":null,"hits":4,"totalDurationNanos":0},{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:a2.Missing","sourceResolution":"UNRESOLVED","sourceSymbolId":null,"targetResolution":null,"targetSymbolId":null,"hits":1,"totalDurationNanos":0}],"observedCalls":[{"source":"DefaultGreetingPort.greet","target":"GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":"RESOLVED","targetSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","hits":3,"totalDurationNanos":200}]}
+
+--- stderr
+
+$ minos runtime report a2-char --session a2-session --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","projectName":"a2-char","snapshotId":"scip-7f41649a3cdad442a3235c0a","nature":"OBSERVED_PARTIAL","exhaustive":false,"limitations":["OBSERVED_PARTIAL: imported sessions describe only their declared time windows and collectors","absence of an observation never proves that a symbol, line or call was not executed","runtime observations do not add static provider capabilities or mutate the authoritative snapshot","observedSymbolRatio is a correlation ratio over the active static symbol set, not exhaustive code coverage"],"sessions":[{"sessionId":"a2-session","snapshotId":"scip-7f41649a3cdad442a3235c0a","startedAt":"<instant>","endedAt":"<instant>","collectorId":"a2-fixture","collectorVersion":"1.0.0","environment":"test","completeness":"PARTIAL","observationCount":5,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"importedAt":"<instant>","sourceSha256":"ed5d6b3cfdf517391fbd13643c72f798f2df8d90b142f98af5e665663581c700","activeSnapshotAligned":true}],"staticSymbolCount":19,"observedSymbolCount":3,"observedSymbolRatio":0.15789473684210525,"coveredLineCount":1,"totalHits":16,"totalDurationNanos":1000,"resolvedReferences":5,"unresolvedReferences":1,"ambiguousReferences":0,"hotPaths":[{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","targetResolution":null,"targetSymbolId":null,"hits":5,"totalDurationNanos":500},{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:DefaultGreetingPort.greet","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":null,"targetSymbolId":null,"hits":3,"totalDurationNanos":300},{"type":"CALL","key":"CALL:DefaultGreetingPort.greet->GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":"RESOLVED","targetSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","hits":3,"totalDurationNanos":200},{"type":"LINE_COVERAGE","key":"LINE_COVERAGE:packages/app/src/greeting-service.ts:7","sourceResolution":"RESOLVED","sourceSymbolId":"sym:d5d844bbf735c0f3be3c532923f81ed36f5c60eee5dbf84c2df9b0eb39c1d51f","targetResolution":null,"targetSymbolId":null,"hits":4,"totalDurationNanos":0},{"type":"SYMBOL_EXECUTION","key":"SYMBOL_EXECUTION:a2.Missing","sourceResolution":"UNRESOLVED","sourceSymbolId":null,"targetResolution":null,"targetSymbolId":null,"hits":1,"totalDurationNanos":0}],"observedCalls":[{"source":"DefaultGreetingPort.greet","target":"GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":"RESOLVED","targetSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","hits":3,"totalDurationNanos":200}]}
+
+--- stderr
+
+$ minos runtime symbol a2-char --symbol sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913 --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","projectName":"a2-char","snapshotId":"scip-7f41649a3cdad442a3235c0a","nature":"OBSERVED_PARTIAL","exhaustive":false,"limitations":["OBSERVED_PARTIAL: imported sessions describe only their declared time windows and collectors","absence of an observation never proves that a symbol, line or call was not executed","runtime observations do not add static provider capabilities or mutate the authoritative snapshot","observedSymbolRatio is a correlation ratio over the active static symbol set, not exhaustive code coverage"],"symbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","symbolKey":"minos:structural:e6e53c43d119962a091b761282ba5ea6f2cbce14df2f5f7f11712d0b083a8b10","qualifiedName":"GreetingPort","sessionIds":["a2-session"],"observedInSelectedSessions":true,"executionHits":5,"totalDurationNanos":500,"coveredLineHits":0,"incomingCalls":[{"source":"DefaultGreetingPort.greet","target":"GreetingPort","sourceResolution":"RESOLVED","sourceSymbolId":"sym:a3df15cdfc3678cc477aa0578ee6c3d7a11a964a8087f088a621e53fcc525c21","targetResolution":"RESOLVED","targetSymbolId":"sym:f47d68e1c921cd15502f80f8f1ad8d3cad4683dab97a9279fdfb8da335e06913","hits":3,"totalDurationNanos":200}],"outgoingCalls":[],"absenceMeaning":"NOT_OBSERVED_IN_SELECTED_PARTIAL_SESSIONS"}
+
+--- stderr
+

@@ -50,7 +50,7 @@ def main() -> int:
         command = read("minos-cli/src/main/java/com/minos/cli/RuntimeCommand.java")
         app = read("minos-application/src/main/java/com/minos/application/MinosApplication.java")
         app_assembler = read("minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
-        local_storage = read("minos-application/src/main/java/com/minos/storage/LocalStorageBackend.java")
+        local_storage = read("minos-storage-local/src/main/java/com/minos/storage/LocalStorageBackend.java")
         mcp = read("minos-mcp/src/main/java/com/minos/mcp/MinosMcpTools.java")
         mcp_schemas = read("minos-mcp/src/main/java/com/minos/mcp/McpToolSchemas.java")
         backend = read("minos-mcp/src/main/java/com/minos/mcp/MinosApplicationMcpBackend.java")
@@ -121,7 +121,7 @@ def main() -> int:
             "RuntimeObservationModelTest.java": read("minos-domain/src/test/java/com/minos/dynamic/RuntimeObservationModelTest.java"),
             "FileRuntimeObservationStoreTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreTest.java"),
             "FileRuntimeObservationStoreSymlinkTest.java": read("minos-storage-local/src/test/java/com/minos/store/FileRuntimeObservationStoreSymlinkTest.java"),
-            "RuntimeIntelligenceServiceTest.java": read("minos-application/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
+            "RuntimeIntelligenceServiceTest.java": read("minos-bootstrap/src/test/java/com/minos/dynamic/RuntimeIntelligenceServiceTest.java"),
             "RuntimeCommandTest.java": read("minos-cli/src/test/java/com/minos/cli/RuntimeCommandTest.java"),
             "MinosMcpToolsTest.java": read("minos-mcp/src/test/java/com/minos/mcp/MinosMcpToolsTest.java"),
         }

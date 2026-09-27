@@ -1,0 +1,53 @@
+$ minos project add <TEMP>/git-project --name a2-git --format json
+exit: 0
+--- stdout
+{"id":"<uuid-1>","name":"a2-git","rootPath":"<TEMP>/git-project","rootAvailable":true,"languages":["TYPESCRIPT"],"buildSystems":[],"moduleCount":1,"indexState":"NEVER_INDEXED","activeSnapshotId":null,"lastSuccessfulIndexAt":null,"providerId":null,"providerVersion":null}
+
+--- stderr
+
+$ minos git-activity a2-git --days 3650 --format text
+exit: 0
+--- stdout
+branch: main
+head: ae5157532df82ba157b23019accd6ef2a9681a58
+clean: true
+scannedCommits: 2
+files: 3
+zones: 3
+limitations: NO_ORIGIN_REMOTE
+note: activity is factual and is not architectural or business importance
+zone	src	2	1	<instant>
+zone	(root)	1	1	<instant>
+zone	src/service	1	1	<instant>
+
+--- stderr
+
+$ minos git-activity a2-git --days 3650 --zone-depth 1 --max-files 1 --format text
+exit: 0
+--- stdout
+branch: main
+head: ae5157532df82ba157b23019accd6ef2a9681a58
+clean: true
+scannedCommits: 2
+files: 1
+zones: 1
+limitations: NO_ORIGIN_REMOTE,FILES_TRUNCATED
+note: activity is factual and is not architectural or business importance
+zone	src	3	2	<instant>
+
+--- stderr
+
+$ minos git-activity a2-git --days 3650 --format json
+exit: 0
+--- stdout
+{"nature":"FACTUAL_ACTIVITY","importanceInference":false,"repository":{"repositoryId":"<hash-1>","workTree":"<TEMP>/git-project","originRemote":null,"branch":"main","headCommit":"ae5157532df82ba157b23019accd6ef2a9681a58","detachedHead":false,"shallow":false,"clean":true,"limitations":["NO_ORIGIN_REMOTE"]},"query":{"maxCommits":500,"maxFiles":500,"since":"<instant>","zoneDepth":2},"scannedCommitCount":2,"historyTruncated":false,"filesTruncated":false,"recentCommits":[{"commitId":"ae5157532df82ba157b23019accd6ef2a9681a58","committedAt":"<instant>","authorName":"A2 Characterization","authorEmail":"a2@example.invalid","message":"change greeting","changedPaths":["src/greeting.ts"]},{"commitId":"0e5c5a2d361b423d63315a7df0c47a7adfb04b6b","committedAt":"<instant>","authorName":"A2 Characterization","authorEmail":"a2@example.invalid","message":"initial","changedPaths":["package.json","src/greeting.ts","src/service/service.ts"]}],"files":[{"commitCount":2,"lastChangedAt":"<instant>","lastCommitId":"ae5157532df82ba157b23019accd6ef2a9681a58","path":"src/greeting.ts","uniqueAuthorCount":1},{"commitCount":1,"lastChangedAt":"<instant>","lastCommitId":"0e5c5a2d361b423d63315a7df0c47a7adfb04b6b","path":"package.json","uniqueAuthorCount":1},{"commitCount":1,"lastChangedAt":"<instant>","lastCommitId":"0e5c5a2d361b423d63315a7df0c47a7adfb04b6b","path":"src/service/service.ts","uniqueAuthorCount":1}],"zones":[{"commitTouches":2,"distinctFileCount":1,"lastChangedAt":"<instant>","zone":"src"},{"commitTouches":1,"distinctFileCount":1,"lastChangedAt":"<instant>","zone":"(root)"},{"commitTouches":1,"distinctFileCount":1,"lastChangedAt":"<instant>","zone":"src/service"}],"limitations":["NO_ORIGIN_REMOTE"]}
+
+--- stderr
+
+$ minos git-activity a2-git --days 3650 --zone-depth 1 --max-files 1 --format json
+exit: 0
+--- stdout
+{"nature":"FACTUAL_ACTIVITY","importanceInference":false,"repository":{"repositoryId":"<hash-1>","workTree":"<TEMP>/git-project","originRemote":null,"branch":"main","headCommit":"ae5157532df82ba157b23019accd6ef2a9681a58","detachedHead":false,"shallow":false,"clean":true,"limitations":["NO_ORIGIN_REMOTE"]},"query":{"maxCommits":500,"maxFiles":1,"since":"<instant>","zoneDepth":1},"scannedCommitCount":2,"historyTruncated":false,"filesTruncated":true,"recentCommits":[{"commitId":"ae5157532df82ba157b23019accd6ef2a9681a58","committedAt":"<instant>","authorName":"A2 Characterization","authorEmail":"a2@example.invalid","message":"change greeting","changedPaths":["src/greeting.ts"]},{"commitId":"0e5c5a2d361b423d63315a7df0c47a7adfb04b6b","committedAt":"<instant>","authorName":"A2 Characterization","authorEmail":"a2@example.invalid","message":"initial","changedPaths":["package.json","src/greeting.ts","src/service/service.ts"]}],"files":[{"commitCount":2,"lastChangedAt":"<instant>","lastCommitId":"ae5157532df82ba157b23019accd6ef2a9681a58","path":"src/greeting.ts","uniqueAuthorCount":1}],"zones":[{"commitTouches":3,"distinctFileCount":2,"lastChangedAt":"<instant>","zone":"src"}],"limitations":["NO_ORIGIN_REMOTE","FILES_TRUNCATED"]}
+
+--- stderr
+

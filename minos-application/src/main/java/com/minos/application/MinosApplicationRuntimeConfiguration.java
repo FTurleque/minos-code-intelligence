@@ -3,7 +3,6 @@ package com.minos.application;
 import com.minos.semantic.LocalHashEmbeddingProvider;
 import com.minos.semantic.OllamaEmbeddingProvider;
 import com.minos.storage.MinosRuntimeSettings;
-import com.minos.store.EnvironmentHostedTenantKeyProvider;
 
 import java.net.URI;
 import java.time.Duration;
@@ -66,7 +65,7 @@ final class MinosApplicationRuntimeConfiguration {
         if (!"enabled".equalsIgnoreCase(hostedMode)) {
             throw new IllegalArgumentException("unsupported hosted mode: " + hostedMode);
         }
-        builder.hostedTenantKeyProvider(new EnvironmentHostedTenantKeyProvider());
+        builder.hostedTenantKeyProvider(builder.resolvedComposer().environmentHostedTenantKeyProvider());
     }
 
     private static String setting(MinosRuntimeSettings settings, String property, String environment) {

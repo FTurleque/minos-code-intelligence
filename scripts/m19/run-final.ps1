@@ -71,7 +71,7 @@ function Assert-M19Structure {
         'minos-application\src\main\java\com\minos\program\analysis\SecurityAnalysisService.java',
         'minos-api\src\main\java\com\minos\api\AdvancedCodeIntelligenceApi.java',
         'minos-api\src\main\java\com\minos\api\LocalAdvancedCodeIntelligenceApi.java',
-        'minos-application\src\test\java\com\minos\program\analysis\ProgramGraphAnalysisTest.java',
+        'minos-bootstrap\src\test\java\com\minos\program\analysis\ProgramGraphAnalysisTest.java',
         'minos-application\src\test\java\com\minos\program\analysis\ProgramDataFlowGroundTruthTest.java',
         'minos-api\src\test\java\com\minos\api\AdvancedCodeIntelligenceApiContractTest.java',
         'minos-mcp\src\test\java\com\minos\mcp\MinosMcpToolsTest.java',
@@ -117,7 +117,7 @@ function Assert-M19Structure {
         throw 'M19 security analysis must remain bounded and must not treat absence of a path as proof of safety.'
     }
 
-    $tests = (Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\test\java\com\minos\program\analysis\ProgramGraphAnalysisTest.java') -Raw) +
+    $tests = (Get-Content -LiteralPath (Require-File -Relative 'minos-bootstrap\src\test\java\com\minos\program\analysis\ProgramGraphAnalysisTest.java') -Raw) +
              (Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\test\java\com\minos\program\analysis\ProgramDataFlowGroundTruthTest.java') -Raw)
     foreach ($proof in @('evaluation\.perfect\(\)','CYCLE_OBSERVED','advancedAddedCount','sanitizedPathObserved','ProgramEdgeKind\.DEF_USE')) {
         if ($tests -notmatch $proof) { throw "M19 controlled qualification proof missing: $proof" }

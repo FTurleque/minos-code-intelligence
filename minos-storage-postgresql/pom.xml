@@ -32,11 +32,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-application</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.13</version>
@@ -81,6 +76,21 @@
 
     <build>
         <plugins>
+            <plugin>
+                <!--
+                  A2: the application-level consistency test over PostgreSQL lives in minos-app
+                  (this adapter no longer depends on minos-application); it reuses the Docker /
+                  pgvector bootstrap of PostgresTestSupport through this test-jar.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven.jar.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals><goal>test-jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

@@ -1,6 +1,6 @@
 package com.minos.cli;
 
-import com.minos.git.GitIntelligenceService;
+import com.minos.git.GitIntelligence;
 import com.minos.output.SymbolOutputFormat;
 
 import java.io.IOException;
@@ -30,9 +30,9 @@ public final class GitActivityCommand {
             """.stripTrailing();
 
     private final ProjectOperations projects;
-    private final GitIntelligenceService git;
+    private final GitIntelligence git;
 
-    public GitActivityCommand(ProjectOperations projects, GitIntelligenceService git) {
+    public GitActivityCommand(ProjectOperations projects, GitIntelligence git) {
         this.projects = Objects.requireNonNull(projects, "projects");
         this.git = Objects.requireNonNull(git, "git");
     }
@@ -42,9 +42,9 @@ public final class GitActivityCommand {
                 (options, exception) -> NAME + " failed: " + failureMessage(exception),
                 options -> {
                     ProjectOperations.ProjectView project = projects.inspectProject(options.project());
-                    GitIntelligenceService.ActivityReport report = git.analyze(
+                    GitIntelligence.ActivityReport report = git.analyze(
                             Path.of(project.rootPath()),
-                            new GitIntelligenceService.ActivityQuery(
+                            new GitIntelligence.ActivityQuery(
                                     Instant.now().minus(Duration.ofDays(options.days())),
                                     options.maxCommits(),
                                     options.maxFiles(),
@@ -60,7 +60,7 @@ public final class GitActivityCommand {
         return USAGE;
     }
 
-    static String render(GitIntelligenceService.ActivityReport report, SymbolOutputFormat format) {
+    static String render(GitIntelligence.ActivityReport report, SymbolOutputFormat format) {
         if (format == SymbolOutputFormat.JSON) {
             return CliJson.render(reportMap(report));
         }
@@ -73,14 +73,14 @@ public final class GitActivityCommand {
         lines.add("zones: " + report.zones().size());
         lines.add("limitations: " + String.join(",", report.limitations()));
         lines.add("note: activity is factual and is not architectural or business importance");
-        for (GitIntelligenceService.ZoneActivity zone : report.zones()) {
+        for (GitIntelligence.ZoneActivity zone : report.zones()) {
             lines.add("zone\t" + zone.zone() + "\t" + zone.commitTouches() + "\t" + zone.distinctFileCount()
                     + "\t" + zone.lastChangedAt());
         }
         return String.join("\n", lines);
     }
 
-    private static Map<String, Object> reportMap(GitIntelligenceService.ActivityReport report) {
+    private static Map<String, Object> reportMap(GitIntelligence.ActivityReport report) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("nature", "FACTUAL_ACTIVITY");
         root.put("importanceInference", false);
@@ -101,7 +101,7 @@ public final class GitActivityCommand {
         return root;
     }
 
-    private static Map<String, Object> repositoryMap(GitIntelligenceService.RepositoryView repository) {
+    private static Map<String, Object> repositoryMap(GitIntelligence.RepositoryView repository) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("repositoryId", repository.repositoryId());
         map.put("workTree", repository.workTree());
@@ -115,7 +115,7 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> commitMap(GitIntelligenceService.CommitActivity commit) {
+    private static Map<String, Object> commitMap(GitIntelligence.CommitActivity commit) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("commitId", commit.commitId());
         map.put("committedAt", commit.committedAt().toString());
@@ -126,7 +126,7 @@ public final class GitActivityCommand {
         return map;
     }
 
-    private static Map<String, Object> fileMap(GitIntelligenceService.FileActivity file) {
+    private static Map<String, Object> fileMap(GitIntelligence.FileActivity file) {
         return Map.of(
                 "path", file.path(),
                 "commitCount", file.commitCount(),
@@ -136,7 +136,7 @@ public final class GitActivityCommand {
         );
     }
 
-    private static Map<String, Object> zoneMap(GitIntelligenceService.ZoneActivity zone) {
+    private static Map<String, Object> zoneMap(GitIntelligence.ZoneActivity zone) {
         return Map.of(
                 "zone", zone.zone(),
                 "commitTouches", zone.commitTouches(),
