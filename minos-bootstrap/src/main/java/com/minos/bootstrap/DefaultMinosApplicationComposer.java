@@ -16,7 +16,9 @@ import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.runtime.CompositeProviderRuntimeManager;
+import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
+import com.minos.runtime.WorkerSandboxProbe;
 import com.minos.storage.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
@@ -110,5 +112,16 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public ResumableRunMarkers resumableRunMarkers(Path home) {
         return new RunDirectoryResumableRunMarkers(home);
+    }
+
+    /** Sonde réelle de l'hôte : aucun paramètre, aucune substitution possible depuis la production. */
+    @Override
+    public WorkerSandboxProbe workerSandboxProbe() {
+        return new LocalWorkerSandboxProbe();
+    }
+
+    @Override
+    public HostCommandLocator hostCommandLocator() {
+        return new LocalHostCommandLocator();
     }
 }

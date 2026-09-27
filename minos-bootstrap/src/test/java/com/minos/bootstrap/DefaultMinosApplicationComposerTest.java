@@ -64,4 +64,31 @@ class DefaultMinosApplicationComposerTest {
                     application.compositionRoot().resumableRunMarkers(application.home()));
         }
     }
+
+    /** L2 — la sonde de production interroge l'hôte réel ; la cause « décision » suit l'énumération. */
+    @Test
+    void productionWorkerSandboxProbeAndCommandLocatorAreTheRealHostOnes(@TempDir Path temp) {
+        Path home = temp.resolve("home");
+        DefaultMinosApplicationComposer composer = new DefaultMinosApplicationComposer();
+        com.minos.runtime.WorkerSandboxProbe probe = composer.workerSandboxProbe();
+        com.minos.runtime.WorkerSandboxBackend managedLocal =
+                com.minos.runtime.WorkerSandboxBackends.strongestAvailableForManagedLocalProvider(home);
+        com.minos.runtime.WorkerSandboxSelection untrusted =
+                com.minos.runtime.WorkerSandboxBackends.selectForUntrustedCode(home);
+
+        assertEquals(new com.minos.runtime.WorkerSandboxProbe.ManagedLocalSandbox(
+                managedLocal.id(), managedLocal.supportsManagedLocalProvider()), probe.managedLocalProvider(home));
+        com.minos.runtime.WorkerSandboxProbe.UntrustedCodeSandbox assessed = probe.untrustedCode(home);
+        assertEquals(untrusted.backend().id(), assessed.backendId());
+        assertEquals(untrusted.supportsUntrustedCode(), assessed.supportsUntrustedCode());
+        assertEquals(untrusted.cause().name(), assessed.cause());
+        assertEquals(untrusted.rejectedBackendId(), assessed.rejectedBackendId());
+        assertEquals(untrusted.rejectionReasons(), assessed.rejectionReasons());
+        assertEquals(untrusted.supportsUntrustedCode() ? "" : untrusted.refusalReport(), assessed.refusalReport());
+        assertEquals(com.minos.runtime.WorkerSandboxSelection.Cause.REJECTED_BY_DECISION.name(),
+                com.minos.runtime.WorkerSandboxProbe.CAUSE_REJECTED_BY_DECISION);
+        assertEquals(com.minos.runtime.CommandLocator.find("java"), composer.hostCommandLocator().find("java"));
+        assertEquals(com.minos.runtime.CommandLocator.invocation(Path.of("docker"), "version"),
+                composer.hostCommandLocator().invocation(Path.of("docker"), "version"));
+    }
 }

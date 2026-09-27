@@ -9,7 +9,9 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
+import com.minos.runtime.WorkerSandboxProbe;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
 import com.minos.store.CodeKnowledgeSnapshotStore;
@@ -67,6 +69,12 @@ public interface MinosApplicationComposer {
 
     /** Marqueurs de run reprenable (R1, ADR 0039 § 5), rangés dans le répertoire de run de ce MINOS_HOME. */
     ResumableRunMarkers resumableRunMarkers(Path home);
+
+    /** Sonde des sandboxes de worker de l'hôte réel (doctor, remote index). */
+    WorkerSandboxProbe workerSandboxProbe();
+
+    /** Localisation et invocation des exécutables de l'hôte réel. */
+    HostCommandLocator hostCommandLocator();
 
     /** Préparation et promotion des snapshots, fournies ensemble. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {

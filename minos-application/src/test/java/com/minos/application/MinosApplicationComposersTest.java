@@ -103,6 +103,8 @@ class MinosApplicationComposersTest {
         }
         @Override public HostedTenantKeyProvider environmentHostedTenantKeyProvider() { throw unused(); }
         @Override public ResumableRunMarkers resumableRunMarkers(Path home) { throw unused(); }
+        @Override public com.minos.runtime.WorkerSandboxProbe workerSandboxProbe() { throw unused(); }
+        @Override public com.minos.runtime.HostCommandLocator hostCommandLocator() { throw unused(); }
 
         private static AssertionError unused() {
             return new AssertionError("an ambiguous composition root must never be used");
