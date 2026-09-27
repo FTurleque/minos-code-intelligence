@@ -86,7 +86,31 @@ Chaque workflow déclenché sur `pull_request`/`push` a été lu intégralement 
 
 ## 6. Contrôles requis et filtres de chemin — piège à traiter
 
-*(section à compléter après implémentation — liste exacte des noms de contrôles requis à remettre à l'utilisateur avant toute demande de run de validation)*
+### 6.1 `docker-release-validation.yml` — écart assumé par rapport à la suggestion littérale de l'audit
+
+L'audit suggère de filtrer ce workflow sur `docker/**`, `scripts/release/**` et le POM du reactor. **Vérification contre le script réel** (`scripts/ci/qualify-docker-release.sh:28`) : il lance `./mvnw -B -ntp -DskipTests -DskipITs package`, c'est-à-dire un **build du reactor complet**, avant de construire l'image. Un changement dans n'importe quel module Java change potentiellement le JAR shadow embarqué dans l'image. Filtrer sur `docker/**`/`scripts/release/**` seul aurait fait manquer une régression introduite dans, par exemple, `minos-mcp` ou `minos-application`, qui n'est visible que dans l'image Docker qualifiée — exactement la perte d'invariant que ce chantier doit éviter.
+
+**Décision retenue** : `paths-ignore` plutôt que `paths`, pour exclure uniquement ce qui ne peut structurellement pas affecter le JAR ou l'image (`docs/**`, `**/*.md`, `scripts/history/**`), sans jamais réduire la couverture sur un changement de code. Cela répond au critère concret de l'audit (« un build de 90 minutes ne doit pas partir sur une modification de documentation ») sans introduire l'angle mort du filtre suggéré.
+
+### 6.2 Comportement de chaque contrôle requis quand son filtre ne matche pas
+
+| Contrôle requis (nom de job GitHub) | Comportement si le filtre de chemin ne matche pas |
+|---|---|
+| `Dependency vulnerability gate / osv-scan`, `Verify (ubuntu-24.04)`, `Verify (windows-2022)` (pr-ci) | Aucun filtre de chemin : se déclenche toujours. Sans objet. |
+| `Docker Release Validation / provider-complete-image` | `paths-ignore` (§ 6.1) : absent de la liste de contrôles d'une PR qui ne touche que `docs/**`/`**/*.md`/`scripts/history/**`. GitHub Actions traite un job absent (jamais déclenché faute de correspondance) comme **non requis pour cette PR** s'il est déclaré requis via une règle de branche qui accepte l'absence de déclenchement (« Require status checks to pass », coché sans « strict » supplémentaire) — mais **passe indéfiniment en attente** si la règle est plus stricte. À vérifier côté réglages du dépôt (hors périmètre de cette session) avant d'activer ce filtre en required-check. |
+| `IntelliJ 2026.1 / Java 21`, `Windows process ownership / Java 21` | Filtré sur `minos-intellij/**`, `minos-cli/**`, `minos-integration-git/**`, docs ciblées. Même comportement que ci-dessus sur une PR hors de ces chemins. |
+| `M19 Java 24 qualification`, `M20 Java 24 qualification` | Filtré sur leurs modules respectifs. Idem. |
+| `Build and smoke Windows candidate` (windows-installer), `Transactional upgrade engine ...` (windows-in-place-upgrade) | Filtré sur `packaging/windows/**`, `scripts/install/**`, `scripts/release/**`, `pom.xml`. Idem. |
+
+### 6.3 Uniformisation appliquée
+
+`ubuntu-latest`/`windows-latest` remplacés par `ubuntu-24.04`/`windows-2022` dans `intellij-plugin.yml`, `m19-advanced-code-intelligence.yml`, `m20-semantic-hybrid-intelligence.yml`, `docker-release-validation.yml` (les autres workflows de PR étaient déjà épinglés). `intellij-plugin-release.yml` (déclencheur `release: published`, hors chemin PR) n'est pas touché.
+
+### 6.4 Concurrence
+
+Les 12 groupes de concurrence des workflows de PR annulaient un run en cours dès qu'un nouvel événement arrivait sur la même clé — y compris un **push** direct sur `develop`/`main`, où la clé retombe sur `github.ref` (donc partagée par tous les push sur cette branche). Deux merges rapprochés sur `develop` pouvaient annuler la validation du premier avant qu'elle ne se termine. Corrigé partout : `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
+
+*(Liste exacte des noms de contrôles requis à mettre à jour dans la protection de branche : figée une fois la fusion en pipeline unique de la § suivante commitée — les jobs `MND exact-head invariants (...)`, `MNE exact-head invariants (...)`, `Post-MNE exact-head invariants (...)`, `Verify post-228 static hardening` disparaissent, remplacés par un seul job dans `pr-ci.yml`.)*
 
 ## 7. G3 — inventaire des scripts et workflows de jalon
 

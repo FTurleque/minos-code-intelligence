@@ -3,8 +3,16 @@ name: Docker Release Validation
 on:
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/history/**'
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/history/**'
   workflow_dispatch:
 
 permissions:
