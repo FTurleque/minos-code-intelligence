@@ -41,6 +41,7 @@ flowchart LR
     minos_bootstrap --> minos_provider_scip
     minos_bootstrap --> minos_runtime_local
     minos_bootstrap --> minos_storage_local
+    minos_bootstrap --> minos_storage_postgresql
     minos_nexus --> minos_application
     minos_nexus --> minos_bootstrap
     minos_nexus --> minos_domain
@@ -89,7 +90,7 @@ flowchart LR
 | `minos-provider-scip` | `minos-domain`, `minos-engine`, `minos-runtime-local`, `minos-storage-local` |
 | `minos-integration-git` | `minos-engine` |
 | `minos-application` | `minos-domain`, `minos-engine` |
-| `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local` |
+| `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
 | `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-storage-local` |
 | `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local` |
 | `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-storage-local` |

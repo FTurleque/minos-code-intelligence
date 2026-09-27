@@ -43,7 +43,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     # ADR 0042: the composition root knows the application and every local adapter.
     "minos-bootstrap": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
-        "minos-provider-scip", "minos-integration-git"
+        "minos-provider-scip", "minos-integration-git", "minos-storage-postgresql"
     }),
     "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-storage-local", "minos-bootstrap"}),
     "minos-cli": frozenset({
