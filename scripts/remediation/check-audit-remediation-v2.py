@@ -113,12 +113,12 @@ def main() -> int:
             "public static String readUtf8(InputStream source",
         )
         require(
-            "minos-application/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
+            "minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
             "BoundedProperties.readUtf8(stream, MAX_SECRET_BYTES",
             "ConfinedFileOpener.openConfinedRegularFile",
         )
         forbid(
-            "minos-application/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
+            "minos-engine/src/main/java/com/minos/storage/MinosRuntimeSettings.java",
             "new String(input.readAllBytes(), StandardCharsets.UTF_8)",
         )
         require(
