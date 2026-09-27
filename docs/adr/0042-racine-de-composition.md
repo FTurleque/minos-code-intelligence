@@ -22,7 +22,11 @@ Conditions attachées à la décision (chacune prouvée par un test ou par le sc
 2. Découverte en échec rapide et déterministe : aucune implémentation → message qui nomme le module
    manquant ; plusieurs → refus, jamais un choix arbitraire ; aucun chemin dans les messages
    (`MinosApplicationComposersTest`).
-3. Le JAR distribué est couvert par un test de contrat de packaging (`ShadedJarCompositionRootIT`).
+3. Le JAR distribué est couvert par un test de contrat de packaging (`ShadedJarCompositionRootIT`). La
+   distribution `jpackage` l'est par transitivité : elle empaquette ce même `minos-code-intelligence-*-all.jar`,
+   copié tel quel en `minos.jar` puis passé à `jpackage --main-jar minos.jar`
+   (`scripts/release/build-windows-distribution.ps1:221,253,264`) ; aucun test existant n'exécute le
+   runtime `jpackage` lui-même.
 4. `docs/user/java-api.md` indique que `minos-bootstrap` est requis au classpath de l'API Java embarquée.
 
 Relu sur la branche `hautes/impl-hexagone` au commit `00b2236a`.
@@ -46,7 +50,7 @@ composition), puis déplacements par petits commits :
 | modèles `com.minos.store` → `minos-engine` | `CodeKnowledgeSnapshotStore` et sa fermeture (6 classes) |
 | ports de persistance → `minos-engine` | `StorageBackend*`, `IndexStateStore`, `ProjectRegistry`, empreintes, `MinosRuntimeSettings`… (20 classes) |
 | adaptateurs fichiers → `minos-storage-local` | `FileIndexStateStore`, `LocalProjectRegistry`, `FileProjectFingerprintSnapshotStore`, `LocalStorageBackend`… (11 classes) |
-| `minos-storage-postgresql` ↛ `minos-application` | dépendance retirée ; le test application × PostgreSQL rejoint `minos-app` |
+| `minos-storage-postgresql` ↛ `minos-application` | dépendance retirée ; le test application × PostgreSQL rejoint `minos-bootstrap` en portée `test` (d'abord `minos-app` au tour 1, puis `minos-bootstrap` depuis `d93cfcfe`, décision C5) |
 | port `IndexerProviderCatalog` | `ProviderPlatformService` ne connaît plus `ScipIndexerCatalog` |
 | `EmbeddingProvider.limitations()` | plus d'`instanceof LocalHash/Ollama` dans `SemanticIndexService` |
 
