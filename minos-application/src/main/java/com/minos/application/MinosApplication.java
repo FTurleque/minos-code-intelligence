@@ -18,6 +18,7 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
+import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -83,6 +84,7 @@ public final class MinosApplication implements AutoCloseable {
     private final ProviderRuntimeManager providerRuntimeManager;
     private final List<IndexerDescriptor> indexerDescriptors;
     private final IndexerProviderCatalog providerCatalog;
+    private final ScipArtifactImporter scipArtifactImporter;
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
     private final GitIntelligence gitIntelligence;
@@ -118,6 +120,7 @@ public final class MinosApplication implements AutoCloseable {
             ProviderRuntimeManager providerRuntimeManager,
             List<IndexerDescriptor> indexerDescriptors,
             IndexerProviderCatalog providerCatalog,
+            ScipArtifactImporter scipArtifactImporter,
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
             GitIntelligence gitIntelligence,
@@ -142,6 +145,7 @@ public final class MinosApplication implements AutoCloseable {
         this.providerRuntimeManager = Objects.requireNonNull(providerRuntimeManager, "providerRuntimeManager");
         this.indexerDescriptors = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors"));
         this.providerCatalog = Objects.requireNonNull(providerCatalog, "providerCatalog");
+        this.scipArtifactImporter = Objects.requireNonNull(scipArtifactImporter, "scipArtifactImporter");
         this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
@@ -226,6 +230,8 @@ public final class MinosApplication implements AutoCloseable {
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
     /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
     public IndexerProviderCatalog providerCatalog() { return providerCatalog; }
+    /** Port d'import SCIP explicite (import-scip) ; l'adaptateur est instancié à chaque import. */
+    public ScipArtifactImporter scipArtifactImporter() { return scipArtifactImporter; }
     public SnapshotStager snapshotStager() { return snapshotStager; }
     public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
     public GitIntelligence gitIntelligence() { return gitIntelligence; }
@@ -297,6 +303,7 @@ public final class MinosApplication implements AutoCloseable {
         ProviderRuntimeManager providerRuntimeManager;
         List<IndexerDescriptor> indexerDescriptors;
         IndexerProviderCatalog providerCatalog;
+        ScipArtifactImporter scipArtifactImporter;
         SnapshotStager snapshotStager;
         SnapshotPromoter snapshotPromoter;
         GitIntelligence gitIntelligence;
@@ -396,6 +403,11 @@ public final class MinosApplication implements AutoCloseable {
 
         public Builder providerCatalog(IndexerProviderCatalog value) {
             this.providerCatalog = Objects.requireNonNull(value);
+            return this;
+        }
+
+        public Builder scipArtifactImporter(ScipArtifactImporter value) {
+            this.scipArtifactImporter = Objects.requireNonNull(value);
             return this;
         }
 

@@ -1,6 +1,7 @@
 package com.minos.application;
 
 import com.minos.adapter.scip.ScipIndexerCatalog;
+import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager;
 import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
 import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
@@ -19,6 +20,7 @@ import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
+import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.program.analysis.ProgramGraphProvider;
@@ -93,6 +95,11 @@ final class MinosApplicationAssembler {
             // exactement comme l'appel direct qu'il remplace.
             IndexerProviderCatalog effectiveProviderCatalog = builder.providerCatalog != null
                     ? builder.providerCatalog : ScipIndexerCatalog::qualifiedM24Providers;
+            // Un importeur neuf par import, comme l'appel direct qu'il remplace dans LocalProjectOperations.
+            ScipArtifactImporter effectiveScipImporter = builder.scipArtifactImporter != null
+                    ? builder.scipArtifactImporter
+                    : (indexFile, request, snapshots) ->
+                            new ScipSymbolSnapshotImporter().importSnapshot(indexFile, request, snapshots);
             ProviderRuntimeManager effectiveProviderRuntime = builder.providerRuntimeManager != null
                     ? builder.providerRuntimeManager
                     : new CompositeProviderRuntimeManager(List.of(
@@ -135,6 +142,7 @@ final class MinosApplicationAssembler {
                     effectiveProviderRuntime,
                     effectiveDescriptors,
                     effectiveProviderCatalog,
+                    effectiveScipImporter,
                     effectiveStager,
                     effectivePromoter,
                     effectiveGit,

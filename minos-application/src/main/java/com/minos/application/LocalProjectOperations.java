@@ -1,7 +1,7 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotReport;
+import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.adapter.scip.ScipSymbolSnapshotRequest;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.io.BoundedFileDigest;
@@ -36,6 +36,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
     private final CodeKnowledgeSnapshotStore snapshotStore;
     private final IndexStateStore stateStore;
     private final ProjectInspectionService inspectionService;
+    private final ScipArtifactImporter scipArtifactImporter;
     private final Path historyDirectory;
 
     public LocalProjectOperations(Path home) throws IOException { this(MinosApplication.open(home), true); }
@@ -50,6 +51,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
         this.snapshotStore = value.snapshotStore();
         this.stateStore = value.indexStateStore();
         this.inspectionService = value.projectInspectionService();
+        this.scipArtifactImporter = value.scipArtifactImporter();
         this.historyDirectory = home.resolve("cli-index-history");
     }
 
@@ -84,7 +86,7 @@ public final class LocalProjectOperations implements ProjectOperations, AutoClos
                 ? "scip-" + BoundedFileDigest.sha256Exact(
                         artifact, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact").substring(0, 24)
                 : snapshotId;
-        ScipSymbolSnapshotReport report = new ScipSymbolSnapshotImporter().importSnapshot(
+        ScipSymbolSnapshotReport report = scipArtifactImporter.importSnapshot(
                 artifact,
                 new ScipSymbolSnapshotRequest(project.id(), effectiveSnapshotId, blankToNull(moduleId), safeProviderId,
                         blankToNull(providerVersion), "application-" + effectiveSnapshotId, java.util.Map.of()),
