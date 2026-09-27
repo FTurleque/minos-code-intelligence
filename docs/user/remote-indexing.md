@@ -116,6 +116,17 @@ L'unique migration nécessaire est effectuée par le script pendant sa phase pri
 
 Sans l'une de ces deux options, le backend Linux se déclare `BLOCKED_NO_AGGREGATE_RESOURCE_JOB_BOUNDARY` et les providers locaux gérés n'ont pas de sandbox OS ; `remote index` échoue (ici avec la cause `NO_OS_BACKEND_AVAILABLE`, et par décision une fois la racine déléguée) avant tout lancement de provider — jamais par un repli silencieux vers une exécution non confinée. En particulier, si le shell n'a pas été attaché, la qualification de la racine déléguée échoue et MINOS reste fail-closed au lieu de tenter une migration privilégiée.
 
+#### Mise à jour : arrêter les instances plus anciennes qui partagent la racine déléguée
+
+À partir de la version qui suit 1.2.0 (`1.3.0-SNAPSHOT` sur `develop` au moment du changement), chaque cgroup créé par MINOS porte dans son nom une marque d'appartenance `<job>.own-<pid>-t<ticks>-<jeton>` : le PID du MINOS propriétaire, son instant de démarrage en ticks noyau depuis le boot (`/proc/<pid>/stat`, champ 22, insensible aux sauts d'horloge murale) et un jeton propre à l'instance. Le balayage exécuté à la qualification de la racine ne récupère un cgroup que si son propriétaire est mort. Tout cgroup qu'il laisse intact est signalé dans un seul WARNING par qualification (« MINOS left N cgroup(s) intact under the delegated cgroup root … »), avec son nom et la raison.
+
+Avant de lancer cette version sur une racine déléguée partagée (le même `MINOS_SANDBOX_CGROUP_ROOT`, ou la même unité `Delegate=yes`), **arrêtez** :
+
+- toute instance **MINOS ≤ 1.2.0** (CLI, serveur MCP, plugin IntelliJ) : à la qualification de la racine, elle tue **tout** cgroup `minos-*` peuplé qu'elle trouve, y compris les jobs en cours d'une instance plus récente ;
+- tout **build `develop` antérieur** à ce changement de format : ces builds écrivent une marque `.own-<pid>-<epochMillis>-<jeton>`. Une marque comparée par l'horloge murale peut faire passer une instance vivante pour morte après un saut d'horloge (NTP). Ces builds prennent aussi un cgroup encore vide au nouveau format pour un cgroup « non marqué et vide », et le suppriment.
+
+Compatibilité dans l'autre sens : un cgroup marqué par ces builds `develop` antérieurs reste reconnu. Il n'est récupéré que si son PID propriétaire est mort, jamais sur un simple écart d'instant. Un cgroup `minos-*` sans marque qui contient encore des processus n'est jamais tué : il est signalé, et c'est à l'opérateur de le supprimer après avoir arrêté l'instance qui l'a créé.
+
 Le transport vérifié utilise `minos-distributed-artifact-v2` et lie chaque artefact à son `projectRelativeRoot`. Le format historique `minos-distributed-artifact-v1` reste reconnu comme fait de compatibilité/documentation, mais il ne transporte pas le scope et n’est donc pas accepté comme provenance vérifiée pour une nouvelle exécution. Le résultat expose le snapshot actif et, pour chaque provider, sa version, le worker, l’isolation, la politique réseau, les SHA-256 vérifiés et le scope du module indexé.
 
 Le backend natif ne fournit qu'une isolation de processus et de workspace. Il refuse `deny` : ces primitives ne prouvent pas un blocage réseau au niveau OS. Il reste également interdit comme repli pour `remote index` avec `allow`, car elles ne prouvent pas le confinement complet de code non fiable.

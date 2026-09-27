@@ -56,6 +56,36 @@ class LinuxCgroupStaleRecoveryTest {
         assertEquals(List.of(String.valueOf(live.getFileName())), sweep.leftIntact());
     }
 
+    /**
+     * R2: a wall-clock step (NTP) shifts the start instant two JVMs derive for the SAME live process.
+     * The marks below are the ones a live MINOS instance wrote before such a step — their instant is a
+     * minute away from the one this JVM now computes for the very same PID — and the sweep must not
+     * mistake that shift for a PID reuse and kill the live instance's job.
+     */
+    @Test
+    void aWallClockStepNeverMakesALiveOwnerLookReused(@TempDir Path root) throws Exception {
+        long pid = ProcessHandle.current().pid();
+        long start = ProcessHandle.current().info().startInstant().orElseThrow().toEpochMilli();
+        List<String> names = List.of(
+                "minos-provider-stepped-ahead.own-" + pid + "-" + (start + 60_000L) + "-0f1e2d3c",
+                "minos-provider-stepped-back.own-" + pid + "-" + (start - 60_000L) + "-0f1e2d3c");
+        for (String name : names) {
+            Path live = Files.createDirectory(root.resolve(name));
+            Files.writeString(live.resolve(LinuxCgroupJob.PROCS_FILE), "424242\n", StandardCharsets.UTF_8);
+        }
+
+        LinuxCgroupJob.StaleSweep sweep = assertDoesNotThrow(() -> LinuxCgroupJob.reclaimStaleJobs(root),
+                "a start-instant shift of a live owner must never lead the sweep to kill its job");
+
+        for (String name : names) {
+            assertTrue(Files.exists(root.resolve(name)), name);
+            assertEquals("424242\n",
+                    Files.readString(root.resolve(name).resolve(LinuxCgroupJob.PROCS_FILE), StandardCharsets.UTF_8));
+        }
+        assertEquals(List.of(), sweep.reclaimed());
+        assertEquals(names.stream().sorted().toList(), sweep.leftIntact().stream().sorted().toList());
+    }
+
     @Test
     void aCgroupOwnedByThisJvmIsLeftIntact(@TempDir Path root) throws Exception {
         Path own = Files.createDirectory(root.resolve(CgroupJobOwnership.CURRENT.markedName("minos-provider-own")));

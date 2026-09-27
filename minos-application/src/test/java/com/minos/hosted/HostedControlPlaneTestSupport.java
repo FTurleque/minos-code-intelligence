@@ -23,6 +23,30 @@ final class HostedControlPlaneTestSupport {
     private HostedControlPlaneTestSupport() {
     }
 
+    /**
+     * Extends the persisted chain with authentic filler events of the given outcome up to {@code size}
+     * events, using a one-event window so that the build stays O(n) even at the hard capacity.
+     */
+    static HostedTenantState extendedTo(
+            HostedTenantState state, HostedAuditChain chain, int size, HostedAuditEvent.Outcome outcome) {
+        List<HostedAuditEvent> events = new ArrayList<>(state.auditEvents());
+        HostedTenantState window = state;
+        while (events.size() < size) {
+            HostedAuditEvent last = window.auditEvents().getLast();
+            HostedTenantState oneEvent = new HostedTenantState(
+                    state.tenantId(), state.name(), state.keyId(), state.version(), state.createdAt(),
+                    window.updatedAt(), state.retentionPolicy(), state.members(), state.workspaces(),
+                    window.auditSequence(), last.previousHash(), List.of(last));
+            window = chain.append(oneEvent, "owner", "AUDIT_FILL", "TENANT", "fill",
+                    outcome, "fill-" + events.size(), state.keyId(), state.version());
+            events.add(window.auditEvents().getLast());
+        }
+        return new HostedTenantState(
+                state.tenantId(), state.name(), state.keyId(), state.version(), state.createdAt(),
+                window.updatedAt(), state.retentionPolicy(), state.members(), state.workspaces(),
+                events.getLast().sequence(), state.auditAnchorHash(), events);
+    }
+
     static Harness harness() {
         InMemoryStore store = new InMemoryStore();
         HostedTenantKeyProvider keys = (tenantId, keyId, purpose) -> {

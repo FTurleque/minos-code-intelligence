@@ -26,6 +26,10 @@ import java.util.UUID;
  * <p>When resource limits are requested, {@code memory.max}, {@code pids.max} and {@code cpu.max}
  * bound the aggregate process tree. Strong ownership requires the kernel {@code cgroup.kill}
  * primitive so MINOS never falls back to signalling raw PIDs that may have been reused.</p>
+ *
+ * <p>Diagnostics never carry an absolute path: journal entries and failure messages name a cgroup
+ * relative to the delegated root (its directory name) and the delegated root relative to the cgroup
+ * mount, including in the failures they attach.</p>
  */
 final class LinuxCgroupJob implements AutoCloseable {
 
@@ -45,6 +49,10 @@ final class LinuxCgroupJob implements AutoCloseable {
     private static final int MAX_KILL_POLLS = 100;
     private static final long KILL_POLL_MILLIS = 50L;
     private static final long MAX_STALE_JOB_SWEEP = 4_096L;
+    /** Residues named in the single qualification WARNING; the remainder is counted, not listed. */
+    static final int MAX_REPORTED_RESIDUES = 32;
+    private static final int MAX_DESCRIBED_CAUSES = 4;
+    private static final int MAX_REDACTION_DEPTH = 16;
 
     private static final Object DISCOVERY_LOCK = new Object();
     private static boolean delegationProbed;
@@ -118,18 +126,18 @@ final class LinuxCgroupJob implements AutoCloseable {
         return Optional.empty();
     }
 
-    private static boolean qualifyRoot(Path root) {
+    static boolean qualifyRoot(Path root) {
         try {
             if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return false;
             if (!availableControllers(root).containsAll(REQUIRED_CONTROLLERS)) return false;
             relocateSelf(root);
             enableSubtreeControl(root);
             if (!probe(root)) return false;
-            reclaimStaleJobs(root);
+            reclaimAndReportStaleJobs(root);
             return true;
         } catch (IOException | RuntimeException exception) {
-            LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS Linux cgroup delegation probe rejected " + root, exception);
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux cgroup delegation probe rejected cgroup root "
+                    + displayRoot(root) + ": " + describeFailure(exception, root));
             return false;
         }
     }
@@ -164,7 +172,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         Set<String> reread = Set.of(
                 Files.readString(control, StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT).split("\\s+"));
         if (!reread.containsAll(REQUIRED_CONTROLLERS)) {
-            throw new IOException("delegated cgroup root does not expose memory/pids/cpu to its children: " + root);
+            throw new IOException("delegated cgroup root does not expose memory/pids/cpu to its children");
         }
     }
 
@@ -180,38 +188,72 @@ final class LinuxCgroupJob implements AutoCloseable {
      * membership cannot be read, is a containment failure and rejects the delegated root. Only
      * deletion of an already empty cgroup remains best-effort because it cannot hide surviving
      * provider processes.</p>
+     *
+     * <p>This sweep does not journal what it leaves intact; {@link #reclaimAndReportStaleJobs} does.</p>
      */
     static StaleSweep reclaimStaleJobs(Path root) throws IOException {
         List<String> reclaimed = new ArrayList<>();
-        List<String> leftIntact = new ArrayList<>();
+        List<Residue> leftIntact = new ArrayList<>();
         try (java.util.stream.Stream<Path> children = Files.list(root)) {
             for (Path child : children.limit(MAX_STALE_JOB_SWEEP).toList()) {
                 if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) continue;
                 String name = String.valueOf(child.getFileName());
                 if (!name.startsWith("minos-")) continue;
                 if (CONTROLLER_DIRECTORY.equals(name)) continue;
-                if (reclaimStaleJob(child, name)) reclaimed.add(name);
-                else leftIntact.add(name);
+                CgroupJobOwnership.Verdict verdict = reclaimStaleJob(child, name);
+                if (verdict.reclaim()) reclaimed.add(name);
+                else leftIntact.add(new Residue(name, verdict.reason()));
             }
         }
         return new StaleSweep(List.copyOf(reclaimed), List.copyOf(leftIntact));
     }
 
     /**
-     * Returns {@code true} when the cgroup was reclaimed (or its reclamation attempted), {@code false}
-     * when the ownership decision left it intact.
+     * Sweeps the delegated root during its qualification and reports, in a single WARNING, every
+     * cgroup the sweep leaves intact.
+     *
+     * <p>The sweep never kills a cgroup whose owner may be alive (a live MINOS instance, an unmarked
+     * cgroup that still holds processes). Such residues still consume the {@code pids} and
+     * {@code memory} budget of the delegated root, so the operator is told about each of them once
+     * per qualification: its name relative to the root and the reason it was left intact. The report
+     * is bounded to {@link #MAX_REPORTED_RESIDUES} named residues; the others are counted.</p>
      */
-    private static boolean reclaimStaleJob(Path child, String name) {
+    static StaleSweep reclaimAndReportStaleJobs(Path root) throws IOException {
+        StaleSweep sweep = reclaimStaleJobs(root);
+        if (!sweep.residues().isEmpty()) {
+            LOGGER.log(System.Logger.Level.WARNING, residueReport(root, sweep.residues()));
+        }
+        return sweep;
+    }
+
+    static String residueReport(Path root, List<Residue> residues) {
+        StringBuilder report = new StringBuilder("MINOS left ")
+                .append(residues.size())
+                .append(" cgroup(s) intact under the delegated cgroup root ")
+                .append(displayRoot(root))
+                .append("; they keep consuming its pids and memory budget until their owner exits or an operator"
+                        + " removes them: ");
+        int listed = Math.min(residues.size(), MAX_REPORTED_RESIDUES);
+        for (int index = 0; index < listed; index++) {
+            Residue residue = residues.get(index);
+            if (index > 0) report.append("; ");
+            report.append(residue.name()).append(" (").append(residue.reason()).append(')');
+        }
+        if (residues.size() > listed) {
+            report.append("; and ").append(residues.size() - listed).append(" more");
+        }
+        return report.toString();
+    }
+
+    /** Applies the ownership decision to one discovered cgroup and reclaims it when the decision says so. */
+    private static CgroupJobOwnership.Verdict reclaimStaleJob(Path child, String name) {
         LinuxCgroupJob stale = new LinuxCgroupJob(child);
         Optional<CgroupJobOwnership.Mark> mark = CgroupJobOwnership.Mark.parse(name);
         CgroupJobOwnership.Verdict verdict = CgroupJobOwnership.decide(
                 mark, CgroupJobOwnership.CURRENT, CgroupJobOwnership.OwnerLookup.SYSTEM, stale::aliveProcesses);
         if (!verdict.reclaim()) {
-            // Unmarked residue with live processes is unexplained and deserves attention; a job of
-            // another live MINOS instance is ordinary coexistence.
-            LOGGER.log(mark.isEmpty() ? System.Logger.Level.WARNING : System.Logger.Level.DEBUG,
-                    "MINOS leaves cgroup " + name + " intact: " + verdict.reason());
-            return false;
+            // Reported once, together with every other residue, by reclaimAndReportStaleJobs.
+            return verdict;
         }
         LOGGER.log(System.Logger.Level.DEBUG, "MINOS reclaims stale cgroup " + name + ": " + verdict.reason());
         if (stale.aliveProcesses() > 0L) {
@@ -220,28 +262,42 @@ final class LinuxCgroupJob implements AutoCloseable {
         try {
             Files.deleteIfExists(child);
         } catch (IOException exception) {
-            LOGGER.log(System.Logger.Level.WARNING,
-                    "MINOS could not remove already-empty stale cgroup " + child, exception);
+            LOGGER.log(System.Logger.Level.WARNING, "MINOS could not remove already-empty stale cgroup " + name
+                    + ": " + describeFailure(exception, child.getParent()));
         }
-        return true;
+        return verdict;
     }
 
     /** Outcome of one stale sweep, by cgroup name (never a path), for diagnostics and tests. */
-    record StaleSweep(List<String> reclaimed, List<String> leftIntact) {
+    record StaleSweep(List<String> reclaimed, List<Residue> residues) {
         StaleSweep {
             reclaimed = List.copyOf(reclaimed);
-            leftIntact = List.copyOf(leftIntact);
+            residues = List.copyOf(residues);
+        }
+
+        /** Names of the cgroups the sweep left intact. */
+        List<String> leftIntact() {
+            return residues.stream().map(Residue::name).toList();
         }
     }
 
-    private static boolean probe(Path root) {
+    /** A cgroup the sweep left intact, by name (never a path), with the reason of the decision. */
+    record Residue(String name, String reason) {
+        Residue {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(reason, "reason");
+        }
+    }
+
+    static boolean probe(Path root) {
         Path probe = root.resolve(CgroupJobOwnership.CURRENT.markedName("minos-probe-" + UUID.randomUUID()));
         try {
             LinuxCgroupJob job = configure(probe, Limits.DEFAULT);
             job.close();
             return true;
         } catch (IOException | RuntimeException exception) {
-            LOGGER.log(System.Logger.Level.WARNING, "MINOS Linux cgroup capability probe failed", exception);
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS Linux cgroup capability probe failed: " + describeFailure(exception, root));
             deleteProbeQuietly(probe);
             return false;
         }
@@ -274,7 +330,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         LinuxCgroupJob job = new LinuxCgroupJob(directory);
         try {
             if (!Files.exists(directory.resolve(PROCS_FILE), LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("cgroup ownership file is missing: " + directory.resolve(PROCS_FILE));
+                throw new IOException("cgroup ownership file " + PROCS_FILE + " is missing in cgroup " + job.name());
             }
             job.requireKillSwitch();
             return job;
@@ -306,7 +362,7 @@ final class LinuxCgroupJob implements AutoCloseable {
         if (!directory.startsWith(normalizedRoot)
                 || directory.equals(normalizedRoot)
                 || !directory.startsWith(CGROUP_MOUNT)) {
-            throw new IOException("cgroup job directory escapes the delegated cgroup root: " + directory);
+            throw new IOException("cgroup job " + safe + " escapes the delegated cgroup root or the cgroup mount");
         }
         return directory;
     }
@@ -438,14 +494,129 @@ final class LinuxCgroupJob implements AutoCloseable {
         Path killSwitch = directory.resolve(KILL_FILE);
         if (Files.isSymbolicLink(killSwitch)
                 || !Files.isRegularFile(killSwitch, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("kernel cgroup.kill control is missing: " + killSwitch);
+            throw new IOException("kernel " + KILL_FILE + " control is missing in cgroup " + name());
         }
         return killSwitch;
     }
 
     private IllegalStateException containmentFailure(String detail, Throwable cause) {
-        String message = "strong cgroup containment cleanup failed for " + directory + ": " + detail;
-        return cause == null ? new IllegalStateException(message) : new IllegalStateException(message, cause);
+        String message = "strong cgroup containment cleanup failed for cgroup " + name() + ": " + detail;
+        return cause == null
+                ? new IllegalStateException(message)
+                : new IllegalStateException(message, redactCause(cause, directory.getParent()));
+    }
+
+    /**
+     * Returns the cause to attach to a failure leaving this class, without any absolute path.
+     *
+     * <p>A failure whose chain (message, causes, suppressed failures) carries no path is attached as
+     * it is, and an {@link InterruptedException} always is: the orchestration looks for it in the
+     * cause chain to persist an interrupted, resumable run. Only a failure that carries a path is
+     * re-expressed as a {@link RedactedCause}, which keeps its stack trace, the fully qualified name
+     * of its class, and its causes and suppressed failures, each redacted the same way.</p>
+     */
+    static Throwable redactCause(Throwable cause, Path root) {
+        return redactCause(cause, root, identitySet(), 0);
+    }
+
+    private static Throwable redactCause(Throwable cause, Path root, Set<Throwable> visiting, int depth) {
+        if (cause == null || cause instanceof InterruptedException) return cause;
+        if (!carriesPath(cause, root, identitySet(), 0)) return cause;
+        if (depth >= MAX_REDACTION_DEPTH || !visiting.add(cause)) {
+            // A pathological (cyclic or very deep) chain is cut rather than leaked.
+            return new RedactedCause(cause, root, null);
+        }
+        Throwable next = cause.getCause() == cause ? null : cause.getCause();
+        RedactedCause copy = new RedactedCause(cause, root, redactCause(next, root, visiting, depth + 1));
+        for (Throwable suppressed : cause.getSuppressed()) {
+            copy.addSuppressed(redactCause(suppressed, root, visiting, depth + 1));
+        }
+        return copy;
+    }
+
+    private static boolean carriesPath(Throwable failure, Path root, Set<Throwable> seen, int depth) {
+        if (failure == null || !seen.add(failure)) return false;
+        if (depth >= MAX_REDACTION_DEPTH) return true;
+        String message = failure.getMessage();
+        if (message != null && !redactPaths(message, root).equals(message)) return true;
+        if (failure.getCause() != failure && carriesPath(failure.getCause(), root, seen, depth + 1)) return true;
+        for (Throwable suppressed : failure.getSuppressed()) {
+            if (carriesPath(suppressed, root, seen, depth + 1)) return true;
+        }
+        return false;
+    }
+
+    private static Set<Throwable> identitySet() {
+        return java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    }
+
+    /** The cgroup directory name, which is how diagnostics designate this job (never by absolute path). */
+    String name() {
+        return String.valueOf(directory.getFileName());
+    }
+
+    /** The delegated root as a cgroup path relative to the cgroup mount (its name outside the mount). */
+    static String displayRoot(Path root) {
+        Path normalized = root.toAbsolutePath().normalize();
+        if (normalized.equals(CGROUP_MOUNT)) return "/";
+        if (normalized.startsWith(CGROUP_MOUNT)) return CGROUP_MOUNT.relativize(normalized).toString();
+        return String.valueOf(normalized.getFileName());
+    }
+
+    /**
+     * Renders a failure and its causes for the journal with every absolute path rewritten relative to
+     * the delegated root (or to the cgroup mount). The failure itself is never attached to a record,
+     * because a JDK file-system exception carries the absolute path in its message.
+     */
+    static String describeFailure(Throwable failure, Path root) {
+        StringBuilder text = new StringBuilder();
+        Throwable current = failure;
+        for (int depth = 0; current != null && depth < MAX_DESCRIBED_CAUSES; depth++) {
+            if (depth > 0) text.append("; caused by ");
+            text.append(current instanceof RedactedCause
+                    ? current.getMessage()
+                    : current.getClass().getSimpleName() + ": " + redactPaths(current.getMessage(), root));
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return text.toString();
+    }
+
+    /** Rewrites the delegated root, then the cgroup mount, out of a diagnostic text. */
+    static String redactPaths(String text, Path root) {
+        if (text == null) return "";
+        String result = text;
+        if (root != null) {
+            Path normalized = root.toAbsolutePath().normalize();
+            String absolute = normalized.toString();
+            result = result.replace(absolute + normalized.getFileSystem().getSeparator(), "")
+                    .replace(absolute, displayRoot(normalized));
+        }
+        String mount = CGROUP_MOUNT.toString();
+        return result.replace(mount + CGROUP_MOUNT.getFileSystem().getSeparator(), "").replace(mount, "/");
+    }
+
+    /**
+     * A failure that carried an absolute path, re-expressed without it: its message starts with the
+     * fully qualified name of the original class, followed by the original message rewritten relative
+     * to the delegated root; its stack trace is the original one. Causes and suppressed failures are
+     * attached by {@link #redactCause}.
+     */
+    static final class RedactedCause extends Exception {
+        private static final long serialVersionUID = 1L;
+        private final String originalClassName;
+
+        RedactedCause(Throwable original, Path root, Throwable redactedCause) {
+            super(original.getClass().getName()
+                    + (original.getMessage() == null ? "" : ": " + redactPaths(original.getMessage(), root)),
+                    redactedCause, true, true);
+            this.originalClassName = original.getClass().getName();
+            setStackTrace(original.getStackTrace());
+        }
+
+        /** Fully qualified name of the class of the failure this one stands for. */
+        String originalClassName() {
+            return originalClassName;
+        }
     }
 
     @Override

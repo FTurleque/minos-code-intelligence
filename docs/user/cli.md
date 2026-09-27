@@ -364,6 +364,16 @@ minos.cmd team bootstrap --tenant <uuid> --name Team --key-id key-a `
 
 Le token retourné ensuite est placé dans `MINOS_TEAM_TOKEN`, pas persisté dans une ligne de commande partagée.
 
+Codes de sortie de `team` : toutes les options d'une opération sont validées avant le premier appel au plan de contrôle, donc une erreur d'usage ne suit jamais une mutation.
+
+```text
+0  succès
+1  erreur d'exécution : token absent ou invalide, refus RBAC, ressource introuvable, stockage indisponible
+2  erreur d'usage, avant tout appel au plan de contrôle : opération ou option inconnue, option manquante
+   ou dupliquée, valeur invalide (UUID, rôle, entier) ou hors bornes documentées — `audit --limit`
+   hors 1..10000, `--token-hours` hors 1..24, bornes de `retention-set` —, token passé en argument
+```
+
 Le contrôle tenant, RBAC, workspaces, audit, chiffrement et rétention ne constituent pas un service SaaS opéré.
 
 ## NEXUS

@@ -49,6 +49,21 @@ class HostedModelTest {
     }
 
     @Test
+    void chainedDenialAdmissionCountsRefusalsAndKeepsAuthorizedHeadroom() {
+        HostedRetentionPolicy policy = new HostedRetentionPolicy(100, 1, 1);
+        assertTrue(policy.admitsChainedDenial(0, 5_000), "authorized events never consume the refusal reserve");
+        assertTrue(policy.admitsChainedDenial(89, 89));
+        assertFalse(policy.admitsChainedDenial(90, 90));
+        assertEquals(10, policy.authorizedAuditHeadroom());
+        assertTrue(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS - 11));
+        assertFalse(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS - 10));
+        assertFalse(policy.admitsChainedDenial(0, HostedRetentionPolicy.MAX_AUDIT_EVENTS));
+        HostedRetentionPolicy largest = new HostedRetentionPolicy(HostedRetentionPolicy.MAX_AUDIT_EVENTS, 1, 1);
+        assertFalse(largest.admitsChainedDenial(0, 90_000),
+                "refusals alone can never bring the chain within a tenth of the hard capacity");
+    }
+
+    @Test
     void tenantRejectsCrossTenantWorkspaceDuplicateMembersAndMissingOwner() {
         UUID tenant = UUID.randomUUID();
         HostedPrincipal owner = new HostedPrincipal("owner", "Owner", HostedRole.OWNER, NOW);
@@ -72,6 +87,35 @@ class HostedModelTest {
                 List.of(first, second)));
         assertThrows(IllegalArgumentException.class, () -> new SharedWorkspace(
                 UUID.randomUUID(), tenant, "shared", SharedWorkspace.Status.ARCHIVED, NOW, NOW, null, List.of()));
+    }
+
+    @Test
+    void auditEventChainingFixesTheSequenceSpaceAndOnlyRefusalsCanBeUnchained() {
+        UUID tenant = UUID.randomUUID();
+        String hash = "a".repeat(64);
+        HostedAuditEvent legacy = new HostedAuditEvent(1, tenant, NOW, "owner", "BOOTSTRAP", "TENANT", "t",
+                HostedAuditEvent.Outcome.ALLOWED, "r", "primary", HostedAuditEvent.GENESIS_HASH, hash);
+        assertEquals(HostedAuditEvent.Chaining.CHAINED, legacy.chaining(), "persisted events are chain links");
+
+        HostedAuditEvent unchained = new HostedAuditEvent(0, tenant, NOW, "viewer", "WORKSPACE_CREATE",
+                "WORKSPACE", "new", HostedAuditEvent.Outcome.DENIED, "r", "primary", HostedAuditEvent.GENESIS_HASH,
+                hash, HostedAuditEvent.Chaining.UNCHAINED);
+        assertEquals(0, unchained.sequence());
+        assertThrows(IllegalArgumentException.class, () -> new HostedAuditEvent(1, tenant, NOW, "viewer",
+                "WORKSPACE_CREATE", "WORKSPACE", "new", HostedAuditEvent.Outcome.DENIED, "r", "primary",
+                HostedAuditEvent.GENESIS_HASH, hash, HostedAuditEvent.Chaining.UNCHAINED));
+        assertThrows(IllegalArgumentException.class, () -> new HostedAuditEvent(0, tenant, NOW, "owner",
+                "BOOTSTRAP", "TENANT", "t", HostedAuditEvent.Outcome.ALLOWED, "r", "primary",
+                HostedAuditEvent.GENESIS_HASH, hash, HostedAuditEvent.Chaining.UNCHAINED));
+        assertThrows(IllegalArgumentException.class, () -> new HostedAuditEvent(0, tenant, NOW, "owner",
+                "BOOTSTRAP", "TENANT", "t", HostedAuditEvent.Outcome.ALLOWED, "r", "primary",
+                HostedAuditEvent.GENESIS_HASH, hash));
+
+        HostedPrincipal owner = new HostedPrincipal("owner", "Owner", HostedRole.OWNER, NOW);
+        IllegalArgumentException rejected = assertThrows(IllegalArgumentException.class, () ->
+                new HostedTenantState(tenant, "Tenant", "primary", 0, NOW, NOW, HostedRetentionPolicy.defaults(),
+                        List.of(owner), List.of(), 0, HostedAuditEvent.GENESIS_HASH, List.of(unchained)));
+        assertTrue(rejected.getMessage().contains("unchained"), rejected.getMessage());
     }
 
     private static HostedTenantState state(
