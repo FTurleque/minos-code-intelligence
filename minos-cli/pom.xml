@@ -51,5 +51,13 @@
             <version>${project.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <!-- A1-3 / A2: test fixtures of the composition root (no public injection point in production) -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

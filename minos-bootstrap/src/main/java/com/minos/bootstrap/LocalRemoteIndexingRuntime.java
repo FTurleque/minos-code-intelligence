@@ -27,8 +27,17 @@ import java.util.function.Supplier;
  * {@link DistributedIndexerExecutor} et sélection {@link WorkerSandboxBackends#selectForUntrustedCode}.
  *
  * <p>La production passe par {@link #production(Path)}, qui sonde toujours l'hôte réel. Le constructeur
- * public ne sert qu'aux tests qui doivent faire atteindre le transport à leur worker : il exige une
- * sélection explicite, aucune valeur ne désactive le refus anticipé (V31).</p>
+ * d'injection est package-private : le JAR de production n'offre aucun point public pour fournir une
+ * autre sélection ou une autre fabrique de workers (A1-3) ; les tests qui doivent faire atteindre le
+ * transport à leur worker passent par une fabrique des sources de test de ce package
+ * (test-jar de minos-bootstrap). Il exige une sélection explicite : aucune valeur ne désactive le
+ * refus anticipé (V31).</p>
+ *
+ * <p>Le verdict « sandbox qualifiée » transite comme un booléen
+ * ({@link WorkerSandboxProbe.UntrustedCodeSandbox#supportsUntrustedCode()}) : un runtime qui rendrait
+ * {@code true} à tort passerait le refus anticipé de {@code remote index}. Seuls ces points d'injection
+ * non publics (tests) le permettent, et le worker isolé refuse de toute façon en profondeur une
+ * sandbox non qualifiée pour du code non fiable (ADR 0041).</p>
  */
 public final class LocalRemoteIndexingRuntime implements RemoteIndexingRuntime {
 
@@ -51,7 +60,7 @@ public final class LocalRemoteIndexingRuntime implements RemoteIndexingRuntime {
                 () -> WorkerSandboxBackends.selectForUntrustedCode(home));
     }
 
-    public LocalRemoteIndexingRuntime(
+    LocalRemoteIndexingRuntime(
             DistributedArtifactBundleStore artifactStore,
             WorkerFactory workerFactory,
             Supplier<WorkerSandboxSelection> untrustedCodeSandbox

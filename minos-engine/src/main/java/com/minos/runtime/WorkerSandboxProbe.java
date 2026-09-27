@@ -32,6 +32,10 @@ public interface WorkerSandboxProbe {
     }
 
     /**
+     * Verdict de la sélection pour du code non fiable. {@code supportsUntrustedCode} ouvre le chemin
+     * de {@code remote index} : il n'est produit en production que par la sonde réelle de l'hôte
+     * (minos-bootstrap) ; seuls des points d'injection non publics (tests) peuvent en fournir un autre.
+     *
      * @param refusalReport rapport de refus sans chemin, vide quand le code non fiable est supporté
      */
     record UntrustedCodeSandbox(

@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.bootstrap.LocalRemoteIndexingRuntime;
+import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer;
@@ -64,7 +64,7 @@ class LocalRemoteIndexOperationsRefusalTest {
                 List.of(BYTES_UNMET, ENTRIES_UNMET));
         try (MinosApplication application = MinosApplication.builder(home).build()) {
             LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                    application, materializer, new LocalRemoteIndexingRuntime(new DistributedArtifactBundleStore(home),
+                    application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(new DistributedArtifactBundleStore(home),
                             (workerId, delegate, store) -> {
                                 throw new AssertionError("no worker may be created when remote indexing is refused");
                             },
@@ -134,7 +134,7 @@ class LocalRemoteIndexOperationsRefusalTest {
     void aMissingSandboxSelectionIsRejectedInsteadOfDisablingTheEarlyRefusal(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
         try (MinosApplication application = MinosApplication.builder(home).build()) {
-            NullPointerException failure = assertThrows(NullPointerException.class, () -> new LocalRemoteIndexingRuntime(
+            NullPointerException failure = assertThrows(NullPointerException.class, () -> LocalRemoteIndexingRuntimeFixtures.withSelection(
                     new DistributedArtifactBundleStore(home),
                     (workerId, delegate, store) -> {
                         throw new AssertionError("no worker may be created");
@@ -164,7 +164,7 @@ class LocalRemoteIndexOperationsRefusalTest {
         };
         try (MinosApplication application = MinosApplication.builder(home).build()) {
             LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                    application, materializer, new LocalRemoteIndexingRuntime(new DistributedArtifactBundleStore(home),
+                    application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(new DistributedArtifactBundleStore(home),
                             (workerId, delegate, store) -> {
                                 throw new AssertionError("not reached in this test");
                             },

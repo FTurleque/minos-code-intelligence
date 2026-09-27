@@ -1,7 +1,7 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.bootstrap.LocalRemoteIndexingRuntime;
+import com.minos.bootstrap.LocalRemoteIndexingRuntimeFixtures;
 import com.minos.discovery.ProjectDiscovery.BuildSystem;
 import com.minos.discovery.ProjectDiscovery.Language;
 import com.minos.orchestration.IndexerCapability;
@@ -75,7 +75,7 @@ class LocalRemoteIndexOperationsIntegrationTest {
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
                 application,
                 ignored -> materialization,
-                new LocalRemoteIndexingRuntime(
+                LocalRemoteIndexingRuntimeFixtures.withSelection(
                         store,
                         (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
                         QualifiedSandboxForTests.selection()));
@@ -139,7 +139,7 @@ class LocalRemoteIndexOperationsIntegrationTest {
 
         DistributedArtifactBundleStore store = new DistributedArtifactBundleStore(home);
         LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                application, materializer, new LocalRemoteIndexingRuntime(store,
+                application, materializer, LocalRemoteIndexingRuntimeFixtures.withSelection(store,
                         (workerId, delegate, artifactStore) -> {
                             throw new AssertionError("worker must never be created when the lease is never acquired");
                         },

@@ -17,7 +17,12 @@ import java.util.Objects;
  */
 public interface RemoteIndexingRuntime {
 
-    /** Sélection de sandbox pour du code distant non fiable, évaluée à chaque appel. */
+    /**
+     * Sélection de sandbox pour du code distant non fiable, évaluée à chaque appel. Le verdict est un
+     * booléen : une implémentation qui le rendrait vrai à tort passerait le refus anticipé ; seule
+     * l'implémentation de production (minos-bootstrap, sonde réelle de l'hôte, sans point d'injection
+     * public) est câblée, et le worker isolé refuse en profondeur une sandbox non qualifiée.
+     */
     WorkerSandboxProbe.UntrustedCodeSandbox untrustedCodeSandbox();
 
     /** Exécuteur distribué qui confie {@code delegate} à un worker et ne rend que des artefacts vérifiés. */

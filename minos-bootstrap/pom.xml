@@ -89,6 +89,25 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <!--
+                  A1-3 / A2: test fixtures (LocalRemoteIndexingRuntimeFixtures) are published as a test-jar
+                  for the minos-cli tests, so the production jar keeps no public injection point.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven.jar.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals><goal>test-jar</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <profiles>
         <!-- Same Docker Desktop hints as minos-storage-postgresql, for the PostgreSQL tests above. -->
         <profile>
