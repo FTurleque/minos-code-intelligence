@@ -17,8 +17,12 @@ Conditions attachées à la décision (chacune prouvée par un test ou par le sc
 
 1. `minos-bootstrap` est le seul module non adaptateur qui connaît une classe concrète d'adaptateur
    (hors `minos-app`, assemblage final) ; `scripts/architecture/check-module-boundaries.py` l'écrit
-   explicitement : `application ↛ adaptateurs`, `adaptateurs ↛ application`, `surfaces ↛ adaptateurs`, et
-   `surfaces → minos-bootstrap` en portée `runtime` ou `test` seulement, jamais `compile`.
+   explicitement : `application ↛ adaptateurs`, `adaptateurs ↛ application`, `surfaces ↛ adaptateurs`
+   (toutes portées confondues, `test` compris), et `surfaces → minos-bootstrap` en portée `runtime` ou
+   `test` seulement, jamais `compile`. Un contrôle des sources complète les règles POM : aucune classe de
+   production de `minos-application`, des surfaces ni de `minos-app` ne nomme une classe d'adaptateur (par
+   import simple, statique ou joker d'un package d'adaptateur, par nom pleinement qualifié, ou par nom
+   simple d'un package partagé avec un adaptateur ; commentaires et littéraux ignorés).
 2. Découverte en échec rapide et déterministe : aucune implémentation → message qui nomme le module
    manquant ; plusieurs → refus, jamais un choix arbitraire ; aucun chemin dans les messages
    (`MinosApplicationComposersTest`).
@@ -29,7 +33,7 @@ Conditions attachées à la décision (chacune prouvée par un test ou par le sc
    runtime `jpackage` lui-même.
 4. `docs/user/java-api.md` indique que `minos-bootstrap` est requis au classpath de l'API Java embarquée.
 
-Relu sur la branche `hautes/impl-hexagone` au commit `00b2236a`.
+Relu sur la branche `hautes/impl-hexagone` au commit `22add2af` (tour 3 et ronde 4 de vérification).
 
 ## 1. Contexte
 
@@ -115,9 +119,10 @@ câblage (ou vers l'adaptateur qu'elles testent).
   PostgreSQL doit rester fusionné dans le jar ombré (`ServicesResourceTransformer`, déjà en place).
 - API publique `minos-api` : les constructeurs `LocalMinosApi(Path)`, `LocalMinosMultiRepositoryApi(Path)`,
   `LocalProviderPlatformApi(Path)` et `MinosMcpTools(Path)` doivent continuer de fonctionner.
-- `check-module-boundaries.py` durci (prêt, non engagé) : `minos-application` ne dépend d'aucun
-  adaptateur, aucun adaptateur ne dépend de `minos-application`, toutes portées confondues, et aucune
-  dépendance interne cachée dans `<profiles>` ou `<dependencyManagement>`.
+- `check-module-boundaries.py` durci (engagé à la clôture du tour 3, voir § 8) : `minos-application` ne
+  dépend d'aucun adaptateur, aucun adaptateur ne dépend de `minos-application`, toutes portées confondues,
+  aucune dépendance interne cachée dans `<profiles>` ou `<dependencyManagement>`, et le contrôle des
+  sources de la condition 1.
 
 ## 3. Options
 
@@ -247,6 +252,21 @@ tests hors de leur module.
   `FileFingerprint.requireSha256` (engine) par `FileProjectFingerprintSnapshotStore` (storage-local) et
   `ProjectChangeSet` (application). Cela fonctionne sur le classpath (même chargeur, JAR non scellés) mais
   interdit un passage à JPMS tant que A3 n'est pas traité.
+- **Chargeur du `ServiceLoader` des backends de stockage (préexistant, renvoyé en suite)** :
+  `StorageBackendSelection` (déplacé verbatim de `StorageBackends`, où l'appel existait déjà sur la base
+  `5b26631c`) découvre `StorageBackendProvider` (PostgreSQL) par `ServiceLoader.load(Class)`, donc par le
+  chargeur de contexte du thread, alors que la racine de composition est découverte par le chargeur qui a
+  chargé MINOS (V48a). Un hôte embarqué qui positionne un autre chargeur de contexte peut donc voir la
+  composition sans voir le backend PostgreSQL. Incohérence non modifiée ici (aucun changement de
+  comportement) ; à aligner dans une suite dédiée, avec son propre test.
+- **Le verdict « sandbox qualifiée » est un booléen** : `WorkerSandboxProbe.UntrustedCodeSandbox` et
+  `RemoteIndexingRuntime.untrustedCodeSandbox()` le transportent dans un record public de `minos-engine`.
+  Un runtime qui rendrait `true` à tort passerait le refus anticipé de `remote index`. Seuls des points
+  d'injection non publics le permettent : le constructeur de `LocalRemoteIndexingRuntime` est
+  package-private et la fabrique `LocalRemoteIndexingRuntimeFixtures` n'existe que dans le test-jar de
+  `minos-bootstrap` (tests de `minos-cli`) ; le JAR de production n'offre que `production(home)`, qui
+  sonde l'hôte réel (`LocalRemoteIndexingRuntimeInjectionTest`). En profondeur, le worker isolé refuse de
+  toute façon une sandbox non qualifiée pour du code non fiable (ADR 0041).
 
 ## 7. Mise en œuvre (tour 2)
 
@@ -268,11 +288,55 @@ caractérisation identiques par SHA-256 (seule exception : V41, qui a réduit le
 - surfaces : `minos-bootstrap` en portée `runtime` (cli, api, mcp) ou `test` (nexus) ; `minos-api`,
   `minos-nexus` et `minos-mcp` ne dépendent plus d'aucun adaptateur.
 
-**Reste ouvert — lot `minos-cli ↛ adaptateurs`** (chiffré, en attente d'accord) : `minos-cli` garde
-`minos-runtime-local` et `minos-integration-git` pour trois classes de production —
-`RunDirectoryResumableRunMarkers` (marqueurs de run R1, à fournir par la composition),
-`DoctorCommand` (sonde des sandboxes `WorkerSandboxBackends` et `CommandLocator`, à passer derrière un port)
-et `LocalRemoteIndexOperations` (câblage de l'indexation distante M25 : `JGitRemoteRepositoryMaterializer`,
-`DistributedArtifactBundleStore`, `LocalIsolatedIndexWorker`, `DistributedIndexerExecutor`,
-`WorkerSandboxSelection`). Tant qu'il n'est pas fait, le script de frontières durci reste rouge sur ces
-deux arêtes et n'est pas engagé.
+Le lot `minos-cli ↛ adaptateurs`, resté ouvert à la fin du tour 2, est traité au tour 3 (§ 8).
+
+## 8. Mise en œuvre (tour 3) et arbitrages
+
+### 8.1 `minos-cli` ne dépend plus d'aucun adaptateur — sans exception temporaire
+
+Arbitrage : aucune exception, même temporaire, n'est inscrite dans le script de frontières pour
+`minos-cli`. **Raison** : une exception temporaire dans un script de frontières devient permanente ; les
+trois classes concernées sont donc passées par la composition avant l'engagement du script.
+
+- `RunDirectoryResumableRunMarkers` (L1) déménage dans `minos-bootstrap` ; l'application l'obtient par
+  `MinosApplicationComposer.resumableRunMarkers(home)` (via `MinosApplication.compositionRoot()`).
+- `DoctorCommand` (L2) sonde l'hôte par deux ports de `minos-engine`, `WorkerSandboxProbe` et
+  `HostCommandLocator`, implémentés dans `minos-bootstrap` ; en production il sonde toujours l'hôte
+  réel, seuls ses tests injectent un double (seam package-private), et un test prouve le câblage réel.
+- `LocalRemoteIndexOperations` (L3) reçoit le matérialiseur JGit et le port `RemoteIndexingRuntime`
+  (`LocalRemoteIndexingRuntime` dans `minos-bootstrap`) de la composition. Garde-fous A1 conservés :
+  `remote index` refuse avant toute matérialisation, bail, enregistrement ou épinglage ; le constructeur
+  de production n'a pas de sentinelle ; un test exerce le câblage de production réel ; aucun point
+  d'injection public (§ 6).
+- Le POM de `minos-cli` ne déclare plus `minos-runtime-local` ni `minos-integration-git`, dans aucune
+  portée ; il ne garde que `minos-bootstrap` en `runtime` et son test-jar en `test`.
+
+### 8.2 `minos-app` passe par des ports — POM légitime, pas le source
+
+Arbitrage : `minos-app` garde ses dépendances POM vers les adaptateurs, mais son code n'en nomme aucun.
+**Raison** : le POM de `minos-app` est légitime — c'est l'assemblage final qui décide quels adaptateurs
+(et backends optionnels) sont livrés dans le JAR ombré ; son source, en revanche, relève de la même règle
+que les surfaces. `DockerMcpTransport` passe par `HostCommandLocator` et `DockerRuntimeBootstrap` par
+`ProjectPathMappings` (port de `minos-engine`, implémenté par `ProjectPathMappingStore`), tous deux
+fournis par la composition ; aucun port n'expose de type d'adaptateur. Le contrôle des sources
+(condition 1) le verrouille, `minos-app` compris.
+
+### 8.3 Limite connue du script : dépendances transitives de test (V47)
+
+Les tests de `minos-cli` (et des autres surfaces) utilisent encore des types d'adaptateurs
+(`ProcessIndexerExecutor`, `WorkerSandboxBackends`, `GitIntelligenceService`…) : ils les voient par
+transitivité, via `minos-bootstrap` en portée `runtime`, que Maven inclut dans le classpath de test.
+C'est permis et assumé. Le script ne contrôle que les dépendances **directes** des POM et les sources de
+**production** (`src/main/java`) : il ne voit ni ces dépendances transitives de test, ni les sources de
+test. Toute dépendance directe surface → adaptateur reste refusée, `test` compris ; un test qui ne
+compilerait pas sans une telle déclaration se déplace vers le module qui teste la chose (`minos-bootstrap`
+ou l'adaptateur).
+
+### 8.4 Engagement du script durci
+
+`scripts/architecture/check-module-boundaries.py` durci est engagé au vert (`hexagonalPolicy=A2-ADR-0042`),
+jamais assoupli, sans exception. Rouge prouvé avant chaque correction (arêtes POM `minos-cli →
+minos-integration-git/minos-runtime-local [compile]`, 13 violations de source au début du tour 3), et
+auto-test de chaque règle (import, import statique, joker, nom pleinement qualifié, nom simple d'un
+package partagé → refus ; commentaire, littéral, port d'un package partagé, `minos-bootstrap` → accepté ;
+surface → adaptateur refusé en `compile`, `runtime`, `test` et `provided`).
