@@ -33,9 +33,7 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
     "minos-engine": frozenset({"minos-domain"}),
     "minos-runtime-local": frozenset({"minos-engine"}),
     "minos-storage-local": frozenset({"minos-engine"}),
-    "minos-storage-postgresql": frozenset({
-        "minos-domain", "minos-engine", "minos-storage-local", "minos-application"
-    }),
+    "minos-storage-postgresql": frozenset({"minos-domain", "minos-engine", "minos-storage-local"}),
     "minos-provider-scip": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local"
     }),
