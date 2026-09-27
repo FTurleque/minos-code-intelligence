@@ -49,9 +49,7 @@ flowchart LR
     minos_cli --> minos_bootstrap
     minos_cli --> minos_domain
     minos_cli --> minos_engine
-    minos_cli --> minos_integration_git
     minos_cli --> minos_nexus
-    minos_cli --> minos_runtime_local
     minos_api --> minos_application
     minos_api --> minos_bootstrap
     minos_api --> minos_domain
@@ -87,7 +85,7 @@ flowchart LR
 | `minos-application` | `minos-domain`, `minos-engine` |
 | `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
 | `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain` |
-| `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-nexus`, `minos-runtime-local` |
+| `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-nexus` |
 | `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-mcp` | `minos-application`, `minos-bootstrap` |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |

@@ -31,16 +31,6 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-integration-git</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-runtime-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
             <artifactId>minos-nexus</artifactId>
             <version>${project.version}</version>
         </dependency>
