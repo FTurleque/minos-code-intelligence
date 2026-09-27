@@ -48,7 +48,7 @@ public record WorkerSandboxSelection(
     public WorkerSandboxSelection {
         Objects.requireNonNull(backend, "backend");
         Objects.requireNonNull(cause, "cause");
-        rejectedBackendId = rejectedBackendId == null ? Optional.empty() : rejectedBackendId;
+        Objects.requireNonNull(rejectedBackendId, "rejectedBackendId");
         rejectionReasons = rejectionReasons == null ? List.of() : List.copyOf(rejectionReasons);
         if (cause == Cause.QUALIFIED && !backend.supportsUntrustedCode()) {
             throw new IllegalArgumentException("a QUALIFIED selection requires a backend qualified for untrusted code");

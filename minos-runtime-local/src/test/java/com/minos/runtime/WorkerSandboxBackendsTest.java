@@ -20,6 +20,7 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -280,5 +281,14 @@ class WorkerSandboxBackendsTest {
             logger.removeHandler(handler);
         }
         return records;
+    }
+
+    @Test
+    void aSelectionRejectsANullOptionalInsteadOfSilentlyReplacingIt() {
+        assertThrows(NullPointerException.class, () -> new WorkerSandboxSelection(
+                WorkerSandboxBackend.nativeEphemeralWorkspace(),
+                WorkerSandboxSelection.Cause.NOT_QUALIFIED,
+                null,
+                List.of()));
     }
 }

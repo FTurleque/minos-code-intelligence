@@ -76,7 +76,7 @@ public final class DoctorCommand {
             Objects.requireNonNull(managedLocalBackend, "managedLocalBackend");
             Objects.requireNonNull(untrustedCodeBackend, "untrustedCodeBackend");
             Objects.requireNonNull(cause, "cause");
-            rejectedBackend = rejectedBackend == null ? Optional.empty() : rejectedBackend;
+            Objects.requireNonNull(rejectedBackend, "rejectedBackend");
             reasons = reasons == null ? List.of() : List.copyOf(reasons);
             reason = reason == null ? "" : reason;
         }

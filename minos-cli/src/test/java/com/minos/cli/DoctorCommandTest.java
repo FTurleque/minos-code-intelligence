@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -173,5 +174,11 @@ class DoctorCommandTest {
                 throw new AssertionError("installProvider must not be called");
             }
         };
+    }
+
+    @Test
+    void aWorkerSandboxReportRejectsANullOptionalInsteadOfSilentlyReplacingIt() {
+        assertThrows(NullPointerException.class, () -> new DoctorCommand.WorkerSandboxReport(
+                "native", true, "native", false, "NOT_QUALIFIED", null, List.of(), ""));
     }
 }
