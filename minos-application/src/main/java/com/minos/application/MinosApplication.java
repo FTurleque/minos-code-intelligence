@@ -17,6 +17,7 @@ import com.minos.incremental.ProjectInvalidationService;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexerRegistry;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
@@ -81,6 +82,7 @@ public final class MinosApplication implements AutoCloseable {
     private final IncrementalIndexingPlanner incrementalIndexingPlanner;
     private final ProviderRuntimeManager providerRuntimeManager;
     private final List<IndexerDescriptor> indexerDescriptors;
+    private final IndexerProviderCatalog providerCatalog;
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
     private final GitIntelligenceService gitIntelligence;
@@ -115,6 +117,7 @@ public final class MinosApplication implements AutoCloseable {
             IncrementalIndexingPlanner incrementalIndexingPlanner,
             ProviderRuntimeManager providerRuntimeManager,
             List<IndexerDescriptor> indexerDescriptors,
+            IndexerProviderCatalog providerCatalog,
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
             GitIntelligenceService gitIntelligence,
@@ -138,6 +141,7 @@ public final class MinosApplication implements AutoCloseable {
         this.incrementalIndexingPlanner = Objects.requireNonNull(incrementalIndexingPlanner, "incrementalIndexingPlanner");
         this.providerRuntimeManager = Objects.requireNonNull(providerRuntimeManager, "providerRuntimeManager");
         this.indexerDescriptors = List.copyOf(Objects.requireNonNull(indexerDescriptors, "indexerDescriptors"));
+        this.providerCatalog = Objects.requireNonNull(providerCatalog, "providerCatalog");
         this.snapshotStager = Objects.requireNonNull(snapshotStager, "snapshotStager");
         this.snapshotPromoter = Objects.requireNonNull(snapshotPromoter, "snapshotPromoter");
         this.gitIntelligence = Objects.requireNonNull(gitIntelligence, "gitIntelligence");
@@ -220,6 +224,8 @@ public final class MinosApplication implements AutoCloseable {
     public IncrementalIndexingPlanner incrementalIndexingPlanner() { return incrementalIndexingPlanner; }
     public ProviderRuntimeManager providerRuntimeManager() { return providerRuntimeManager; }
     public List<IndexerDescriptor> indexerDescriptors() { return indexerDescriptors; }
+    /** Port du catalogue de providers ; consulté à la demande, jamais figé à la composition. */
+    public IndexerProviderCatalog providerCatalog() { return providerCatalog; }
     public SnapshotStager snapshotStager() { return snapshotStager; }
     public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
     public GitIntelligenceService gitIntelligence() { return gitIntelligence; }
@@ -290,6 +296,7 @@ public final class MinosApplication implements AutoCloseable {
         IncrementalIndexingPlanner incrementalIndexingPlanner;
         ProviderRuntimeManager providerRuntimeManager;
         List<IndexerDescriptor> indexerDescriptors;
+        IndexerProviderCatalog providerCatalog;
         SnapshotStager snapshotStager;
         SnapshotPromoter snapshotPromoter;
         GitIntelligenceService gitIntelligence;
@@ -384,6 +391,11 @@ public final class MinosApplication implements AutoCloseable {
 
         public Builder indexerDescriptors(List<IndexerDescriptor> value) {
             this.indexerDescriptors = List.copyOf(Objects.requireNonNull(value));
+            return this;
+        }
+
+        public Builder providerCatalog(IndexerProviderCatalog value) {
+            this.providerCatalog = Objects.requireNonNull(value);
             return this;
         }
 

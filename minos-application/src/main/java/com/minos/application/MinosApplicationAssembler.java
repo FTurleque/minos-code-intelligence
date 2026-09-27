@@ -17,6 +17,7 @@ import com.minos.incremental.ProjectInvalidationService;
 import com.minos.io.PrivateLocalStorage;
 import com.minos.orchestration.IndexStateStore;
 import com.minos.orchestration.IndexerDescriptor;
+import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.program.analysis.ProgramGraphProvider;
@@ -87,6 +88,10 @@ final class MinosApplicationAssembler {
                     ? builder.incrementalIndexingPlanner : new IncrementalIndexingPlanner();
             List<IndexerDescriptor> effectiveDescriptors = builder.indexerDescriptors != null
                     ? builder.indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM24Descriptors());
+            // Référence de méthode : le catalogue n'est lu qu'à la demande (ProviderPlatformService.defaults),
+            // exactement comme l'appel direct qu'il remplace.
+            IndexerProviderCatalog effectiveProviderCatalog = builder.providerCatalog != null
+                    ? builder.providerCatalog : ScipIndexerCatalog::qualifiedM24Providers;
             ProviderRuntimeManager effectiveProviderRuntime = builder.providerRuntimeManager != null
                     ? builder.providerRuntimeManager
                     : new CompositeProviderRuntimeManager(List.of(
@@ -128,6 +133,7 @@ final class MinosApplicationAssembler {
                     effectivePlanner,
                     effectiveProviderRuntime,
                     effectiveDescriptors,
+                    effectiveProviderCatalog,
                     effectiveStager,
                     effectivePromoter,
                     effectiveGit,
