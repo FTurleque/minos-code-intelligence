@@ -9,12 +9,15 @@ import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.application.MinosApplicationComposer;
 import com.minos.git.GitIntelligence;
 import com.minos.git.GitIntelligenceService;
+import com.minos.git.JGitRemoteRepositoryMaterializer;
 import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.remote.RemoteIndexingRuntime;
+import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -123,5 +126,17 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public HostCommandLocator hostCommandLocator() {
         return new LocalHostCommandLocator();
+    }
+
+    /** Déplacé de minos-cli (LocalRemoteIndexOperations) : matérialisation JGit du MINOS_HOME. */
+    @Override
+    public RemoteRepositoryMaterializer remoteRepositoryMaterializer(Path home) throws IOException {
+        return new JGitRemoteRepositoryMaterializer(home);
+    }
+
+    /** Déplacé de minos-cli : magasin de bundles, worker isolé et sélection réelle de l'hôte. */
+    @Override
+    public RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException {
+        return LocalRemoteIndexingRuntime.production(home);
     }
 }

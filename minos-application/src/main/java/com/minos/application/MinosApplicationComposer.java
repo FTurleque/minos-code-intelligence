@@ -9,6 +9,8 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.remote.RemoteIndexingRuntime;
+import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.runtime.HostCommandLocator;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.runtime.WorkerSandboxProbe;
@@ -75,6 +77,15 @@ public interface MinosApplicationComposer {
 
     /** Localisation et invocation des exécutables de l'hôte réel. */
     HostCommandLocator hostCommandLocator();
+
+    /** Matérialisation des révisions distantes (M25), pour ce MINOS_HOME. */
+    RemoteRepositoryMaterializer remoteRepositoryMaterializer(Path home) throws IOException;
+
+    /**
+     * Moteur d'indexation distante (M25) pour ce MINOS_HOME : sélection de sandbox de l'hôte réel,
+     * worker isolé et transport d'artefacts vérifiés.
+     */
+    RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException;
 
     /** Préparation et promotion des snapshots, fournies ensemble. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {

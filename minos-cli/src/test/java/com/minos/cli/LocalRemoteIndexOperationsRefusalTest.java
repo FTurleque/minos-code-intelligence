@@ -1,6 +1,8 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
+import com.minos.bootstrap.LocalRemoteIndexingRuntime;
+import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
@@ -62,11 +64,11 @@ class LocalRemoteIndexOperationsRefusalTest {
                 List.of(BYTES_UNMET, ENTRIES_UNMET));
         try (MinosApplication application = MinosApplication.builder(home).build()) {
             LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                    application, materializer, new DistributedArtifactBundleStore(home),
-                    (workerId, delegate, store) -> {
-                        throw new AssertionError("no worker may be created when remote indexing is refused");
-                    },
-                    () -> rejected);
+                    application, materializer, new LocalRemoteIndexingRuntime(new DistributedArtifactBundleStore(home),
+                            (workerId, delegate, store) -> {
+                                throw new AssertionError("no worker may be created when remote indexing is refused");
+                            },
+                            () -> rejected));
             RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
 
@@ -90,9 +92,10 @@ class LocalRemoteIndexOperationsRefusalTest {
 
     /**
      * V31: the production wiring itself refuses early. {@code MinosCliRunner} builds
-     * {@code new LocalRemoteIndexOperations(app)}, which only substitutes the JGit materializer and
-     * the artifact store into the three-argument constructor exercised here; that constructor is the
-     * one that wires the real host selection. No selection is injected: the refusal must come from
+     * {@code new LocalRemoteIndexOperations(app)}, which takes the JGit materializer and the remote
+     * indexing runtime from the composition root (ADR 0042); the two-argument constructor exercised
+     * here substitutes only the materializer and keeps the production runtime, whose sandbox selection
+     * is the real host one. No selection is injected: the refusal must come from
      * {@link WorkerSandboxBackends#selectForUntrustedCode} on the current host, whatever its OS.
      */
     @Test
@@ -101,8 +104,7 @@ class LocalRemoteIndexOperationsRefusalTest {
         AtomicInteger materializeCalls = new AtomicInteger();
         RemoteRepositoryMaterializer materializer = refusingMaterializer(materializeCalls);
         try (MinosApplication application = MinosApplication.builder(home).build()) {
-            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                    application, materializer, new DistributedArtifactBundleStore(home));
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(application, materializer);
             RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
 
@@ -132,13 +134,17 @@ class LocalRemoteIndexOperationsRefusalTest {
     void aMissingSandboxSelectionIsRejectedInsteadOfDisablingTheEarlyRefusal(@TempDir Path temp) throws Exception {
         Path home = temp.resolve("home");
         try (MinosApplication application = MinosApplication.builder(home).build()) {
-            NullPointerException failure = assertThrows(NullPointerException.class, () -> new LocalRemoteIndexOperations(
-                    application, refusingMaterializer(new AtomicInteger()), new DistributedArtifactBundleStore(home),
+            NullPointerException failure = assertThrows(NullPointerException.class, () -> new LocalRemoteIndexingRuntime(
+                    new DistributedArtifactBundleStore(home),
                     (workerId, delegate, store) -> {
                         throw new AssertionError("no worker may be created");
                     },
                     null));
             assertEquals("untrustedCodeSandbox", failure.getMessage());
+            // Nor can the runtime itself be left out of the operations.
+            NullPointerException noRuntime = assertThrows(NullPointerException.class, () -> new LocalRemoteIndexOperations(
+                    application, refusingMaterializer(new AtomicInteger()), (RemoteIndexingRuntime) null));
+            assertEquals("remoteIndexingRuntime", noRuntime.getMessage());
         }
     }
 
@@ -158,11 +164,11 @@ class LocalRemoteIndexOperationsRefusalTest {
         };
         try (MinosApplication application = MinosApplication.builder(home).build()) {
             LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(
-                    application, materializer, new DistributedArtifactBundleStore(home),
-                    (workerId, delegate, store) -> {
-                        throw new AssertionError("not reached in this test");
-                    },
-                    QualifiedSandboxForTests.selection());
+                    application, materializer, new LocalRemoteIndexingRuntime(new DistributedArtifactBundleStore(home),
+                            (workerId, delegate, store) -> {
+                                throw new AssertionError("not reached in this test");
+                            },
+                            QualifiedSandboxForTests.selection()));
             RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
                     "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
 
@@ -171,6 +177,33 @@ class LocalRemoteIndexOperationsRefusalTest {
 
             assertEquals("materializer reached", failure.getMessage());
             assertEquals(1, materializeCalls.get());
+        }
+    }
+
+    /**
+     * A2 / ADR 0042 — the true production constructor {@code new LocalRemoteIndexOperations(app)}, with
+     * nothing substituted (JGit materializer and remote indexing runtime from the composition root),
+     * refuses before any lease, registration or pin on the current host.
+     */
+    @Test
+    void productionConstructorRefusesBeforeAnySideEffectOnTheCurrentHost(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        try (MinosApplication application = MinosApplication.builder(home).build()) {
+            LocalRemoteIndexOperations operations = new LocalRemoteIndexOperations(application);
+            RemoteRepositoryRequest request = RemoteRepositoryRequest.of(
+                    "https://github.com/acme/remote-fixture", "main", "a".repeat(40), null, null);
+
+            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> operations.index(
+                    request, "remote-fixture", null, "worker-one", WorkerNetworkPolicy.ALLOW));
+
+            WorkerSandboxSelection host = WorkerSandboxBackends.selectForUntrustedCode(home);
+            assertFalse(host.supportsUntrustedCode(), "ADR 0041 keeps untrusted remote code closed: " + host);
+            String message = failure.getMessage();
+            assertTrue(message.startsWith("remote index is refused before any materialization"), message);
+            assertTrue(message.contains(host.refusalReport()), message);
+            assertFalse(message.contains("/") || message.contains("\\"), "no filesystem path in the refusal: " + message);
+            assertFalse(Files.exists(home.resolve("remote-index-leases")), "no lease may be taken");
+            assertTrue(application.projectRegistry().listProjects().isEmpty(), "no project may be registered");
         }
     }
 

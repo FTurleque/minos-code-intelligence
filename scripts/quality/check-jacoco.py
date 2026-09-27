@@ -84,6 +84,8 @@ SCOPES = {
             "com/minos/runtime/DistributedArtifactCachePolicy", "com/minos/runtime/DistributedIndexerExecutor",
             "com/minos/runtime/LocalIsolatedIndexWorker", "com/minos/runtime/WorkerSandboxBackend",
             "com/minos/runtime/WorkerSandboxQualification", "com/minos/cli/LocalRemoteIndexOperations",
+            # A2 / ADR 0042: the M25 wiring LocalRemoteIndexOperations used to build moved here verbatim.
+            "com/minos/bootstrap/LocalRemoteIndexingRuntime",
             "com/minos/cli/RemoteIndexCommand",
         ),
         "line": 0.70,

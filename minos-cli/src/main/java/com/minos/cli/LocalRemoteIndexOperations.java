@@ -1,23 +1,20 @@
 package com.minos.cli;
 
 import com.minos.application.MinosApplication;
-import com.minos.git.JGitRemoteRepositoryMaterializer;
+import com.minos.application.MinosApplicationComposer;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexingRuntimePorts.IndexerExecutor;
 import com.minos.registry.ProjectRegistry;
 import com.minos.registry.RegisteredProject;
-import com.minos.remote.DistributedIndexing.Worker;
 import com.minos.remote.DistributedIndexing.WorkerNetworkPolicy;
 import com.minos.remote.IdempotentRemoteRepositoryMaterializer;
+import com.minos.remote.RemoteIndexingRuntime;
+import com.minos.remote.RemoteIndexingRuntime.DistributedExecution;
+import com.minos.remote.RemoteIndexingRuntime.VerifiedArtifactEvidence;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.remote.RemoteRepositoryMaterializer.RemoteMaterialization;
 import com.minos.remote.RemoteRepositoryRequest;
-import com.minos.runtime.DistributedArtifactBundleStore;
-import com.minos.runtime.DistributedArtifactBundleStore.VerifiedArtifact;
-import com.minos.runtime.DistributedIndexerExecutor;
-import com.minos.runtime.WorkerSandboxBackends;
-import com.minos.runtime.WorkerSandboxSelection;
-import com.minos.runtime.LocalIsolatedIndexWorker;
+import com.minos.runtime.WorkerSandboxProbe;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,7 +22,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -44,45 +40,40 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
 
     private final MinosApplication application;
     private final RemoteRepositoryMaterializer materializer;
-    private final DistributedArtifactBundleStore artifactStore;
-    private final WorkerFactory workerFactory;
     /**
      * Never null: every composition goes through the early refusal. Production wires the real host
-     * selection; a test that wants the transport to reach its worker injects a qualified selection
-     * explicitly, there is no value that skips the check.
+     * selection (composition root, ADR 0042); a test that wants the transport to reach its worker
+     * injects a runtime with a qualified selection explicitly, there is no value that skips the check.
      */
-    private final Supplier<WorkerSandboxSelection> untrustedCodeSandbox;
+    private final RemoteIndexingRuntime runtime;
     private final Map<String, IndexerDescriptor> descriptors;
 
     public LocalRemoteIndexOperations(MinosApplication application) throws IOException {
-        this(application, new JGitRemoteRepositoryMaterializer(application.home()),
-                new DistributedArtifactBundleStore(application.home()));
+        this(application, application.compositionRoot());
+    }
+
+    /** Materializer then runtime, created in this order by the composition root, as before ADR 0042. */
+    private LocalRemoteIndexOperations(MinosApplication application, MinosApplicationComposer compositionRoot)
+            throws IOException {
+        this(application, compositionRoot.remoteRepositoryMaterializer(application.home()),
+                compositionRoot.remoteIndexingRuntime(application.home()));
+    }
+
+    /** Production runtime (real host selection) with a substituted materializer: tests only. */
+    LocalRemoteIndexOperations(MinosApplication application, RemoteRepositoryMaterializer materializer)
+            throws IOException {
+        this(application, materializer, application.compositionRoot().remoteIndexingRuntime(application.home()));
     }
 
     LocalRemoteIndexOperations(
             MinosApplication application,
             RemoteRepositoryMaterializer materializer,
-            DistributedArtifactBundleStore artifactStore
-    ) {
-        this(application, materializer, artifactStore,
-                (workerId, delegate, store) -> new LocalIsolatedIndexWorker(
-                        workerId, application.home(), delegate, store),
-                () -> WorkerSandboxBackends.selectForUntrustedCode(application.home()));
-    }
-
-    LocalRemoteIndexOperations(
-            MinosApplication application,
-            RemoteRepositoryMaterializer materializer,
-            DistributedArtifactBundleStore artifactStore,
-            WorkerFactory workerFactory,
-            Supplier<WorkerSandboxSelection> untrustedCodeSandbox
+            RemoteIndexingRuntime runtime
     ) {
         this.application = Objects.requireNonNull(application, "application");
         this.materializer = IdempotentRemoteRepositoryMaterializer.wrap(
                 Objects.requireNonNull(materializer, "materializer"));
-        this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
-        this.workerFactory = Objects.requireNonNull(workerFactory, "workerFactory");
-        this.untrustedCodeSandbox = Objects.requireNonNull(untrustedCodeSandbox, "untrustedCodeSandbox");
+        this.runtime = Objects.requireNonNull(runtime, "remoteIndexingRuntime");
         this.descriptors = application.indexerDescriptors().stream().collect(Collectors.toUnmodifiableMap(
                 IndexerDescriptor::id, descriptor -> descriptor));
     }
@@ -118,12 +109,12 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
      * remote code. The message carries backend identifiers and dimension codes only, never a path.
      */
     private void refuseUnlessUntrustedCodeSandboxIsQualified() {
-        WorkerSandboxSelection selection = Objects.requireNonNull(
-                untrustedCodeSandbox.get(), "untrusted-code sandbox selection");
+        WorkerSandboxProbe.UntrustedCodeSandbox selection = Objects.requireNonNull(
+                runtime.untrustedCodeSandbox(), "untrusted-code sandbox selection");
         if (selection.supportsUntrustedCode()) return;
         throw new IllegalStateException(
                 "remote index is refused before any materialization: sandbox backend "
-                        + selection.backend().id()
+                        + selection.backendId()
                         + " is not qualified for untrusted remote code on the current platform; "
                         + selection.refusalReport());
     }
@@ -143,7 +134,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
             String workerId,
             WorkerNetworkPolicy workerNetworkPolicy
     ) throws Exception {
-        List<DistributedIndexerExecutor> distributedExecutors = new ArrayList<>();
+        List<DistributedExecution> distributedExecutors = new ArrayList<>();
         RegisteredProject project = null;
         boolean newlyRegistered = false;
         boolean pinned = false;
@@ -165,10 +156,9 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 if (descriptor == null) {
                     throw new IllegalStateException("remote execution has no descriptor for provider: " + delegate.indexerId());
                 }
-                Worker worker = Objects.requireNonNull(
-                        workerFactory.create(workerId, delegate, artifactStore), "workerFactory result");
-                DistributedIndexerExecutor distributed = new DistributedIndexerExecutor(
-                        descriptor.id(), descriptor.version(), source, workerNetworkPolicy, worker, artifactStore);
+                DistributedExecution distributed = Objects.requireNonNull(runtime.distribute(
+                        descriptor.id(), descriptor.version(), source, workerNetworkPolicy, workerId, delegate),
+                        "distributed execution");
                 distributedExecutors.add(distributed);
                 return distributed;
             };
@@ -177,7 +167,7 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
 
             List<ArtifactEvidence> evidence = distributedExecutors.stream()
                     .flatMap(executor -> {
-                        List<VerifiedArtifact> verified = executor.verifiedArtifacts();
+                        List<VerifiedArtifactEvidence> verified = executor.verifiedArtifacts();
                         if (verified.isEmpty()) {
                             throw new IllegalStateException(
                                     "distributed provider completed without verified artifact evidence");
@@ -228,9 +218,9 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         return Objects.requireNonNull(result, "remote index result");
     }
 
-    private static Exception closeExecutors(List<DistributedIndexerExecutor> executors) {
+    private static Exception closeExecutors(List<DistributedExecution> executors) {
         Exception failure = null;
-        for (DistributedIndexerExecutor executor : executors) {
+        for (DistributedExecution executor : executors) {
             try {
                 executor.close();
             } catch (Exception exception) {
@@ -253,17 +243,12 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
                 value.cacheKey(), value.cacheHit(), value.materializedAt().toString());
     }
 
-    private static ArtifactEvidence evidence(VerifiedArtifact value) {
+    private static ArtifactEvidence evidence(VerifiedArtifactEvidence value) {
         var manifest = value.manifest();
         return new ArtifactEvidence(
                 manifest.providerId(), manifest.providerVersion(), manifest.language().name(), manifest.workerId(),
                 manifest.isolation().name(), manifest.networkPolicy().name(), manifest.networkDenyEnforced(),
                 manifest.artifactSha256(), value.bundleSha256(), value.cacheKey(), value.cacheHit(),
                 manifest.projectRelativeRoot());
-    }
-
-    @FunctionalInterface
-    interface WorkerFactory {
-        Worker create(String workerId, IndexerExecutor delegate, DistributedArtifactBundleStore store);
     }
 }
