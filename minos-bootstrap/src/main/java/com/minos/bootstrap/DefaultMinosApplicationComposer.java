@@ -19,7 +19,6 @@ import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.storage.LocalStorageBackend;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
-import com.minos.storage.StorageBackendProvider;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.EnvironmentHostedTenantKeyProvider;
 import com.minos.store.FileHostedControlPlaneStore;
@@ -27,7 +26,6 @@ import com.minos.store.FileHostedControlPlaneStore;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.ServiceLoader;
 
 /**
  * Racine de composition de MINOS (ADR 0042) : le seul module non adaptateur qui connaît les classes
@@ -43,18 +41,10 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     public DefaultMinosApplicationComposer() {
     }
 
-    /** Déplacé de {@code StorageBackends.open} : raccourci {@code local} exact, puis {@code ServiceLoader}. */
+    /** Raccourci {@code local} exact, puis {@code ServiceLoader} : voir {@link StorageBackendSelection}. */
     @Override
     public StorageBackend openStorageBackend(StorageBackendConfiguration configuration) throws IOException {
-        if ("local".equals(configuration.backend())) {
-            return new LocalStorageBackend(configuration.home());
-        }
-        for (StorageBackendProvider provider : ServiceLoader.load(StorageBackendProvider.class)) {
-            if (configuration.backend().equalsIgnoreCase(provider.id())) {
-                return provider.open(configuration);
-            }
-        }
-        throw new IOException("MINOS storage backend provider is not available: " + configuration.backend());
+        return StorageBackendSelection.open(configuration);
     }
 
     @Override

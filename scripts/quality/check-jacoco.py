@@ -157,6 +157,8 @@ SCOPES = {
         "prefixes": (
             "com/minos/storage/StorageBackend", "com/minos/storage/StorageBackendConfiguration", "com/minos/storage/StorageBackendProvider",
             "com/minos/storage/StorageBackends", "com/minos/storage/LocalStorageBackend", "com/minos/storage/MinosRuntimeSettings",
+            # A2 / ADR 0042: the selection logic moved verbatim from StorageBackends to the composition root.
+            "com/minos/bootstrap/StorageBackendSelection",
         ), "line": 0.52, "branch": 0.32,
     },
     "m30-postgresql-pgvector": {"prefixes": ("com/minos/storage/postgresql/",), "line": 0.60, "branch": 0.40},
