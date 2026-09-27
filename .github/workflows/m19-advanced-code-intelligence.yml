@@ -22,7 +22,8 @@ permissions:
 
 concurrency:
   group: m19-advanced-code-intelligence-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   java:
