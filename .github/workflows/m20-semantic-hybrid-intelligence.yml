@@ -31,7 +31,7 @@ concurrency:
 jobs:
   java:
     name: M20 Java 24 qualification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
