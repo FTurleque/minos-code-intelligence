@@ -16,6 +16,11 @@ import java.util.UUID;
  */
 public final class HostedControlPlaneService {
 
+    /** Smallest number of audit events {@link #audit} returns. */
+    public static final int MIN_AUDIT_LIMIT = 1;
+    /** Largest number of audit events {@link #audit} returns; surfaces validate against it before calling. */
+    public static final int MAX_AUDIT_LIMIT = 10_000;
+
     private final HostedTenantService tenants;
     private final HostedWorkspaceService workspaces;
     private final HostedMembershipService memberships;
