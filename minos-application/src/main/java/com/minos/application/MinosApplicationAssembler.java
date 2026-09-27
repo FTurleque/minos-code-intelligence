@@ -135,7 +135,8 @@ final class MinosApplicationAssembler {
                     effectiveGit,
                     effectiveProgramGraphProviders,
                     Optional.ofNullable(builder.embeddingProvider),
-                    effectiveHosted);
+                    effectiveHosted,
+                    composer);
         } catch (IOException | RuntimeException exception) {
             closeBackendOnFailure(selected, exception);
             throw exception;

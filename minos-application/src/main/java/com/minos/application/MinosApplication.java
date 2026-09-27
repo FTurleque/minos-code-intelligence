@@ -101,6 +101,7 @@ public final class MinosApplication implements AutoCloseable {
     private final WorkspaceIntelligenceService workspaceIntelligence;
     private final RuntimeIntelligenceService runtimeIntelligenceService;
     private final Optional<HostedControlPlaneService> hostedControlPlaneService;
+    private final MinosApplicationComposer compositionRoot;
 
     MinosApplication(
             Path home,
@@ -125,7 +126,8 @@ public final class MinosApplication implements AutoCloseable {
             GitIntelligence gitIntelligence,
             List<ProgramGraphProvider> programGraphProviders,
             Optional<EmbeddingProvider> embeddingProvider,
-            Optional<HostedControlPlaneService> hostedControlPlaneService
+            Optional<HostedControlPlaneService> hostedControlPlaneService,
+            MinosApplicationComposer compositionRoot
     ) {
         this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
         this.storageBackend = Objects.requireNonNull(storageBackend, "storageBackend");
@@ -173,6 +175,7 @@ public final class MinosApplication implements AutoCloseable {
                 projectRegistry, snapshotStore, runtimeObservationStore);
         this.hostedControlPlaneService = Objects.requireNonNull(
                 hostedControlPlaneService, "hostedControlPlaneService");
+        this.compositionRoot = Objects.requireNonNull(compositionRoot, "compositionRoot");
     }
 
     /**
@@ -252,6 +255,12 @@ public final class MinosApplication implements AutoCloseable {
     public WorkspaceIntelligenceService workspaceIntelligence() { return workspaceIntelligence; }
     public RuntimeIntelligenceService runtimeIntelligenceService() { return runtimeIntelligenceService; }
     public Optional<HostedControlPlaneService> hostedControlPlaneService() { return hostedControlPlaneService; }
+
+    /**
+     * Racine de composition qui a construit cette application (ADR 0042) : les surfaces lui demandent
+     * les adaptateurs qu'elles créent elles-mêmes, au moment où elles les créaient.
+     */
+    public MinosApplicationComposer compositionRoot() { return compositionRoot; }
 
     @Override
     public void close() throws IOException {

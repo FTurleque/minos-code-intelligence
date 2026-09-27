@@ -48,4 +48,20 @@ class DefaultMinosApplicationComposerTest {
             assertEquals("local", application.storageBackendId());
         }
     }
+
+    /** L1 — les marqueurs de run reprenable fournis par la composition sont ceux du répertoire de run R1. */
+    @Test
+    void resumableRunMarkersAreTheRunDirectoryMarkersOfTheHome(@TempDir Path temp) throws Exception {
+        Path home = temp.resolve("home");
+        java.util.UUID runId = java.util.UUID.fromString("0f0f0f0f-0000-4000-8000-000000000001");
+        com.minos.orchestration.ResumableRunMarkers markers =
+                new DefaultMinosApplicationComposer().resumableRunMarkers(home);
+        com.minos.runtime.FileResumableRunMarkers files = new com.minos.runtime.FileResumableRunMarkers(home);
+
+        assertEquals(java.util.Optional.of(files.runDirectory(runId)), markers.runDirectory(runId));
+        try (MinosApplication application = MinosApplication.open(home)) {
+            assertInstanceOf(RunDirectoryResumableRunMarkers.class,
+                    application.compositionRoot().resumableRunMarkers(application.home()));
+        }
+    }
 }

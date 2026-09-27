@@ -7,6 +7,7 @@ import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
+import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.storage.StorageBackend;
@@ -63,6 +64,9 @@ public interface MinosApplicationComposer {
 
     /** Clés hébergées lues depuis l'environnement de l'opérateur (mode hébergé activé). */
     HostedTenantKeyProvider environmentHostedTenantKeyProvider();
+
+    /** Marqueurs de run reprenable (R1, ADR 0039 § 5), rangés dans le répertoire de run de ce MINOS_HOME. */
+    ResumableRunMarkers resumableRunMarkers(Path home);
 
     /** Préparation et promotion des snapshots, fournies ensemble. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {

@@ -13,6 +13,7 @@ import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
+import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
@@ -103,5 +104,11 @@ public final class DefaultMinosApplicationComposer implements MinosApplicationCo
     @Override
     public HostedTenantKeyProvider environmentHostedTenantKeyProvider() {
         return new EnvironmentHostedTenantKeyProvider();
+    }
+
+    /** Déplacé de minos-cli (LocalAutonomousIndexOperations) : un adaptateur neuf à chaque demande. */
+    @Override
+    public ResumableRunMarkers resumableRunMarkers(Path home) {
+        return new RunDirectoryResumableRunMarkers(home);
     }
 }

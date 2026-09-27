@@ -5,6 +5,7 @@ import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.orchestration.IndexerDescriptor;
 import com.minos.orchestration.IndexerProviderCatalog;
+import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.storage.StorageBackend;
@@ -101,6 +102,7 @@ class MinosApplicationComposersTest {
             throw unused();
         }
         @Override public HostedTenantKeyProvider environmentHostedTenantKeyProvider() { throw unused(); }
+        @Override public ResumableRunMarkers resumableRunMarkers(Path home) { throw unused(); }
 
         private static AssertionError unused() {
             return new AssertionError("an ambiguous composition root must never be used");
