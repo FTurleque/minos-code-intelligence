@@ -49,6 +49,12 @@ Il doit y en avoir **exactement un** : sans racine de composition, l'ouverture �
 `MINOS composition root is missing: the minos-bootstrap module must be on the classpath ...`, avant de créer
 le home ; avec plusieurs, elle refuse de choisir (`MINOS refuses to choose a composition root ...`).
 
+La règle vaut aussi pour `MinosApplication.builder(home)...build()`, **même quand le `Builder` surcharge
+tous les défauts** (backend, magasins, runtimes, Git, cycle de vie des snapshots…) : la racine de
+composition est résolue avant tout le reste, sans effet de bord. Elle est cherchée dans le chargeur de
+classes de MINOS, jamais dans le chargeur de contexte du thread : un hôte qui positionne un autre chargeur
+de contexte ne peut ni la masquer ni en substituer une autre.
+
 ## Enregistrer un projet
 
 ```java
