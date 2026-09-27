@@ -90,7 +90,86 @@ Chaque workflow déclenché sur `pull_request`/`push` a été lu intégralement 
 
 ## 7. G3 — inventaire des scripts et workflows de jalon
 
-*(en cours — voir agent de recherche `a9f7e8b48c16e7bd3`, résultats à intégrer)*
+Politique : [ADR 0043](../adr/0043-retrait-des-artefacts-de-jalon.md). Inventaire exhaustif des 101 fichiers sous `scripts/m0`…`scripts/m29`, `scripts/remediation`, plus `scripts/intellij/check-m21-parity.py`, établi par un agent de recherche dédié puis revérifié par des lectures directes (`check-post-mne.py`, `check-polyglot.py`, `check-provider.py`, `check-m28.py`, `run-runtime-e2e.py`, `run-hosted-e2e.py`) avant classification. Trois états, définis par l'ADR 0043 : **permanent**, **gelé par assertion**, **archivé**.
+
+### 7.1 Mécanisme clé : exécution indirecte
+
+`scripts/remediation/check-post-mne.py:14-24` définit `ACTIVE_MILESTONE_GATES` et l'exécute par sous-processus (`run_active_milestone_gates`, :63-75, appelée depuis `main()`). Ce script tourne sur **chaque PR** via `post-mne-remediation.yml:65`. Les neuf gates de la liste sont donc vivants alors qu'aucun fichier YAML ne les nomme :
+
+```
+scripts/m21/check-s7-provider.py
+scripts/m22/check-provider.py
+scripts/m23/check-semantic.py
+scripts/m24/check-polyglot.py
+scripts/m25/check-remote-distributed.py
+scripts/m26/check-runtime-dynamic.py
+scripts/m27/check-hosted.py
+scripts/m28/check-m28.py
+scripts/m28/check-current-docs.py   # importe et exécute aussi scripts/docs/check-current-docs.py (:15-21)
+```
+
+### 7.2 Catégorie « permanent » — à relocaliser hors numéro de jalon
+
+| Script | Invariant appliqué | Chemin cible proposé |
+|---|---|---|
+| `scripts/m21/check-s7-provider.py` | Cohérence du provider Java AST avancé (capabilities, program graph) | `scripts/quality/check-advanced-provider-consistency.py` |
+| `scripts/m22/check-provider.py` | Cohérence du provider Java AST de référence (ADR 0030) | `scripts/quality/check-java-ast-provider-consistency.py` |
+| `scripts/m23/check-semantic.py` | Cohérence de la récupération sémantique (ADR 0031) | `scripts/quality/check-semantic-retrieval-consistency.py` |
+| `scripts/m24/check-polyglot.py` | Cohérence des providers SCIP polyglottes sous preuve (ADR 0032) | `scripts/quality/check-polyglot-provider-consistency.py` |
+| `scripts/m25/check-remote-distributed.py` | Révisions distantes épinglées, artefacts worker vérifiés (ADR 0033) | `scripts/quality/check-remote-distributed-consistency.py` |
+| `scripts/m26/check-runtime-dynamic.py` | Observations runtime partielles corrélées à un snapshot exact (ADR 0034) | `scripts/quality/check-runtime-dynamic-consistency.py` |
+| `scripts/m27/check-hosted.py` | Plan de contrôle tenant opt-in chiffré/audité (ADR 0035) | `scripts/quality/check-hosted-control-plane-consistency.py` |
+| `scripts/m28/check-m28.py` | Convergence, surface verticale, frontières et décomposition M28 | `scripts/quality/check-vertical-decomposition-consistency.py` |
+| `scripts/m28/check-current-docs.py` | Sur-couche M28 de `scripts/docs/check-current-docs.py` (fraîcheur doc étendue) | `scripts/quality/check-current-docs-vertical-extension.py` |
+
+Action à commiter séparément (haut risque relatif — touche un chemin exécuté sur chaque PR) : déplacer les 9 fichiers (`git mv`), mettre à jour `ACTIVE_MILESTONE_GATES` dans `check-post-mne.py`, mettre à jour toutes les références documentaires trouvées (`docs/developer/*.md`, `docs/roadmap/*.md`), rejouer `check-post-mne.py` pour confirmer un comportement identique (mêmes 9 « SUCCESS »).
+
+### 7.3 Catégorie « gelé par assertion » — laissé en place, non résolu par ce chantier
+
+Ces fichiers ne sont jamais exécutés par la CI, mais un gate vivant (§ 7.1/7.2) lit leur texte et exige un contenu précis (`read(path)`, pas `subprocess`). Les déplacer ou les supprimer sans réécrire le gate ferait échouer une CI qui passait aujourd'hui — hors périmètre de ce chantier (règle 4 : aucun changement de comportement de gate). Laissés en place, marqués ici pour ne pas redevenir invisibles :
+
+| Fichier | Gelé par |
+|---|---|
+| `scripts/m22/run-final.ps1` | `scripts/m22/check-provider.py:50` |
+| `scripts/m23/run-final.ps1`, `scripts/m23/evaluate-learned-quality.py` | `scripts/m23/check-semantic.py:163-176,234-268` |
+| `scripts/m24/run-final.ps1`, `run-final.sh`, `run-provider-e2e.py`, `bootstrap-windows-toolchains.ps1`, `check-windows-prerequisites.ps1` | `scripts/m24/check-polyglot.py:108-112,329-379` |
+| `scripts/m25/run-final.ps1`, `run-final.sh`, `run-remote-e2e.py` | `scripts/m25/check-remote-distributed.py:68-70,144-156` |
+| `scripts/m26/run-final.ps1`, `run-final.sh`, `run-runtime-e2e.py`, `M26RuntimeFixture.java` (compilé par `run-runtime-e2e.py:19,110`, aucun module Maven) | `scripts/m26/check-runtime-dynamic.py:57-59,144-152` |
+| `scripts/m27/run-final.ps1`, `run-final.sh`, `run-hosted-e2e.py`, `M27HostedFixture.java` (compilé par `run-hosted-e2e.py:20,94`, aucun module Maven) | `scripts/m27/check-hosted.py:160-162,163-169` |
+
+**Sous-catégorie « vivant par rejeu manuel » (workflow_dispatch), à ne pas confondre avec « gelé »** — ceux-ci sont réellement exécutés, à la demande, via `historical-qualification.yml` :
+
+| Fichier | Point d'entrée |
+|---|---|
+| `scripts/remediation/run-final.ps1` / `run-final.sh` | `historical-qualification.yml:104` (`m28-windows`) / `:64` (`m28-linux`), `workflow_dispatch` |
+| `scripts/m28/run-program-graph-performance.ps1` / `.sh` | appelés par `run-final.ps1`/`.sh` ci-dessus (également lus statiquement par `check-m28.py:72-73`) |
+| `scripts/m15/run-final.ps1`, `capture-baseline.ps1`, `capture-final-query.ps1`, `M15FinalQueryProbe.java` | `historical-qualification.yml:144` (`m15-windows`), `workflow_dispatch` |
+| `scripts/m14/validate-local.ps1` | appelé par `scripts/m15/capture-baseline.ps1:222-244` (chaîne ci-dessus) |
+
+`scripts/m29/run-s3.ps1` à `run-s7.ps1` sont dans un état voisin : jamais exécutés en CI, mais leur **contenu exact** est asserté par un test JUnit vivant (`M29S3RunnerPowerShellHostContractTest`, `M29DockerAdministrationContractTest`, `M29McpClientBackendAgnosticContractTest`, `M29InstallerBackendLifecycleContractTest`, exécutés par `mvnw clean verify` sur chaque PR) — même traitement que « gelé par assertion », laissés en place. `scripts/m29/run-s8.ps1` n'a aucun appelant : voir § 7.4.
+
+### 7.4 Catégorie « archivé » — vers `scripts/history/`
+
+Aucune référence vivante (ni exécution directe, ni sous-processus, ni assertion statique dans un gate vivant) ; au plus une mention documentaire.
+
+| Lot | Fichiers | Référence restante avant retrait |
+|---|---|---|
+| `scripts/m0/**` (12 fichiers) | `README.md`, `export-glean-compatible-scip.ps1`, `install-glean-wsl.ps1`, `install-scip-tools.ps1`, `install-scip-typescript.ps1`, `run-in-memory-backend-benchmark.ps1`, `run-minos-scip-baseline.ps1`, `run-scip-java.ps1`, `run-scip-java.sh`, `run-scip-typescript.ps1`, `validate-local-ci.ps1`, `scip-java-windows-patch/.../ScipWriter.java` | Uniquement le propre `README.md` de M0 et `docs/history/milestones/m0/*.md` (déjà de l'historique) |
+| `scripts/m15/` phase S1–S6 (11 fichiers) | `run-s1.ps1`…`run-s6.ps1`, `run-s2-final.ps1`, `capture-query-baseline.ps1`, `M15RepeatedQueryProbe.java`, `relocate-main-sources.ps1`, `relocate-tests.ps1` | `run-s1.ps1`/`run-s3.ps1` cités par `docs/history/milestones/m15/M15_S1_BASELINE.md` et `docs/adr/0042-racine-de-composition.md:199` (référence historique, à laisser telle quelle — l'ADR cite un test déjà joué, pas un gate vivant) |
+| `scripts/m16/**` (9 fichiers) | tout le répertoire — **aucun workflow ne déclenche `run-final.ps1`, confirmé** | `docs/adr/0025-mesurement-gated-storage-backend-evolution.md` (référence historique) |
+| `scripts/m17/run-final.ps1` | 1 fichier | `docs/roadmap/M17_EXECUTION.md:84`, `docs/adr/0026-...md:79` (historique) |
+| `scripts/m18/run-final.ps1` | 1 fichier — **son chemin est dans le filtre `paths:` de `intellij-plugin.yml:12,22` sans qu'aucune étape ne l'exécute** | Retirer le fichier **et** la ligne `scripts/m18/**` du filtre dans le même commit, sinon le filtre continue de retenir un chemin mort |
+| `scripts/m19/run-final.ps1`, `scripts/m20/run-final.ps1` | 2 fichiers, appelés uniquement par les jobs morts `m19-final-windows`/`m20-final-windows` (§ 5, C1) | À retirer **dans le même commit** que la suppression de ces deux jobs — leur seul appelant disparaît en même temps |
+| `scripts/m21/` branche morte (9 fichiers) | `run-local.ps1`, `run-s5.ps1`…`run-s9.ps1`, `run-s8-benchmark.ps1`, `M21SemanticScaleProbe.java`, `check-s8-results.py` | `docs/developer/semantic-scale-qualification.md`, `docs/developer/advanced-program-provider.md` (historique) |
+| `scripts/intellij/check-m21-parity.py` | 1 fichier, appelé uniquement par `scripts/m21/run-s6.ps1` (lui-même mort) | Aucune |
+| `scripts/remediation/apply-post-audit-remediation.py`, `post-audit-provenance.env` | 2 fichiers, aucune référence trouvée nulle part | Aucune |
+| `scripts/m29/run-s8.ps1` | 1 fichier, aucun appelant (contrairement à `run-s3`…`run-s7`, lus par un test JUnit vivant) | Aucune |
+
+**Total archivé : 49 fichiers.** Chaque lot part dans son propre commit (`git mv` vers `scripts/history/<jalon>/`), sauf M19/M20 qui partent avec la suppression du job mort correspondant.
+
+### 7.5 Garde-fou (à livrer)
+
+`scripts/quality/check-milestone-artifact-references.py` : échoue si un fichier sous `scripts/` (hors `scripts/history/`) n'est référencé par aucun des trois moyens ci-dessus ni par une liste explicite d'archives assumées. Auto-test : un fichier fictif non référencé doit faire échouer le contrôle ; un fichier référencé par chacune des voies (workflow direct, sous-processus depuis un gate vivant, assertion statique depuis un gate vivant, documentation) doit le laisser passer. Exécuté une fois dans le pipeline consolidé (C1).
 
 ## 8. Journal des constats de `verif-ci` / `verif-gates`
 
