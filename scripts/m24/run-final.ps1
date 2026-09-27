@@ -95,7 +95,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "M24 Windows prerequisite gate failed (exit=$LASTEXITCODE)" }
 
     Write-Host '[1/9] M24 static provider/discovery/documentation contract...'
-    Invoke-PythonGate $Python 'scripts\m24\check-polyglot.py' 'M24 polyglot consistency gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-polyglot-provider-consistency.py' 'M24 polyglot consistency gate failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency failed'
 
     Write-Host '[2/9] Canonical M23 learned retrieval regression...'
@@ -108,8 +108,8 @@ try {
     }
 
     Write-Host '[4/9] M17/M22/M23 functional/static regressions...'
-    Invoke-PythonGate $Python 'scripts\m22\check-provider.py' 'M22 provider regression gate failed'
-    Invoke-PythonGate $Python 'scripts\m23\check-semantic.py' 'M23 semantic contract regression failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-java-ast-provider-consistency.py' 'M22 provider regression gate failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-semantic-retrieval-consistency.py' 'M23 semantic contract regression failed'
     Invoke-WithSemanticDisabled {
         & .\mvnw.cmd -q -pl minos-application,minos-provider-scip,minos-app -am test `
             '-Dtest=M24PolyglotDiscoveryTest,M24PolyglotProviderTest,M24PolyglotIdentityProvenanceTest,M24PolyglotProcessPlanFactoryTest,ManagedPolyglotScipRuntimeManagerTest,M17ProviderPlatformTest' `
@@ -139,9 +139,9 @@ try {
 
     Write-Host '[8/9] Learned regression and M24/M22/M23/docs recheck...'
     Invoke-PythonGate $Python 'scripts\m23\evaluate-learned-quality.py' 'M23 learned semantic quality changed during M24 qualification'
-    Invoke-PythonGate $Python 'scripts\m22\check-provider.py' 'M22 provider recheck failed'
-    Invoke-PythonGate $Python 'scripts\m23\check-semantic.py' 'M23 semantic recheck failed'
-    Invoke-PythonGate $Python 'scripts\m24\check-polyglot.py' 'M24 polyglot recheck failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-java-ast-provider-consistency.py' 'M22 provider recheck failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-semantic-retrieval-consistency.py' 'M23 semantic recheck failed'
+    Invoke-PythonGate $Python 'scripts\quality\check-polyglot-provider-consistency.py' 'M24 polyglot recheck failed'
     Invoke-PythonGate $Python 'scripts\docs\check-current-docs.py' 'Current documentation consistency changed during M24 qualification'
 
     Write-Host '[9/9] Exact HEAD, workflow-diff and clean-worktree final gate...'

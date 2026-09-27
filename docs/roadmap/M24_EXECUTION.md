@@ -152,7 +152,7 @@ Discovery `.rs/Cargo.toml` ; rust-analyzer 2026-07-27 / v0.3.2989 commit `12c338
 
 ### M24-S8 — Surfaces publiques, documentation, packaging/runtime ✅ VALIDÉ
 
-Composition M24, CLI provider, guides user/developer, gate statique `scripts/m24/check-polyglot.py`, scope JaCoCo M24 sans baisse historique et isolation sémantique M23 validés. Packaging/release Windows et IntelliJ/Plugin Verifier ont été rejoués par le runner final.
+Composition M24, CLI provider, guides user/developer, gate statique `scripts/quality/check-polyglot-provider-consistency.py`, scope JaCoCo M24 sans baisse historique et isolation sémantique M23 validés. Packaging/release Windows et IntelliJ/Plugin Verifier ont été rejoués par le runner final.
 
 ### M24-S9 — Qualification finale exact-head Windows + Linux ✅ VALIDÉ
 

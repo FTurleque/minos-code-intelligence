@@ -236,7 +236,7 @@ def main() -> int:
         require(
             runner_path,
             runner,
-            "check-semantic.py",
+            "check-semantic-retrieval-consistency.py",
             "evaluate-learned-quality.py",
             "run-s5.ps1",
             "0.2.0-m23",

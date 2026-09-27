@@ -106,7 +106,7 @@ assert_provider_prerequisites
 
 echo "HEAD: $HEAD_SHA"
 echo '[1/7] M24 static provider/discovery/documentation contract...'
-"$PYTHON" scripts/m24/check-polyglot.py
+"$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 
 echo '[2/7] Full Java 24 Maven reactor + JaCoCo with semantic opt-in isolated...'
@@ -114,8 +114,8 @@ run_with_semantic_disabled ./mvnw clean verify
 "$PYTHON" scripts/quality/check-jacoco.py
 
 echo '[3/7] M17/M22/M23/M24 functional and static regressions...'
-"$PYTHON" scripts/m22/check-provider.py
-"$PYTHON" scripts/m23/check-semantic.py
+"$PYTHON" scripts/quality/check-java-ast-provider-consistency.py
+"$PYTHON" scripts/quality/check-semantic-retrieval-consistency.py
 run_with_semantic_disabled ./mvnw -q -pl minos-application,minos-provider-scip,minos-app -am test \
   '-Dtest=M24PolyglotDiscoveryTest,M24PolyglotProviderTest,M24PolyglotIdentityProvenanceTest,M24PolyglotProcessPlanFactoryTest,ManagedPolyglotScipRuntimeManagerTest,M17ProviderPlatformTest' \
   '-Dsurefire.failIfNoSpecifiedTests=false'
@@ -126,9 +126,9 @@ run_with_semantic_disabled "$PYTHON" scripts/m24/run-provider-e2e.py \
   --require-e2e 'scip-clang,scip-dotnet,scip-go,rust-analyzer-scip'
 
 echo '[5/7] Recheck M22/M23/M24 contracts and documentation after provider execution...'
-"$PYTHON" scripts/m22/check-provider.py
-"$PYTHON" scripts/m23/check-semantic.py
-"$PYTHON" scripts/m24/check-polyglot.py
+"$PYTHON" scripts/quality/check-java-ast-provider-consistency.py
+"$PYTHON" scripts/quality/check-semantic-retrieval-consistency.py
+"$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 
 echo '[6/7] Recheck JaCoCo aggregate gates...'

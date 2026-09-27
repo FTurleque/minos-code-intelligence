@@ -145,10 +145,10 @@ def main() -> int:
                       "M26 RUNTIME DYNAMIC END-TO-END SUCCESS", "completeRejected",
                       "sessionMutationRejected", "activeSnapshotAligned", "OBSERVED_PARTIAL")
         require_facts("scripts/m26/run-final.ps1", windows,
-                      "ExpectedHead", "check-runtime-dynamic.py", "run-runtime-e2e.py",
+                      "ExpectedHead", "check-runtime-dynamic-consistency.py", "run-runtime-e2e.py",
                       "M26 FINAL RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS")
         require_facts("scripts/m26/run-final.sh", linux,
-                      "EXPECTED_HEAD", "check-runtime-dynamic.py", "run-runtime-e2e.py",
+                      "EXPECTED_HEAD", "check-runtime-dynamic-consistency.py", "run-runtime-e2e.py",
                       "M26 LINUX RUNTIME DYNAMIC INTELLIGENCE VALIDATION SUCCESS")
         forbid("scripts/m26/run-final.ps1", windows, "gh workflow", "gh run", "workflow_dispatch")
         forbid("scripts/m26/run-final.sh", linux, "gh workflow", "gh run", "workflow_dispatch")

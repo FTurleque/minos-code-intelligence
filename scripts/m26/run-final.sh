@@ -48,10 +48,10 @@ echo "HEAD: $HEAD_SHA"
 echo "Java: $JAVA_VERSION"
 
 echo '[1/7] M26 static, documentation and prior-milestone contracts...'
-"$PYTHON" scripts/m26/check-runtime-dynamic.py
+"$PYTHON" scripts/quality/check-runtime-dynamic-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
-"$PYTHON" scripts/m25/check-remote-distributed.py
-"$PYTHON" scripts/m24/check-polyglot.py
+"$PYTHON" scripts/quality/check-remote-distributed-consistency.py
+"$PYTHON" scripts/quality/check-polyglot-provider-consistency.py
 
 echo '[2/7] Full Java 24 Maven reactor...'
 run_semantic_disabled ./mvnw clean verify
@@ -60,15 +60,15 @@ echo '[3/7] JaCoCo including M26 scope...'
 "$PYTHON" scripts/quality/check-jacoco.py
 
 echo '[4/7] Historical provider and semantic regression contracts...'
-"$PYTHON" scripts/m22/check-provider.py
-"$PYTHON" scripts/m23/check-semantic.py
+"$PYTHON" scripts/quality/check-java-ast-provider-consistency.py
+"$PYTHON" scripts/quality/check-semantic-retrieval-consistency.py
 
 echo '[5/7] Shaded CLI runtime import/correlation/storage/report e2e...'
 run_semantic_disabled "$PYTHON" scripts/m26/run-runtime-e2e.py \
   --expected-head "$HEAD_SHA" --output target/m26/runtime-e2e-linux.json
 
 echo '[6/7] Static, docs and detailed evidence recheck...'
-"$PYTHON" scripts/m26/check-runtime-dynamic.py
+"$PYTHON" scripts/quality/check-runtime-dynamic-consistency.py
 "$PYTHON" scripts/docs/check-current-docs.py
 "$PYTHON" - "$HEAD_SHA" <<'PY'
 import json

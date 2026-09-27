@@ -31,4 +31,4 @@ Retention first returns a deterministic plan. Only `retention-apply` removes eli
 
 ## Qualification
 
-`scripts/m27/check-hosted.py` validates the architecture and non-regression contracts. `run-hosted-e2e.py` exercises the shaded JAR across process restarts, two tenants, RBAC denial/audit, exact snapshot binding, encryption tamper rejection, rotation and explicit retention. `run-final.ps1` and `run-final.sh` qualify one clean exact HEAD on Windows and Linux without GitHub Actions.
+`scripts/quality/check-hosted-control-plane-consistency.py` validates the architecture and non-regression contracts. `run-hosted-e2e.py` exercises the shaded JAR across process restarts, two tenants, RBAC denial/audit, exact snapshot binding, encryption tamper rejection, rotation and explicit retention. `run-final.ps1` and `run-final.sh` qualify one clean exact HEAD on Windows and Linux without GitHub Actions.

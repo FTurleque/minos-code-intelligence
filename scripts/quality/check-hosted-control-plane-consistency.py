@@ -163,9 +163,9 @@ def main() -> int:
         require("run-hosted-e2e.py", e2e, "M27 TEAM HOSTED END-TO-END SUCCESS", "crossTenantLeak",
                 "viewerMutationDenied", "staleRejected", "tamperRejected", "oldKeyRejected",
                 "secret JSON output redacted")
-        require("run-final.ps1", windows, "ExpectedHead", "check-hosted.py", "run-hosted-e2e.py",
+        require("run-final.ps1", windows, "ExpectedHead", "check-hosted-control-plane-consistency.py", "run-hosted-e2e.py",
                 "M27 FINAL TEAM HOSTED MODE VALIDATION SUCCESS")
-        require("run-final.sh", linux, "EXPECTED_HEAD", "check-hosted.py", "run-hosted-e2e.py",
+        require("run-final.sh", linux, "EXPECTED_HEAD", "check-hosted-control-plane-consistency.py", "run-hosted-e2e.py",
                 "M27 LINUX TEAM HOSTED MODE VALIDATION SUCCESS")
         forbid("run-final.ps1", windows, "gh workflow", "gh run", "workflow_dispatch")
         forbid("run-final.sh", linux, "gh workflow", "gh run", "workflow_dispatch")
