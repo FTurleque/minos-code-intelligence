@@ -11,6 +11,7 @@ import java.net.Proxy;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -55,6 +56,9 @@ public final class OllamaEmbeddingProvider implements EmbeddingProvider {
     }
 
     @Override public String id() { return "minos-local-ollama"; }
+    @Override public List<String> limitations() {
+        return List.of("LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC", "SEMANTIC_RESULTS_REMAIN_HEURISTIC");
+    }
     @Override public String modelId() { return model; }
     @Override public int dimensions() { return dimensions; }
     public URI endpoint() { return endpoint; }

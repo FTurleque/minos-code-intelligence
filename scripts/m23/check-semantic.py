@@ -130,12 +130,19 @@ def main() -> int:
         )
         forbid(search_path, search, "HNSW", "approximateNearest")
 
+        # A2: provider limitations are carried by the EmbeddingProvider port; SemanticIndexService
+        # appends provider.limitations() and never branches on a concrete provider class.
         index_path = "minos-application/src/main/java/com/minos/semantic/SemanticIndexService.java"
         index = read(index_path)
+        require(index_path, index, "provider.limitations()")
+        forbid(index_path, index, "instanceof LocalHashEmbeddingProvider", "instanceof OllamaEmbeddingProvider")
+        port_path = "minos-application/src/main/java/com/minos/semantic/EmbeddingProvider.java"
+        require(port_path, read(port_path), "default List<String> limitations()")
+        local_hash_path = "minos-application/src/main/java/com/minos/semantic/LocalHashEmbeddingProvider.java"
+        require(local_hash_path, read(local_hash_path), "LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL")
         require(
-            index_path,
-            index,
-            "LOCAL_HASH_EMBEDDING_NOT_LANGUAGE_MODEL",
+            provider_path,
+            provider,
             "LEARNED_MODEL_QUALITY_IS_CONFIGURATION_SPECIFIC",
             "SEMANTIC_RESULTS_REMAIN_HEURISTIC",
         )
