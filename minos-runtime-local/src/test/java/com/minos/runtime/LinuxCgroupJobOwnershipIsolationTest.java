@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +52,78 @@ class LinuxCgroupJobOwnershipIsolationTest {
             }
         } finally {
             job.close();
+        }
+    }
+
+    /**
+     * R2 on a real cgroup: the first instance marked its job before a wall-clock step, so the start
+     * instant in its mark is a minute away from the one this JVM computes for the same live PID.
+     */
+    @Test
+    void aWallClockStepDoesNotKillTheJobsOfALiveMinosInstance() throws Exception {
+        Path root = requireDelegatedRoot();
+        long pid = ProcessHandle.current().pid();
+        long stepped = ProcessHandle.current().info().startInstant().orElseThrow().toEpochMilli() + 60_000L;
+        Path directory = root.resolve("minos-stepped-" + UUID.randomUUID() + ".own-" + pid + "-" + stepped + "-0f1e2d3c");
+        Files.createDirectory(directory);
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
+        try {
+            Process sleeper = start(job, "sleep", "600");
+            try {
+                awaitMembership(job);
+
+                LinuxCgroupJob.reclaimStaleJobs(root);
+
+                assertTrue(sleeper.isAlive(), "a wall-clock step must never make a live owner look reused");
+                assertTrue(Files.isDirectory(directory), "the cgroup of a live MINOS instance must remain");
+                assertTrue(job.aliveProcesses() > 0L, "the job must still hold its process");
+            } finally {
+                sleeper.destroyForcibly();
+                sleeper.waitFor(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            if (Files.exists(directory)) job.close();
+        }
+    }
+
+    /** R2 on a real cgroup: the mark written by this JVM carries the kernel start ticks of its process. */
+    @Test
+    void theMarkCarriesTheKernelStartTicksOfItsOwner() throws Exception {
+        requireDelegatedRoot();
+        OptionalLong ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, ProcessHandle.current().pid());
+
+        assertTrue(ticks.isPresent(), "/proc/self/stat must expose the start ticks on Linux");
+        assertEquals(ticks.getAsLong(), CgroupJobOwnership.CURRENT.start());
+        assertEquals(CgroupJobOwnership.StartClock.BOOT_TICKS, CgroupJobOwnership.CURRENT.clock());
+        assertEquals(ticks, CgroupJobOwnership.OwnerLookup.SYSTEM.find(ProcessHandle.current().pid())
+                .orElseThrow().startTicks(), "the sweep reads the same ticks for the same live process");
+    }
+
+    /**
+     * R2 on a real cgroup: a PID whose kernel start ticks differ from the mark designates another
+     * process (PID reuse), so the job is reclaimed and its processes are killed.
+     */
+    @Test
+    void aJobWhoseOwnerPidWasReusedIsReclaimedOnItsKernelStartTicks() throws Exception {
+        Path root = requireDelegatedRoot();
+        long pid = ProcessHandle.current().pid();
+        long ticks = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, pid).orElseThrow();
+        Mark reused = new Mark(pid, ticks + 1L, "0f1e2d3c");
+        Path directory = root.resolve(reused.markedName("minos-reused-" + UUID.randomUUID()));
+        Files.createDirectory(directory);
+        LinuxCgroupJob job = new LinuxCgroupJob(directory);
+        Process sleeper = start(job, "sleep", "600");
+        try {
+            awaitMembership(job);
+
+            LinuxCgroupJob.StaleSweep sweep = LinuxCgroupJob.reclaimStaleJobs(root);
+
+            assertTrue(sleeper.waitFor(10, TimeUnit.SECONDS), "a job of a reused pid must be killed by the sweep");
+            assertFalse(Files.exists(directory), "a job of a reused pid must be reclaimed");
+            assertTrue(sweep.reclaimed().contains(String.valueOf(directory.getFileName())));
+        } finally {
+            sleeper.destroyForcibly();
+            if (Files.exists(directory)) job.close();
         }
     }
 
@@ -108,8 +180,8 @@ class LinuxCgroupJobOwnershipIsolationTest {
     }
 
     private static Mark deadOwnerMark() throws Exception {
-        Process shortLived = new ProcessBuilder("/bin/true").redirectErrorStream(true).start();
-        long start = shortLived.info().startInstant().map(Instant::toEpochMilli).orElse(0L);
+        Process shortLived = new ProcessBuilder("/bin/sleep", "0.2").redirectErrorStream(true).start();
+        long start = CgroupJobOwnership.startTicks(CgroupJobOwnership.PROC, shortLived.pid()).orElse(0L);
         assertTrue(shortLived.waitFor(10, TimeUnit.SECONDS));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (ProcessHandle.of(shortLived.pid()).isPresent() && System.nanoTime() < deadline) Thread.sleep(20L);
