@@ -36,16 +36,6 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-provider-scip</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
             <artifactId>minos-runtime-local</artifactId>
             <version>${project.version}</version>
         </dependency>

@@ -45,15 +45,12 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
         "minos-provider-scip", "minos-integration-git", "minos-storage-postgresql"
     }),
-    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-storage-local", "minos-bootstrap"}),
+    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-bootstrap"}),
     "minos-cli": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-integration-git",
-        "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus", "minos-bootstrap"
+        "minos-runtime-local", "minos-nexus", "minos-bootstrap"
     }),
-    "minos-api": frozenset({
-        "minos-domain", "minos-engine", "minos-application", "minos-storage-local",
-        "minos-integration-git", "minos-bootstrap"
-    }),
+    "minos-api": frozenset({"minos-domain", "minos-engine", "minos-application", "minos-bootstrap"}),
     "minos-mcp": frozenset({"minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",

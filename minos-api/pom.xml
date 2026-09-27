@@ -30,16 +30,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-integration-git</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
             <groupId>com.minos</groupId>
             <artifactId>minos-bootstrap</artifactId>

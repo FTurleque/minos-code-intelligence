@@ -45,22 +45,17 @@ flowchart LR
     minos_nexus --> minos_application
     minos_nexus --> minos_bootstrap
     minos_nexus --> minos_domain
-    minos_nexus --> minos_storage_local
     minos_cli --> minos_application
     minos_cli --> minos_bootstrap
     minos_cli --> minos_domain
     minos_cli --> minos_engine
     minos_cli --> minos_integration_git
     minos_cli --> minos_nexus
-    minos_cli --> minos_provider_scip
     minos_cli --> minos_runtime_local
-    minos_cli --> minos_storage_local
     minos_api --> minos_application
     minos_api --> minos_bootstrap
     minos_api --> minos_domain
     minos_api --> minos_engine
-    minos_api --> minos_integration_git
-    minos_api --> minos_storage_local
     minos_mcp --> minos_application
     minos_mcp --> minos_bootstrap
     minos_app --> minos_api
@@ -91,9 +86,9 @@ flowchart LR
 | `minos-integration-git` | `minos-engine` |
 | `minos-application` | `minos-domain`, `minos-engine` |
 | `minos-bootstrap` | `minos-application`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
-| `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-storage-local` |
-| `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local` |
-| `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-storage-local` |
+| `minos-nexus` | `minos-application`, `minos-bootstrap`, `minos-domain` |
+| `minos-cli` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-nexus`, `minos-runtime-local` |
+| `minos-api` | `minos-application`, `minos-bootstrap`, `minos-domain`, `minos-engine` |
 | `minos-mcp` | `minos-application`, `minos-bootstrap` |
 | `minos-app` | `minos-api`, `minos-application`, `minos-bootstrap`, `minos-cli`, `minos-domain`, `minos-engine`, `minos-integration-git`, `minos-mcp`, `minos-nexus`, `minos-provider-scip`, `minos-runtime-local`, `minos-storage-local`, `minos-storage-postgresql` |
 
