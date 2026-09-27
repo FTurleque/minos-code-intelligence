@@ -1,9 +1,10 @@
 package com.minos.cli;
 
+import com.minos.application.MinosApplicationComposers;
 import com.minos.application.MinosHome;
 import com.minos.diagnostics.PublicErrorMessages;
 import com.minos.registry.ProjectPathMapping;
-import com.minos.registry.ProjectPathMappingStore;
+import com.minos.registry.ProjectPathMappings;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -54,7 +55,8 @@ public final class DockerRuntimeBootstrap {
             return FindSymbolCommand.USAGE_ERROR;
         }
 
-        ProjectPathMappingStore store = new ProjectPathMappingStore(home);
+        // ADR 0042 : magasin fourni par la racine de composition, créé au même moment qu'avant.
+        ProjectPathMappings store = MinosApplicationComposers.resolve().projectPathMappings(home);
         Optional<ProjectPathMapping> existing = store.loadOptional();
         if (existing.isPresent() && !existing.orElseThrow().equals(desired)) {
             error.append("error: refusing to replace an existing project path mapping implicitly\n");

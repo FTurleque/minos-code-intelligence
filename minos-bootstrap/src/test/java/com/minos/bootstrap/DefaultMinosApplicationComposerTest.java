@@ -91,4 +91,17 @@ class DefaultMinosApplicationComposerTest {
         assertEquals(com.minos.runtime.CommandLocator.invocation(Path.of("docker"), "version"),
                 composer.hostCommandLocator().invocation(Path.of("docker"), "version"));
     }
+
+    /** Port de minos-app — la correspondance de chemins de production est le magasin fichier du home. */
+    @Test
+    void projectPathMappingsAreTheFileStoreOfTheHome(@TempDir Path temp) throws Exception {
+        Path home = java.nio.file.Files.createDirectories(temp.resolve("home"));
+        com.minos.registry.ProjectPathMapping mapping = new com.minos.registry.ProjectPathMapping("N:/workspace-dev", "/workspace/projects");
+
+        new DefaultMinosApplicationComposer().projectPathMappings(home).save(mapping);
+
+        assertEquals(java.util.Optional.of(mapping), new com.minos.registry.ProjectPathMappingStore(home).loadOptional());
+        assertInstanceOf(com.minos.registry.ProjectPathMappingStore.class,
+                new DefaultMinosApplicationComposer().projectPathMappings(home));
+    }
 }

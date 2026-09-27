@@ -9,6 +9,7 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.orchestration.ResumableRunMarkers;
 import com.minos.orchestration.ScipArtifactImporter;
+import com.minos.registry.ProjectPathMappings;
 import com.minos.remote.RemoteIndexingRuntime;
 import com.minos.remote.RemoteRepositoryMaterializer;
 import com.minos.runtime.HostCommandLocator;
@@ -86,6 +87,9 @@ public interface MinosApplicationComposer {
      * worker isolé et transport d'artefacts vérifiés.
      */
     RemoteIndexingRuntime remoteIndexingRuntime(Path home) throws IOException;
+
+    /** Correspondance persistée des racines hôte/conteneur de ce MINOS_HOME (plan Docker). */
+    ProjectPathMappings projectPathMappings(Path home);
 
     /** Préparation et promotion des snapshots, fournies ensemble. */
     record SnapshotLifecycle(SnapshotStager stager, SnapshotPromoter promoter) {

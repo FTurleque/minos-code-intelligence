@@ -109,6 +109,7 @@ class MinosApplicationComposersTest {
             throw unused();
         }
         @Override public com.minos.remote.RemoteIndexingRuntime remoteIndexingRuntime(Path home) { throw unused(); }
+        @Override public com.minos.registry.ProjectPathMappings projectPathMappings(Path home) { throw unused(); }
 
         private static AssertionError unused() {
             return new AssertionError("an ambiguous composition root must never be used");

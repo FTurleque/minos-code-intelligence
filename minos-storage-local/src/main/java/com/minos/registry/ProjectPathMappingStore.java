@@ -16,7 +16,7 @@ import java.util.Properties;
 import java.util.Set;
 
 /** Versioned runtime-only persistence for host/container physical project roots. */
-public final class ProjectPathMappingStore {
+public final class ProjectPathMappingStore implements ProjectPathMappings {
 
     public static final int CURRENT_FORMAT_VERSION = 1;
     public static final String RUNTIME_DIRECTORY = "runtime";
