@@ -6,11 +6,14 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -169,6 +172,54 @@ class LinuxCgroupJobOwnershipIsolationTest {
             }
         } finally {
             job.close();
+        }
+    }
+
+    /**
+     * R3 on a real delegated root: re-running the qualification reports, in one WARNING and without
+     * any absolute path, the populated cgroups its sweep leaves intact (a live foreign MINOS job and
+     * an unmarked job), and the root stays usable.
+     */
+    @Test
+    void theQualificationReportsTheResiduesItLeavesIntact() throws Exception {
+        Path root = requireDelegatedRoot();
+        Path marked = root.resolve(Mark.of(ProcessHandle.current(), "0f1e2d3c")
+                .markedName("minos-residue-" + UUID.randomUUID()));
+        Path unmarked = root.resolve("minos-residue-legacy-" + UUID.randomUUID());
+        Files.createDirectory(marked);
+        Files.createDirectory(unmarked);
+        LinuxCgroupJob markedJob = new LinuxCgroupJob(marked);
+        LinuxCgroupJob unmarkedJob = new LinuxCgroupJob(unmarked);
+        Process first = start(markedJob, "sleep", "600");
+        Process second = start(unmarkedJob, "sleep", "600");
+        try {
+            awaitMembership(markedJob);
+            awaitMembership(unmarkedJob);
+            List<LogRecord> records = new ArrayList<>();
+
+            LinuxCgroupJob.resetDelegationForTesting();
+            Optional<Path> requalified = LinuxCgroupJobDiagnosticsTest.capture(records, LinuxCgroupJob::delegatedRoot);
+
+            assertEquals(Optional.of(root), requalified, "residues left intact never disqualify the root");
+            assertTrue(first.isAlive() && second.isAlive(), "residues are reported, never killed");
+            String markedName = String.valueOf(marked.getFileName());
+            String unmarkedName = String.valueOf(unmarked.getFileName());
+            List<LogRecord> reports = records.stream()
+                    .filter(r -> r.getMessage().contains(markedName) || r.getMessage().contains(unmarkedName))
+                    .toList();
+            assertEquals(1, reports.size(), "one aggregated report per qualification: " + reports.stream()
+                    .map(LogRecord::getMessage).toList());
+            assertEquals(Level.WARNING, reports.getFirst().getLevel());
+            assertTrue(reports.getFirst().getMessage().contains(markedName), reports.getFirst().getMessage());
+            assertTrue(reports.getFirst().getMessage().contains(unmarkedName), reports.getFirst().getMessage());
+            LinuxCgroupJobDiagnosticsTest.assertNoAbsolutePath(records, root);
+        } finally {
+            first.destroyForcibly();
+            second.destroyForcibly();
+            first.waitFor(10, TimeUnit.SECONDS);
+            second.waitFor(10, TimeUnit.SECONDS);
+            markedJob.close();
+            unmarkedJob.close();
         }
     }
 
