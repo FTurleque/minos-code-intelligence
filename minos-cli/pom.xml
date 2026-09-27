@@ -54,5 +54,12 @@
             <artifactId>minos-nexus</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
+            <groupId>com.minos</groupId>
+            <artifactId>minos-bootstrap</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 </project>

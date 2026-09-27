@@ -19,6 +19,7 @@ MODULES = (
     "minos-provider-scip",
     "minos-integration-git",
     "minos-application",
+    "minos-bootstrap",
     "minos-nexus",
     "minos-cli",
     "minos-api",
@@ -42,20 +43,25 @@ ALLOWED_DEPENDENCIES: dict[str, frozenset[str]] = {
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
         "minos-provider-scip", "minos-integration-git"
     }),
-    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-storage-local"}),
+    # ADR 0042: the composition root knows the application and every local adapter.
+    "minos-bootstrap": frozenset({
+        "minos-domain", "minos-engine", "minos-application", "minos-runtime-local", "minos-storage-local",
+        "minos-provider-scip", "minos-integration-git"
+    }),
+    "minos-nexus": frozenset({"minos-domain", "minos-application", "minos-storage-local", "minos-bootstrap"}),
     "minos-cli": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-integration-git",
-        "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus"
+        "minos-storage-local", "minos-provider-scip", "minos-runtime-local", "minos-nexus", "minos-bootstrap"
     }),
     "minos-api": frozenset({
         "minos-domain", "minos-engine", "minos-application", "minos-storage-local",
-        "minos-integration-git"
+        "minos-integration-git", "minos-bootstrap"
     }),
-    "minos-mcp": frozenset({"minos-application"}),
+    "minos-mcp": frozenset({"minos-application", "minos-bootstrap"}),
     "minos-app": frozenset({
         "minos-domain", "minos-engine", "minos-runtime-local", "minos-storage-local",
         "minos-storage-postgresql", "minos-provider-scip", "minos-integration-git",
-        "minos-application", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
+        "minos-application", "minos-bootstrap", "minos-nexus", "minos-cli", "minos-api", "minos-mcp"
     }),
 }
 
@@ -70,6 +76,7 @@ ARTIFACT_TO_MODULE = {
     "minos-provider-scip": "minos-provider-scip",
     "minos-integration-git": "minos-integration-git",
     "minos-application": "minos-application",
+    "minos-bootstrap": "minos-bootstrap",
     "minos-nexus": "minos-nexus",
     "minos-cli": "minos-cli",
     "minos-api": "minos-api",

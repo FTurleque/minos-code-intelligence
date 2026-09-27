@@ -1,21 +1,20 @@
 package com.minos.storage;
 
-import java.io.IOException;
-import java.util.ServiceLoader;
+import com.minos.application.MinosApplicationComposers;
 
-/** Resolves the configured MINOS storage backend without compile-time coupling to optional providers. */
+import java.io.IOException;
+
+/**
+ * Resolves the configured MINOS storage backend without compile-time coupling to any backend.
+ *
+ * <p>ADR 0042 : la sélection (backend {@code local} intégré, puis fournisseurs découverts par
+ * {@code ServiceLoader}) vit dans la racine de composition {@code minos-bootstrap} ; cette façade
+ * garde le point d'entrée public et délègue à l'unique racine de composition.</p>
+ */
 public final class StorageBackends {
     private StorageBackends() { }
 
     public static StorageBackend open(StorageBackendConfiguration configuration) throws IOException {
-        if ("local".equals(configuration.backend())) {
-            return new LocalStorageBackend(configuration.home());
-        }
-        for (StorageBackendProvider provider : ServiceLoader.load(StorageBackendProvider.class)) {
-            if (configuration.backend().equalsIgnoreCase(provider.id())) {
-                return provider.open(configuration);
-            }
-        }
-        throw new IOException("MINOS storage backend provider is not available: " + configuration.backend());
+        return MinosApplicationComposers.resolve().openStorageBackend(configuration);
     }
 }

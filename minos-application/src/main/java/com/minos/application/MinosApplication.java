@@ -37,7 +37,6 @@ import com.minos.semantic.SemanticVectorStore;
 import com.minos.storage.MinosRuntimeSettings;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
-import com.minos.storage.StorageBackends;
 import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.workspace.WorkspaceIntelligenceService;
@@ -185,12 +184,16 @@ public final class MinosApplication implements AutoCloseable {
      * MINOS has not yet confirmed it can protect.</p>
      */
     public static MinosApplication open(Path home) throws IOException {
+        // ADR 0042 : la racine de composition est résolue d'abord, sans effet de bord ; absente ou
+        // ambiguë, l'ouverture échoue avant de toucher au MINOS_HOME.
+        MinosApplicationComposer composer = MinosApplicationComposers.resolve();
         Path validatedHome = PrivateLocalStorage.ensurePrivateDirectory(home);
         MinosRuntimeSettings settings = MinosRuntimeSettings.load(validatedHome);
-        StorageBackend backend = StorageBackends.open(StorageBackendConfiguration.resolve(settings));
+        StorageBackend backend = composer.openStorageBackend(StorageBackendConfiguration.resolve(settings));
         boolean buildInvoked = false;
         try {
             Builder builder = builder(validatedHome).storageBackend(backend);
+            builder.composer = composer;
             MinosApplicationRuntimeConfiguration.apply(settings, builder);
             buildInvoked = true;
             return builder.build();
@@ -311,6 +314,8 @@ public final class MinosApplication implements AutoCloseable {
         EmbeddingProvider embeddingProvider;
         HostedTenantKeyProvider hostedTenantKeyProvider;
         Clock hostedClock = Clock.systemUTC();
+        /** Racine de composition résolue une fois par construction (ADR 0042). */
+        MinosApplicationComposer composer;
 
         private Builder(Path home) {
             this.home = Objects.requireNonNull(home, "home").toAbsolutePath().normalize();
@@ -432,6 +437,11 @@ public final class MinosApplication implements AutoCloseable {
 
         public MinosApplication build() throws IOException {
             return MinosApplicationAssembler.build(this);
+        }
+
+        MinosApplicationComposer resolvedComposer() {
+            if (composer == null) composer = MinosApplicationComposers.resolve();
+            return composer;
         }
     }
 }

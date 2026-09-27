@@ -9,9 +9,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>minos-api</artifactId>
-    <name>MINOS Java API</name>
-    <description>Public Java contracts and current local implementations.</description>
+    <artifactId>minos-bootstrap</artifactId>
+    <name>MINOS Bootstrap</name>
+    <description>Composition root (ADR 0042): the only non-adapter module that wires concrete adapters behind the ports of minos-application.</description>
 
     <dependencies>
         <dependency>
@@ -31,20 +31,23 @@
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
+            <artifactId>minos-runtime-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
             <artifactId>minos-storage-local</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.minos</groupId>
+            <artifactId>minos-provider-scip</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-integration-git</artifactId>
             <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <!-- A2 / ADR 0042: composition root discovered by ServiceLoader behind MinosApplication.open; runtime only, never compile -->
-            <groupId>com.minos</groupId>
-            <artifactId>minos-bootstrap</artifactId>
-            <version>${project.version}</version>
-            <scope>runtime</scope>
         </dependency>
     </dependencies>
 </project>

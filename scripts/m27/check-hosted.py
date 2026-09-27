@@ -60,6 +60,9 @@ def main() -> int:
             "minos-application/src/main/java/com/minos/application/MinosApplicationRuntimeConfiguration.java")
         app_assembler = read(
             "minos-application/src/main/java/com/minos/application/MinosApplicationAssembler.java")
+        # A2 / ADR 0042: concrete hosted adapters are wired by the composition root only.
+        composer = read(
+            "minos-bootstrap/src/main/java/com/minos/bootstrap/DefaultMinosApplicationComposer.java")
         command = read("minos-cli/src/main/java/com/minos/cli/TeamCommand.java")
         api = read("minos-api/src/main/java/com/minos/api/MinosTeamApi.java")
         api_impl = read("minos-api/src/main/java/com/minos/api/LocalMinosTeamApi.java")
@@ -96,10 +99,14 @@ def main() -> int:
                 "MinosApplicationRuntimeConfiguration.apply(settings, builder)")
         require("MinosApplicationRuntimeConfiguration.java", runtime_config,
                 '"enabled"', '"disabled"', "hostedTenantKeyProvider",
-                "new EnvironmentHostedTenantKeyProvider")
+                "environmentHostedTenantKeyProvider()")
+        forbid("MinosApplicationRuntimeConfiguration.java", runtime_config, "new EnvironmentHostedTenantKeyProvider")
         require("MinosApplicationAssembler.java", app_assembler,
                 'home.resolve("hosted-control-plane")', "hostedTenantKeyProvider",
-                "new HostedControlPlaneService", "FileHostedControlPlaneStore")
+                "new HostedControlPlaneService", "composer.hostedControlPlaneStore(")
+        forbid("MinosApplicationAssembler.java", app_assembler, "FileHostedControlPlaneStore")
+        require("DefaultMinosApplicationComposer.java", composer,
+                "new EnvironmentHostedTenantKeyProvider()", "new FileHostedControlPlaneStore(directory, keys)")
 
         require("TeamCommand.java", command, 'TOKEN_ENVIRONMENT_VARIABLE = "MINOS_TEAM_TOKEN"',
                 "bearer tokens are accepted only through", "workspace-create", "member-grant", "project-bind",

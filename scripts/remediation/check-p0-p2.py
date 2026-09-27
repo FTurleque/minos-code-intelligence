@@ -154,7 +154,7 @@ def main() -> int:
             "FingerprintConstrainedJavaProgramGraphProvider.java"
         )
         application_test = read(
-            "minos-application/src/test/java/com/minos/application/MinosApplicationTest.java"
+            "minos-bootstrap/src/test/java/com/minos/application/MinosApplicationTest.java"
         )
         api_test = read(
             "minos-api/src/test/java/com/minos/api/AdvancedCodeIntelligenceApiContractTest.java"

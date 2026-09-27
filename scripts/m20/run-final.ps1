@@ -77,7 +77,7 @@ function Assert-M20Structure {
         'minos-nexus\src\main\java\com\minos\integration\nexus\NexusSemanticSignalContract.java',
         'minos-nexus\src\main\java\com\minos\integration\nexus\NexusSemanticSignalService.java',
         'minos-storage-local\src\test\java\com\minos\store\FileSemanticVectorStoreTest.java',
-        'minos-application\src\test\java\com\minos\semantic\SemanticHybridIntelligenceTest.java',
+        'minos-bootstrap\src\test\java\com\minos\semantic\SemanticHybridIntelligenceTest.java',
         'minos-api\src\test\java\com\minos\api\SemanticCodeIntelligenceApiContractTest.java',
         'minos-nexus\src\test\java\com\minos\integration\nexus\NexusSemanticSignalServiceTest.java',
         'minos-mcp\src\test\java\com\minos\mcp\MinosMcpToolsTest.java',
@@ -144,7 +144,7 @@ function Assert-M20Structure {
         if ($evaluator -notmatch $metric) { throw "M20 relevance metric missing: $metric" }
     }
 
-    $tests = Get-Content -LiteralPath (Require-File -Relative 'minos-application\src\test\java\com\minos\semantic\SemanticHybridIntelligenceTest.java') -Raw
+    $tests = Get-Content -LiteralPath (Require-File -Relative 'minos-bootstrap\src\test\java\com\minos\semantic\SemanticHybridIntelligenceTest.java') -Raw
     foreach ($proof in @('SEMANTIC_EMBEDDING_PROVIDER_UNAVAILABLE','VECTOR_SCORE_IS_RANKING_SIGNAL_NOT_STRUCTURAL_FACT','recallAtK','mrr\(\)','ndcgAtK','gain\.measurableGain\(\)','embeddedCount\(\) < incremental\.documentCount\(\)','usedTokens\(\) <= 180')) {
         if ($tests -notmatch $proof) { throw "M20 controlled qualification proof missing: $proof" }
     }

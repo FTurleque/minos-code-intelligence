@@ -1,17 +1,11 @@
 package com.minos.application;
 
-import com.minos.adapter.scip.ScipIndexerCatalog;
-import com.minos.adapter.scip.ScipSymbolSnapshotImporter;
-import com.minos.adapter.scip.runtime.ManagedPolyglotScipRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipProviderRuntimeManager;
-import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
-import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeObservationStore;
 import com.minos.git.GitIntelligence;
-import com.minos.git.GitIntelligenceService;
 import com.minos.hosted.HmacHostedIdentityProvider;
 import com.minos.hosted.HostedControlPlaneService;
+import com.minos.hosted.HostedControlPlaneStore;
 import com.minos.incremental.IncrementalIndexingPlanner;
 import com.minos.incremental.ProjectFingerprintService;
 import com.minos.incremental.ProjectFingerprintSnapshotStore;
@@ -25,15 +19,12 @@ import com.minos.orchestration.IndexingRuntimePorts.SnapshotPromoter;
 import com.minos.orchestration.IndexingRuntimePorts.SnapshotStager;
 import com.minos.program.analysis.ProgramGraphProvider;
 import com.minos.registry.ProjectRegistry;
-import com.minos.runtime.CompositeProviderRuntimeManager;
 import com.minos.runtime.ProviderRuntimeManager;
 import com.minos.semantic.SemanticVectorStore;
 import com.minos.storage.StorageBackend;
 import com.minos.storage.StorageBackendConfiguration;
-import com.minos.storage.StorageBackends;
 import com.minos.storage.StorageRetentionService;
 import com.minos.store.CodeKnowledgeSnapshotStore;
-import com.minos.store.FileHostedControlPlaneStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -46,6 +37,9 @@ final class MinosApplicationAssembler {
     }
 
     static MinosApplication build(MinosApplication.Builder builder) throws IOException {
+        // ADR 0042 : adaptateurs par défaut fournis par la racine de composition (minos-bootstrap),
+        // résolue avant tout effet de bord ; chaque défaut reste créé au même point qu'auparavant.
+        MinosApplicationComposer composer = builder.resolvedComposer();
         Path home = builder.home;
         // Builder is a direct public entry point, so it independently enforces private MINOS_HOME
         // even when callers bypass MinosApplication.open(Path).
@@ -58,9 +52,9 @@ final class MinosApplicationAssembler {
                 || builder.semanticVectorStore != null
                 || builder.runtimeObservationStore != null;
         if (selected == null && !explicitStore) {
-            selected = StorageBackends.open(StorageBackendConfiguration.resolve(home));
+            selected = composer.openStorageBackend(StorageBackendConfiguration.resolve(home));
         }
-        if (selected == null) selected = new com.minos.storage.LocalStorageBackend(home);
+        if (selected == null) selected = composer.openLocalStorageBackend(home);
 
         try {
             ProjectRegistry effectiveRegistry = builder.projectRegistry != null
@@ -90,40 +84,33 @@ final class MinosApplicationAssembler {
             IncrementalIndexingPlanner effectivePlanner = builder.incrementalIndexingPlanner != null
                     ? builder.incrementalIndexingPlanner : new IncrementalIndexingPlanner();
             List<IndexerDescriptor> effectiveDescriptors = builder.indexerDescriptors != null
-                    ? builder.indexerDescriptors : List.copyOf(ScipIndexerCatalog.qualifiedM24Descriptors());
-            // Référence de méthode : le catalogue n'est lu qu'à la demande (ProviderPlatformService.defaults),
-            // exactement comme l'appel direct qu'il remplace.
+                    ? builder.indexerDescriptors : List.copyOf(composer.qualifiedIndexerDescriptors());
+            // Le catalogue n'est lu qu'à la demande (ProviderPlatformService.defaults).
             IndexerProviderCatalog effectiveProviderCatalog = builder.providerCatalog != null
-                    ? builder.providerCatalog : ScipIndexerCatalog::qualifiedM24Providers;
-            // Un importeur neuf par import, comme l'appel direct qu'il remplace dans LocalProjectOperations.
+                    ? builder.providerCatalog : composer.providerCatalog();
+            // Un importeur neuf par import (voir le composer).
             ScipArtifactImporter effectiveScipImporter = builder.scipArtifactImporter != null
-                    ? builder.scipArtifactImporter
-                    : (indexFile, request, snapshots) ->
-                            new ScipSymbolSnapshotImporter().importSnapshot(indexFile, request, snapshots);
+                    ? builder.scipArtifactImporter : composer.scipArtifactImporter();
             ProviderRuntimeManager effectiveProviderRuntime = builder.providerRuntimeManager != null
-                    ? builder.providerRuntimeManager
-                    : new CompositeProviderRuntimeManager(List.of(
-                            new ManagedScipProviderRuntimeManager(home),
-                            new ManagedScipPythonRuntimeManager(home),
-                            new ManagedPolyglotScipRuntimeManager(home)));
+                    ? builder.providerRuntimeManager : composer.providerRuntimeManager(home);
             SnapshotStager effectiveStager = builder.snapshotStager;
             SnapshotPromoter effectivePromoter = builder.snapshotPromoter;
             if ((effectiveStager == null) != (effectivePromoter == null)) {
                 throw new IllegalStateException("snapshot stager and promoter must be configured together");
             }
             if (effectiveStager == null) {
-                ScipProjectSnapshotLifecycle lifecycle =
-                        new ScipProjectSnapshotLifecycle(home, effectiveSnapshots, effectiveDescriptors);
-                effectiveStager = lifecycle;
-                effectivePromoter = lifecycle;
+                MinosApplicationComposer.SnapshotLifecycle lifecycle =
+                        composer.snapshotLifecycle(home, effectiveSnapshots, effectiveDescriptors);
+                effectiveStager = lifecycle.stager();
+                effectivePromoter = lifecycle.promoter();
             }
             GitIntelligence effectiveGit = builder.gitIntelligence != null
-                    ? builder.gitIntelligence : new GitIntelligenceService();
+                    ? builder.gitIntelligence : composer.gitIntelligence();
             List<ProgramGraphProvider> effectiveProgramGraphProviders = builder.programGraphProviders != null
                     ? builder.programGraphProviders
                     : MinosApplication.productionProgramGraphProviders(effectiveFingerprints);
             Optional<HostedControlPlaneService> effectiveHosted = hostedControlPlane(
-                    builder, home, effectiveSnapshots);
+                    builder, composer, home, effectiveSnapshots);
 
             return new MinosApplication(
                     home,
@@ -157,11 +144,12 @@ final class MinosApplicationAssembler {
 
     private static Optional<HostedControlPlaneService> hostedControlPlane(
             MinosApplication.Builder builder,
+            MinosApplicationComposer composer,
             Path home,
             CodeKnowledgeSnapshotStore snapshots
     ) throws IOException {
         if (builder.hostedTenantKeyProvider == null) return Optional.empty();
-        FileHostedControlPlaneStore hostedStore = new FileHostedControlPlaneStore(
+        HostedControlPlaneStore hostedStore = composer.hostedControlPlaneStore(
                 home.resolve("hosted-control-plane"), builder.hostedTenantKeyProvider);
         HmacHostedIdentityProvider hostedIdentities =
                 new HmacHostedIdentityProvider(builder.hostedTenantKeyProvider);
