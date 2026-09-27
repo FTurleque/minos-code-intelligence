@@ -56,7 +56,7 @@ Les ADR décrivent l’architecture courante et son raisonnement. Les preuves, m
 | [0039](0039-reprise-indexation-apres-interruption.md) | Reprendre une indexation interrompue au lieu de tout réindexer | Accepted | — |
 | [0040](0040-distribution-auto-portante-indexeurs-embarques.md) | Livrer les indexeurs dans le paquet, pas après l'installation | Proposed | — |
 | [0041](0041-indexation-distante-de-code-non-fiable.md) | Indexation distante de code non fiable : quota d'écriture OS ou fermeture assumée | Accepted (option b : fermeture par décision) | Audit 2026-09, A1 |
-| [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Proposed — en attente de décision | Audit 2026-09, A2 |
+| [0042](0042-racine-de-composition.md) | Racine de composition une fois `minos-application` réduite à ses ports | Accepted (option c : module minos-bootstrap) | Audit 2026-09, A2 |
 
 ## Règle de rédaction
 
