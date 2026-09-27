@@ -9,7 +9,6 @@ on:
       - 'minos-integration-git/**'
       - 'docs/user/intellij-plugin.md'
       - 'docs/roadmap/M18_EXECUTION.md'
-      - 'scripts/m18/**'
       - '.github/workflows/intellij-plugin.yml'
   push:
     branches: [main, develop]
@@ -19,7 +18,6 @@ on:
       - 'minos-integration-git/**'
       - 'docs/user/intellij-plugin.md'
       - 'docs/roadmap/M18_EXECUTION.md'
-      - 'scripts/m18/**'
       - '.github/workflows/intellij-plugin.yml'
   workflow_dispatch:
 
