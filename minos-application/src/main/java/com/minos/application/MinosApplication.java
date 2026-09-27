@@ -5,7 +5,7 @@ import com.minos.architecture.ProjectArchitectureQuery;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeIntelligenceService;
 import com.minos.dynamic.RuntimeObservationStore;
-import com.minos.git.GitIntelligenceService;
+import com.minos.git.GitIntelligence;
 import com.minos.hosted.HostedControlPlaneService;
 import com.minos.hosted.HostedTenantKeyProvider;
 import com.minos.impact.LocalProjectImpactQuery;
@@ -85,7 +85,7 @@ public final class MinosApplication implements AutoCloseable {
     private final IndexerProviderCatalog providerCatalog;
     private final SnapshotStager snapshotStager;
     private final SnapshotPromoter snapshotPromoter;
-    private final GitIntelligenceService gitIntelligence;
+    private final GitIntelligence gitIntelligence;
     private final ProjectInspectionService projectInspectionService;
     private final ProjectQueryService projectQueryService;
     private final ProjectArchitectureQuery architectureQuery;
@@ -120,7 +120,7 @@ public final class MinosApplication implements AutoCloseable {
             IndexerProviderCatalog providerCatalog,
             SnapshotStager snapshotStager,
             SnapshotPromoter snapshotPromoter,
-            GitIntelligenceService gitIntelligence,
+            GitIntelligence gitIntelligence,
             List<ProgramGraphProvider> programGraphProviders,
             Optional<EmbeddingProvider> embeddingProvider,
             Optional<HostedControlPlaneService> hostedControlPlaneService
@@ -228,7 +228,7 @@ public final class MinosApplication implements AutoCloseable {
     public IndexerProviderCatalog providerCatalog() { return providerCatalog; }
     public SnapshotStager snapshotStager() { return snapshotStager; }
     public SnapshotPromoter snapshotPromoter() { return snapshotPromoter; }
-    public GitIntelligenceService gitIntelligence() { return gitIntelligence; }
+    public GitIntelligence gitIntelligence() { return gitIntelligence; }
     public ProjectInspectionService projectInspectionService() { return projectInspectionService; }
     public ProjectQueryService projectQueryService() { return projectQueryService; }
     public ProjectArchitectureQuery architectureQuery() { return architectureQuery; }
@@ -299,7 +299,7 @@ public final class MinosApplication implements AutoCloseable {
         IndexerProviderCatalog providerCatalog;
         SnapshotStager snapshotStager;
         SnapshotPromoter snapshotPromoter;
-        GitIntelligenceService gitIntelligence;
+        GitIntelligence gitIntelligence;
         List<ProgramGraphProvider> programGraphProviders;
         EmbeddingProvider embeddingProvider;
         HostedTenantKeyProvider hostedTenantKeyProvider;
@@ -405,7 +405,7 @@ public final class MinosApplication implements AutoCloseable {
             return this;
         }
 
-        public Builder gitIntelligence(GitIntelligenceService value) {
+        public Builder gitIntelligence(GitIntelligence value) {
             this.gitIntelligence = Objects.requireNonNull(value);
             return this;
         }

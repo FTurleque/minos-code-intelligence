@@ -7,6 +7,7 @@ import com.minos.adapter.scip.runtime.ManagedScipPythonRuntimeManager;
 import com.minos.adapter.scip.runtime.ScipProjectSnapshotLifecycle;
 import com.minos.discovery.ProjectDiscoveryService;
 import com.minos.dynamic.RuntimeObservationStore;
+import com.minos.git.GitIntelligence;
 import com.minos.git.GitIntelligenceService;
 import com.minos.hosted.HmacHostedIdentityProvider;
 import com.minos.hosted.HostedControlPlaneService;
@@ -109,7 +110,7 @@ final class MinosApplicationAssembler {
                 effectiveStager = lifecycle;
                 effectivePromoter = lifecycle;
             }
-            GitIntelligenceService effectiveGit = builder.gitIntelligence != null
+            GitIntelligence effectiveGit = builder.gitIntelligence != null
                     ? builder.gitIntelligence : new GitIntelligenceService();
             List<ProgramGraphProvider> effectiveProgramGraphProviders = builder.programGraphProviders != null
                     ? builder.programGraphProviders
