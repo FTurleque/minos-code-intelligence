@@ -28,6 +28,12 @@ import java.util.Objects;
  * explicitly implements {@link ProcessSandboxCapableIndexerExecutor}. This keeps ownership
  * capability-based instead of concrete-class-based, including wrappers such as
  * {@link StrongProcessOwnershipIndexerExecutor}. Other executors remain fail-closed.</p>
+ *
+ * <p><strong>Closed by decision (ADR 0041).</strong> No integrated backend is qualified for
+ * untrusted remote code on any OS, so {@link #execute} refuses before copying a workspace or
+ * launching a provider. The refusal names the rejected OS backend and its exact unmet dimension
+ * codes ({@link WorkerSandboxSelection#refusalReport()}); the transport below it stays in place
+ * as the contract a future qualified backend must honour.</p>
  */
 public final class LocalIsolatedIndexWorker implements Worker {
 
@@ -40,6 +46,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
     private final IndexerExecutor delegate;
     private final DistributedArtifactBundleStore bundleStore;
     private final WorkerSandboxBackend sandboxBackend;
+    private final WorkerSandboxSelection sandboxSelection;
     private final SourceBudgetPolicy sourceBudgetPolicy;
     private final Clock clock;
 
@@ -54,7 +61,7 @@ public final class LocalIsolatedIndexWorker implements Worker {
                 minosHome,
                 delegate,
                 bundleStore,
-                defaultSandboxBackend(minosHome, delegate),
+                defaultSandboxSelection(minosHome, delegate),
                 DEFAULT_MAX_WORKSPACE_FILES,
                 DEFAULT_MAX_WORKSPACE_BYTES,
                 Clock.systemUTC());
@@ -70,6 +77,21 @@ public final class LocalIsolatedIndexWorker implements Worker {
             long maxWorkspaceBytes,
             Clock clock
     ) {
+        this(workerId, minosHome, delegate, bundleStore,
+                WorkerSandboxSelection.of(Objects.requireNonNull(sandboxBackend, "sandboxBackend")),
+                maxWorkspaceFiles, maxWorkspaceBytes, clock);
+    }
+
+    LocalIsolatedIndexWorker(
+            String workerId,
+            Path minosHome,
+            IndexerExecutor delegate,
+            DistributedArtifactBundleStore bundleStore,
+            WorkerSandboxSelection sandboxSelection,
+            long maxWorkspaceFiles,
+            long maxWorkspaceBytes,
+            Clock clock
+    ) {
         if (workerId == null || !workerId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) {
             throw new IllegalArgumentException("workerId must be a safe non-blank identifier");
         }
@@ -79,7 +101,8 @@ public final class LocalIsolatedIndexWorker implements Worker {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         ProviderId.require(this.delegate.indexerId());
         this.bundleStore = Objects.requireNonNull(bundleStore, "bundleStore");
-        this.sandboxBackend = Objects.requireNonNull(sandboxBackend, "sandboxBackend");
+        this.sandboxSelection = Objects.requireNonNull(sandboxSelection, "sandboxSelection");
+        this.sandboxBackend = sandboxSelection.backend();
         if (sandboxBackend.id() == null || sandboxBackend.id().isBlank()) {
             throw new IllegalArgumentException("sandbox backend id must not be blank");
         }
@@ -117,7 +140,8 @@ public final class LocalIsolatedIndexWorker implements Worker {
         if (!sandboxBackend.supportsUntrustedCode()) {
             throw new IllegalStateException(
                     "sandbox backend " + sandboxBackend.id()
-                            + " is not qualified for untrusted remote code on the current platform; execution is fail-closed");
+                            + " is not qualified for untrusted remote code on the current platform; "
+                            + sandboxSelection.refusalReport());
         }
         if (request.networkPolicy() == WorkerNetworkPolicy.DENY
                 && !sandboxBackend.enforcesNetworkDeny()) {
@@ -212,12 +236,12 @@ public final class LocalIsolatedIndexWorker implements Worker {
         }
     }
 
-    private static WorkerSandboxBackend defaultSandboxBackend(Path minosHome, IndexerExecutor delegate) {
+    private static WorkerSandboxSelection defaultSandboxSelection(Path minosHome, IndexerExecutor delegate) {
         Objects.requireNonNull(minosHome, "minosHome");
         Objects.requireNonNull(delegate, "delegate");
         return delegate instanceof ProcessSandboxCapableIndexerExecutor
-                ? WorkerSandboxBackends.strongestAvailable(minosHome)
-                : WorkerSandboxBackend.nativeEphemeralWorkspace();
+                ? WorkerSandboxBackends.selectForUntrustedCode(minosHome)
+                : WorkerSandboxSelection.executorNotSandboxCapable();
     }
 
     private static String portableScope(Path projectRelativeRoot) {

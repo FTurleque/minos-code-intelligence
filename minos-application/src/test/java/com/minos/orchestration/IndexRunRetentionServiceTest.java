@@ -50,6 +50,34 @@ class IndexRunRetentionServiceTest {
         assertTrue(store.findRun(failedOld.id()).isEmpty());
     }
 
+    @Test
+    void compactionProtectsTheResumableRunLikeTheLatestRun(@TempDir Path root) throws Exception {
+        // R1 lot 2: an INTERRUPTED run offered for resume must survive count-based retention.
+        FileIndexStateStore store = new FileIndexStateStore(root);
+        UUID projectId = UUID.randomUUID();
+        IndexingRun interrupted = run(projectId, IndexingRun.Status.INTERRUPTED, 2);
+        IndexingRun failedLatest = run(projectId, IndexingRun.Status.FAILED, 3);
+        IndexingRun failedOld = run(projectId, IndexingRun.Status.FAILED, 1);
+        for (IndexingRun run : List.of(interrupted, failedLatest, failedOld)) store.saveRun(run);
+        store.saveProjectState(new ProjectIndexState(
+                projectId,
+                ProjectIndexState.Availability.FAILED,
+                Optional.empty(),
+                Optional.of(failedLatest.id()),
+                Instant.parse("2026-01-05T00:00:00Z"),
+                Optional.of("interrupted then failed"),
+                Optional.of(interrupted.id())));
+
+        IndexRunRetentionService.RetentionResult result = new IndexRunRetentionService(root, store)
+                .compact(projectId, new IndexRunRetentionPolicy(0, 0));
+
+        assertTrue(result.retainedRunIds().contains(interrupted.id()), "resumable run must be retained");
+        assertTrue(result.retainedRunIds().contains(failedLatest.id()));
+        assertFalse(result.retainedRunIds().contains(failedOld.id()));
+        assertTrue(store.findRun(interrupted.id()).isPresent());
+        assertTrue(store.findRun(failedOld.id()).isEmpty());
+    }
+
     private static IndexingRun run(UUID projectId, IndexingRun.Status status, int day) {
         Instant instant = Instant.parse("2026-01-0" + day + "T00:00:00Z");
         boolean success = status == IndexingRun.Status.SUCCEEDED;

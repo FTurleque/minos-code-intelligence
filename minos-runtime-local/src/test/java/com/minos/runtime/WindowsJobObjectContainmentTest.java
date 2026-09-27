@@ -173,6 +173,7 @@ class WindowsJobObjectContainmentTest {
         assertEquals(
                 WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
                 qualification.trustDisposition());
+        assertTrue(qualification.limitations().contains("WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"));
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_BREAKAWAY_PROHIBITED"));
         assertTrue(qualification.limitations().contains("WINDOWS_JOB_TERMINATED_ON_EVERY_EXIT_PATH"));
         assertTrue(qualification.limitations().stream()

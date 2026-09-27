@@ -15,6 +15,8 @@ import com.minos.remote.RemoteRepositoryRequest;
 import com.minos.runtime.DistributedArtifactBundleStore;
 import com.minos.runtime.DistributedArtifactBundleStore.VerifiedArtifact;
 import com.minos.runtime.DistributedIndexerExecutor;
+import com.minos.runtime.WorkerSandboxBackends;
+import com.minos.runtime.WorkerSandboxSelection;
 import com.minos.runtime.LocalIsolatedIndexWorker;
 
 import java.io.IOException;
@@ -23,16 +25,33 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
-/** Native composition of M25 remote source, worker boundary and verified artifact transport. */
+/**
+ * Native composition of M25 remote source, worker boundary and verified artifact transport.
+ *
+ * <p><strong>Closed by decision (ADR 0041).</strong> No integrated sandbox backend is qualified
+ * for untrusted remote code on any OS, so {@link #index} refuses <em>before</em> materializing the
+ * revision, taking the lease, registering the project or pinning the source — with the per-cause
+ * refusal report in the message (the rejected backend and its unmet dimension codes, or the missing
+ * prerequisite codes, or the executor without sandbox capability). {@code remote materialize} is
+ * unaffected. The transport below stays in place as the contract a future qualified backend must
+ * honour; test-only worker factories keep exercising it.</p>
+ */
 public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
 
     private final MinosApplication application;
     private final RemoteRepositoryMaterializer materializer;
     private final DistributedArtifactBundleStore artifactStore;
     private final WorkerFactory workerFactory;
+    /**
+     * Never null: every composition goes through the early refusal. Production wires the real host
+     * selection; a test that wants the transport to reach its worker injects a qualified selection
+     * explicitly, there is no value that skips the check.
+     */
+    private final Supplier<WorkerSandboxSelection> untrustedCodeSandbox;
     private final Map<String, IndexerDescriptor> descriptors;
 
     public LocalRemoteIndexOperations(MinosApplication application) throws IOException {
@@ -47,20 +66,23 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
     ) {
         this(application, materializer, artifactStore,
                 (workerId, delegate, store) -> new LocalIsolatedIndexWorker(
-                        workerId, application.home(), delegate, store));
+                        workerId, application.home(), delegate, store),
+                () -> WorkerSandboxBackends.selectForUntrustedCode(application.home()));
     }
 
     LocalRemoteIndexOperations(
             MinosApplication application,
             RemoteRepositoryMaterializer materializer,
             DistributedArtifactBundleStore artifactStore,
-            WorkerFactory workerFactory
+            WorkerFactory workerFactory,
+            Supplier<WorkerSandboxSelection> untrustedCodeSandbox
     ) {
         this.application = Objects.requireNonNull(application, "application");
         this.materializer = IdempotentRemoteRepositoryMaterializer.wrap(
                 Objects.requireNonNull(materializer, "materializer"));
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
         this.workerFactory = Objects.requireNonNull(workerFactory, "workerFactory");
+        this.untrustedCodeSandbox = Objects.requireNonNull(untrustedCodeSandbox, "untrustedCodeSandbox");
         this.descriptors = application.indexerDescriptors().stream().collect(Collectors.toUnmodifiableMap(
                 IndexerDescriptor::id, descriptor -> descriptor));
     }
@@ -86,8 +108,24 @@ public final class LocalRemoteIndexOperations implements RemoteIndexOperations {
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
         }
+        refuseUnlessUntrustedCodeSandboxIsQualified();
         RemoteMaterialization source = materializer.materialize(request);
         return indexUnderSourceLease(source, displayName, providerOverride, workerId, workerNetworkPolicy);
+    }
+
+    /**
+     * Fails closed before any side effect when the host has no sandbox qualified for untrusted
+     * remote code. The message carries backend identifiers and dimension codes only, never a path.
+     */
+    private void refuseUnlessUntrustedCodeSandboxIsQualified() {
+        WorkerSandboxSelection selection = Objects.requireNonNull(
+                untrustedCodeSandbox.get(), "untrusted-code sandbox selection");
+        if (selection.supportsUntrustedCode()) return;
+        throw new IllegalStateException(
+                "remote index is refused before any materialization: sandbox backend "
+                        + selection.backend().id()
+                        + " is not qualified for untrusted remote code on the current platform; "
+                        + selection.refusalReport());
     }
 
     /**

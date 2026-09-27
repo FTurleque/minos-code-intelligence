@@ -37,8 +37,12 @@ import java.util.concurrent.TimeUnit;
 /** Provider-independent process executor with optional qualified OS sandbox plan transformation. */
 public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexerExecutor {
 
+    private static final System.Logger LOGGER = System.getLogger(ProcessIndexerExecutor.class.getName());
     private static final Duration GRACEFUL_TERMINATION_WAIT = Duration.ofMillis(500);
     private static final Duration FORCED_TERMINATION_WAIT = Duration.ofSeconds(10);
+
+    /** Suffix of the durable digest sidecar written next to a promoted artifact (ADR 0039 §1). */
+    static final String ARTIFACT_DIGEST_SUFFIX = ".sha256";
 
     private final String indexerId;
     private final Path runsRoot;
@@ -204,9 +208,13 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
         }
         if (writeQuota.isPresent()) {
             try {
-                Set<Path> exemptions = (preserveExisting && providerLocationPrepared)
-                        ? residueReclamationExemptions(runDirectory, generatedArtifact)
-                        : Set.of();
+                Set<Path> exemptions = new LinkedHashSet<>();
+                // The digest sidecar is MINOS-authored after the provider exited; reclamation must
+                // keep it next to the promoted artifact it describes.
+                exemptions.add(artifactDigestSidecar(runDirectory.toAbsolutePath().normalize().resolve("index.scip")));
+                if (preserveExisting && providerLocationPrepared) {
+                    exemptions.addAll(residueReclamationExemptions(runDirectory, generatedArtifact));
+                }
                 ProviderResidueReclamation.reclaim(runsRoot, runDirectory, exemptions);
             } catch (RuntimeException failure) {
                 failures.add(failure);
@@ -327,6 +335,62 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             move(partial, finalArtifact);
         }
         requireValidArtifact(finalArtifact, "stable run artifact is invalid");
+        writeArtifactDigest(finalArtifact);
+    }
+
+    /**
+     * Records the SHA-256 of the promoted artifact next to it (ADR 0039 §1) so that a resume can
+     * verify the bytes it would reuse. The digest is computed on the promoted file itself, never on
+     * the provider-side copy, and published through the same durable primitive as the artifact.
+     *
+     * <p>The digest only serves resumption: a failure to record it (disk full after a 512 MiB move,
+     * unwritable pathname) never fails an execution whose artifact is already valid and promoted.
+     * The orchestrator recomputes the digest itself and simply finds no sidecar to cross-check.</p>
+     */
+    private static void writeArtifactDigest(Path finalArtifact) {
+        Path sidecar = artifactDigestSidecar(finalArtifact);
+        Path temporary = null;
+        try {
+            String digest = sha256Bounded(finalArtifact);
+            temporary = Files.createTempFile(sidecar.getParent(), ".digest-", ".tmp");
+            Files.writeString(temporary, digest + "  " + finalArtifact.getFileName() + "\n", StandardCharsets.UTF_8);
+            DurableAtomicFile.replace(temporary, sidecar, "provider artifact digest replacement");
+        } catch (IOException | RuntimeException failure) {
+            LOGGER.log(System.Logger.Level.WARNING,
+                    "MINOS could not record the artifact digest sidecar; the artifact stays valid but this target"
+                            + " will not be resumable: " + failure.getClass().getSimpleName());
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // Residue reclamation and run retention bound any leftover temporary file.
+                }
+            }
+        }
+    }
+
+    static Path artifactDigestSidecar(Path finalArtifact) {
+        return finalArtifact.resolveSibling(finalArtifact.getFileName() + ARTIFACT_DIGEST_SUFFIX);
+    }
+
+    private static String sha256Bounded(Path artifact) throws IOException {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+        byte[] buffer = new byte[64 * 1024];
+        try (InputStream raw = Files.newInputStream(artifact, LinkOption.NOFOLLOW_LINKS);
+             BoundedInputStream input = new BoundedInputStream(
+                     raw, IndexArtifactLimits.MAX_SCIP_ARTIFACT_BYTES, "SCIP artifact digest")) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read > 0) digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     /** Resolves and bounds the MINOS-owned run directory this execution may write to. */
@@ -342,6 +406,11 @@ public final class ProcessIndexerExecutor implements ProcessSandboxCapableIndexe
             throw new IllegalStateException("provider scope directory escapes provider run root");
         }
         Files.createDirectories(runDirectory);
+        // A resumed run (ADR 0039 §3) re-executes this target inside the same run directory: the
+        // temporary left by the provider that was interrupted mid-promotion must never be mistaken
+        // for, or merged into, the artifact this execution is about to produce.
+        Path stalePartial = runDirectory.resolve("index.partial.scip");
+        if (regularFileNoFollow(stalePartial)) Files.delete(stalePartial);
         return runDirectory;
     }
 

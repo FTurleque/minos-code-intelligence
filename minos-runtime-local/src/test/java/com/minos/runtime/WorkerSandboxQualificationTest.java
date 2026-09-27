@@ -103,5 +103,7 @@ class WorkerSandboxQualificationTest {
                 .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_BYTES")));
         assertTrue(qualification.limitations().stream()
                 .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
+        assertTrue(qualification.limitations().contains("WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"),
+                "the downgrade is a decision (ADR 0041), and says so in a machine-readable way");
     }
 }

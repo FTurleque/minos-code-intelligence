@@ -85,19 +85,21 @@ public final class MinosCliRunner {
 
         NexusExportCommand nexusExportCommand = new NexusExportCommand(projectRoot ->
                 new NexusExportService(app.projectRegistry(), app.snapshotStore()).export(projectRoot));
+        LocalAutonomousIndexOperations autonomousIndex = new LocalAutonomousIndexOperations(app);
         return new MinosCli(
                 new LocalProjectSymbolQuery(app),
                 new LocalProjectOperations(app),
                 app.architectureQuery(),
                 app.impactQuery(),
                 nexusExportCommand,
-                new LocalAutonomousIndexOperations(app),
+                autonomousIndex,
                 app.home(),
                 ProviderPlatformService.defaults(app),
                 app.gitIntelligence(),
                 new LocalRemoteIndexOperations(app),
                 app.runtimeIntelligenceService(),
-                app.hostedControlPlaneService().orElse(null)
+                app.hostedControlPlaneService().orElse(null),
+                autonomousIndex
         ).run(arguments, output, error);
     }
 

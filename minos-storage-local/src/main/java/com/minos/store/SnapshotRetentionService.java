@@ -1,9 +1,13 @@
 package com.minos.store;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -15,6 +19,11 @@ import java.util.stream.Collectors;
 
 /** Snapshot-retention mechanism separated from persistence. */
 public final class SnapshotRetentionService {
+
+    /** Aligned on the resume TTL (ADR 0039): older prepared-snapshot temporaries are orphans. */
+    public static final Duration DEFAULT_ORPHAN_MAX_AGE = Duration.ofHours(24);
+    private static final String PREPARED_SNAPSHOT_PREFIX = ".snapshot-";
+    private static final String TEMPORARY_SUFFIX = ".tmp";
 
     private final SnapshotRepository repository;
 
@@ -71,8 +80,46 @@ public final class SnapshotRetentionService {
     ) throws IOException {
         Objects.requireNonNull(projectId, "projectId");
         try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            deleteOrphanPreparedSnapshotsLocked(projectId, Instant.now(), DEFAULT_ORPHAN_MAX_AGE);
             return applyPolicyLocked(projectId, activeFileName, policy);
         }
+    }
+
+    /**
+     * Reclaims prepared-snapshot temporaries ({@code .snapshot-*.tmp}) older than {@code maxAge}
+     * (ADR 0039 §4). A prepared snapshot is written to such a temporary and then atomically
+     * published under its final name, so a temporary is never referenced by any run
+     * (RUNNING or INTERRUPTED runs reference published staged snapshots only): an old temporary can
+     * only be the residue of a staging interrupted mid-write. Recent temporaries are left alone
+     * because a staging in progress writes its temporary before it takes the project lease; the
+     * age check and the deletion happen under that lease, so a publication cannot slip between them.
+     * Active-pointer temporaries ({@code .active-*.tmp}) are never touched.
+     */
+    public int deleteOrphanPreparedSnapshots(UUID projectId, Instant now, Duration maxAge) throws IOException {
+        Objects.requireNonNull(projectId, "projectId");
+        try (SnapshotProjectLease ignored = SnapshotProjectLease.acquire(repository.storageRoot(), projectId)) {
+            return deleteOrphanPreparedSnapshotsLocked(projectId, now, maxAge);
+        }
+    }
+
+    private int deleteOrphanPreparedSnapshotsLocked(UUID projectId, Instant now, Duration maxAge) throws IOException {
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(maxAge, "maxAge");
+        if (maxAge.isZero() || maxAge.isNegative()) throw new IllegalArgumentException("maxAge must be positive");
+        Path directory = repository.projectDirectory(projectId);
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) return 0;
+        Instant cutoff = now.minus(maxAge);
+        int deleted = 0;
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
+            for (Path entry : entries) {
+                String name = entry.getFileName().toString();
+                if (!name.startsWith(PREPARED_SNAPSHOT_PREFIX) || !name.endsWith(TEMPORARY_SUFFIX)) continue;
+                if (Files.isSymbolicLink(entry) || !Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) continue;
+                if (!Files.getLastModifiedTime(entry, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) continue;
+                if (Files.deleteIfExists(entry)) deleted++;
+            }
+        }
+        return deleted;
     }
 
     RetentionResult applyPolicyLocked(

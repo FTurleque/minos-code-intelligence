@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -30,13 +31,21 @@ import java.util.UUID;
  * Deletion itself is bounded per invocation; whatever does not fit is moved into a quarantine
  * directory inside the runs root with a constant-cost rename and finished by later invocations.</p>
  *
+ * <p>A run directory carrying a {@code .resumable} marker (ADR 0039 §5) is an interrupted run offered
+ * for resume: it is reclaimed last, only when the budget still requires it after every unmarked run,
+ * or when its marker is older than {@link Policy#resumeTtl()}. The marker's own modification time
+ * dates the interruption; the directory's time is not used for it because the marker and the
+ * artifact digest sidecar are written into the run directory after the artifacts (R1-7).</p>
+ *
  * <p>Nothing outside {@code runsRoot} is ever deleted and symbolic links are never followed.</p>
  */
 final class RunDirectoryRetention {
 
     private static final System.Logger LOGGER = System.getLogger(RunDirectoryRetention.class.getName());
 
-    static final Policy DEFAULT = new Policy(16, 4L * 1024L * 1024L * 1024L, Duration.ofDays(7));
+    /** Aligned on the resume planner's TTL: a marker older than this no longer protects the run. */
+    static final Duration DEFAULT_RESUME_TTL = Duration.ofHours(24);
+    static final Policy DEFAULT = new Policy(16, 4L * 1024L * 1024L * 1024L, Duration.ofDays(7), DEFAULT_RESUME_TTL);
     static final String QUARANTINE_DIRECTORY = ".quarantine";
     static final long MAX_SCAN_ENTRIES_PER_RUN = 1_000_000L;
     static final int MAX_RUN_ROOT_SCAN_ENTRIES = 4_096;
@@ -81,19 +90,22 @@ final class RunDirectoryRetention {
         List<Entry> entries = scan.entries();
 
         // Unreadable or oversized residue is reclaimed first: it is the only thing that can starve
-        // the next indexation, and it can never be trusted to stay within the scan budget.
+        // the next indexation, and it can never be trusted to stay within the scan budget. Runs
+        // offered for resume come last, so the budget is re-evaluated after every unmarked run.
         entries.sort(Comparator
                 .comparing(Entry::reclaimFirst).reversed()
-                .thenComparing(Entry::lastModified)
+                .thenComparing(Entry::resumable)
+                .thenComparing(Entry::ageReference)
                 .thenComparing(entry -> entry.path().toString()));
 
         long retainedBytes = 0L;
         for (Entry entry : entries) retainedBytes = saturatingAdd(retainedBytes, entry.bytes());
         int retainedCount = entries.size();
         Instant cutoff = now.minus(policy.maxAge());
+        Instant resumeCutoff = now.minus(policy.resumeTtl());
 
         for (Entry entry : entries) {
-            boolean expired = entry.lastModified().toInstant().isBefore(cutoff);
+            boolean expired = entry.ageReference().toInstant().isBefore(entry.resumable() ? resumeCutoff : cutoff);
             boolean overCount = retainedCount > policy.maxEntries() || scan.truncated();
             boolean overBytes = retainedBytes > policy.maxBytes();
             if (!entry.reclaimFirst() && !expired && !overCount && !overBytes) continue;
@@ -240,8 +252,9 @@ final class RunDirectoryRetention {
         try {
             lastModified = Files.getLastModifiedTime(run, LinkOption.NOFOLLOW_LINKS);
         } catch (IOException exception) {
-            return new Entry(run, FileTime.from(Instant.EPOCH), 0L, true);
+            return new Entry(run, FileTime.from(Instant.EPOCH), 0L, true, Optional.empty());
         }
+        Optional<FileTime> resumableSince = resumableSince(run);
         try {
             Files.walkFileTree(run, new SimpleFileVisitor<>() {
                 private FileVisitResult account(long size) {
@@ -278,7 +291,20 @@ final class RunDirectoryRetention {
         } catch (IOException | RuntimeException exception) {
             reclaimFirst[0] = true;
         }
-        return new Entry(run, lastModified, bytes[0], reclaimFirst[0]);
+        return new Entry(run, lastModified, bytes[0], reclaimFirst[0], resumableSince);
+    }
+
+    /** The interruption time of a run offered for resume: its marker's modification time. */
+    private static Optional<FileTime> resumableSince(Path run) {
+        Path marker = run.resolve(FileResumableRunMarkers.MARKER_FILE_NAME);
+        try {
+            if (Files.isSymbolicLink(marker) || !Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) {
+                return Optional.empty();
+            }
+            return Optional.of(Files.getLastModifiedTime(marker, LinkOption.NOFOLLOW_LINKS));
+        } catch (IOException exception) {
+            return Optional.empty();
+        }
     }
 
     private static long saturatingAdd(long left, long right) {
@@ -295,7 +321,7 @@ final class RunDirectoryRetention {
         }
     }
 
-    record Policy(int maxEntries, long maxBytes, Duration maxAge) {
+    record Policy(int maxEntries, long maxBytes, Duration maxAge, Duration resumeTtl) {
         Policy {
             if (maxEntries < 1 || maxBytes < 1L) {
                 throw new IllegalArgumentException("run retention limits must be positive");
@@ -304,6 +330,15 @@ final class RunDirectoryRetention {
             if (maxAge.isZero() || maxAge.isNegative()) {
                 throw new IllegalArgumentException("run retention maxAge must be positive");
             }
+            resumeTtl = Objects.requireNonNull(resumeTtl, "resumeTtl");
+            if (resumeTtl.isZero() || resumeTtl.isNegative()) {
+                throw new IllegalArgumentException("run retention resumeTtl must be positive");
+            }
+        }
+
+        /** Compatibility constructor: the default resume TTL. */
+        Policy(int maxEntries, long maxBytes, Duration maxAge) {
+            this(maxEntries, maxBytes, maxAge, DEFAULT_RESUME_TTL);
         }
     }
 
@@ -330,7 +365,21 @@ final class RunDirectoryRetention {
         }
     }
 
-    private record Entry(Path path, FileTime lastModified, long bytes, boolean reclaimFirst) {
+    private record Entry(
+            Path path,
+            FileTime lastModified,
+            long bytes,
+            boolean reclaimFirst,
+            Optional<FileTime> resumableSince
+    ) {
+        private boolean resumable() {
+            return resumableSince.isPresent();
+        }
+
+        /** The time that decides both ordering and expiry: the marker's for a resumable run. */
+        private FileTime ageReference() {
+            return resumableSince.orElse(lastModified);
+        }
     }
 
     private record Scan(List<Entry> entries, boolean truncated) {

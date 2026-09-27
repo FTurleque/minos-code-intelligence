@@ -3,6 +3,7 @@ package com.minos.runtime;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,8 +71,14 @@ class WorkerResourceContainmentTest {
                 .anyMatch(value -> value.startsWith("FILESYSTEM_WRITE_ENTRIES")));
     }
 
+    /**
+     * A1 / ADR 0041. Formerly {@code currentOsBackendsFailClosedUntilStorageIsOsEnforced}: the
+     * integrated backends keep a supervised write quota <em>by decision</em>, so untrusted remote
+     * execution stays fail-closed on every OS. The lock now also pins the exact unmet dimensions,
+     * the machine-readable decision marker, and the managed-local contract that must not regress.
+     */
     @Test
-    void currentOsBackendsFailClosedUntilStorageIsOsEnforced() {
+    void currentOsBackendsStayFailClosedByDecisionAdr0041() {
         WorkerResourceContainment linux = LinuxBubblewrapWorkerSandboxBackend.containment();
         WorkerResourceContainment windows = WindowsAppContainerWorkerSandboxBackend.containment();
 
@@ -83,5 +90,32 @@ class WorkerResourceContainmentTest {
         assertFalse(windows.qualifiedForUntrustedCode());
         assertTrue(linux.evidence().contains("CGROUP_V2_CGROUP_KILL"));
         assertTrue(windows.evidence().contains("JOB_OBJECT_LIMIT_KILL_ON_CLOSE"));
+
+        List<String> onlyTheWriteQuota = List.of(
+                "FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL",
+                "FILESYSTEM_WRITE_ENTRIES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL");
+        assertEquals(onlyTheWriteQuota, linux.unmetRequirements());
+        assertEquals(onlyTheWriteQuota, windows.unmetRequirements());
+        assertTrue(linux.qualifiedForManagedLocalProvider(), "managed local indexing must not regress");
+        assertTrue(windows.qualifiedForManagedLocalProvider(), "managed local indexing must not regress");
+
+        for (WorkerResourceContainment containment : List.of(linux, windows)) {
+            WorkerSandboxQualification qualification = new WorkerSandboxQualification(
+                    containment.boundaryId(),
+                    com.minos.remote.DistributedIndexing.WorkerIsolation.PROCESS_EPHEMERAL_WORKSPACE,
+                    WorkerSandboxBackend.NetworkGuarantee.OS_ENFORCED,
+                    WorkerSandboxQualification.NetworkDenyDisposition.QUALIFIED,
+                    WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_SUPPORTED,
+                    containment,
+                    Map.of(WorkerSandboxQualification.currentPlatform(),
+                            WorkerSandboxQualification.PlatformDisposition.QUALIFIED),
+                    List.of());
+            assertEquals(
+                    WorkerSandboxQualification.TrustDisposition.UNTRUSTED_CODE_UNSUPPORTED,
+                    qualification.trustDisposition());
+            assertTrue(qualification.limitations().contains("WORKER_UNTRUSTED_CODE_CLOSED_BY_DECISION_ADR_0041"),
+                    containment.boundaryId() + " must carry the ADR 0041 decision marker");
+            assertTrue(qualification.managedLocalProviderClaimPermitted());
+        }
     }
 }

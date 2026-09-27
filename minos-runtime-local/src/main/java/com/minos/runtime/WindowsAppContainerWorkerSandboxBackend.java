@@ -112,9 +112,9 @@ public final class WindowsAppContainerWorkerSandboxBackend implements WorkerSand
         } catch (IOException | IllegalArgumentException exception) {
             // Not just "PowerShell missing": this can also mean the launcher could not be installed
             // as owner-only (e.g. the private-storage filesystem could not enforce or verify
-            // ownership) or another environmental failure. WorkerSandboxBackends.strongestAvailable()
-            // silently falls back to the weaker native-ephemeral tier for untrusted provider code
-            // when this returns empty, so the degradation must be observable, not silent.
+            // ownership) or another environmental failure. WorkerSandboxBackends.selectForUntrustedCode()
+            // falls back to the weaker native-ephemeral tier (which refuses untrusted provider code)
+            // when this returns empty, so the details of the degradation are logged here.
             LOGGER.log(System.Logger.Level.WARNING,
                     "MINOS Windows AppContainer worker sandbox is unavailable, falling back to a weaker "
                             + "sandbox tier", exception);

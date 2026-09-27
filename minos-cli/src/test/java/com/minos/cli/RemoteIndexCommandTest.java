@@ -88,6 +88,45 @@ class RemoteIndexCommandTest {
         assertTrue(output.toString().contains("\"networkDenyEnforced\":false"));
     }
 
+    /** A1 / ADR 0041: a closed-by-decision refusal exits non-zero with its reason codes intact. */
+    @Test
+    void indexRefusalIsRenderedWithItsReasonCodesAndANonZeroExit() throws Exception {
+        String bytesUnmet = "FILESYSTEM_WRITE_BYTES_REQUIRES_OS_ENFORCED_JOB_BOUNDARY_BUT_IS_SUPERVISED_HARD_KILL";
+        RemoteIndexOperations operations = new StubOperations() {
+            @Override
+            public RemoteIndexView index(
+                    RemoteRepositoryRequest request,
+                    String displayName,
+                    String providerOverride,
+                    String workerId,
+                    WorkerNetworkPolicy policy
+            ) {
+                throw new IllegalStateException(
+                        "remote index is refused before any materialization: sandbox backend "
+                                + "native-process-ephemeral-workspace-v1 is not qualified for untrusted remote code "
+                                + "on the current platform; untrusted remote execution is fail-closed by decision "
+                                + "(ADR 0041); OS sandbox backend linux-bubblewrap-cgroup2-v5 was rejected for "
+                                + "untrusted code: " + bytesUnmet);
+            }
+        };
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+
+        int exit = new RemoteIndexCommand(operations).run(new String[]{
+                "index", "https://gitlab.com/acme/demo",
+                "--ref", "main", "--commit", COMMIT,
+                "--name", "demo", "--worker", "worker-one", "--worker-network", "allow"
+        }, output, error);
+
+        assertEquals(FindSymbolCommand.EXECUTION_ERROR, exit);
+        assertEquals("", output.toString());
+        String line = error.toString();
+        assertTrue(line.startsWith("error: remote index failed: remote index is refused before any materialization"), line);
+        assertTrue(line.contains("ADR 0041"), line);
+        assertTrue(line.contains("linux-bubblewrap-cgroup2-v5"), line);
+        assertTrue(line.contains(bytesUnmet), line);
+    }
+
     @Test
     void rejectsUnsafeUrlBeforeCallingOperations() throws Exception {
         StringBuilder error = new StringBuilder();

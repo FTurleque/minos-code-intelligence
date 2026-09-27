@@ -243,11 +243,33 @@ public interface MinosApi extends AutoCloseable {
             String activeSnapshotId,
             String lastSuccessfulIndexAt,
             String providerId,
-            String providerVersion
+            String providerVersion,
+            String resumableRunId,
+            Long resumableCheckpointAgeSeconds,
+            Integer resumableTargets
     ) {
         public ProjectDto {
             languages = immutable(languages);
             buildSystems = immutable(buildSystems);
+        }
+
+        /** Compatibility constructor: a project without any run offered for resume (ADR 0039 §6). */
+        public ProjectDto(
+                String id,
+                String name,
+                String rootPath,
+                boolean rootAvailable,
+                List<String> languages,
+                List<String> buildSystems,
+                int moduleCount,
+                String indexState,
+                String activeSnapshotId,
+                String lastSuccessfulIndexAt,
+                String providerId,
+                String providerVersion
+        ) {
+            this(id, name, rootPath, rootAvailable, languages, buildSystems, moduleCount, indexState,
+                    activeSnapshotId, lastSuccessfulIndexAt, providerId, providerVersion, null, null, null);
         }
     }
 

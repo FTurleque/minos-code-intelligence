@@ -19,7 +19,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Worker-backed executor that accepts only a verified artifact matching the exact request. */
+/**
+ * Worker-backed executor that accepts only a verified artifact matching the exact request.
+ *
+ * <p><strong>Closed by decision (ADR 0041).</strong> In production this executor is only ever
+ * built by {@code remote index}, which refuses before any materialization because no integrated
+ * sandbox backend is qualified for untrusted remote code on any OS. The class is kept, with its
+ * tests, as the verified-artifact contract a future qualified backend must honour; it is not dead
+ * code to delete.</p>
+ */
 public final class DistributedIndexerExecutor implements IndexerExecutor, AutoCloseable {
 
     private final String indexerId;

@@ -75,7 +75,8 @@ class LocalRemoteIndexOperationsIntegrationTest {
                 application,
                 ignored -> materialization,
                 store,
-                (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp));
+                (workerId, delegate, artifactStore) -> trustedFixtureWorker(workerId, delegate, artifactStore, temp),
+                QualifiedSandboxForTests.selection());
 
         RemoteIndexOperations.RemoteIndexView result = operations.index(
                 request, "remote-fixture", "fixture-provider", "worker-one", WorkerNetworkPolicy.ALLOW);
@@ -139,7 +140,8 @@ class LocalRemoteIndexOperationsIntegrationTest {
                 application, materializer, store,
                 (workerId, delegate, artifactStore) -> {
                     throw new AssertionError("worker must never be created when the lease is never acquired");
-                });
+                },
+                QualifiedSandboxForTests.selection());
 
         // Force RemoteIndexLease.acquire(...) to fail deterministically and without waiting on its
         // real timeout: its lock directory cannot be created because a regular file already occupies
