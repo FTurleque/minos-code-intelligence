@@ -52,7 +52,7 @@ class MinosApplicationComposersTest {
     }
 
     @Test
-    void openRefusesToChooseBetweenSeveralCompositionRoots(@TempDir Path temp) throws Exception {
+    void discoveryRefusesToChooseBetweenSeveralCompositionRoots(@TempDir Path temp) throws Exception {
         Path services = Files.createDirectories(temp.resolve("classes").resolve("META-INF").resolve("services"));
         Files.writeString(services.resolve(MinosApplicationComposer.class.getName()),
                 SecondComposer.class.getName() + "\n" + FirstComposer.class.getName() + "\n",
@@ -61,17 +61,20 @@ class MinosApplicationComposersTest {
         ClassLoader previous = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader loader = new URLClassLoader(
                 new URL[]{temp.resolve("classes").toUri().toURL()}, MinosApplicationComposersTest.class.getClassLoader())) {
-            Thread.currentThread().setContextClassLoader(loader);
-
-            IllegalStateException failure = assertThrows(IllegalStateException.class, () -> MinosApplication.open(home));
+            // Découverte réelle (ServiceLoader) dans un chargeur qui voit deux racines.
+            IllegalStateException failure = assertThrows(IllegalStateException.class,
+                    () -> MinosApplicationComposers.resolve(loader));
 
             assertEquals("MINOS refuses to choose a composition root: 2 MinosApplicationComposer services are"
                     + " registered (" + FirstComposer.class.getName() + ", " + SecondComposer.class.getName()
                     + "); exactly one minos-bootstrap module must be on the classpath", failure.getMessage());
-            assertFalse(Files.exists(home), "the refusal must happen before MINOS_HOME is created");
             assertNoPath(failure.getMessage(), temp);
-            assertEquals(failure.getMessage(), assertThrows(IllegalStateException.class,
-                    () -> MinosApplication.builder(home).build()).getMessage());
+
+            // V48 : positionnées par un hôte dans le chargeur de contexte, ces racines ne sont pas consultées.
+            Thread.currentThread().setContextClassLoader(loader);
+            assertEquals(MinosApplicationComposers.MISSING, assertThrows(IllegalStateException.class,
+                    () -> MinosApplication.open(home)).getMessage());
+            assertFalse(Files.exists(home), "the lookup must fail before MINOS_HOME is created");
         } finally {
             Thread.currentThread().setContextClassLoader(previous);
         }

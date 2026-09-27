@@ -11,6 +11,13 @@ import java.util.stream.Collectors;
  * ({@code META-INF/services}, module {@code minos-bootstrap}). Aucune : échec explicite qui nomme le
  * module manquant. Plusieurs : refus, jamais un choix arbitraire. Les messages ne citent que des noms
  * de classes, jamais de chemin. Aucune mise en cache : chaque ouverture relit le classpath courant.</p>
+ *
+ * <p>V48 — la recherche se fait dans le seul chargeur de classes de MINOS (celui de
+ * {@link MinosApplicationComposer}), jamais dans le chargeur de contexte du thread. Avant A2, l'ouverture
+ * locale ne dépendait d'aucun {@code ServiceLoader} : un hôte embarqué qui positionne un autre chargeur
+ * de contexte ne doit ni masquer la racine de composition livrée avec MINOS, ni en injecter une autre.
+ * C'est l'option la plus simple ; consulter aussi le chargeur de contexte ajouterait une seconde source,
+ * une déduplication, et rouvrirait l'injection par l'hôte.</p>
  */
 public final class MinosApplicationComposers {
 
@@ -20,9 +27,13 @@ public final class MinosApplicationComposers {
     private MinosApplicationComposers() {
     }
 
-    /** Résout l'unique racine de composition visible du chargeur de classes de contexte. */
+    /** Résout l'unique racine de composition visible du chargeur de classes de MINOS. */
     public static MinosApplicationComposer resolve() {
-        return select(ServiceLoader.load(MinosApplicationComposer.class).stream().toList());
+        return resolve(MinosApplicationComposer.class.getClassLoader());
+    }
+
+    static MinosApplicationComposer resolve(ClassLoader loader) {
+        return select(ServiceLoader.load(MinosApplicationComposer.class, loader).stream().toList());
     }
 
     static MinosApplicationComposer select(List<ServiceLoader.Provider<MinosApplicationComposer>> providers) {
