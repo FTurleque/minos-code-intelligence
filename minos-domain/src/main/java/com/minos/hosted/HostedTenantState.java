@@ -58,6 +58,9 @@ public record HostedTenantState(
         String previous = auditAnchorHash;
         long sequence = 0;
         for (HostedAuditEvent event : auditEvents) {
+            if (event.chaining() != HostedAuditEvent.Chaining.CHAINED) {
+                throw new IllegalArgumentException("unchained audit event cannot be part of the audit chain");
+            }
             if (!tenantId.equals(event.tenantId())) throw new IllegalArgumentException("cross-tenant audit event");
             if (!previous.equals(event.previousHash())) throw new IllegalArgumentException("broken audit hash chain");
             if (event.sequence() <= sequence) throw new IllegalArgumentException("audit sequence is not strictly increasing");

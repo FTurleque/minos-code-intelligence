@@ -11,11 +11,13 @@ public interface HostedAuditSink {
     /**
      * Receives a refusal that was authenticated with the tenant key but deliberately not appended
      * to the durable audit chain (chained-refusal capacity reserve or per-principal refusal budget
-     * exhausted). Such an event is not replayable from the tenant state: its sequence is the next
-     * sequence the chain would have used and will be reused by the next chained event, so it must
-     * never travel through {@link #publish} where it would collide with a committed event. The
-     * control plane journals every unchained refusal before calling this method; by default the
-     * event is only reported as not exported. Sinks that export it override this method.
+     * exhausted). Such an event is not replayable from the tenant state. It is marked
+     * {@link HostedAuditEvent.Chaining#UNCHAINED}, has no chain sequence (0, never a sequence of the
+     * chain), is identified by its {@code hash} and is authenticated in a separate HMAC domain, so
+     * it never verifies as a link of the chain; it still never travels through {@link #publish},
+     * which only carries committed chain links. The control plane journals every unchained refusal
+     * before calling this method; by default the event is only reported as not exported. Sinks that
+     * export it override this method.
      */
     default void publishUnchained(HostedAuditEvent event) throws IOException {
         System.getLogger(HostedAuditSink.class.getName()).log(

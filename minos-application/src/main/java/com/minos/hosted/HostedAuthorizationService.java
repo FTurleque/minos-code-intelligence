@@ -103,9 +103,8 @@ final class HostedAuthorizationService {
                         chainedDenials(state), state.auditEvents().size())
                 && denialThrottle.tryAcquire(state.tenantId(), principalId, clock.instant());
         if (!chained) {
-            HostedAuditEvent unchained = auditChain.event(
-                    state, principalId, action, resourceType, resourceId,
-                    HostedAuditEvent.Outcome.DENIED, requestId, state.keyId());
+            HostedAuditEvent unchained = auditChain.unchainedRefusal(
+                    state, principalId, action, resourceType, resourceId, requestId, state.keyId());
             HostedAuditDelivery.publishUnchained(auditSink, unchained);
             return;
         }
