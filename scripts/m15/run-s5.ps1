@@ -113,7 +113,7 @@ function Assert-S5Shape {
         }
     }
 
-    $resolverTest = Read-RepoText 'minos-application\src\test\java\com\minos\application\ProjectResolverTest.java'
+    $resolverTest = Read-RepoText 'minos-bootstrap\src\test\java\com\minos\application\ProjectResolverTest.java'
     foreach ($expected in @(
         'resolvesUuidAndExactDisplayName',
         'reportsInvalidAndMissingReferencesWithStableDiagnostics',

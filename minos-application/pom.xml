@@ -11,7 +11,7 @@
 
     <artifactId>minos-application</artifactId>
     <name>MINOS Application Services</name>
-    <description>Shared application services and local composition root consumed by public surfaces.</description>
+    <description>Application services and ports consumed by public surfaces; concrete adapters are wired by minos-bootstrap (ADR 0042).</description>
 
     <dependencies>
         <dependency>
@@ -26,26 +26,6 @@
         <dependency>
             <groupId>com.minos</groupId>
             <artifactId>minos-engine</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-runtime-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-storage-local</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-provider-scip</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.minos</groupId>
-            <artifactId>minos-integration-git</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
