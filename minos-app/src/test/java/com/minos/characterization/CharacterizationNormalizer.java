@@ -34,8 +34,10 @@ import java.util.stream.Stream;
  *       même UUID gardent donc le même jeton, et les relations d'identité restent vérifiées.</li>
  *   <li><b>Empreintes dérivées</b> : voir {@link #numberDerivedHashes(String)}.</li>
  *   <li><b>Horodatages</b> : tout instant ISO-8601 devient {@code <instant>}.</li>
- *   <li><b>Durées mesurées</b> : la valeur numérique des champs {@code *Millis}, {@code *Nanos}
- *       et {@code *Ms} (JSON et {@code clé=valeur}) devient {@code <duration>}.</li>
+ *   <li><b>Durées mesurées à l'horloge</b> : la valeur des seuls champs de
+ *       {@link #MEASURED_DURATION_FIELDS} (JSON, {@code clé=valeur}, {@code clé: valeur}) devient
+ *       {@code <duration>}. Une durée issue des données (par exemple {@code totalDurationNanos},
+ *       somme des durées d'une enveloppe d'observations importée) reste comparée.</li>
  *   <li><b>Runtimes de providers de l'hôte</b> : voir {@link #normalizeProviderRuntimeHostFacts(String)}.</li>
  * </ol>
  * <p>L'identifiant de projet, que le registre tire au hasard et dont dérivent les identifiants de
@@ -59,10 +61,16 @@ final class CharacterizationNormalizer {
             "((?:\"(?:repositoryId|previousHash|hash)\":\"|\\b(?:repositoryId|previousHash|hash)[=:] ?))([0-9a-f]{64})\\b");
     private static final Pattern INSTANT = Pattern.compile(
             "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})");
+    /**
+     * V41 — durées mesurées à l'horloge pendant l'exécution, et elles seules : {@code latencyMillis}
+     * (durée d'une recherche, SemanticAnalysisResultRenderer / SemanticCodeIntelligenceApi).
+     */
+    static final Set<String> MEASURED_DURATION_FIELDS = Set.of("latencyMillis");
+    private static final String MEASURED = "(?:" + String.join("|", MEASURED_DURATION_FIELDS) + ")";
     private static final Pattern JSON_DURATION = Pattern.compile(
-            "(\"[A-Za-z]*(?:Millis|Nanos|Ms)\"\\s*:\\s*)\\d+");
+            "(\"" + MEASURED + "\"\\s*:\\s*)\\d+");
     private static final Pattern RECORD_DURATION = Pattern.compile(
-            "(\\b[A-Za-z]*(?:Millis|Nanos|Ms)=)\\d+");
+            "(\\b" + MEASURED + "(?:=|: ))\\d+");
     private static final Pattern TOKEN_PATH = Pattern.compile(
             "(<TEMP>|<REPO>)((?:(?:\\\\\\\\|\\\\|/)[A-Za-z0-9._@+-]+)*)");
 
