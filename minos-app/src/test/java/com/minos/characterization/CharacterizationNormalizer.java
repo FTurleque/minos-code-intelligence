@@ -32,6 +32,7 @@ import java.util.stream.Stream;
  *   <li><b>Identifiants aléatoires</b> : chaque UUID (identifiant de projet, de run, de snapshot)
  *       devient {@code <uuid-N>}, N étant son rang de première apparition ; deux occurrences du
  *       même UUID gardent donc le même jeton, et les relations d'identité restent vérifiées.</li>
+ *   <li><b>Empreintes dérivées</b> : voir {@link #numberDerivedHashes(String)}.</li>
  *   <li><b>Horodatages</b> : tout instant ISO-8601 devient {@code <instant>}.</li>
  *   <li><b>Durées mesurées</b> : la valeur numérique des champs {@code *Millis}, {@code *Nanos}
  *       et {@code *Ms} (JSON et {@code clé=valeur}) devient {@code <duration>}.</li>
@@ -49,7 +50,13 @@ final class CharacterizationNormalizer {
     private static final ObjectMapper JSON = new ObjectMapper();
     /** Clés JSON dont la valeur (ou chaque élément, pour un tableau) est une map sans ordre contractuel. */
     private static final Set<String> UNORDERED_MAP_KEYS = Set.of("capabilities", "providerProfiles");
+    private static final String ROOT = "<root>";
+    private static final Set<String> RUNTIME_SESSIONS_ROOT_KEYS = Set.of("nature", "exhaustive", "sessions", "limitations");
+    /** Idem, dans la seule sortie git-activity ({@code "nature":"FACTUAL_ACTIVITY"}) : requête, fichiers et zones (Map.of). */
+    private static final Set<String> GIT_ACTIVITY_UNORDERED_MAP_KEYS = Set.of("query", "files", "zones");
     private static final Pattern TEXT_CAPABILITIES = Pattern.compile("(?m)^(\\s*capabilities: \\{)([^}\\n]*)\\}$");
+    private static final Pattern DERIVED_HASH = Pattern.compile(
+            "((?:\"(?:repositoryId|previousHash|hash)\":\"|\\b(?:repositoryId|previousHash|hash)[=:] ?))([0-9a-f]{64})\\b");
     private static final Pattern INSTANT = Pattern.compile(
             "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})");
     private static final Pattern JSON_DURATION = Pattern.compile(
@@ -62,6 +69,7 @@ final class CharacterizationNormalizer {
     private final Map<String, String> directories = new LinkedHashMap<>();
     /** Numérotation partagée par toute la transcription : un même identifiant garde le même jeton d'une sortie à l'autre. */
     private final Map<String, String> uuidTokens = new LinkedHashMap<>();
+    private final Map<String, String> derivedHashTokens = new LinkedHashMap<>();
 
     CharacterizationNormalizer(Path temp, Path repository) {
         register(Objects.requireNonNull(temp, "temp"), "<TEMP>");
@@ -83,6 +91,7 @@ final class CharacterizationNormalizer {
         }
         value = unifySeparators(value);
         value = number(value, UUID, uuidTokens, "uuid");
+        value = numberDerivedHashes(value);
         value = INSTANT.matcher(value).replaceAll("<instant>");
         value = JSON_DURATION.matcher(value).replaceAll("$1<duration>");
         value = RECORD_DURATION.matcher(value).replaceAll("$1<duration>");
@@ -95,7 +104,8 @@ final class CharacterizationNormalizer {
      * déplacé par A2 : version et emplacement du JDK, exécutables trouvés dans le {@code PATH},
      * état et diagnostics des runtimes de providers installés sur la machine (leur nombre de lignes
      * compris), exécutable résolu, permissions du stockage privé (POSIX ou ACL selon l'OS) et
-     * valeurs de la section {@code workerSandbox} (backend de l'OS courant). Leur <em>présence</em>,
+     * valeurs de la section {@code workerSandbox} (backend de l'OS courant), sauf l'indisponibilité de
+     * l'indexation distante, vraie sur tout hôte. Leur <em>présence</em>,
      * leur libellé, leur ordre, l'identifiant, la version et le caractère requis de chaque provider,
      * {@code MINOS_HOME}, le verdict et le code de sortie restent comparés ; seule leur valeur devient
      * {@code <host>}.
@@ -108,7 +118,10 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(?m)^(\\S+ \\S+ — )[A-Z_]+( \\[(?:required|optional)\\])$", "$1<host>$2");
         result = result.replaceAll("(?m)(?:^  diagnostic: .*\\n)+", "  diagnostic: <host>\n");
         result = result.replaceAll("(?m)^(privateStorage\\[[^\\]]+\\]): .*$", "$1: <host>");
-        result = result.replaceAll("(?m)^(workerSandbox\\[[^\\]]+\\]): .*$", "$1: <host>");
+        // L'indisponibilité de l'indexation distante vaut sur tout hôte (ADR 0041) : elle reste comparée,
+        // seule sa cause (décision ou prérequis absent) dépend de l'hôte.
+        result = result.replaceAll("(?m)^(workerSandbox\\[remoteIndexing\\]: [A-Z]+).*$", "$1<host>");
+        result = result.replaceAll("(?m)^(workerSandbox\\[(?!remoteIndexing\\])[^\\]]+\\]): .*$", "$1: <host>");
         // Rendu JSON.
         result = result.replaceAll("(\"(?:javaRuntime|javaHome)\":)\"[^\"]*\"", "$1\"<host>\"");
         result = result.replaceAll("(\"commands\":)\\{[^}]*\\}", "$1<host>");
@@ -116,7 +129,12 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(\"executable\":)(?:null|\"[^\"]*\")", "$1\"<host>\"");
         result = result.replaceAll("(\"diagnostics\":)\\[[^\\]]*\\]", "$1<host>");
         result = result.replaceAll("(\"privateStoragePermissions\":)\\{[^}]*\\}", "$1<host>");
-        result = result.replaceAll("(\"workerSandbox\":)\\{(?:[^{}]|\\{[^{}]*\\})*\\}", "$1<host>");
+        // Section workerSandbox : remoteIndexing et untrustedCode.available restent comparés.
+        result = result.replaceAll("(\"managedLocalProvider\":)\\{[^{}]*\\}", "$1<host>");
+        result = result.replaceAll("(\"untrustedCode\":\\{\"backend\":)\"[^\"]*\"", "$1\"<host>\"");
+        result = result.replaceAll("(\"(?:cause|rejectedBackend|decision)\":)(?:null|\"[^\"]*\")", "$1\"<host>\"");
+        result = result.replaceAll("(\"reasons\":)\\[[^\\]]*\\]", "$1<host>");
+        result = result.replaceAll("(\"reason\":)\"(?:[^\"\\\\]|\\\\.)*\"", "$1\"<host>\"");
         return result;
     }
 
@@ -138,7 +156,9 @@ final class CharacterizationNormalizer {
 
     /**
      * Ordre des clés des maps sans ordre contractuel. {@code ProviderView.capabilities} est un
-     * {@code Map.copyOf} et chaque profil {@code providerProfiles} du MCP est un {@code Map.copyOf} :
+     * {@code Map.copyOf}, chaque profil {@code providerProfiles} du MCP est un {@code Map.copyOf}, les
+     * objets {@code query}, {@code files}, {@code zones} de git-activity et la racine de
+     * {@code RuntimeIntelligenceRenderer.renderSessions} ({@code Map.of}) aussi :
      * leur ordre d'itération change d'une JVM à l'autre (non-déterminisme préexistant, hors A2). Ces
      * maps-là, et elles seules, sont réémises triées par clé avec le moteur JSON du produit, après
      * vérification que la sortie brute se relit et se réémet à l'octet près (sinon le test échoue au
@@ -157,39 +177,68 @@ final class CharacterizationNormalizer {
         } catch (IOException notJson) {
             return value;
         }
-        if (!containsUnorderedMap(tree, null)) return value;
+        Set<String> unordered = unorderedKeys(tree);
+        if (!containsUnorderedMap(tree, ROOT, unordered)) return value;
         String reEmitted = DeterministicJson.render(tree);
         if (!reEmitted.equals(trimmed)) {
             throw new AssertionError("JSON output does not re-emit byte for byte; refusing to canonicalize it:\n" + trimmed);
         }
-        return value.replace(trimmed, DeterministicJson.render(canonical(tree, null)));
+        return value.replace(trimmed, DeterministicJson.render(canonical(tree, ROOT, unordered)));
     }
 
-    private static boolean containsUnorderedMap(Object node, String key) {
+    private static Set<String> unorderedKeys(Object tree) {
+        if (tree instanceof Map<?, ?> map && "FACTUAL_ACTIVITY".equals(map.get("nature"))) {
+            return Stream.concat(UNORDERED_MAP_KEYS.stream(), GIT_ACTIVITY_UNORDERED_MAP_KEYS.stream())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+        // RuntimeIntelligenceRenderer.renderSessions émet un Map.of : seul son niveau racine est concerné.
+        if (tree instanceof Map<?, ?> map && map.keySet().equals(RUNTIME_SESSIONS_ROOT_KEYS)) {
+            return Stream.concat(UNORDERED_MAP_KEYS.stream(), Stream.of(ROOT))
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+        return UNORDERED_MAP_KEYS;
+    }
+
+    private static boolean containsUnorderedMap(Object node, String key, Set<String> unordered) {
         if (node instanceof Map<?, ?> map) {
-            if (isUnordered(key)) return true;
-            return map.entrySet().stream().anyMatch(entry -> containsUnorderedMap(entry.getValue(), String.valueOf(entry.getKey())));
+            if (key != null && unordered.contains(key)) return true;
+            return map.entrySet().stream()
+                    .anyMatch(entry -> containsUnorderedMap(entry.getValue(), String.valueOf(entry.getKey()), unordered));
         }
         if (node instanceof List<?> list) {
-            return list.stream().anyMatch(element -> containsUnorderedMap(element, key));
+            return list.stream().anyMatch(element -> containsUnorderedMap(element, key, unordered));
         }
         return false;
     }
 
-    private static boolean isUnordered(String key) {
-        return key != null && UNORDERED_MAP_KEYS.contains(key);
-    }
-
-    private static Object canonical(Object node, String key) {
+    private static Object canonical(Object node, String key, Set<String> unordered) {
         if (node instanceof Map<?, ?> map) {
-            Map<String, Object> result = isUnordered(key) ? new TreeMap<>() : new LinkedHashMap<>();
-            map.forEach((childKey, child) -> result.put(String.valueOf(childKey), canonical(child, String.valueOf(childKey))));
+            Map<String, Object> result = key != null && unordered.contains(key) ? new TreeMap<>() : new LinkedHashMap<>();
+            map.forEach((childKey, child) ->
+                    result.put(String.valueOf(childKey), canonical(child, String.valueOf(childKey), unordered)));
             return result;
         }
         if (node instanceof List<?> list) {
-            return list.stream().map(element -> canonical(element, key)).toList();
+            return list.stream().map(element -> canonical(element, key, unordered)).toList();
         }
         return node;
+    }
+
+    /**
+     * Empreintes dérivées d'une valeur aléatoire ou d'un chemin temporaire : identifiant de dépôt Git
+     * (haché depuis le chemin du dépôt) et chaîne d'audit hébergée (qui hache des UUID aléatoires).
+     * Numérotées comme les UUID, ce qui garde vérifiable le chaînage {@code hash} -> {@code previousHash}.
+     */
+    private String numberDerivedHashes(String value) {
+        Matcher matcher = DERIVED_HASH.matcher(value);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String key = matcher.group(2);
+            String token = derivedHashTokens.computeIfAbsent(key, ignored -> "<hash-" + (derivedHashTokens.size() + 1) + ">");
+            matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(1) + token));
+        }
+        matcher.appendTail(result);
+        return result.toString();
     }
 
     private static String unifySeparators(String value) {

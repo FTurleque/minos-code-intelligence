@@ -1,0 +1,28 @@
+# addProject
+ok: ProjectDto[id=<uuid-1>, name=a2-char, rootPath=<REPO>/fixtures/typescript/typescript-modules, rootAvailable=true, languages=[TYPESCRIPT], buildSystems=[NPM], moduleCount=3, indexState=NEVER_INDEXED, activeSnapshotId=null, lastSuccessfulIndexAt=null, providerId=null, providerVersion=null, resumableRunId=null, resumableCheckpointAgeSeconds=null, resumableTargets=null]
+# importScip a2-snapshot-1
+ok: IndexImportDto[projectId=<uuid-2>, snapshotId=a2-snapshot-1, providerId=scip-typescript, providerVersion=0.4.0, normalizedSymbolCount=19, occurrenceCount=67, relationshipCount=6, relatedTestRelationshipCount=4, unresolvedOccurrenceCount=23, unresolvedRelationshipCount=0, completedAt=<instant>]
+# importScip a2-snapshot-2
+ok: IndexImportDto[projectId=<uuid-2>, snapshotId=a2-snapshot-2, providerId=scip-typescript, providerVersion=0.4.0, normalizedSymbolCount=19, occurrenceCount=67, relationshipCount=6, relatedTestRelationshipCount=4, unresolvedOccurrenceCount=23, unresolvedRelationshipCount=0, completedAt=<instant>]
+# importScip a2-snapshot-3
+ok: IndexImportDto[projectId=<uuid-2>, snapshotId=a2-snapshot-3, providerId=scip-typescript, providerVersion=0.4.0, normalizedSymbolCount=19, occurrenceCount=67, relationshipCount=6, relatedTestRelationshipCount=4, unresolvedOccurrenceCount=23, unresolvedRelationshipCount=0, completedAt=<instant>]
+# importScip a2-snapshot-4
+ok: IndexImportDto[projectId=<uuid-2>, snapshotId=a2-snapshot-4, providerId=scip-typescript, providerVersion=0.4.0, normalizedSymbolCount=19, occurrenceCount=67, relationshipCount=6, relatedTestRelationshipCount=4, unresolvedOccurrenceCount=23, unresolvedRelationshipCount=0, completedAt=<instant>]
+before: [symbol-snapshots/<uuid-2>/active.pointer, symbol-snapshots/<uuid-2>/snapshot-2bc4390498cf4f0181ad26ba477b56b8095f159638a5023a52b5573226e1d092-cf9fefcb3f8cf9111a8724a985d3cc43ccbe542820a09ac68a84d93effcd00ec.knowledge, symbol-snapshots/<uuid-2>/snapshot-77fabb12ed487314de7657a184175f8624c6f23ac2ff90c5beba6b6a8ac3c482-97f23527038c76c8c12ec133bb9ee3d59782e171457d6290d92645e5d5c9ff5c.knowledge, symbol-snapshots/<uuid-2>/snapshot-9091c0cb3d3ab7f2e58f208601ecb52afbe91b1f9e72df556ec900b9d5079473-ae70a8e4bb46fae4a18135b79285b8fed91f5407d9966c362040b6fe3bf500ea.knowledge, symbol-snapshots/<uuid-2>/snapshot-f752878b865a97e92d73cd921da42ed154ed9ff23ae2efe0ca8374ee20e639b2-0aa1a3f11ca138712207d34e3564d09b8c52dc2d0bc6063817713432af0ce87d.knowledge, index-state/locks/indexing/<uuid-2>.lock, index-state/projects/<uuid-2>.properties, index-state/runs/.by-id/v1.ready]
+# compact(default)
+ok: RetentionResult[deletedKnowledgeSnapshots=1, deletedFingerprintSnapshots=0, deletedIndexingRuns=0]
+after compact(default): [symbol-snapshots/<uuid-2>/active.pointer, symbol-snapshots/<uuid-2>/snapshot-2bc4390498cf4f0181ad26ba477b56b8095f159638a5023a52b5573226e1d092-cf9fefcb3f8cf9111a8724a985d3cc43ccbe542820a09ac68a84d93effcd00ec.knowledge, symbol-snapshots/<uuid-2>/snapshot-77fabb12ed487314de7657a184175f8624c6f23ac2ff90c5beba6b6a8ac3c482-97f23527038c76c8c12ec133bb9ee3d59782e171457d6290d92645e5d5c9ff5c.knowledge, symbol-snapshots/<uuid-2>/snapshot-f752878b865a97e92d73cd921da42ed154ed9ff23ae2efe0ca8374ee20e639b2-0aa1a3f11ca138712207d34e3564d09b8c52dc2d0bc6063817713432af0ce87d.knowledge, index-state/locks/indexing/<uuid-2>.lock, index-state/projects/<uuid-2>.properties, index-state/runs/.by-id/v1.ready]
+# compact(0,1,1)
+ok: RetentionResult[deletedKnowledgeSnapshots=2, deletedFingerprintSnapshots=0, deletedIndexingRuns=0]
+after compact(0,1,1): [symbol-snapshots/<uuid-2>/active.pointer, symbol-snapshots/<uuid-2>/snapshot-77fabb12ed487314de7657a184175f8624c6f23ac2ff90c5beba6b6a8ac3c482-97f23527038c76c8c12ec133bb9ee3d59782e171457d6290d92645e5d5c9ff5c.knowledge, index-state/locks/indexing/<uuid-2>.lock, index-state/projects/<uuid-2>.properties, index-state/runs/.by-id/v1.ready]
+# activeSnapshot
+ok: Optional[a2-snapshot-4]
+# runs
+ok: []
+$ minos index-status a2-char --format json
+exit: 0
+--- stdout
+{"projectId":"<uuid-2>","projectName":"a2-char","state":"READY","activeSnapshotId":"a2-snapshot-4","lastSuccessfulIndexAt":"<instant>","providerId":"scip-typescript","providerVersion":"0.4.0","resumableRunId":null,"resumableRunPhase":null,"resumableCheckpointAgeSeconds":null,"resumableTargets":null}
+
+--- stderr
+
