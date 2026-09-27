@@ -25,8 +25,9 @@ import java.util.stream.Stream;
  *   <li><b>Maps sans ordre contractuel</b> : voir {@link #canonicalizeUnorderedMaps(String)}.</li>
  *   <li><b>Fin de ligne de la plateforme</b> : {@code \r\n} devient {@code \n}.</li>
  *   <li><b>Répertoires d'exécution</b> : le répertoire temporaire du test devient {@code <TEMP>}
- *       et la racine absolue du dépôt (emplacement de l'extraction) devient {@code <REPO>}, sous
- *       leurs trois graphies (native, JSON échappée, barres obliques). Les séparateurs du chemin
+ *       et la racine absolue du dépôt (emplacement de l'extraction) devient {@code <REPO>} — chacun
+ *       tel que fourni, absolu normalisé et réel ({@code toRealPath}, nom long d'un chemin 8.3),
+ *       sous trois graphies (native, JSON échappée, barres obliques). Les séparateurs du chemin
  *       qui suit immédiatement l'un de ces jetons sont ramenés à {@code /}, parce que le
  *       séparateur natif dépend de l'OS et non du code.</li>
  *   <li><b>Identifiants aléatoires</b> : chaque UUID (identifiant de projet, de run, de snapshot)
@@ -80,20 +81,48 @@ final class CharacterizationNormalizer {
     private final Map<String, String> derivedHashTokens = new LinkedHashMap<>();
 
     CharacterizationNormalizer(Path temp, Path repository) {
-        register(Objects.requireNonNull(temp, "temp"), "<TEMP>");
-        register(Objects.requireNonNull(repository, "repository"), "<REPO>");
+        this(spellings(Objects.requireNonNull(temp, "temp")), spellings(Objects.requireNonNull(repository, "repository")));
     }
 
-    private void register(Path directory, String token) {
-        String absolute = directory.toAbsolutePath().normalize().toString();
-        directories.put(absolute.replace("\\", "\\\\"), token);
-        directories.put(absolute, token);
-        directories.put(absolute.replace('\\', '/'), token);
+    /**
+     * Graphies équivalentes des deux répertoires, fournies explicitement (test du normalisateur : nom
+     * court 8.3 et nom long d'un même répertoire Windows).
+     */
+    CharacterizationNormalizer(List<Path> tempSpellings, List<Path> repositorySpellings) {
+        Map<String, String> collected = new LinkedHashMap<>();
+        tempSpellings.forEach(path -> register(collected, path, "<TEMP>"));
+        repositorySpellings.forEach(path -> register(collected, path, "<REPO>"));
+        // Le plus long d'abord : une graphie ne masque jamais une autre plus longue qui la contient
+        // (forme JSON échappée avant forme native, nom long avant nom court).
+        collected.entrySet().stream()
+                .sorted((left, right) -> Integer.compare(right.getKey().length(), left.getKey().length()))
+                .forEach(entry -> directories.put(entry.getKey(), entry.getValue()));
+    }
+
+    /**
+     * Le répertoire tel que fourni, sa forme absolue normalisée et sa forme réelle ({@code toRealPath} :
+     * nom long d'un chemin 8.3 Windows, cible d'un lien symbolique) — le même répertoire, rien d'autre.
+     */
+    private static List<Path> spellings(Path directory) {
+        List<Path> result = new java.util.ArrayList<>(List.of(directory, directory.toAbsolutePath().normalize()));
+        try {
+            result.add(directory.toRealPath());
+        } catch (java.io.IOException notYetCreated) {
+            // Répertoire absent : il n'a pas d'autre graphie réelle.
+        }
+        return result;
+    }
+
+    private static void register(Map<String, String> collected, Path directory, String token) {
+        String absolute = directory.toString();
+        collected.put(absolute.replace("\\", "\\\\"), token);
+        collected.put(absolute, token);
+        collected.put(absolute.replace('\\', '/'), token);
     }
 
     String normalize(String raw) {
         String value = canonicalizeUnorderedMaps(raw.replace("\r\n", "\n"));
-        // Pour chaque répertoire, la graphie JSON échappée (la plus longue) est remplacée avant la native.
+        // Graphies triées de la plus longue à la plus courte (voir le constructeur).
         for (Map.Entry<String, String> entry : directories.entrySet()) {
             value = value.replace(entry.getKey(), entry.getValue());
         }
@@ -124,7 +153,11 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(?m)^(Java runtime|Java home): .*$", "$1: <host>");
         result = result.replaceAll("(?m)^(command\\[[a-z]+\\]): .*$", "$1: <host>");
         result = result.replaceAll("(?m)^(\\S+ \\S+ — )[A-Z_]+( \\[(?:required|optional)\\])$", "$1<host>$2");
-        result = result.replaceAll("(?m)(?:^  diagnostic: .*\\n)+", "  diagnostic: <host>\n");
+        // Lignes de détail d'un provider (ToolsCommand.render : « executable: » si un exécutable est
+        // résolu sur l'hôte, puis une « diagnostic: » par diagnostic) : leur nombre et leur contenu
+        // dépendent des outils installés. Tout le bloc devient exactement une ligne sous chaque provider.
+        result = result.replaceAll("(?m)^  (?:executable|diagnostic): .*\\n", "");
+        result = result.replaceAll("(?m)^(\\S+ \\S+ — <host> \\[(?:required|optional)\\])$", "$1\n  diagnostic: <host>");
         result = result.replaceAll("(?m)^(privateStorage\\[[^\\]]+\\]): .*$", "$1: <host>");
         // L'indisponibilité de l'indexation distante vaut sur tout hôte (ADR 0041) : elle reste comparée,
         // seule sa cause (décision ou prérequis absent) dépend de l'hôte.
@@ -157,6 +190,9 @@ final class CharacterizationNormalizer {
         result = result.replaceAll("(\"runtimeState\":)\"[^\"]*\"", "$1\"<host>\"");
         result = result.replaceAll("(\"runtimeDiagnostics\":)\\[(?:[^\\[\\]\"]|\"(?:[^\"\\\\]|\\\\.)*\")*\\]", "$1<host>");
         result = result.replaceAll("(?m)^(runtimeState|runtimeDiagnostics): .*$", "$1: <host>");
+        // Table texte de `minos providers` (ProviderCommand.renderList) :
+        // id TAB version TAB qualification TAB état-du-runtime TAB score=N — seule la 4e colonne est masquée.
+        result = result.replaceAll("(?m)^([a-z0-9][a-z0-9-]*\\t[^\\t\\n]+\\t[A-Z_]+\\t)[A-Z_]+(\\tscore=\\d+)$", "$1<host>$2");
         result = result.replaceAll("(\\bruntimeState=)[A-Z_]+", "$1<host>");
         result = result.replaceAll("(\\bruntimeDiagnostics=)\\[[^\\]]*\\]", "$1<host>");
         return result;

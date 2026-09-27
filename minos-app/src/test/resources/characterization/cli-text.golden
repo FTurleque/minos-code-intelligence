@@ -829,13 +829,13 @@ technologies: [TYPESCRIPT, NPM]
 $ minos providers --format text
 exit: 0
 --- stdout
-rust-analyzer-scip	0.3.2989	QUALIFIED_WITH_CONSTRAINTS	BLOCKED	score=45
-scip-clang	0.4.0	QUALIFIED_WITH_CONSTRAINTS	BLOCKED	score=48
-scip-dotnet	0.2.14	QUALIFIED_WITH_CONSTRAINTS	BLOCKED	score=55
-scip-go	0.2.7	QUALIFIED_WITH_CONSTRAINTS	BLOCKED	score=52
-scip-java	0.13.1	QUALIFIED_WITH_CONSTRAINTS	NOT_INSTALLED	score=69
-scip-python	0.6.6	QUALIFIED_WITH_CONSTRAINTS	NOT_INSTALLED	score=40
-scip-typescript	0.4.0	QUALIFIED_WITH_CONSTRAINTS	NOT_INSTALLED	score=62
+rust-analyzer-scip	0.3.2989	QUALIFIED_WITH_CONSTRAINTS	<host>	score=45
+scip-clang	0.4.0	QUALIFIED_WITH_CONSTRAINTS	<host>	score=48
+scip-dotnet	0.2.14	QUALIFIED_WITH_CONSTRAINTS	<host>	score=55
+scip-go	0.2.7	QUALIFIED_WITH_CONSTRAINTS	<host>	score=52
+scip-java	0.13.1	QUALIFIED_WITH_CONSTRAINTS	<host>	score=69
+scip-python	0.6.6	QUALIFIED_WITH_CONSTRAINTS	<host>	score=40
+scip-typescript	0.4.0	QUALIFIED_WITH_CONSTRAINTS	<host>	score=62
 
 --- stderr
 
