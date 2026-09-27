@@ -52,6 +52,7 @@ final class LinuxCgroupJob implements AutoCloseable {
     /** Residues named in the single qualification WARNING; the remainder is counted, not listed. */
     static final int MAX_REPORTED_RESIDUES = 32;
     private static final int MAX_DESCRIBED_CAUSES = 4;
+    private static final int MAX_REDACTION_DEPTH = 16;
 
     private static final Object DISCOVERY_LOCK = new Object();
     private static boolean delegationProbed;
@@ -502,7 +503,51 @@ final class LinuxCgroupJob implements AutoCloseable {
         String message = "strong cgroup containment cleanup failed for cgroup " + name() + ": " + detail;
         return cause == null
                 ? new IllegalStateException(message)
-                : new IllegalStateException(message, new RedactedCause(cause, directory.getParent()));
+                : new IllegalStateException(message, redactCause(cause, directory.getParent()));
+    }
+
+    /**
+     * Returns the cause to attach to a failure leaving this class, without any absolute path.
+     *
+     * <p>A failure whose chain (message, causes, suppressed failures) carries no path is attached as
+     * it is, and an {@link InterruptedException} always is: the orchestration looks for it in the
+     * cause chain to persist an interrupted, resumable run. Only a failure that carries a path is
+     * re-expressed as a {@link RedactedCause}, which keeps its stack trace, the fully qualified name
+     * of its class, and its causes and suppressed failures, each redacted the same way.</p>
+     */
+    static Throwable redactCause(Throwable cause, Path root) {
+        return redactCause(cause, root, identitySet(), 0);
+    }
+
+    private static Throwable redactCause(Throwable cause, Path root, Set<Throwable> visiting, int depth) {
+        if (cause == null || cause instanceof InterruptedException) return cause;
+        if (!carriesPath(cause, root, identitySet(), 0)) return cause;
+        if (depth >= MAX_REDACTION_DEPTH || !visiting.add(cause)) {
+            // A pathological (cyclic or very deep) chain is cut rather than leaked.
+            return new RedactedCause(cause, root, null);
+        }
+        Throwable next = cause.getCause() == cause ? null : cause.getCause();
+        RedactedCause copy = new RedactedCause(cause, root, redactCause(next, root, visiting, depth + 1));
+        for (Throwable suppressed : cause.getSuppressed()) {
+            copy.addSuppressed(redactCause(suppressed, root, visiting, depth + 1));
+        }
+        return copy;
+    }
+
+    private static boolean carriesPath(Throwable failure, Path root, Set<Throwable> seen, int depth) {
+        if (failure == null || !seen.add(failure)) return false;
+        if (depth >= MAX_REDACTION_DEPTH) return true;
+        String message = failure.getMessage();
+        if (message != null && !redactPaths(message, root).equals(message)) return true;
+        if (failure.getCause() != failure && carriesPath(failure.getCause(), root, seen, depth + 1)) return true;
+        for (Throwable suppressed : failure.getSuppressed()) {
+            if (carriesPath(suppressed, root, seen, depth + 1)) return true;
+        }
+        return false;
+    }
+
+    private static Set<Throwable> identitySet() {
+        return java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     }
 
     /** The cgroup directory name, which is how diagnostics designate this job (never by absolute path). */
@@ -551,20 +596,26 @@ final class LinuxCgroupJob implements AutoCloseable {
     }
 
     /**
-     * The cause of a containment failure, re-expressed without absolute path: same stack trace, the
-     * original class name and a message rewritten relative to the delegated root.
+     * A failure that carried an absolute path, re-expressed without it: its message starts with the
+     * fully qualified name of the original class, followed by the original message rewritten relative
+     * to the delegated root; its stack trace is the original one. Causes and suppressed failures are
+     * attached by {@link #redactCause}.
      */
-    private static final class RedactedCause extends Exception {
+    static final class RedactedCause extends Exception {
         private static final long serialVersionUID = 1L;
+        private final String originalClassName;
 
-        RedactedCause(Throwable original, Path root) {
-            super(describeFailure(original, root), null, false, true);
+        RedactedCause(Throwable original, Path root, Throwable redactedCause) {
+            super(original.getClass().getName()
+                    + (original.getMessage() == null ? "" : ": " + redactPaths(original.getMessage(), root)),
+                    redactedCause, true, true);
+            this.originalClassName = original.getClass().getName();
             setStackTrace(original.getStackTrace());
         }
 
-        @Override
-        public String toString() {
-            return getMessage();
+        /** Fully qualified name of the class of the failure this one stands for. */
+        String originalClassName() {
+            return originalClassName;
         }
     }
 
