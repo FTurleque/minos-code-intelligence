@@ -28,7 +28,16 @@ Deux mécanismes rendaient l'inventaire naïf ("grep-t-on son nom quelque part ?
 - Ajouter un nouveau script de jalon impose d'écrire, dans le même commit, sa condition de retrait (quel gate permanent le remplacera, ou pourquoi il restera un outil de rejeu manuel — `workflow_dispatch` — au lieu d'un gate de PR).
 - Un outil de **rejeu manuel** délibéré (par exemple une qualification historique déclenchée à la demande via `workflow_dispatch`, comme `historical-qualification.yml`) n'est pas un artefact orphelin : c'est un choix explicite documenté. Il garde son numéro de jalon si le rejeu est spécifique à ce jalon, mais doit être atteignable depuis un point d'entrée CI référencé (pas seulement depuis la documentation).
 
-### 3. Garde-fou
+### 3. Un gate s'ancre sur un invariant, pas sur une phrase
+
+Trois gates existants ont échoué avant tout commit pendant ce chantier (`check-semantic.py`/`check-remote-distributed.py`/`check-runtime-dynamic.py`/`check-hosted.py` lors de leur propre renommage, puis `check-audit-remediation-v2.py` deux fois — suppression de `post-228-hardening.yml`, puis reformulation de `docs/STATUS.md` ; détail dans `CI-HYGIENE-SUIVI.md` § 8, J1/J3/J6). Ce n'est pas trois accidents mais une seule fragilité, répétée : un gate qui vérifie qu'une **chaîne littérale exacte** apparaît dans un fichier cible casse à chaque reformulation légitime de ce fichier, même quand l'invariant qu'il protège reste respecté.
+
+Règle pour tout gate écrit ou modifié à partir de maintenant :
+
+- **S'ancrer sur le comportement ou la structure, pas sur la formulation.** Préférer un test qui exécute le code et observe son effet, ou qui parse une structure nommée (comme `read_job_block` dans `check-audit-remediation-v2.py`, qui extrait un bloc YAML par son nom plutôt que de chercher une sous-chaîne dans le fichier entier), plutôt qu'une phrase censée apparaître telle quelle.
+- **Échouer si la cible est introuvable, jamais réussir par défaut.** Un gate qui traiterait un fichier ou un bloc absent comme « rien à vérifier » transformerait une suppression en trou noir silencieux ; cette politique l'interdit pour tout gate présent ou futur.
+
+### 4. Garde-fou
 
 Un contrôle (`scripts/quality/check-milestone-artifact-references.py` ou équivalent) échoue si un script versionné sous `scripts/` n'est référencé ni par un workflow (exécution directe ou via un `if:`/chemin filtré), ni par un autre script exécuté par la CI (exécution ou assertion statique), ni par la documentation, ni par une liste explicite d'archives assumées. Il tourne une seule fois dans le pipeline consolidé (issu de C1) et a son propre auto-test (au moins : un script fictif non référencé fait échouer le contrôle ; un script référencé par chacune des voies ci-dessus le laisse passer).
 

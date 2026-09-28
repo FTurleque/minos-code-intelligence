@@ -93,15 +93,25 @@ L'audit suggère de filtrer ce workflow sur `docker/**`, `scripts/release/**` et
 
 **Décision retenue** : `paths-ignore` plutôt que `paths`, pour exclure uniquement ce qui ne peut structurellement pas affecter le JAR ou l'image (`docs/**`, `**/*.md`, `scripts/history/**`), sans jamais réduire la couverture sur un changement de code. Cela répond au critère concret de l'audit (« un build de 90 minutes ne doit pas partir sur une modification de documentation ») sans introduire l'angle mort du filtre suggéré.
 
-### 6.2 Comportement de chaque contrôle requis quand son filtre ne matche pas
+### 6.2 Contrôles réellement requis sur `develop`, et comportement quand un filtre ne matche pas
 
-| Contrôle requis (nom de job GitHub) | Comportement si le filtre de chemin ne matche pas |
-|---|---|
-| `Dependency vulnerability gate / osv-scan`, `Verify (ubuntu-24.04)`, `Verify (windows-2022)` (pr-ci) | Aucun filtre de chemin : se déclenche toujours. Sans objet. |
-| `Docker Release Validation / provider-complete-image` | `paths-ignore` (§ 6.1) : absent de la liste de contrôles d'une PR qui ne touche que `docs/**`/`**/*.md`/`scripts/history/**`. GitHub Actions traite un job absent (jamais déclenché faute de correspondance) comme **non requis pour cette PR** s'il est déclaré requis via une règle de branche qui accepte l'absence de déclenchement (« Require status checks to pass », coché sans « strict » supplémentaire) — mais **passe indéfiniment en attente** si la règle est plus stricte. À vérifier côté réglages du dépôt (hors périmètre de cette session) avant d'activer ce filtre en required-check. |
-| `IntelliJ 2026.1 / Java 21`, `Windows process ownership / Java 21` | Filtré sur `minos-intellij/**`, `minos-cli/**`, `minos-integration-git/**`, docs ciblées. Même comportement que ci-dessus sur une PR hors de ces chemins. |
-| `M19 Java 24 qualification`, `M20 Java 24 qualification` | Filtré sur leurs modules respectifs. Idem. |
-| `Build and smoke Windows candidate` (windows-installer), `Transactional upgrade engine ...` (windows-in-place-upgrade) | Filtré sur `packaging/windows/**`, `scripts/install/**`, `scripts/release/**`, `pom.xml`. Idem. |
+Relevé en lecture seule (`gh api repos/.../rules/branches/develop`, 28/09/2026) : `develop` n'a **pas** de protection de branche classique ; la règle vient du **ruleset `20809312`**, dont la règle `required_status_checks` (`strict_required_status_checks_policy: true`) exige exactement **quatre** contrôles :
+
+- `Verify (ubuntu-24.04)`
+- `Verify (windows-2022)`
+- `Dependency vulnerability gate / osv-scan`
+- `SonarCloud Code Analysis` (application GitHub externe, hors de ce chantier)
+
+Conséquences, vérifiées sur ce relevé et non supposées :
+
+| Contrôle | Requis ? | Filtre de chemin | Si le filtre ne matche pas |
+|---|---|---|---|
+| `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan` | **oui** | aucun | sans objet : se déclenchent toujours |
+| `Provider-complete image exact-head gate` (**docker-release-validation**) | **non** | `paths-ignore` (§ 6.1) | **disparaît en silence** : aucun check n'apparaît sur une PR docs/markdown/historique, et la PR n'attend rien. C'était déjà un contrôle non requis avant ce chantier : même rouge, il n'a jamais bloqué une fusion. |
+| `IntelliJ …`, `M19/M20 Java 24 qualification`, `Build and smoke Windows candidate`, `Transactional upgrade engine …` | non | chemins ciblés | disparaissent en silence, comme avant |
+| `Static invariants (single run)` (nouveau) | **non — voir § 6.5** | aucun | sans objet : se déclenche toujours |
+
+Aucun des sept anciens contrôles (`MND/MNE/Post-MNE exact-head invariants (…)`, `Verify post-228 static hardening`) n'a jamais figuré dans le ruleset : leur disparition ne laissera **aucune** PR en attente.
 
 ### 6.3 Uniformisation appliquée
 
@@ -111,22 +121,21 @@ L'audit suggère de filtrer ce workflow sur `docker/**`, `scripts/release/**` et
 
 Les 12 groupes de concurrence des workflows de PR annulaient un run en cours dès qu'un nouvel événement arrivait sur la même clé — y compris un **push** direct sur `develop`/`main`, où la clé retombe sur `github.ref` (donc partagée par tous les push sur cette branche). Deux merges rapprochés sur `develop` pouvaient annuler la validation du premier avant qu'elle ne se termine. Corrigé partout : `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
 
-### 6.5 Liste exacte des contrôles requis à mettre à jour dans la protection de branche
+### 6.5 Mise à jour du ruleset `20809312` — et pourquoi elle doit précéder la fusion
 
-**À retirer** (workflows supprimés, ces noms de contrôle n'existeront plus jamais) :
-- `MND exact-head invariants (ubuntu-latest)`, `MND exact-head invariants (windows-latest)`
-- `MNE exact-head invariants (ubuntu-latest)`, `MNE exact-head invariants (windows-latest)`
-- `Post-MNE exact-head invariants (ubuntu-latest)`, `Post-MNE exact-head invariants (windows-latest)`
-- `Verify post-228 static hardening`
+**À retirer** : rien. Les sept anciens contrôles n'ont jamais été requis (§ 6.2). La liste « à retirer » de la version précédente de ce document était une supposition, corrigée par le relevé réel.
 
-**À ajouter** (nouveau job dans `pr-ci.yml`) :
-- `Static invariants (single run)`
+**À ajouter, avant la fusion de cette PR** : `Static invariants (single run)`.
 
-**Inchangés** (toujours produits par `pr-ci.yml`, aucune action requise) :
-- `Dependency vulnerability gate / osv-scan`
-- `Verify (ubuntu-24.04)`, `Verify (windows-2022)`
+**Pourquoi c'est bloquant et pas cosmétique** : huit gates tournaient jusqu'ici **à l'intérieur** du job `verify`, donc sous les contrôles requis `Verify (ubuntu-24.04)`/`Verify (windows-2022)` : `check-workflow-pins.py`, `check-module-boundaries.py`, `product-facts.py --check`, `check-audit-remediation-v2.py`, `check-p0-p2.py`, `check-minos-01.py`, la provenance Inno Setup et les tests du vérificateur Docker upgrade. Ils vivent désormais dans le job `invariants`. Tant que `Static invariants (single run)` n'est pas requis, **un échec de l'un d'eux ne bloque plus aucune fusion** : c'est exactement l'invariant qui disparaît en silence que ce chantier devait éviter. L'ordre prévu (run → le contrôle apparaît → ajout au ruleset → fusion) le couvre, à condition que l'ajout précède la fusion.
 
-Aucun autre workflow de la § 2 n'a changé de nom de job.
+En contrepartie, les gates issus de `mnd`/`mne`/`post-mne`/`post-228` (`check-mnd.py`, `check-mne.py`, `check-post-mne.py` et les neuf gates de jalon qu'il exécute, `check-post228-hardening.py`, `check-current-docs.py`) **deviennent** bloquants une fois ce contrôle ajouté, alors qu'ils ne l'étaient pas : un gain net d'application, à connaître avant d'ajouter la règle.
+
+**Inchangés** : `Verify (ubuntu-24.04)`, `Verify (windows-2022)`, `Dependency vulnerability gate / osv-scan`, `SonarCloud Code Analysis`.
+
+### 6.6 Limite de validation locale : pas d'`actionlint`
+
+`actionlint` n'est pas installé sur le poste, et ne l'a pas été volontairement : ce chantier retire de l'outillage, il n'en ajoute pas. La validation locale des workflows se limite donc à un chargement YAML (`yaml.safe_load` sur les 13 fichiers) et à `check-workflow-pins.py` ; elle ne vérifie ni la validité des expressions `${{ }}`, ni les clés inconnues, ni les références entre jobs. GitHub valide la syntaxe des workflows à la réception : c'est ce que l'unique run de validation exerce, et c'est lui qui fait foi sur ce point.
 
 ## 7. G3 — inventaire des scripts et workflows de jalon
 
