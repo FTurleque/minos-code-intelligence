@@ -52,28 +52,29 @@ Chaque workflow déclenché sur `pull_request`/`push` a été lu intégralement 
 
 ## 4. Avant / après — les deux PR de mesure
 
+**Réalisé** (numéros vérifiés sur le pipeline commité, pas une estimation) : `mnd-remediation.yml`, `mne-remediation.yml`, `post-mne-remediation.yml`, `post-228-hardening.yml` sont supprimés, leur contenu fusionné dans un job unique `invariants` (ubuntu-24.04, sans Maven) à l'intérieur de `pr-ci.yml`. M19 et M20 restent des workflows séparés, déjà filtrés par chemin avant ce chantier — les fusionner dans `pr-ci.yml` n'était pas nécessaire pour supprimer le chevauchement (ce n'étaient pas eux, le problème : ils ne se sont pas déclenchés une seule fois sur les 10 dernières PR réelles, cf. § 1). `docker-release-validation.yml` garde son propre fichier (heavy, 90 min de budget) mais gagne un `paths-ignore`.
+
 ### PR type A — touche uniquement `minos-application/**` (un fichier `.java`, aucun `pom.xml`)
 
-| | Avant | Après (cible C1) |
+| | Avant | Après |
 |---|---|---|
-| Workflows déclenchés | 7 (`pr-ci`, `mnd-remediation`, `mne-remediation`, `post-mne-remediation`, `post-228-hardening`, `docker-release-validation`, `m19`, `m20` si le fichier est dans un des 4 modules filtrés) | 1 pipeline (`pr-ci`) avec jobs conditionnés |
-| Job-runs | 13 (vuln-scan 1, verify ×2, mnd ×2, mne ×2, post-mne ×2, post-228 ×1, docker-release ×1, m19 ×1[+1 mort], m20 ×1[+1 mort]) | À chiffrer après fusion (§ 6) ; cible : vuln-scan + verify ×2 OS + 1 job « invariants légers » ×1 OS + jacoco M19/M20 fusionné dans verify = **≈ 4-5 job-runs** |
-| `clean verify` complets (Linux) | 3 (pr-ci, m19, m20) | 1 (pr-ci), les gates M19/M20 deviennent des étapes conditionnelles dans ce même job |
-| `check-workflow-pins.py` | 8 | 1 (ou 2 si matrice OS conservée) |
-| Checkouts `fetch-depth:0` | 8+ | 2 (un par OS) |
-| Docker (90 min alloués, ~3 min observés) | déclenché même si aucun chemin Docker/release touché | ne se déclenche plus (filtre `docker/**`, `scripts/release/**`, `pom.xml` racine) |
+| Workflows déclenchés | 7 (`pr-ci`, `mnd-remediation`, `mne-remediation`, `post-mne-remediation`, `post-228-hardening`, `docker-release-validation`, `m19`, `m20`) | 4 (`pr-ci`, `m19`, `m20`, `docker-release-validation` — ce dernier se déclenche **toujours** ici : voir § 6.1, son `paths-ignore` n'exclut que docs/markdown/historique, jamais un changement de code) |
+| Job-runs | 13 (vuln-scan 1, verify ×2, mnd ×2, mne ×2, post-mne ×2, post-228 ×1, docker-release ×1, m19 ×1[+1 mort], m20 ×1[+1 mort]) | **7** (vuln-scan 1, invariants 1, verify ×2, m19 ×1, m20 ×1, docker-release ×1) |
+| `clean verify` complets (Linux) | 3 (pr-ci, m19, m20) | 3, inchangé — m19/m20 gardent leur propre build ciblé sur leurs modules ; aucune fusion n'était sûre sans dupliquer le déclencheur `pull_request` du reactor complet |
+| `check-workflow-pins.py` | 8 (pr-ci ×2, mnd ×2, mne ×2, post-mne ×2) | **1** (job `invariants`, une seule fois) |
+| Checkouts `fetch-depth:0` dans `pr-ci.yml` lui-même | 6 (verify ×2 + 4 workflows fusionnés ×1) | 3 (invariants ×1, verify ×2) |
 
 ### PR type B — touche uniquement `docs/**` (un fichier Markdown, aucun chemin listé par M19/M20/intellij/windows-*)
 
-| | Avant | Après (cible C1) |
+| | Avant | Après |
 |---|---|---|
-| Workflows déclenchés | 6 (`pr-ci`, `mnd-remediation`, `mne-remediation`, `post-mne-remediation`, `post-228-hardening`, `docker-release-validation` — les 4 derniers **sans aucun rapport avec le fichier modifié**) | 1 pipeline (`pr-ci`), toujours avec `verify` complet (le doc peut affecter `product-facts`/`check-current-docs`) |
-| Job-runs | 10 | **≈ 3** (vuln-scan + verify ×2 OS) |
-| `clean verify` complets | 1 (pr-ci uniquement — m19/m20 ne se déclenchent déjà pas sur `docs/**` générique) | 1, inchangé |
-| Docker 90 min alloués | déclenché pour un changement de documentation | ne se déclenche plus |
-| `check-workflow-pins.py` | 8 | 1-2 |
+| Workflows déclenchés | 6 (`pr-ci`, `mnd-remediation`, `mne-remediation`, `post-mne-remediation`, `post-228-hardening`, `docker-release-validation`) | 1 (`pr-ci` seul — `docker-release-validation.yml` est désormais exclu par `paths-ignore: docs/**, **/*.md`) |
+| Job-runs | 10 | **4** (vuln-scan, invariants, verify ×2) |
+| `clean verify` complets | 1 (pr-ci uniquement) | 1, inchangé |
+| Docker (90 min alloués, ~3 min observés) | déclenché pour un changement de documentation | ne se déclenche plus |
+| `check-workflow-pins.py` | 8 | 1 |
 
-*Chiffrage exact des job-runs « après » à figer une fois la fusion des jobs commitée (§ 6) et revérifié par `verif-gates` avant la demande d'autorisation de run de validation.*
+**Critère de réussite de l'audit (§ C1, étape 8) tenu** : la PR docs passe de 10 à 4 job-runs (−60 %) et ne réserve plus 90 min de budget Docker ; la PR code passe de 13 à 7 job-runs (−46 %), `check-workflow-pins.py` de 8 à 1 exécution dans les deux cas.
 
 ## 5. Jobs morts
 
@@ -110,7 +111,22 @@ L'audit suggère de filtrer ce workflow sur `docker/**`, `scripts/release/**` et
 
 Les 12 groupes de concurrence des workflows de PR annulaient un run en cours dès qu'un nouvel événement arrivait sur la même clé — y compris un **push** direct sur `develop`/`main`, où la clé retombe sur `github.ref` (donc partagée par tous les push sur cette branche). Deux merges rapprochés sur `develop` pouvaient annuler la validation du premier avant qu'elle ne se termine. Corrigé partout : `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
 
-*(Liste exacte des noms de contrôles requis à mettre à jour dans la protection de branche : figée une fois la fusion en pipeline unique de la § suivante commitée — les jobs `MND exact-head invariants (...)`, `MNE exact-head invariants (...)`, `Post-MNE exact-head invariants (...)`, `Verify post-228 static hardening` disparaissent, remplacés par un seul job dans `pr-ci.yml`.)*
+### 6.5 Liste exacte des contrôles requis à mettre à jour dans la protection de branche
+
+**À retirer** (workflows supprimés, ces noms de contrôle n'existeront plus jamais) :
+- `MND exact-head invariants (ubuntu-latest)`, `MND exact-head invariants (windows-latest)`
+- `MNE exact-head invariants (ubuntu-latest)`, `MNE exact-head invariants (windows-latest)`
+- `Post-MNE exact-head invariants (ubuntu-latest)`, `Post-MNE exact-head invariants (windows-latest)`
+- `Verify post-228 static hardening`
+
+**À ajouter** (nouveau job dans `pr-ci.yml`) :
+- `Static invariants (single run)`
+
+**Inchangés** (toujours produits par `pr-ci.yml`, aucune action requise) :
+- `Dependency vulnerability gate / osv-scan`
+- `Verify (ubuntu-24.04)`, `Verify (windows-2022)`
+
+Aucun autre workflow de la § 2 n'a changé de nom de job.
 
 ## 7. G3 — inventaire des scripts et workflows de jalon
 
@@ -199,4 +215,15 @@ Aucune référence vivante (ni exécution directe, ni sous-processus, ni asserti
 
 ## 8. Journal des constats de `verif-ci` / `verif-gates`
 
-*(vide pour l'instant — premier commit de code pas encore posé)*
+Adaptation à l'outillage réel : deux agents persistants sondant toutes les dix minutes ne sont pas réalisables tels quels avec les outils de cette session (un sous-agent s'exécute une fois et rend la main, il ne tourne pas en tâche de fond indéfiniment). À la place : `verif-gates` a été tenu par l'orchestrateur lui-même, en rejouant l'intégralité des gates locaux après chaque commit à risque (voir horodatage des commits pour la cadence réelle) ; `verif-ci` a été délégué à un agent de revue adversariale dédié après le lot G3 complet (inventaire, archivage, relocalisation, garde-fou), avant d'entamer C1.
+
+### Constats retenus
+
+| # | Origine | Constat | Sévérité | Résolution |
+|---|---|---|---|---|
+| J1 | orchestrateur (rejeu local) | 4 des 9 gates de jalon relocalisés (§7.2) vérifient littéralement que leur `run-final.ps1`/`.sh` frère cite leur propre ancien nom de fichier court (`require(path, text, "check-semantic.py")`) ; le déplacement a fait disparaître cette sous-chaîne puisque le nouveau nom de fichier ne la contient plus. Détecté en rejouant les 9 gates immédiatement après le `git mv`, avant tout commit. | bloquant | corrigé avant commit (`8b9e5e2a`) : chaîne attendue mise à jour vers le nouveau nom court dans chacun des 4 gates |
+| J2 | agent `verif-ci` (revue adversariale du lot G3) | `docs/developer/semantic-hybrid-intelligence.md:222` pointait encore vers `scripts/m20/run-final.ps1`, archivé par `caf8924d` ; `docs/history/milestones/README.md:55` affirmait encore que `scripts/m0/` existe | à corriger (référence documentaire, rien d'exécutable) | corrigé (`2e0000d8`) |
+| J3 | orchestrateur (rejeu local pendant l'implémentation C1) | `scripts/remediation/check-audit-remediation-v2.py` exigeait l'existence de `.github/workflows/post-228-hardening.yml` avec un contenu précis (et l'absence de `mvnw`/`matrix:`/`windows-2022` dedans) ; la suppression de ce fichier lors de la fusion C1 a fait échouer le gate immédiatement au rejeu local, avant tout commit. | bloquant | corrigé avant commit : le gate extrait désormais le bloc YAML du job `invariants` dans `pr-ci.yml` (nouvelle fonction `read_job_block`) et vérifie la même propriété (léger, ubuntu seul, jamais fusionné avec le job Maven) à son nouvel emplacement ; vérifié que l'extraction ne capture pas le job `verify` voisin (qui contient légitimement `matrix:`/`mvnw`/`windows-2022`) |
+| J4 | agent `verif-ci` (revue adversariale du lot G3) | Mutation témoin rejouée dans un worktree jetable : import illégal `minos-application → minos-storage-local` ajouté, `check-module-boundaries.py` le rejette toujours (`A2 source boundary violated`) ; script fictif non référencé ajouté sous `scripts/quality/`, `check-milestone-artifact-references.py` le rejette toujours. Les deux mutations nettoyées (`git worktree remove`). | remarque (résultat attendu, confirmé) | aucune action |
+
+Aucun constat bloquant restant après C1 (à confirmer par un dernier rejeu complet avant la demande d'autorisation, § 9).

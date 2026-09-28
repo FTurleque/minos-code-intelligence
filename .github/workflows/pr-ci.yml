@@ -30,6 +30,79 @@ jobs:
       contents: read
       security-events: write
 
+  # Every static/textual invariant gate that does not need a Maven build, run exactly once
+  # (Python-only, no Java/Maven setup) instead of once per OS or once per now-retired
+  # remediation workflow. Formerly split across pr-ci's own OS matrix plus
+  # mnd-remediation.yml, mne-remediation.yml, post-mne-remediation.yml and
+  # post-228-hardening.yml (see docs/audit/CI-HYGIENE-SUIVI.md for the inventory that
+  # justified each merge).
+  invariants:
+    name: Static invariants (single run)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert exact candidate HEAD
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Immutable workflow supply-chain gate
+        run: python scripts/quality/check-workflow-pins.py
+
+      - name: Maven module-boundary fitness gate
+        run: python scripts/architecture/check-module-boundaries.py
+
+      - name: Current documentation consistency
+        run: python scripts/docs/check-current-docs.py
+
+      - name: Product facts consistency
+        run: python scripts/docs/product-facts.py --check
+
+      - name: Milestone artifact reference guard
+        run: python scripts/quality/check-milestone-artifact-references.py
+
+      - name: MND remediation invariants
+        run: python scripts/remediation/check-mnd.py
+
+      - name: MNE remediation invariants
+        run: python scripts/remediation/check-mne.py
+
+      - name: Post-MNE structural remediation invariants (includes the active milestone gates)
+        run: python scripts/remediation/check-post-mne.py
+
+      - name: Post-228 static invariants
+        run: python scripts/remediation/check-post228-hardening.py
+
+      - name: Audit remediation v2 invariants
+        run: python scripts/remediation/check-audit-remediation-v2.py
+
+      - name: P0-P2 audit remediation consistency
+        run: python scripts/remediation/check-p0-p2.py
+
+      - name: MINOS-01 worker resource containment gate
+        run: python scripts/remediation/check-minos-01.py
+
+      - name: Inno Setup provenance rules
+        shell: pwsh
+        run: ./scripts/release/test-iscc-provenance.ps1
+
+      - name: Docker upgrade evidence checker unit tests
+        run: python scripts/release/test_check_docker_upgrade_evidence.py -v
+
   verify:
     name: Verify (${{ matrix.os }})
     strategy:
@@ -89,26 +162,6 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Immutable workflow supply-chain gate
-        run: python scripts/quality/check-workflow-pins.py
-
-      - name: Audit remediation v2 invariants
-        if: runner.os != 'Windows'
-        run: python scripts/remediation/check-audit-remediation-v2.py
-
-      - name: Inno Setup provenance rules
-        shell: pwsh
-        run: ./scripts/release/test-iscc-provenance.ps1
-
-      - name: P0-P2 audit remediation consistency
-        run: python scripts/remediation/check-p0-p2.py
-
-      - name: MINOS-01 worker resource containment gate
-        run: python scripts/remediation/check-minos-01.py
-
-      - name: Maven module-boundary fitness gate
-        run: python scripts/architecture/check-module-boundaries.py
-
       - name: Install and authorize Linux worker sandbox runtime
         if: runner.os != 'Windows'
         timeout-minutes: 10
@@ -161,12 +214,6 @@ jobs:
       - name: Targeted JaCoCo gate (Windows, PostgreSQL scope qualified on Linux)
         if: runner.os == 'Windows'
         run: python scripts/quality/check-jacoco.py --skip-scope m30-postgresql-pgvector
-
-      - name: Product facts consistency
-        run: python scripts/docs/product-facts.py --check
-
-      - name: Docker upgrade evidence checker unit tests
-        run: python scripts/release/test_check_docker_upgrade_evidence.py -v
 
       - name: Upload verification diagnostics
         if: always()
