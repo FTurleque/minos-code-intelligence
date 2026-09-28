@@ -26,12 +26,32 @@ public record HostedRetentionPolicy(
     }
 
     /**
-     * Audit size from which refused mutations are no longer appended to the durable chain: one
-     * tenth of the retention target is reserved so that refusals, whatever their number and
-     * whichever process emits them, can never bring the chain to its hard capacity and starve
-     * authorized mutations. Authorized mutations are only bounded by {@link #MAX_AUDIT_EVENTS}.
+     * Maximum number of refusals ({@code DENIED} events) the durable chain may hold: one tenth of
+     * the retention target is kept out of reach of refusals. The reserve counts refusals only, so
+     * authorized traffic, however large before an explicit retention, never prevents the first
+     * refusal of an attack from being chained. Authorized mutations are only bounded by
+     * {@link #MAX_AUDIT_EVENTS}.
      */
     public int deniedAuditCapacity() {
         return maxAuditEvents - maxAuditEvents / 10;
+    }
+
+    /**
+     * Audit slots below {@link #MAX_AUDIT_EVENTS} that refusals never consume, so that however many
+     * refusals are chained, authorized mutations (including {@code RETENTION_APPLY}) still find
+     * room in the chain.
+     */
+    public int authorizedAuditHeadroom() {
+        return maxAuditEvents / 10;
+    }
+
+    /**
+     * Whether one more refusal may be appended to a chain that already holds {@code chainedDenials}
+     * refusals among {@code chainSize} events: the refusal reserve is not exhausted and the
+     * authorized headroom below the hard capacity stays untouched.
+     */
+    public boolean admitsChainedDenial(long chainedDenials, int chainSize) {
+        return chainedDenials < deniedAuditCapacity()
+                && chainSize < MAX_AUDIT_EVENTS - authorizedAuditHeadroom();
     }
 }

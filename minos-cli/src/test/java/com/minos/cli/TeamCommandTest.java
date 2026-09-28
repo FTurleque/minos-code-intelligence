@@ -16,11 +16,16 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -93,46 +98,103 @@ class TeamCommandTest {
         assertEquals("", output.toString());
     }
 
+    /**
+     * Valid arguments of every declared team operation. The key set must equal
+     * {@link TeamCommand#operations()}: a new operation fails this test until it is covered.
+     */
+    private static Map<String, List<String>> validArguments(String workspace, String project) {
+        Map<String, List<String>> arguments = new LinkedHashMap<>();
+        arguments.put("bootstrap", List.of("--tenant", UUID.randomUUID().toString(), "--name", "Other",
+                "--key-id", "key-b", "--owner", "bob", "--owner-name", "Bob"));
+        arguments.put("tenant", List.of());
+        arguments.put("workspaces", List.of());
+        arguments.put("workspace-show", List.of("--workspace", workspace));
+        arguments.put("workspace-create", List.of("--name", "Platform"));
+        arguments.put("workspace-archive", List.of("--workspace", workspace));
+        arguments.put("members", List.of());
+        arguments.put("member-grant", List.of("--principal", "bob", "--display-name", "Bob", "--role", "viewer"));
+        arguments.put("member-revoke", List.of("--principal", "bob"));
+        arguments.put("project-bind", List.of("--workspace", workspace, "--project", project, "--snapshot", "snap-1"));
+        arguments.put("project-unbind", List.of("--workspace", workspace, "--project", project));
+        arguments.put("token-issue", List.of("--principal", "alice", "--token-hours", "2"));
+        arguments.put("key-rotate", List.of("--key-id", "key-b", "--token-hours", "2"));
+        arguments.put("retention-plan", List.of());
+        arguments.put("retention-set", List.of("--max-audit-events", "100", "--audit-days", "1",
+                "--archived-workspace-days", "1"));
+        arguments.put("retention-apply", List.of());
+        arguments.put("audit", List.of("--limit", "5"));
+        return arguments;
+    }
+
     @Test
-    void everyOperationRejectsUnknownOptionsBeforeReachingTheService() throws Exception {
+    void everyDeclaredOperationRejectsUnknownOptionsBeforeReachingTheService() throws Exception {
+        SpyStore store = new SpyStore();
+        AtomicReference<String> token = new AtomicReference<>();
+        AtomicInteger tokenReads = new AtomicInteger();
+        TeamCommand command = new TeamCommand(service(store), () -> {
+            tokenReads.incrementAndGet();
+            return token.get();
+        });
+        StringBuilder output = new StringBuilder();
+        StringBuilder error = new StringBuilder();
+        token.set(bootstrap(command, UUID.randomUUID(), output, error));
+        Map<String, List<String>> valid = validArguments(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+        assertEquals(TeamCommand.operations(), valid.keySet(),
+                "every declared team operation must be covered by the validate-before-mutate guard");
+
+        for (String operation : TeamCommand.operations()) {
+            List<String> invocation = new ArrayList<>();
+            invocation.add(operation);
+            invocation.addAll(valid.get(operation));
+            invocation.addAll(List.of("--bogus", "x"));
+            store.calls.clear();
+            tokenReads.set(0);
+            output.setLength(0);
+            error.setLength(0);
+            int code = command.run(invocation.toArray(String[]::new), output, error);
+            assertEquals(2, code, operation);
+            assertTrue(error.toString().contains("unknown team option: --bogus"), operation);
+            assertEquals("", output.toString(), operation);
+            assertEquals(List.of(), store.calls, operation + " reached the service before rejecting --bogus");
+            assertEquals(0, tokenReads.get(), operation + " read the bearer token before rejecting --bogus");
+        }
+    }
+
+    @Test
+    void usageDocumentsExactlyTheDeclaredOperations() {
+        Set<String> documented = new LinkedHashSet<>();
+        for (String line : TeamCommand.usage().lines().toList()) {
+            var matcher = java.util.regex.Pattern.compile("^  ([a-z][a-z-]*)(?:\\s|$)").matcher(line);
+            if (matcher.find()) documented.add(matcher.group(1));
+        }
+        assertEquals(new TreeSet<>(TeamCommand.operations()), new TreeSet<>(documented));
+    }
+
+    @Test
+    void auditLimitOutsideTheDocumentedBoundsIsAUsageErrorBeforeAnyServiceCall() throws Exception {
         SpyStore store = new SpyStore();
         AtomicReference<String> token = new AtomicReference<>();
         TeamCommand command = new TeamCommand(service(store), token::get);
         StringBuilder output = new StringBuilder();
         StringBuilder error = new StringBuilder();
         token.set(bootstrap(command, UUID.randomUUID(), output, error));
-        String workspace = UUID.randomUUID().toString();
-        String project = UUID.randomUUID().toString();
-        List<String[]> invocations = List.of(
-                new String[]{"bootstrap", "--tenant", UUID.randomUUID().toString(), "--name", "Other",
-                        "--key-id", "key-b", "--owner", "bob", "--owner-name", "Bob", "--bogus", "x"},
-                new String[]{"workspace-create", "--name", "Platform", "--bogus", "x"},
-                new String[]{"workspace-archive", "--workspace", workspace, "--bogus", "x"},
-                new String[]{"member-grant", "--principal", "bob", "--display-name", "Bob", "--role", "viewer", "--bogus", "x"},
-                new String[]{"member-revoke", "--principal", "bob", "--bogus", "x"},
-                new String[]{"project-bind", "--workspace", workspace, "--project", project, "--snapshot", "snap-1", "--bogus", "x"},
-                new String[]{"project-unbind", "--workspace", workspace, "--project", project, "--bogus", "x"},
-                new String[]{"token-issue", "--principal", "alice", "--token-hours", "2", "--bogus", "x"},
-                new String[]{"key-rotate", "--key-id", "key-b", "--token-hours", "2", "--bogus", "x"},
-                new String[]{"retention-set", "--max-audit-events", "100", "--audit-days", "1",
-                        "--archived-workspace-days", "1", "--bogus", "x"},
-                new String[]{"retention-apply", "--bogus", "x"},
-                new String[]{"tenant", "--bogus", "x"},
-                new String[]{"workspaces", "--bogus", "x"},
-                new String[]{"workspace-show", "--workspace", workspace, "--bogus", "x"},
-                new String[]{"members", "--bogus", "x"},
-                new String[]{"audit", "--limit", "5", "--bogus", "x"},
-                new String[]{"retention-plan", "--bogus", "x"});
+        assertTrue(TeamCommand.usage().contains("audit [--limit <1..10000>]"));
 
-        for (String[] invocation : invocations) {
+        for (String limit : List.of("0", "-1", "10001", String.valueOf(Integer.MAX_VALUE))) {
             store.calls.clear();
             output.setLength(0);
             error.setLength(0);
-            int code = command.run(invocation, output, error);
-            assertEquals(2, code, invocation[0]);
-            assertTrue(error.toString().contains("unknown team option: --bogus"), invocation[0]);
-            assertEquals("", output.toString(), invocation[0]);
-            assertEquals(List.of(), store.calls, invocation[0] + " reached the service before rejecting --bogus");
+            int code = command.run(new String[]{"audit", "--limit", limit}, output, error);
+            assertEquals(2, code, "--limit " + limit + ": " + error);
+            assertTrue(error.toString().contains("limit must be between 1 and 10000"), error.toString());
+            assertTrue(error.toString().contains("Usage: minos team"), error.toString());
+            assertEquals("", output.toString());
+            assertEquals(List.of(), store.calls, "--limit " + limit + " reached the service");
+        }
+        for (String limit : List.of("1", "10000")) {
+            output.setLength(0);
+            error.setLength(0);
+            assertEquals(0, command.run(new String[]{"audit", "--limit", limit}, output, error), error.toString());
         }
     }
 

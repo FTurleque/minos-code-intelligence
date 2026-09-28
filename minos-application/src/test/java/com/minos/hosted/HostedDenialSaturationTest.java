@@ -3,8 +3,6 @@ package com.minos.hosted;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +21,8 @@ class HostedDenialSaturationTest {
         String viewer = harness.grantAndIssue(owner, "viewer", HostedRole.VIEWER);
         HostedAuditChain chain = new HostedAuditChain(harness.keys(), harness.clock());
         harness.store().values.put(harness.tenant(),
-                extendedTo(harness.state(), chain, HostedRetentionPolicy.MAX_AUDIT_EVENTS - 10));
+                HostedControlPlaneTestSupport.extendedTo(harness.state(), chain,
+                        HostedRetentionPolicy.MAX_AUDIT_EVENTS - 10, HostedAuditEvent.Outcome.ALLOWED));
 
         for (int index = 0; index < 10; index++) {
             String requestId = "denied-" + index;
@@ -61,11 +60,11 @@ class HostedDenialSaturationTest {
         }
 
         HostedTenantState saturated = harness.state();
-        assertTrue(saturated.auditEvents().size() <= deniedCapacity,
-                "chained refusals exceeded the denied capacity: " + saturated.auditEvents().size());
         long chainedDenials = saturated.auditEvents().stream()
                 .filter(event -> event.outcome() == HostedAuditEvent.Outcome.DENIED).count();
-        assertEquals(deniedCapacity - baseline, chainedDenials);
+        // S12: the reserve counts chained refusals only; the authorized baseline does not consume it.
+        assertEquals(deniedCapacity, chainedDenials);
+        assertEquals(baseline + deniedCapacity, saturated.auditEvents().size());
         assertEquals(refusals - chainedDenials, harness.sink().unchained.size());
         assertTrue(harness.sink().unchained.stream()
                 .allMatch(event -> event.outcome() == HostedAuditEvent.Outcome.DENIED
@@ -189,25 +188,5 @@ class HostedDenialSaturationTest {
 
         assertEquals(1, harness.sink().unchained.size());
         assertEquals("denied-later", harness.state().auditEvents().getLast().requestId());
-    }
-
-    /** Extends the persisted chain with authentic filler events using a one-event window (O(n) build). */
-    private static HostedTenantState extendedTo(HostedTenantState state, HostedAuditChain chain, int size) {
-        List<HostedAuditEvent> events = new ArrayList<>(state.auditEvents());
-        HostedTenantState window = state;
-        while (events.size() < size) {
-            HostedAuditEvent last = window.auditEvents().getLast();
-            HostedTenantState oneEvent = new HostedTenantState(
-                    state.tenantId(), state.name(), state.keyId(), state.version(), state.createdAt(),
-                    window.updatedAt(), state.retentionPolicy(), state.members(), state.workspaces(),
-                    window.auditSequence(), last.previousHash(), List.of(last));
-            window = chain.append(oneEvent, "owner", "AUDIT_FILL", "TENANT", "fill",
-                    HostedAuditEvent.Outcome.ALLOWED, "fill-" + events.size(), state.keyId(), state.version());
-            events.add(window.auditEvents().getLast());
-        }
-        return new HostedTenantState(
-                state.tenantId(), state.name(), state.keyId(), state.version(), state.createdAt(),
-                window.updatedAt(), state.retentionPolicy(), state.members(), state.workspaces(),
-                events.getLast().sequence(), state.auditAnchorHash(), events);
     }
 }
