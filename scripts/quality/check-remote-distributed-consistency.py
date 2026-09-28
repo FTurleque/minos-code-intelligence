@@ -149,10 +149,10 @@ def main() -> int:
                       "scip-go", "0.2.7", "cacheHit", "activeSnapshotId",
                       "artifactSha256", "bundleSha256", "M25 REMOTE INDEXING END-TO-END SUCCESS")
         require_facts("scripts/m25/run-final.ps1", windows_runner,
-                      "ExpectedHead", "check-remote-distributed.py", "run-remote-e2e.py",
+                      "ExpectedHead", "check-remote-distributed-consistency.py", "run-remote-e2e.py",
                       "M25 FINAL REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
         require_facts("scripts/m25/run-final.sh", linux_runner,
-                      "EXPECTED_HEAD", "check-remote-distributed.py", "run-remote-e2e.py",
+                      "EXPECTED_HEAD", "check-remote-distributed-consistency.py", "run-remote-e2e.py",
                       "M25 LINUX REMOTE DISTRIBUTED INDEXING VALIDATION SUCCESS")
         forbid("scripts/m25/run-final.ps1", windows_runner, "gh workflow", "gh run", "workflow_dispatch")
         forbid("scripts/m25/run-final.sh", linux_runner, "gh workflow", "gh run", "workflow_dispatch")

@@ -3,8 +3,16 @@ name: Docker Release Validation
 on:
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/history/**'
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/history/**'
   workflow_dispatch:
 
 permissions:
@@ -12,12 +20,13 @@ permissions:
 
 concurrency:
   group: docker-release-validation-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   provider-complete-image:
     name: Provider-complete image exact-head gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
 
     steps:

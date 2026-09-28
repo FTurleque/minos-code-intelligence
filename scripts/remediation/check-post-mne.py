@@ -12,15 +12,15 @@ from windows_launcher import assemble, is_assembled_launcher  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_MILESTONE_GATES = (
-    "scripts/m21/check-s7-provider.py",
-    "scripts/m22/check-provider.py",
-    "scripts/m23/check-semantic.py",
-    "scripts/m24/check-polyglot.py",
-    "scripts/m25/check-remote-distributed.py",
-    "scripts/m26/check-runtime-dynamic.py",
-    "scripts/m27/check-hosted.py",
-    "scripts/m28/check-m28.py",
-    "scripts/m28/check-current-docs.py",
+    "scripts/quality/check-advanced-provider-consistency.py",
+    "scripts/quality/check-java-ast-provider-consistency.py",
+    "scripts/quality/check-semantic-retrieval-consistency.py",
+    "scripts/quality/check-polyglot-provider-consistency.py",
+    "scripts/quality/check-remote-distributed-consistency.py",
+    "scripts/quality/check-runtime-dynamic-consistency.py",
+    "scripts/quality/check-hosted-control-plane-consistency.py",
+    "scripts/quality/check-vertical-decomposition-consistency.py",
+    "scripts/quality/check-current-docs-vertical-extension.py",
 )
 
 

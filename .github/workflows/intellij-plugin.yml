@@ -9,7 +9,6 @@ on:
       - 'minos-integration-git/**'
       - 'docs/user/intellij-plugin.md'
       - 'docs/roadmap/M18_EXECUTION.md'
-      - 'scripts/m18/**'
       - '.github/workflows/intellij-plugin.yml'
   push:
     branches: [main, develop]
@@ -19,7 +18,6 @@ on:
       - 'minos-integration-git/**'
       - 'docs/user/intellij-plugin.md'
       - 'docs/roadmap/M18_EXECUTION.md'
-      - 'scripts/m18/**'
       - '.github/workflows/intellij-plugin.yml'
   workflow_dispatch:
 
@@ -28,12 +26,13 @@ permissions:
 
 concurrency:
   group: intellij-plugin-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Never cancel a push-triggered run on develop/main: only a duplicate PR run is obsolete.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   plugin:
     name: IntelliJ 2026.1 / Java 21
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -85,7 +84,7 @@ jobs:
 
   windows-ownership:
     name: Windows process ownership / Java 21
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 45
 
     steps:

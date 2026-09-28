@@ -32,6 +32,23 @@ def forbid(path: str, *tokens: str) -> None:
             raise RuntimeError(f"{path}: stale/unsafe audit-v2 text remains: {token}")
 
 
+def read_job_block(path: str, job_name: str) -> str:
+    """Slice out one top-level job's YAML text (its key through the next 2-space-indented key)."""
+    text = read(path)
+    lines = text.splitlines()
+    marker = f"  {job_name}:"
+    start = next((i for i, line in enumerate(lines) if line == marker), None)
+    if start is None:
+        raise RuntimeError(f"{path}: no top-level job named {job_name!r}")
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":"):
+            end = i
+            break
+    return "\n".join(lines[start:end])
+
+
 def main() -> int:
     try:
         require(
@@ -69,16 +86,17 @@ def main() -> int:
         )
         forbid("docs/ROADMAP.md", "Vérification manuelle encore ouverte")
 
-        post228 = require(
-            ".github/workflows/post-228-hardening.yml",
-            "Verify post-228 static hardening",
-            "runs-on: ubuntu-24.04",
-            "check-current-docs.py",
-            "check-post228-hardening.py",
-        )
+        # Post-228 hardening was its own workflow file; C1 (docs/adr/0043) folded it into pr-ci.yml
+        # as the dedicated "invariants" job so it runs once instead of in a separate parallel
+        # workflow. The property this protects is unchanged: these are fast, ubuntu-only, non-Maven
+        # checks that must never grow into (or duplicate) the OS-matrixed Maven verify job.
+        invariants_job = read_job_block(".github/workflows/pr-ci.yml", "invariants")
+        for token in ("runs-on: ubuntu-24.04", "check-current-docs.py", "check-post228-hardening.py"):
+            if token.casefold() not in invariants_job.casefold():
+                raise RuntimeError(f".github/workflows/pr-ci.yml (invariants job): missing audit-v2 invariant: {token}")
         for stale in ("mvnw", "check-jacoco.py", "windows-2022", "matrix:"):
-            if stale.casefold() in post228.casefold():
-                raise RuntimeError(f"post-228 workflow duplicated current PR validation responsibility: {stale}")
+            if stale.casefold() in invariants_job.casefold():
+                raise RuntimeError(f"pr-ci.yml invariants job duplicated the Maven verify job's responsibility: {stale}")
 
         require(
             ".github/workflows/pr-ci.yml",

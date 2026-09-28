@@ -39,13 +39,13 @@ try {
     python scripts/remediation/check-minos-01.py
     if ($LASTEXITCODE -ne 0) { throw 'MINOS-01 worker resource containment gate failed' }
 
-    python scripts/m28/check-m28.py
+    python scripts/quality/check-vertical-decomposition-consistency.py
     if ($LASTEXITCODE -ne 0) { throw 'M28 convergence/decomposition gate failed' }
 
     python scripts/docs/product-facts.py --check
     if ($LASTEXITCODE -ne 0) { throw 'product facts gate failed' }
 
-    python scripts/m28/check-current-docs.py
+    python scripts/quality/check-current-docs-vertical-extension.py
     if ($LASTEXITCODE -ne 0) { throw 'M28 current documentation gate failed' }
 
     python scripts/architecture/check-module-boundaries.py
