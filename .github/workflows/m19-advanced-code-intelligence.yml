@@ -13,7 +13,6 @@ on:
       - 'docs/developer/public-surfaces.md'
       - 'docs/user/mcp.md'
       - 'docs/generated/product-facts.md'
-      - 'scripts/m19/**'
       - '.github/workflows/m19-advanced-code-intelligence.yml'
   workflow_dispatch:
 

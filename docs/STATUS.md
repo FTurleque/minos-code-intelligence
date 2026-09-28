@@ -70,19 +70,12 @@ La qualification courante est volontairement séparée entre gates produit actue
 
 ### PR Validation
 
-`.github/workflows/pr-ci.yml` porte les contrôles produit exact-head actuels :
+`.github/workflows/pr-ci.yml` est le pipeline de PR unique (constat C1 de l'audit 2026-09, voir [`docs/audit/CI-HYGIENE-SUIVI.md`](audit/CI-HYGIENE-SUIVI.md)), avec deux jobs qui tournent en parallèle :
 
-- scan de vulnérabilités OSV ;
-- Maven `clean verify` sous Ubuntu 24.04 et Windows Server 2022 ;
-- PostgreSQL obligatoire sur Linux ;
-- tests sandbox/cgroup/AppContainer applicables ;
-- seuils JaCoCo ciblés Linux/Windows ;
-- invariants architecture, supply-chain et documentation ;
-- invariant d'ascendance : `main` doit être ancêtre du candidat afin d'empêcher une nouvelle divergence silencieuse `main/develop`.
+- **`invariants`** (Ubuntu seul, aucun Maven/Java) : épinglage supply-chain des workflows, frontières de modules, cohérence documentaire courante, `product-facts`, garde-fou de non-réaccumulation d'artefacts de jalon, invariants MND/MNE/post-MNE (y compris les neuf gates de jalon actifs M21–M28), invariants post-#228, invariants d'audit-remédiation v2/P0-P2/MINOS-01, provenance Inno Setup, tests unitaires du vérificateur Docker upgrade — chaque contrôle statique une seule fois, quel que soit l'OS ;
+- **`verify`** (Ubuntu 24.04 et Windows Server 2022) : `clean verify` Maven complet, PostgreSQL obligatoire sur Linux, tests sandbox/cgroup/AppContainer applicables, seuils JaCoCo ciblés Linux/Windows, invariant d'ascendance (`main` doit être ancêtre du candidat, afin d'empêcher une nouvelle divergence silencieuse `main/develop`).
 
-### Post-228 Hardening Invariants
-
-`.github/workflows/post-228-hardening.yml` est désormais un **gate statique ciblé Ubuntu**. Il vérifie les invariants post-#228 sans dupliquer Maven, Windows ou JaCoCo, qui restent sous l'autorité de **PR Validation**.
+Les workflows `mnd-remediation.yml`, `mne-remediation.yml`, `post-mne-remediation.yml` et `post-228-hardening.yml`, qui dupliquaient chacun leur propre checkout et leur propre vérification d'épinglage, ont été retirés : leurs invariants vivent désormais dans le job `invariants` ci-dessus.
 
 Les preuves historiques Post-#228 restent explicitement conservées : candidat qualifié `1a551ff72f95db4e14e8a9597d897491b9c1589a`, puis merge `a042e97ac5e3e2ab7207fa603d85563ea1f71712`. Ces SHA décrivent l'intégration historique #228 ; ils ne changent pas la répartition actuelle des responsabilités CI.
 

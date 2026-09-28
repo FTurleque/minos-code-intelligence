@@ -16,7 +16,6 @@ on:
       - 'docs/developer/**'
       - 'docs/user/**'
       - 'docs/generated/product-facts.md'
-      - 'scripts/m20/**'
       - '.github/workflows/m20-semantic-hybrid-intelligence.yml'
   workflow_dispatch:
 
