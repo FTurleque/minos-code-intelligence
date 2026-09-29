@@ -214,7 +214,11 @@ public final class HybridSearchService {
         return weight;
     }
 
-    /** Object and array headers (40 bytes) plus the characters at their stored width. */
+    /**
+     * Object and array headers (40 bytes) plus the characters at their stored width. The 40 bytes assume
+     * compressed oops; on a heap of 32 GiB or more they grow by about 8 bytes per string, under 2 % of a long
+     * chunk, which the per-document margin measured by {@code HybridCorpusWeightTest} still absorbs.
+     */
     private static long stringWeight(String value) {
         if (value == null) return 0L;
         return safeAdd(40L, (long) value.length() * (isLatin1(value) ? Byte.BYTES : Character.BYTES));
