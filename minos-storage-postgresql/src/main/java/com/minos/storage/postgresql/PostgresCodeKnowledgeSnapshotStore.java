@@ -4,6 +4,7 @@ import com.minos.domain.Relationship;
 import com.minos.domain.Symbol;
 import com.minos.domain.SymbolOccurrence;
 import com.minos.io.PrivateLocalStorage;
+import com.minos.storage.local.store.SnapshotCodec;
 import com.minos.store.CodeKnowledgeSnapshot;
 import com.minos.store.CodeKnowledgeSnapshotStore;
 import com.minos.store.InMemoryCodeKnowledgeStore;
@@ -34,7 +35,7 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotStore {
-    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = 256L * 1024L * 1024L;
+    private static final long MAX_PERSISTED_SNAPSHOT_BYTES = SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES;
     private static final int MAX_ACTIVE_QUERY_RETRIES = 4;
     private static final long QUERY_VIEW_PERSISTED_AMPLIFICATION = 8L;
     private static final int MAX_QUERY_CACHE_ENTRIES = 32;
@@ -206,10 +207,15 @@ final class PostgresCodeKnowledgeSnapshotStore implements CodeKnowledgeSnapshotS
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot) throws IOException {
+        // Refused before any I/O: no scratch file, no row, no activation change (A6).
+        long encodedBytes = codec.requirePersistable(snapshot);
         Path payload = createScratchFile("snapshot-write-");
         try {
             String sha = codec.encode(payload, snapshot).sha256();
             long payloadBytes = Files.size(payload);
+            if (payloadBytes != encodedBytes) {
+                throw new IOException("PostgreSQL knowledge snapshot encoding length differs from its computed size");
+            }
             if (payloadBytes < 1L || payloadBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
                 throw new IOException("PostgreSQL knowledge snapshot payload exceeds streaming limit");
             }

@@ -14,6 +14,10 @@ final class PostgresSnapshotPayloadCodec {
         return codec.write(target, snapshot);
     }
 
+    long requirePersistable(CodeKnowledgeSnapshot snapshot) throws IOException {
+        return codec.requirePersistable(snapshot);
+    }
+
     CodeKnowledgeSnapshot decode(Path payload) throws IOException {
         return codec.read(payload);
     }

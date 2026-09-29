@@ -37,6 +37,12 @@ public final class SnapshotCodecV2 implements SnapshotCodec {
         return SnapshotBinaryCodecSupport.readKnowledgeSnapshotV2(file);
     }
 
+    @Override
+    public long encodedSize(CodeKnowledgeSnapshot snapshot) throws IOException {
+        Objects.requireNonNull(snapshot, "snapshot");
+        return SnapshotBinaryCodecSupport.encodedKnowledgeSnapshotV2Size(snapshot);
+    }
+
     public byte[] encodeToBytes(CodeKnowledgeSnapshot snapshot) throws IOException {
         Objects.requireNonNull(snapshot, "snapshot");
         return SnapshotBinaryCodecSupport.writeKnowledgeSnapshotV2ToBytes(snapshot);

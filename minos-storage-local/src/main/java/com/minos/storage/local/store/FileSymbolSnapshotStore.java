@@ -290,9 +290,14 @@ public final class FileSymbolSnapshotStore implements CodeKnowledgeSnapshotStore
     }
 
     private void publishSnapshot(CodeKnowledgeSnapshot snapshot, SnapshotCodec codec) throws IOException {
+        // Refused before any I/O: no temporary file, no partial file, no pointer change (A6).
+        long encodedBytes = codec.requirePersistable(snapshot);
         Path temporarySnapshot = snapshotRepository.createTemporarySnapshot(snapshot.projectId());
         try {
             SnapshotCodec.SnapshotEncoding encoding = codec.write(temporarySnapshot, snapshot);
+            if (Files.size(temporarySnapshot) != encodedBytes) {
+                throw new IOException("snapshot encoding length differs from its computed size");
+            }
             String fileName = "snapshot-" + integrityService.logicalIdHash(snapshot.snapshotId())
                     + "-" + encoding.sha256() + codec.fileExtension();
             // Publication and active-pointer promotion are one mutation transaction with respect to

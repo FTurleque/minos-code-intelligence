@@ -90,18 +90,49 @@ final class SnapshotBinaryCodecSupport {
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, SYMBOL_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            output.writeInt(SNAPSHOT_MAGIC);
-            output.writeInt(FORMAT_VERSION_V1);
-            output.writeLong(snapshot.projectId().getMostSignificantBits());
-            output.writeLong(snapshot.projectId().getLeastSignificantBits());
-            writeString(output, snapshot.snapshotId());
-            output.writeInt(snapshot.symbols().size());
-            for (Symbol symbol : snapshot.symbols()) {
-                writeSymbol(output, symbol);
-            }
+            writeSymbolSnapshotV1Body(new StreamSink(output), snapshot);
         }
         requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
+    }
+
+    private static void writeSymbolSnapshotV1Body(EncodingSink output, SymbolSnapshot snapshot) throws IOException {
+        output.writeInt(SNAPSHOT_MAGIC);
+        output.writeInt(FORMAT_VERSION_V1);
+        output.writeLong(snapshot.projectId().getMostSignificantBits());
+        output.writeLong(snapshot.projectId().getLeastSignificantBits());
+        writeString(output, snapshot.snapshotId());
+        output.writeInt(snapshot.symbols().size());
+        for (Symbol symbol : snapshot.symbols()) {
+            writeSymbol(output, symbol);
+        }
+    }
+
+    /** Exact length of {@link #writeSymbolSnapshotV1}'s output: the same traversal, counted instead of written. */
+    static long encodedSymbolSnapshotV1Size(SymbolSnapshot snapshot) throws IOException {
+        CountingSink counter = new CountingSink();
+        writeSymbolSnapshotV1Body(counter, snapshot);
+        return counter.bytes();
+    }
+
+    /** Exact length of {@link #writeKnowledgeSnapshotV2}'s output: the same traversal, counted instead of written. */
+    static long encodedKnowledgeSnapshotV2Size(CodeKnowledgeSnapshot snapshot) throws IOException {
+        CountingSink counter = new CountingSink();
+        writeKnowledgeSnapshotV2Body(counter, snapshot);
+        return counter.bytes();
+    }
+
+    /**
+     * Refuses, before any byte is written, a snapshot whose encoding would exceed the persisted ceiling.
+     * The message carries only sizes, never a path, so it is safe to surface publicly.
+     */
+    static long requirePersistable(long encodedBytes) throws IOException {
+        if (encodedBytes > MAX_PERSISTED_SNAPSHOT_BYTES) {
+            throw new IOException("knowledge snapshot is too large to persist: " + encodedBytes
+                    + " encoded bytes exceed the " + MAX_PERSISTED_SNAPSHOT_BYTES
+                    + "-byte limit (256 MiB); nothing was written");
+        }
+        return encodedBytes;
     }
 
     static SymbolSnapshot readSymbolSnapshotV1(Path file) throws IOException {
@@ -149,7 +180,7 @@ final class SnapshotBinaryCodecSupport {
              BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      digestOutput, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            writeKnowledgeSnapshotV2Body(output, snapshot);
+            writeKnowledgeSnapshotV2Body(new StreamSink(output), snapshot);
         }
         requireSnapshotFileSize(file);
         return HEX.formatHex(digest.digest());
@@ -160,7 +191,7 @@ final class SnapshotBinaryCodecSupport {
         try (BoundedOutputStream boundedOutput = new BoundedOutputStream(
                      baos, MAX_PERSISTED_SNAPSHOT_BYTES, KNOWLEDGE_SNAPSHOT_LABEL);
              DataOutputStream output = new DataOutputStream(new BufferedOutputStream(boundedOutput))) {
-            writeKnowledgeSnapshotV2Body(output, snapshot);
+            writeKnowledgeSnapshotV2Body(new StreamSink(output), snapshot);
         }
         byte[] payload = baos.toByteArray();
         if (payload.length > MAX_PERSISTED_SNAPSHOT_BYTES) {
@@ -169,7 +200,7 @@ final class SnapshotBinaryCodecSupport {
         return payload;
     }
 
-    private static void writeKnowledgeSnapshotV2Body(DataOutputStream output, CodeKnowledgeSnapshot snapshot) throws IOException {
+    private static void writeKnowledgeSnapshotV2Body(EncodingSink output, CodeKnowledgeSnapshot snapshot) throws IOException {
         output.writeInt(SNAPSHOT_MAGIC);
         output.writeInt(FORMAT_VERSION_V2);
         output.writeLong(snapshot.projectId().getMostSignificantBits());
@@ -260,7 +291,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static void writeSymbol(DataOutputStream output, Symbol symbol) throws IOException {
+    private static void writeSymbol(EncodingSink output, Symbol symbol) throws IOException {
         writeString(output, symbol.id());
         writeString(output, symbol.symbolKey());
         writeString(output, symbol.identityQuality().name());
@@ -353,7 +384,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeOccurrence(
-            DataOutputStream output,
+            EncodingSink output,
             SymbolOccurrence occurrence
     ) throws IOException {
         writeString(output, occurrence.id());
@@ -410,7 +441,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeSymbolReference(
-            DataOutputStream output,
+            EncodingSink output,
             SymbolReference reference
     ) throws IOException {
         if (reference instanceof ResolvedSymbolReference resolved) {
@@ -447,7 +478,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeRelationship(
-            DataOutputStream output,
+            EncodingSink output,
             Relationship relationship
     ) throws IOException {
         writeString(output, relationship.id());
@@ -515,7 +546,7 @@ final class SnapshotBinaryCodecSupport {
         }
     }
 
-    private static void writeEvidence(DataOutputStream output, Evidence evidence)
+    private static void writeEvidence(EncodingSink output, Evidence evidence)
             throws IOException {
         writeString(output, evidence.type().name());
         writeString(output, evidence.description());
@@ -559,7 +590,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeOptionalCodeEntityReference(
-            DataOutputStream output,
+            EncodingSink output,
             CodeEntityRef reference
     ) throws IOException {
         output.writeBoolean(reference != null);
@@ -574,7 +605,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeCodeEntityReference(
-            DataOutputStream output,
+            EncodingSink output,
             CodeEntityRef reference
     ) throws IOException {
         writeString(output, reference.type().name());
@@ -588,7 +619,7 @@ final class SnapshotBinaryCodecSupport {
         );
     }
 
-    private static void writeOptionalDouble(DataOutputStream output, Double value)
+    private static void writeOptionalDouble(EncodingSink output, Double value)
             throws IOException {
         output.writeBoolean(value != null);
         if (value != null) {
@@ -601,7 +632,7 @@ final class SnapshotBinaryCodecSupport {
     }
 
     private static void writeProviderReferences(
-            DataOutputStream output,
+            EncodingSink output,
             Set<ProviderReference> providerReferences
     ) throws IOException {
         List<ProviderReference> ordered = providerReferences.stream()
@@ -631,7 +662,7 @@ final class SnapshotBinaryCodecSupport {
         return references;
     }
 
-    private static void writeLocation(DataOutputStream output, SymbolLocation location) throws IOException {
+    private static void writeLocation(EncodingSink output, SymbolLocation location) throws IOException {
         output.writeBoolean(location != null);
         if (location == null) {
             return;
@@ -658,7 +689,7 @@ final class SnapshotBinaryCodecSupport {
         );
     }
 
-    private static void writeOrigin(DataOutputStream output, Origin origin) throws IOException {
+    private static void writeOrigin(EncodingSink output, Origin origin) throws IOException {
         writeString(output, origin.providerId());
         writeString(output, origin.providerType());
         writeString(output, origin.providerVersion());
@@ -704,12 +735,68 @@ final class SnapshotBinaryCodecSupport {
             output.writeInt(-1);
             return;
         }
-        if (value.length() > MAX_STRING_CHARS) {
-            throw new IOException("string exceeds snapshot limit");
-        }
+        requireWritableString(value);
         output.writeInt(value.length());
         for (int index = 0; index < value.length(); index++) {
             output.writeChar(value.charAt(index));
+        }
+    }
+
+    private static void writeString(EncodingSink output, String value) throws IOException {
+        output.writeString(value);
+    }
+
+    private static void requireWritableString(String value) throws IOException {
+        if (value.length() > MAX_STRING_CHARS) {
+            throw new IOException("string exceeds snapshot limit");
+        }
+    }
+
+    /**
+     * Destination of one encoding pass. The writers traverse a snapshot once, against either the real
+     * stream or a counter: the computed size and the written size cannot drift apart.
+     */
+    private interface EncodingSink {
+        void writeInt(int value) throws IOException;
+
+        void writeLong(long value) throws IOException;
+
+        void writeByte(int value) throws IOException;
+
+        void writeBoolean(boolean value) throws IOException;
+
+        void writeDouble(double value) throws IOException;
+
+        void writeString(String value) throws IOException;
+    }
+
+    private record StreamSink(DataOutputStream output) implements EncodingSink {
+        @Override public void writeInt(int value) throws IOException { output.writeInt(value); }
+        @Override public void writeLong(long value) throws IOException { output.writeLong(value); }
+        @Override public void writeByte(int value) throws IOException { output.writeByte(value); }
+        @Override public void writeBoolean(boolean value) throws IOException { output.writeBoolean(value); }
+        @Override public void writeDouble(double value) throws IOException { output.writeDouble(value); }
+        @Override public void writeString(String value) throws IOException {
+            SnapshotBinaryCodecSupport.writeString(output, value);
+        }
+    }
+
+    /** Counts the bytes {@link StreamSink} would write, with the same string checks, and writes nothing. */
+    private static final class CountingSink implements EncodingSink {
+        private long bytes;
+
+        long bytes() { return bytes; }
+
+        @Override public void writeInt(int value) { bytes += Integer.BYTES; }
+        @Override public void writeLong(long value) { bytes += Long.BYTES; }
+        @Override public void writeByte(int value) { bytes += Byte.BYTES; }
+        @Override public void writeBoolean(boolean value) { bytes += Byte.BYTES; }
+        @Override public void writeDouble(double value) { bytes += Double.BYTES; }
+        @Override public void writeString(String value) throws IOException {
+            bytes += Integer.BYTES;
+            if (value == null) return;
+            requireWritableString(value);
+            bytes += (long) Character.BYTES * value.length();
         }
     }
 

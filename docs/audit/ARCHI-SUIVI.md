@@ -796,7 +796,8 @@ Les cinq écarts déclarés au jalon 2 (§ A4.6 et rapport : pas de commit rouge
 
 | Jalon | Contenu | Statut | Commits |
 |---|---|---|---|
-| 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, en attente d'arbitrage (§ A6.5) | `fb363253` + commit de docs |
+| 1 | Corpus réel (ce dépôt indexé par scip-java géré), harnais `benchmarks/scalability/`, mesures avant, verdicts et recommandations ; aucune optimisation | livré, accepté par verif-archi, arbitré (§ A6.9) | `fb363253`, `d491519d` |
+| 2.1 | Étape 1 — plafond : taille encodée exacte, refus avant toute écriture (fichier et PostgreSQL) | livré | voir § A6.6 |
 
 ## A6.2 Procédure de mesure
 
@@ -935,6 +936,8 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 - 2026-09-29 — impl-archi, jalon 1 : worktree `a6-scalabilite` sur `d9ae1005`. Tentative `minos index` sur une copie du dépôt : refusée par le bac à sable AppContainer (`pwsh.exe` sous `Program Files`). Runner scip-java géré appelé directement : premier index à 39 documents (le `clean` de `minos-app` efface l'agrégat de scip-java), puis 883 documents après correctif de la copie. Procédure scriptée (`prepare-corpus.ps1`) et rejouée : 23 816 951 octets (±1).
 - 2026-09-29 — impl-archi : `run1` (ratio, `file-f*`, impact `mem-k1`) ; mesures hybrides `mem-k1` de `run1` écartées : `SemanticIndexService.status` y rechargeait la tranche `file-f0.50` restée active dans le magasin fichier (constat du § A6.3.4). Le harnais publie désormais un snapshot vide avant les jeux en mémoire. `run2` (jeux `mem-k*`, architecture) : complet pour `mem-k1` ; arrêté sur `mem-k2` après la première recherche hybride (corpus refusé par le cache, chaque requête le reconstruit en ~17 min). `run3` : impact et index sur `mem-k2` et `mem-k3` (73 s). La configuration par défaut du banc garde `mem-k1` seul ; `README` du banc pour le complément.
 - 2026-09-29 — impl-archi : `fb363253` (test) — harnais, lanceur, préparation du corpus, README ; `./mvnw -q -pl minos-bootstrap -am test` vert, le banc absent des rapports Surefire ; gates `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts. Commit de docs suivant : ce suivi. Aucune ligne de production modifiée.
+- 2026-09-29 — impl-archi, étape 1 (tests d'abord) : `PersistedSnapshotLimitTest` exécuté sur la base : **2 tests sur 2 rouges**. Le premier écrit 256 Mio en 2,3 s puis échoue sur `knowledge snapshot exceeds byte limit: 268443632/268435456`. Le second, dont le répertoire du projet est occupé par un fichier ordinaire, échoue sur `private storage path is not a directory: C:\Users\…` : une écriture était tentée avant tout refus, et ce message, qui porte un chemin absolu, aurait été remplacé par un repli générique à la frontière publique.
+- 2026-09-29 — impl-archi, étape 1 : commit `perf(archi)` (§ A6.10) ; `./mvnw -q -pl minos-storage-postgresql -am test -Dminos.postgresql.tests.required=true` vert (PostgreSQL sous Docker) ; gates `remediation/*`, `check-module-boundaries`, `check-milestone-artifact-references`, `check-current-docs` verts.
 
 ## A6.7 Constats verif-archi
 
@@ -954,3 +957,55 @@ Part de la découverte dans l'intelligence complète : **96 %** en médiane. JFR
 | impl-archi (jalon 1) | `minos-app` construit dans le `target/` racine : sur un dépôt organisé ainsi, scip-java perd tous les modules sauf le dernier (l'agrégat `target/scip-targetroot` est effacé par le `clean` du module). Vaut pour ce dépôt, et pour tout projet utilisateur de même forme. | provider scip-java |
 | impl-archi (jalon 1) | Découverte de projet (`ProjectDiscoveryService.discover`) : 12,7 s sur ce worktree, 36 s sous `%TEMP%`, dont 99,6 % des échantillons natifs dans `discoverModuleRoots` ; elle fait 96 % de chaque requête d'architecture (§ A6.3.6). Profil du parcours (répertoires `target/`, détecteurs par répertoire, règles d'ignorance) à instruire. | lot perf |
 | impl-archi (jalon 1) | `minos index` impossible sur un poste où PowerShell 7 est sous `Program Files` sans élévation (bac à sable AppContainer). | A1 / D1 |
+
+## A6.9 Arbitrages de l'orchestrateur (29 septembre 2026)
+
+| # | Point | Décision |
+|---|---|---|
+| 1 | Plafonds | **À faire, en premier.** Évaluer d'abord un refus pendant l'ingestion (borne inférieure monotone et exacte) ; sinon taille encodée exacte après ingestion, refus avant toute écriture, message `PublicErrorMessages`, fichier et PostgreSQL. Tests : rouge d'abord, frontière au plafond, taille calculée = taille écrite pour tout format. |
+| 2 | Format V3 UTF-8 | **À faire**, contrôlé en bloquant par verif : lecture V1/V2 conservée (fixtures écrites à `d9ae1005`, fichier et PostgreSQL), repli V2 pour les surrogates isolés, décodage strict borné en octets, pointeur actif compatible, payload PostgreSQL auto-décrit, ré-import du même SCIP sans « different content », `logicalIdHash`, noms, `listSnapshotFiles` et compaction inchangés ; ADR. |
+| 3 | Traversée d'impact | **Ne pas faire** (infirmé en pratique). |
+| 4 | Normalisation hybride | **À faire** : cache du contenu normalisé dans `CachedCorpus`, pas d'index inversé, test d'équivalence ; arrêt si le classement bouge. |
+| 5 | Snapshot paginé ou mappé | **ADR `Proposed`**, sans implémentation. |
+| — | § A6.8 | Hors lot, remonté à l'utilisateur. |
+
+## A6.10 Étape 1 — plafond : taille exacte, refus avant toute écriture
+
+**Refus pendant l'ingestion : évalué, écarté.**
+
+- La taille encodée est une propriété du codec du magasin : fichier V1/V2, PostgreSQL, bientôt V3 avec un repli V2 décidé sur le snapshot entier. L'importeur SCIP (`minos-provider-scip`) ne connaît que le port `CodeKnowledgeSnapshotStore`. Un adaptateur ne dépend pas d'un autre (`check-module-boundaries`) : il faudrait un nouveau port.
+- Le magasin de capture de l'importeur indexe les entités par identifiant et remplace une entité ré-émise. La somme courante n'est donc pas monotone sans suivre ces remplacements.
+- Le gain serait borné par l'ingestion elle-même. Or le travail perdu mesuré est surtout l'écriture : 2,1 à 3,1 s d'écriture inutile, contre 1,2 à 1,6 s pour tout l'import sans persistance (gel, sha256 et décodage compris).
+
+**Aucun critère n'est possible avant le décodage.** Le ratio V2/SCIP va de 9,0 à 14,2 selon le corpus (§ A6.3.1). Les comptes de la pré-analyse majorent les entités persistées au lieu de les minorer, l'ingestion pouvant en écarter. Tout refus avant l'ingestion pourrait rejeter un snapshot qui tient. Le Javadoc de `SnapshotCodec.requirePersistable` le dit.
+
+**Réalisation.**
+
+- `SnapshotBinaryCodecSupport` : les écrivains parcourent le snapshot contre un `EncodingSink`, flux réel (`StreamSink`) ou compteur (`CountingSink`). La taille annoncée et la taille écrite viennent du même parcours et ne peuvent pas diverger ; le compteur applique aussi le contrôle de longueur de chaîne de l'écrivain. Nouvelles méthodes : `encodedSymbolSnapshotV1Size`, `encodedKnowledgeSnapshotV2Size`, `requirePersistable(long)`.
+- `SnapshotCodec` : `encodedSize`, `requirePersistable` (défaut) et `MAX_PERSISTED_SNAPSHOT_BYTES`, qui reprend la constante de `SnapshotBinaryCodecSupport` (littéral exigé par `check-mne.py`, inchangé). `PostgresCodeKnowledgeSnapshotStore` n'a plus de copie du plafond : il reprend `SnapshotCodec.MAX_PERSISTED_SNAPSHOT_BYTES`.
+- `FileSymbolSnapshotStore.publishSnapshot` et `PostgresCodeKnowledgeSnapshotStore.publishSnapshot` appellent `requirePersistable` **avant** de créer le fichier temporaire ou le fichier de travail, puis vérifient que la taille écrite est la taille annoncée.
+- Message : `knowledge snapshot is too large to persist: <n> encoded bytes exceed the 268435456-byte limit (256 MiB); nothing was written`. Il ne porte que des tailles et passe `PublicErrorMessages.sanitize` inchangé (testé).
+
+**Tests.**
+
+- `PersistedSnapshotLimitTest` (3 tests) :
+  - un snapshot trop grand ne laisse aucun fichier ajouté ni modifié, et le snapshot actif reste inchangé ;
+  - le refus est décidé avant toute E/S : le répertoire du projet est occupé par un fichier ordinaire, et seul un refus décidé avant l'I/O passe ;
+  - frontière : un snapshot d'exactement 268 435 456 octets est publié (fichier de 268 435 456 octets), un octet de plus est refusé.
+- `SnapshotEncodedSizeTest` (4 tests) : taille annoncée = taille écrite en V1 et V2, sur un snapshot qui passe par chaque branche des codecs (`CodecFixtures`), un grand snapshot et un snapshot vide. `encodeToBytes` concorde ; une chaîne trop longue est refusée de la même façon.
+- `PostgresCodeKnowledgeSnapshotStoreTest.oversizedSnapshotIsRefusedBeforeAnyScratchFileOrRow` : aucun fichier de travail, aucune ligne insérée, snapshot actif inchangé, message identique.
+- Les snapshots de plus de 256 Mio partagent une seule chaîne de 8 millions de caractères (`PersistedSizeFixtures`) : ils ne coûtent que quelques mégaoctets de tas.
+
+**Mesures avant/après.** Pour « avant », le `minos-storage-local` de `d9ae1005` est recompilé et placé en tête du classpath du banc. 7 itérations ; deux paires A/B en ordre inversé, car l'écart d'une exécution à l'autre dépasse 30 %.
+
+| Mesure (médiane, paire 1 / paire 2) | Avant | Après |
+|---|---:|---:|
+| Import de ce dépôt (refusé) | 4 734 / 3 372 ms | **2 274 / 1 772 ms** |
+| dont temps après l'ingestion (import − import sans persistance) | 3 117 / 2 138 ms, 256 Mio écrits puis effacés | **660 / 379 ms, 0 octet écrit** |
+| Import publié, ariane-chatbot (31,8 Mo) | 552 / 420 ms | 398 / 408 ms |
+| Import publié, nexus-context-engine (26,7 Mo) | 429 / 313 ms | 324 / 306 ms |
+| Publication de la tranche `file-f0.50` (162 Mo) | 1 935 / 1 375 ms | 1 400 / 1 294 ms |
+
+- Le passage de comptage n'a pas de coût mesurable sur les imports qui passent : les écarts restent dans le bruit.
+- Le refus de ce dépôt arrive 1,6 à 2,5 s plus tôt et n'écrit plus rien. Les 379 à 660 ms restants sont le tri et le contrôle d'unicité du magasin, plus le comptage.
+- La taille est calculée sur le snapshot réellement ingéré, donc sur l'`Origin` du produit (`indexRunId`, `providerVersion`), jamais sur une estimation (V-A6-03).
